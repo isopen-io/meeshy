@@ -4,13 +4,17 @@ import XCTest
 /// Un serveur de fichiers qui honore `Range` (comme la passerelle et Traefik),
 /// ou qui l'ignore. Il compte les requêtes, les en-têtes reçus et les octets
 /// servis par URL. `gatesContinuation` retient la reprise après son premier
-/// paquet jusqu'à `release(_:)`.
+/// paquet jusqu'à `release(_:)`. `pacesIgnoredRange` espace les paquets d'une
+/// réponse entière servie à une demande de plage : sans cela, URLSession peut
+/// remettre le fichier entier en un seul paquet, avant qu'aucune tête ne
+/// puisse s'arrêter à son budget.
 private final class RangeStubURLProtocol: URLProtocol {
     struct File {
         var body: Data
         var honorsHeadRange = true
         var honorsContinuation = true
         var gatesContinuation = false
+        var pacesIgnoredRange = false
     }
 
     nonisolated(unsafe) private static let lock = NSLock()
@@ -68,7 +72,8 @@ private final class RangeStubURLProtocol: URLProtocol {
         }
         let honors = bounds.lowerBound == 0 ? file.honorsHeadRange : file.honorsContinuation
         guard honors else {
-            reply(status: 200, headers: ["Content-Length": "\(file.body.count)"], body: file.body, gate: nil)
+            reply(status: 200, headers: ["Content-Length": "\(file.body.count)"], body: file.body, gate: nil,
+                  pace: file.pacesIgnoredRange ? 0.05 : 0)
             return
         }
         let slice = file.body.subdata(in: bounds)
@@ -81,7 +86,7 @@ private final class RangeStubURLProtocol: URLProtocol {
 
     override nonisolated func stopLoading() {}
 
-    private func reply(status: Int, headers: [String: String], body: Data, gate: DispatchSemaphore?) {
+    private func reply(status: Int, headers: [String: String], body: Data, gate: DispatchSemaphore?, pace: TimeInterval = 0) {
         let url = request.url!
         var all = headers
         all["Content-Type"] = "video/mp4"
@@ -94,6 +99,7 @@ private final class RangeStubURLProtocol: URLProtocol {
             client?.urlProtocol(self, didLoad: body.subdata(in: offset..<end))
             Self.lock.withLock { Self.served[url.absoluteString, default: 0] += end - offset }
             if offset == 0, let gate { gate.wait() }
+            if pace > 0 { Thread.sleep(forTimeInterval: pace) }
             offset = end
         }
         client?.urlProtocolDidFinishLoading(self)
@@ -261,7 +267,7 @@ final class DiskCacheStoreHeadTransferTests: XCTestCase {
     func test_serverIgnoringRange_headStopsAtItsBudget_andElectionStartsOver() async throws {
         let url = base + "no-range.mp4"
         let payload = body(512 * 1024)
-        RangeStubURLProtocol.set(.init(body: payload, honorsHeadRange: false), for: url)
+        RangeStubURLProtocol.set(.init(body: payload, honorsHeadRange: false, pacesIgnoredRange: true), for: url)
         let store = makeStore()
 
         await store.prefetchHead(of: url, bytes: headBytes)
@@ -271,6 +277,24 @@ final class DiskCacheStoreHeadTransferTests: XCTestCase {
         let ranges = RangeStubURLProtocol.requestedRanges(url)
         XCTAssertEqual(ranges.count, 2)
         XCTAssertNil(ranges.last ?? "absent", "la seconde requête repart du début, sans Range")
+        let cached = try XCTUnwrap(store.cachedFileURL(for: url))
+        XCTAssertEqual(try Data(contentsOf: cached), payload)
+    }
+
+    /// Sans espacement, URLSession remet la réponse entière en un ou plusieurs
+    /// paquets selon sa file : la tête est coupée à son budget, ou le fichier
+    /// est déjà entier avant toute coupe. Dans les deux cas l'élection sert le
+    /// fichier — jamais `notCached` pour des paquets écrits après l'annulation.
+    func test_serverIgnoringRange_unpacedReply_electionAlwaysServesTheFile() async throws {
+        let url = base + "no-range-unpaced.mp4"
+        let payload = body(512 * 1024)
+        RangeStubURLProtocol.set(.init(body: payload, honorsHeadRange: false), for: url)
+        let store = makeStore()
+
+        await store.prefetchHead(of: url, bytes: headBytes)
+        let data = try await store.data(for: url)
+
+        XCTAssertEqual(data, payload)
         let cached = try XCTUnwrap(store.cachedFileURL(for: url))
         XCTAssertEqual(try Data(contentsOf: cached), payload)
     }

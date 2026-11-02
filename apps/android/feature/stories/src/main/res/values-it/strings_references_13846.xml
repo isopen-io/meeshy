@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_more_mention">Menziona</string>
+    <string name="story_mention_title">Menziona</string>
+    <string name="story_mention_mode_pinned">Sulla scena</string>
+    <string name="story_mention_mode_note">In «Con …»</string>
+    <string name="story_mention_mode_silent">In silenzio</string>
+    <string name="story_hashtag_title">Hashtag</string>
+    <string name="story_hashtag_field">Aggiungi un hashtag</string>
+    <string name="story_hashtag_trending">Di tendenza</string>
+    <string name="story_hashtag_remove">Rimuovi #%1$s</string>
+    <string name="story_place_title">Luogo</string>
+    <string name="story_place_search">Cerca un luogo</string>
+    <string name="story_place_around">Vicino a me</string>
+    <string name="story_place_here">La mia posizione</string>
+    <string name="story_place_denied">Meeshy non ha accesso alla tua posizione: nessun luogo vicino viene proposto. Puoi cercare un luogo per nome.</string>
+    <string name="story_place_pastille_a11y">Luogo: %1$s</string>
+    <string name="story_references_with">Con %1$s</string>
+    <string name="story_mention_already">Già menzionate</string>
+    <string name="story_mention_remove">Rimuovi %1$s</string>
+    <string name="story_mention_audience_warning">Questa persona potrà vedere questo contenuto anche fuori dal pubblico scelto</string>
+</resources>

@@ -5,6 +5,7 @@ import { PackAssetRefSchema } from '@meeshy/shared/types/content-pack-index';
 import { PACK_LANGUAGES, PACK_ORIGINS, PACK_STATUSES } from '@meeshy/shared/types/content-pack';
 import type { PackAssetRef, PackLanguage, PackSummary } from '@meeshy/shared/types/content-pack';
 import { parseFrameUsage } from '@meeshy/shared/types/frame-usage';
+import { servablePackPreview } from '@meeshy/shared/types/glory-frame-atlas';
 import type { GloryFrameUsage } from '@meeshy/shared/types/glory-frame-pack';
 
 import type { ConversationsDeps } from './conversations';
@@ -19,7 +20,11 @@ import { loadCatalogueOf, loadDetailOf, loadInstalledOf, setInstalledOf, type Pa
  * 404 : boutique vide, sans erreur.
  */
 
-export type FramePackSummary = PackSummary & { readonly usage: GloryFrameUsage | null };
+export type FramePackSummary = PackSummary & {
+  /** L'atlas des vignettes (#10275) à son adresse sur la passerelle : le pack se montre sans s'installer. `null` sans atlas servable. */
+  readonly previewUrl: string | null;
+  readonly usage: GloryFrameUsage | null;
+};
 
 export type FramePackDetail = FramePackSummary & {
   readonly contractSchema: number;
@@ -48,6 +53,7 @@ const WireFrameSummary = z.object({
   removable: z.optional(z.boolean()),
   names: z.optional(z.record(z.string(), z.unknown())),
   preview: z.optional(z.unknown()),
+  previewUrl: z.optional(z.nullable(z.string())),
   usage: z.optional(z.unknown()),
 });
 
@@ -76,6 +82,7 @@ export function decodeFramePackSummary(raw: unknown): FramePackSummary | null {
   const parsed = WireFrameSummary.safeParse(raw);
   if (!parsed.success) return null;
   const wire = parsed.data;
+  const preview = servablePackPreview(refOrNull(wire.preview));
   return {
     slug: wire.slug,
     name: wire.name,
@@ -94,7 +101,8 @@ export function decodeFramePackSummary(raw: unknown): FramePackSummary | null {
     downloadBytes: wire.downloadBytes ?? null,
     removable: wire.removable ?? true,
     names: namesOf(wire.names),
-    preview: refOrNull(wire.preview),
+    preview,
+    previewUrl: preview === null ? null : (wire.previewUrl ?? null),
     usage: gloryUsageOf(wire.usage),
   };
 }

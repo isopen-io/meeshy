@@ -66,8 +66,8 @@ final class VoiceProfileFrenchTypographyTests: XCTestCase {
         // A `defaultValue` that disagrees with the catalogue is a second, silent copy
         // of the string: it ships whenever the entry is missing, and it is what the
         // next developer duplicates into a new call site.
-        let sources = ["Meeshy/Features/Main/Views/VoiceProfileManageView.swift",
-                       "Meeshy/Features/Main/Views/VoiceProfileWizardView.swift"]
+        let sources = ["Meeshy/Features/Settings/Views/VoiceProfileManageView.swift",
+                       "Meeshy/Features/Settings/Views/VoiceProfileWizardView.swift"]
             .map { iosRoot.appendingPathComponent($0) }
 
         for url in sources {
@@ -86,7 +86,7 @@ final class VoiceProfileFrenchTypographyTests: XCTestCase {
         // The sheet already shows a navigation bar for its Close button; its title
         // belongs in that bar, not in a Text inside the content.
         let source = try String(
-            contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/VoiceProfileManageView.swift"),
+            contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Settings/Views/VoiceProfileManageView.swift"),
             encoding: .utf8
         )
         XCTAssertTrue(

@@ -80,6 +80,8 @@ const arStudioChrome = {
   'story.studio.background.cameraHold': 'اضغط مطولًا: افتح الكاميرا',
   'story.studio.camera.close': 'العودة إلى المشهد',
   'story.studio.camera.flip': 'تبديل الكاميرا',
+  'story.studio.camera.frames': 'إطارات',
+  'story.studio.camera.frames.none': 'بلا إطار',
   'story.studio.camera.flash': 'الفلاش',
   'story.studio.camera.shutter.photo': 'التقاط صورة',
   'story.studio.camera.shutter.start': 'بدء التسجيل',
@@ -145,6 +147,10 @@ const arStudioChrome = {
   'story.studio.edit.saving': 'جارٍ الحفظ…',
   'story.studio.edit.cancel': 'تجاهل التعديلات',
   'story.studio.publish.as.storyAndReel': 'نشر القصة والريل',
+  'story.studio.unsent': 'لم يُرسَل المنشور.',
+  'story.studio.unsent.retry': 'إعادة المحاولة',
+  'story.studio.unsent.discard': 'حذف',
+  'story.studio.volatile': 'هذا الجهاز لا يحتفظ بالوسائط: لا تُعِد تحميل الصفحة قبل النشر.',
 } satisfies StudioChromeCatalogSlice;
 
 export default arStudioChrome;

@@ -1,9 +1,11 @@
 import { currentDeviceLocale } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
+import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { coqueCourante } from '@/lib/native-shell';
 import { resolveReaderLanguages } from '@/lib/reader';
+import { quickReplyAllowed } from '@/lib/send/served-regime';
 
 import { createCaptions, type CaptionsContext, type CaptionsPort } from './call-captions-controller';
 import { recognitionFor } from './call-shell-speech';
@@ -53,5 +55,7 @@ export function createBrowserCaptions(ctx: CaptionsContext): CaptionsPort {
     language: spokenLanguage,
     viewerName,
     newId: utteranceId,
+    // #13720 — fail-closed : régime connu du cache ET en clair, comme la réponse rapide d'un refus d'appel.
+    serverMayHearCaptions: (conversationId) => quickReplyAllowed(conversationId, appQueryClient),
   });
 }

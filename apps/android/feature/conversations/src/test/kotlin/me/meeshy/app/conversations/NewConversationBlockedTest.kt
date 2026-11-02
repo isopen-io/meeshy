@@ -6,6 +6,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -16,6 +17,7 @@ import me.meeshy.sdk.friend.BlockedListRepository
 import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.model.FriendRequestUser
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.friend.BlockedUser
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
@@ -46,7 +48,10 @@ class NewConversationBlockedTest {
         }
         val blockedCache = mockk<BlockedListRepository> { coEvery { cachedSnapshot() } returns cachedBlocked }
         val blocks = mockk<BlockRepository> { coEvery { listBlocked() } returns served }
-        val session = mockk<SessionRepository>(relaxed = true) { every { currentUserId } returns "me" }
+        val session = mockk<SessionRepository>(relaxed = true) {
+            every { currentUserId } returns "me"
+            every { currentUser } returns MutableStateFlow<MeeshyUser?>(null)
+        }
         return NewConversationViewModel(mockk(relaxed = true), mockk(relaxed = true), session, friends, network, blockedCache, blocks)
     }
 

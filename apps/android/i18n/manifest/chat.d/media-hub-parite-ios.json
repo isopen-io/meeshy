@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.title",
+          "androidName": "media_hub_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.search.placeholder",
+          "androidName": "media_hub_search_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.search.label",
+          "androidName": "media_hub_search_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.segments.label",
+          "androidName": "media_hub_segments_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.kind.visual",
+          "androidName": "media_hub_kind_visual",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.kind.audio",
+          "androidName": "media_hub_kind_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.kind.document",
+          "androidName": "media_hub_kind_document",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.kind.link",
+          "androidName": "media_hub_kind_link",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.kind.contact",
+          "androidName": "media_hub_kind_contact",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.kind.conversation",
+          "androidName": "media_hub_kind_conversation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.kind.location",
+          "androidName": "media_hub_kind_location",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.empty",
+          "androidName": "media_hub_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.empty_search",
+          "androidName": "media_hub_empty_search",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.loading",
+          "androidName": "media_hub_loading",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.error",
+          "androidName": "media_hub_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.retry",
+          "androidName": "media_hub_retry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.offline",
+          "androidName": "media_hub_offline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.offline_empty",
+          "androidName": "media_hub_offline_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.more_error",
+          "androidName": "media_hub_more_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.go_to_message",
+          "androidName": "media_hub_go_to_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.tile.image",
+          "androidName": "media_hub_tile_image",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.tile.video",
+          "androidName": "media_hub_tile_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.place.fallback",
+          "androidName": "media_hub_place_fallback",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media_hub.all_loaded",
+          "androidName": "media_hub_all_loaded",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.clear-search",
+          "androidName": "common_clear_search",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "context.invite_friends",
+          "androidName": "context_invite_friends",
+          "status": "adopted"
+        },
+        {
+          "androidName": "media_hub_encrypted_notice",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_hub_encrypted_tile",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

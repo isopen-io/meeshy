@@ -52,6 +52,33 @@ internal fun ComposerReadOnlyNotice(modifier: Modifier = Modifier) {
 }
 
 /**
+ * The composer of an end-to-end-encrypted conversation (#13110): the native Android
+ * app neither seals nor opens libsignal yet (#13015), so nothing leaves it — the row
+ * replaces the input and says where the conversation is written.
+ */
+@Composable
+internal fun ComposerEndToEndNotice(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Lock,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text = stringResource(R.string.chat_composer_end_to_end),
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.padding(start = MeeshySpacing.xs),
+        )
+    }
+}
+
+/**
  * The live slow-mode posture for the composer, ticked once a second while a
  * cooldown is running. The ViewModel's [ChatViewModel.send] gate is authoritative;
  * this is the thin, coverage-exempt Compose glue that animates the countdown so the

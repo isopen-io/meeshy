@@ -3,7 +3,7 @@ import { serializeConversationParticipant } from '@meeshy/shared/utils/participa
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { isMemberCreator, MemberRole } from '@meeshy/shared/types/role-types';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
-import { actorHasMinimumRole } from '../../utils/conversation-authority';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getPresenceVisibilityService, type PresenceViewer } from '../../services/PresenceVisibilityService';
 import { presenceFor } from '../users/presence-gate';

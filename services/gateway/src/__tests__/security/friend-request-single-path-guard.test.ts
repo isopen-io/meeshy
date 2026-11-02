@@ -22,8 +22,15 @@ import path from 'path';
 
 const RACINE = path.resolve(__dirname, '../../routes');
 
-/** Le seul module autorisé à ÉCRIRE une demande d'amitié. */
+/**
+ * Le module autorisé à ÉCRIRE une demande d'amitié — et celui qu'il a dû
+ * ESSAIMER (#13933) : `friend-requests-core.ts` dépassait le budget de taille,
+ * la réponse (`update`) a été extraite en `friend-request-answer.ts`. C'est la même
+ * famille, dans le même dossier, appelée par le seul cœur : ce n'est pas une
+ * seconde famille de chemins.
+ */
 const MODULE_AUTORISE = 'directory/friend-requests-core.ts';
+const MODULES_EXTRAITS = ['directory/friend-request-answer.ts'] as const;
 
 /**
  * L'exception, NOMMÉE et bornée : la MODÉRATION.
@@ -67,6 +74,7 @@ describe('Un seul module écrit une demande d’amitié', () => {
   it('aucun autre fichier n’appelle `friendRequest.create`, `.update` ou `.delete`', () => {
     const ecrivains = fichiersTs(RACINE)
       .filter((f) => !f.endsWith(MODULE_AUTORISE))
+      .filter((f) => !MODULES_EXTRAITS.some((extrait) => f.endsWith(extrait)))
       .filter((f) => !SOUS_ADMINISTRATION.some((admin) => f.endsWith(admin)))
       .flatMap((f) =>
         lignesDeCode(fs.readFileSync(f, 'utf8'))

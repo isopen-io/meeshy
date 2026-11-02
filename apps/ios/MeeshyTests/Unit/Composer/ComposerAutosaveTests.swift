@@ -472,6 +472,23 @@ final class ComposerAutosaveTests: XCTestCase {
         XCTAssertEqual(relu.publishChoice, ComposerPublishChoice(format: .post, layout: nil))
     }
 
+    /// #13920 — les formats cochés ENSEMBLE reviennent avec le brouillon ; un
+    /// instantané d'avant la clé se relit sur son seul format.
+    func test_save_thenLoad_restoresEveryCheckedFormat() throws {
+        let store = makeStore()
+        let compte = makeAccount()
+        var etat = makeState(format: .post)
+        let choix = try XCTUnwrap(ComposerPublishChoice(formats: [.story, .post, .reel], layout: .hero))
+        etat.publishChoice = choix
+
+        store.save(ComposerAutosaveCodec.write(from: etat), account: compte, slot: .creation)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        XCTAssertEqual(relu.publishChoice, choix)
+        XCTAssertEqual(ComposerAutosaveCodec.write(from: etat).snapshot.publishChoice?.format, "post",
+                       "Une version d'avant le choix composite relit le premier format coché.")
+    }
+
     // MARK: - Une copie par image (#9420)
 
     private func makeStoreAndRoot() -> (ComposerAutosaveStore, URL) {
@@ -734,6 +751,63 @@ final class ComposerAutosaveTests: XCTestCase {
             let url = try XCTUnwrap(objet.mediaURL.flatMap(URL.init(string:)))
             XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
         }
+    }
+
+    // MARK: - L'aperçu d'un brouillon rouvert (#14189)
+
+    /// Ce que le lecteur de l'aperçu PEINT : le document v3 quand la story en
+    /// porte un (la porte de `StoryViewerView+Canvas`), sinon le runtime.
+    private func paintedMedia(_ slide: StorySlide) -> [StoryMediaObject] {
+        let item = slide.toPreviewStoryItem()
+        guard let document = item.storyEffects?.canvasV3 else { return item.storyEffects?.mediaObjects ?? [] }
+        return StoryEffects(rendering: document, sceneIndex: 0).mediaObjects ?? []
+    }
+
+    private func makeVideoBackgroundState(in dossier: URL) -> ComposerAutosaveState {
+        var etat = makeState(format: .story)
+        let video = makeMediaFile(named: "fond.mp4", in: dossier)
+        var fond = StoryMediaObject(id: "bg-video", postMediaId: "", mediaURL: video.absoluteString,
+                                    mediaType: "video", aspectRatio: 1)
+        fond.isBackground = true
+        etat.slides[0].effects.mediaObjects = [fond]
+        etat.porters = ComposerMediaPorters(
+            localMedia: [ComposerDocumentMedia(url: video, mimeType: "video/mp4", durationMs: 4000)],
+            roleByURL: [video: .background], slideIdByMediaURL: [video: "s1"],
+            objectIdBySource: [:], captions: [:], altsByObjectId: [:], transcriptions: [:], railPosedURLs: [])
+        return etat
+    }
+
+    func test_preview_ofARestoredVideoBackground_paintsAPlayableLocalFile() throws {
+        let store = makeStore()
+        let compte = makeAccount()
+        store.save(ComposerAutosaveCodec.write(from: makeVideoBackgroundState(in: makeTempDirectory())),
+                   account: compte, slot: .creation)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        let peints = paintedMedia(try XCTUnwrap(relu.slides.first))
+        XCTAssertEqual(peints.map(\.id), ["bg-video"])
+        for objet in peints {
+            let adresse = try XCTUnwrap(objet.mediaURL)
+            XCTAssertFalse(adresse.hasPrefix(ComposerAutosaveCodec.fileReferencePrefix),
+                           "L'aperçu ne peut pas jouer une référence de brouillon : \(adresse)")
+            let url = try XCTUnwrap(URL(string: adresse))
+            XCTAssertTrue(url.isFileURL && FileManager.default.fileExists(atPath: url.path),
+                          "L'aperçu reçoit la copie de session de la vidéo : \(adresse)")
+        }
+    }
+
+    func test_preview_ofARestoredSlide_paintsTheEditMadeAfterTheRestore() throws {
+        let store = makeStore()
+        let compte = makeAccount()
+        store.save(ComposerAutosaveCodec.write(from: makeVideoBackgroundState(in: makeTempDirectory())),
+                   account: compte, slot: .creation)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        var editee = try XCTUnwrap(relu.slides.first)
+        editee.effects.mediaObjects = []
+
+        XCTAssertEqual(paintedMedia(editee).map(\.id), [],
+                       "Le fond retiré après la réouverture ne revient pas dans l'aperçu.")
     }
 
     /// « Tout effacer » vide le dossier, médias compris.

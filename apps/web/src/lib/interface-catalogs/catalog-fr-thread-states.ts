@@ -21,6 +21,8 @@ const frThreadStates = {
   'message.forwarded': 'Transféré',
   'message.forwarded.fromGroup': 'Transféré depuis {name}',
   'message.forwarded.fromPerson': 'Transféré de {name}',
+  /* #11375 — la modification d'un message par un modérateur de plateforme, dite à tous. */
+  'message.editedByModerator': 'modifié par un modérateur',
   'message.send.failed': 'Non envoyé',
   'message.send.failed.reason': 'Non envoyé — {reason}',
   'message.send.retry': 'Réessayer',
@@ -30,6 +32,8 @@ const frThreadStates = {
   'message.expired.a11y': 'Message éphémère expiré',
   'message.withheld': 'Contenu retenu',
   'message.withheld.a11y': 'Contenu retenu : ce message existe et ne se montre pas',
+  'message.endToEnd': 'Chiffré de bout en bout — à lire dans l’application Meeshy installée sur vos appareils',
+  'message.endToEnd.a11y': 'Chiffré de bout en bout : ce message se lit dans l’application Meeshy installée sur vos appareils',
   'message.veiled': 'Contenu masqué',
   'message.veiled.hint': 'Touchez pour afficher',
   'message.veiled.error': 'Révélation impossible pour l’instant',

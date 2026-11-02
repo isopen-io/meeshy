@@ -58,7 +58,11 @@ describe('planShare — entrées × actions (contenu ordinaire), la matrice de l
       ['send', 'caption', 'reorder', 'imager', 'copy-text'],
     ],
     ['une publication', { kind: 'post', url: 'https://meeshy.me/p/1' }, ['send', 'caption', 'publish-post', 'publish-story', 'copy-link', 'share-out']],
-    ['une story — pas de republication (D14)', { kind: 'story', url: 'https://meeshy.me/s/1' }, ['send', 'caption', 'copy-link', 'share-out']],
+    [
+      'une story — republiable et recomposable (D14, #12644)',
+      { kind: 'story', url: 'https://meeshy.me/s/1' },
+      ['send', 'caption', 'publish-post', 'publish-story', 'publish-reel', 'studio', 'copy-link', 'share-out'],
+    ],
     ['un réel', { kind: 'reel', url: 'https://meeshy.me/r/1' }, ['send', 'caption', 'publish-post', 'publish-story', 'copy-link', 'share-out']],
     ['un profil (D15)', { kind: 'profile', url: 'https://meeshy.me/u/lea' }, ['send', 'caption', 'copy-link', 'share-out']],
     ['une invitation', { kind: 'invitation', url: 'https://meeshy.me/join/x' }, ['send', 'caption', 'copy-link', 'share-out']],
@@ -217,22 +221,22 @@ describe('planShare — ensemble / séparément, légende (D3, D4)', () => {
 });
 
 describe('planShare — plafonds (D10, V9)', () => {
-  it('22 fichiers et 612 Mo : retirer les 2 derniers, bouton désactivé', () => {
+  it('102 fichiers : retirer les 2 derniers, bouton désactivé (100 fichiers depuis le 2026-10-25, #12974)', () => {
     const media = [
-      ...Array.from({ length: 20 }, (_, index) => ({ id: `f${index}`, mimeType: 'image/jpeg', bytes: 23 * MB })),
-      { id: 'f20', mimeType: 'video/mp4', bytes: 12 * MB, durationMs: 10_000 },
-      { id: 'f21', mimeType: 'video/mp4', bytes: 140 * MB, durationMs: 60_000 },
+      ...Array.from({ length: 100 }, (_, index) => ({ id: `f${index}`, mimeType: 'image/jpeg', bytes: 23 * MB })),
+      { id: 'f100', mimeType: 'video/mp4', bytes: 12 * MB, durationMs: 10_000 },
+      { id: 'f101', mimeType: 'video/mp4', bytes: 140 * MB, durationMs: 60_000 },
     ];
     const plan = planShare({ entry: { kind: 'media', media }, destinations: [{ id: 'd' }] });
-    expect(plan.limits.files).toBe(22);
+    expect(plan.limits.files).toBe(102);
     expect(plan.limits.trimCount).toBe(2);
     expect(plan.canSend).toBe(false);
   });
 
   it('les octets seuls peuvent imposer de retirer', () => {
     const media = [
-      { id: 'a', mimeType: 'video/mp4', bytes: 300 * MB, durationMs: 10_000 },
-      { id: 'b', mimeType: 'video/mp4', bytes: 300 * MB, durationMs: 10_000 },
+      { id: 'a', mimeType: 'video/mp4', bytes: 3 * 1024 * MB, durationMs: 10_000 },
+      { id: 'b', mimeType: 'video/mp4', bytes: 3 * 1024 * MB, durationMs: 10_000 },
     ];
     expect(planShare({ entry: { kind: 'media', media } }).limits.trimCount).toBe(1);
   });

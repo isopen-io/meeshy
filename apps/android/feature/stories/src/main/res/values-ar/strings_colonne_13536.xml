@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_column_text_style">النمط</string>
+    <string name="composer_column_text_effect">التلاشي</string>
+    <string name="composer_column_text_color">اللون</string>
+    <string name="composer_column_text_align">المحاذاة</string>
+    <string name="composer_column_text_background">الخلفية</string>
+    <string name="composer_column_text_timing">التوقيت</string>
+    <string name="composer_column_draw_color">لون الفرشاة</string>
+    <string name="composer_column_draw_width">سماكة الفرشاة</string>
+    <string name="composer_column_exit_tool">إنهاء الأداة</string>
+</resources>

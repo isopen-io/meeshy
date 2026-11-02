@@ -2,7 +2,11 @@ package me.meeshy.sdk.socket
 
 import kotlinx.coroutines.CoroutineDispatcher
 import me.meeshy.core.common.DefaultDispatcher
+import me.meeshy.sdk.net.SessionTransitionFlags
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 import timber.log.Timber
+import javax.inject.Provider
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,14 +27,23 @@ fun interface SocketEventRegistrar {
 class SocketEventRouter internal constructor(
     private val registrar: SocketEventRegistrar,
     dispatcher: CoroutineDispatcher,
+    session: () -> Long = { 0L },
+    ticket: () -> AccountTicket? = { null },
 ) {
     @Inject
     constructor(
         socketManager: SocketManager,
         @DefaultDispatcher dispatcher: CoroutineDispatcher,
-    ) : this(SocketEventRegistrar { event, callback -> socketManager.on(event, callback) }, dispatcher)
+        transition: SessionTransitionFlags,
+        fence: Provider<AccountFence>,
+    ) : this(
+        SocketEventRegistrar { event, callback -> socketManager.on(event, callback) },
+        dispatcher,
+        { transition.generation },
+        { fence.get().ticket() },
+    )
 
-    private val lane = OrderedDeliveryLane(dispatcher)
+    private val lane = OrderedDeliveryLane(dispatcher, ticket, session)
 
     fun install(routes: List<SocketInboundRoute>) {
         routes.forEach { route ->

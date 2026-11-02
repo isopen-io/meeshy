@@ -47,6 +47,10 @@ const edit = (params: { encryptionMode: string | null; editor?: string; globalRo
       createdAt: new Date(NOW - 60_000),
       messageType: 'text',
       metadata: null,
+      // #12881 — ces témoins portent sur le régime de la CONVERSATION, pas sur
+      // ce que la LIGNE du message porte : permissif explicite.
+      isEncrypted: null,
+      encryptionMode: null,
     },
     now: NOW,
   });
@@ -72,8 +76,40 @@ describe('admitMessageEdit — aucune édition en clair dans une conversation e2
     expect(isEditRefused(admission) && admission.reason).toBe('not-a-member');
   });
 
-  it.each([null, 'server', 'hybrid'])('mode %s : l’édition reste admise (le serveur lit déjà le clair)', async (mode) => {
+  it('sans chiffrement, l’édition reste admise', async () => {
+    const admission = await edit({ encryptionMode: null });
+    expect(admission.admitted).toBe(true);
+  });
+
+  it.each(['server', 'hybrid', 'Hybrid'])('décision 2026-11-01 — mode %s : admise, les quatre transports rescellent le texte modifié (`atRestEdit`)', async (mode) => {
     const admission = await edit({ encryptionMode: mode });
+    expect(admission.admitted).toBe(true);
+  });
+
+  it('décision 2026-11-01 — un modérateur plateforme corrige aussi un message au repos', async () => {
+    const admission = await edit({ encryptionMode: 'server', editor: 'user-mod', globalRole: 'MODERATOR' });
+    expect(admission).toMatchObject({ admitted: true, asModerator: true });
+  });
+
+  it('décision 2026-11-01 — une LIGNE scellée au repos (isEncrypted, mode server) n’est pas un chiffré de bout en bout : admise', async () => {
+    const admission = await admitMessageEdit({
+      prisma: buildPrisma() as never,
+      editorUserId: AUTHOR,
+      message: {
+        authorUserId: AUTHOR,
+        conversationId: CONV,
+        conversation: { isActive: true, closedAt: null, type: 'group', encryptionMode: 'server' },
+        createdAt: new Date(NOW - 60_000),
+        messageType: 'text',
+        metadata: null,
+        isViewOnce: false,
+        effectFlags: 0,
+        isEncrypted: true,
+        encryptionMode: 'server',
+        attachments: [],
+      },
+      now: NOW,
+    });
     expect(admission.admitted).toBe(true);
   });
 

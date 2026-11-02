@@ -19,8 +19,9 @@ import { arrivalAge, countryLabel } from '@/routes/share-link-detail-parts';
  * liste charge la suite. Pièces PURES : `share-link-arrivals.test.tsx` les
  * rend sans passerelle ni TanStack Query.
  *
- * Aucune présence, aucun visage : la passerelle ne les sert pas, et les
- * initiales en couleur suffisent à distinguer deux lignes.
+ * Aucune présence : la passerelle ne la sert pas. Le visage (#12571) est celui
+ * que servent aussi les arrivées récentes ; sans photo, les initiales en couleur
+ * distinguent deux lignes.
  */
 
 const INK = 'var(--color-ios-ink)';
@@ -32,7 +33,7 @@ function ArrivalLine({ language, arrival, now }: { readonly language: InterfaceL
   return (
     <li data-link-arrival className="flex min-w-0 items-center gap-3 border-t py-2.5 first:border-t-0" style={{ borderColor: 'var(--color-ios-hairline)' }}>
       <span aria-hidden="true" className="shrink-0">
-        <Avatar initials={initialsOf(arrival.displayName)} color={colorForName(arrival.displayName)} size={40} />
+        <Avatar initials={initialsOf(arrival.displayName)} color={colorForName(arrival.displayName)} size={40} {...(arrival.avatar === null ? {} : { src: arrival.avatar })} />
       </span>
       <span className="grid min-w-0 flex-1 gap-0.5">
         <span className="flex min-w-0 items-center gap-2">

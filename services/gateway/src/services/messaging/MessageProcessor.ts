@@ -9,7 +9,12 @@ import { copiedAttachmentFields } from './copiedAttachmentFields';
 import { exitProtectedCopy } from './copyExitProtection';
 import type { ForwardImposition } from './forwardAdmission';
 import { declaredReplyProtection } from './replyProtectionContagion';
-import { assertPlaintextAdmitted, type EncryptionRegime } from './e2eePlaintextAdmission';
+import { assertPlaintextAdmitted, E2EE_CONTENT_PLACEHOLDER, type EncryptionRegime } from './e2eePlaintextAdmission';
+import { admitSendUnderRegime } from './e2eeSendAdmission';
+import { persistAdmittedEnvelopes } from './e2eeEnvelopePersistence';
+import { atRestModeOf, sealsAtRest, sealTextAtRest } from './atRestWrite';
+import { isSealedAtRest, isServerAtRestMode, revealAtRestWithQuote, servedClearAtRest, ServerAtRestUnavailableError } from './serverAtRest';
+import type { E2EERelayRequest } from '@meeshy/shared/types/e2ee-directory';
 import { PrismaClient, Message, type Prisma } from '@meeshy/shared/prisma/client';
 import { TrackingLinkService } from '../TrackingLinkService';
 import { processExplicitLinks } from './messageLinks';
@@ -23,6 +28,7 @@ import {
   type MessageNotificationTarget,
 } from './messageNotificationFanOut';
 import { resolveMessageMentions } from './messageMentions';
+import { noteMessageInteractions } from '../relations/messageInteractions';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
 import { copyAttachmentsFromMessage } from './copyAttachments';
@@ -37,12 +43,15 @@ import {
   type PostReplyTo,
 } from './postReplySnapshot';
 import { clientDeclaredMetadata } from './clientDeclaredMetadata';
+import { E2EE_PLAINTEXT_LOCATION_WITHHELD } from '../location/sharedPlace';
 import { LIVE_MESSAGE_MARK } from './liveMessage';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { mapWithConcurrency } from '@meeshy/shared/utils/concurrency';
 import { findExistingMessage, findContentWindowDuplicate } from './messageDedupProjection';
 import { MESSAGE_AUTHOR_USER_SELECT } from './messageAuthorSelect';
 import type { SocketAttachmentRow } from '../../socketio/serializeAttachmentForSocket';
+import { prismaAtRestFileStore, type AtRestFileAccess } from '../attachments/atRest/atRestFiles';
+import { contentDisappears, gatewaySealDeps, requireFileSealingKey, sealMessageAttachmentsAtRest, sendCarriesFiles } from './sealMessageAttachments';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
@@ -72,16 +81,19 @@ export class MessageProcessor {
   private mentionService: MentionService;
   private encryptionService: EncryptionService;
   private attachmentService: AttachmentService;
+  private atRestFiles: AtRestFileAccess;
 
   constructor(
     private readonly prisma: PrismaClient,
     private readonly notificationService?: NotificationService,
-    private readonly translationService?: MessageTranslationService
+    private readonly translationService?: MessageTranslationService,
+    atRestFiles?: AtRestFileAccess
   ) {
     this.trackingLinkService = new TrackingLinkService(prisma);
     this.mentionService = new MentionService(prisma);
     this.encryptionService = new EncryptionService(prisma);
     this.attachmentService = new AttachmentService(prisma);
+    this.atRestFiles = atRestFiles ?? { store: prismaAtRestFileStore(prisma), keyring: this.encryptionService };
   }
 
   /**
@@ -160,25 +172,16 @@ export class MessageProcessor {
   }
 
   /**
-   * Get encryption context for a conversation
-   * Determines if and how a message should be encrypted
+   * Le chiffrement d'un message, décidé par le RÉGIME de sa conversation et par
+   * lui seul : un `messageType` déclaré n'en dispense jamais (#12822 — un
+   * `system` venu d'un client rangeait le clair dans une conversation
+   * `server`/`hybrid`). Les avis de la passerelle ne passent pas par ici.
    */
   async getEncryptionContext(
     conversationId: string,
     content: string,
-    messageType: string,
     knownRegime?: EncryptionRegime | null
   ): Promise<MessageEncryptionContext> {
-    // System messages are NEVER encrypted
-    if (messageType === 'system') {
-      return {
-        isEncrypted: false,
-        mode: null,
-        encryptedContent: null,
-        encryptionMetadata: null
-      };
-    }
-
     const conversation = knownRegime === undefined ? await this.readEncryptionRegime(conversationId) : knownRegime;
 
     // No encryption enabled
@@ -204,63 +207,31 @@ export class MessageProcessor {
       };
     }
 
-    try {
-      // Server mode: encrypt content server-side
-      if (mode === 'server') {
-        const encrypted = await this.encryptionService.encryptMessage(
-          content,
-          'server',
-          conversationId
-        );
-
-        return {
-          isEncrypted: true,
-          mode: 'server',
-          encryptedContent: encrypted.ciphertext,
-          encryptionMetadata: encrypted.metadata as Prisma.InputJsonValue
-        };
-      }
-
-      // Hybrid mode: encrypt the server layer
-      if (mode === 'hybrid') {
-        const serverLayer = await this.encryptionService.encryptHybridServerLayer(
-          content,
-          conversationId
-        );
-
-        return {
-          isEncrypted: true,
-          mode: 'hybrid',
-          encryptedContent: serverLayer.ciphertext,
-          encryptionMetadata: {
-            mode: 'hybrid',
-            protocol: 'aes-256-gcm',
-            keyId: serverLayer.keyId,
-            iv: serverLayer.iv,
-            authTag: serverLayer.authTag,
-            canTranslate: true,
-            timestamp: Date.now()
-          } as Prisma.InputJsonValue
-        };
-      }
-
-      // Unknown mode - fallback to plaintext
-      logger.warn(`[MessageProcessor] Unknown encryption mode: ${mode}`);
-      return {
-        isEncrypted: false,
-        mode: null,
-        encryptedContent: null,
-        encryptionMetadata: null
-      };
-    } catch (error) {
-      logger.error('[MessageProcessor] Encryption failed', error);
-      return {
-        isEncrypted: false,
-        mode: null,
-        encryptedContent: null,
-        encryptionMetadata: null
-      };
+    // #11381 — un mode que la passerelle ne sait pas chiffrer est REFUSÉ, comme
+    // une clé absente : la conversation se croit chiffrée, rien ne s'y écrit en clair.
+    if (!isServerAtRestMode(mode)) {
+      logger.warn(`[MessageProcessor] Unknown encryption mode refused: ${mode}`);
+      throw new ServerAtRestUnavailableError('unknown-mode');
     }
+
+    const sealed = await sealTextAtRest({
+      sealer: this.encryptionService,
+      mode,
+      conversationId,
+      plaintext: content,
+      preferredKeyId: conversation.serverEncryptionKeyId ?? null,
+    });
+    // Un message sans texte n'a rien à sceller : il se range non chiffré, mode gardé.
+    if (!sealed) return { isEncrypted: false, mode: atRestModeOf(mode), encryptedContent: null, encryptionMetadata: null };
+    return { isEncrypted: true, mode: sealed.mode, encryptedContent: sealed.encryptedContent, encryptionMetadata: sealed.encryptionMetadata };
+  }
+
+  /**
+   * #11381 — une ligne LUE en base (rejeu d'un `clientMessageId`, doublon) et
+   * sa citation, servies en clair comme la liste les sert.
+   */
+  revealStored<T extends Parameters<typeof revealAtRestWithQuote>[0]>(row: T): Promise<T> {
+    return revealAtRestWithQuote(row, this.encryptionService);
   }
 
   private readEncryptionRegime(conversationId: string): Promise<EncryptionRegime | null> {
@@ -321,19 +292,18 @@ export class MessageProcessor {
     sticker?: unknown;
     /** Pièce NOMMÉE citée (#6164) — même doctrine : admise par `admitAttachmentReply`, forme gardée par `parseAttachmentReplyTo`. */
     attachmentReplyTo?: unknown;
+    /** Envoi libsignal par appareil (#3706) : admis par `admitSendUnderRegime`, rangé par `persistAdmittedEnvelopes`. */
+    e2eeRelay?: E2EERelayRequest;
   }): Promise<Message> {
+    // #11216, #12518 — refusé AVANT tout le reste ; `endToEnd` éteint les pipelines serveur.
+    const { regime, carriesCiphertext, endToEnd, relay } = await admitSendUnderRegime(this.prisma, request);
+
     const data = await exitProtectedCopy(this.prisma, await declaredReplyProtection(this.prisma, request));
     const corr: Record<string, any> = {
       clientMessageId: data.clientMessageId,
       conversationId: data.conversationId,
       senderId: data.senderId
     };
-
-    // #11216 — le régime est lu AVANT les liens : un clair refusé en e2ee ne
-    // laisse rien derrière lui, pas même un `TrackingLink` minté sur son URL.
-    const carriesCiphertext = Boolean(data.encryptedContent && data.encryptionMetadata);
-    const regime = carriesCiphertext ? null : await this.readEncryptionRegime(data.conversationId);
-    assertPlaintextAdmitted({ encryptionMode: regime?.encryptionMode, plaintext: data.content });
 
     // À qui appartiendront les liens de ce message : le `User.id` DERRIÈRE le
     // participant expéditeur, résolu UNE fois pour les deux chemins de tracking
@@ -348,7 +318,11 @@ export class MessageProcessor {
     //
     // Un expéditeur non inscrit (invité anonyme, participant introuvable) ne
     // voit aucune adresse suivie (#10286) : ni réécriture, ni carte.
-    const linkAuthor = this.containsLinks(data.content)
+    // #11381 — au repos, aucune adresse ne se range en clair à côté du chiffré.
+    const sealedAtRest = sealsAtRest(regime);
+    // #13100 — ses fichiers seront scellés : sans clé, refusé AVANT l'écriture.
+    if (sealedAtRest && sendCarriesFiles(request)) await requireFileSealingKey(this.atRestFiles, request.conversationId);
+    const linkAuthor = !endToEnd && !sealedAtRest && this.containsLinks(data.content)
       ? await this.resolveLinkTrackingAuthor(data.senderId)
       : UNTRACKED_LINK_AUTHOR;
 
@@ -365,20 +339,24 @@ export class MessageProcessor {
     let encryptionContext: MessageEncryptionContext;
 
     if (carriesCiphertext) {
-      const metadata = data.encryptionMetadata as Record<string, unknown>;
+      // #12562 — un chiffré n'est admis QUE dans une conversation e2ee : le
+      // mode de la ligne est celui de la conversation, jamais celui du client.
       encryptionContext = {
         isEncrypted: true,
-        mode: (metadata.mode as EncryptionMode) || 'e2ee',
+        mode: 'e2ee',
         encryptedContent: data.encryptedContent,
         encryptionMetadata: data.encryptionMetadata
       };
+    } else if (endToEnd) {
+      // Le mode de la ligne est celui de la conversation, quel que soit le
+      // `messageType` déclaré : l'éventail et la traduction le lisent.
+      encryptionContext = { isEncrypted: false, mode: 'e2ee', encryptedContent: null, encryptionMetadata: null };
     } else {
       encryptionContext = await performanceLogger.withTiming(
         'messaging.encryptionContext',
         () => this.getEncryptionContext(
           data.conversationId,
           processedContent.trim(),
-          data.messageType || 'text',
           regime
         ),
         corr
@@ -407,10 +385,16 @@ export class MessageProcessor {
 
     // Les blocs que le CLIENT déclare (`location`, `sticker`) passent par leurs
     // parseurs dédiés — jamais un `metadata` brut, cf. `clientDeclaredMetadata.ts`.
+    // #12526 — en e2ee, un lieu en clair est retenu ; le message chiffré passe.
     const messageMetadata: Record<string, unknown> = {
       ...(postReplyTo ? { postReplyTo } : {}),
       ...(trackingLinks.length > 0 ? { trackingLinks } : {}),
-      ...clientDeclaredMetadata(data),
+      ...clientDeclaredMetadata(data, {
+        endToEnd,
+        onWithheld: (field) => logger.warn('plaintext block withheld from an end-to-end conversation', {
+          code: E2EE_PLAINTEXT_LOCATION_WITHHELD, field, conversationId: data.conversationId,
+        }),
+      }),
     };
 
     // ÉTAPE 3: Créer le message avec le contenu traité et encryption.
@@ -424,7 +408,7 @@ export class MessageProcessor {
     const messageData = {
       conversationId: data.conversationId,
       senderId: data.senderId,
-      content: encryptionContext.isEncrypted ? '' : processedContent.trim(),
+      content: encryptionContext.isEncrypted ? (relay ? E2EE_CONTENT_PLACEHOLDER : '') : processedContent.trim(),
       originalLanguage: data.originalLanguage,
       messageType: data.messageType || 'text',
       messageSource: data.messageSource || 'user',
@@ -467,7 +451,8 @@ export class MessageProcessor {
       candidate: {
         conversationId: messageData.conversationId,
         senderId: messageData.senderId,
-        content: messageData.content,
+        // Le littéral d'un envoi libsignal n'est pas son contenu : deux messages chiffrés ne se confondent jamais.
+        content: relay ? '' : messageData.content,
         ...(data.attachmentIds ? { attachmentIds: data.attachmentIds } : {})
       },
       ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {}),
@@ -475,8 +460,8 @@ export class MessageProcessor {
     });
 
     if (alreadySent) {
-      (alreadySent as Message & { isDuplicate?: boolean }).isDuplicate = true;
-      return { ...alreadySent, timestamp: alreadySent.createdAt } as Message;
+      const servedDuplicate = await this.revealStored(alreadySent);
+      return { ...servedDuplicate, isDuplicate: true, timestamp: alreadySent.createdAt } as Message;
     }
 
     let message: Message;
@@ -562,7 +547,7 @@ export class MessageProcessor {
         });
         throw e;
       }
-      message = existing;
+      message = await this.revealStored(existing);
       isDuplicate = true;
       logger.info('Idempotent dedup hit on clientMessageId', {
         conversationId: data.conversationId,
@@ -589,10 +574,12 @@ export class MessageProcessor {
 
     const corrWithMsg = { ...corr, messageId: message.id };
 
+    if (relay) await persistAdmittedEnvelopes(this.prisma, { message, relay });
+
     // ÉTAPE 4: Gérer les attachments (Lier ou Copier pour forward)
     await performanceLogger.withTiming(
       'messaging.handleAttachments',
-      () => this.handleAttachments(data, message),
+      () => this.handleAttachments(data, message, { serverReads: !endToEnd, sealsAtRest: sealedAtRest }),
       corrWithMsg
     );
 
@@ -669,8 +656,12 @@ export class MessageProcessor {
       corrWithMsg
     );
 
+    // #11381 — l'expéditeur, `message:new` et la traduction reçoivent le CLAIR ;
+    // la base n'a reçu que le chiffré (ÉTAPE 3) et la notification (ÉTAPE 6) son placeholder.
+    const opened = isSealedAtRest(message) ? servedClearAtRest(message, processedContent.trim()) : message;
+    const served = await this.revealStored(opened);
     return {
-      ...message,
+      ...served,
       timestamp: message.createdAt
     } as Message;
   }
@@ -687,8 +678,12 @@ export class MessageProcessor {
       copyAttachmentsFromMessageId?: string;
       conversationId: string;
     },
-    message: Message
+    message: Message,
+    options: { readonly serverReads: boolean; readonly sealsAtRest: boolean }
   ): Promise<void> {
+    const sealFiles = () => options.sealsAtRest
+      ? sealMessageAttachmentsAtRest(gatewaySealDeps(this.prisma, this.atRestFiles), { messageId: message.id, conversationId: data.conversationId })
+      : Promise.resolve();
     // Diffusion à plusieurs destinataires (PAS un transfert) : copie SERVEUR
     // des pièces jointes du message désigné. Volontairement HORS du
     // try/catch ci-dessous — celui-ci absorbe les échecs du forward en
@@ -719,6 +714,7 @@ export class MessageProcessor {
         );
         throw error;
       }
+      await sealFiles();
       return;
     }
 
@@ -726,16 +722,19 @@ export class MessageProcessor {
       // 1. Lier les attachments pré-uploadés
       if (data.attachmentIds && data.attachmentIds.length > 0) {
         await this.attachmentService.associateAttachmentsToMessage(data.attachmentIds, message.id, message);
+        // #13100 — scellés AVANT le départ de l'audio et avant `message:new`.
+        await sealFiles();
 
-        // Déclencher le traitement audio si nécessaire
-        if (this.translationService) {
-          this.processAudioAttachments(data.attachmentIds, message.id, data.conversationId, data.senderId)
+        // Déclencher le traitement audio si nécessaire — jamais en e2ee (#12518).
+        if (this.translationService && options.serverReads) {
+          this.processAudioAttachments(data.attachmentIds, message.id, data.conversationId, data.senderId, { atRest: options.sealsAtRest || contentDisappears(message) })
             .catch(err => logger.error('[MessageProcessor] Audio processing failed', err));
         }
       }
       // 2. Copier les attachments si c'est un forward et qu'aucun nouvel attachment n'est fourni
       else if (data.forwardedFromId) {
         await this.copyForwardedAttachments(data.forwardedFromId, message.id, data.senderId, data.forwardCopySelection);
+        await sealFiles();
       }
     } catch (error) {
       logger.error('[MessageProcessor] Error handling attachments', error);
@@ -806,7 +805,8 @@ export class MessageProcessor {
     attachmentIds: readonly string[],
     messageId: string,
     conversationId: string,
-    senderId: string
+    senderId: string,
+    regime: { readonly atRest: boolean } = { atRest: false }
   ): Promise<void> {
     if (!this.translationService) return;
 
@@ -877,7 +877,8 @@ export class MessageProcessor {
               audioDurationMs: audioAtt.duration || 0,
               mobileTranscription: mobileTranscription,
               generateVoiceClone: true,
-              modelType: 'medium'
+              modelType: 'medium',
+              ...(regime.atRest ? { atRest: true } : {})
             });
             return true;
           } catch (error) {
@@ -957,6 +958,24 @@ export class MessageProcessor {
       // « pas de `@`, pas de requête » vit dans l'unité, pas ici : c'est une
       // garde qu'un nouvel écrivain oublierait.
       const validatedMentionUserIds = await this.processMentionsInDB(data, message, processedContent);
+
+      // Les cercles (#13932) : le FAIT du message compte pour la paire, jamais son contenu.
+      const counted = message as Message & {
+        sender?: { userId?: string | null } | null;
+        replyTo?: { sender?: { userId?: string | null } | null } | null;
+        attachments?: ReadonlyArray<{ mimeType?: string | null }> | null;
+      };
+      noteMessageInteractions(this.prisma, {
+        conversationId: data.conversationId,
+        senderUserId: counted.sender?.userId ?? null,
+        messageSource: message.messageSource,
+        messageType: message.messageType,
+        encryptionMode: message.encryptionMode,
+        attachmentMimeTypes: (counted.attachments ?? []).map((attachment) => attachment.mimeType),
+        replyToAuthorUserId: counted.replyTo?.sender?.userId ?? null,
+        isStoryReply: Boolean(message.storyReplyToId),
+        mentionedUserIds: validatedMentionUserIds,
+      });
 
       // 2. Déclencher les notifications (Mentions, Réponses, Messages)
       if (this.notificationService) {

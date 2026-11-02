@@ -250,8 +250,8 @@ struct CallPresentationLayer: ViewModifier {
                             get: { callManager.showCallWaitingBanner },
                             set: { callManager.showCallWaitingBanner = $0 }
                         ),
-                        onReject: { callManager.rejectPendingCall() },
-                        onEndAndAnswer: { callManager.endCurrentAndAnswerPending() }
+                        onReject: { callManager.incomingRing.rejectPendingCall() },
+                        onEndAndAnswer: { callManager.incomingRing.endCurrentAndAnswerPending() }
                     )
                     .id(callManager.pendingIncomingCall?.callId)
                     .padding(.top, MeeshySpacing.sm)

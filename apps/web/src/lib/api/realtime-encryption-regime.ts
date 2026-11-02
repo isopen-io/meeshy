@@ -1,7 +1,10 @@
 import type { QueryClient } from '@tanstack/react-query';
+import type { StoreApi } from 'zustand/vanilla';
 
 import type { EncryptionMode } from '@meeshy/shared/types/encryption';
 import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
+
+import { endToEndRegimeLedger, type EndToEndRegimeState } from '@/lib/end-to-end-regime-ledger';
 
 import { conversationQueryKey, findCachedConversation, patchConversation, patchConversationDetail } from './conversations';
 import type { Conversation } from './types';
@@ -78,10 +81,18 @@ const withRegime =
  * POSE L'ANNONCE sur la liste ET le détail (deux caches, la même conversation),
  * puis relit le détail pour la vérité du serveur. Rien ne change (régime déjà
  * fermé ou déjà annoncé) ⇒ rien n'est relu : la même ligne de liste
- * rediffusée ne coûte rien.
+ * rediffusée ne coûte rien. Le bout en bout annoncé est inscrit au registre du
+ * compte (#12949) : la relecture du détail, même servie sans mode, ne rouvre
+ * plus le clair.
  */
-export function applyEncryptionAnnounced(queryClient: QueryClient, conversationId: string, announced: AnnouncedMode | null): void {
+export function applyEncryptionAnnounced(
+  queryClient: QueryClient,
+  conversationId: string,
+  announced: AnnouncedMode | null,
+  ledger: StoreApi<EndToEndRegimeState> = endToEndRegimeLedger,
+): void {
   if (announced === null) return;
+  if (announced === 'e2ee') ledger.getState().learnEndToEnd(conversationId);
   const close = withRegime(announced);
   const listed = findCachedConversation(queryClient, conversationId);
   const detail = queryClient.getQueryData<Conversation>(conversationQueryKey(conversationId));

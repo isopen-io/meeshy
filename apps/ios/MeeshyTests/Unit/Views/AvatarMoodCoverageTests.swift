@@ -42,7 +42,7 @@ final class AvatarMoodCoverageTests: XCTestCase {
 
     func test_profileView_mountsTheAvatarThatCarriesMyMood() throws {
         XCTAssertTrue(
-            try stripped(views + "ProfileView.swift").contains("ProfileOwnAvatar(user: user, accentColor: user?.profileAccentHex ?? accentColor, isEditing: isEditing)"),
+            try stripped("Meeshy/Features/Profile/Views/ProfileView.swift").contains("ProfileOwnAvatar(user: user, accentColor: user?.profileAccentHex ?? accentColor, isEditing: isEditing)"),
             "l'écran de mon profil peint mon avatar par ProfileOwnAvatar — sans lui, mon humeur manque sur le seul écran qui me présente"
         )
     }
@@ -68,8 +68,8 @@ final class AvatarMoodCoverageTests: XCTestCase {
             "l'hôte remet à la bulle l'humeur de l'auteur, lue dans les statuts déjà en mémoire — aucune requête par cellule"
         )
         XCTAssertTrue(
-            code.contains("onSenderMoodTap: statuses.moodTapHandler(for: senderId)"),
-            "le toucher de l'humeur ouvre la bulle d'humeur (emoji + texte) par le gestionnaire de #10528"
+            code.contains("onSenderMoodTap: statuses.moodSpotlightHandler(for: senderId)"),
+            "en conversation, le toucher de l'humeur ouvre sa page plein écran, sans bulle ni pop-up (#13987)"
         )
     }
 
@@ -115,7 +115,7 @@ final class AvatarMoodCoverageTests: XCTestCase {
     }
 
     func test_storyViewerProfileSheet_readsTheMoodFromTheRootResolvers() throws {
-        let code = try stripped(views + "StoryViewerView+Header.swift")
+        let code = try stripped(AppSourceGuard.featureViewPath("StoryViewerView+Header.swift"))
         XCTAssertTrue(code.contains("moodEmoji: moodEmojiResolver?(user.userId ?? \"\")"))
         XCTAssertTrue(code.contains("onMoodTap: moodTapResolver?(user.userId ?? \"\")"))
     }

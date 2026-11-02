@@ -41,7 +41,8 @@ const ECHO = 'rediffuse un état ABSOLU à chaque rejeu — écho sans crédit n
 const INVENTORY: Readonly<Record<string, Declaration>> = {
   'routes/posts/interactions.ts': { calls: 1, replay: `${NO_EFFECT} : retirer un like rejoué ne sait plus quelle réaction est partie et n'annonce rien` },
   'routes/posts/comments.ts': { calls: 2, replay: `édition et suppression : ${ECHO}` },
-  'routes/directory/friend-requests-core.ts': { calls: 2, replay: 'renotifie et repousse la demande ou la réponse à chaque rejeu — suivi #9623 ; le crédit social.friendship est protégé par son quota par cible' },
+  'routes/directory/friend-requests-core.ts': { calls: 1, replay: 'renotifie et repousse la demande à chaque rejeu — suivi #9623' },
+  'routes/directory/friend-request-answer.ts': { calls: 1, replay: 'renotifie et repousse la réponse à chaque rejeu — suivi #9623 ; le crédit social.friendship est protégé par son quota par cible' },
   'routes/directory/blocks.ts': { calls: 2, replay: `${NO_EFFECT} : seule l'invalidation du cache de blocage repart` },
   'routes/me/preferences/preference-router-factory.ts': { calls: 2, replay: ECHO },
   'routes/me/preferences/unified-routes.ts': { calls: 1, replay: ECHO },

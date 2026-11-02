@@ -340,3 +340,79 @@ describe('placeMessageMenuCluster — marges par reflow, positions au pixel enti
     expect(positions.every(Number.isInteger)).toBe(true);
   });
 });
+
+/**
+ * EN BULLES, LE CLUSTER S'ANCRE SOUS LA BULLE (#12635) — port de
+ * `MessageOverlayMenu.swift:321-334` : `nlAnchorX` vaut le centre de la BULLE,
+ * tenue à son bord (droite pour un envoi, gauche sinon), et la liste est
+ * ensuite bornée aux marges. Géométrie MESURÉE (Chromium 390×844,
+ * `/c/c-deploiement` en Bulles) : la rangée `[data-row]` occupe 14→376, la
+ * bulle envoyée `m2` 123→376, la bulle reçue `m1` 14→267 — et sans la bulle,
+ * la liste tombait à 75→315, centrée sur l'écran.
+ */
+describe('placeMessageMenuCluster — en Bulles, l’ancre est la bulle (#12635)', () => {
+  const row = { top: 400, bottom: 488, left: 14, right: 376, width: 362, height: 88 };
+  const sent = { left: 123, right: 376 };
+  const received = { left: 14, right: 267 };
+  const bubbleInput = (overrides: Partial<MessageMenuClusterInput>) => clusterInput({ anchor: row, ...overrides });
+  const listSpan = (placement: { readonly menuLeft: number }) => ({ left: placement.menuLeft, right: placement.menuLeft + MENU_WIDTH });
+
+  test('une bulle envoyée : la liste se centre sous la bulle, tenue à son bord droit, plus sous l’écran', () => {
+    const placement = placeMessageMenuCluster(bubbleInput({ isMine: true, bubble: sent }));
+    expect(placement.anchorX).toBe(248);
+    expect(listSpan(placement)).toEqual({ left: 128, right: 368 });
+    expect(placement.previewEdge).toBe('right');
+  });
+
+  test('une bulle reçue : la liste se centre sous la bulle, tenue à son bord gauche', () => {
+    const placement = placeMessageMenuCluster(bubbleInput({ isMine: false, bubble: received }));
+    expect(placement.anchorX).toBe(143);
+    expect(listSpan(placement)).toEqual({ left: 23, right: 263 });
+    expect(placement.previewEdge).toBe('left');
+  });
+
+  test('une rangée plate (Focal, Script) garde le centrage sur la rangée, envoyée ou reçue', () => {
+    expect(placeMessageMenuCluster(bubbleInput({ isMine: true })).anchorX).toBe(195);
+    expect(placeMessageMenuCluster(bubbleInput({ isMine: false })).anchorX).toBe(195);
+    expect(placeMessageMenuCluster(bubbleInput({ isMine: true })).previewEdge).toBe('right');
+    expect(placeMessageMenuCluster(bubbleInput({ isMine: false })).previewEdge).toBe('left');
+  });
+
+  test('l’aperçu reste à sa place : la bulle n’en change ni le bord ni la largeur', () => {
+    const flat = placeMessageMenuCluster(bubbleInput({ isMine: true }));
+    const anchored = placeMessageMenuCluster(bubbleInput({ isMine: true, bubble: sent }));
+    expect(anchored.previewLeft).toBe(flat.previewLeft);
+    expect(anchored.previewWidth).toBe(flat.previewWidth);
+    expect(anchored.previewTop).toBe(flat.previewTop);
+  });
+
+  test('RTL — la bulle envoyée vit au bord de FIN (à gauche) : la liste la suit, et l’aperçu tient ce bord', () => {
+    const placement = placeMessageMenuCluster(bubbleInput({ isMine: true, bubble: received }));
+    expect(placement.anchorX).toBe(143);
+    expect(placement.previewEdge).toBe('left');
+    const mirrored = placeMessageMenuCluster(bubbleInput({ isMine: false, bubble: sent }));
+    expect(mirrored.anchorX).toBe(248);
+    expect(mirrored.previewEdge).toBe('right');
+  });
+
+  test('au bord de l’écran, la liste est ramenée à la marge, jamais au-delà', () => {
+    const right = placeMessageMenuCluster(bubbleInput({ isMine: true, bubble: { left: 300, right: 376 } }));
+    expect(listSpan(right).right).toBe(390 - SIDE_PADDING);
+    const left = placeMessageMenuCluster(bubbleInput({ isMine: false, bubble: { left: 14, right: 90 } }));
+    expect(listSpan(left).left).toBe(SIDE_PADDING);
+  });
+
+  test('un aperçu réduit (trop haut) garde l’ancre sous la bulle RÉDUITE, depuis le bord qu’il tient', () => {
+    const tall = { ...row, bottom: 1400, height: 1000 };
+    const placement = placeMessageMenuCluster(bubbleInput({ anchor: tall, isMine: true, bubble: sent }));
+    expect(placement.previewScale).toBeLessThan(1);
+    const edge = placement.previewLeft + placement.previewWidth;
+    const bubbleCenter = edge - (376 - 123) / 2;
+    expect(placement.anchorX).toBe(Math.round(edge - (edge - bubbleCenter) * placement.previewScale));
+  });
+
+  test('une ancre de bulle fractionnaire rend toujours des pixels entiers', () => {
+    const placement = placeMessageMenuCluster(bubbleInput({ isMine: true, bubble: { left: 123.4, right: 375.7 } }));
+    expect([placement.anchorX, placement.menuLeft, placement.railLeft].every(Number.isInteger)).toBe(true);
+  });
+});

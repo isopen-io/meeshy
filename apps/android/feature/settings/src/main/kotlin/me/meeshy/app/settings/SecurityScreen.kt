@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Lock
@@ -42,13 +41,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.settings.R
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.formColumnWidth
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
  * Page Sécurité unique (SecurityView iOS) : Mot de passe, authentification à deux
- * facteurs, E-mail, Téléphone, puis Sessions. (Conversations verrouillées s'insère entre
+ * facteurs, E-mail, Téléphone, Mes appareils chiffrés, puis Sessions. (Conversations verrouillées s'insère entre
  * Téléphone et Sessions quand son lot est livré.) Au retour au premier plan, le statut
  * 2FA est relu et, si un e-mail est en attente, la session aussi.
  */
@@ -59,6 +61,7 @@ fun SecurityScreen(
     onOpenChangePassword: () -> Unit,
     onOpenTwoFactor: (step: String) -> Unit,
     onOpenSessions: () -> Unit,
+    onOpenEncryptedDevices: () -> Unit,
     viewModel: SecurityViewModel = hiltViewModel(),
     contactViewModel: AccountContactViewModel = hiltViewModel(),
 ) {
@@ -85,8 +88,8 @@ fun SecurityScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.settings_back),
+                                leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.settings_back)),
                             )
                         }
                     },
@@ -112,6 +115,9 @@ fun SecurityScreen(
                 )
                 SecurityEmailSection(contact, contactViewModel)
                 SecurityPhoneSection(contact, contactViewModel)
+                SecuritySectionCard(MeeshyIcons.Shield, stringResource(R.string.security_section_encrypted_devices)) {
+                    SecurityLinkRow(MeeshyIcons.Shield, stringResource(R.string.encrypted_devices_title), onOpenEncryptedDevices)
+                }
                 SecuritySectionCard(Icons.Filled.Devices, stringResource(R.string.security_section_sessions)) {
                     SecurityLinkRow(Icons.Filled.Devices, stringResource(R.string.security_sessions_manage), onOpenSessions)
                 }

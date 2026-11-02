@@ -11,8 +11,8 @@ iOS croisées avec `apps/ios/Meeshy/Localizable.xcstrings` :
 | fichier | clés non traduites |
 |---|---|
 | **`Features/Auth/Onboarding/OnboardingStepViews.swift`** | **64** |
-| `Features/Main/Views/CreateShareLinkView.swift` | 55 |
-| `Features/Main/Views/NotificationSettingsView.swift` | 52 |
+| `Features/Links/Views/CreateShareLinkView.swift` | 55 |
+| `Features/Settings/Views/NotificationSettingsView.swift` | 52 |
 | `Features/Main/Components/MessageDetailSheet.swift` | 47 |
 | … | (backlog total 1669) |
 

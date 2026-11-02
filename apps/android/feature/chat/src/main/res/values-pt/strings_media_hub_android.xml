@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="media_hub_encrypted_notice">Conversa criptografada: os arquivos permanecem lacrados, então suas prévias não podem ser exibidas aqui.</string>
+    <string name="media_hub_encrypted_tile">Arquivo criptografado</string>
+</resources>

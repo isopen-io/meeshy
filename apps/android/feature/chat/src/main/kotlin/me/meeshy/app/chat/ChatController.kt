@@ -50,7 +50,15 @@ interface ChatControllerHost {
 
     /** Surfaces a failure through the screen's single error channel. */
     fun reportError(message: String?)
+
+    /**
+     * The conversation's unread count captured BEFORE the open marks it read; `null` until
+     * known. A host that does not track it reports zero.
+     */
+    val initialUnreadCount: StateFlow<Int?> get() = NO_INITIAL_UNREAD
 }
+
+private val NO_INITIAL_UNREAD: StateFlow<Int?> = kotlinx.coroutines.flow.MutableStateFlow(0)
 
 /**
  * The controllers contributed to one [ChatViewModel], looked up by type — how a screen
@@ -99,6 +107,7 @@ internal class ChatScreenHost(
     override val scope: CoroutineScope,
     private val state: ChatStateAccess,
     override val messages: StateFlow<List<LocalMessage>>,
+    override val initialUnreadCount: StateFlow<Int?> = NO_INITIAL_UNREAD,
 ) : ChatControllerHost {
 
     override val uiState: StateFlow<ChatUiState> get() = state.flow

@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.visits",
+          "androidName": "shareLink_detail_visits",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.arrivals",
+          "androidName": "shareLink_detail_arrivals",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.withoutAccount",
+          "androidName": "shareLink_detail_withoutAccount",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.arrivalLanguages",
+          "androidName": "shareLink_detail_arrivalLanguages",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.recentArrivals",
+          "androidName": "shareLink_detail_recentArrivals",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.noAccountBadge",
+          "androidName": "shareLink_detail_noAccountBadge",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.noArrivals",
+          "androidName": "shareLink_detail_noArrivals",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.statsUnavailable",
+          "androidName": "shareLink_detail_statsUnavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.arrivals.seeAll",
+          "androidName": "shareLink_arrivals_seeAll",
+          "kind": "plurals",
+          "status": "adopted",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.arrivals.total",
+          "androidName": "shareLink_arrivals_total",
+          "kind": "plurals",
+          "status": "adopted",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.arrivals.loading",
+          "androidName": "shareLink_arrivals_loading",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.arrivals.loadFailed",
+          "androidName": "shareLink_arrivals_loadFailed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.arrivals.moreFailed",
+          "androidName": "shareLink_arrivals_moreFailed",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -71,12 +71,16 @@ const choose = async (input: HTMLInputElement | null, files: readonly File[]) =>
   });
 };
 
-const mount = (deps: ReturnType<typeof gateway>['deps']) =>
-  mounter.mount(
+/** Le document écrit à la main s'importe par le second mode ; l'éditeur sans code est le premier (`lens-editor.test.tsx`). */
+const mount = async (deps: ReturnType<typeof gateway>['deps']) => {
+  const host = await mounter.mount(
     <QueryClientProvider client={new QueryClient()}>
       <LensSubmit language="fr" deps={deps} digest={digest} />
     </QueryClientProvider>,
   );
+  await mounter.click(host.querySelector<HTMLElement>('[data-lens-mode="import"]'));
+  return host;
+};
 
 describe('LensSubmit', () => {
   test('« Mes propositions » dit l’état et le mot de la modération', async () => {

@@ -626,7 +626,9 @@ final class ReelsViewModel: ObservableObject {
             if let rollbackIdx = reels.firstIndex(where: { $0.id == postId }) {
                 reels[rollbackIdx] = snapshot
             }
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.editError", defaultValue: "Erreur lors de la modification", bundle: .main))
+            if !DailyGestureLimitNotice.surface(error) {
+                FeedbackToastManager.shared.showError(String(localized: "feed.post.editError", defaultValue: "Erreur lors de la modification", bundle: .main))
+            }
         }
     }
 

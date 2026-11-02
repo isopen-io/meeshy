@@ -19,7 +19,6 @@ import {
 } from '@/lib/admin/conversation-list';
 import { conversationRefOf, conversationStateOf, participantName } from '@/lib/admin/conversation-model';
 import { interpretConversationType } from '@/lib/admin/interpret/enums';
-import { personInitials } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { ADMIN_PERIODS } from '@/lib/admin/period';
@@ -33,7 +32,7 @@ import {
 } from '@/lib/api/admin-conversations';
 import { apiDeps } from '@/lib/api/deps';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import { participantAvatarOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import type { AdminOption } from '@/components/admin/list-toolbar';
 
 /**
@@ -84,7 +83,7 @@ function MemberStack({ language, participants }: { readonly language: AdminLangu
         return (
           <Avatar
             key={participant.id}
-            initials={personInitials(name)}
+            initials={initialsOf(name)}
             color="var(--color-ios-brand)"
             size={24}
             name={name}
@@ -212,7 +211,7 @@ export function AdminConversationsPanel({ language, deps = apiDeps, now = defaul
         language={language}
         title={translateAdmin(language, 'admin.nav.conversations')}
         subtitle={translateAdmin(language, 'admin.conversation.subtitle')}
-        crumbs={[{ label: translateAdmin(language, 'admin.group.exchanges') }, { label: translateAdmin(language, 'admin.nav.conversations') }]}
+        place={{ section: 'conversations' }}
       />
       <AdminOfflineNotice language={language} />
       {scopedCommunity === undefined ? null : (

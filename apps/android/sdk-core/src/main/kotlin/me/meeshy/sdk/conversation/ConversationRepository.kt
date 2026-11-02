@@ -1,7 +1,9 @@
 package me.meeshy.sdk.conversation
 
+import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
@@ -12,6 +14,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.appearance.ConversationAppearance
 import me.meeshy.sdk.model.DIRECT_CONVERSATION_TYPE
 import me.meeshy.sdk.model.directConversationRequest
 import me.meeshy.sdk.model.isDirect
@@ -20,12 +23,17 @@ import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.model.HistoryGrantUpdate
+import me.meeshy.sdk.model.MemberCountResolution
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.MemberRosterPage
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData
 import me.meeshy.sdk.model.applyRemote
+import me.meeshy.sdk.model.withMemberCount
+import me.meeshy.sdk.model.conversationlist.RecentlyCreatedMerge
+import me.meeshy.sdk.model.conversationlist.UnreadReconciliation
+import me.meeshy.sdk.model.conversationlist.UnreadRow
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
@@ -41,10 +49,14 @@ import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.core.database.dao.SearchIndexDao
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.commitOrWrite
+import me.meeshy.sdk.socket.ServedPresenceSink
 import me.meeshy.sdk.search.LocalSearchIndex
 import me.meeshy.sdk.sync.SyncAccountProvider
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 
 @Singleton
 class ConversationRepository @Inject constructor(
@@ -54,7 +66,16 @@ class ConversationRepository @Inject constructor(
     syncMetaDao: SyncMetaDao,
     private val outboxRepository: OutboxRepository,
     syncAccountProvider: SyncAccountProvider = SyncAccountProvider.None,
+    endToEndRegimeLedger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
+    private val fence: AccountFence? = null,
+    presenceSink: ServedPresenceSink = ServedPresenceSink.None,
 ) {
+    /** conversationId → instant this client created it ([RecentlyCreatedMerge]); guarded by itself. */
+    private val recentlyCreated = mutableMapOf<String, Long>()
+
+    /** Annonces `conversation:new` en cours de lecture : une même conversation n'est jamais lue deux fois à la fois. */
+    private val learning: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
     private val cacheSource = ConversationCacheSource(
         database = database,
         conversationDao = conversationDao,
@@ -63,6 +84,10 @@ class ConversationRepository @Inject constructor(
         clock = SystemCacheClock,
         searchIndex = LocalSearchIndex(SearchIndexDao(database)),
         accountProvider = syncAccountProvider,
+        protectedIds = ::recentlyCreatedIds,
+        endToEnd = endToEndRegimeLedger,
+        fence = fence,
+        presenceSink = presenceSink,
     )
 
     /**
@@ -110,6 +135,18 @@ class ConversationRepository @Inject constructor(
     fun totalUnreadCount(): Flow<Int> = conversationDao.totalUnreadCount()
 
     /**
+     * Une empreinte de la fenêtre que lisent les widgets ([recentCachedConversations]) : elle change
+     * quand une conversation de la fenêtre change (message reçu, lecture, épingle), jamais sinon.
+     * Aucun décodage ni réseau — le déclencheur de repeinte des widgets.
+     */
+    fun recentCachedFingerprint(limit: Int = RECENT_WINDOW): Flow<Int> =
+        conversationDao.observeRecentByUpdatedAt(limit)
+            .map { rows -> rows.fold(1) { hash, row ->
+                31 * (31 * (31 * hash + row.id.hashCode()) + row.payload.hashCode()) + row.unreadCount
+            } }
+            .distinctUntilChanged()
+
+    /**
      * The [limit] most-recently-updated cached conversations, decoded — a
      * BOUNDED read for callers that only ever render a handful of rows
      * (home-screen widgets, dynamic launcher shortcuts) instead of
@@ -127,6 +164,66 @@ class ConversationRepository @Inject constructor(
         cacheSource.revalidate()
     }
 
+    /**
+     * Silent sync (launch prewarm, cached-fresh first frame, return to the foreground): the same
+     * revalidation as [refresh], but a failure is reported as `false` — the cache stays on screen.
+     */
+    suspend fun syncSilently(): Boolean =
+        try {
+            cacheSource.revalidate()
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false
+        }
+
+    /**
+     * After a COMPLETE sync, reconciles the unread counters the server just served with what this
+     * device knows better ([UnreadReconciliation]): the conversation open on screen reads 0, an
+     * explicit « mark unread » keeps its badge. Only the rows that change are rewritten. Returns
+     * how many were.
+     */
+    suspend fun reconcileUnreads(openConversationId: String?, explicitlyUnread: Set<String>): Int {
+        val ids = (explicitlyUnread + listOfNotNull(openConversationId)).filterTo(HashSet()) { it.isNotBlank() }
+        if (ids.isEmpty()) return 0
+        return database.withTransaction {
+            val rows = ids.mapNotNull { conversationDao.find(it) }
+            val fixes = UnreadReconciliation.corrections(
+                rows.map { UnreadRow(it.id, it.unreadCount) },
+                openConversationId,
+                explicitlyUnread,
+            )
+            val byId = rows.associateBy { it.id }
+            val updated = fixes.mapNotNull { fix ->
+                val row = byId[fix.conversationId] ?: return@mapNotNull null
+                val conversation = runCatching {
+                    MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+                }.getOrNull() ?: return@mapNotNull null
+                row.copy(
+                    payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = fix.unreadCount)),
+                    unreadCount = fix.unreadCount,
+                )
+            }
+            if (updated.isNotEmpty()) conversationDao.upsertAll(updated)
+            updated.size
+        }
+    }
+
+    private fun noteCreated(id: String) {
+        synchronized(recentlyCreated) {
+            val now = SystemCacheClock.nowMillis()
+            val live = RecentlyCreatedMerge.evictExpired(recentlyCreated, now)
+            recentlyCreated.clear()
+            recentlyCreated.putAll(live)
+            recentlyCreated[id] = now
+        }
+    }
+
+    private fun recentlyCreatedIds(): Set<String> = synchronized(recentlyCreated) {
+        RecentlyCreatedMerge.protectedIds(recentlyCreated, SystemCacheClock.nowMillis())
+    }
+
     suspend fun getById(id: String): NetworkResult<ApiConversation> =
         apiCall { conversationApi.getById(id) }
 
@@ -141,12 +238,84 @@ class ConversationRepository @Inject constructor(
         cacheSource.remember(conversation)
     }
 
+    /** #13628 — [remember] for a body the gateway has just served: its null mode is confirmed clear. Never for a cached or built copy. */
+    suspend fun rememberServed(conversation: ApiConversation) {
+        cacheSource.rememberServed(conversation)
+    }
+
+    /**
+     * `conversation:new` (#13795) : lit et mémorise la conversation que la passerelle vient d'annoncer, pour qu'elle
+     * entre dans la liste (Room) sans rafraîchissement, à sa place d'ordre et avec son mode de chiffrement SERVI
+     * ([rememberServed]). `true` quand elle est connue à l'issue (déjà en cache, en cours de lecture par un autre
+     * appel, ou mémorisée) ; `false` quand la lecture a échoué ou que le compte a changé — l'appelant peut alors
+     * demander une relecture de la liste. Une conversation déjà connue n'est jamais relue ni dupliquée, et la ligne
+     * ajoutée est protégée de l'élagage d'un balayage dont l'agrégat n'a pas encore rattrapé la création.
+     *
+     * Le compte est celui sous lequel l'événement est ARRIVÉ ([me.meeshy.sdk.socket.collectArrived]) : un compte clos
+     * ne lit rien (aucune requête sous le jeton du suivant) et n'écrit rien.
+     */
+    suspend fun learnCreated(conversationId: String): Boolean {
+        val ticket = fence?.currentTicket()
+        if (ticket != null && fence?.isCurrent(ticket) == false) return false
+        if (conversationDao.find(conversationId) != null) return true
+        if (!learning.add(conversationId)) return true
+        try {
+            val fence = fence
+            val read: suspend () -> NetworkResult<ApiConversation> = { getById(conversationId) }
+            val outcome = if (fence == null || ticket == null) read() else fence.guard(ticket, read)
+            return when (val served = outcome) {
+                null -> false
+                is NetworkResult.Success -> {
+                    noteCreated(conversationId)
+                    cacheSource.rememberServed(served.data)
+                    true
+                }
+                is NetworkResult.Failure -> false
+            }
+        } finally {
+            learning.remove(conversationId)
+        }
+    }
+
+    /**
+     * #13795 — l'effectif d'une ligne du cache après une adhésion ou un débannissement ([MemberCountResolution] :
+     * l'absolu servi tranche, le delta n'est qu'un repli). `false` quand la conversation est inconnue (rien n'est
+     * fabriqué) ou que le compte de l'événement n'est plus le courant.
+     */
+    suspend fun applyMembership(
+        conversationId: String,
+        absolute: Int?,
+        absoluteCapped: Boolean?,
+        delta: Int,
+    ): Boolean {
+        val ticket = fence?.currentTicket()
+        return fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val row = conversationDao.find(conversationId) ?: return@withTransaction false
+                val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+                val resolved = MemberCountResolution.after(
+                    current = conversation.memberCount,
+                    currentCapped = conversation.memberCountCapped == true,
+                    absolute = absolute,
+                    absoluteCapped = absoluteCapped,
+                    delta = delta,
+                )
+                conversationDao.upsertAll(
+                    listOf(row.copy(payload = MeeshyApi.json.encodeToString(conversation.withMemberCount(resolved)))),
+                )
+                true
+            }
+        } ?: false
+    }
+
     suspend fun create(
         type: String,
         title: String?,
         participantIds: List<String>,
+        encryptionMode: String? = null,
     ): NetworkResult<ApiConversation> =
-        apiCall { conversationApi.create(CreateConversationRequest(type, title, participantIds)) }
+        apiCall { conversationApi.create(CreateConversationRequest(type, title, participantIds, encryptionMode)) }
+            .also { if (it is NetworkResult.Success) noteCreated(it.data.id) }
 
     /**
      * La conversation directe la plus récente avec [userId] qui existe DÉJÀ dans le cache local —
@@ -187,7 +356,7 @@ class ConversationRepository @Inject constructor(
         ) {
             is NetworkResult.Success -> {
                 val found = result.data.firstOrNull { it.isDirect }
-                found?.let { cacheSource.remember(it) }
+                found?.let { cacheSource.rememberServed(it) }
                 NetworkResult.Success(found)
             }
             is NetworkResult.Failure -> result
@@ -215,7 +384,7 @@ class ConversationRepository @Inject constructor(
         val request = directConversationRequest(userId)
         return when (val created = create(request.type, request.title, request.participantIds)) {
             is NetworkResult.Success -> {
-                cacheSource.remember(created.data)
+                cacheSource.rememberServed(created.data)
                 DirectConversationResolution.Created(created.data)
             }
             is NetworkResult.Failure -> failedOrQueued(userId, created.error, creationQueue)
@@ -392,27 +561,45 @@ class ConversationRepository @Inject constructor(
         }
 
     /**
+     * Local-only mark-as-read: the cached badge drops to zero, and NOTHING joins the outbox. The
+     * list's « mark read » takes this path for the conversation already on screen (parity iOS
+     * `shouldDispatchListMarkAsRead`): the open conversation owns the precise mark-read that names
+     * the messages actually shown, and a body-less list mark-read would declare unseen messages
+     * read. No-op (returns false) when the conversation is unknown or already read.
+     */
+    suspend fun markReadLocally(id: String): Boolean {
+        val ticket = fence?.currentTicket()
+        return fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val row = conversationDao.find(id) ?: return@withTransaction false
+                val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+                if (conversation.unreadCount == 0) return@withTransaction false
+                conversationDao.upsertAll(
+                    listOf(
+                        row.copy(
+                            payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = 0)),
+                            unreadCount = 0,
+                        ),
+                    ),
+                )
+                true
+            }
+        } ?: false
+    }
+
+    /**
      * Optimistic mark-as-read (ARCHITECTURE.md §5): the cached badge drops to
      * zero instantly and a `READ_RECEIPT` mutation joins its outbox lane (the
      * coalescer merges repeats). No-op when the conversation is unknown or
      * already read. Returns whether anything was queued.
      */
     suspend fun markReadOptimistic(id: String): Boolean {
-        val updated = database.withTransaction {
-            val row = conversationDao.find(id) ?: return@withTransaction false
-            val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
-            if (conversation.unreadCount == 0) return@withTransaction false
-            conversationDao.upsertAll(
-                listOf(
-                    row.copy(
-                        payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = 0)),
-                        unreadCount = 0,
-                    ),
-                ),
-            )
-            true
-        }
-        if (!updated) return false
+        if (!markReadLocally(id)) return false
+        queueReadReceipt(id)
+        return true
+    }
+
+    private suspend fun queueReadReceipt(id: String) {
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.READ_RECEIPT,
@@ -421,6 +608,19 @@ class ConversationRepository @Inject constructor(
                 payload = "{}",
             ),
         )
+    }
+
+    /**
+     * The open conversation's read receipt (#13793): the decision to acknowledge was taken by the
+     * screen on what it captured at opening, so the receipt joins the outbox WHATEVER the cached
+     * badge says now. A list sync can zero the badge of the open conversation between the capture
+     * and this call ([markReadOptimistic] would then queue nothing and the server would keep
+     * counting unread). The coalescer keeps a single pending `READ_RECEIPT` per conversation, and
+     * the route is idempotent, so a repeated acknowledgement costs nothing.
+     */
+    suspend fun acknowledgeRead(id: String): Boolean {
+        markReadLocally(id)
+        queueReadReceipt(id)
         return true
     }
 
@@ -492,10 +692,12 @@ class ConversationRepository @Inject constructor(
      * Optimistic drag-to-category (re)assignment (parity iOS
      * `ConversationOptionsViewModel.setCategory`): the cached `categoryId` mutates
      * instantly — the section splitter re-buckets the row into [categoryId]'s
-     * section — and the full-snapshot mutation joins the shared prefs lane. A no-op
-     * (returns false) when the conversation is already in [categoryId].
+     * section — and the full-snapshot mutation joins the shared prefs lane. A `null`
+     * [categoryId] uncategorizes the row (iOS `category.remove`, #13784): its snapshot
+     * carries [ConversationPrefsPayload.clearCategory]. A no-op (returns false) when
+     * the conversation is already in [categoryId].
      */
-    suspend fun setCategoryOptimistic(id: String, categoryId: String): Boolean =
+    suspend fun setCategoryOptimistic(id: String, categoryId: String?): Boolean =
         updatePreferencesOptimistic(id) { it.copy(categoryId = categoryId) }
 
     /**
@@ -537,6 +739,15 @@ class ConversationRepository @Inject constructor(
     }
 
     /**
+     * Optimistic personal background + accent (parité iOS `ConversationAppearanceViewModel.commit`) : le fond change aussitôt
+     * (la ligne Room émet, le fil ouvert se repeint), le snapshot part par la voie des préférences, sans doublon si rien ne change.
+     */
+    suspend fun setAppearanceOptimistic(id: String, appearance: ConversationAppearance): Boolean {
+        val wire = appearance.toWire()
+        return updatePreferencesOptimistic(id) { it.copy(appearance = wire) }
+    }
+
+    /**
      * Apply a conversation-scope `user:preferences-updated` broadcast to the cached
      * row — the read side of the per-USER preferences the user changed on ANOTHER
      * device (issue #4127).
@@ -555,18 +766,23 @@ class ConversationRepository @Inject constructor(
      */
     suspend fun applyRemoteConversationPreferences(
         event: UserPreferencesConversationUpdatedSocketData,
-    ): Boolean = database.withTransaction {
-        val row = conversationDao.find(event.conversationId) ?: return@withTransaction false
-        val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
-        val next = conversation.resolvedPreferences.applyRemote(event) ?: return@withTransaction false
-        conversationDao.upsertAll(
-            listOf(
-                row.copy(
-                    payload = MeeshyApi.json.encodeToString(conversation.copy(preferences = next)),
-                ),
-            ),
-        )
-        true
+    ): Boolean {
+        val ticket = fence?.currentTicket()
+        return fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val row = conversationDao.find(event.conversationId) ?: return@withTransaction false
+                val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+                val next = conversation.resolvedPreferences.applyRemote(event) ?: return@withTransaction false
+                conversationDao.upsertAll(
+                    listOf(
+                        row.copy(
+                            payload = MeeshyApi.json.encodeToString(conversation.copy(preferences = next)),
+                        ),
+                    ),
+                )
+                true
+            }
+        } ?: false
     }
 
     /**
@@ -581,12 +797,16 @@ class ConversationRepository @Inject constructor(
         id: String,
         transform: (ApiConversationPreferences) -> ApiConversationPreferences,
     ): Boolean {
+        var appearanceChanged = false
+        var categoryCleared = false
         val snapshot = database.withTransaction {
             val row = conversationDao.find(id) ?: return@withTransaction null
             val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
             val current = conversation.resolvedPreferences ?: ApiConversationPreferences()
             val next = transform(current)
             if (next == current) return@withTransaction null
+            appearanceChanged = next.appearance != current.appearance
+            categoryCleared = current.categoryId != null && next.categoryId == null
             conversationDao.upsertAll(
                 listOf(
                     row.copy(
@@ -611,6 +831,8 @@ class ConversationRepository @Inject constructor(
                         customName = snapshot.customName,
                         reaction = snapshot.reaction,
                         tags = snapshot.tags,
+                        appearance = if (appearanceChanged) snapshot.appearance else null,
+                        clearCategory = categoryCleared,
                     ),
                 ),
             ),

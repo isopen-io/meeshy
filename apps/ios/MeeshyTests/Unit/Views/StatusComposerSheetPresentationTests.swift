@@ -57,7 +57,7 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
     /// le fichier n'existe plus). `SheetToolbarSemanticsTests`,
     /// `StatusComposerAccessibilityTests` et `NavigationContainerMigrationTests`
     /// ont été re-visées sur la même surface, `ComposerMoodSurface.swift`.
-    private let composerPath = "Meeshy/Features/Main/Composer/ComposerMoodSurface.swift"
+    private let composerPath = "Meeshy/Features/Composer/ComposerMoodSurface.swift"
 
     // MARK: - The composer's own side of the contract
 

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "bubble_message_end_to_end",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

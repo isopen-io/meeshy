@@ -15,8 +15,8 @@ import os
 public enum RealtimeMessageMutation: Sendable, Equatable {
     /// `marksEdited` recopie l'`isEdited` servi : `false` pour un avis que le
     /// SERVEUR complète sur place (la ligne d'arrivées, #8633) — le contenu
-    /// suit, le drapeau « modifié » ne se pose pas.
-    case edited(messageId: String, content: String, editedAt: Date, marksEdited: Bool = true)
+    /// suit, le drapeau « modifié » ne se pose pas. `authorship` : voir `EditAuthorship`.
+    case edited(messageId: String, content: String, editedAt: Date, marksEdited: Bool = true, authorship: EditAuthorship = .untouched)
     /// `message:edited` porteur d'un résumé d'appel : la transition live →
     /// terminal (« en cours » → « Appel · 04:32 »). Distincte de `.edited`
     /// parce qu'un avis d'appel ne doit JAMAIS porter le drapeau « modifié ».
@@ -26,6 +26,9 @@ public enum RealtimeMessageMutation: Sendable, Equatable {
     /// Distinct de `.deleted` : l'hôte l'applique comme la conversation
     /// OUVERTE (`ConversationSocketHandler`), sans épargner une vue unique.
     case expired(messageId: String, expiredAt: Date)
+    /// `attachment:deleted` — une pièce retirée d'un message par un membre. L'hôte l'écrit dans la base du compte qui
+    /// l'a reçue ; un message laissé sans texte ni pièce y devient une pierre tombale.
+    case attachmentRemoved(messageId: String, conversationId: String, attachmentId: String, at: Date)
     /// `message:cited-post-withdrawn` (#7969) — le post que des messages de
     /// `conversationId` citent a été retiré : chaque citation devient
     /// « Story indisponible ».
@@ -53,6 +56,17 @@ public enum RealtimeMessageMutation: Sendable, Equatable {
     /// dénormalisé de SES messages suit, toutes conversations confondues
     /// (`MessagePersistenceActor.repaintSender`).
     case senderRepainted(UserUpdatedEvent)
+}
+
+extension RealtimeMessageMutation {
+    /// Une modification SERVIE (`message:edited`), avec ce qu'elle dit de son
+    /// auteur (#11375). L'horloge SERVEUR, jamais celle de l'appareil :
+    /// `markEdited` compare cet instant au précédent pour rejeter les échos
+    /// désordonnés, ce qui n'a de sens qu'entre horloges comparables.
+    static func servedEdit(of apiMessage: APIMessage, content: String) -> RealtimeMessageMutation {
+        .edited(messageId: apiMessage.id, content: content, editedAt: apiMessage.editedAt ?? Date(),
+                marksEdited: apiMessage.isEdited ?? true, authorship: apiMessage.editAuthorship)
+    }
 }
 
 // MARK: - Protocol
@@ -279,6 +293,14 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     public var realtimeMessagePersistor: (@Sendable @concurrent (RealtimeMessageMutation) async -> Void)? {
         get { engineState.read { $0.realtimeMessagePersistor } }
         set { engineState.mutate { $0.realtimeMessagePersistor = newValue } }
+    }
+
+    /// Lit, sans réseau, les traductions que l'appareil garde d'un message (base du compte). Le modèle de message du
+    /// cache n'en porte pas : le message précédent qui reprend la ligne de liste après une suppression les demande
+    /// ici pour que la ligne serve la langue du lecteur. Installé par l'app, qui possède la base ; `nil` en test.
+    public var messageTranslationsReader: (@Sendable @concurrent (String) async -> [TranslationRecord])? {
+        get { engineState.read { $0.messageTranslationsReader } }
+        set { engineState.mutate { $0.messageTranslationsReader = newValue } }
     }
 
     /// Accusés de RÉCEPTION en attente, par conversation.

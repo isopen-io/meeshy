@@ -141,7 +141,7 @@ final class MessagePieceTargetTests: XCTestCase {
         let bulles = try source("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift")
         XCTAssertEqual(bulles.components(separatedBy: "MessagePieceLongPress(attachmentId: attachment.id").count - 1, 2,
                        "la photo ET la vidéo de grille ouvrent l'aperçu de leur pièce")
-        let focal = try source("Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift")
+        let focal = try source("Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift")
         XCTAssertTrue(focal.contains("MessagePieceLongPress(attachmentId: attachment.id"),
                       "Focal et Script ouvrent l'aperçu de la pièce par le MÊME geste")
     }
@@ -256,12 +256,12 @@ final class MessagePieceTargetTests: XCTestCase {
     }
 
     func test_focalTile_offersTheSameReactionGestureAsTheBubbleTile() throws {
-        let focal = try source("Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift")
+        let focal = try source("Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift")
         XCTAssertTrue(focal.contains("FocalPieceDoubleTap(enabled: canReact)"), "le double tap ouvre le sélecteur")
         XCTAssertTrue(focal.contains("AttachmentReactionPickerOverlay(isPresented: $showReactionPicker)"),
                       "le MÊME sélecteur que la tuile de bulle")
         XCTAssertTrue(focal.contains("onReactToAttachment: onReactToAttachment"), "la grille transmet le geste à ses cases")
-        let row = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let row = try source("Meeshy/Features/Focal/Row/FocalRow.swift")
         XCTAssertTrue(row.contains("onReactToAttachment: actions.onReactToAttachment"), "la rangée câble la réaction par pièce")
     }
 
@@ -354,7 +354,7 @@ final class MessagePieceTargetTests: XCTestCase {
 
     func test_everyCitationSkin_postsThePlusN() throws {
         for path in ["Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift",
-                     "Meeshy/Features/Main/Focal/Row/FocalQuotedReplyView.swift",
+                     "Meeshy/Features/Focal/Row/FocalQuotedReplyView.swift",
                      "Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift"] {
             XCTAssertTrue(try source(path).contains(".quotedExtraPieces("), "\(path) doit poser « +N »")
         }
@@ -370,7 +370,7 @@ final class MessagePieceTargetTests: XCTestCase {
         XCTAssertTrue(controller.contains(".environment(\\.pieceSpotlight,"))
         let bulles = try source("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift")
         XCTAssertEqual(bulles.components(separatedBy: "PieceSpotlightRing(attachmentId: attachment.id").count - 1, 2)
-        XCTAssertTrue(try source("Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift")
+        XCTAssertTrue(try source("Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift")
             .contains("PieceSpotlightRing(attachmentId: attachment.id"))
     }
 

@@ -3,7 +3,12 @@ package me.meeshy.app.calls
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -17,12 +22,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -30,6 +33,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallChromeVisibility
+import me.meeshy.sdk.model.call.CallDuoStageLayout
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -38,12 +43,17 @@ import org.webrtc.VideoTrack
 
 private const val PAUSED_SCRIM_ALPHA = 0.85f
 private val MUTED_BADGE_TOP = 52.dp
+private val ZOOM_INDICATOR_BOTTOM = 220.dp
+private val CAMERA_RAIL_TOP = 56.dp
 
 /**
  * La scène vidéo du duo (miroir de iOS `videoCallLayout` + `duoOverlays`). Connecté : la vidéo du
  * correspondant occupe tout l'écran — son avatar « Caméra désactivée » s'il n'envoie rien — et ma
- * vignette flotte par-dessus ; toucher la vignette permute les deux. Avant la connexion, mon aperçu
+ * vignette flotte par-dessus ; toucher la vignette permute les deux ([onSwap]). Avant la connexion, mon aperçu
  * tient tout le fond. Le flux d'un pair qui escalade l'audio en vidéo s'affiche même caméra locale coupée.
+ *
+ * [layout] — mon image en plein écran ou dans la vignette — est décidé par l'écran (`CallDuoStageLaw`) : la pilule
+ * lit le même pour ne pas répéter les commandes que la vignette ou le rail du haut portent.
  */
 @Composable
 internal fun CallDuoVideoStage(
@@ -55,33 +65,77 @@ internal fun CallDuoVideoStage(
     peerAvatarUrl: String?,
     connected: Boolean,
     reduceMotion: Boolean,
+    layout: CallDuoStageLayout,
     modifier: Modifier = Modifier,
+    onSwap: () -> Unit = {},
+    selfEffects: CallSelfEffects? = null,
     selfTileMemory: CallSelfTileMemory = CallSelfTileMemories.shared,
+    onSceneTap: (() -> Unit)? = null,
+    selfCamera: CallSelfCameraActions? = null,
+    controlsVisible: Boolean = true,
+    framed: Boolean = false,
 ) {
     Box(modifier.fillMaxSize()) {
         if (!connected) {
             localTrack?.let { local ->
-                VideoRenderer(track = local, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = true)
+                VideoRenderer(track = local, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = state.isFrontCamera)
             }
         } else {
-            var swapped by remember(callKey) { mutableStateOf(false) }
-            val featuresLocal = swapped && localTrack != null
+            val featuresLocal = layout.isMyImageFullScreen
             val fit = rememberCallVideoFit()
-            if (featuresLocal && localTrack != null) {
-                VideoRenderer(track = localTrack, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = true, fit = fit)
-            } else {
-                CallRemoteVideoStage(
-                    callKey = callKey,
-                    hasTrack = remoteTrack != null,
-                    peerVideoEnabled = !state.isPeerCameraOff,
-                    hasEstablishedMedia = connected,
-                    track = remoteTrack,
-                    eglContext = eglContext,
-                    peerName = state.peerName,
-                    avatarUrl = peerAvatarUrl,
-                    modifier = Modifier.fillMaxSize(),
-                    fit = fit,
+            if (!framed) {
+                if (featuresLocal && localTrack != null) {
+                    VideoRenderer(track = localTrack, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = state.isFrontCamera, fit = fit)
+                } else {
+                    CallRemoteVideoStage(
+                        callKey = callKey,
+                        hasTrack = remoteTrack != null,
+                        peerVideoEnabled = !state.isPeerCameraOff,
+                        hasEstablishedMedia = connected,
+                        track = remoteTrack,
+                        eglContext = eglContext,
+                        peerName = state.peerName,
+                        avatarUrl = peerAvatarUrl,
+                        modifier = Modifier.fillMaxSize(),
+                        fit = fit,
+                    )
+                }
+            }
+            // Le toucher de la scène vit ICI, SOUS la vignette : un détecteur posé sur la colonne du
+            // chrome, au-dessus, avalait tous les touchers et la vignette ne glissait ni ne permutait plus.
+            // Ma propre image en plein écran se pince (zoom de la caméra envoyée) ; zoomée, un double toucher
+            // revient à 1×.
+            val pinchZoom = if (featuresLocal) selfCamera?.zoom else null
+            if (onSceneTap != null || pinchZoom != null) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .let { if (pinchZoom != null) it.callCameraPinch(enabled = true, zoom = pinchZoom) else it }
+                        .pointerInput(onSceneTap, pinchZoom) {
+                            detectTapGestures(
+                                onDoubleTap = pinchZoom?.let { zoom ->
+                                    { if (zoom.state.value.displayFactor != zoom.state.value.profile?.baselineDisplay) zoom.resetToBaseline() }
+                                },
+                                onTap = { onSceneTap?.invoke() },
+                            )
+                        },
                 )
+            }
+            if (pinchZoom != null) {
+                CallZoomIndicator(pinchZoom, Modifier.align(Alignment.BottomCenter).padding(bottom = ZOOM_INDICATOR_BOTTOM))
+            }
+            // iOS `CallCameraRail.placement` : mon image en plein écran, les commandes de ma caméra montent en haut au
+            // centre ; dans la vignette, elles l'entourent et le zoom s'y loge. Jamais deux fois le même bouton.
+            val pickCamera = selfCamera?.let { if (rememberHasSelectableCameras(it.zoom)) rememberCameraPickerOpener() else null }
+            if (featuresLocal && selfCamera != null) {
+                AnimatedVisibility(
+                    visible = controlsVisible,
+                    enter = fadeIn(tween(CallChromeVisibility.FADE_DURATION_MILLIS.toInt())),
+                    exit = fadeOut(tween(CallChromeVisibility.FADE_DURATION_MILLIS.toInt())),
+                    modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding().padding(top = CAMERA_RAIL_TOP),
+                ) {
+                    CallMyImageTopRail(selfCamera, state.isCameraOn, onPickCamera = pickCamera, effects = selfEffects)
+                }
             }
             if (state.isPeerMuted && !featuresLocal) {
                 CallPeerMutedBadge(
@@ -89,15 +143,28 @@ internal fun CallDuoVideoStage(
                     modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding().padding(top = MUTED_BADGE_TOP),
                 )
             }
-            if (state.isCameraOn && (localTrack != null || state.isVideoAutoPaused)) {
+            if (layout.showsSelfTile) {
+                val cameraCount = if (featuresLocal) 0 else rememberSelfCameraControlCount(selfCamera, state.isCameraOn)
+                val effectsCount = if (featuresLocal) 0 else selfEffects?.items?.size ?: 0
+                val showsMyImage = !featuresLocal && state.isCameraOn && localTrack != null && !state.isVideoAutoPaused
                 CallSelfTile(
                     callKey = callKey,
                     memory = selfTileMemory,
-                    paused = state.isVideoAutoPaused,
+                    paused = state.isVideoAutoPaused && state.isCameraOn,
                     reduceMotion = reduceMotion,
-                    onSwap = { if (localTrack != null) swapped = !swapped },
+                    onSwap = onSwap,
+                    effectsCount = effectsCount,
+                    cameraCount = cameraCount,
+                    controlsVisible = controlsVisible,
+                    effectsControls = { selfEffects?.let { CallSelfEffectsRow(it) } },
+                    cameraControls = {
+                        selfCamera?.let {
+                            CallSelfTileControlsRow(it, state.isCameraOn, onPickCamera = pickCamera, isPaused = state.isVideoAutoPaused)
+                        }
+                    },
                     modifier = Modifier.fillMaxSize(),
                     overlay = {
+                        if (showsMyImage && selfCamera != null) CallSelfTileZoomSlot(selfCamera.zoom, visible = controlsVisible)
                         if (state.isPeerMuted && featuresLocal) {
                             CallPeerMutedBadge(
                                 compact = true,
@@ -107,6 +174,7 @@ internal fun CallDuoVideoStage(
                     },
                 ) {
                     when {
+                        !state.isCameraOn -> CallSelfCameraOffBody()
                         state.isVideoAutoPaused && !featuresLocal -> CallVideoPausedTileBody()
                         featuresLocal -> CallRemoteVideoStage(
                             callKey = callKey,
@@ -125,7 +193,7 @@ internal fun CallDuoVideoStage(
                             track = localTrack,
                             eglContext = eglContext,
                             modifier = Modifier.fillMaxSize(),
-                            mirror = true,
+                            mirror = state.isFrontCamera,
                             overlay = true,
                         )
                         else -> Unit

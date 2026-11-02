@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:reels": {
+      "resDir": "feature/reels/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "reels.action.send",
+          "androidName": "reels_action_send",
+          "status": "adopted"
+        },
+        {
+          "androidName": "share_reel_text",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

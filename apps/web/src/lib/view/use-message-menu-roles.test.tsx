@@ -293,9 +293,9 @@ describe('useMessageMenu — audit #11372', () => {
     expect(offered).toEqual([]);
   });
 
-  test('B1 — un MODERATOR de plateforme ne modifie pas le message d’un autre ; il modifie le sien', () => {
+  test('#11375 — un MODERATOR de plateforme modifie le message d’un autre comme le sien ; un utilisateur ordinaire, le sien seul', () => {
     const { api } = mount({ viewer: { platformRole: 'MODERATOR' } });
-    expect(api().editOf('m-theirs')).toBeNull();
+    expect(api().editOf('m-theirs')).not.toBeNull();
     expect(api().editOf('m-mine')).not.toBeNull();
   });
 

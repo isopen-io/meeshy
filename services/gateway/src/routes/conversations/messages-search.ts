@@ -269,6 +269,8 @@ export function registerMessageSearchRoute(
       const translationMatches = translationCandidates.filter((msg: any) => {
         if (!msg.translations || typeof msg.translations !== 'object') return false;
         return Object.values(msg.translations).some((t: any) => {
+          // #12822 — une traduction chiffrée au repos est du base64 : elle ne se cherche pas.
+          if (t?.isEncrypted === true) return false;
           const text = typeof t === 'string' ? t : t?.text || t?.content || '';
           return text.toLowerCase().includes(queryLower);
         });

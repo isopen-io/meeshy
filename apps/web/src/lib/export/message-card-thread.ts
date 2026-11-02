@@ -36,8 +36,6 @@ export const threadSeparatorWidth = (level: number): number => Math.max(THREAD_I
 /** La largeur de texte qui reste à un niveau dans `width`. */
 export const threadRoom = (width: number, level: number): number => Math.max(THREAD_MIN_WIDTH, width - threadShift(level));
 
-/** Combien de hauteur la séparation d'une entrée ajoute : rien au niveau 0, ou si la liaison du template ne dessine rien (« bulles », « silence »). */
-export const threadSeparatorHeight = (link: CardLinkId, level: number): number => (level >= 1 && link !== 'bulles' && link !== 'silence' ? THREAD_SEPARATOR_ROW : 0);
 
 /**
  * La séparation d'une entrée de fil : la liaison du template en version compacte,

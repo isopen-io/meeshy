@@ -3,4 +3,6 @@
      derriere les barres systeme quand le telephone est en schema sombre. -->
 <resources>
     <color name="surface">#09090B</color>
+    <!-- #13129 — l'accent de la marque (jeton « ios-indigo-400 », plus lisible sur le fond sombre des dialogues, packages/design-tokens/ios.css). -->
+    <color name="brand_accent">#818CF8</color>
 </resources>

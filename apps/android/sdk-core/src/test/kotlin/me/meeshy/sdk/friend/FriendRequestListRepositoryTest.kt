@@ -52,7 +52,7 @@ class FriendRequestListRepositoryTest {
     fun `persistReceived then cachedReceived returns the requests in the persisted order`() = runTest {
         val repo = repository()
 
-        repo.persistReceived(listOf(request("r1"), request("r2")))
+        repo.persistReceived(listOf(request("r1"), request("r2")), null)
 
         assertThat(repo.cachedReceived()?.map { it.id }).containsExactly("r1", "r2").inOrder()
     }
@@ -61,7 +61,7 @@ class FriendRequestListRepositoryTest {
     fun `persistSent then cachedSent returns the requests in the persisted order`() = runTest {
         val repo = repository()
 
-        repo.persistSent(listOf(request("s1"), request("s2")))
+        repo.persistSent(listOf(request("s1"), request("s2")), null)
 
         assertThat(repo.cachedSent()?.map { it.id }).containsExactly("s1", "s2").inOrder()
     }
@@ -70,8 +70,8 @@ class FriendRequestListRepositoryTest {
     fun `received and sent are independent caches sharing no rows`() = runTest {
         val repo = repository()
 
-        repo.persistReceived(listOf(request("r1")))
-        repo.persistSent(listOf(request("s1")))
+        repo.persistReceived(listOf(request("r1")), null)
+        repo.persistSent(listOf(request("s1")), null)
 
         assertThat(repo.cachedReceived()?.map { it.id }).containsExactly("r1")
         assertThat(repo.cachedSent()?.map { it.id }).containsExactly("s1")
@@ -82,7 +82,7 @@ class FriendRequestListRepositoryTest {
         val repo = repository()
         val rich = request("r1", senderId = "alice", receiverId = "bob", status = "pending")
 
-        repo.persistReceived(listOf(rich))
+        repo.persistReceived(listOf(rich), null)
 
         assertThat(repo.cachedReceived()).containsExactly(rich)
     }
@@ -91,8 +91,8 @@ class FriendRequestListRepositoryTest {
     fun `persistReceived drops requests absent from the latest list`() = runTest {
         val repo = repository()
 
-        repo.persistReceived(listOf(request("r1"), request("r2")))
-        repo.persistReceived(listOf(request("r2")))
+        repo.persistReceived(listOf(request("r1"), request("r2")), null)
+        repo.persistReceived(listOf(request("r2")), null)
 
         assertThat(repo.cachedReceived()?.map { it.id }).containsExactly("r2")
     }
@@ -101,8 +101,8 @@ class FriendRequestListRepositoryTest {
     fun `persisting an empty received list is a synced-empty cache, not a cold one`() = runTest {
         val repo = repository()
 
-        repo.persistReceived(listOf(request("r1")))
-        repo.persistReceived(emptyList())
+        repo.persistReceived(listOf(request("r1")), null)
+        repo.persistReceived(emptyList(), null)
 
         assertThat(repo.cachedReceived()).isEqualTo(emptyList<FriendRequest>())
     }
@@ -111,8 +111,8 @@ class FriendRequestListRepositoryTest {
     fun `persisting an empty sent list is a synced-empty cache, not a cold one`() = runTest {
         val repo = repository()
 
-        repo.persistSent(listOf(request("s1")))
-        repo.persistSent(emptyList())
+        repo.persistSent(listOf(request("s1")), null)
+        repo.persistSent(emptyList(), null)
 
         assertThat(repo.cachedSent()).isEqualTo(emptyList<FriendRequest>())
     }
@@ -131,7 +131,7 @@ class FriendRequestListRepositoryTest {
             sender = FriendRequestUser(id = "alice", username = "alice", profileDecor = ring),
         )
 
-        repo.persistReceived(listOf(withRing))
+        repo.persistReceived(listOf(withRing), null)
 
         assertThat(repo.cachedReceived()).containsExactly(withRing)
         assertThat(repo.cachedReceived()!!.single().sender!!.profileDecor).isEqualTo(ring)

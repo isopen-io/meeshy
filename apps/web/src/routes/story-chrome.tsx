@@ -4,6 +4,8 @@ import type { ContentTrackingLink } from '@meeshy/shared/types/post';
 
 import { GlyphSvg } from '@/components/glyph';
 import { GLYPHS } from '@/components/glyphs';
+import { FEED_GLYPHS } from '@/components/glyphs-feed';
+import { THREAD_MENU_GLYPHS } from '@/components/glyphs-thread-menu';
 import { NOTIFICATIONS_GLYPHS } from '@/components/glyphs-notifications';
 import type { SoundCreditControl } from '@/components/background-sound-credit';
 import { ViewerBottomBar, ViewerTopBar, type ViewerIdentityModel } from '@/components/viewer-chrome';
@@ -50,6 +52,8 @@ export function StoryTopBar({
   language,
   onClose,
   onSave,
+  onShare,
+  onImager,
   onRemove,
   onOptionsOpenChange,
   prism,
@@ -66,6 +70,10 @@ export function StoryTopBar({
   readonly onClose: () => void;
   /** « Enregistrer » du menu « … » — la sauvegarde du rail auteur, offerte à tout lecteur (#8823). */
   readonly onSave?: (() => void) | undefined;
+  /** « Partager » — le FICHIER composé remis à la feuille du système (#13881), distinct d'« Envoyer » (la feuille Meeshy). */
+  readonly onShare?: (() => void) | undefined;
+  /** « Imager » — la même composition, longueur au choix au-delà d'une minute (#13881). */
+  readonly onImager?: (() => void) | undefined;
   /** « Retirer » (#11150) — la modération, sur la story d'un autre ; absent ⇒ aucune entrée. */
   readonly onRemove?: (() => void) | undefined;
   readonly onOptionsOpenChange?: ((open: boolean) => void) | undefined;
@@ -95,6 +103,8 @@ export function StoryTopBar({
             onOpenChange={onOptionsOpenChange}
             items={[
               { key: 'save', label: translate(language, 'story.action.save'), glyph: <GlyphSvg glyph={GLYPHS.downloadSimple} size={18} />, onSelect: onSave },
+              { key: 'share', label: translate(language, 'story.action.share'), glyph: <GlyphSvg glyph={FEED_GLYPHS.shareNetwork} size={18} />, onSelect: onShare },
+              { key: 'imager', label: translate(language, 'media.viewer.imager'), glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.imageSquare} size={18} />, onSelect: onImager },
               { key: 'remove', label: translate(language, 'moderation.remove.action'), glyph: <GlyphSvg glyph={NOTIFICATIONS_GLYPHS.trash} size={18} />, onSelect: onRemove, destructive: true },
             ]}
           />

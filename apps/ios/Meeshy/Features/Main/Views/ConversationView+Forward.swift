@@ -11,7 +11,7 @@ extension ConversationView {
     /// (barre rapide, « Plus… », « Sélectionner », D1).
     func forwardSubject(for message: Message) -> ShareSubject {
         let source = conversation?.id
-        let encrypted = conversation?.encryptionMode != nil
+        let encrypted = conversation?.encryptionMode != nil || source.map(viewModel.collaborators.regimeLedger.remembersEndToEnd) == true
         if let pieceId = composerState.forwardPieceId, message.attachments.contains(where: { $0.id == pieceId }) {
             return .piece(message, attachmentId: pieceId, sourceConversationId: source, conversationIsEncrypted: encrypted)
         }
@@ -59,7 +59,7 @@ extension ConversationView {
         guard let request = MessageCardDiscussion.request(
             messages: viewModel.messages,
             endingAt: message.id,
-            servedText: { viewModel.preferredTranslation(for: $0.id)?.translatedContent },
+            servedText: { UnencryptedMessageGate.preferredTranslation(of: $0, in: viewModel)?.translatedContent },
             viewer: MessageCardSubject.Viewer(id: user?.id ?? "", displayName: user?.displayName, username: user?.username),
             handle: user?.username,
             conversationTitle: conversation?.title,

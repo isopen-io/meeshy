@@ -37,7 +37,7 @@ final class StoryTrayWiringGuardTests: XCTestCase {
     /// Corps du struct `StoryUploadOverlay`, borné dynamiquement par la
     /// déclaration de struct suivante (ou la fin du fichier).
     private func uploadOverlayBlock() throws -> String {
-        let tray = try source("Meeshy/Features/Main/Views/StoryTrayView.swift")
+        let tray = try source("Meeshy/Features/Stories/Views/StoryTrayView.swift")
         guard let start = tray.range(of: "struct StoryUploadOverlay") else {
             XCTFail("StoryUploadOverlay introuvable dans StoryTrayView.swift")
             return ""
@@ -77,7 +77,7 @@ final class StoryTrayWiringGuardTests: XCTestCase {
     // MARK: - Reprise : un seul écrivain de pendingDraftId
 
     func test_resumeDraft_handlers_routeThroughOpenComposer() throws {
-        let tray = try source("Meeshy/Features/Main/Views/StoryTrayView.swift")
+        let tray = try source("Meeshy/Features/Stories/Views/StoryTrayView.swift")
 
         let resumeCases = occurrences(of: "case .resumeDraft", in: tray)
         XCTAssertGreaterThanOrEqual(resumeCases, 2, "Grande trail ET mini-trail épinglée doivent gérer .resumeDraft")
@@ -104,7 +104,7 @@ final class StoryTrayWiringGuardTests: XCTestCase {
     /// sans que rien ne rougisse ; ne lire que le second laisserait la porte
     /// arrêter de le passer.
     func test_composerCover_handsThePendingDraftToTheHost_whichAdoptsIt_andResetsOnDismiss() throws {
-        let actions = try source("Meeshy/Features/Main/Views/StoryTrayActions.swift")
+        let actions = try source("Meeshy/Features/Stories/Views/StoryTrayActions.swift")
         let host = try AppSourceGuard.composerHostSource()
 
         XCTAssertTrue(
@@ -176,7 +176,7 @@ final class StoryTrayWiringGuardTests: XCTestCase {
     }
 
     func test_storyRingCell_isMountedEquatableAtEverySite() throws {
-        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryTrayView.swift"))
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryTrayView.swift"))
         let sites = source.components(separatedBy: "StoryRingCell(").dropFirst()
 
         XCTAssertEqual(sites.count, 3)

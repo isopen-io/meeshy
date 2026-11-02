@@ -9,27 +9,32 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
-import me.meeshy.feature.calls.R
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import androidx.compose.runtime.CompositionLocalProvider
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
+import me.meeshy.sdk.model.call.CallChromeVisibility
+import me.meeshy.sdk.model.call.CallDuoStageInputs
+import me.meeshy.sdk.model.call.CallDuoStageLaw
+import me.meeshy.sdk.model.call.CallScreenMode
+import me.meeshy.sdk.model.call.CallScreenPanel
 import me.meeshy.sdk.model.call.CallStatusLabelLaw
 import me.meeshy.sdk.model.call.IncomingCallAnswer
 import me.meeshy.ui.theme.hexColor
@@ -54,8 +59,29 @@ fun CallScreen(
     autoAnswer: Boolean = false,
     viewModel: CallViewModel = hiltViewModel(),
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    // L'écran voit un état à chrono GELÉ : un tic de 1 Hz ne le recompose pas. Le temps vivant
+    // voyage en `State` (LocalCallLiveSeconds) et n'est lu que par les feuilles qui l'affichent.
+    val callState by remember(viewModel) { viewModel.state.map(CallUiState::withFrozenClock).distinctUntilChanged() }
+        .collectAsStateWithLifecycle(initialValue = viewModel.state.value.withFrozenClock())
+    // Les sous-titres (#13333) entrent dans l'état que l'écran dessine : le bouton s'allume au toucher.
+    val captionsViewModel: CallCaptionsViewModel = hiltViewModel()
+    val captionsChip by remember(captionsViewModel) { captionsViewModel.state.map(CallCaptionsChip::of).distinctUntilChanged() }
+        .collectAsStateWithLifecycle(initialValue = CallCaptionsChip.of(captionsViewModel.state.value))
+    // Le principal parti d'un groupe qui continue, l'appel se nomme par ceux qui restent (#13754, iOS #9091) : le
+    // ViewModel le sert déjà dans `peerName`, que la pilule et la notification lisent aussi (#13768).
+    val groupMesh by viewModel.groupMesh.collectAsStateWithLifecycle()
+    val state = callState.withCaptions(captionsChip)
+    val liveSeconds = remember(viewModel) { viewModel.state.map { it.durationSeconds }.distinctUntilChanged() }
+        .collectAsStateWithLifecycle(initialValue = viewModel.state.value.durationSeconds)
     val permissionGate = rememberCallPermissionGate(config.isVideo)
+    val declineReply: CallDeclineReplyViewModel = hiltViewModel()
+    val pipViewModel: CallPictureInPictureViewModel = hiltViewModel()
+    val autoAnswerGate: IncomingAutoAnswerViewModel = hiltViewModel()
+    val inPip by pipViewModel.inPip.collectAsStateWithLifecycle()
+    DisposableEffect(pipViewModel) {
+        pipViewModel.callScreenShown(true)
+        onDispose { pipViewModel.callScreenShown(false) }
+    }
 
     LaunchedEffect(config.peerId, config.isOutgoing, config.isVideo) {
         if (config.isOutgoing) {
@@ -65,8 +91,10 @@ fun CallScreen(
             // Bouton « Répondre » de la notification : décrocher directement —
             // même chemin gated permissions que le bouton Accepter de l'écran.
             // Gardé sur INCOMING : une ré-entrée (second tap de notification,
-            // onNewIntent) sur un appel déjà décroché ne re-join jamais.
-            if (autoAnswer && viewModel.state.value.status == CallStatus.INCOMING) {
+            // onNewIntent) sur un appel déjà décroché ne re-join jamais. Et seulement l'appel que la
+            // passerelle tient pour en cours sous cet identifiant, jamais un callId arbitraire (#13504) :
+            // la sonde passe d'abord, le statut se relit après (l'utilisateur a pu refuser entre-temps).
+            if (autoAnswer && autoAnswerGate.confirms(config) && viewModel.state.value.status == CallStatus.INCOMING) {
                 permissionGate.answerIncoming(config.isVideo) { answer -> answerIncoming(viewModel, answer) }
             }
         }
@@ -87,12 +115,13 @@ fun CallScreen(
 
     val accent = hexColor(DynamicColorGenerator.colorForName(config.peerId.ifBlank { config.peerName }))
     val extensions = viewModel.extensions
-    val overlayContext = CallOverlayContext(state = state, accent = accent)
     val chrome = remember { CallChromeController() }
     val chromeVisibility = rememberCallChromeVisibility(chrome, state)
     val remoteVideo by viewModel.remoteVideoTracks.collectAsStateWithLifecycle(initialValue = null)
+    val groupShown = groupStageShown(state, groupMesh)
     val reduceMotion = rememberCallReduceMotion()
     val peer by viewModel.peerVisual.collectAsStateWithLifecycle()
+    val preview by viewModel.previewUi.collectAsStateWithLifecycle()
     val avatarUrl = peer.avatarUrl
     val backdropUrl = if (remoteVideo == null) peer.backdropUrl else null
     val close = {
@@ -109,10 +138,21 @@ fun CallScreen(
             CallBackAction.Close -> close()
         }
     }
+    val chromeState by chrome.state.collectAsStateWithLifecycle()
+    val overlayContext = CallOverlayContext(
+        state = state,
+        accent = accent,
+        activeMode = chromeState.layer.activeMode,
+        chrome = chromeVisibility,
+        onChromeRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
+    )
+    BackHandler(enabled = chromeState.layer.activeMode != null) { chrome.exitMode() }
+    LaunchedEffect(captionsViewModel, chrome) { captionsViewModel.journalRequests.collect { chrome.open(CallScreenPanel.Journal) } }
 
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
     // on épingle aussi le thème pour que les jetons de texte et de surface des enfants restent clairs.
     MeeshyTheme(darkTheme = true) {
+        CompositionLocalProvider(LocalCallLiveSeconds provides liveSeconds) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -126,17 +166,73 @@ fun CallScreen(
 
             // Un pair qui escalade l'audio en vidéo s'affiche même si l'appel est né audio.
             val videoStage = state.isVideoCall || remoteVideo != null
-            if (videoStage) {
+            val touchExploration = rememberCallTouchExploration()
+            val videoScene = callIsVideoStage(state)
+            val sceneTap = remember(chrome, videoScene, touchExploration) {
+                if (CallChromeVisibility.mayToggleByTap(videoScene, touchExploration)) {
+                    { chrome.onSceneTap(videoScene, touchExploration) }
+                } else {
+                    null
+                }
+            }
+            val selfCamera = remember(viewModel) {
+                CallSelfCameraActions(viewModel.cameraZoom, onFlip = viewModel::flipCamera, onToggleCamera = viewModel::toggleCamera)
+            }
+            val liveFrame: CallLiveFrameViewModel = hiltViewModel()
+            val liveFrameState by liveFrame.controller.state.collectAsStateWithLifecycle()
+            val framed = CallLiveFrameStage.framesTheDuo(
+                frameId = liveFrameState.frameId,
+                isVideoCall = state.isVideoCall,
+                showsConnectedLayout = state.showsConnectedLayout,
+                constrained = rememberCallDeviceConstrained(),
+                reduceMotion = reduceMotion,
+            )
+            // Le mode « Effets » pose lui-même les deux vidéos (la mienne en plein écran, l'autre en vignette) : la
+            // scène du duo s'efface, sa vignette de soi en `SurfaceView` superposée percerait le mode.
+            // Un appel de groupe à deux membres distants ou plus pose sa grille entre l'en-tête et la pilule (#13740) :
+            // la scène du duo s'efface, la vidéo du principal passe dans sa vignette.
+            val stageShown = videoStage && chromeState.layer.activeMode != CallScreenMode.Effects && !groupShown
+            // La permutation vit ICI, pas dans la scène : la pilule lit la même disposition pour ne pas répéter les
+            // commandes de mon image que la vignette ou le rail du haut portent (iOS `CallCameraRail.placement`).
+            val callKey = viewModel.activeCallId.ifBlank { config.callId }.ifBlank { config.peerId }
+            var swapped by remember(callKey) { mutableStateOf(false) }
+            val localTrack = viewModel.localVideoTrack
+            val stageLayout = CallDuoStageLaw.layout(
+                CallDuoStageInputs(
+                    isStageShown = stageShown,
+                    isConnected = state.showsConnectedLayout,
+                    isFramed = framed,
+                    isSwapped = swapped,
+                    hasLocalTrack = localTrack != null,
+                    isCameraOn = state.isCameraOn,
+                    isVideoAutoPaused = state.isVideoAutoPaused,
+                ),
+            )
+            val pill = rememberCallPillActions(state, viewModel, chrome)
+            val selfEffects = remember(pill) { CallSelfEffects(CallPillModel.selfEffects(pill.available, pill.items), pill.onAction) }
+            if (stageShown) {
                 CallDuoVideoStage(
                     state = state,
-                    callKey = viewModel.activeCallId.ifBlank { config.callId }.ifBlank { config.peerId },
+                    callKey = callKey,
                     remoteTrack = remoteVideo,
-                    localTrack = viewModel.localVideoTrack,
+                    localTrack = localTrack,
                     eglContext = viewModel.eglBaseContext,
                     peerAvatarUrl = avatarUrl,
                     connected = state.showsConnectedLayout,
                     reduceMotion = reduceMotion,
+                    layout = stageLayout,
+                    onSwap = { if (localTrack != null && state.isCameraOn) swapped = !swapped },
+                    onSceneTap = sceneTap,
+                    selfCamera = selfCamera,
+                    selfEffects = selfEffects,
+                    controlsVisible = chromeVisibility.isVisible(CallChromeElement.Controls) && !inPip,
+                    framed = framed,
                 )
+            }
+
+            // L'aperçu avant décroché : la vidéo de l'appelant derrière la sonnerie, jusqu'au vrai lien.
+            preview.video?.takeIf { !state.showsConnectedLayout }?.let { track ->
+                CallPreviewBackdrop(track = track, eglContext = viewModel.eglBaseContext)
             }
 
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Background, overlayContext, Modifier.fillMaxSize())
@@ -153,11 +249,31 @@ fun CallScreen(
                     chrome = chrome,
                     videoStage = videoStage,
                     peer = peer,
+                    pill = pill,
+                    cameraPlacement = stageLayout.controlsPlacement,
                     modifier = content,
+                    inPip = inPip,
+                    groupStage = if (groupShown) {
+                        { stageModifier ->
+                            CallGroupStage(
+                                state = state,
+                                mesh = groupMesh,
+                                localTrack = localTrack,
+                                primaryTrack = remoteVideo,
+                                eglContext = viewModel.eglBaseContext,
+                                isChromeVisible = chromeVisibility.isVisible(CallChromeElement.Controls),
+                                isFullScreen = chromeState.isStageFullScreen,
+                                onFullScreenChange = chrome::setStageFullScreen,
+                                onStageTap = sceneTap,
+                                modifier = stageModifier,
+                            )
+                        }
+                    } else {
+                        null
+                    },
                 )
                 state.status == CallStatus.INCOMING -> IncomingCallScreen(
                     state = state,
-                    accent = accent,
                     peer = peer,
                     reduceMotion = reduceMotion,
                     onAccept = {
@@ -165,12 +281,30 @@ fun CallScreen(
                     },
                     onDecline = viewModel::decline,
                     modifier = content,
+                    onDeclineWithMessage = CallDeclineReplyTarget.of(config)?.let { target ->
+                        { text ->
+                            declineReply.send(target.peerId, target.conversationId, text)
+                            viewModel.decline()
+                        }
+                    },
+                    preview = preview,
+                    onTogglePreviewSound = viewModel::togglePreviewSound,
                 )
                 state.status == CallStatus.OUTGOING_RINGING -> CallOutgoingRingingScreen(
                     state = state,
                     peer = peer,
                     reduceMotion = reduceMotion,
                     onHangUp = viewModel::hangUp,
+                    previewPanel = {
+                        CallPreviewOutgoingPanel(
+                            preview = preview,
+                            peerName = state.peerName,
+                            isVideoCall = state.isVideoCall,
+                            onToggleAudio = viewModel::togglePreviewAudio,
+                            onToggleVideo = viewModel::togglePreviewVideo,
+                            modifier = Modifier.padding(bottom = MeeshySpacing.xxl),
+                        )
+                    },
                 )
                 state.isEnded -> CallEndedPanel(
                     state = state,
@@ -210,30 +344,73 @@ fun CallScreen(
                 )
             }
 
-            // Minimise affordance — parity with iOS's collapse-to-pill: offered only for a live,
-            // non-incoming call; the Activity-scoped CallViewModel keeps the call alive.
+            // En-tête (miroir de iOS `topChrome`) : Réduire · Conversation à gauche, puce durée · signal à
+            // droite en vidéo établie. Il s'efface avec la pilule d'un toucher sur la scène.
             if (CallPillPresenter.isMinimizable(state.status)) {
                 CallChromeFade(
-                    isVisible = chromeVisibility.isVisible(CallChromeElement.Header),
+                    isVisible = chromeVisibility.isVisible(CallChromeElement.Header) && !inPip,
                     onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
-                    modifier = Modifier.align(Alignment.TopStart).systemBarsPadding().padding(MeeshySpacing.sm),
+                    modifier = Modifier.align(Alignment.TopStart).systemBarsPadding().padding(horizontal = MeeshySpacing.lg),
                 ) {
-                    IconButton(onClick = onMinimize) {
-                        Icon(
-                            imageVector = Icons.Filled.KeyboardArrowDown,
-                            contentDescription = stringResource(R.string.call_action_minimize),
-                            tint = CallPalette.Ink,
-                        )
-                    }
+                    CallHeaderBar(
+                        state = state,
+                        conversationId = config.conversationId.ifBlank { viewModel.activeConfig.conversationId },
+                        showsMinimize = true,
+                        onMinimize = onMinimize,
+                        modifier = Modifier.padding(top = MeeshySpacing.xs),
+                        isVideoStage = videoStage,
+                    )
                 }
             }
 
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Fullscreen, overlayContext, Modifier.fillMaxSize())
 
+            // Le mode « Capturer l'appel » : la scène qui se photographie (deux tapes) ou se filme (appui
+            // long), sous le choix du cadre en direct ; le chrome de l'appel s'efface.
+            if (chromeState.layer.activeMode == CallScreenMode.Montage) {
+                CallMontageMode(
+                    state = state,
+                    localTrack = viewModel.localVideoTrack,
+                    remoteTrack = remoteVideo,
+                    eglContext = viewModel.eglBaseContext,
+                    reduceMotion = reduceMotion,
+                    onClose = chrome::exitMode,
+                    pickerModifier = Modifier.align(Alignment.BottomCenter).systemBarsPadding(),
+                )
+            }
+
+            // Le mode « Effets de ma caméra » : mon image en plein écran, telle qu'elle part, sous le choix d'un effet.
+            if (chromeState.layer.activeMode == CallScreenMode.Effects) {
+                CallEffectsMode(
+                    state = state,
+                    localTrack = viewModel.localVideoTrack,
+                    remoteTrack = remoteVideo,
+                    eglContext = viewModel.eglBaseContext,
+                    reduceMotion = reduceMotion,
+                    onClose = chrome::exitMode,
+                )
+            }
+
+            // « Ajouter à l'appel » : une feuille, comme iOS ; la fermer rend le menu de la pilule.
+            if (chromeState.layer.openPanel == CallScreenPanel.People) {
+                CallAddPeopleSheet(
+                    selfId = groupMesh.roster.localUserId,
+                    primaryUserId = groupMesh.primaryUserId ?: config.peerId,
+                    mesh = groupMesh,
+                    onDismiss = chrome::backToMenu,
+                )
+            }
+
+            // Le journal de la transcription : une feuille, comme iOS ; la fermer rend le menu de la pilule.
+            if (chromeState.layer.openPanel == CallScreenPanel.Journal) {
+                CallCaptionsJournalSheet(onDismiss = chrome::backToMenu, viewModel = captionsViewModel)
+            }
+
             CallToastHost(
                 toasts = extensions.toasts.toasts,
                 modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding(),
             )
+        }
         }
     }
 }

@@ -7,7 +7,7 @@
  *   POST  /admin/conversations/:conversationId/participants/:userId/remove
  *
  * Les routes de membre exigent d'être DANS la conversation (« une fois dans »,
- * `utils/conversation-authority.ts`) : un administrateur qui instruit un
+ * `packages/shared/utils/conversation-authority.ts`) : un administrateur qui instruit un
  * signalement sur un groupe dont il n'est pas membre y recevait 403. Ces trois
  * gestes lui rendent la main, sous le rang d'administration, un motif écrit et
  * une trace.

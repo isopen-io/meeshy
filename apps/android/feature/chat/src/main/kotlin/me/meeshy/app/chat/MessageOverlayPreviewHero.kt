@@ -27,6 +27,7 @@ import androidx.compose.ui.window.PopupProperties
 import java.util.Locale
 import me.meeshy.ui.R
 import me.meeshy.ui.component.bubble.BubbleAccessibilityStrings
+import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleDeliveryA11yStrings
 import me.meeshy.ui.component.bubble.MessageBubble
@@ -93,6 +94,7 @@ internal fun MessageOverlayPreviewHero(
             MessageBubble(
                 content = content,
                 outgoingColor = accentColor,
+                callbacks = BubbleCallbacks.None,
                 accessibilityLabel = rememberBubbleAccessibilityLabel(content),
             )
         }
@@ -136,6 +138,7 @@ private fun rememberBubbleAccessibilityLabel(content: BubbleContent): String {
             read = stringResource(R.string.bubble_status_read),
             failed = stringResource(R.string.bubble_status_failed),
         ),
+        endToEndSealed = stringResource(R.string.bubble_message_end_to_end),
     )
     val locale: Locale = LocalConfiguration.current.locales[0]
     return remember(content, strings, locale) {

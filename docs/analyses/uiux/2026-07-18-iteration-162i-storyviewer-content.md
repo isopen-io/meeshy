@@ -2,7 +2,7 @@
 
 **Date** : 2026-07-18
 **Piste** : iOS (suffixe `i`).
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift`
+**Surface** : `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift`
 **Base** : `main` HEAD (`b706076`)
 **Branche** : `claude/laughing-thompson-geeyz4`
 **Gate** : CI `iOS Tests`

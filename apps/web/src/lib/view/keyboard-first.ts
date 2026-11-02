@@ -4,7 +4,7 @@
  * avant de faire disparaître le reste ».
  *
  * Deux lois pures, MIROIR mot pour mot de
- * `apps/ios/Meeshy/Features/Main/Focal/Core/KeyboardFirstScroll.swift` :
+ * `apps/ios/Meeshy/Features/Focal/Core/KeyboardFirstScroll.swift` :
  *
  * - `dismissesKeyboard` — clavier ouvert et doigt qui tire vers les messages
  *   ANCIENS ⇒ le clavier se ferme. Vers les récents, il reste : on y écrit.

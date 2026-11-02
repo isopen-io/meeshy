@@ -86,4 +86,14 @@ class SceneShapeTest {
         assertThat(bandeHaute.top + bandeHaute.bottom).isWithin(1e-9).of(2 * SceneShape.BAND_TOP_Y)
     }
 
+    @Test
+    fun `la boite suit l echelle ecrite au dela de 3 et en deca de 0,5`() {
+        fun boite(scale: String) = SceneShape.anchorBox(
+            obj("""{"id":"s","kind":"sticker","anchor":{"t":"free","x":0.5,"y":0.5},"transform":{"scale":$scale},"payload":{}}"""),
+        )
+        assertThat(boite("10").width).isGreaterThan(boite("3").width)
+        assertThat(boite("0.04").width).isLessThan(boite("0.5").width)
+        assertThat(boite("0").width).isEqualTo(boite("1").width)
+    }
+
 }

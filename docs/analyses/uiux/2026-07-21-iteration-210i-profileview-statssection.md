@@ -4,7 +4,7 @@
 **Date**: 2026-07-21
 **Branch**: `claude/laughing-thompson-dj6dd5`
 **Base**: `main` HEAD `0acec4f7c`
-**File**: `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift` (+ source-level test)
+**File**: `apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift` (+ source-level test)
 
 ## Surface
 `ProfileView.statsSection` — the "Statistiques" card on the user's profile. Three

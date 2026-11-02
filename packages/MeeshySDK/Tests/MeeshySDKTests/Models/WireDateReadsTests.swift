@@ -20,7 +20,7 @@ final class WireDateReadsTests: XCTestCase {
     // MARK: - Décodeur REST (APIClient)
 
     func test_apiPayloadDecoder_relitLesDeuxFormes() throws {
-        let decoder = APIClient.makeAPIPayloadDecoder()
+        let decoder = MeeshyCoders.decoder(.api)
         for (servie, attendu) in Self.formes {
             let lue = try decoder.decode(Horodate.self, from: Data(#"{"at":"\#(servie)"}"#.utf8))
             XCTAssertEqual(Self.millisecondes(lue.at), attendu, servie)
@@ -28,14 +28,14 @@ final class WireDateReadsTests: XCTestCase {
     }
 
     func test_apiPayloadDecoder_refuseUneHeureSeule() {
-        let decoder = APIClient.makeAPIPayloadDecoder()
+        let decoder = MeeshyCoders.decoder(.api)
         XCTAssertThrowsError(try decoder.decode(Horodate.self, from: Data(#"{"at":"09:34:23.563"}"#.utf8)))
     }
 
     // MARK: - Décodeur socket
 
     func test_socketPayloadDecoder_relitLesDeuxFormes() throws {
-        let decoder = SocialSocketManager.makeSocketPayloadDecoder()
+        let decoder = MeeshyCoders.decoder(.socket)
         for (servie, attendu) in Self.formes {
             let lue = try decoder.decode(Horodate.self, from: Data(#"{"at":"\#(servie)"}"#.utf8))
             XCTAssertEqual(Self.millisecondes(lue.at), attendu, servie)
@@ -59,7 +59,7 @@ final class WireDateReadsTests: XCTestCase {
              "createdAt":"2026-09-15T09:00:00.000Z","updatedAt":"2026-09-15T09:00:00.000Z",
              "pinnedAt":"\(servie)"}
             """
-            let message = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
+            let message = try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data(json.utf8))
             XCTAssertEqual(Self.millisecondes(message.toMessage(currentUserId: "u1").pinnedAt), attendu, servie)
         }
     }

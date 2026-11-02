@@ -23,6 +23,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -242,27 +246,52 @@ fun CollapsibleHeader(
     }
 }
 
+/**
+ * Le titre se lit ENTIER : iOS le rétrécit jusqu'à 80 % (`minimumScaleFactor(0.8)`) avant de couper ; ici le même
+ * rétrécissement, puis — si le mot est encore trop long pour la largeur (S8, 360 dp) — une seconde ligne tant que
+ * l'en-tête est déployé. Replié, il reste sur une ligne et ne coupe qu'en dernier recours.
+ */
 @Composable
 private fun HeaderTitleText(title: String, titleColor: Color, sizeSp: Float, bold: Boolean) {
+    var fit by remember(title) { mutableFloatStateOf(1f) }
+    var wraps by remember(title) { mutableStateOf(false) }
+    val expanded = sizeSp >= CollapsibleHeaderTitleFit.WRAP_FROM_SP
     val style = TextStyle(
         fontFamily = NunitoFontFamily,
-        fontSize = sizeSp.sp,
+        fontSize = (sizeSp * fit).sp,
         fontWeight = if (bold) FontWeight.Bold else FontWeight.SemiBold,
         color = titleColor,
     )
     Text(
         text = title,
         style = if (titleColor == Color.Unspecified) style.copy(brush = MeeshyGradients.brand) else style,
-        maxLines = 1,
+        maxLines = if (wraps && expanded) CollapsibleHeaderTitleFit.WRAPPED_LINES else 1,
         overflow = TextOverflow.Ellipsis,
+        onTextLayout = { layout ->
+            if (!layout.hasVisualOverflow) return@Text
+            when {
+                fit > CollapsibleHeaderTitleFit.MIN_SCALE -> fit = CollapsibleHeaderTitleFit.shrunk(fit)
+                expanded -> wraps = true
+            }
+        },
         modifier = Modifier.semantics { heading() },
     )
 }
 
-/** Surface de l'en-tete : teinte opaque en haut, transparente au bord bas (le contenu passe dessous). */
+/** Les règles du rétrécissement du titre, hors composition pour être testées. */
+internal object CollapsibleHeaderTitleFit {
+    const val MIN_SCALE = 0.8f
+    const val STEP = 0.05f
+    const val WRAPPED_LINES = 2
+    const val WRAP_FROM_SP = 20f
+
+    fun shrunk(scale: Float): Float = (scale - STEP).coerceAtLeast(MIN_SCALE)
+}
+
+/** Surface de l'en-tete : quasi opaque sous le titre et la barre d'etat, fondue au seul bord bas (#13386). */
 private fun headerBrush(base: Color): Brush = Brush.verticalGradient(
-    0f to base.copy(alpha = 0.9f),
-    0.5f to base.copy(alpha = 0.7f),
+    0f to base.copy(alpha = CollapsibleHeaderMetrics.SURFACE_TOP_ALPHA),
+    CollapsibleHeaderMetrics.SURFACE_OPAQUE_UNTIL to base.copy(alpha = CollapsibleHeaderMetrics.SURFACE_BODY_ALPHA),
     1f to base.copy(alpha = 0f),
 )
 

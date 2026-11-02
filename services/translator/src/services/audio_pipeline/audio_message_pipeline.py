@@ -48,6 +48,7 @@ from .translation_stage import (
 
 # Import services for dependency injection
 from ..redis_service import get_redis_service
+from services.task_privacy import shown
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -407,7 +408,7 @@ class AudioMessagePipeline:
         )
 
         logger.info(
-            f"[PIPELINE] Transcribed: '{transcription.text[:50]}...' "
+            f"[PIPELINE] Transcribed: '{shown(transcription.text, 50)}...' "
             f"(lang={transcription.language}, source={transcription.source})"
         )
 

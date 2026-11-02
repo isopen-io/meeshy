@@ -12,14 +12,17 @@
  *   publie (`state/containers.json`). Rang d'administration (#11441).
  * - `POST /:operation` — `backup` ou `image-prune`, RANG D'ADMINISTRATION
  *   (BIGBOSS et ADMIN, demande porteur 2026-10-21, #11441), après une
- *   confirmation qui NOMME l'opération. La passerelle ne fait que DÉPOSER la
+ *   confirmation qui NOMME l'opération. Le nettoyage n'est permis que de 02:00 à
+ *   06:00 heure de Paris (#11452, décision porteur 2026-10-24) : hors fenêtre,
+ *   `409 OPERATION_OUTSIDE_WINDOW` et la prochaine ouverture, avant tout dépôt.
+ *   La passerelle ne fait que DÉPOSER la
  *   demande (`services/admin/ops-relay.ts`) : c'est le runner de l'hôte qui
  *   l'exécute, sur liste blanche et sous délai. Chaque demande acceptée est
  *   journalisée AVANT son dépôt, et fail-closed : sans journal, rien n'est déposé
  *   (`TRIGGER_SERVER_OPERATION`, entité `Server`). Une tentative REFUSÉE l'est aussi
  *   (`SERVER_OPERATION_REFUSED`, avec son code — #10459 point 3) : rang insuffisant
  *   (pour un compte qui entre dans l'administration), confirmation fausse, délai,
- *   opération en cours, relais absent — une fois par acteur, opération et code toutes
+ *   hors fenêtre, opération en cours, relais absent — une fois par acteur, opération et code toutes
  *   les dix minutes, pour qu'aucun compte ne transforme ses refus en écritures.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -198,7 +201,7 @@ export function buildAdminOpsRoutes(deps: AdminOpsDeps) {
         onRequest: adminGate,
         schema: {
           description:
-            "Le dernier passage de chaque opération serveur, sa prochaine disponibilité, l'installation du relais et la carte de la dernière sauvegarde. BIGBOSS et ADMIN. #10385, #10386.",
+            "Le dernier passage de chaque opération serveur, sa prochaine disponibilité (délai et fenêtre horaire, le plus tardif), sa fenêtre horaire, l'installation du relais et la carte de la dernière sauvegarde. BIGBOSS et ADMIN. #10385, #10386, #11452.",
           tags: ['admin'],
           summary: 'Server operations status (admin)',
           security: [{ bearerAuth: [] }],
@@ -234,7 +237,7 @@ export function buildAdminOpsRoutes(deps: AdminOpsDeps) {
         onResponse: auditForbidden,
         schema: {
           description:
-            "Déclenche une opération serveur (backup | image-prune) après une confirmation qui la nomme. Rang d'administration (BIGBOSS, ADMIN) ; la demande est déposée pour le runner de l'hôte, et chaque tentative, acceptée ou refusée, est journalisée. #10385, #10386, #11441.",
+            "Déclenche une opération serveur (backup | image-prune) après une confirmation qui la nomme. Rang d'administration (BIGBOSS, ADMIN) ; image-prune n'est permise que de 02:00 à 06:00 heure de Paris (409 OPERATION_OUTSIDE_WINDOW sinon) ; la demande est déposée pour le runner de l'hôte, et chaque tentative, acceptée ou refusée, est journalisée. #10385, #10386, #11441, #11452.",
           tags: ['admin'],
           summary: 'Trigger a server operation (admin)',
           security: [{ bearerAuth: [] }],
@@ -285,6 +288,12 @@ export function buildAdminOpsRoutes(deps: AdminOpsDeps) {
           await auditRefusal({ request, code: result.code });
           if (result.code === 'OPERATION_COOLDOWN') {
             return sendError(reply, 409, 'Opération trop récente', { code: result.code, details: { data: { availableAt: result.availableAt } } });
+          }
+          if (result.code === 'OPERATION_OUTSIDE_WINDOW') {
+            return sendError(reply, 409, "Le nettoyage n'est permis que de 2 h à 6 h, heure de Paris", {
+              code: result.code,
+              details: { data: { availableAt: result.availableAt } },
+            });
           }
           if (result.code === 'OPERATION_IN_PROGRESS') {
             return sendError(reply, 409, 'Opération déjà en cours', { code: result.code });

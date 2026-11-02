@@ -43,6 +43,10 @@ import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import me.meeshy.feature.profile.R
+import me.meeshy.sdk.model.share.ShareCards
+import me.meeshy.sdk.model.share.ShareSubject
+import me.meeshy.ui.share.LocalShareLauncher
+import me.meeshy.ui.share.open
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -60,6 +64,7 @@ internal fun ProfileShareSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
+    val shareLauncher = LocalShareLauncher.current
     val clipboard: ClipboardManager = LocalClipboardManager.current
     val shareMessage = stringResource(R.string.profile_share_message, share.displayName, share.webLink)
     // The QR always sits on a fixed-white card, so the modules must be black in
@@ -115,13 +120,25 @@ internal fun ProfileShareSheet(
                 }
                 OutlinedButton(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, shareMessage)
+                        // « Envoyer » : la feuille de partage unique (#13474) — conversations, puis partage système.
+                        if (shareLauncher != null) {
+                            onDismiss()
+                            shareLauncher.open(
+                                ShareSubject.Card(
+                                    ShareCards.profile(
+                                        userId = share.handle, title = share.displayName, webLink = share.webLink, messageText = shareMessage,
+                                    ),
+                                ),
+                            )
+                        } else {
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, shareMessage)
+                            }
+                            context.startActivity(
+                                Intent.createChooser(intent, context.getString(R.string.profile_share_via)),
+                            )
                         }
-                        context.startActivity(
-                            Intent.createChooser(intent, context.getString(R.string.profile_share_via)),
-                        )
                     },
                     modifier = Modifier.weight(1f),
                 ) {

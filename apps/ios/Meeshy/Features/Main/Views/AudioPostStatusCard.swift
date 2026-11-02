@@ -13,7 +13,7 @@ struct AudioPostStatusCard: View {
     let formattedDuration: String
     let spokenDuration: String
 
-    private var theme: ThemeManager { ThemeManager.shared }
+    @ResolvedThemePalette private var theme
 
     var body: some View {
         VStack(spacing: MeeshySpacing.lg) {

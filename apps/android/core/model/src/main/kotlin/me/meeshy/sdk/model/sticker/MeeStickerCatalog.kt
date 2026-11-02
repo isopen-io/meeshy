@@ -48,4 +48,20 @@ object MeeStickerCatalog {
     }
 
     fun stickerById(id: String): MeeSticker? = byId[id]
+
+    /** La distribution d'un pack intégré (`mee`, `meo`, `mee-et-meo`), `null` pour un pack de tiers — iOS `cast(forPackSlug:)`. */
+    fun cast(forPackSlug: String): MeeCharacter? = when (forPackSlug) {
+        "mee" -> MeeCharacter.MEE
+        "meo" -> MeeCharacter.MEO
+        "mee-et-meo" -> MeeCharacter.DUO
+        else -> null
+    }
+
+    /** Le nom d'un pack intégré avant que la passerelle ait répondu (`builtinPackTitle`, iOS) — un nom propre, non traduit. */
+    fun builtinPackTitle(slug: String): String? = when (cast(slug)) {
+        MeeCharacter.MEE -> "Mee"
+        MeeCharacter.MEO -> "Meo"
+        MeeCharacter.DUO -> "Mee & Meo"
+        null -> null
+    }
 }

@@ -303,10 +303,10 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
 
     func test_everySurfaceFamily_declaresItselfAtItsMountPoint() throws {
         let mounts: [(String, String)] = [
-            ("Features/Main/Views/StoryViewerContainer.swift", ".closesForConversationOpening(.storyViewer"),
+            ("Features/Stories/Views/StoryViewerContainer.swift", ".closesForConversationOpening(.storyViewer"),
             ("Features/Main/Views/ReelsPresenter.swift", "surfaces.declare(.reels"),
             ("Features/Main/Views/SocialMediaGalleryPresentation.swift", ".closesForConversationOpening(.mediaGallery)"),
-            ("Features/Main/Composer/MeeshyComposerHost+Autosave.swift", ".closesForConversationOpening(.composer"),
+            ("Features/Composer/MeeshyComposerHost+Autosave.swift", ".closesForConversationOpening(.composer"),
         ]
         for (file, declaration) in mounts {
             XCTAssertTrue(try appSource(file).contains(declaration), "\(file) ne se déclare plus")
@@ -326,7 +326,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         // 3a7502ceda : la feuille « nouvelle conversation » est montée par
         // `NewConversationSheetHost` (commande de scène), qui la déclare une fois ;
         // chaque racine monte ce porteur.
-        XCTAssertEqual(try occurrences(of: sheet, in: "Features/Main/Navigation/SceneCommandHosts.swift"), 1,
+        XCTAssertEqual(try occurrences(of: sheet, in: "Features/Navigation/SceneCommandHosts.swift"), 1,
                        "SceneCommandHosts.swift : nouvelle conversation")
         for layers in ["Features/Main/Views/RootLayers/RootViewLayers.swift",
                        "Features/Main/Views/RootLayers/iPadRootViewLayers.swift"] {
@@ -348,7 +348,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
             ("Features/Main/Views/ReelFeedCard.swift", place, 1),
             ("Features/Main/Views/CommentRowView.swift", place, 1),
             ("Features/Main/Views/GlobalSearchView.swift", ".closesForConversationOpening(.search)", 1),
-            ("Features/Main/Views/ProfileView.swift", ").closesForConversationOpening(.profilePhoto)", 1),
+            ("Features/Profile/Views/ProfileView.swift", ").closesForConversationOpening(.profilePhoto)", 1),
             ("Features/Main/Components/ContactCardView.swift", ".closesForConversationOpening(.contactCard)", 1),
         ]
         for (file, declaration, count) in mounts {
@@ -357,8 +357,8 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
     }
 
     func test_gameScreens_retainInsteadOfClosing() throws {
-        for file in ["Features/Main/Game/Photo/GamePhotoFlowView.swift",
-                     "Features/Main/Views/AchievementRevealView.swift"] {
+        for file in ["Features/Game/Photo/GamePhotoFlowView.swift",
+                     "Features/Profile/Views/AchievementRevealView.swift"] {
             XCTAssertEqual(try occurrences(of: ".retainsAgainstConversationOpening(.game)", in: file), 1, file)
             XCTAssertEqual(try occurrences(of: "closesForConversationOpening", in: file), 0,
                            "\(file) : une partie en cours ne se referme pas")
@@ -366,13 +366,13 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
     }
 
     func test_composerClosing_goesThroughTheAtelierExit() throws {
-        let host = try appSource("Features/Main/Composer/MeeshyComposerHost+Autosave.swift")
+        let host = try appSource("Features/Composer/MeeshyComposerHost+Autosave.swift")
         XCTAssertTrue(host.contains("ComposerConversationYield.close(atelierWritesItsDraft: atelierWritesItsDraft"))
         XCTAssertTrue(host.contains("exitIsArmed: publishTrigger.offersExit"))
     }
 
     func test_pushOfAConversation_goesThroughTheRouterSite() throws {
-        let router = try appSource("Features/Main/Navigation/Router.swift")
+        let router = try appSource("Features/Navigation/Router.swift")
         let push = try XCTUnwrap(router.components(separatedBy: "func push(_ route: Route) {").dropFirst().first)
         let body = push.components(separatedBy: "private func place(_ route: Route) {")[0]
         XCTAssertTrue(body.contains("guard case .conversation(let conversation) = route else"))
@@ -403,7 +403,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         let iPad = try appSource("Features/Main/Views/RootLayers/iPadRootViewLayers.swift")
         let covers = try XCTUnwrap(iPad.components(separatedBy: "struct iPadCoversAndChromeLayer").dropFirst().first)
         XCTAssertTrue(covers.contains(scope), "iPadCoversAndChromeLayer est la dernière couche de iPadRootView")
-        XCTAssertTrue(try appSource("Features/Main/Navigation/PresentedSurfaceModifier.swift")
+        XCTAssertTrue(try appSource("Features/Navigation/PresentedSurfaceModifier.swift")
             .contains("registry.declare(kind, scope: scope"))
     }
 

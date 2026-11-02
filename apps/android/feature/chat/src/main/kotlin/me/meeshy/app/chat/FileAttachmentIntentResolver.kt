@@ -35,6 +35,13 @@ object FileAttachmentIntentResolver {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 
+    /**
+     * Only a file the system itself handed back (`content://`, a finished download of a CLEAR attachment) is lent to
+     * another app. A `file://` path would leak the storage layout (and is refused by the platform), and a sealed
+     * (end-to-end) piece is never downloaded in the clear, so it never reaches here (#13496).
+     */
+    fun canHandOff(scheme: String?): Boolean = scheme.equals("content", ignoreCase = true)
+
     /** A chooser over `ACTION_SEND` for [fileUri] — the "Partager" counterpart to [viewIntent]. */
     fun shareIntent(fileUri: Uri, mimeType: String?, fileName: String?): Intent {
         val send = Intent(Intent.ACTION_SEND).apply {

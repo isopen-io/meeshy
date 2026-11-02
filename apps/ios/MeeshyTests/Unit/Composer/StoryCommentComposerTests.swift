@@ -18,7 +18,7 @@ private enum StoryComposerSource {
     }
 
     static func storyComposer() throws -> String {
-        try read("Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerBar.swift")
+        try read("Meeshy/Features/Stories/Views/StoryViewerView+CanvasComposerBar.swift")
     }
 }
 

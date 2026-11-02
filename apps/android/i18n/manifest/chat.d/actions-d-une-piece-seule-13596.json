@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "androidName": "piece_delete_confirm_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "piece_delete_confirm_action",
+          "status": "android-only"
+        },
+        {
+          "androidName": "piece_remove_failed",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

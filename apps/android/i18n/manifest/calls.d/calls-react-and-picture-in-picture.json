@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.control.react",
+          "androidName": "call_control_react",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.pip",
+          "androidName": "call_control_pip",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

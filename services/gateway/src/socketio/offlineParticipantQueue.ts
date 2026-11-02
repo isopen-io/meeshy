@@ -7,6 +7,7 @@ import {
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import type { QueuedEventVariant } from './queuedEventContract';
+import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 
 const logger = enhancedLogger.child({ module: 'offlineParticipantQueue' });
 
@@ -16,7 +17,9 @@ const logger = enhancedLogger.child({ module: 'offlineParticipantQueue' });
  * without importing each other.
  */
 export interface OfflineParticipantQueueDeps {
-  deliveryQueue: { enqueue(userId: string, entry: QueuedMessagePayload): Promise<void> } | null | undefined;
+  deliveryQueue: {
+    enqueue(userId: string, entry: QueuedMessagePayload, options?: { readonly sealAtRest?: boolean }): Promise<void>;
+  } | null | undefined;
   prisma: Pick<PrismaClient, 'participant'>;
   connectedUsers: { has(key: string): boolean };
 }
@@ -151,6 +154,23 @@ function readableLanguagesFor(participant: OfflineQueueParticipant): string[] {
   ];
 }
 
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+
+const modeOf = (record: Record<string, unknown> | null): string | null =>
+  typeof record?.['encryptionMode'] === 'string' ? record['encryptionMode'] : null;
+
+/**
+ * #12822 — la déclaration `atRest` du producteur décide (requise au type pour
+ * les familles qui portent du texte, `TextBearingQueuedEvent`). Une charge qui
+ * déclare elle-même un mode au repos se scelle EN PLUS : défense en profondeur,
+ * jamais un substitut — l'enveloppe d'un lien, par exemple, n'en porte aucun.
+ */
+const declaresAtRest = (payload: Record<string, unknown>): boolean =>
+  isServerAtRestMode(modeOf(payload)) || isServerAtRestMode(modeOf(asRecord(payload['message'])));
+
+const SEAL_AT_REST = { sealAtRest: true } as const;
+
 /**
  * THE implementation of the "offline participants" audience, shared by every
  * transport that mutates or creates conversation state.
@@ -244,15 +264,19 @@ export async function enqueueForOfflineParticipants(
         const readable = readableLanguagesFor(p);
         if (readable.length > 0 && !readable.includes(restrictToLanguage)) continue;
       }
-      deliveryQueue
-        .enqueue(queueKey, {
-          messageId,
-          conversationId,
-          payload: resolvePayloadForReader ? resolvePayloadForReader(queueKey) : payload,
-          enqueuedAt: new Date().toISOString(),
-          eventType,
-          ...(dedupKey ? { dedupKey } : {}),
-        })
+      const body = resolvePayloadForReader ? resolvePayloadForReader(queueKey) : payload;
+      const entry: QueuedMessagePayload = {
+        messageId,
+        conversationId,
+        payload: body,
+        enqueuedAt: new Date().toISOString(),
+        eventType,
+        ...(dedupKey ? { dedupKey } : {}),
+      };
+      const queued = params.atRest === true || declaresAtRest(body)
+        ? deliveryQueue.enqueue(queueKey, entry, SEAL_AT_REST)
+        : deliveryQueue.enqueue(queueKey, entry);
+      queued
         .catch((err) => logger.warn('Failed to enqueue offline event', { userId: queueKey, eventType, error: err }));
     }
   } catch (err) {

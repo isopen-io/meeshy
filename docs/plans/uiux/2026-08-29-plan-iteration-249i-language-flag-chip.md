@@ -15,7 +15,7 @@
 | 3 | `Meeshy/Features/Main/Views/FeedPostCard.swift` | rangée méta → puce `.standard` + badge actif ; haptique retirée de `handleFlagTap` |
 | 4 | `Meeshy/Features/Main/Views/PostDetailView.swift` | rangée de la publication ET du repartage ; badge actif / décoratif |
 | 5 | `Meeshy/Features/Main/Views/FeedCommentsSheet.swift` | deux puces + badge décoratif |
-| 6 | `Meeshy/Features/Main/Views/StoryViewerView+Content.swift` | `languageSwitcher` → deux puces `.overlay` ; helper `languageFlag` supprimé |
+| 6 | `Meeshy/Features/Stories/Views/StoryViewerView+Content.swift` | `languageSwitcher` → deux puces `.overlay` ; helper `languageFlag` supprimé |
 | 7 | `Meeshy/Features/Main/Views/ReelsPlayerView.swift` | puce `.overlay` |
 | 8 | `Meeshy/Localizable.xcstrings` | 2 renommages, 3 suppressions (3409 → 3406) |
 | 9 | `MeeshyTests/Unit/Components/LanguageFlagChipTests.swift` | **neuf** — vocabulaire, replis, cibles |

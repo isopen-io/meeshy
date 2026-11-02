@@ -209,7 +209,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
         )
         let canvas = try source("Meeshy/Features/Main/Views/PostDetailView+Canvas.swift")
         XCTAssertTrue(
-            canvas.contains("announcement: BackgroundSoundBadge.announcement(for: playedEffects)"),
+            canvas.contains("announcement: BackgroundSoundBadge.creditAnnouncement(for: playedEffects)"),
             "La note se monte sur l'annonce PARTAGÉE (E1), sur les effets que la scène joue."
         )
     }
@@ -549,7 +549,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     // MARK: - Rail du viewer story — NON-régression (déjà son propre muet, hors périmètre)
 
     func test_storyViewerSidebar_muteRail_noRegression() throws {
-        let text = try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        let text = try source("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift")
         XCTAssertTrue(
             text.contains("railPlan.showsSound"),
             "Le rail garde sa propre condition d'existence (piste audible) — non touchée par E2."

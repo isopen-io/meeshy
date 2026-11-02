@@ -91,6 +91,7 @@ function prismaDouble(options: { hiding?: readonly string[]; amis?: readonly str
     friendRequest: {
       findMany: jest.fn<any>(async () => amis.map((id) => ({ senderId: MOI, receiverId: id }))),
     },
+    userRelation: { findMany: jest.fn<any>(async () => []) },
   };
 }
 

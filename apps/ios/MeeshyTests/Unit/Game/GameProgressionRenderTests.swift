@@ -24,7 +24,7 @@ final class GameProgressionRenderTests: XCTestCase {
     private func sourceCount(of needle: String) throws -> Int {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Game")
+            .appendingPathComponent("Meeshy/Features/Game")
         let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL }
             .filter { $0.pathExtension == "swift" } ?? []
         return try files.reduce(0) { total, file in
@@ -265,7 +265,7 @@ final class GameProgressionRenderTests: XCTestCase {
             XCTAssertTrue(code.contains("case .progression, .progressionDashboard:"), "\(host) : l'ancienne route n'ouvre pas la première page")
         }
         XCTAssertEqual(try sourceCount(of: "push(.progressionDashboard"), 0, "une page du jeu pousse encore le tableau de bord")
-        XCTAssertFalse(FileManager.default.fileExists(atPath: ios.appendingPathComponent("Meeshy/Features/Main/Game/ProgressionDashboardPage.swift").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: ios.appendingPathComponent("Meeshy/Features/Game/ProgressionDashboardPage.swift").path))
     }
 
     // MARK: - Les niveaux à 3, 4 et 5 chiffres tiennent (#9688)

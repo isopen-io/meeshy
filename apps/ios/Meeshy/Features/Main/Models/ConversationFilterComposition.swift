@@ -96,6 +96,58 @@ nonisolated enum ConversationFilterComposition {
         isNeutral(selection) ? [] : selection.intersection(stateFilters)
     }
 
+    /// Une conversation de la liste passe-t-elle la sélection, l'étiquette et
+    /// la recherche ? La règle des deux familles appliquée à une ligne.
+    static func admits(
+        _ c: Conversation, filters: Set<MeeshyConversationFilter>, tag: String?, searchText: String
+    ) -> Bool {
+        // Étiquette active (carte de focus) : seules celles qui la portent.
+        if let tag, !c.tags.contains(where: { $0.name == tag }) { return false }
+        // Soft delete (`.deleteForUser` / `.leave` set `deletedForUserAt`):
+        // the store keeps the row in RAM until a refresh drops it, so the
+        // list must hide it from EVERY filter (incl. .archived). Matches
+        // `ConversationUserState.isVisible`.
+        guard c.userState.deletedForUserAt == nil else { return false }
+        // Les ARCHIVES changent de corpus, elles ne restreignent pas : sans
+        // ce gate, une archivée reparaîtrait dans « Non lus » parce qu'elle
+        // porte encore des messages non lus.
+        let wantsArchived = includesArchived(filters)
+        guard wantsArchived == c.userState.isArchived else { return false }
+        // Une archivée n'a pas à être encore ACTIVE pour se montrer : c'est
+        // le seul corpus où l'inactivité est attendue.
+        guard wantsArchived || c.isActive else { return false }
+
+        // TYPES : un OU. Vide ⇒ aucun type n'est exigé.
+        let types = selectedTypes(filters)
+        let typeMatch = types.isEmpty || types.contains { type in
+            switch type {
+            case .personnel: return c.type == .direct
+            case .privee: return c.type == .group
+            case .ouvertes: return c.type == .public || c.type == .community
+            case .globales: return c.type == .global
+            case .channels: return c.isAnnouncementChannel
+            default: return false
+            }
+        }
+
+        // ÉTATS : un ET. Vide ⇒ aucune restriction.
+        let states = selectedStates(filters)
+        let stateMatch = states.allSatisfy { state in
+            switch state {
+            case .unread: return c.userState.unreadCount > 0
+            case .favoris: return c.userState.reaction != nil
+            default: return true
+            }
+        }
+
+        let filterMatch = typeMatch && stateMatch
+        // `displayName` (not `name`): a conversation renamed locally via
+        // `userState.customName` must remain findable by the name the
+        // row actually shows, not just the server-side title/identifier.
+        let searchMatch = searchText.isEmpty || c.displayName.localizedCaseInsensitiveContains(searchText)
+        return filterMatch && searchMatch
+    }
+
     /// Le libellé d'accessibilité d'une chip : son état se DIT, il ne se déduit
     /// pas d'une couleur. Une chip sélectionnée annonce comment la retirer.
     static func accessibilityHint(isSelected: Bool) -> String {

@@ -9,7 +9,7 @@ import MeeshyUI
 
 // MARK: - Swipe-to-go-back enabler
 // `InteractivePopEnabler` vit désormais dans
-// `Features/Main/Navigation/InteractivePopEnabler.swift` — les sections du
+// `Features/Navigation/InteractivePopEnabler.swift` — les sections du
 // hub de progression en ont besoin aussi (#5843), et une jumelle recopiée
 // aurait perdu la politique `allowsEdgeSwipe` dont la Rivière dépend.
 
@@ -56,14 +56,9 @@ struct ConversationView: View {
     /// rien. Cette révision, lue par `liveConversation`, porte le redessin (#10751).
     @State private var repaintRevision = 0
 
-    /// Le pair d'un direct OUVERT renommé ou repeint à `user:updated` (#9359) :
-    /// l'annonce s'applique à la conversation AFFICHÉE et le résultat devient
-    /// l'override — l'override garde la priorité, la valeur figée reste le
-    /// repli, et un enregistrement des réglages repart du pair repeint. Une
-    /// annonce qui ne change rien n'écrit rien : l'écran ne se redessine pas.
-    func admitPeerUpdate(_ event: UserUpdatedEvent) { admitRepainted(DirectPeerRepaint.repainted(liveConversation, by: event)) }
-    /// Écrivain UNIQUE de l'override : pair (#9359), accent relayé (#10631), réglages enregistrés.
-    func admitRepainted(_ repainted: Conversation?) { guard let repainted else { return }; conversationOverride = repainted; repaintRevision &+= 1 }
+    /// Écrivain UNIQUE de l'override : pair (#9359) et régime de chiffrement (#12522) repeints sur la conversation
+    /// AFFICHÉE (une annonce qui ne change rien n'écrit rien), accent relayé (#10631), réglages enregistrés.
+    func admitRepainted(_ repainted: Conversation?) { guard let repainted else { return }; conversationOverride = repainted; repaintRevision &+= 1; ConversationMentionScope.rescope(viewModel, to: repainted, anonymousSession: anonymousSession) }
 
     // NOTE: Properties below are internal (not private) for cross-file extension access (+MessageRow, +Header, …).
     @Environment(\.sceneWindowSize) var sceneWindowSize // la fenêtre qui porte la conversation (Stage Manager)
@@ -262,7 +257,7 @@ struct ConversationView: View {
 
     /// #11214 — le lecteur et la conversation tels que la loi des actions les lit ; un seul site.
     var menuAuthority: ConversationMenuAuthority {
-        ConversationMenuAuthority.make(conversation: liveConversation, currentUser: AuthManager.shared.currentUser, guest: anonymousSession)
+        ConversationMenuAuthority.make(conversation: liveConversation, viewModel: viewModel)
     }
 
     /// « Retirer » le message d'un AUTRE (#11151) — créateur compris, jamais en direct.
@@ -288,7 +283,7 @@ struct ConversationView: View {
             conversationId: conversation?.id ?? "",
             unreadCount: conversation?.userState.unreadCount ?? 0,
             isDirect: conversation?.type == .direct,
-            participantUserId: conversation?.participantUserId,
+            participantUserId: conversation?.participantUserId, encryptionMode: conversation?.encryptionMode,
             memberJoinedAt: conversation?.currentUserJoinedAt,
             // Frontière de lecture (#7198/#7222) — reprise SYNCHRONE de la
             // ligne de liste qui ouvre ce fil, même idiome que
@@ -300,7 +295,7 @@ struct ConversationView: View {
             closedAt: conversation?.closedAt,
             anonymousSession: anonymousSession
         )
-        _viewModel = StateObject(wrappedValue: vm)
+        _viewModel = StateObject(wrappedValue: ConversationMentionScope.applying(conversation, anonymousSession: anonymousSession, to: vm))
 
         // WS-7 (F-086, A6) — décision de l'orchestrateur, ICI, UNE SEULE
         // FOIS. `identity`/`capabilities`/`isFlagEnabled` sont les mêmes
@@ -561,7 +556,7 @@ struct ConversationView: View {
             scrollState: $scrollState,
             overlayState: $overlayState,
             showScript: { readingModeController.select(.script) },
-            reply: { triggerReply(for: $0) }, presentMenu: { presentLongPressMenu(for: $0, cellFrame: nil) },
+            reply: { triggerReply(for: $0) }, menuAuthority: { menuAuthority }, presentMenu: { presentLongPressMenu(for: $0, cellFrame: $1.windowFrame, riverFace: $1.face) },
             openViewOnce: { openViewOnce(messageId: $0) },
             openMedia: openMediaFullscreen
         )
@@ -621,7 +616,7 @@ struct ConversationView: View {
             ),
             isHeaderExpanded: composerState.showOptions,
             readingMode: readingModeController.mode,
-            authority: menuAuthority,
+            authority: { menuAuthority },
             messageActions: messageActions,
             actions: ConversationMessageListActions(
                 toggleSelection: { toggleMessageSelection($0) },

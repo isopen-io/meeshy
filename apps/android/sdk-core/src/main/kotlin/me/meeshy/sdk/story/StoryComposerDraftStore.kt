@@ -4,6 +4,9 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
@@ -24,6 +27,9 @@ public interface StoryComposerDraftStore {
     /** The stored composer draft, or `null` if none was persisted (or the blob was corrupt). */
     public suspend fun load(): StoryComposerDraftSnapshot?
 
+    /** The stored draft, live — what « Reprendre votre brouillon » shows at the head of the feed. */
+    public fun observe(): Flow<StoryComposerDraftSnapshot?>
+
     /** Persists [snapshot], replacing any previously stored composer draft. */
     public suspend fun save(snapshot: StoryComposerDraftSnapshot)
 
@@ -35,16 +41,18 @@ public interface StoryComposerDraftStore {
 public class InMemoryStoryComposerDraftStore(
     initial: StoryComposerDraftSnapshot? = null,
 ) : StoryComposerDraftStore {
-    private var snapshot: StoryComposerDraftSnapshot? = initial
+    private val state = MutableStateFlow(initial)
 
-    override suspend fun load(): StoryComposerDraftSnapshot? = snapshot
+    override suspend fun load(): StoryComposerDraftSnapshot? = state.value
+
+    override fun observe(): Flow<StoryComposerDraftSnapshot?> = state
 
     override suspend fun save(snapshot: StoryComposerDraftSnapshot) {
-        this.snapshot = snapshot
+        state.value = snapshot
     }
 
     override suspend fun clear() {
-        snapshot = null
+        state.value = null
     }
 }
 
@@ -61,6 +69,9 @@ public class DataStoreStoryComposerDraftStore(
 
     override suspend fun load(): StoryComposerDraftSnapshot? =
         dataStore.data.map { prefs -> decode(prefs[KEY]) }.first()
+
+    override fun observe(): Flow<StoryComposerDraftSnapshot?> =
+        dataStore.data.map { prefs -> decode(prefs[KEY]) }.distinctUntilChanged()
 
     override suspend fun save(snapshot: StoryComposerDraftSnapshot) {
         dataStore.edit { prefs ->

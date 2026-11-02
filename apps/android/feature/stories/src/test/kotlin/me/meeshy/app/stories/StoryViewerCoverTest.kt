@@ -22,4 +22,17 @@ class StoryViewerCoverTest {
         assertThat(StoryViewerCover(dialog = true).freezesPlayback).isTrue()
         assertThat(StoryViewerCover(railBar = true).freezesPlayback).isTrue()
     }
+
+    @Test
+    fun `a comment being written freezes playback, like iOS StoryComposerHold`() {
+        assertThat(StoryViewerCover(composing = true).freezesPlayback).isTrue()
+    }
+
+    @Test
+    fun `a typed draft, a staged piece or a send in flight holds the story, an empty composer does not`() {
+        assertThat(StoryCommentHold.holds(draft = " ", hasMedia = false, isSubmitting = false)).isFalse()
+        assertThat(StoryCommentHold.holds(draft = "Beau", hasMedia = false, isSubmitting = false)).isTrue()
+        assertThat(StoryCommentHold.holds(draft = "", hasMedia = true, isSubmitting = false)).isTrue()
+        assertThat(StoryCommentHold.holds(draft = "", hasMedia = false, isSubmitting = true)).isTrue()
+    }
 }

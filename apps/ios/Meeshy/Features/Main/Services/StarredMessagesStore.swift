@@ -39,13 +39,11 @@ final class StarredMessagesStore: ObservableObject {
     private let defaults: UserDefaults
     private let storageKey = "meeshy_starred_messages"
     private let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
+        let e = MeeshyCoders.encoder(.persistence)
         return e
     }()
     private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
+        let d = MeeshyCoders.decoder(.persistence)
         return d
     }()
 
@@ -217,10 +215,10 @@ extension StarredMessagesStore {
             }
         case let .unstarred(messageId), let .deleted(messageId, _), let .expired(messageId, _):
             await MainActor.run { (store ?? .shared).remove(messageId: messageId) }
-        case let .edited(messageId, content, _, _):
+        case let .edited(messageId, content, _, _, _):
             await MainActor.run { (store ?? .shared).updatePreview(messageId: messageId, contentPreview: content) }
         case .callNoticeUpdated, .reactionAdded, .reactionRemoved, .consumed, .viewOnceOpened, .citedPostWithdrawn,
-             .senderRepainted:
+             .attachmentRemoved, .senderRepainted:
             return
         }
     }

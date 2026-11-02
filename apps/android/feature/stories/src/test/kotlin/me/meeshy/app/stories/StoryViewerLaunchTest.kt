@@ -62,7 +62,7 @@ class StoryViewerLaunchTest {
         isViewedByMe = viewed,
     )
 
-    private fun viewer(author: String): StoryViewerViewModel = StoryViewerViewModel(
+    private fun viewer(author: String, storyId: String? = null): StoryViewerViewModel = StoryViewerViewModel(
         repo,
         mockk(relaxed = true),
         session,
@@ -71,7 +71,12 @@ class StoryViewerLaunchTest {
         mockk(relaxed = true),
         object : CacheClock { override fun nowMillis(): Long = now.toEpochMilli() },
         InMemoryPrivacyPreferencesStore(PrivacyPreferences()),
-        SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to author)),
+        SavedStateHandle(
+            listOfNotNull(
+                StoryViewerViewModel.USER_ID_ARG to author,
+                storyId?.let { StoryViewerViewModel.STORY_ID_ARG to it },
+            ).toMap(),
+        ),
     )
 
     private val offline = NetworkResult.Failure(ApiError(message = "hors ligne"))
@@ -118,6 +123,49 @@ class StoryViewerLaunchTest {
         assertThat(vm.state.value.isDismissed).isFalse()
         assertThat(vm.state.value.isLoading).isFalse()
         assertThat(vm.state.value.slides).isEmpty()
+    }
+
+    @Test
+    fun `a named story opens on that story, not on the author's first unseen one`() = runTest(dispatcher) {
+        coEvery { repo.cachedStories() } returns listOf(story("b1", "b", 5), story("b2", "b", 4, viewed = true), story("b3", "b", 3))
+
+        val vm = viewer("b", storyId = "b2")
+
+        assertThat(vm.state.value.current?.id).isEqualTo("b2")
+        assertThat(vm.state.value.missingStoryId).isNull()
+    }
+
+    @Test
+    fun `a named story the author no longer carries reports it missing instead of the load failure`() = runTest(dispatcher) {
+        coEvery { repo.cachedStories() } returns listOf(story("b1", "b", 5))
+        coEvery { repo.list(any(), any()) } returns NetworkResult.Success(listOf(story("b1", "b", 5)))
+
+        val vm = viewer("b", storyId = "b-gone")
+
+        assertThat(vm.state.value.missingStoryId).isEqualTo("b-gone")
+        assertThat(vm.state.value.loadFailed).isFalse()
+        assertThat(vm.state.value.slides).isEmpty()
+    }
+
+    @Test
+    fun `a named story of an author the reader does not follow reports it missing`() = runTest(dispatcher) {
+        coEvery { repo.cachedStories() } returns listOf(story("a1", "a", 1))
+        coEvery { repo.list(any(), any()) } returns NetworkResult.Success(listOf(story("a1", "a", 1)))
+
+        val vm = viewer("stranger", storyId = "s9")
+
+        assertThat(vm.state.value.missingStoryId).isEqualTo("s9")
+        assertThat(vm.state.value.loadFailed).isFalse()
+    }
+
+    @Test
+    fun `a named story that is expired is missing, even when its author is in the tray`() = runTest(dispatcher) {
+        coEvery { repo.cachedStories() } returns listOf(story("b1", "b", 30), story("b2", "b", 2))
+        coEvery { repo.list(any(), any()) } returns offline
+
+        val vm = viewer("b", storyId = "b1")
+
+        assertThat(vm.state.value.missingStoryId).isEqualTo("b1")
     }
 
     @Test

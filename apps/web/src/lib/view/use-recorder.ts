@@ -237,6 +237,14 @@ export function useRecorder(params?: {
    * session — un témoin système de captation allumé après annulation.
    */
   const activeRef = useRef(false);
+  /**
+   * LA DEMANDE EN COURS (#12874) — dans la coque Android, `requesting` couvre
+   * la permission native : on annule ou on quitte le fil avant que le flux
+   * n'arrive. Chaque `start()` prend un numéro ; annuler, fermer ou démonter
+   * en change, et un flux rendu à une demande périmée est relâché sans rien
+   * démarrer — ni `MediaRecorder`, ni le service micro de la coque.
+   */
+  const attemptRef = useRef(0);
 
   const stopMetering = useCallback(() => {
     cancelIntervalRef.current?.();
@@ -244,11 +252,16 @@ export function useRecorder(params?: {
   }, []);
 
   // Nettoyage au DÉMONTAGE — un composeur fermé pendant un enregistrement ne
-  // laisse ni minuteur ni piste micro ouverte derrière lui.
+  // laisse ni minuteur ni piste micro ouverte derrière lui, ni le contexte
+  // audio et la boucle du vumètre que seul `engine.stop()` ferme (#12908).
   useEffect(() => {
     return () => {
+      attemptRef.current += 1;
       stopMetering();
-      if (streamRef.current !== null) engine.release(streamRef.current);
+      if (streamRef.current !== null) {
+        void engine.stop();
+        engine.release(streamRef.current);
+      }
       releaseMicrophone();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- nettoyage de démontage seul, volontairement sans dépendance.
@@ -257,9 +270,14 @@ export function useRecorder(params?: {
   const start = useCallback(() => {
     if (activeRef.current) return; // Défaut 6 : re-entrance gardée, jamais une seconde captation.
     activeRef.current = true;
+    const attempt = ++attemptRef.current;
     setState({ status: 'requesting', durationMs: 0, levels: [] });
     void (async () => {
       const result = await engine.requestStream();
+      if (attempt !== attemptRef.current) {
+        if (result.ok) engine.release(result.stream);
+        return;
+      }
       if (!result.ok) {
         activeRef.current = false;
         setState({ status: result.reason, durationMs: 0, levels: [] });
@@ -288,6 +306,7 @@ export function useRecorder(params?: {
   }, []);
 
   const teardown = useCallback(() => {
+    attemptRef.current += 1;
     stopMetering();
     if (streamRef.current !== null) {
       engine.release(streamRef.current);
@@ -322,6 +341,7 @@ export function useRecorder(params?: {
   }, [state.status]);
 
   const reset = useCallback(() => {
+    attemptRef.current += 1;
     activeRef.current = false;
     setState(RECORDER_IDLE_STATE);
   }, []);

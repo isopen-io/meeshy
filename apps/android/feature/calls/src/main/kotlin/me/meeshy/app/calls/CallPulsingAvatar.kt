@@ -8,29 +8,22 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import me.meeshy.sdk.model.appearance.AvatarRingDesign
 import me.meeshy.ui.appearance.AvatarRingLayer
-import me.meeshy.ui.theme.MeeshyTypography
+import me.meeshy.ui.component.MeeshyAvatar
 
 private const val PULSE_PEAK = 1.15f
 private const val PULSE_MILLIS = 1_500
@@ -53,33 +46,17 @@ internal fun CallAvatarDisc(
     }
 }
 
-/** Le disque nu : dégradé indigo + initiale, la photo par-dessus quand on l'a. */
+/** Le disque nu : l'atome central, UN visage (photo OU initiales), sur le dégradé de l'appel. */
 @Composable
 private fun CallAvatarPhoto(name: String, size: Dp, avatarUrl: String?) {
-    val initialSize = with(LocalDensity.current) { (size * 0.4f).toSp() }
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(Brush.linearGradient(listOf(CallPalette.BrandDeep, CallPalette.Brand))),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = name.take(1).uppercase(),
-            style = MeeshyTypography.headlineLarge,
-            fontSize = initialSize,
-            fontWeight = FontWeight.Bold,
-            color = CallPalette.Ink,
-        )
-        if (!avatarUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = avatarUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(size).clip(CircleShape),
-            )
-        }
-    }
+    MeeshyAvatar(
+        name = name,
+        size = size,
+        containerColor = CallPalette.BrandDeep,
+        secondaryColor = CallPalette.Brand,
+        contentColor = CallPalette.Ink,
+        imageUrl = avatarUrl,
+    )
 }
 
 /**

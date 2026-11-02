@@ -14,7 +14,8 @@
  * En production (#10289), l'agent partageait `meeshy-network` avec Traefik, la
  * webapp, static-files et certs-dumper : un de ces conteneurs compromis joignait
  * ses routes et son canal ZMQ. Il vit désormais sur `meeshy-agent-network`, que
- * seuls la passerelle, la base et Redis partagent avec lui.
+ * seule la passerelle partage avec lui, et joint la base et Redis par `meeshy-data`
+ * (#11451, garde : `prod-data-network-isolated.test.ts`).
  *
  * Ce témoin lit les FICHIERS du dépôt (même patron que
  * `staging-admin-surfaces-ssh-tunnel-only.test.ts`).
@@ -74,11 +75,12 @@ describe("le service agent n'est jamais publié sur Internet (#10242)", () => {
   });
 });
 
-describe("en production, le réseau de l'agent n'est partagé qu'avec la passerelle, la base et Redis (#10289)", () => {
+describe("en production, le réseau de l'agent n'est partagé qu'avec la passerelle (#10289, #11451)", () => {
   const file = 'docker-compose.prod.yml';
   const source = fs.readFileSync(path.join(COMPOSE_DIR, file), 'utf8');
   const PRIVATE = 'meeshy-agent-network';
-  const ALLOWED = new Set(['agent', 'gateway', 'database', 'redis']);
+  // #11451 : la base et Redis l'ont quitté pour meeshy-data, réseau interne.
+  const ALLOWED = new Set(['agent', 'gateway']);
 
   function servicesOn(network: string): string[] {
     const servicesSection = source.split('\n');
@@ -103,7 +105,7 @@ describe("en production, le réseau de l'agent n'est partagé qu'avec la passere
     expect(networks).toMatch(new RegExp(`\\n {2}${PRIVATE}:\\n {4}driver: bridge`));
   });
 
-  it("n'y place que l'agent, la passerelle, la base et Redis", () => {
+  it("n'y place que l'agent et la passerelle", () => {
     const members = servicesOn(PRIVATE);
     expect(members.sort()).toEqual([...ALLOWED].sort());
   });

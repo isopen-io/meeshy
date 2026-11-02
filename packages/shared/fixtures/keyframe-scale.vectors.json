@@ -1,0 +1,14 @@
+{
+  "_law": "L'échelle d'une image clé MULTIPLIE celle de l'objet (#14316) : échelle rendue = objectScale × facteur interpolé au temps local (at − startTime) ; un canal sans image clé, ou avant sa première, compte pour 1. Écrits à la main, rejoués par iOS (StoryRenderer, StoryRendererCache), Android (StoryKeyframeResolver, ScenePoseResolver) et le web (objectPose).",
+  "vectors": [
+    { "_label": "sans image clé : l'échelle de l'objet", "objectScale": 1.5, "startTime": 0, "at": 1, "keyframes": [], "renderedScale": 1.5 },
+    { "_label": "image clé de position seule : l'échelle de l'objet", "objectScale": 2, "startTime": 0, "at": 1, "keyframes": [{ "time": 0, "x": 0.3, "y": 0.3, "easing": "linear" }], "renderedScale": 2 },
+    { "_label": "avant la première image clé d'échelle : l'objet, jamais la première valeur", "objectScale": 2, "startTime": 0, "at": 0.5, "keyframes": [{ "time": 1, "scale": 3, "easing": "linear" }], "renderedScale": 2 },
+    { "_label": "un facteur 1,2 sur un objet pincé à 2 : 2,4, comme iOS le publie depuis 2026-05", "objectScale": 2, "startTime": 0, "at": 0, "keyframes": [{ "time": 0, "scale": 1.2, "easing": "linear" }], "renderedScale": 2.4 },
+    { "_label": "entre deux images clés : le facteur interpolé, multiplié par l'objet", "objectScale": 2, "startTime": 0, "at": 1, "keyframes": [{ "time": 0, "scale": 1, "easing": "linear" }, { "time": 2, "scale": 2, "easing": "linear" }], "renderedScale": 3 },
+    { "_label": "après la dernière image clé : le facteur tenu", "objectScale": 0.5, "startTime": 0, "at": 3, "keyframes": [{ "time": 0, "scale": 1, "easing": "linear" }, { "time": 1, "scale": 4, "easing": "linear" }], "renderedScale": 2 },
+    { "_label": "objet qui entre à 2 s : le temps d'une image clé est relatif à son départ", "objectScale": 1, "startTime": 2, "at": 3, "keyframes": [{ "time": 0, "scale": 1, "easing": "linear" }, { "time": 2, "scale": 3, "easing": "linear" }], "renderedScale": 2 },
+    { "_label": "facteur 1 : l'objet tel qu'il est posé, ce que fige le compositeur", "objectScale": 2.5, "startTime": 0, "at": 0.5, "keyframes": [{ "time": 0, "scale": 1, "easing": "linear" }], "renderedScale": 2.5 },
+    { "_label": "facteur égal à l'échelle de l'objet : son carré, jamais l'objet seul", "objectScale": 2, "startTime": 0, "at": 0, "keyframes": [{ "time": 0, "scale": 2, "easing": "linear" }], "renderedScale": 4 }
+  ]
+}

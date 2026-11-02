@@ -135,6 +135,7 @@ const en = {
   'export.card.compose.post': 'Post on top',
   'export.card.compose.replies': 'Replies on the card',
   'export.card.compose.folded': '+{count} replies',
+  'export.card.compose.thread': 'Comment thread',
   'export.card.compose.head': 'Media on top',
   'export.card.compose.head.image': 'Photo {position}',
   'export.card.compose.head.video': 'Video {position}',

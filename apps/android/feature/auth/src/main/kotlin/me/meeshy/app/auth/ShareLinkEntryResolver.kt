@@ -33,7 +33,7 @@ public data class ShareLinkEntryResolution(
  * the grain test it is product orchestration. The decision itself is the SDK's.
  *
  * Faithful port of iOS `ShareLinkEntryResolver`
- * (`apps/ios/Meeshy/Features/Main/Navigation/ShareLinkEntryResolver.swift`), with
+ * (`apps/ios/Meeshy/Features/Navigation/ShareLinkEntryResolver.swift`), with
  * two SOTA hardenings over the iOS force-unwrapping original:
  *  - a blank identifier is inert (never the doomed empty-preview request);
  *  - a preview that carries no conversation, or a blank conversation id, resolves

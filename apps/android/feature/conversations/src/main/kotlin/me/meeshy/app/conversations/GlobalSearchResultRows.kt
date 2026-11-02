@@ -45,6 +45,10 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.HighlightSegment
+import me.meeshy.sdk.model.PresenceState
+import me.meeshy.sdk.model.displayedAvatar
+import me.meeshy.sdk.theme.otherParticipantUserId
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.sdk.model.resolvedLastMessagePreview
 import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.search.MessageSearchHit
@@ -82,9 +86,14 @@ internal fun ResultCard(
 }
 
 @Composable
-internal fun MessageHitRow(hit: MessageSearchHit, resultsQuery: String, onClick: () -> Unit) {
+internal fun MessageHitRow(
+    hit: MessageSearchHit,
+    identity: MessageHitIdentity,
+    resultsQuery: String,
+    onClick: () -> Unit,
+) {
     val sender = hit.message.sender?.displayName ?: hit.message.sender?.username.orEmpty()
-    val title = hit.conversationTitle.ifBlank { sender }
+    val title = identity.title.ifBlank { sender }
     val description = GlobalSearchRows.messageLabel(
         template = stringResource(R.string.global_search_message_label),
         sender = sender,
@@ -96,7 +105,7 @@ internal fun MessageHitRow(hit: MessageSearchHit, resultsQuery: String, onClick:
         description = description,
         hint = stringResource(R.string.global_search_open_conversation_hint),
     ) {
-        MeeshyAvatar(name = title, size = 40.dp)
+        MeeshyAvatar(name = title, size = 40.dp, imageUrl = identity.avatarUrl)
         Spacer(Modifier.width(MeeshySpacing.md))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -150,9 +159,9 @@ private fun typeIcon(type: String): ImageVector = when (type.lowercase()) {
 internal fun ConversationHitRow(
     conversation: ApiConversation,
     currentUserId: String?,
-    readerPrism: List<String>,
-    nowMillis: Long,
     onClick: () -> Unit,
+    readerPrism: List<String> = emptyList(),
+    nowMillis: Long = 0L,
 ) {
     val title = conversation.displayTitle(currentUserId)
     val palette = remember(conversation.id, conversation.type, conversation.memberCount) { conversation.accentColorPalette() }
@@ -182,7 +191,8 @@ internal fun ConversationHitRow(
             size = 40.dp,
             containerColor = accent,
             secondaryColor = hexColor(palette.secondary),
-            imageUrl = conversation.avatar,
+            imageUrl = conversation.displayedAvatar(currentUserId),
+            presence = rememberPresence(conversation.otherParticipantUserId(currentUserId)),
         )
         Spacer(Modifier.width(MeeshySpacing.md))
         Column(modifier = Modifier.weight(1f)) {
@@ -272,12 +282,12 @@ private fun ProtectionLine(protection: RowProtection, text: String) {
 @Composable
 internal fun UserHitRow(user: UserSearchResult, onClick: () -> Unit) {
     val name = user.displayName ?: user.username
-    val presence = GlobalSearchRows.presence(user.isOnline)
+    val presence = rememberPresence(user.id, user.servedPresence())
     val onlineWord = stringResource(R.string.global_search_online)
     val description = GlobalSearchRows.userLabel(
         name = name,
         username = user.username,
-        online = presence != null,
+        online = presence == PresenceState.ONLINE,
         onlineWord = onlineWord.lowercase(),
     )
     ResultCard(
@@ -301,7 +311,7 @@ internal fun UserHitRow(user: UserSearchResult, onClick: () -> Unit) {
                 maxLines = 1,
             )
         }
-        if (presence != null) {
+        if (presence == PresenceState.ONLINE) {
             Text(
                 text = onlineWord,
                 style = MaterialTheme.typography.labelSmall,

@@ -57,9 +57,11 @@ data class PublicationModerationReceipt(
 
     /** `updated` : appliqué ; `unchanged` : la publication était déjà dans l'état visé. */
     fun isApplied(postId: String): Boolean =
-        results.firstOrNull { it.postId == postId }?.outcome in APPLIED_OUTCOMES
-
-    private companion object {
-        val APPLIED_OUTCOMES = setOf("updated", "unchanged")
-    }
+        results.firstOrNull { it.postId == postId }?.outcome in APPLIED_MODERATION_OUTCOMES
 }
+
+/**
+ * Hors du type : un `private companion object` sur une classe `@Serializable` porte aussi son
+ * `serializer()`, que Retrofit ne peut plus atteindre par réflexion.
+ */
+private val APPLIED_MODERATION_OUTCOMES = setOf("updated", "unchanged")

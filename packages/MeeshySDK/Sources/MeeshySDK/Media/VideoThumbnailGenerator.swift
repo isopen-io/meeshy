@@ -12,6 +12,9 @@ public struct VideoThumbnailRequest: Equatable, Sendable {
         /// `count` images, au milieu de `count` tranches égales ; au plus une
         /// par seconde de vidéo quand `atMostOnePerSecond`.
         case evenlySpaced(count: Int, atMostOnePerSecond: Bool)
+        /// `count` images au milieu de tranches égales de la seule FENÊTRE
+        /// `start…end` de la source — la barre d'un clip coupé (#14268).
+        case window(start: Double, end: Double, count: Int)
     }
 
     /// L'écart toléré entre l'instant demandé et l'image rendue : une
@@ -73,6 +76,13 @@ public enum VideoThumbnailInstants {
             let wanted = max(1, count)
             let slices = atMostOnePerSecond ? min(wanted, max(1, Int(known))) : wanted
             return (0..<slices).map { known * (Double($0) + 0.5) / Double(slices) }
+        case let .window(start, end, count):
+            let debut = max(0, start)
+            let fin = known.map { min(end, $0) } ?? end
+            guard fin > debut, fin.isFinite else { return [] }
+            let tranches = max(1, count)
+            let pas: Double = (fin - debut) / Double(tranches)
+            return (0..<tranches).map { (indice: Int) -> Double in debut + pas * (Double(indice) + 0.5) }
         }
     }
 
@@ -80,6 +90,7 @@ public enum VideoThumbnailInstants {
         switch instants {
         case .start(let atMost): return atMost > 0
         case .evenlySpaced: return true
+        case .window: return false
         }
     }
 }

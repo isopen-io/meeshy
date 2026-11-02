@@ -11,6 +11,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Dict, Optional
+from services.task_privacy import shown, under_declared_regime
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ class TranscriptionHandler:
             self.transcription_service = get_transcription_service()
         else:
             self.transcription_service = None
+    @under_declared_regime
     async def _handle_transcription_only_request(self, request_data: dict):
         """
         Traite une requête de transcription seule (sans traduction ni TTS).
@@ -200,7 +202,7 @@ class TranscriptionHandler:
                     "source": mobile_trans.get('source', 'mobile'),
                     "segments": mobile_trans.get('segments')
                 }
-                logger.info(f"🔍 [TRANSLATOR-TRACE] ✅ Transcription mobile fournie: {mobile_trans.get('text')[:50]}...")
+                logger.info(f"🔍 [TRANSLATOR-TRACE] ✅ Transcription mobile fournie: {shown(mobile_trans.get('text'), 50)}...")
             else:
                 logger.info(f"🔍 [TRANSLATOR-TRACE] Pas de transcription mobile")
 
@@ -219,14 +221,14 @@ class TranscriptionHandler:
             )
 
             logger.info(f"🔍 [TRANSLATOR-TRACE] ✅ Transcription terminée:")
-            logger.info(f"   - text: {result.text[:100]}...")
+            logger.info(f"   - text: {shown(result.text, 100)}...")
             logger.info(f"   - language: {result.language}")
             logger.info(f"   - confidence: {result.confidence}")
             logger.info(f"   - duration_ms: {result.duration_ms}")
             logger.info(f"   - source: {result.source}")
             logger.info(f"   - segments: {len(result.segments) if result.segments else 0} segments")
             if result.segments and len(result.segments) > 0:
-                logger.info(f"   - premier segment: {result.segments[0].text[:30]}... ({result.segments[0].start_ms}ms - {result.segments[0].end_ms}ms)")
+                logger.info(f"   - premier segment: {shown(result.segments[0].text, 30)}... ({result.segments[0].start_ms}ms - {result.segments[0].end_ms}ms)")
 
             processing_time = int((time.time() - start_time) * 1000)
             logger.info(f"🔍 [TRANSLATOR-TRACE] Processing time: {processing_time}ms")

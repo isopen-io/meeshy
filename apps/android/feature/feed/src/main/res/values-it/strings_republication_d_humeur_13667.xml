@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="status_repost_audience_refused">Questo stato non può essere ripubblicato per un pubblico più ampio dell\'originale. Scegli lo stesso pubblico o uno più ristretto.</string>
+</resources>

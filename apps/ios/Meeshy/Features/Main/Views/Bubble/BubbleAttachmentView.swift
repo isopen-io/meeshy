@@ -29,6 +29,8 @@ struct BubbleAttachmentView: View {
     /// Ouvre la vidéo en plein écran — la seule lecture qu'une vidéo du fil
     /// connaisse (#8231). Nil : le poster reste inerte.
     var onOpenVideo: ((MessageAttachment) -> Void)? = nil
+    /// #13622 — ce que la conversation permet à une carte de visite de résoudre.
+    var contactCardScope: ContactCardResolutionScope = .unknown
 
     var body: some View {
         switch attachment.type {
@@ -101,7 +103,7 @@ struct BubbleAttachmentView: View {
             // (#8101). Testée AVANT la détection de code, qui lirait le
             // `text/vcard` comme du texte brut.
             if attachment.isContactCard {
-                ContactCardView(attachment: attachment, isMe: isMe, accentHex: accentHex)
+                ContactCardView(attachment: attachment, isMe: isMe, accentHex: accentHex, scope: contactCardScope)
                     .equatable()
             } else if let lang = CodeLanguage.detect(fileName: attachment.originalName, mimeType: attachment.mimeType) {
                 CodeViewerView(

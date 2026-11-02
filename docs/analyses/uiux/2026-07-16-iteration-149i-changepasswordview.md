@@ -2,7 +2,7 @@
 
 **Date** : 2026-07-16
 **Piste** : iOS (suffixe `i`).
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift`
+**Surface** : `apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift`
 **Base** : `main` HEAD (`ab6df74`)
 **Branche** : `claude/laughing-thompson-uj2nmm`
 **Gate** : CI `iOS Tests`

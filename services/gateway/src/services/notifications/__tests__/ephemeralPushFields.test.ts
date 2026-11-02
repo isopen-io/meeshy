@@ -55,24 +55,20 @@ describe('boundApnsPayload', () => {
     expect(boundApnsPayload(socle)).toEqual(socle);
   });
 
-  it('coupe la traduction du Prisme avant le texte du message', () => {
+  it("coupe le texte du message quand il dépasse le budget, et garde les champs d'éphémère", () => {
     const gros = 'é'.repeat(APNS_SAFE_PAYLOAD_BYTES);
     const borne = boundApnsPayload({
       ...socle,
-      data: { ...socle.data, translatedContent: gros, translatedLanguage: 'fr', content: 'bonjour' },
-    });
-
-    expect(borne.data).toEqual({ ...socle.data, content: 'bonjour' });
-  });
-
-  it("coupe le texte du message quand la traduction ne suffit pas, et garde les champs d'éphémère", () => {
-    const gros = 'é'.repeat(APNS_SAFE_PAYLOAD_BYTES);
-    const borne = boundApnsPayload({
-      ...socle,
-      data: { ...socle.data, translatedContent: gros, content: gros, originalLanguage: 'fr' },
+      data: { ...socle.data, content: gros, originalLanguage: 'fr' },
     });
 
     expect(borne.data).toEqual(socle.data);
+  });
+
+  it('garde le texte du message quand il tient dans le budget', () => {
+    const charge = { ...socle, data: { ...socle.data, content: 'bonjour', originalLanguage: 'fr' } };
+
+    expect(boundApnsPayload(charge)).toEqual(charge);
   });
 
   it("envoie le dernier étage même s'il dépasse — une charge courte vaut mieux qu'aucune", () => {

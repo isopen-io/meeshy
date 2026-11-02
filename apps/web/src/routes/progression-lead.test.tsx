@@ -9,6 +9,7 @@ import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progr
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, type EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { gameBlockFixture } from '@/lib/api/game-fixture';
+import { createPhotoAlerts } from '@/lib/game-photo/alerts';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import type { PhotoMoment } from '@/lib/game-photo/moments';
 import type { NotebookEntry } from '@/lib/game-photo/notebook';
@@ -58,7 +59,14 @@ function bench(initial: EngagementWithGame) {
     now: () => new Date('2026-10-05T10:00:00.000Z'),
     playOptions: { reducedMotion: false, haptics: false, schedule: (run: () => void) => (run(), () => undefined) },
   } as unknown as PhotoEnv;
-  return { client, transport, env, log };
+  /* Le coordinateur des invitations (#10174) par banc : mémoire appareil neuve, aucun rythme hérité d'un autre témoin. */
+  const memory = new Map<string, string>();
+  const alerts = createPhotoAlerts({
+    storage: { getItem: (k) => memory.get(k) ?? null, setItem: (k, v) => void memory.set(k, v), removeItem: (k) => void memory.delete(k) },
+    sessionStartedAt: null,
+    acknowledge: () => undefined,
+  });
+  return { client, transport, env, log, alerts };
 }
 
 async function render(initial: EngagementWithGame, mountView: EngagementWithGame = initial) {
@@ -68,7 +76,7 @@ async function render(initial: EngagementWithGame, mountView: EngagementWithGame
   function Host() {
     const [shown, set] = useState(mountView);
     setView = set;
-    return <GameLead view={shown} env={() => b.env} transport={b.transport} navigateTo={(to) => b.log.navigated.push(to)} openConcept={(concept) => b.log.scrolled.push(concept)} />;
+    return <GameLead view={shown} env={() => b.env} alerts={b.alerts} transport={b.transport} navigateTo={(to) => b.log.navigated.push(to)} openConcept={(concept) => b.log.scrolled.push(concept)} />;
   }
   const host = await mount(
     <QueryClientProvider client={b.client}>

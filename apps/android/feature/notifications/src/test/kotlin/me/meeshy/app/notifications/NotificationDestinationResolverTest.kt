@@ -6,6 +6,9 @@ import me.meeshy.sdk.model.NotificationActor
 import me.meeshy.sdk.model.NotificationContext
 import me.meeshy.sdk.model.NotificationMetadata
 import me.meeshy.sdk.model.NotificationState
+import me.meeshy.sdk.model.game.GameTarget
+import me.meeshy.sdk.model.game.pages.GamePage
+import me.meeshy.sdk.model.game.progression.ProgressionConcept
 import org.junit.Test
 
 /**
@@ -36,6 +39,27 @@ class NotificationDestinationResolverTest {
         metadata = NotificationMetadata(postType = postType, contentType = contentType, postId = metadataPostId),
         state = NotificationState(createdAt = "2026-01-01"),
     )
+
+    // --- Relation family (iOS RootNotificationNavigator : profil de l'expéditeur) ---
+
+    @Test
+    fun `every contact lifecycle type opens the actor profile like iOS`() {
+        listOf(
+            "friend_request", "contact_request", "friend_accepted", "contact_accepted",
+            "contact_joined", "contact_recently_active", "STATUS_UPDATE", "FRIEND_REQUEST",
+        ).forEach { type ->
+            val dest = NotificationDestinationResolver.resolve(notification(type, actorId = "u9"))
+
+            assertThat(dest).isEqualTo(NotificationDestination.Profile("u9"))
+        }
+    }
+
+    @Test
+    fun `a contact notification without an actor is a dead end rather than a wrong screen`() {
+        val dest = NotificationDestinationResolver.resolve(notification("contact_recently_active"))
+
+        assertThat(dest).isEqualTo(NotificationDestination.None)
+    }
 
     // --- Conversation family ---
 
@@ -160,12 +184,12 @@ class NotificationDestinationResolverTest {
     // `type: PostType.STORY` exclusively — so it falls back to the post detail rather
     // than opening the author's (STORY-only) tray, which the mood is never actually in.
     @Test
-    fun `a fresh mood publication opens the post detail, not its author's story tray`() {
+    fun `a fresh mood publication opens its own mood page, not its author's story tray`() {
         val dest = NotificationDestinationResolver.resolve(
             notification("friend_new_mood", postId = "p1", actorId = "author1", postType = "MOOD"),
         )
 
-        assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
+        assertThat(dest).isEqualTo(NotificationDestination.Mood("p1"))
     }
 
     @Test
@@ -198,7 +222,7 @@ class NotificationDestinationResolverTest {
     @Test
     fun `the contentType discriminant is read when postType is absent`() {
         val dest = NotificationDestinationResolver.resolve(
-            notification("friend_new_mood", postId = "p1", actorId = "author1", contentType = "MOOD"),
+            notification("story_reaction", postId = "p1", actorId = "author1", contentType = "MOOD"),
         )
 
         assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
@@ -253,6 +277,54 @@ class NotificationDestinationResolverTest {
     }
 
     @Test
+    fun `dispatch fans a mood destination to onOpenMood only`() {
+        val opened = mutableMapOf<String, String?>()
+        NotificationDestination.Mood("m1").dispatch(
+            onOpenConversation = { opened["conversation"] = it },
+            onOpenPost = { opened["post"] = it },
+            onOpenReel = { opened["reel"] = it },
+            onOpenStory = { opened["story"] = it },
+            onOpenProfile = { opened["profile"] = it },
+            onOpenMood = { opened["mood"] = it },
+        )
+
+        assertThat(opened).containsExactly("mood", "m1")
+    }
+
+    @Test
+    fun `une notification de jeu ou de palier ouvre l ecran que la carte du jeu nomme`() {
+        mapOf(
+            "level_up" to GameTarget.Concept(ProgressionConcept.Level),
+            "streak_milestone" to GameTarget.Concept(ProgressionConcept.Flame),
+            "badge_earned" to GameTarget.Concept(ProgressionConcept.Badges),
+            "achievement_unlocked" to GameTarget.Concept(ProgressionConcept.Succes),
+            "game_mission_window" to GameTarget.Concept(ProgressionConcept.Missions),
+            "game_duo_invited" to GameTarget.Page(GamePage.League),
+            "game_duo_accepted" to GameTarget.Page(GamePage.League),
+            "game_league_result" to GameTarget.Page(GamePage.League),
+            "game_season_step" to GameTarget.Page(GamePage.Season),
+        ).forEach { (type, target) ->
+            assertThat(NotificationDestinationResolver.resolve(notification(type)))
+                .isEqualTo(NotificationDestination.Game(target))
+        }
+    }
+
+    @Test
+    fun `dispatch fans a game destination to onOpenGame only`() {
+        val opened = mutableListOf<GameTarget>()
+        NotificationDestination.Game(GameTarget.Page(GamePage.Season)).dispatch(
+            onOpenConversation = { error("no") },
+            onOpenPost = { error("no") },
+            onOpenReel = { error("no") },
+            onOpenStory = { error("no") },
+            onOpenProfile = { error("no") },
+            onOpenGame = { opened += it },
+        )
+
+        assertThat(opened).containsExactly(GameTarget.Page(GamePage.Season))
+    }
+
+    @Test
     fun `dispatch is a no-op for None`() {
         val opened = mutableMapOf<String, String?>()
         NotificationDestination.None.dispatch(
@@ -264,5 +336,22 @@ class NotificationDestinationResolverTest {
         )
 
         assertThat(opened).isEmpty()
+    }
+
+    @Test
+    fun `a voice clone ready notice is an account notice like iOS, never a conversation`() {
+        assertThat(NotificationDestinationResolver.resolve(notification("voice_clone_ready", conversationId = "c1")))
+            .isEqualTo(NotificationDestination.None)
+    }
+
+    @Test
+    fun `the row and the system banner of one notification open the same place`() {
+        val row = NotificationDestinationResolver.resolve(notification("post_comment", postId = "p1", postType = "REEL"))
+        val banner = me.meeshy.sdk.model.push.PushTapDestination.resolve(
+            me.meeshy.sdk.model.push.PushPayload(type = "post_comment", postId = "p1", postType = "REEL"),
+        )
+
+        assertThat(row).isEqualTo(NotificationDestination.Reel("p1"))
+        assertThat(banner).isEqualTo(me.meeshy.sdk.model.push.PushTapDestination.Reel("p1"))
     }
 }

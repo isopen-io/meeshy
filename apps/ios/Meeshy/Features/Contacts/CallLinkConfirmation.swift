@@ -223,7 +223,11 @@ struct CallLinkConfirmationSheet: View {
 /// Monté par les DEUX racines (iPhone, iPad), qui ne vivent que dans la
 /// fenêtre principale : la confirmation se montre dans la bonne scène.
 private struct CallLinkConfirmationHost: ViewModifier {
-    @ObservedObject private var controller = CallLinkConfirmationController.shared
+    @ObservedObject private var controller: CallLinkConfirmationController
+
+    init(controller: CallLinkConfirmationController = .shared) {
+        self.controller = controller
+    }
 
     func body(content: Content) -> some View {
         // Le setter n'efface rien : pendant un remplacement (second lien) SwiftUI

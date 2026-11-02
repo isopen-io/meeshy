@@ -11,6 +11,15 @@ final class RouterTests: XCTestCase {
         Conversation(id: id, identifier: id, type: .direct, title: "Test", lastMessageAt: Date(), createdAt: Date(), updatedAt: Date())
     }
 
+    /// Un registre de surfaces PROPRE au test : `PresentedSurfaceRegistry.shared`
+    /// garde les surfaces que les vues hébergées par d'autres suites ont déclarées
+    /// sans jamais disparaître, et ouvrir une conversation les referme toutes —
+    /// leurs fermetures (brouillon du composer, lecture coupée) tournent alors
+    /// sur le main pendant que ce test l'attend.
+    private func makeIsolatedRouter() -> Router {
+        Router(surfaces: PresentedSurfaceRegistry())
+    }
+
     private func makeCommunity(id: String = "000000000000000000000002") -> Community {
         Community(id: id, identifier: id, name: "Test Community", createdBy: "user1")
     }
@@ -533,7 +542,7 @@ final class RouterTests: XCTestCase {
     /// multiple times per frame" warning. A single atomic assignment to
     /// `path` fixes it — and makes navigation synchronous.
     func test_navigateToConversation_replacesPathInOneSynchronousStep() {
-        let router = Router()
+        let router = makeIsolatedRouter()
         router.push(.profile)
         router.push(.settings)
 
@@ -548,7 +557,7 @@ final class RouterTests: XCTestCase {
     /// iPad two-column mode (`onRouteRequested` set) keeps forwarding the
     /// route via the callback instead of mutating `path`.
     func test_navigateToConversation_iPad_forwardsViaOnRouteRequested() {
-        let router = Router()
+        let router = makeIsolatedRouter()
         var interceptedRoute: Route?
         router.onRouteRequested = { route in
             interceptedRoute = route
@@ -574,7 +583,7 @@ final class RouterTests: XCTestCase {
     /// relançant ses chargements, et la conversation déjà ouverte était démontée
     /// puis reconstruite au lieu d'atterrir en place.
     func test_navigateToConversation_iPad_neverClosesTheDetailColumnFirst() {
-        let router = Router()
+        let router = makeIsolatedRouter()
         var popRequested = false
         var forwarded: [Route] = []
         router.onPopRequested = { popRequested = true }

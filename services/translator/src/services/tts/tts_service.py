@@ -440,11 +440,14 @@ class UnifiedTTSService:
         cache_key = "tts:audio:" + hashlib.sha256(
             f"{text}:{language}:{effective_model}:{effective_format}".encode()
         ).hexdigest()
+        # #13102 — une tâche au repos, éphémère ou au régime non déclaré ne lit ni ne range rien.
+        from services.task_privacy import cache_allowed
+        caching = cache_allowed()
 
         try:
             from services.redis_service import RedisService
             redis = RedisService()
-            cached = await redis.get(cache_key)
+            cached = await redis.get(cache_key) if caching else None
             if cached:
                 logger.debug(f"[TTS] Cache hit for key {cache_key[:16]}…")
                 import json, dataclasses
@@ -470,6 +473,8 @@ class UnifiedTTSService:
         )
 
         try:
+            if not caching:
+                return result
             from services.redis_service import RedisService
             import json, dataclasses
             redis = RedisService()

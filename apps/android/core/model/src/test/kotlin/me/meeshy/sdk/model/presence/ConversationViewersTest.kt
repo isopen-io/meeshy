@@ -104,4 +104,12 @@ class ConversationViewersTest {
         val snapshot = json.decodeFromString<ViewingSnapshot>("""{"conversationId":"c1","userIds":["a","b"]}""")
         assertThat(snapshot.userIds).containsExactly("a", "b").inOrder()
     }
+
+    @Test
+    fun `the served here is spoken by the avatar value for value`() {
+        assertThat(ConversationHere.values().map { it.toAvatarHere().name })
+            .isEqualTo(ConversationHere.values().map { it.name })
+        assertThat(ConversationHere.ABSENT.toAvatarHere().isHere).isFalse()
+        assertThat(ConversationHere.FOCUSED.toAvatarHere().isFocused).isTrue()
+    }
 }

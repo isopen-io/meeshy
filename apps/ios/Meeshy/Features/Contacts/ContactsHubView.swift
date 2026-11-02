@@ -5,9 +5,10 @@ import MeeshyUI
 
 /// The People hub — the redesigned contact view.
 ///
-/// Three primary tabs sit under a collapsing header and swipe horizontally:
+/// Four primary tabs sit under a collapsing header and swipe horizontally:
 /// **Appels** (call journal), **Clavier** (dial pad), **Contacts** (the
-/// directory — an annuaire filtered by `ContactFilter`).
+/// directory — an annuaire filtered by `ContactFilter`), **Cercles** (my links
+/// by level, #13938).
 ///
 /// Connection management and user discovery (Demandes / Decouvrir / Bloques)
 /// no longer clutter the Contacts tab — they live in `PeopleDiscoveryView`,
@@ -23,6 +24,7 @@ struct ContactsHubView: View {
     @StateObject private var contactsListVM = ContactsListViewModel()
     @StateObject private var phonebookVM = PhonebookViewModel()
     @StateObject private var affiliatesVM = AffiliatesViewModel()
+    @StateObject private var circlesVM = CirclesViewModel()
 
     /// - Parameter initialTab: tab shown on open. The floating menu ladder
     ///   lands on `.calls` (call journal); everything else keeps the directory.
@@ -107,6 +109,14 @@ struct ContactsHubView: View {
                 onScrollOffsetChange: { scrollRelay.offset = $0 }
             )
             .tag(PeopleTab.contacts)
+
+            CirclesTab(
+                viewModel: circlesVM,
+                isActive: selectedTab == .circles,
+                onScrollOffsetChange: { scrollRelay.offset = $0 },
+                onFindContacts: { selectedTab = .contacts }
+            )
+            .tag(PeopleTab.circles)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)

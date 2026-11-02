@@ -1,7 +1,6 @@
 import Foundation
 import Combine
 import UIKit
-import GRDB
 import MeeshySDK
 import MeeshyUI
 import os
@@ -176,11 +175,11 @@ extension ConversationViewModel {
 
     var allAudioItems: [AudioItem] {
         if let cached = derived.allAudioItems { return cached }
+        let served = startupDependencies.encryptedEra.servedAudioMaps(in: self)
         let result = ConversationMessageProjector.audioItems(
             of: messages,
             transcription: { originalTranscription(for: $0, messageId: $1) },
-            translatedByAttachment: messageTranslatedAudiosByAttachment,
-            translatedByMessage: messageTranslatedAudios
+            translatedByAttachment: served.byAttachment, translatedByMessage: served.byMessage
         )
         derived.allAudioItems = result
         return result

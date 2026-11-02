@@ -117,9 +117,10 @@ final class DecodedImageAtDisplayedSizeTests: XCTestCase {
             await gate.acquire()
             admitted.fulfill()
         }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
         var queuedBeforeRelease = await gate.waitingCount
-        for _ in 0..<1_000 where queuedBeforeRelease == 0 {
-            await Task.yield()
+        while queuedBeforeRelease == 0 && ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(1))
             queuedBeforeRelease = await gate.waitingCount
         }
         XCTAssertEqual(queuedBeforeRelease, 1, "au-delà du plafond, le décodage attend au lieu de s'empiler")

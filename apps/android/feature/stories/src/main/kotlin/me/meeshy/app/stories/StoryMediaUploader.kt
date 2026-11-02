@@ -28,6 +28,16 @@ import javax.inject.Singleton
 public class StoryMediaUploader @Inject constructor(
     private val tusUploadRepository: TusUploadRepository,
 ) {
-    public suspend fun upload(items: List<MediaUploadItem>): NetworkResult<List<UploadedMedia>> =
-        tusUploadRepository.uploadAll(items, TusUploadContext.STORY)
+    public suspend fun upload(
+        items: List<MediaUploadItem>,
+        onProgress: (index: Int, sent: Long, total: Long) -> Unit = { _, _, _ -> },
+    ): NetworkResult<List<UploadedMedia>> =
+        tusUploadRepository.uploadAll(items, TusUploadContext.STORY, onProgress)
+
+    /** One outcome per item, in order (#13959): a failed media never discards the ones the gateway already received. */
+    public suspend fun uploadEach(
+        items: List<MediaUploadItem>,
+        onProgress: (index: Int, sent: Long, total: Long) -> Unit = { _, _, _ -> },
+    ): List<NetworkResult<List<UploadedMedia>>> =
+        tusUploadRepository.uploadEach(items, TusUploadContext.STORY, onProgress)
 }

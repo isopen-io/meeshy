@@ -9,7 +9,7 @@ import {
 const baseInput = (over: Partial<PresenceVisibilityInput> = {}): PresenceVisibilityInput => ({
   isSelf: false,
   viewerRole: 'USER',
-  areConnected: false,
+  relationLevel: 'PUBLIC',
   targetShowOnlineStatus: true,
   targetShowLastSeen: true,
   targetIsDeactivated: false,
@@ -17,7 +17,7 @@ const baseInput = (over: Partial<PresenceVisibilityInput> = {}): PresenceVisibil
   ...over,
 });
 
-// Directive produit (2026-08-25) : hors amitié acceptée (`areConnected`),
+// Directive produit (2026-08-25) : hors amitié acceptée (niveau effectif >= FRIEND),
 // la présence est supprimée pour tout le monde sauf ADMIN et supérieur
 // (BIGBOSS). MODERATOR a perdu son bypass ; le partage d'une conversation
 // n'est plus un critère d'autorisation.
@@ -54,8 +54,8 @@ describe('resolvePresenceVisibility', () => {
     }
   });
 
-  it('shows full presence to a connected contact when both preferences are on', () => {
-    expect(resolvePresenceVisibility(baseInput({ areConnected: true }))).toEqual({
+  it('shows full presence to a CLOSE contact when both preferences are on', () => {
+    expect(resolvePresenceVisibility(baseInput({ relationLevel: 'CLOSE' }))).toEqual({
       showOnline: true,
       showLastSeenTimestamp: true,
     });
@@ -63,18 +63,18 @@ describe('resolvePresenceVisibility', () => {
 
   it('hides only the timestamp for a contact when showLastSeen is off', () => {
     expect(
-      resolvePresenceVisibility(baseInput({ areConnected: true, targetShowLastSeen: false })),
+      resolvePresenceVisibility(baseInput({ relationLevel: 'CLOSE', targetShowLastSeen: false })),
     ).toEqual({ showOnline: true, showLastSeenTimestamp: false });
   });
 
   it('hides all presence for a contact when showOnlineStatus is off (master switch)', () => {
     expect(
-      resolvePresenceVisibility(baseInput({ areConnected: true, targetShowOnlineStatus: false })),
+      resolvePresenceVisibility(baseInput({ relationLevel: 'FRIEND', targetShowOnlineStatus: false })),
     ).toEqual({ showOnline: false, showLastSeenTimestamp: false });
   });
 
   it('hides presence from a conversation co-participant who is not a contact — sharing a conversation is not a relationship', () => {
-    expect(resolvePresenceVisibility(baseInput({ areConnected: false }))).toEqual({
+    expect(resolvePresenceVisibility(baseInput({ relationLevel: 'PUBLIC' }))).toEqual({
       showOnline: false,
       showLastSeenTimestamp: false,
     });
@@ -89,13 +89,13 @@ describe('resolvePresenceVisibility', () => {
 
   it('hides presence when either party blocked the other, even for a contact', () => {
     expect(
-      resolvePresenceVisibility(baseInput({ areConnected: true, isBlockedEitherWay: true })),
+      resolvePresenceVisibility(baseInput({ relationLevel: 'FRIEND', isBlockedEitherWay: true })),
     ).toEqual({ showOnline: false, showLastSeenTimestamp: false });
   });
 
   it('hides presence of a deactivated target, even from a contact', () => {
     expect(
-      resolvePresenceVisibility(baseInput({ areConnected: true, targetIsDeactivated: true })),
+      resolvePresenceVisibility(baseInput({ relationLevel: 'FRIEND', targetIsDeactivated: true })),
     ).toEqual({ showOnline: false, showLastSeenTimestamp: false });
   });
 });
@@ -117,7 +117,7 @@ describe('applyPresenceVisibility', () => {
   });
 
   it('keeps isOnline but nulls the timestamp when only showLastSeenTimestamp is off', () => {
-    const out = applyPresenceVisibility(profile, { showOnline: true, showLastSeenTimestamp: false });
+    const out = applyPresenceVisibility(profile, { showOnline: true, showLastSeenTimestamp: false }, 0);
     expect(out.isOnline).toBe(true);
     expect(out.lastActiveAt).toBeNull();
   });
@@ -151,7 +151,7 @@ describe('applyPresenceVisibilityAsOffline', () => {
   });
 
   it('keeps isOnline but nulls the timestamp when only showLastSeenTimestamp is off', () => {
-    const out = applyPresenceVisibilityAsOffline(profile, { showOnline: true, showLastSeenTimestamp: false });
+    const out = applyPresenceVisibilityAsOffline(profile, { showOnline: true, showLastSeenTimestamp: false }, { now: 0 });
     expect(out.isOnline).toBe(true);
     expect(out.lastActiveAt).toBeNull();
   });
@@ -234,5 +234,62 @@ describe('applyPresenceVisibilityAsOffline', () => {
   it('conserve le défaut masquant quand aucune option n est passée', () => {
     const out = applyPresenceVisibilityAsOffline(profile, undefined, {});
     expect(out.isOnline).toBe(false);
+  });
+});
+
+// #13927 — la politique est une PROJECTION de la loi d'accès : le niveau effectif
+// remplace le booléen d'amitié. #13928 — l'Ami est BINAIRE : « en ligne » ou rien,
+// jamais la dernière connexion ; la présence détaillée (règle 1/3/5) commence à Proche.
+describe('resolvePresenceVisibility — projection du niveau effectif', () => {
+  const FULL = { showOnline: true, showLastSeenTimestamp: true };
+  const HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
+  const ONLINE_ONLY = { showOnline: true, showLastSeenTimestamp: false };
+
+  it('un Ami reçoit « en ligne » et jamais lastActiveAt, même si la cible l\'autorise', () => {
+    expect(resolvePresenceVisibility(baseInput({ relationLevel: 'FRIEND', targetShowLastSeen: true }))).toEqual(ONLINE_ONLY);
+    expect(resolvePresenceVisibility(baseInput({ relationLevel: 'FRIEND', targetShowLastSeen: false }))).toEqual(ONLINE_ONLY);
+  });
+
+  it.each(['CLOSE', 'BLOOD'] as const)('sert la présence détaillée à partir de Proche (%s)', (relationLevel) => {
+    expect(resolvePresenceVisibility(baseInput({ relationLevel }))).toEqual(FULL);
+  });
+
+  it.each(['PUBLIC', 'COMMUNITY', 'ACQUAINTANCE'] as const)('ne sert rien sous Ami (%s)', (relationLevel) => {
+    expect(resolvePresenceVisibility(baseInput({ relationLevel }))).toEqual(HIDDEN);
+  });
+
+  it('respecte les préférences de la cible à tout niveau', () => {
+    expect(resolvePresenceVisibility(baseInput({ relationLevel: 'BLOOD', targetShowOnlineStatus: false }))).toEqual(HIDDEN);
+    expect(resolvePresenceVisibility(baseInput({ relationLevel: 'FRIEND', targetShowOnlineStatus: false }))).toEqual(HIDDEN);
+    expect(resolvePresenceVisibility(baseInput({ relationLevel: 'CLOSE', targetShowLastSeen: false }))).toEqual(ONLINE_ONLY);
+  });
+
+  it('un blocage masque même au sommet de l\'échelle, et ADMIN reste privilégié sans lien', () => {
+    expect(resolvePresenceVisibility(baseInput({ relationLevel: 'BLOOD', isBlockedEitherWay: true }))).toEqual(HIDDEN);
+    expect(resolvePresenceVisibility(baseInput({ viewerRole: 'ADMIN' }))).toEqual(FULL);
+    expect(resolvePresenceVisibility(baseInput({ viewerRole: 'MODERATOR' }))).toEqual(HIDDEN);
+  });
+
+  it('un Ami lit la forme SERVIE : isOnline vrai, lastActiveAt nul — y compris hors ligne', () => {
+    const friend = resolvePresenceVisibility(baseInput({ relationLevel: 'FRIEND' }));
+    const profile = { isOnline: false as boolean | null, lastActiveAt: new Date(1000) as Date | null };
+
+    expect(applyPresenceVisibilityAsOffline(profile, friend, { now: 0 })).toEqual({ isOnline: false, lastActiveAt: null });
+    expect(applyPresenceVisibilityAsOffline({ ...profile, isOnline: true }, friend, { now: 0 })).toEqual({ isOnline: true, lastActiveAt: null });
+  });
+});
+
+describe('l\'Ami ne reçoit jamais « en ligne » sur une ligne périmée (#13928)', () => {
+  const friend = resolvePresenceVisibility(baseInput({ relationLevel: 'FRIEND' }));
+  const NOW = 10 * 60_000;
+  const row = (agoMs: number) => ({ isOnline: true as boolean | null, lastActiveAt: new Date(NOW - agoMs) as Date | null });
+
+  it('isOnline vrai mais dernière activité > 5 min : hors ligne chez l\'Ami', () => {
+    expect(applyPresenceVisibilityAsOffline(row(6 * 60_000), friend, { now: NOW })).toEqual({ isOnline: false, lastActiveAt: null });
+    expect(applyPresenceVisibility(row(6 * 60_000), friend, NOW).isOnline).toBe(false);
+  });
+
+  it('isOnline vrai et activité récente : en ligne chez l\'Ami', () => {
+    expect(applyPresenceVisibilityAsOffline(row(60_000), friend, { now: NOW }).isOnline).toBe(true);
   });
 });

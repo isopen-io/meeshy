@@ -1,7 +1,6 @@
 import Foundation
 import Combine
 import UIKit
-import GRDB
 import MeeshySDK
 import MeeshyUI
 import os
@@ -191,7 +190,7 @@ extension ConversationViewModel {
 
         guard !anticipated, hasOlderMessages, !isCurrentlyNearBottom else { return }
         Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(150))
+            guard await cancellableSleep(for: .milliseconds(150)) else { return }
             guard let self, !self.isLoadingOlder else { return }
             await self.loadOlderMessages(anticipated: true)
         }

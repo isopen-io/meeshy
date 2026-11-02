@@ -32,8 +32,8 @@ final class NativeShareLinkAdoptionTests: XCTestCase {
         .deletingLastPathComponent()   // MeeshyTests
         .deletingLastPathComponent()   // apps/ios
 
-    private static let affiliateView = "Meeshy/Features/Main/Views/AffiliateView.swift"
-    private static let shareLinkDetailView = "Meeshy/Features/Main/Views/ShareLinkDetailView.swift"
+    private static let affiliateView = "Meeshy/Features/Links/Views/AffiliateView.swift"
+    private static let shareLinkDetailView = "Meeshy/Features/Links/Views/ShareLinkDetailView.swift"
 
     private func readSource(_ relativePath: String) throws -> String {
         try String(contentsOf: Self.appRoot.appendingPathComponent(relativePath), encoding: .utf8)

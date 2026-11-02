@@ -40,6 +40,7 @@ const de = {
   'listFilter.pinned': 'Angeheftet',
   'listFilter.archived': 'Archiviert',
   'listRow.muted': 'Stummgeschaltet',
+  'listRow.endToEnd': 'Ende-zu-Ende-verschlüsselt',
   'listRow.announce.pin.on': 'Unterhaltung angeheftet',
   'listRow.announce.pin.off': 'Anheftung gelöst',
   'listRow.announce.mute.on': 'Unterhaltung stummgeschaltet',

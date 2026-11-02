@@ -2273,7 +2273,7 @@ describe('CallEventsHandler', () => {
       mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [makeParticipant()] }));
       const { socket } = setupWithSocket({
         callSession: {
-          findUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: {} }),
+          findUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: {}, conversation: { encryptionMode: null } }),
           findMany: jest.fn<any>().mockResolvedValue([]),
         },
       });
@@ -2287,7 +2287,7 @@ describe('CallEventsHandler', () => {
       mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [makeParticipant()] }));
       const { socket } = setupWithSocket({
         callSession: {
-          findUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: { translationEnabled: true } }),
+          findUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: { translationEnabled: true }, conversation: { encryptionMode: null } }),
           findMany: jest.fn<any>().mockResolvedValue([]),
         },
       });

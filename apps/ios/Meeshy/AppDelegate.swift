@@ -166,6 +166,21 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     /// us a deterministic place to emit the delivery receipt (double-check
     /// cursor) so the sender sees their message as "received" even when the
     /// recipient never foregrounds the app.
+    /// #13142 — le réveil d'un signal chiffré de bout en bout : un push opaque, le
+    /// même pour tout signal, qui ne nomme ni le signal ni la conversation.
+    /// L'appareil relit ses enveloppes et applique les signaux reçus.
+    private static func handledEndToEndWake(
+        _ userInfo: [AnyHashable: Any], completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) -> Bool {
+        guard (userInfo["type"] as? String) == EndToEndSessionBridge.wakePushType else { return false }
+        Task { @MainActor in
+            primeAPITokenFromSession()
+            await EndToEndSessionBridge.shared.wake()
+            completionHandler(.newData)
+        }
+        return true
+    }
+
     func application(
         _ application: UIApplication,
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
@@ -180,12 +195,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
            let cancelCallId = userInfo["callId"] as? String, !cancelCallId.isEmpty {
             Logger.network.info("call_cancel silent push received (callId=\(cancelCallId, privacy: .public))")
             Task { @MainActor in
-                CallManager.shared.endRingingFromCancellation(callId: cancelCallId)
+                CallManager.shared.incomingRing.endRingingFromCancellation(callId: cancelCallId)
                 completionHandler(.noData)
             }
             return
         }
-
+        if Self.handledEndToEndWake(userInfo, completionHandler: completionHandler) { return }
         // Multi-device : un autre appareil du compte a décroché — pendant
         // socketless de `call:already-answered` (voir sendCallCancellationPushes
         // côté gateway pour le rationale réseau). Le device qui a décroché
@@ -194,7 +209,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
            let answeredCallId = userInfo["callId"] as? String, !answeredCallId.isEmpty {
             Logger.network.info("call_answered_elsewhere silent push received (callId=\(answeredCallId, privacy: .public))")
             Task { @MainActor in
-                CallManager.shared.endRingingAnsweredElsewhere(callId: answeredCallId)
+                CallManager.shared.incomingRing.endRingingAnsweredElsewhere(callId: answeredCallId)
                 completionHandler(.noData)
             }
             return
@@ -382,7 +397,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
 
-    static func registerNotificationCategories(bundle: Bundle = InterfaceLanguageResolver.bundle()) {
+    /// `register` reçoit le jeu COMPLET des catégories : c'est lui que le
+    /// système connaît, et lui qu'un témoin éprouve (#12655).
+    static func registerNotificationCategories(
+        bundle: Bundle = InterfaceLanguageResolver.bundle(),
+        register: (Set<UNNotificationCategory>) -> Void = { UNUserNotificationCenter.current().setNotificationCategories($0) }
+    ) {
         let replyAction = UNTextInputNotificationAction(
             identifier: MeeshyNotificationAction.reply.rawValue,
             title: String(localized: "notifications.action.reply", defaultValue: "Répondre", bundle: bundle),
@@ -507,15 +527,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             options: [.customDismissAction]
         )
 
-        UNUserNotificationCenter.current().setNotificationCategories(Set([
-            messageCategory,
-            mentionCategory,
-            friendRequestCategory,
-            socialCategory,
-            socialCommentableCategory,
-            callIncomingCategory,
-            callMissedCategory,
-            legacyCallCategory
+        register(Set([
+            messageCategory, mentionCategory, friendRequestCategory, socialCategory, socialCommentableCategory,
+            callIncomingCategory, callMissedCategory, legacyCallCategory, LockedConversationNotificationCategory.category,
         ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle)))
     }
 
@@ -654,6 +668,9 @@ enum MeeshyNotificationCategory: String {
     /// #7455 — un message éphémère : la notification DÉPLOYÉE montre son
     /// décompte vivant (`MeeshyNotificationContentExtension`).
     case ephemeral = "MEESHY_EPHEMERAL"
+    /// #12655 — une conversation verrouillée par PIN : aucune action rapide
+    /// (`NSEAttachmentPolicy.lockedConversationCategory`).
+    case lockedConversation = "MEESHY_LOCKED_CONVERSATION"
 }
 
 enum MeeshyNotificationAction: String {

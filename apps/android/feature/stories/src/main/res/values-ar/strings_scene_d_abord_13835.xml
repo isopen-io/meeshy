@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_typing_font">الخط</string>
+    <string name="composer_typing_color">اللون</string>
+    <string name="composer_typing_align">المحاذاة</string>
+    <string name="composer_typing_backing">خلفية النص</string>
+    <string name="composer_typing_language">لغة النص</string>
+    <string name="composer_typing_done">إنهاء الكتابة</string>
+</resources>

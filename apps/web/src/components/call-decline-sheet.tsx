@@ -36,7 +36,7 @@ export function CallDeclineSheet({
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
-    panel.current?.querySelector<HTMLElement>('[data-call-decline-reply]')?.focus();
+    panel.current?.querySelector<HTMLElement>('[data-call-decline-reply], [data-call-decline-dismiss]')?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.stopPropagation();
@@ -52,6 +52,9 @@ export function CallDeclineSheet({
   const reply = (text: string) => {
     if (declineWithReply({ call, text, language, deps })) onClose();
   };
+  /* #13171 — conversation vue chiffrée de bout en bout : aucune réponse ne
+     s'offre, la feuille dit où écrire, et « Annuler » rend l'écran entrant. */
+  const withheld = call !== null && deps.canReply?.(call.conversationId) === false;
 
   return (
     <div className="fixed inset-0 z-[220] flex items-end justify-center sm:items-center" data-call-decline="">
@@ -67,6 +70,19 @@ export function CallDeclineSheet({
         <h2 id="call-decline-title" className="text-body font-semibold">
           {translate(language, 'callDecline.title')}
         </h2>
+        {withheld ? (
+          <>
+            <p role="status" className="text-body" style={{ color: INK_2 }} data-call-decline-end-to-end="">
+              {translate(language, __SHELL__ ? 'composer.writeRestriction.endToEnd.shell' : 'composer.writeRestriction.endToEnd')}
+            </p>
+            <div className="flex justify-end">
+              <button type="button" onClick={onClose} className="min-h-11 rounded-full px-4 text-body" style={{ color: INK_2 }} data-call-decline-dismiss="">
+                {translate(language, 'callDecline.cancel')}
+              </button>
+            </div>
+          </>
+        ) : null}
+        {withheld ? null : (
         <ul className="flex flex-col gap-2">
           {DECLINE_REPLY_KEYS.map((key) => {
             const text = translate(language, key);
@@ -85,6 +101,8 @@ export function CallDeclineSheet({
             );
           })}
         </ul>
+        )}
+        {withheld ? null : (
         <form
           className="flex flex-col gap-2"
           onSubmit={(event) => {
@@ -121,6 +139,7 @@ export function CallDeclineSheet({
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

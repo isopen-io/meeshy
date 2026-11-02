@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Surfaces des widgets : MeeshyPalette (Indigo500 / Indigo700 / SurfaceDarkDeep), servies au lanceur, qui les résout selon le mode nuit du système (aperçus du sélecteur, fond arrondi avant Android 12). -->
+<resources>
+    <color name="widget_surface">#FFFFFFFF</color>
+    <color name="widget_brand_surface">#FF6366F1</color>
+    <color name="widget_preview_bar">#FFE0E7FF</color>
+    <color name="widget_preview_brand">#FF6366F1</color>
+    <color name="widget_preview_on_brand">#FFFFFFFF</color>
+</resources>

@@ -196,3 +196,16 @@
     opacity: 0;
   }
 }
+
+/*
+ * UN SEUL VISAGE (#12571) — les initiales ne sont que le PLACEHOLDER du
+ * chargement. `avatarPhotoEvents` (`components/avatar.tsx`, posé par `Avatar`
+ * et par l'avatar carré d'une communauté) pose `data-loaded` sur l'`<img>` à son
+ * `load` ; l'`<img>` précède le nœud d'initiales dans le DOM, donc cette règle de
+ * frère le masque sans état ni hook. `visibility` plutôt que `display` : la boîte garde sa
+ * place (la racine a une taille explicite) et un PNG transparent ne laisse plus
+ * voir de dégradé dessous — ni le liseré de deux cercles de même rayon.
+ */
+img[data-loaded] ~ [data-avatar-initials] {
+  visibility: hidden;
+}

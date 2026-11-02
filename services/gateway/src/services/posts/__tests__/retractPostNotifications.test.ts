@@ -44,6 +44,8 @@ interface NotificationRow {
   readonly postId: string | null;
   /** `metadata.repostId` — posé par `post_repost` seulement. */
   readonly repostId?: string;
+  /** `metadata.originalPostId` — l'original cité par un relais de republication (#14243). */
+  readonly originalPostId?: string;
   readonly type?: string;
 }
 
@@ -62,7 +64,12 @@ const prisma = {
 /** `{ '<chemin>': { $in } }` → la valeur de la ligne sous ce chemin est dans `$in`. */
 function matchesClause(row: NotificationRow, clause: Record<string, { $in?: string[] }>): boolean {
   return Object.entries(clause).every(([path, predicate]) => {
-    const value = path === 'context.postId' ? row.postId : path === 'metadata.repostId' ? row.repostId : undefined;
+    const byPath: Record<string, string | null | undefined> = {
+      'context.postId': row.postId,
+      'metadata.repostId': row.repostId,
+      'metadata.originalPostId': row.originalPostId,
+    };
+    const value = byPath[path];
     return value != null && (predicate.$in ?? []).includes(value);
   });
 }
@@ -148,6 +155,7 @@ describe('retractPostNotifications', () => {
           $or: [
             { 'context.postId': { $in: [POST_ID] } },
             { 'metadata.repostId': { $in: [POST_ID] } },
+            { 'metadata.originalPostId': { $in: [POST_ID] } },
           ],
         },
         projection: { _id: 1, userId: 1, 'delivery.pushSent': 1 },
@@ -167,6 +175,25 @@ describe('retractPostNotifications', () => {
     expect(count).toBe(1);
     expect(deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['n-repost'] } } });
     expect(rows.map((row) => row.id)).toEqual(['n-autre-repost', 'n-like-original']);
+  });
+
+  it("supprimer l'ORIGINAL retire les relais de ses republications et citations, qui ouvrent la republication (#14243)", async () => {
+    const relay = (id: string, userId: string, repostId: string, originalPostId: string): NotificationRow => ({
+      id, userId, postId: repostId, originalPostId, type: 'friend_content_repost',
+    });
+    seed([
+      relay('n-relais', FRIEND_ID, REPOST_ID, POST_ID),
+      relay('n-relais-citation', COMMENTER_ID, OTHER_REPOST_ID, POST_ID),
+      relay('n-relais-autre', FRIEND_ID, REPOST_ID, OTHER_POST_ID),
+    ]);
+
+    const count = await retractPostNotifications(prisma, [POST_ID], announcer);
+
+    expect(count).toBe(2);
+    expect(rows.map((row) => row.id)).toEqual(['n-relais-autre']);
+    expect(announceNotificationsRetracted).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ id: 'n-relais', userId: FRIEND_ID }), expect.objectContaining({ id: 'n-relais-citation', userId: COMMENTER_ID })])
+    );
   });
 
   it('retire les lignes de TOUTE l\'audience et annonce chacune à SON destinataire', async () => {
@@ -313,6 +340,7 @@ describe('retractPostNotifications', () => {
           $or: [
             { 'context.postId': { $in: [POST_ID, OTHER_POST_ID] } },
             { 'metadata.repostId': { $in: [POST_ID, OTHER_POST_ID] } },
+            { 'metadata.originalPostId': { $in: [POST_ID, OTHER_POST_ID] } },
           ],
         },
       })

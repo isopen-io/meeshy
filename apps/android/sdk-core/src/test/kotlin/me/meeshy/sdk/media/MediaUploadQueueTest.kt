@@ -34,7 +34,7 @@ class MediaUploadQueueTest {
             ApplicationProvider.getApplicationContext(),
             MeeshyDatabase::class.java,
         ).allowMainThreadQueries().build()
-        blobStore = MediaBlobStore(db.mediaBlobDao())
+        blobStore = MediaBlobStore(db.mediaBlobDao(), MediaBlobFiles(kotlin.io.path.createTempDirectory("blobs").toFile()) { me.meeshy.core.crypto.primitives.StreamingSeal.ephemeral() })
         outbox = OutboxRepository(db, db.outboxDao())
         queue = MediaUploadQueue(blobStore, outbox)
     }
@@ -90,6 +90,16 @@ class MediaUploadQueueTest {
         val row = outbox.deliverable(OutboxLanes.MEDIA).single()
         val payload = Json.decodeFromString<MediaUploadPayload>(row.payload)
         assertThat(payload.uploadContext).isEqualTo(TusUploadContext.STORY.wire)
+    }
+
+    @Test
+    fun `a chat attachment names its destination conversation, and keeps the legacy upload path`() = runTest {
+        queue.enqueue(item(), conversationId = "c-1")
+
+        val row = outbox.deliverable(OutboxLanes.MEDIA).single()
+        val payload = Json.decodeFromString<MediaUploadPayload>(row.payload)
+        assertThat(payload.conversationId).isEqualTo("c-1")
+        assertThat(payload.uploadContext).isNull()
     }
 
     @Test

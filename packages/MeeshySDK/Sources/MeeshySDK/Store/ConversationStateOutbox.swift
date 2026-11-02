@@ -60,18 +60,6 @@ public enum OutboxDispatchOutcome: Sendable {
     case failedTransient(reason: String)
 }
 
-/// Backoff schedule per design §4.5: `min(60s, 2^attempts × 5s)`.
-public enum OutboxBackoff {
-    public static let baseSeconds: TimeInterval = 5
-    public static let capSeconds: TimeInterval = 60
-
-    public static func nextDelay(forAttempts attempts: Int) -> TimeInterval {
-        let exponent = max(0, attempts)
-        let raw = pow(2.0, Double(exponent)) * baseSeconds
-        return min(capSeconds, raw)
-    }
-}
-
 // MARK: - Outbox actor
 
 /// Append-and-flush queue for `UserStateMutation`s waiting on the
@@ -97,6 +85,7 @@ public actor ConversationStateOutbox {
     private var pending: [UUID: OutboxTask] = [:]
     private var indexByCoalescingKey: [CoalescingKey: UUID] = [:]
     private let now: @Sendable () -> Date
+    private let retryPolicy: RetryPolicy
 
     private struct CoalescingKey: Hashable {
         let convId: String
@@ -111,14 +100,15 @@ public actor ConversationStateOutbox {
     }
 
     /// Test-only init that allows injecting a path and a clock.
-    public init(dbPath: String, clock: @escaping @Sendable () -> Date = { Date() }) {
-        self.init(storage: ResilientDatabaseQueue.open(path: dbPath), clock: clock)
+    public init(dbPath: String, clock: @escaping @Sendable () -> Date = { Date() }, retryPolicy: RetryPolicy = .stateSync) {
+        self.init(storage: ResilientDatabaseQueue.open(path: dbPath), clock: clock, retryPolicy: retryPolicy)
     }
 
-    init(storage opened: OpenedDatabaseQueue, clock: @escaping @Sendable () -> Date = { Date() }) {
+    init(storage opened: OpenedDatabaseQueue, clock: @escaping @Sendable () -> Date = { Date() }, retryPolicy: RetryPolicy = .stateSync) {
         let queue = Self.prepare(opened)
         self.storage = queue
         self.now = clock
+        self.retryPolicy = retryPolicy
         let snapshot = Self.hydrateFromDisk(db: queue)
         self.pending = snapshot.pending
         self.indexByCoalescingKey = snapshot.index
@@ -300,8 +290,7 @@ public actor ConversationStateOutbox {
     public func markFailedTransient(_ id: UUID, reason: String) {
         guard var task = pending[id] else { return }
         task.attempts += 1
-        let delay = OutboxBackoff.nextDelay(forAttempts: task.attempts)
-        task.nextRetryAt = now().addingTimeInterval(delay)
+        task.nextRetryAt = now().addingTimeInterval(retryPolicy.delay(afterFailure: task.attempts))
         pending[id] = task
         upsertRow(task)
     }
@@ -406,8 +395,7 @@ public actor ConversationStateOutbox {
     }
 
     private func encodeMutation(_ mutation: UserStateMutation) -> String? {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         do {
             let data = try encoder.encode(mutation)
             guard let str = String(data: data, encoding: .utf8) else {
@@ -436,8 +424,7 @@ public actor ConversationStateOutbox {
             return nil
         }
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         guard let data = mutationJSON.data(using: .utf8),
               let mutation = decoder.decodeOrLog(UserStateMutation.self, from: data,
                                                  field: "conversation state mutation",

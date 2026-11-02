@@ -1,5 +1,6 @@
 import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
+import { isNameTooShort, isUsernameTooShort } from '../identity-bounds';
 import { type AdminDeps } from './admin';
 import { decodeAdminUserDetail, type AdminUserDetail } from './admin-user-detail';
 import type { ApiResult } from './http';
@@ -41,6 +42,16 @@ export function missingCreateFields(input: AdminUserCreateInput): readonly Admin
   return REQUIRED.filter((champ) => input[champ].trim() === '');
 }
 
+/** #13825 — un pseudo DONNÉ a trois caractères au moins, un prénom ou un nom
+ * deux, rognés ; un champ ABSENT se dit par `missingCreateFields`. */
+export function tooShortCreateFields(input: AdminUserCreateInput): readonly Extract<AdminUserCreateField, 'username' | 'firstName' | 'lastName'>[] {
+  return [
+    ...(isUsernameTooShort(input.username) ? (['username'] as const) : []),
+    ...(isNameTooShort(input.firstName) ? (['firstName'] as const) : []),
+    ...(isNameTooShort(input.lastName) ? (['lastName'] as const) : []),
+  ];
+}
+
 export async function createAdminUser(
   params: AdminDeps & {
     readonly input: AdminUserCreateInput;
@@ -52,6 +63,8 @@ export async function createAdminUser(
   const { input } = params;
   const manquants = missingCreateFields(input);
   if (manquants.length > 0) return { ok: false, status: 0, error: `Champs requis : ${manquants.join(', ')}` };
+  const courts = tooShortCreateFields(input);
+  if (courts.length > 0) return { ok: false, status: 0, error: `Champs trop courts : ${courts.join(', ')}` };
 
   const result = await params.transport.request<unknown>({
     method: 'POST',

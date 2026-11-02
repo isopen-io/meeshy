@@ -600,6 +600,24 @@ public final class StoryTextLayer: CATextLayer {
     /// `true` pour un texte en verre : seul porteur d'une couche à nourrir.
     var hasGlassBackdrop: Bool { glassBackdropLayer != nil }
 
+    /// **La vitre seule** (#12602) : le fond Verre peint en blanc opaque, sans glyphe, liseré,
+    /// ombre ni teinte — la découpe où un peintre de média floute ce qu'il y a dessous.
+    /// `false` (et rien ne change) pour un texte sans verre.
+    @MainActor
+    @discardableResult
+    func isolateGlassPane() -> Bool {
+        guard let vitre = glassBackdropLayer else { return false }
+        sublayers?.filter { $0 !== vitre }.forEach { $0.isHidden = true }
+        string = nil
+        backgroundColor = nil
+        borderWidth = 0
+        shadowOpacity = 0
+        vitre.contents = nil
+        vitre.borderWidth = 0
+        vitre.backgroundColor = UIColor.white.cgColor
+        return true
+    }
+
     /// Ce que la lecture a déjà donné au verre de ce texte (#9864).
     var glassBackdropFeedStamp: StoryGlassFeedStamp? { glassBackdropLayer?.feedStamp }
 

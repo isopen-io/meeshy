@@ -8,7 +8,7 @@ import org.junit.Test
  * waiting-step state machine + strict email gate backing passwordless
  * magic-link login.
  *
- * Parity source: iOS `MagicLinkView` (`apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift`):
+ * Parity source: iOS `MagicLinkView` (`apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift`):
  * the `isValidEmail` regex, the `startCountdown` / per-second tick loop that flips
  * `linkExpired` at zero, `formattedCountdown` (`"m:ss"`), and the resend button's
  * `.disabled(countdownRemaining > 0 || isLoading)` gate.

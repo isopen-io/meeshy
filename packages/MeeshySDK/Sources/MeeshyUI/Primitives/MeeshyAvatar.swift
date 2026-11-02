@@ -282,7 +282,6 @@ public struct MeeshyAvatar: View {
         // every subsequent render allocation- and hash-free.
         let accent = accentColor.isEmpty ? DynamicColorGenerator.colorForName(name) : accentColor
         self.resolvedAccent = accent
-        self.resolvedSecondary = secondaryColor ?? accent
         self.initials = Self.makeInitials(from: name)
     }
 
@@ -305,16 +304,11 @@ public struct MeeshyAvatar: View {
     }
     private let isDark: Bool
     private let resolvedAccent: String
-    private let resolvedSecondary: String
     private let initials: String
     /// Le dessin du contour, résolu UNE fois à l'init (le catalogue embarqué
     /// est en mémoire) : le défilement d'une liste ne relit rien.
     let ringDesign: AvatarRingDesign?
     private var theme: ThemeManager { ThemeManager.shared }
-
-    private var secondaryGradientColor: Color {
-        secondaryColor != nil ? Color(hex: resolvedSecondary) : Color(hex: resolvedAccent).opacity(0.6)
-    }
 
     private var effectiveStoryState: StoryRingState {
         guard kind == .user else { return .none }
@@ -511,20 +505,13 @@ public struct MeeshyAvatar: View {
     @ViewBuilder
     private var avatarBody: some View {
         if let url = avatarURL, !url.isEmpty {
-            CachedAvatarImage(urlString: url, thumbHash: thumbHash, name: name, size: context.size, accentColor: resolvedAccent)
+            CachedAvatarImage(urlString: url, thumbHash: thumbHash, name: name, size: context.size, accentColor: resolvedAccent, secondaryColor: secondaryColor)
                 .shadow(color: Color(hex: resolvedAccent).opacity(0.4), radius: context.shadowRadius, y: context.shadowY)
         } else {
-            ZStack {
-                Circle()
-                    .fill(LinearGradient(
-                        colors: [Color(hex: resolvedAccent), secondaryGradientColor],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    ))
-                    .frame(width: context.size, height: context.size)
-                Text(initials)
-                    .font(.system(size: context.initialFont, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-            }
+            AvatarInitialsFace(
+                initials: initials, accent: resolvedAccent, secondary: secondaryColor,
+                size: context.size, fontSize: context.initialFont
+            )
             .shadow(color: Color(hex: resolvedAccent).opacity(0.4), radius: context.shadowRadius, y: context.shadowY)
         }
     }

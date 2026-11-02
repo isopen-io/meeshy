@@ -227,6 +227,21 @@ enum CommentAttachmentIntake {
         }
     }
 
+    /// Le sticker choisi dans la feuille rejoint la zone comme une IMAGE du
+    /// commentaire (#14335) : la pièce paraît au toucher, son fichier (le PNG
+    /// du sticker, ou le fichier d'un pack) s'écrit ensuite.
+    @discardableResult
+    static func stage(sticker choice: StickerSheetChoice, into attachments: Binding<[ComposerAttachment]>,
+                      limit: Int = MAX_POST_MEDIA) -> ComposerAttachment? {
+        guard let piece = admit([placeholder(isVideo: false)], into: &attachments.wrappedValue, limit: limit).first else {
+            return nil
+        }
+        Task { @MainActor in
+            fill(piece.id, with: await writeImage(await CommentStickerPiece.imageData(for: choice)), in: attachments)
+        }
+        return piece
+    }
+
     static func placeholder(isVideo: Bool) -> ComposerAttachment {
         isVideo
             ? ComposerAttachment(id: "video-\(UUID().uuidString)", type: .video,
@@ -324,6 +339,48 @@ enum CommentAttachmentThumbnail {
         case .video:
             return await AttachmentPreparationService.generateVideoThumbnail(url: url)
         case .voice, .file, .location:
+            return nil
+        }
+    }
+}
+
+// ============================================================================
+// MARK: - CommentStickerPiece
+// ============================================================================
+
+/// **Ce qu'un sticker devient dans un commentaire** (#14335) : les octets de
+/// l'image qui part, rendus par le MÊME moteur que la conversation
+/// (`ConversationStickerRendering`, `MeeStickerCatalog`, `StickerPackItemImages`).
+/// Un commentaire ne porte pas de descripteur de sticker : ce qui part est
+/// l'image que tout lecteur voit. PNG, pour garder la transparence ; un pack
+/// part avec son fichier d'origine, animé compris.
+enum CommentStickerPiece {
+
+    static func imageData(for choice: StickerSheetChoice) async -> Data? {
+        if case .packItem(_, let item) = choice {
+            return await StickerPackItemImages.load(item)?.data
+        }
+        return still(choice)?.pngData()
+    }
+
+    private static func still(_ choice: StickerSheetChoice) -> UIImage? {
+        switch choice {
+        case .emoji(let emoji):
+            return ConversationStickerRendering.emojiImage(emoji)
+        case .library(let item):
+            return item.thumbnail
+        case .template(let gabarit, let slots):
+            return ConversationStickerRendering.templateImage(templateID: gabarit.id, slots: slots)
+                ?? ConversationStickerRendering.emojiImage(gabarit.fallbackEmoji)
+        case .locationTemplate(let lieu, let gabarit):
+            return ConversationStickerRendering.templateImage(
+                templateID: gabarit.id, slots: ConversationStickerRendering.locationSlots(for: lieu))
+                ?? ConversationStickerRendering.emojiImage(gabarit.fallbackEmoji)
+        case .mee(let mee):
+            return MeeStickerCatalog.stillImage(mee) ?? ConversationStickerRendering.emojiImage(mee.emoji)
+        case .instant(let instant, let slots):
+            return instant.stillImage(slots: slots) ?? ConversationStickerRendering.emojiImage(instant.emoji)
+        case .packItem:
             return nil
         }
     }

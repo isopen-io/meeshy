@@ -49,6 +49,8 @@ public final class StoryCanvasUIView: UIView {
     }
     public internal(set) var mode: RenderMode
     public internal(set) var currentTime: CMTime = .zero
+    /// Le format composé, que le résumé VoiceOver nomme (#13913).
+    var formatWording: ComposerFormatWording = .story
 
     /// Timeline preview (« preview vivante ») : non-nil tant que la sheet
     /// timeline pilote ce canvas comme moniteur de preview. Le canvas reste
@@ -423,9 +425,9 @@ public final class StoryCanvasUIView: UIView {
     var rotationRecognizer: UIRotationGestureRecognizer!
     var singleTapRecognizer: UITapGestureRecognizer!
     var doubleTapRecognizer: UITapGestureRecognizer!
-    /// **L'appui long sur le FOND** — jamais sur un objet, où
-    /// `UIContextMenuInteraction` règne déjà (`hitTestItem` y rend un id, et
-    /// le menu se configure ; sur le fond il rend `nil`, laissant la place).
+    /// **L'appui long immobile** : le geste du FOND, et le menu d'un objet quand
+    /// l'hôte le peint (#14206). Sans hôte, `UIContextMenuInteraction` garde le
+    /// menu système des objets.
     var backgroundLongPressRecognizer: UILongPressGestureRecognizer!
     /// Pinch à 3 doigts dédié au zoom du viewport (canvas entier). Séparé du
     /// `pinchRecognizer` 2-doigts qui agit sur un élément/fond : sans cette
@@ -442,7 +444,14 @@ public final class StoryCanvasUIView: UIView {
     public internal(set) var isDrawingMode: Bool = false
 
     /// Item currently being dragged/scaled/rotated. Reset on .ended/.cancelled.
-    var manipulatedItemId: String?
+    var manipulatedItemId: String? {
+        didSet {
+            if manipulatedItemId == nil, oldValue != nil { lastManipulationEndedAt = Date() }
+            if (manipulatedItemId == nil) != (oldValue == nil) { StoryCanvasManipulation.announce(active: manipulatedItemId != nil, by: self) }
+        }
+    }
+    /// La fin du dernier geste : un appui long qui la suit n'ouvre aucun menu (L5).
+    var lastManipulationEndedAt: Date?
     var dragStartSlideX: Double = 0
     var dragStartSlideY: Double = 0
     var baseScale: Double = 1.0
@@ -632,6 +641,15 @@ public final class StoryCanvasUIView: UIView {
     public var onInlineTextChanged: ((String, String) -> Void)?
     /// Notifié quand l'édition se termine (textId).
     public var onInlineTextEditEnded: ((String) -> Void)?
+    /// La barre collée au clavier et le panneau qui peut le remplacer (#13839, L4).
+    public var inlineEditInputLink: StoryInlineEditInputLink? {
+        didSet {
+            guard oldValue !== inlineEditInputLink else { return }
+            oldValue?.detach()
+            guard inlineEditingTextId != nil, let editor = inlineEditor else { return }
+            inlineEditInputLink?.attach(to: editor)
+        }
+    }
 
     /// Y (coordonnées ÉCRAN) du bord supérieur des contrôleurs de l'outil
     /// texte — chips flottantes, panneau déplié, clavier. Le texte en cours
@@ -689,12 +707,11 @@ public final class StoryCanvasUIView: UIView {
     /// > construction — un booléen de configuration ne l'aurait pas fait.
     public var onBackgroundLongPressed: (() -> Void)?
 
-    /// **L'appui long sur un média DE FOND demande son menu.**
+    /// **L'appui long sur un média DE FOND le sélectionne** (#13974).
     ///
     /// Distinct de `onBackgroundLongPressed`, qui appartient au viseur : la
-    /// scène qui porte un fond n'est pas vide, et le geste y ouvre supprimer /
-    /// ramener en avant / éditer — les mêmes verbes que le menu contextuel d'un
-    /// objet de premier plan, pour que le geste ait un seul sens.
+    /// scène qui porte un fond n'est pas vide, et le geste y fait ce que fait
+    /// le toucher — l'hôte pose le niveau « Fond » dans son rail.
     ///
     /// **Sa présence est un FAIT que la règle lit** : tant que l'hôte ne le
     /// branche pas, `StoryCanvasBackgroundLongPress` retombe sur le viseur

@@ -16,6 +16,10 @@
         <!-- #10005 — `SystemBars.setStyle` repeint la fenetre de ce fond : derriere les barres
              systeme, la surface de l'ecran et non le gris du theme DayNight. -->
         <item name="android:windowBackground">@color/surface</item>
+        <!-- #13129 — l'accent que la WebView prete a ses controles natifs (calendrier d'un
+             `<input type="date">`, liste d'un `<select>`) : sans lui, le sarcelle par defaut
+             d'AppCompat, la ou iOS teinte le meme selecteur de `MeeshyColors.indigo500`. -->
+        <item name="colorAccent">@color/brand_accent</item>
     </style>
 
 

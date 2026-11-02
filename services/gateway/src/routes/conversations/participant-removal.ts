@@ -9,7 +9,7 @@ import { emitConversationMemberCountEvent } from '../../socketio/emitConversatio
 import { endConversationMembership } from '../../socketio/endConversationMembership';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { memberRoleCasings, MemberRole } from '@meeshy/shared/types/role-types';
-import { actorHasMinimumRole } from '../../utils/conversation-authority';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import { resolveTargetParticipant, identifyTarget } from './utils/target-participant';
 import { participantActionRefusal } from './utils/participant-authority';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';

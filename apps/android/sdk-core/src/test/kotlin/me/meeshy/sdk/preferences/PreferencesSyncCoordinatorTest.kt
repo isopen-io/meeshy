@@ -64,6 +64,10 @@ class PreferencesSyncCoordinatorTest {
      * not intend to exercise fails loudly instead of quietly succeeding.
      */
     private open class StubPreferencesApi : PreferencesApi {
+        override suspend fun updateAudio(body: me.meeshy.sdk.model.AudioPreferenceSyncBody) = ApiResponse<Unit>(success = false)
+
+        override suspend fun getAudio() = ApiResponse<me.meeshy.sdk.model.AudioPreferenceSyncBody>(success = false)
+
         override suspend fun getCategories(limit: Int?) =
             ApiResponse<List<ApiCategory>>(success = false)
 

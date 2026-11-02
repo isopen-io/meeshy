@@ -2,6 +2,7 @@ import { act, useState, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
 import type { WorldEntry } from '@meeshy/shared/types/world';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
@@ -239,6 +240,33 @@ describe('WorldGuestEntry — une vue, un clic (#10098)', () => {
     expect(recorded.joins).toEqual([]);
     expect(host.querySelector('[role="alert"]')).not.toBeNull();
     expect(document.activeElement).toBe(nameField(host));
+  });
+
+  test('un nom trop court n\'entre pas : le refus DIT le minimum et le champ reprend le focus (#13825)', async () => {
+    const { deps: d, recorded } = deps();
+    const host = await mount({ deps: d });
+    typeInto(nameField(host), 'Al');
+    await submit(host);
+    expect(recorded.joins).toEqual([]);
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain(String(usernameMinLength));
+    expect(document.activeElement).toBe(nameField(host));
+  });
+
+  test('un nom dont la passerelle ne garde que deux caractères (« Zoé ») n\'entre pas non plus (#13825)', async () => {
+    const { deps: d, recorded } = deps();
+    const host = await mount({ deps: d });
+    typeInto(nameField(host), 'Zoé');
+    await submit(host);
+    expect(recorded.joins).toEqual([]);
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain(String(usernameMinLength));
+  });
+
+  test('le nom est rogné avant d\'être jugé : « Ali » entouré d\'espaces entre sous « Ali » (#13825)', async () => {
+    const { deps: d, recorded } = deps();
+    const host = await mount({ deps: d });
+    typeInto(nameField(host), '  Ali ');
+    await submit(host);
+    expect(recorded.joins).toEqual([['mshy_world_served', { language: 'fr', nickname: 'Ali' }]]);
   });
 
   test('le nom venu d’une adresse est pré-rempli', async () => {

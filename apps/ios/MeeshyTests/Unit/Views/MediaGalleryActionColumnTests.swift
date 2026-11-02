@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import CoreGraphics
 import MeeshySDK
 import MeeshyUI
@@ -179,10 +180,18 @@ final class MediaGalleryActionColumnTests: XCTestCase {
                           + "le rail du SDK (#8878), une pile à intervalle `railSpacing`")
         XCTAssertTrue(compact(colonne).contains("mediaActions("),
                       "et c'est ELLE qui monte les trois actions")
-        XCTAssertTrue(
-            compact(colonne).contains("alignment:.trailing"),
-            "à DROITE du cadre — gabarit de `StoryViewerView+Sidebar.swift`"
-        )
+        // #12420 — le rail se pose à DROITE du bloc d'informations, dans la même
+        // rangée ancrée en bas (gabarit du rail de la story et du réel) : sept
+        // disques ne tiennent plus AU-DESSUS de lui sur un iPhone SE.
+        let region = compact(corps("var cadreRegion: some View {", dans: code) ?? "")
+        guard let rangee = region.range(of: "HStack(alignment:.bottom"),
+              let bloc = region.range(of: "cadreOverlay"),
+              let rail = region.range(of: "cadreActionColumn") else {
+            return XCTFail("la rangée bloc d'informations + rail est introuvable")
+        }
+        XCTAssertLessThan(rangee.lowerBound, bloc.lowerBound)
+        XCTAssertLessThan(bloc.lowerBound, rail.lowerBound,
+                          "le bloc d'abord, le rail ensuite — à DROITE")
         XCTAssertFalse(
             compact(colonne).contains("spacing:"),
             "l'espacement vient du rail partagé, pas d'un nombre recopié dans la vue"
@@ -354,5 +363,97 @@ final class MediaGalleryActionColumnTests: XCTestCase {
             XCTAssertFalse(site.contains("LongPressGesture"))
             XCTAssertFalse(site.contains("DragGesture"))
         }
+    }
+}
+
+// MARK: - 5 · Le rail porte les cinq actions (#12420)
+
+/// **Réagir, Répondre, Créer, Enregistrer et Transférer vivent dans LE rail**
+/// (demande porteur 2026-10-23). Le témoin lit ce que VoiceOver lit dans une
+/// fenêtre réelle : les cinq actions annoncées, dans cet ordre, sur UNE seule
+/// colonne — la même abscisse —, et à DROITE du bloc d'informations plutôt
+/// qu'au-dessus de lui.
+@MainActor
+final class MediaGalleryRailActionsTests: XCTestCase {
+
+    private static let window = CGSize(width: 402, height: 874)
+
+    private static var react: String { String(localized: "media.react.title", defaultValue: "Réagir", bundle: .main) }
+    private static var reply: String { String(localized: "media.reply.title", defaultValue: "Répondre", bundle: .main) }
+    private static var compose: String {
+        String(localized: "media.compose.title", defaultValue: "Créer avec ce média", bundle: .main)
+    }
+    private static var save: String { String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main) }
+    private static var forward: String { MessageActionVerb.forward.label }
+
+    private static func gallery(forwarding: Bool, exitGate: ContentExitGate) -> some View {
+        let lot = MediaGalleryLot.imagesOnly(3)
+        return ConversationMediaGalleryView(
+            allAttachments: lot,
+            startAttachmentId: lot[0].id,
+            accentColor: "6366F1",
+            onComposeWithMedia: { _ in },
+            onReplyToMedia: { _ in },
+            onReactToMedia: { _, _ in },
+            onForwardMedia: forwarding ? { _ in } : nil,
+            entryPresentation: .carded
+        )
+        .contentExitGate(exitGate)
+    }
+
+    private func frame(_ label: String, in screen: RenderedScreen) -> CGRect? {
+        screen.nodes.first { $0.label == label && $0.frame.width > 0 }?.frame
+    }
+
+    func test_theRail_carriesTheFiveActions_inOneColumn_inTheirOrder() throws {
+        let screen = RenderedScreen(Self.gallery(forwarding: true, exitGate: .open), size: Self.window)
+        defer { screen.dismount() }
+
+        let order = [Self.react, Self.reply, Self.compose, Self.save, Self.forward]
+        let frames = order.map { frame($0, in: screen) }
+        for (label, cadre) in zip(order, frames) {
+            XCTAssertNotNil(cadre, "« \(label) » n'est pas dans le rail — annoncé : \(screen.labels)")
+        }
+        let posees = frames.compactMap { $0 }
+        guard posees.count == order.count, let premier = posees.first else { return }
+        for cadre in posees {
+            XCTAssertEqual(cadre.midX, premier.midX, accuracy: 1,
+                           "une seule colonne : chaque action a l'abscisse du rail")
+            XCTAssertTrue(cadre.maxX <= Self.window.width && cadre.minX >= 0, "le rail reste dans l'écran")
+        }
+        XCTAssertEqual(posees.map(\.minY), posees.map(\.minY).sorted(),
+                       "Réagir, Répondre, Créer, puis Enregistrer et Transférer, de haut en bas")
+        XCTAssertGreaterThan(premier.midX, Self.window.width / 2, "le rail est au bord DROIT")
+
+        if let data = screen.snapshotPNG() {
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("gallery-rail-12420.png")
+            try data.write(to: url)
+            print("RECETTE-12420 capture : \(url.path)")
+        }
+    }
+
+    func test_theRail_neverOffersWhatTheHostCannotServe() {
+        let screen = RenderedScreen(Self.gallery(forwarding: false, exitGate: .sealed), size: Self.window)
+        defer { screen.dismount() }
+
+        XCTAssertNotNil(frame(Self.react, in: screen), "le rail est monté — sinon l'absence ne prouverait rien")
+        XCTAssertNil(frame(Self.forward, in: screen), "un hôte qui ne transfère pas n'a pas de « Transférer » (loi 4)")
+        XCTAssertNil(frame(Self.save, in: screen),
+                     "une pièce que la loi de sortie retient ne s'enregistre pas depuis le rail (#9573)")
+    }
+
+    /// Le rail à sept disques — cinq actions, le son et (...) — tient à côté du bloc
+    /// d'informations sur le plus petit écran servi, couloirs de série et de durée réservés.
+    func test_theFullRail_fitsTheSmallestPlateau() {
+        let video = MessageAttachment(id: "vid", mimeType: "video/mp4", fileSize: 4_204_800,
+                                      fileUrl: "https://cdn.meeshy.me/v.mp4", width: 1_080, height: 1_920,
+                                      duration: 12_000, uploadedBy: "u-1")
+        let reserves = MediaGalleryStage.corridors(safeTop: 20, safeBottom: 0,
+                                                   attachments: [video] + MediaGalleryLot.imagesOnly(1))
+        XCTAssertGreaterThan(reserves.transport, 0, "la bande de durée est réservée : le cas le plus serré")
+        let region = 667
+            - MediaGalleryStage.topInset(presentation: .carded, corridors: reserves)
+            - MediaGalleryStage.bottomInset(presentation: .carded, corridors: reserves)
+        XCTAssertLessThanOrEqual(MediaStageActionColumn.height(actions: 7), region)
     }
 }

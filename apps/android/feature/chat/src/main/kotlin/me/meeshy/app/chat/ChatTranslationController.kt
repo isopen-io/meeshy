@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.collectArrived
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
 import me.meeshy.ui.component.bubble.MessageDetailExplorer
 import me.meeshy.ui.component.bubble.MessageLanguageExplorer
@@ -78,7 +79,7 @@ internal class ChatTranslationController(
                 .collect { explorer -> state.update { it.copy(languageExplorer = explorer) } }
         }
         scope.launch {
-            messageSocketManager.translationReceived.collect { event ->
+            messageSocketManager.translationReceived.collectArrived { event ->
                 if (event.conversationId == conversationId) {
                     messageRepository.applyTranslation(
                         event.messageId,

@@ -86,6 +86,11 @@ const esStickerPacks = {
   'packs.shop.domains': "Categoría de la tienda",
   'packs.shop.hint': "Todos los packs: stickers, marcos, fondos, contornos y banners. Lo que tienes aparece en las pantallas que lo usan.",
   'packs.retry': "Reintentar",
+  'packs.error.notRemovable': "Este paquete sigue instalado: no se puede quitar.",
+  'packs.frames.changeAtmosphere': "Cambiar de atmósfera",
+  'packs.frames.yourAtmosphere': "Tu atmósfera",
+  'packs.frames.atmosphereKept': "Este paquete lleva tu atmósfera: sigue instalado. Cambia de atmósfera para quitarlo.",
+  'packs.frames.atmosphereQueued': "Sin conexión: tu elección se enviará al recuperar la conexión.",
 } satisfies StickerPacksCatalog;
 
 export default esStickerPacks;

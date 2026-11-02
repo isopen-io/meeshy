@@ -113,6 +113,43 @@ class FriendBlockSendersTest {
     }
 
     @Test
+    fun `a circles raise travels with its level and keeps an existing friend a friend`() = runTest {
+        val cache = FriendshipCache().apply { hydrate(sent = listOf(FriendRequest(id = "old", receiverId = "u1", status = "accepted")), received = emptyList()) }
+        coEvery { friendRepository.sendFriendRequest("u1", null, "CLOSE") } returns
+            NetworkResult.Success(FriendRequest(id = "req-close", targetLevel = "CLOSE"))
+        val row = outboxRow(
+            OutboxKind.SEND_FRIEND_REQUEST,
+            targetId = "u1",
+            payload = encodedPayload(FriendRequestPayload(message = null, targetLevel = "CLOSE")),
+        )
+
+        assertThat(friendHandler(cache).send(row)).isEqualTo(SendResult.Success)
+        assertThat(cache.status("u1")).isEqualTo(FriendshipStatus.Friend)
+    }
+
+    @Test
+    fun `a raise the circles law refuses fails permanently so its optimistic level rolls back`() = runTest {
+        coEvery { friendRepository.sendFriendRequest("u1", null, "CLOSE") } returns
+            NetworkResult.Failure(ApiError("not eligible", code = "RELATION_NOT_ELIGIBLE", httpStatus = 409))
+        val row = outboxRow(
+            OutboxKind.SEND_FRIEND_REQUEST,
+            targetId = "u1",
+            payload = encodedPayload(FriendRequestPayload(message = null, targetLevel = "CLOSE")),
+        )
+
+        assertThat(friendHandler(FriendshipCache()).send(row)).isEqualTo(SendResult.PermanentFailure("not eligible"))
+    }
+
+    @Test
+    fun `a row written before the level field reads back as a plain request`() = runTest {
+        coEvery { friendRepository.sendFriendRequest("u1", "salut", null) } returns
+            NetworkResult.Success(FriendRequest(id = "req-1"))
+        val row = outboxRow(OutboxKind.SEND_FRIEND_REQUEST, targetId = "u1", payload = """{"message":"salut"}""")
+
+        assertThat(friendHandler(FriendshipCache()).send(row)).isEqualTo(SendResult.Success)
+    }
+
+    @Test
     fun `a friend request with an undecodable payload fails permanently`() = runTest {
         val result = friendHandler(FriendshipCache())
             .send(outboxRow(OutboxKind.SEND_FRIEND_REQUEST, targetId = "u1", payload = "["))

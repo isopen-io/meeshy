@@ -74,6 +74,12 @@
    "reason": "Icons.Filled.SouthEast"
   },
   {
+   "symbol": "arrow.down.right.and.arrow.up.left",
+   "status": "mapped",
+   "role": "CloseFullscreen",
+   "reason": "Icons.Filled.CloseFullscreen"
+  },
+  {
    "symbol": "arrow.down.right.circle",
    "status": "mapped",
    "role": "ArrowDownRight",
@@ -278,6 +284,12 @@
    "reason": "Icons.Outlined.BookmarkBorder"
   },
   {
+   "symbol": "bookmark.fill",
+   "status": "mapped",
+   "role": "BookmarkFilled",
+   "reason": "Icons.Filled.Bookmark; variante .fill rendue en Filled"
+  },
+  {
    "symbol": "bubble.left.and.bubble.right",
    "status": "mapped",
    "role": "Forum",
@@ -312,6 +324,12 @@
    "status": "mapped",
    "role": "PhotoFilter",
    "reason": "Icons.Filled.PhotoFilter"
+  },
+  {
+   "symbol": "captions.bubble",
+   "status": "mapped",
+   "role": "Subtitles",
+   "reason": "Icons.Filled.Subtitles (outil Transcrire de l'éditeur audio, #13462)"
   },
   {
    "symbol": "cellularbars",
@@ -461,6 +479,12 @@
    "reason": "Icons.Filled.Memory; variante .fill rendue en Filled"
   },
   {
+   "symbol": "crop",
+   "status": "mapped",
+   "role": "Crop",
+   "reason": "Icons.Filled.Crop"
+  },
+  {
    "symbol": "crown.fill",
    "status": "mapped",
    "role": "Premium",
@@ -508,10 +532,22 @@
    "reason": "Icons.AutoMirrored.Filled.Article (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
   },
   {
+   "symbol": "dollarsign.circle.fill",
+   "status": "mapped",
+   "role": "MonetizationOn",
+   "reason": "Icons.Filled.MonetizationOn; variante .fill rendue en Filled (carte « Liens affiliés » de LinksHubView, symbole passé en paramètre)"
+  },
+  {
    "symbol": "dot.radiowaves.left.and.right",
    "status": "mapped",
    "role": "Sensors",
    "reason": "Icons.Filled.Sensors"
+  },
+  {
+   "symbol": "ear.fill",
+   "status": "mapped",
+   "role": "Hearing",
+   "reason": "Icons.Filled.Hearing; variante .fill rendue en Filled"
   },
   {
    "symbol": "ellipsis",
@@ -1303,6 +1339,18 @@
    "reason": "Icons.Filled.PushPin; variante .fill rendue en Filled"
   },
   {
+   "symbol": "pip.enter",
+   "status": "mapped",
+   "role": "PictureInPicture",
+   "reason": "Icons.Outlined.PictureInPictureAlt"
+  },
+  {
+   "symbol": "pip.exit",
+   "status": "mapped",
+   "role": "PictureInPicture",
+   "reason": "Icons.Outlined.PictureInPictureAlt"
+  },
+  {
    "symbol": "play.circle",
    "status": "mapped",
    "role": "PlayCircle",
@@ -1387,6 +1435,12 @@
    "reason": "Icons.Filled.FormatQuote"
   },
   {
+   "symbol": "record.circle",
+   "status": "mapped",
+   "role": "Record",
+   "reason": "Icons.Filled.FiberManualRecord ; passé par un paramètre symbol: (CallView+Recording), que l'extracteur de littéraux ne voit pas"
+  },
+  {
    "symbol": "rectangle.2.swap",
    "status": "mapped",
    "role": "SwapHorizontal",
@@ -1423,6 +1477,12 @@
    "reason": "Icons.AutoMirrored.Filled.Logout (rôle directionnel, miroité en RTL)"
   },
   {
+   "symbol": "rectangle.split.2x1",
+   "status": "mapped",
+   "role": "VerticalSplit",
+   "reason": "Icons.Filled.VerticalSplit (outil Couper de l'éditeur audio, #13462)"
+  },
+  {
    "symbol": "rectangle.stack",
    "status": "mapped",
    "role": "Layers",
@@ -1445,6 +1505,12 @@
    "status": "mapped",
    "role": "Cut",
    "reason": "Icons.Filled.ContentCut"
+  },
+  {
+   "symbol": "scribble.variable",
+   "status": "mapped",
+   "role": "Scribble",
+   "reason": "Icons.Filled.Gesture — le tracé libre de la porte Dessin (iOS ComposerRailDoor.drawing), jamais un crayon générique"
   },
   {
    "symbol": "shield",
@@ -1529,6 +1595,12 @@
    "status": "mapped",
    "role": "VolumeUp",
    "reason": "Icons.AutoMirrored.Filled.VolumeUp (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "speedometer",
+   "status": "mapped",
+   "role": "Speed",
+   "reason": "Icons.Filled.Speed (outil Vitesse de l'éditeur audio, #13462)"
   },
   {
    "symbol": "square",
@@ -1637,6 +1709,12 @@
    "status": "custom",
    "role": "StarSlash",
    "reason": "aucun équivalent Material fidèle : vecteur maison MeeshyVectorIcons.StarSlash (24 dp)"
+  },
+  {
+   "symbol": "stop.circle.fill",
+   "status": "mapped",
+   "role": "StopCircle",
+   "reason": "Icons.Filled.StopCircle ; passé par un paramètre symbol: (CallView+Recording), que l'extracteur de littéraux ne voit pas"
   },
   {
    "symbol": "stop.fill",
@@ -2008,6 +2086,10 @@
    "origin": "material",
    "directional": false
   },
+  "BookmarkFilled": {
+   "origin": "material",
+   "directional": false
+  },
   "Brightness": {
    "origin": "material",
    "directional": false
@@ -2092,6 +2174,10 @@
    "origin": "material",
    "directional": false
   },
+  "CloseFullscreen": {
+   "origin": "material",
+   "directional": false
+  },
   "Cloud": {
    "origin": "material",
    "directional": false
@@ -2105,6 +2191,10 @@
    "directional": false
   },
   "Copy": {
+   "origin": "material",
+   "directional": false
+  },
+  "Crop": {
    "origin": "material",
    "directional": false
   },
@@ -2312,6 +2402,10 @@
    "origin": "material",
    "directional": false
   },
+  "Hearing": {
+   "origin": "material",
+   "directional": false
+  },
   "Heart": {
    "origin": "material",
    "directional": false
@@ -2452,6 +2546,10 @@
    "origin": "material",
    "directional": false
   },
+  "MonetizationOn": {
+   "origin": "material",
+   "directional": false
+  },
   "MoreHorizontal": {
    "origin": "material",
    "directional": false
@@ -2528,6 +2626,10 @@
    "origin": "material",
    "directional": false
   },
+  "PictureInPicture": {
+   "origin": "material",
+   "directional": false
+  },
   "Pin": {
    "origin": "material",
    "directional": false
@@ -2569,6 +2671,10 @@
    "directional": false
   },
   "RadioUnchecked": {
+   "origin": "material",
+   "directional": false
+  },
+  "Record": {
    "origin": "material",
    "directional": false
   },
@@ -2621,6 +2727,10 @@
    "directional": false
   },
   "ScheduleFilled": {
+   "origin": "material",
+   "directional": false
+  },
+  "Scribble": {
    "origin": "material",
    "directional": false
   },
@@ -2712,6 +2822,10 @@
    "origin": "material",
    "directional": false
   },
+  "Speed": {
+   "origin": "material",
+   "directional": false
+  },
   "Star": {
    "origin": "material",
    "directional": false
@@ -2721,6 +2835,14 @@
    "directional": false
   },
   "Stop": {
+   "origin": "material",
+   "directional": false
+  },
+  "StopCircle": {
+   "origin": "material",
+   "directional": false
+  },
+  "Subtitles": {
    "origin": "material",
    "directional": false
   },
@@ -2817,6 +2939,10 @@
    "directional": false
   },
   "VerifiedUser": {
+   "origin": "material",
+   "directional": false
+  },
+  "VerticalSplit": {
    "origin": "material",
    "directional": false
   },

@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -84,7 +85,7 @@ internal fun Modifier.viewOnceRetouch(isActive: Boolean, onRetouch: () -> Unit):
  * glue that only replays those keyframes off the clock.
  */
 @Composable
-internal fun BubbleBlurReveal(
+public fun BubbleBlurReveal(
     messageId: String,
     spec: BubbleBlurRevealSpec,
     modifier: Modifier = Modifier,
@@ -163,7 +164,11 @@ internal fun BubbleBlurReveal(
         Box(
             modifier = (
                 if (concealed) {
-                    Modifier.blur(CONCEAL_BLUR_RADIUS, BlurredEdgeTreatment.Unbounded)
+                    // Le flou ne cache qu'à l'œil : tant que c'est masqué, le contenu sort
+                    // aussi de l'arbre d'accessibilité, sinon TalkBack le lirait en clair.
+                    Modifier
+                        .blur(CONCEAL_BLUR_RADIUS, BlurredEdgeTreatment.Unbounded)
+                        .clearAndSetSemantics {}
                 } else {
                     Modifier
                 }

@@ -8,7 +8,6 @@ import type { StickerPackDetail, StickerPackSummary } from '@meeshy/shared/types
 import type { PackShopAdapter } from './pack-shop';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
-import { attachmentSrc } from '@/lib/api/media-url';
 import {
   INSTALLED_PACKS_QUERY_KEY,
   PACKS_STALE_TIME,
@@ -28,6 +27,7 @@ import { meeStickersOfPack } from '@/lib/mee/catalog';
 import { renderMeeSticker } from '@/lib/mee/render';
 import { isMeeBuiltinPack } from '@/lib/mee/types';
 import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
+import { stickerPackCoverSrc } from '@/lib/sticker-packs/src';
 
 /**
  * **LA BOUTIQUE DE STICKERS** (#9141) — le dernier onglet de la feuille.
@@ -230,9 +230,10 @@ function PackCover({ pack }: { readonly pack: StickerPackSummary }) {
       <span aria-hidden className={box} dangerouslySetInnerHTML={{ __html: renderMeeSticker(first, { uid: `shop-${pack.slug}`, animated: false }) }} />
     );
   }
-  return pack.coverUrl === null ? (
+  const cover = stickerPackCoverSrc(pack);
+  return cover === null ? (
     <span aria-hidden className={box} style={{ backgroundColor: 'var(--color-ios-fill)' }} />
   ) : (
-    <img src={attachmentSrc(pack.coverUrl)} alt="" loading="lazy" decoding="async" crossOrigin={mediaImageCrossOrigin(attachmentSrc(pack.coverUrl))} className={`${box} object-contain`} />
+    <img src={cover} alt="" loading="lazy" decoding="async" crossOrigin={mediaImageCrossOrigin(cover)} className={`${box} object-contain`} />
   );
 }

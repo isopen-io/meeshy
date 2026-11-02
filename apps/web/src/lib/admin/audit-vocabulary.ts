@@ -159,9 +159,14 @@ export const AUDIT_ACTIONS = {
   LENS_PACK_APPROVE_NOT_APPLIED: entry('packs', 'warning', 'neutral'),
   LENS_PACK_REJECT: entry('packs', 'prohibit', 'warning'),
   LENS_PACK_REJECT_NOT_APPLIED: entry('packs', 'warning', 'neutral'),
+  PARTNER_PROFILE_VERIFY: entry('packs', 'checkCircle', 'success'),
+  PARTNER_PROFILE_REVOKE: entry('packs', 'prohibit', 'warning'),
   LENS_PACK_REJECTION_REPLACED: entry('packs', 'pencilSimple', 'neutral'),
   LENS_PACK_WITHDRAW: entry('packs', 'trash', 'danger'),
   LENS_PACK_WITHDRAW_NOT_APPLIED: entry('packs', 'warning', 'neutral'),
+  LENS_PACK_RESTORE: entry('packs', 'arrowClockwise', 'success'),
+  LENS_PACK_RESTORE_APPLIED: entry('packs', 'checkCircle', 'success'),
+  LENS_PACK_RESTORE_NOT_APPLIED: entry('packs', 'warning', 'neutral'),
 } as const satisfies Readonly<Record<string, ActionEntry>>;
 
 export type AuditActionCode = keyof typeof AUDIT_ACTIONS;

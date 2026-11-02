@@ -284,13 +284,23 @@ struct ConversationPreviewView: View {
                     state.messages,
                     translations: state.snapshot?.translations ?? [:],
                     served: state.snapshot?.served ?? [:],
-                    phase: state.phase
+                    phase: state.phase,
+                    unencrypted: state.snapshot?.unencrypted ?? []
                 )
             }
         } else if ConversationLockManager.shared.isLocked(conversation.id) {
-            recentMessages([], translations: [:], served: [:], phase: .sealed)
+            recentMessages([], translations: [:], served: [:], phase: .sealed, unencrypted: [])
         } else {
-            recentMessages(cachedMessages, translations: [:], served: [:], phase: cachedMessages.isEmpty ? .empty : .loaded)
+            recentMessages(
+                cachedMessages, translations: [:], served: [:],
+                phase: cachedMessages.isEmpty ? .empty : .loaded,
+                unencrypted: ConversationPreviewRenderer.unencryptedIds(
+                    of: cachedMessages,
+                    regime: EndToEndRegimeMemory.shared.resolve(
+                        conversationId: conversation.id, served: EndToEndRegime(conversation: conversation)
+                    )
+                )
+            )
         }
     }
 
@@ -298,7 +308,8 @@ struct ConversationPreviewView: View {
         _ messages: [Message],
         translations: [String: [MessageTranslation]],
         served: [String: MessageTranslation],
-        phase: ConversationPreviewPhase
+        phase: ConversationPreviewPhase,
+        unencrypted: Set<String>
     ) -> some View {
         ConversationRecentMessagesPreview(
             messages: messages,
@@ -312,7 +323,8 @@ struct ConversationPreviewView: View {
             isDark: isDark,
             currentUserId: AuthManager.shared.currentUser?.id ?? "",
             cardWidth: cardWidth,
-            backdrop: ConversationPreviewRenderer.backdrop(for: conversation, computedAccentHex: accentColor, isDark: isDark)
+            backdrop: ConversationPreviewRenderer.backdrop(for: conversation, computedAccentHex: accentColor, isDark: isDark),
+            unencrypted: unencrypted
         )
     }
 

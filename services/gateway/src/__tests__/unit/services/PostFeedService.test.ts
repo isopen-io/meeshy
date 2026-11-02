@@ -135,6 +135,7 @@ beforeEach(() => {
       updateManyAndReturn: jest.fn(),
       fields: {} as any,
     } as unknown as PrismaClient['friendRequest'],
+    userRelation: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) } as unknown as PrismaClient['userRelation'],
     participant: {
       findMany: mockParticipantFindMany,
       findFirst: jest.fn(),

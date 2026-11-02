@@ -1,0 +1,83 @@
+<style>
+.row{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;margin:12px 0 28px}
+.cap{font-size:13px;color:#555;margin-top:8px;max-width:250px;line-height:1.35}
+.cap b{color:#222}
+.phone{width:240px;height:494px;border-radius:30px;background:#111;padding:8px;box-shadow:0 6px 24px rgba(0,0,0,.25);position:relative}
+.screen{width:100%;height:100%;border-radius:23px;overflow:hidden;position:relative;background:#0b0b14}
+.scene{position:absolute;inset:0;background:linear-gradient(#0ea5e9,#0b3b57 55%,#02060a)}
+.txt{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);color:#fff;font:800 19px system-ui;padding:4px 10px;border-radius:8px;background:rgba(0,0,0,.35);white-space:nowrap}
+.stk{position:absolute;left:56%;top:50%;font-size:34px}
+.ic{width:34px;height:34px;border-radius:17px;background:rgba(0,0,0,.38);backdrop-filter:blur(6px);color:#fff;display:flex;align-items:center;justify-content:center;font:600 14px system-ui}
+.top{position:absolute;top:10px;left:10px;right:10px;display:flex;justify-content:space-between}
+.tools{position:absolute;right:10px;top:60px;display:flex;flex-direction:column;gap:10px}
+.bottom{position:absolute;left:10px;right:10px;bottom:12px;display:flex;gap:8px}
+.aud{height:38px;border-radius:19px;background:rgba(0,0,0,.45);color:#fff;font:600 12px system-ui;display:flex;align-items:center;padding:0 12px}
+.pub{flex:1;height:38px;border-radius:19px;background:#6366f1;color:#fff;font:700 13px system-ui;display:flex;align-items:center;justify-content:space-between;padding:0 6px 0 16px}
+.chev{width:28px;height:28px;border-radius:14px;background:rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;font-size:12px}
+.kbd{position:absolute;left:0;right:0;bottom:0;height:178px;background:#d1d5db;display:grid;grid-template-columns:repeat(10,1fr);gap:4px;padding:8px 5px}
+.kbd i{background:#fff;border-radius:4px;height:30px}
+.bar{position:absolute;left:0;right:0;bottom:178px;height:44px;background:#1e1b4b;display:flex;align-items:center;justify-content:space-around;color:#fff;font:600 13px system-ui}
+.bar span.ok{background:#6366f1;border-radius:14px;padding:5px 12px}
+.mini{position:absolute;left:50%;transform:translateX(-50%);top:14px;width:142px;height:252px;border-radius:12px;overflow:hidden}
+.sel{outline:2px dashed #fff;outline-offset:3px}
+.abar{position:absolute;left:10px;right:10px;bottom:60px;height:44px;border-radius:22px;background:rgba(15,15,30,.72);backdrop-filter:blur(8px);display:flex;justify-content:space-around;align-items:center;color:#fff;font:600 11px system-ui}
+.abar div{display:flex;flex-direction:column;align-items:center;gap:1px}
+.tab{width:560px;height:350px;border-radius:22px;background:#111;padding:8px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.tscreen{width:100%;height:100%;border-radius:15px;background:#1e1b4b;position:relative;overflow:hidden;display:flex}
+.rail{width:112px;padding:14px 10px;display:flex;flex-direction:column;gap:8px;color:#e0e7ff;font:600 11px system-ui}
+.rail div{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:10px}
+.rail .on{background:#4338ca}
+.tcenter{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.tscene{width:168px;height:298px;border-radius:14px;position:relative;overflow:hidden}
+</style>
+
+<h2>Compositeur : la scène d'abord, les contrôles posés dessus</h2>
+<p class="subtitle">Écran du S8 (360 × 740 dp) en haut, grand écran (tablette, pliable ouvert) en bas. Touchez la version qui vous convient, puis répondez dans le terminal.</p>
+
+<div class="cards">
+<div class="card" data-choice="petit-ecran" onclick="toggleSelect(this)">
+<div class="card-image" style="background:#f4f4f8;padding:16px">
+<div class="row">
+
+<div><div class="phone"><div class="screen">
+  <div class="scene"></div><div class="txt">Bonjour Meeshy</div><div class="stk">😎</div>
+  <div class="top"><div class="ic">✕</div><div style="display:flex;gap:8px"><div class="ic">↶</div><div class="ic">↷</div></div></div>
+  <div class="tools"><div class="ic">Aa</div><div class="ic">🖼</div><div class="ic">☺</div><div class="ic">♪</div><div class="ic">✎</div><div class="ic">⋯</div></div>
+  <div class="bottom"><div class="aud">🌐 Public</div><div class="pub">Publier la story<span class="chev">▾</span></div></div>
+</div></div>
+<div class="cap"><b>1. Au repos.</b> La scène occupe tout l'écran. Six boutons ronds sont posés dessus : texte, média, sticker, son, dessin et « ⋯ », qui ouvre le reste (fond, durée, animation). Le chevron ▾ de « Publier » permet de choisir story, post ou réel.</div></div>
+
+<div><div class="phone"><div class="screen" style="background:#0b0b14">
+  <div class="mini"><div class="scene"></div><div class="txt" style="font-size:12px">Bonjour Meeshy|</div><div class="stk" style="font-size:20px;top:52%">😎</div></div>
+  <div class="bar"><span>Aa</span><span>●</span><span>≡</span><span>▣</span><span class="ok">OK</span></div>
+  <div class="kbd"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+</div></div>
+<div class="cap"><b>2. On écrit.</b> La scène se réduit mais reste entière, et on lit ce qu'on tape. Une barre fine est collée au clavier : police, couleur, alignement, fond du texte et OK. Toucher une icône remplace le clavier par ses choix.</div></div>
+
+<div><div class="phone"><div class="screen">
+  <div class="scene"></div><div class="txt">Bonjour Meeshy</div><div class="stk sel">😎</div>
+  <div class="top"><div class="ic">✕</div><div style="display:flex;gap:8px"><div class="ic">↶</div><div class="ic">↷</div></div></div>
+  <div class="abar"><div>✎<span>Modifier</span></div><div>⇅<span>Ordre</span></div><div>⧉<span>Dupliquer</span></div><div>◷<span>Temps</span></div><div>🗑<span>Retirer</span></div></div>
+  <div class="bottom"><div class="aud">🌐 Public</div><div class="pub">Publier la story<span class="chev">▾</span></div></div>
+</div></div>
+<div class="cap"><b>3. Un élément sélectionné.</b> Les outils se retirent et une seule barre d'actions apparaît sur la scène, avec ses libellés. Toucher la scène à vide la referme.</div></div>
+
+</div></div>
+<div class="card-body"><h3>Petit écran : tout sur la scène</h3><p>Aucun rail, aucun panneau qui pousse la scène, aucun compteur.</p></div>
+</div>
+
+<div class="card" data-choice="grand-ecran" onclick="toggleSelect(this)">
+<div class="card-image" style="background:#f4f4f8;padding:16px">
+<div class="tab"><div class="tscreen">
+  <div class="rail"><div>✕ Fermer</div><div class="on">Aa Texte</div><div>🖼 Média</div><div>☺ Sticker</div><div>♪ Son</div><div>✎ Dessin</div><div>▦ Fond</div></div>
+  <div class="tcenter">
+    <div class="tscene"><div class="scene"></div><div class="txt" style="font-size:14px">Bonjour Meeshy</div><div class="stk sel" style="font-size:26px">😎</div></div>
+    <div style="display:flex;gap:8px;width:300px"><div class="aud">🌐 Public</div><div class="pub">Publier la story<span class="chev">▾</span></div></div>
+  </div>
+  <div class="rail" style="text-align:left"><div style="opacity:.6">SÉLECTION</div><div>✎ Modifier</div><div>⇅ Ordre</div><div>⧉ Dupliquer</div><div>◷ Temps</div><div>🗑 Retirer</div><div style="margin-top:auto">↶ ↷</div></div>
+</div></div>
+<div class="cap" style="max-width:560px">La place libre autour de la scène 9:16 accueille deux rails libellés : à gauche ce qu'on ajoute, à droite les actions de l'élément sélectionné (le rail droit reste vide sans sélection). Le passage d'une disposition à l'autre se fait automatiquement, selon la place qui reste à côté de la scène, jamais selon le modèle d'appareil.</div>
+</div>
+<div class="card-body"><h3>Grand écran : rails libellés autour de la scène</h3><p>Même vocabulaire et mêmes actions que sur le petit écran, seule la place change.</p></div>
+</div>
+</div>

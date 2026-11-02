@@ -45,12 +45,35 @@ nonisolated enum ForwardRefusalReason: Equatable, CaseIterable, Sendable {
     case encryptedSource
     /// La pièce choisie n'est pas du message (`forwarded-attachment-not-in-source`).
     case attachmentNotInSource
+    /// La DESTINATION est chiffrée de bout en bout (`E2EE_PLAINTEXT_REFUSED`) :
+    /// le serveur n'y reçoit aucun clair, et l'appareil ne sait pas encore y
+    /// sceller une pièce ni une copie (#10789, #12978).
+    case encryptedDestination
 
     /// Ce que la loi de sortie refuse pour ce message, ou `nil` s'il se
     /// transfère. Un flouté se transfère (D8).
     static func local(for message: Message) -> ForwardRefusalReason? {
         guard case .refused(let refusal) = message.exitOffer.law.forward else { return nil }
         return refusal == .viewOnce ? .viewOnce : .afterRead
+    }
+
+    /// La raison d'un refus du serveur, quel que soit le type que le client lève :
+    /// le vrai `APIClient` lève `MeeshyError` (`.server`, `.rejected`), jamais
+    /// `APIError` (#12978). Le code du refus E2EE se lit AVANT la phrase, qui dit
+    /// « chiffrée » et se lirait sinon comme une source chiffrée.
+    static func server(error: any Error) -> ForwardRefusalReason? {
+        if EndToEndSendGate.isServerPlaintextRefusal(error) { return .encryptedDestination }
+        return server(message: serverMessage(of: error))
+    }
+
+    /// La phrase que le serveur a jointe à son refus, ou `nil`.
+    static func serverMessage(of error: any Error) -> String? {
+        switch error {
+        case APIError.serverError(_, let message): return message
+        case MeeshyError.server(_, let message): return message
+        case MeeshyError.rejected(let rejection): return rejection.message
+        default: return nil
+        }
     }
 
     /// La raison que porte la phrase de refus du serveur, ou `nil` si ce n'en est pas une.
@@ -81,6 +104,9 @@ nonisolated enum ForwardRefusalReason: Equatable, CaseIterable, Sendable {
         case .attachmentNotInSource:
             return String(localized: "forward.refused.attachment-not-in-source",
                           defaultValue: "Cette pièce n’appartient plus au message.", bundle: .main)
+        case .encryptedDestination:
+            return String(localized: "share.refused.encrypted-destination",
+                          defaultValue: "Cette conversation est chiffrée : le partage n’y envoie rien pour l’instant.", bundle: .main)
         }
     }
 }
@@ -146,6 +172,9 @@ final class MessageForwardService: MessageForwardServiceProviding {
     private let isOnline: () -> Bool
     private let conversationCreator: ConversationCreating
     private let authManager: AuthManaging
+    /// La loi du fil, appliquée à la cible (#12985) : mémoire du compte, mode
+    /// servi, ligne et fil du cache.
+    private let destinationGuard: EndToEndDestinationGuard
     /// La clé de dédoublonnage d'un transfert (`message→cible`) et l'identifiant
     /// client qu'un nouvel essai doit REJOUER. Retirée à l'envoi et au refus ;
     /// gardée après un échec réseau ou une mise en file hors ligne — c'est
@@ -160,18 +189,34 @@ final class MessageForwardService: MessageForwardServiceProviding {
         queue: OfflineMessageQueueing = OfflineQueue.shared,
         isOnline: @escaping () -> Bool = { NetworkMonitor.shared.isOnline },
         conversationCreator: ConversationCreating = ConversationCreator(),
-        authManager: AuthManaging = AuthManager.shared
+        authManager: AuthManaging = AuthManager.shared,
+        destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard()
     ) {
         self.api = api
         self.queue = queue
         self.isOnline = isOnline
         self.conversationCreator = conversationCreator
         self.authManager = authManager
+        self.destinationGuard = destinationGuard
     }
 
     func forward(message: Message, sourceConversationId: String?, to targetConversationId: String, chosenDurationSeconds: Int?, forwardedAttachmentIds: [String]?) async -> ForwardOutcome {
+        await forward(message: message, sourceConversationId: sourceConversationId, to: targetConversationId, served: [],
+                      chosenDurationSeconds: chosenDurationSeconds, forwardedAttachmentIds: forwardedAttachmentIds)
+    }
+
+    /// **Une cible chiffrée de bout en bout ne reçoit jamais de clair** (#12985).
+    /// Un transfert porte sa source (`forwardedFromId`) et son texte : rien
+    /// que l'appareil sache sceller. Vers une cible que la garde dit chiffrée
+    /// — servie telle, ou vue telle par ce compte —, il est refusé avant toute
+    /// requête et ne se met pas en file.
+    private func forward(message: Message, sourceConversationId: String?, to targetConversationId: String, served: [String?],
+                         chosenDurationSeconds: Int?, forwardedAttachmentIds: [String]?) async -> ForwardOutcome {
         if let refusal = ForwardRefusalReason.local(for: message) {
             return .failed(reason: refusal.explanation)
+        }
+        if await destinationGuard.seals(targetConversationId, served: served) {
+            return .failed(reason: ForwardRefusalReason.encryptedDestination.explanation)
         }
         let ephemeralDuration = message.contentExitLaw.forward.requestedDuration(chosen: chosenDurationSeconds)
         let pieces = forwardedAttachmentIds.flatMap { $0.isEmpty ? nil : $0 }
@@ -248,6 +293,7 @@ final class MessageForwardService: MessageForwardServiceProviding {
         }
         if let conversationId = target.conversationId {
             return await forward(message: message, sourceConversationId: sourceConversationId, to: conversationId,
+                                 served: [target.isEncrypted ? E2EEWire.mode : nil],
                                  chosenDurationSeconds: chosenDurationSeconds, forwardedAttachmentIds: forwardedAttachmentIds)
         }
         guard let userId = target.userId else {
@@ -262,6 +308,7 @@ final class MessageForwardService: MessageForwardServiceProviding {
                 currentUserId: authManager.currentUser?.id ?? ""
             )
             return await forward(message: message, sourceConversationId: sourceConversationId, to: conversation.id,
+                                 served: [conversation.encryptionMode],
                                  chosenDurationSeconds: chosenDurationSeconds, forwardedAttachmentIds: forwardedAttachmentIds)
         } catch {
             return .failed(reason: Self.failureReason(for: error))
@@ -269,8 +316,7 @@ final class MessageForwardService: MessageForwardServiceProviding {
     }
 
     private static func refusal(in error: Error) -> ForwardRefusalReason? {
-        guard case let APIError.serverError(_, serverMessage) = error else { return nil }
-        return ForwardRefusalReason.server(message: serverMessage)
+        ForwardRefusalReason.server(error: error)
     }
 
     private static func failureReason(for error: Error) -> String {

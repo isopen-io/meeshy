@@ -8,11 +8,8 @@ import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationFilters
 import me.meeshy.sdk.model.MeeshyUser
-import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.StoryGroup
-import me.meeshy.sdk.model.UserPresence
-import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.StoryRingState
@@ -21,7 +18,12 @@ data class ConversationListUiState(
     val conversations: List<ApiConversation> = emptyList(),
     val isSyncing: Boolean = false,
     val isUserRefreshing: Boolean = false,
-    val showSkeleton: Boolean = false,
+    /**
+     * Vrai tant que le cache n'a pas répondu : l'état initial est « on charge », jamais « aucune
+     * conversation » — sinon un écran rouvert (liste recréée au retour d'un écran ouvert à froid)
+     * montrait un instant « Aucune conversation » par-dessus des rangées en cache (#13392).
+     */
+    val showSkeleton: Boolean = true,
     val errorMessage: String? = null,
     val connection: SocketConnectionState = SocketConnectionState.DISCONNECTED,
     /**
@@ -48,6 +50,11 @@ data class ConversationListUiState(
     val isSearchActive: Boolean = false,
     val drafts: Map<String, ConversationDraft> = emptyMap(),
     /**
+     * Conversations masquées pour soi dont la purge serveur n'est pas encore revenue : la rangée tombe
+     * à l'instant du geste (iOS `.deleteForUser`), revient si la passerelle refuse.
+     */
+    val pendingRemovals: Set<String> = emptySet(),
+    /**
      * The user's conversation-category catalogue (parity iOS `userCategories`), the
      * section source consumed by [ConversationSections.of]. Empty until the tracked
      * corpus-hydration slice populates it (cache-first + revalidate); an empty
@@ -61,14 +68,6 @@ data class ConversationListUiState(
      * flight); present-but-empty = loaded, genuinely no cached messages.
      */
     val previewMessages: Map<String, List<LocalMessage>> = emptyMap(),
-    /**
-     * Live `user:status`/`presence:snapshot` frames, keyed by userId — see
-     * [ConversationListViewModel.observePresence]. A userId absent here has no
-     * live presence data yet (a genuinely cold cache, not an error): `ApiConversation
-     * .participants` carries no `isOnline`/`lastActiveAt` fields at all, so there is
-     * no REST-fetched fallback to fall back to, unlike the Contacts roster.
-     */
-    val presenceByUserId: Map<String, UserStatusEvent> = emptyMap(),
     /**
      * Live mirror of [me.meeshy.sdk.lock.ConversationLockStore.lockedConversationIdsFlow] —
      * port of iOS `ConversationListView` observing `ConversationLockManager` directly so a
@@ -177,19 +176,6 @@ data class ConversationListUiState(
         if (isLocked(conversationId)) null else previewMessages[conversationId]
 
     /**
-     * The live presence state for [conversation]'s other participant, or `null` for a
-     * group/community/channel/bot conversation, or when nothing has arrived for them yet.
-     * A peer typing here is ALWAYS online, whatever the last presence frame said (product
-     * rule; parity iOS `LentilleConversationRow`: `typingUsername != nil ? .online`).
-     */
-    fun presenceStateFor(conversation: ApiConversation, nowEpochMillis: Long): PresenceState? {
-        val otherId = conversation.otherParticipantUserId(currentUserId) ?: return null
-        if (typers[conversation.id]?.containsKey(otherId) == true) return PresenceState.ONLINE
-        val event = presenceByUserId[otherId] ?: return null
-        return UserPresence(isOnline = event.isOnline, lastActiveAt = event.lastActiveAt).state(nowEpochMillis)
-    }
-
-    /**
      * The peer's story-ring state on [conversation]'s row avatar (parity iOS
      * `ConversationListView.storyRingState(for:)`), derived from the live
      * [storyGroups] mirror by [ConversationStoryRing]. `StoryRingState.None` for
@@ -237,13 +223,17 @@ internal fun CacheResult<List<ApiConversation>>.rawListOr(
  * Re-derives the visible (filtered + searched) list from the authoritative [raw]
  * cache list, applying the active filter, search query and current user identity.
  */
-internal fun ConversationListUiState.withVisible(raw: List<ApiConversation>): ConversationListUiState =
-    copy(
+internal fun ConversationListUiState.withVisible(raw: List<ApiConversation>): ConversationListUiState {
+    val stillPending = if (pendingRemovals.isEmpty()) pendingRemovals else raw.mapTo(HashSet()) { it.id }.intersect(pendingRemovals)
+    val kept = if (stillPending.isEmpty()) raw else raw.filterNot { it.id in stillPending }
+    return copy(
+        pendingRemovals = stillPending,
         conversations = DraftAwareOrdering.apply(
-            ConversationFilters.apply(raw, selectedFilter, searchText, currentUserId),
+            ConversationFilters.apply(kept, selectedFilter, searchText, currentUserId),
             drafts,
         ),
     )
+}
 
 /**
  * Maps a [CacheResult]'s SWR flags onto the screen state — skeleton only on a

@@ -30,10 +30,12 @@ internal fun MessageDeleteConfirmationDialog(
     onDeleteForEveryone: () -> Unit,
     onDeleteForMe: () -> Unit,
     onDismiss: () -> Unit,
+    /** Une sélection de plusieurs messages dit combien partent (iOS `MessageDeleteConfirmation.title(count:)`). */
+    title: String = stringResource(R.string.chat_delete_confirm_title),
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.chat_delete_confirm_title)) },
+        title = { Text(title) },
         text = { Text(stringResource(R.string.chat_delete_confirm_hint)) },
         confirmButton = {
             Column(horizontalAlignment = Alignment.End) {

@@ -148,6 +148,9 @@ public struct TimelineScrubArea<TracksContent: View>: View {
                             geometry: geometry,
                             isDark: isDark,
                             height: rulerHeight,
+                            visibleWindow: RulerView.visibleWindow(
+                                scrollX: max(0, scrollX - Self.laneLabelWidth - Self.horizontalPadding),
+                                viewportWidth: viewportWidth),
                             onTapTime: onScrub,
                             onScrubBegan: onScrubBegan,
                             onScrubEnded: onScrubEnded
@@ -157,6 +160,7 @@ public struct TimelineScrubArea<TracksContent: View>: View {
                         .padding(.leading, Self.laneLabelWidth)
                         tracks(laneWidth)
                     }
+                    .timelineVisibleWindow(scrollX: max(0, scrollX - Self.horizontalPadding), viewportWidth: viewportWidth)
                     .padding(.horizontal, Self.horizontalPadding)
                     .overlay(alignment: .topLeading) { snapGuideOverlay }
                     .overlay(alignment: .topLeading) { playheadOverlay }

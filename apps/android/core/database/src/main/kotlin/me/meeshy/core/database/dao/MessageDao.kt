@@ -20,6 +20,25 @@ public interface MessageDao {
     @Query("SELECT * FROM messages WHERE id = :id")
     public suspend fun find(id: String): MessageEntity?
 
+    /** Les lignes du fil dont la charge nomme [postId] : candidates à une citation retirée (#13296). */
+    @Query("SELECT * FROM messages WHERE conversationId = :conversationId AND payload LIKE '%' || :postId || '%'")
+    public suspend fun mentioning(conversationId: String, postId: String): List<MessageEntity>
+
+    /**
+     * #13792 — parmi les [window] lignes les plus RÉCENTES du fil, celles qui PEUVENT dire le bout en bout (drapeau chiffré,
+     * ou « e2ee » dans la charge : mode du message, d'une pièce, avis d'activation, lignes non encore rétro-remplies
+     * comprises). Le filtre de texte ne court que sur la fenêtre, jamais sur tout l'historique : la sous-requête ne trie que
+     * des identifiants, par l'index `(conversationId, createdAt)`. Un pré-filtre : la loi se lit sur la charge décodée
+     * (`EndToEndRegimeMemory.cachedThreadSeals`). Les avis de désactivation n'y sont pas lus : comme iOS et le web, aucun
+     * avis ne rouvre (#12949, #13821), et un serveur compromis ne peut pas rouvrir le clair par un avis.
+     */
+    @Query(
+        "SELECT * FROM messages WHERE id IN (" +
+            "SELECT id FROM messages WHERE conversationId = :conversationId ORDER BY createdAt DESC LIMIT :window) " +
+            "AND (isEncrypted = 1 OR payload LIKE '%e2ee%' OR payload LIKE '%\"isEncrypted\":true%')",
+    )
+    public suspend fun endToEndCandidates(conversationId: String, window: Int): List<MessageEntity>
+
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId")
     public suspend fun listForConversation(conversationId: String): List<MessageEntity>
 
@@ -147,11 +166,19 @@ public interface MessageDao {
 /**
  * Upserts server-truth rows without erasing what only this device knows (retry counter, last
  * error, opened view-once, change version). Call it inside the transaction that writes the page.
+ * The message ingestion pipeline (`MessageIngestPipeline`) goes further and skips unchanged rows.
  */
 public suspend fun MessageDao.upsertKeepingLocal(rows: List<MessageEntity>) {
     if (rows.isEmpty()) return
     val previous = rows.map { it.id }.chunked(ID_CHUNK).flatMap { findAll(it) }.associateBy { it.id }
     upsertAll(rows.map { it.carryingLocalColumnsOf(previous[it.id]) })
 }
+
+/**
+ * Whether this row stores exactly what [other] stores, ignoring the bookkeeping that every write
+ * moves (`cachedAt`, `changeVersion`) — the test that decides whether an upsert is a real change.
+ */
+public fun MessageEntity.sameStoredContentAs(other: MessageEntity): Boolean =
+    copy(cachedAt = other.cachedAt, changeVersion = other.changeVersion) == other
 
 private const val ID_CHUNK = 500

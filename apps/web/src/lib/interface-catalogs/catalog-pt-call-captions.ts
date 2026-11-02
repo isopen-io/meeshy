@@ -15,6 +15,7 @@ const ptCallCaptions = {
   'callCaptions.listening': 'A sua voz está a ser transcrita',
   'callCaptions.unsupported': 'A sua voz não é transcrita neste dispositivo: você lê os outros',
   'callCaptions.denied': 'Reconhecimento de voz recusado: você lê os outros',
+  'callCaptions.sealed': 'Legendas indisponíveis: esta conversa é encriptada de ponta a ponta, ou não foi possível verificar a sua encriptação',
   'callCaptions.journal.title': 'Registo da chamada',
   'callCaptions.participant': 'Participante',
   'callTranscript.show': 'Transcrição',

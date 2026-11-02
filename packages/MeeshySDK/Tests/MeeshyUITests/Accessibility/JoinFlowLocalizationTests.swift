@@ -95,7 +95,7 @@ final class JoinFlowLocalizationTests: XCTestCase {
         XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.linkNotFound", defaultValue: "Ce lien de conversation est introuvable", bundle: bundle)"#))
         XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.unknown", defaultValue: "Erreur inconnue", bundle: bundle)"#))
         XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.loadFailed", defaultValue: "Impossible de charger les informations du lien", bundle: bundle)"#))
-        XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.tooManyUsers", defaultValue: "Trop d'utilisateurs connectes", bundle: bundle)"#))
+        XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.tooManyUsers", defaultValue: "Trop d'utilisateurs connectés", bundle: bundle)"#))
         XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.joinFailed", defaultValue: "Erreur lors de la connexion", bundle: bundle)"#))
         XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.unexpected", defaultValue: "Erreur inattendue", bundle: bundle)"#))
 

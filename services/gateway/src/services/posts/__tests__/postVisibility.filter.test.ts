@@ -16,8 +16,8 @@ import { matchesMongoWhere, type MongoDocument } from '../../../__tests__/helper
 describe('buildPostVisibilityOrFilter (G5 canonical shape)', () => {
   const filter = buildPostVisibilityOrFilter('viewer-1', ['friend-a', 'friend-b'], ['co-member-x']);
 
-  it('produces the 6 canonical branches in order', () => {
-    expect(filter.OR).toHaveLength(6);
+  it('produces the 6 canonical branches in order, then the 3 circle branches (empty without circles)', () => {
+    expect(filter.OR).toHaveLength(9);
     expect(filter.OR[0]).toEqual({ authorId: 'viewer-1' });
     expect(filter.OR[1]).toEqual({ visibility: PostVisibility.PUBLIC });
     expect(filter.OR[2]).toEqual({
@@ -37,6 +37,24 @@ describe('buildPostVisibilityOrFilter (G5 canonical shape)', () => {
       visibility: PostVisibility.ONLY,
       visibilityUserIds: { has: 'viewer-1' },
     });
+    expect(filter.OR.slice(6)).toEqual([
+      { visibility: PostVisibility.ACQUAINTANCES, authorId: { in: [] } },
+      { visibility: PostVisibility.CLOSE, authorId: { in: [] } },
+      { visibility: PostVisibility.BLOOD, authorId: { in: [] } },
+    ]);
+  });
+
+  it('serves each circle branch from its own list of authors', () => {
+    const withCircles = buildPostVisibilityOrFilter('viewer-1', [], [], [], {
+      acquaintance: ['a', 'c', 'b'],
+      close: ['c', 'b'],
+      blood: ['b'],
+    });
+    expect(withCircles.OR.slice(6)).toEqual([
+      { visibility: PostVisibility.ACQUAINTANCES, authorId: { in: ['a', 'c', 'b'] } },
+      { visibility: PostVisibility.CLOSE, authorId: { in: ['c', 'b'] } },
+      { visibility: PostVisibility.BLOOD, authorId: { in: ['b'] } },
+    ]);
   });
 
   it('defaults community co-members to an empty audience', () => {

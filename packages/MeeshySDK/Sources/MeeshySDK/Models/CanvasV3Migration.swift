@@ -549,6 +549,7 @@ public extension CanvasV3 {
         // de slide, posé plus loin sur le même objet.
         if !media.isBackground, let filter = nonEmpty(media.filter) { payload["filter"] = .string(filter) }
         if let adjustments = media.adjustments?.canvasPayload { payload["adjustments"] = adjustments } // #9175
+        if let look = media.look?.canvasPayload { payload["look"] = look } // #13840 — auteur seulement
         if let duration = media.duration { payload["duration"] = .number(duration) }
         // **La clé sort quand la MESURE existe, pas quand la valeur diffère de 1**
         // — le test `!= 1` interrogerait la PROJECTION

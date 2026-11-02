@@ -494,4 +494,17 @@ class CallSignalMapperTest {
     fun `mediaToggle is inert on malformed JSON rather than crashing`() {
         assertThat(CallSignalMapper.mediaToggle("not-json-at-all")).isNull()
     }
+
+    // --- call:ice-servers-refreshed ----------------------------------------
+
+    @Test
+    fun `a TURN refresh keeps its call and its lifetime, a malformed frame is dropped`() {
+        val refresh = CallSignalMapper.iceServersRefreshed(
+            """{"callId":"c1","iceServers":[{"urls":"turn:relay","username":"u","credential":"p"}],"ttl":3600}""",
+        )
+        assertThat(refresh?.callId).isEqualTo("c1")
+        assertThat(refresh?.ttl).isEqualTo(3600)
+        assertThat(refresh?.iceServers?.single()?.username).isEqualTo("u")
+        assertThat(CallSignalMapper.iceServersRefreshed("not json")).isNull()
+    }
 }

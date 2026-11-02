@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:profile": {
+      "resDir": "feature/profile/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "profile.section.identity",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.section.contact",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.section.languages",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.section.stats",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.section.requests",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.section.member_since",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.email",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.phone",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.verified",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.not_verified",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.username",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.bio.placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.avatar.edit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.language.primary",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.language.primary.subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.language.regional",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.language.custom",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.language.choose",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.language.none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.stats.messages",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.stats.conversations",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.stats.friends",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.stats.a11y.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.friend_requests",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.progression.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.progression.subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.progression.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.decor.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.decor.subtitle",
+          "status": "adopted"
+        },
+        {
+          "androidName": "profile_own_value_missing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_own_friend_requests_pending",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

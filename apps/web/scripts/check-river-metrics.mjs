@@ -26,7 +26,7 @@ import { readFileSync } from 'node:fs';
 
 const ROOT = new URL('../../..', import.meta.url).pathname;
 const TOKENS_PATH = `${ROOT}packages/shared/design/lentille-tokens.json`;
-const SWIFT_PATH = `${ROOT}apps/ios/Meeshy/Features/Main/Riviere/Core/RiverMetrics.swift`;
+const SWIFT_PATH = `${ROOT}apps/ios/Meeshy/Features/River/Core/RiverMetrics.swift`;
 const TS_PATH = `${ROOT}apps/web/src/lib/river/metrics.ts`;
 const COLUMNS_PATH = `${ROOT}apps/web/src/lib/river/columns.ts`;
 const FOCUS_PATH = `${ROOT}apps/web/src/lib/river/focus.ts`;

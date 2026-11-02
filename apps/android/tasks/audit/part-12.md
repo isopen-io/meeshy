@@ -4,7 +4,7 @@ Scope: 17 files from `apps/ios/Meeshy/Features/Main/Views/` — story viewer (co
 
 ---
 
-## apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
+## apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
 
 Purpose: Largest extension of the story viewer — text/media/filter rendering, gestures, navigation, the display-link progress timer, comments, reactions, and the comments-overlay sub-view. ~1960 lines.
 
@@ -30,7 +30,7 @@ Dependencies: `StoryViewModel`, `PostService`, `APIClient`, `CacheCoordinator`, 
 
 Android-port note: `CADisplayLink` → `Choreographer.FrameCallback` or a Compose `withInfiniteAnimationFrameMillis` loop; the pause-aware accumulator pattern ports directly. Drag axis-lock → `pointerInput` with a custom axis detector. Cross-dissolve → `AnimatedContent`/`Crossfade` with a kept outgoing layer. Comments overlay → `ModalBottomSheet` with `LazyColumn`. The `shouldPauseTimer` aggregate predicate is good design — keep it.
 
-## apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift
+## apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift
 
 Purpose: Extracted real-struct views for the story viewer's right action sidebar and top header (broken out of the viewer's opaque type to dodge a type-metadata crash).
 
@@ -44,7 +44,7 @@ Dependencies: `StoryItem`/`StoryGroup`, `EmojiReactionPicker`, `MeeshyAvatar`, `
 
 Android-port note: Sidebar → vertical `Column` of icon buttons over the canvas. Kebab → `DropdownMenu`. `ShareLink` → `Intent.ACTION_SEND`. Translate strip → horizontal `LazyRow` of flag chips. Bindings collapse into a single state holder / `StoryViewerUiState`.
 
-## apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
+## apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
 
 Purpose: Root story viewer view — owns all viewer `@State`, the prefetcher + gated-timer pipeline wire-up, sheet/fullScreenCover routing (viewers, export, share, repost-as-story, repost-as-post), and lifecycle.
 
@@ -66,7 +66,7 @@ Dependencies: `StoryViewModel`, `Router`, `ConversationListViewModel`, `StatusVi
 
 Android-port note: Story viewer → full-screen `Pager` (`HorizontalPager` for groups). The prefetcher sliding window → preload images/players for adjacent pages via Coil + ExoPlayer pre-buffering; Compose `Pager` already pre-composes neighbors. No type-metadata-crash concern in Kotlin — the extracted structs are an iOS-only workaround, collapse them back into composables freely. The legacy/gated dual timer is tech debt: implement ONE content-gated auto-advance. EnvironmentObject re-injection issue does not exist with Hilt/CompositionLocal.
 
-## apps/ios/Meeshy/Features/Main/Views/SupportView.swift
+## apps/ios/Meeshy/Features/Settings/Views/SupportView.swift
 
 Purpose: Static "Aide et support" screen — help center / FAQ links, contact (email, Twitter), bug/feature report mailto links, app version/build/platform info.
 
@@ -76,7 +76,7 @@ Key behaviors: Pure static content; `Link` to URLs (https + mailto). Hardcoded s
 
 Android-port note: Trivial `@Composable` with a `LazyColumn` of link rows; URLs via `Intent.ACTION_VIEW`. Version from `BuildConfig.VERSION_NAME`/`VERSION_CODE`. No state.
 
-## apps/ios/Meeshy/Features/Main/Views/TermsOfServiceView.swift
+## apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift
 
 Purpose: Static Terms of Service screen with FR/EN toggle; 9 numbered sections per language hardcoded in a `[String: [(title, content)]]` dictionary.
 
@@ -158,7 +158,7 @@ Dependencies: `MeeshyMessage`/`APIMessage`, `APIClient`, `MessageService`, `Send
 
 Android-port note: Standard detail screen with a small `ViewModel`. No SWR cache here (refetch-on-send) — could add cache. Reply list → `LazyColumn`.
 
-## apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift
+## apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift
 
 Purpose: Detail/analytics screen for a single UTM tracking link — stats, geo/device/browser breakdowns, click timeline, UTM config, QR generation, copy/share/delete.
 
@@ -172,7 +172,7 @@ Dependencies: `TrackingLink`/`TrackingLinkClick`, `TrackingLinkService`, CoreIma
 
 Android-port note: QR via ZXing. Charts/bars → custom composables or a chart lib. Share/copy → `Intent`/`ClipboardManager`. Country flag math ports directly. ViewModel → Hilt VM.
 
-## apps/ios/Meeshy/Features/Main/Views/TrackingLinksView.swift
+## apps/ios/Meeshy/Features/Links/Views/TrackingLinksView.swift
 
 Purpose: List of UTM tracking links + aggregate stats overview; create-link entry point.
 
@@ -186,7 +186,7 @@ Dependencies: `TrackingLink`/`TrackingLinkStats`, `TrackingLinkService`, `CacheC
 
 Android-port note: `LazyColumn` + `pullRefresh`; SWR pattern → Repository emitting cached-then-network `Flow`. `NavigationLink` → nav route to detail.
 
-## apps/ios/Meeshy/Features/Main/Views/TwoFactorSetupView.swift
+## apps/ios/Meeshy/Features/Settings/Views/TwoFactorSetupView.swift
 
 Purpose: 2FA enrollment wizard, disable flow, and backup-codes regeneration.
 
@@ -201,7 +201,7 @@ Dependencies: `TwoFactorViewModel`, `TwoFactorSetup` model.
 
 Android-port note: Step `enum` → sealed class UI state. QR data-URL → decode base64 to `Bitmap` (`Image`). Code field → `OutlinedTextField` with `KeyboardType.NumberPad` + input filter. Localized strings → string resources. Three screens share one VM.
 
-## apps/ios/Meeshy/Features/Main/Views/UserStatsView.swift
+## apps/ios/Meeshy/Features/Profile/Views/UserStatsView.swift
 
 Purpose: User statistics dashboard — stat cards (messages, conversations, translations, languages, member days, friend requests), activity timeline chart, achievement badges.
 
@@ -239,7 +239,7 @@ Dependencies: `CallManager.shared`, `VideoFilterConfig`/`VideoFilterPreset`, `Vi
 
 Android-port note: Preset chips → `LazyRow`. Filter pipeline (color matrix, background blur via segmentation, skin smoothing) is heavy GPU work — on Android use a `GLSurfaceView`/`Surface` shader or ML Kit selfie segmentation; the auto-degrade fallback is important to preserve. Two-way sync with a call manager → shared `StateFlow`.
 
-## apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift
+## apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift
 
 Purpose: Voice-profile management screen — status, info, cloning toggle, sample list (add/delete), GDPR-compliant profile deletion.
 
@@ -253,7 +253,7 @@ Dependencies: `VoiceProfileManageViewModel`, `VoiceProfile`/`VoiceSample`/`Voice
 
 Android-port note: Status enum → sealed class / enum. Sample list → `LazyColumn`. Recording → `MediaRecorder` + permission. Confirmation → `AlertDialog`. GDPR delete must stay explicit/irreversible-warned.
 
-## apps/ios/Meeshy/Features/Main/Views/VoiceProfileWizardView.swift
+## apps/ios/Meeshy/Features/Settings/Views/VoiceProfileWizardView.swift
 
 Purpose: Voice-profile creation wizard — consent → age verification → recording → processing → complete.
 

@@ -1,7 +1,6 @@
 import Foundation
 import Combine
 import UIKit
-import GRDB
 import MeeshySDK
 import MeeshyUI
 import os
@@ -31,17 +30,18 @@ import os
 // MARK: - ConversationDependencies
 
 struct ConversationDependencies {
-    let dbPool: any DatabaseWriter
     let persistence: MessagePersistenceActor
     var collaborators: ConversationCollaborators? = nil
     var transcriptionRetry: (any TranscriptionRetryScheduling)? = nil
+    /// Ce que l'ère chiffrée de la conversation laisse servir (#11380) — une
+    /// instance par conversation ouverte, comme ce conteneur.
+    var encryptedEra = ConversationEncryptedEra()
+    /// Le clair que cet appareil a posé sur le fil, que la cellule repose (#12916).
+    var endToEndClear = EndToEndThreadClear()
 
     @MainActor
     static var live: ConversationDependencies {
-        ConversationDependencies(
-            dbPool: DependencyContainer.shared.dbPool,
-            persistence: DependencyContainer.shared.messagePersistence
-        )
+        ConversationDependencies(persistence: DependencyContainer.shared.messagePersistence)
     }
 }
 
@@ -73,7 +73,7 @@ struct LiveCallJoinContext {
         hasPendingIncomingCall: { CallManager.shared.pendingIncomingCall?.callId == $0 },
         bringCallUIForward: { CallManager.shared.displayMode = .fullScreen },
         rejoinActiveCall: { callId, conversationId, remoteUserId, remoteUsername, isVideo in
-            CallManager.shared.rejoinActiveCall(
+            CallManager.shared.outgoingDial.rejoinActiveCall(
                 callId: callId,
                 conversationId: conversationId,
                 remoteUserId: remoteUserId,
@@ -344,7 +344,7 @@ extension ConversationViewModel {
     func prefetchRecentMedia() {
         mediaPrefetchDebounce?.cancel()
         mediaPrefetchDebounce = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
+            guard await cancellableSleep(for: .milliseconds(300)) else { return }
             guard let self, !Task.isCancelled else { return }
             self.mediaHandler.prefetchRecentMedia()
         }

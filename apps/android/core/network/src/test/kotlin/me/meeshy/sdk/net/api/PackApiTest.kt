@@ -109,4 +109,72 @@ class PackApiTest {
         assertThat(response.success).isTrue()
         assertThat(response.data!!.packs).isEmpty()
     }
+
+    private val servedShop = """{"success":true,"data":{"balance":340,"domains":[{"domain":"wallpaper","packs":[{"slug":"animes","price":90,"owned":false}]}]}}"""
+
+    @Test
+    fun `the shop is read from one address filtered by the asked domains`() = runTest {
+        val capture = Capture()
+
+        val shop = apiServing(servedShop, capture).shop(listOf(AppearancePackDomain.WALLPAPER, AppearancePackDomain.AVATAR_RING)).data!!
+
+        assertThat(capture.request!!.method).isEqualTo("GET")
+        assertThat(capture.request!!.url.encodedPath).isEqualTo("/api/v1/packs/shop")
+        assertThat(capture.request!!.url.queryParameter("domains")).isEqualTo("wallpaper,avatar-ring")
+        assertThat(shop.balance).isEqualTo(340)
+        assertThat(shop.packs(AppearancePackDomain.WALLPAPER).single().canBuy).isTrue()
+    }
+
+    @Test
+    fun `a purchase posts only its intention id to the pack address and reads the served pack and balance`() = runTest {
+        val capture = Capture()
+        val body = """{"success":true,"data":{"pack":{"slug":"animes","price":90,"owned":true,"installed":true},"balance":250}}"""
+
+        val bought = apiServing(body, capture).purchase(AppearancePackDomain.BANNER_FRAME, "animes", "req-1").data!!
+
+        assertThat(capture.request!!.method).isEqualTo("POST")
+        assertThat(capture.request!!.url.encodedPath).isEqualTo("/api/v1/packs/banner-frame/animes/purchase")
+        val sent = okio.Buffer().also { capture.request!!.body!!.writeTo(it) }.readUtf8()
+        assertThat(sent).isEqualTo("""{"requestId":"req-1"}""")
+        assertThat(bought.pack.isOwned).isTrue()
+        assertThat(bought.balance).isEqualTo(250)
+    }
+
+    private val servedPack = """{"success":true,"data":{"slug":"animes","price":90,"owned":true,"installed":true,"installCount":5}}"""
+
+    @Test
+    fun `installing a pack puts to its install address and reads the served summary`() = runTest {
+        val capture = Capture()
+
+        val pack = apiServing(servedPack, capture).setInstalled(AppearancePackDomain.BANNER_FRAME, "animes", installed = true).data!!
+
+        assertThat(capture.request!!.method).isEqualTo("PUT")
+        assertThat(capture.request!!.url.encodedPath).isEqualTo("/api/v1/packs/banner-frame/animes/install")
+        assertThat(pack.installed).isTrue()
+        assertThat(pack.installCount).isEqualTo(5)
+    }
+
+    @Test
+    fun `removing a pack deletes its install address`() = runTest {
+        val capture = Capture()
+
+        apiServing(servedPack, capture).setInstalled(AppearancePackDomain.WALLPAPER, "animes", installed = false)
+
+        assertThat(capture.request!!.method).isEqualTo("DELETE")
+        assertThat(capture.request!!.url.encodedPath).isEqualTo("/api/v1/packs/wallpaper/animes/install")
+    }
+
+    @Test
+    fun `the per domain catalogue reads a lossy list of shop packs from the domain address`() = runTest {
+        val capture = Capture()
+        val body = """{"success":true,"data":[{"slug":"essentiels","coverUrl":"/api/v1/pack-assets/aaaaaaaaaaaaaaaa.webp"},{"slug":null},"x"]}"""
+
+        val packs = apiServing(body, capture).catalogue(AppearancePackDomain.AVATAR_RING).data!!.packs
+
+        assertThat(capture.request!!.method).isEqualTo("GET")
+        assertThat(capture.request!!.url.encodedPath).isEqualTo("/api/v1/packs/avatar-ring")
+        assertThat(packs.map { it.slug }).containsExactly("essentiels")
+        assertThat(packs.single().coverPath).isEqualTo("/api/v1/pack-assets/aaaaaaaaaaaaaaaa.webp")
+    }
 }
+

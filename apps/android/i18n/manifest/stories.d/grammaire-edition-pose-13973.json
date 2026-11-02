@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.rotate",
+          "androidName": "composer_edit_rotate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.sound.volume",
+          "androidName": "composer_edit_volume",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.mute",
+          "androidName": "composer_edit_mute",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

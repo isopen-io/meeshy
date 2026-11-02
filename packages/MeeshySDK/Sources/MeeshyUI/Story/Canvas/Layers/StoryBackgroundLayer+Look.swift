@@ -17,11 +17,12 @@ extension StoryBackgroundLayer {
     /// ses réglages, sans que la lecture ne saute. Dans le canvas interactif
     /// (`bakesLookOffMainThread`), l'image se cuit HORS du fil principal (#9873).
     @MainActor
-    func restyleInPlace(filter: StoryFilter?, filterIntensity: Float, adjustments: ImageAdjustments?) -> Bool {
+    func restyleInPlace(filter: StoryFilter?, filterIntensity: Float, adjustments: ImageAdjustments?,
+                        mediaLook: StoryMediaLook? = nil) -> Bool {
         switch kind {
         case .image:
             guard let source = stampedSource, let img = contentLayer else { return false }
-            setLook(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments)
+            setLook(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments, mediaLook: mediaLook)
             guard bakesLookOffMainThread else {
                 stampFinalImage(source.image, imageId: source.imageId, on: img)
                 return true
@@ -30,7 +31,7 @@ extension StoryBackgroundLayer {
             return true
         case .video:
             guard avPlayer != nil else { return false }
-            setLook(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments)
+            setLook(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments, mediaLook: mediaLook)
             applyBackgroundVideoLook()
             return true
         case .solidColor, .gradient:
@@ -48,7 +49,8 @@ extension StoryBackgroundLayer {
     @MainActor
     func repaintLookOffMainThread(_ source: (image: UIImage, imageId: String?), on img: CALayer) {
         let request = StoryLookBakeRequest(image: source.image, filter: activeFilter, intensity: activeFilterIntensity,
-                                           adjustments: activeAdjustments, imageId: source.imageId)
+                                           adjustments: activeAdjustments, imageId: source.imageId,
+                                           look: activeMediaLook)
         if let pret = StoryLookBake.ready(request) {
             liveLookStorage?.supersede()
             stampDisplay(pret, on: img)
@@ -82,7 +84,8 @@ extension StoryBackgroundLayer {
     func applyBackgroundVideoLook() {
         guard let player = avPlayer else { return }
         let reglages = StoryBackgroundLook.painted(activeAdjustments, for: .video)
-        let signature = reglages.map(StoryMediaAdjustmentsProcessor.signature) ?? ""
+        let regard = StoryMediaLookPainterRegistry.paintable(activeMediaLook)
+        let signature = StoryVideoAdjustmentsProcessor.signature(look: regard, adjustments: reglages)
         let identite = ObjectIdentifier(player)
         let precedent = appliedBackgroundVideoLook
         guard precedent?.player != identite || precedent?.signature != signature else { return }
@@ -91,7 +94,7 @@ extension StoryBackgroundLayer {
         backgroundVideoLookTask = nil
         appliedBackgroundVideoLook = (identite, signature)
 
-        guard let reglages else {
+        guard !signature.isEmpty else {
             if precedent?.player == identite, precedent?.signature.isEmpty == false {
                 backgroundPlaybackItems(of: player).forEach { $0.videoComposition = nil }
             }
@@ -103,7 +106,8 @@ extension StoryBackgroundLayer {
         let looper = avPlayerLooper
         backgroundVideoLookTask = Task { @MainActor [weak self, weak player] in
             guard let composition = try? await StoryVideoAdjustmentsProcessor.composition(for: asset,
-                                                                                          adjustments: reglages)
+                                                                                          adjustments: reglages,
+                                                                                          look: regard)
             else { return }
             // Une boucle pose ses répliques quand SON asset est chargé — le même
             // que la composition lit (#9881) : on attend qu'elles existent.

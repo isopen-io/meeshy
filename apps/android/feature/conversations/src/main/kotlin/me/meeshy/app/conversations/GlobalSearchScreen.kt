@@ -150,6 +150,7 @@ private fun SearchResults(
             ) { hit ->
                 MessageHitRow(
                     hit = hit,
+                    identity = hit.identity(state.currentUserId),
                     resultsQuery = state.resultsQuery,
                     onClick = { onOpenConversation(hit.message.conversationId) },
                 )

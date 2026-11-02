@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.mine",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.trending",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.search",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.clearSearch",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.emptyMine",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.emptySearch",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.emptyTrending",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.untitled",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.renameTitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.renamePlaceholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.renameConfirm",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.renameHint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.removeTitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.removeConfirm",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.removeMessageUnused",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.removeMessageUsed",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.removeFailed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.remove",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.rename",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.preparing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.stop",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.play",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.postCount",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sound.library.playCount",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.sound.background.a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.sound.mute",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.sound.unmute",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audio.delete.action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.tool.sound",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.soundLibrary",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

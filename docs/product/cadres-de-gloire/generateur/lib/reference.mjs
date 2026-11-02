@@ -1,12 +1,14 @@
 // Fige la référence de fidélité (lot L0) : rend chaque SVG d'une génération en PNG 1080×1920 (polices telles que la
 // planche validée les a chargées), écrit reference/sha256.json et un WebP SANS PERTE par collection.
 // Usage : node lib/reference.mjs <out> <reference> --commit <sha> [--keep <dossier des PNG>] [--jobs 3]
-//         node lib/reference.mjs <out> <reference> --amend l2 --design <out du dessin validé> [--jobs 3]
+//         node lib/reference.mjs <out> <reference> --amend l2 --design <out du dessin validé> [--only a,b] [--jobs 3]
 // --amend l2 n'écrase JAMAIS la référence : il ajoute à sha256.json, sous `amendments.l2`, le rendu des seuls cadres
 // dont Mee et Meo ont bougé (lib/anchors.json), avec la preuve que rien d'autre n'a bougé — `decorDelta`, les pixels
 // qui diffèrent entre le dessin validé (`--design`, généré avec CADRES_ANCHORS=off) et le dessin corrigé, oiseaux,
 // ce qui les suit (data-follows-bird) et texte vivant masqués (le titre en dégradé sur chemin courbe de poses-ruban
 // ne se rend pas deux fois à l'identique dans Chromium). recompose.mjs juge alors ces cadres contre l'amendement.
+// --only rejoue les seuls cadres nommés (une ancre corrigée après coup, `png: null` dans l'amendement) et les fond dans
+// l'amendement existant ; il refuse un Chromium autre que celui de l'amendement, dont les rendus ne se mélangent pas.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,6 +27,7 @@ const keep = arg('--keep') && path.resolve(arg('--keep'));
 const jobs = Number(arg('--jobs', '3'));
 const amend = arg('--amend');
 const design = arg('--design') && path.resolve(arg('--design'));
+const only = arg('--only') ? new Set(arg('--only').split(',')) : null;
 if (!commit && !amend) throw new Error('--commit <sha> : la génération rendue doit nommer son commit.');
 if (amend && !design) throw new Error('--amend demande --design <out du dessin validé> (CADRES_ANCHORS=off).');
 
@@ -36,11 +39,19 @@ const frames = collections.flatMap((c) => fs.readdirSync(path.join(out, c)).filt
 if (amend) {
   const doc = JSON.parse(fs.readFileSync(path.join(reference, 'sha256.json'), 'utf8'));
   const anchors = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'anchors.json'), 'utf8'));
+  const previous = only ? doc.amendments?.[amend] : null;
+  if (only && !previous) throw new Error(`--only fond dans un amendement existant : amendments.${amend} est absent.`);
+  const unknown = only ? [...only].filter((name) => !anchors[name]) : [];
+  if (unknown.length) throw new Error(`--only : sans ancre dans lib/anchors.json : ${unknown.join(', ')}`);
   const browser = await launch();
+  if (previous && browser.version() !== previous.chromium) {
+    await browser.close();
+    throw new Error(`--only : Chromium ${browser.version()} ne rejoue pas un amendement rendu par Chromium ${previous.chromium} (PW_CHROMIUM).`);
+  }
   const pages = await Promise.all(Array.from({ length: jobs }, () => openPage(browser)));
   const free = [...pages];
   const hideBirds = () => document.querySelectorAll('[data-layer="birds"], [data-follows-bird], text').forEach((el) => { el.style.display = 'none'; });
-  const rows = await pool(frames.filter(({ name }) => anchors[name]), jobs, async ({ collection, name }) => {
+  const rows = await pool(frames.filter(({ name }) => anchors[name] && (!only || only.has(name))), jobs, async ({ collection, name }) => {
     const handle = free.pop();
     try {
       const svg = fs.readFileSync(path.join(out, collection, name + '.svg'));
@@ -59,11 +70,13 @@ if (amend) {
       free.push(handle);
     }
   });
+  if (only && rows.length !== only.size) throw new Error(`--only : ${only.size - rows.length} cadre(s) absent(s) de ${out}.`);
+  const merged = Object.fromEntries(Object.entries({ ...(previous?.frames ?? {}), ...Object.fromEntries(rows) }).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
   doc.amendments = { ...(doc.amendments ?? {}), [amend]: {
     note: 'Lot L2 (#10153) : Mee et Meo déplacés hors de la photo (lib/anchors.json). Le décor ne bouge pas (decorDelta = 0 ; seule la lueur posée sous un oiseau le suit). En attente de la revalidation du porteur (#9963) ; vider lib/anchors.json rend la référence L0.',
     chromium: browser.version(),
-    count: rows.length,
-    frames: Object.fromEntries(rows),
+    count: Object.keys(merged).length,
+    frames: merged,
   } };
   fs.writeFileSync(path.join(reference, 'sha256.json'), JSON.stringify(doc, null, 2) + '\n');
   await Promise.all(pages.map((p) => p.dispose()));

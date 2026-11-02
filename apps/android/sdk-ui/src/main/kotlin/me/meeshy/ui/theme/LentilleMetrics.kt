@@ -7,7 +7,7 @@ import androidx.compose.ui.unit.TextUnit
 
 /**
  * Cotes normatives du rang de la Lentille — miroir Kotlin de `LentilleMetrics.swift`
- * (`apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift`, contrat LWS-5).
+ * (`apps/ios/Meeshy/Features/Lens/Core/LentilleMetrics.swift`, contrat LWS-5).
  * `LentilleMetricsSourceParityTest` relit le fichier iOS et exige une valeur identique pour chaque
  * littéral. Toute vue de la Lentille lit ses cotes ICI ; aucune cote de rang ne s'écrit en dur.
  */

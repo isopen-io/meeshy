@@ -80,6 +80,8 @@ const ptStudioChrome = {
   'story.studio.background.cameraHold': 'Manter pressionado: abrir a câmera',
   'story.studio.camera.close': 'Voltar à cena',
   'story.studio.camera.flip': 'Trocar de câmera',
+  'story.studio.camera.frames': 'Molduras',
+  'story.studio.camera.frames.none': 'Sem moldura',
   'story.studio.camera.flash': 'Flash',
   'story.studio.camera.shutter.photo': 'Tirar uma foto',
   'story.studio.camera.shutter.start': 'Iniciar a gravação',
@@ -145,6 +147,10 @@ const ptStudioChrome = {
   'story.studio.edit.saving': 'A guardar…',
   'story.studio.edit.cancel': 'Descartar as alterações',
   'story.studio.publish.as.storyAndReel': 'Publicar story e reel',
+  'story.studio.unsent': 'Publicação não enviada.',
+  'story.studio.unsent.retry': 'Tentar novamente',
+  'story.studio.unsent.discard': 'Excluir',
+  'story.studio.volatile': 'Este dispositivo não guarda as suas mídias: não recarregue a página antes de publicar.',
 } satisfies StudioChromeCatalogSlice;
 
 export default ptStudioChrome;

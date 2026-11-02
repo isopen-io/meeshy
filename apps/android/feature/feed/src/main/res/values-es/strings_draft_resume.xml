@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_draft_resume_title">Retoma tu borrador</string>
+    <string name="feed_draft_resume_action">Retomar</string>
+    <string name="feed_draft_resume_discard_title">¿Eliminar este borrador?</string>
+    <string name="feed_draft_resume_discard_body">Se borrará de este dispositivo.</string>
+</resources>

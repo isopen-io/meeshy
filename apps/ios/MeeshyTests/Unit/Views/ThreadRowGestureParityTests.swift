@@ -82,7 +82,7 @@ final class ThreadRowGestureParityTests: XCTestCase {
     }
 
     private func sourceDuConteneur() throws -> String {
-        try source("apps/ios/Meeshy/Features/Main/Views/MessageListView.swift")
+        try source("apps/ios/Meeshy/Features/Main/Views/BubbleSwipeContainer.swift")
     }
 
     /// Une garde négative dont le balayage ne voit rien reste verte pour la

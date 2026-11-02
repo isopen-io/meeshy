@@ -35,6 +35,7 @@ data class StarredMessage(
     val conversationName: String? = null,
     val conversationAccentColor: String? = null,
     val senderName: String? = null,
+    val senderAvatarUrl: String? = null,
     val contentPreview: String = "",
     val attachmentKind: StarredAttachmentKind? = null,
     val starredAtMillis: Long = 0L,

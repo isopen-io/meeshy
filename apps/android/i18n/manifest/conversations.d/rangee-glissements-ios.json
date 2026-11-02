@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "androidName": "swipe_pin",
+          "status": "android-only"
+        },
+        {
+          "androidName": "swipe_unpin",
+          "status": "android-only"
+        },
+        {
+          "androidName": "swipe_mute",
+          "status": "android-only"
+        },
+        {
+          "androidName": "swipe_unmute",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "swipe.unlock",
+          "androidName": "swipe_unlock",
+          "status": "adopted"
+        },
+        {
+          "androidName": "swipe_archive",
+          "status": "android-only"
+        },
+        {
+          "androidName": "swipe_unarchive",
+          "status": "android-only"
+        },
+        {
+          "androidName": "swipe_mark_read",
+          "status": "android-only"
+        },
+        {
+          "androidName": "swipe_mark_unread",
+          "status": "android-only"
+        },
+        {
+          "androidName": "swipe_hide",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

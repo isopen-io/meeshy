@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.LiveLocationEmission
 import me.meeshy.sdk.model.LiveLocationFix
 import me.meeshy.sdk.model.LiveLocationSharingState
 import me.meeshy.sdk.model.LiveLocationStartFailure
+import me.meeshy.sdk.session.PerAccountCache
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -51,6 +52,9 @@ interface LiveLocationServiceHost {
  * Pilote le partage de MA position : permission vérifiée au moment du partage, émission
  * start / update / stop, arrêt manuel ou à l'échéance. Un seul partage à la fois ; en démarrer
  * un autre arrête le précédent.
+ *
+ * La fin de session ([clear]) arrête le partage du compte parti SANS émettre : la socket appartient déjà au compte
+ * suivant, qui n'a rien à arrêter ; la passerelle échoit le partage à son échéance.
  */
 @Singleton
 class LiveLocationSharingController @Inject constructor(
@@ -60,7 +64,7 @@ class LiveLocationSharingController @Inject constructor(
     private val host: LiveLocationServiceHost,
     private val clock: LiveLocationClock,
     @DefaultDispatcher dispatcher: CoroutineDispatcher,
-) {
+) : PerAccountCache {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val _state = MutableStateFlow<LiveLocationSharingState>(LiveLocationSharingState.Idle)
     val state: StateFlow<LiveLocationSharingState> = _state.asStateFlow()
@@ -85,6 +89,8 @@ class LiveLocationSharingController @Inject constructor(
     }
 
     fun stop() = stopInternal(emitStop = true)
+
+    override suspend fun clear() = stopInternal(emitStop = false)
 
     /** Recale l'échéance sur l'heure serveur (`expiresAt` de `location:live-started`). */
     fun adoptServerDeadline(expiresAtMillis: Long) {

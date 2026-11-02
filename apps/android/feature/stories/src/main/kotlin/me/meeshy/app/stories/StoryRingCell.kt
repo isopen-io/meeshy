@@ -12,12 +12,14 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.DropdownMenu
@@ -36,7 +38,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -47,12 +48,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import me.meeshy.feature.stories.R
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.meeshyPresenceDotColor
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
@@ -75,6 +77,10 @@ internal fun StoryRingCell(
     onShowProfile: (() -> Unit)?,
     onAppeared: (String?) -> Unit,
     onAdd: (() -> Unit)? = null,
+    onManage: (() -> Unit)? = null,
+    onEdit: ((String) -> Unit)? = null,
+    onAddStatus: (() -> Unit)? = null,
+    onMoodTap: (() -> Unit)? = null,
 ) {
     val haptics = rememberMeeshyHaptics()
     var menuOpen by remember { mutableStateOf(false) }
@@ -115,15 +121,26 @@ internal fun StoryRingCell(
             StoryRingFrame(ring) {
                 StoryAvatar(ring)
                 if (showAddBadge) AddBadge(onClick = onAdd)
-                if (!moodEmoji.isNullOrEmpty()) MoodBadge(moodEmoji) else PresenceDot(ring)
+                when {
+                    showAddBadge && onAddStatus != null -> StatusBadge(moodEmoji, onClick = onAddStatus)
+                    !moodEmoji.isNullOrEmpty() -> MoodBadge(moodEmoji, onClick = onMoodTap)
+                    else -> PresenceDot(ring)
+                }
             }
             StoryRingMenu(
                 expanded = menuOpen,
                 onDismiss = { menuOpen = false },
                 onViewStories = { menuOpen = false; onOpen() },
                 onShowProfile = onShowProfile?.let { open -> { menuOpen = false; open() } },
-                selfActions = if (onAdd != null) StoryTraySelfMenu.actions(ring) else null,
+                selfActions = if (onAdd != null) {
+                    StoryTraySelfMenu.actions(ring, canEdit = onEdit != null, canChangeMood = onAddStatus != null, canViewProfile = onShowProfile != null)
+                } else {
+                    null
+                },
                 onAdd = { menuOpen = false; onAdd?.invoke() },
+                onManage = { menuOpen = false; onManage?.invoke() },
+                onEdit = { menuOpen = false; ring.displayedStoryId?.let { onEdit?.invoke(it) } },
+                onChangeMood = { menuOpen = false; onAddStatus?.invoke() },
             )
         }
         StoryCountDotsRow(
@@ -137,13 +154,16 @@ internal fun StoryRingCell(
 }
 
 @Composable
-private fun StoryRingMenu(
+internal fun StoryRingMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     onViewStories: () -> Unit,
     onShowProfile: (() -> Unit)?,
     selfActions: List<StoryTraySelfAction>? = null,
     onAdd: () -> Unit = {},
+    onManage: () -> Unit = {},
+    onEdit: () -> Unit = {},
+    onChangeMood: () -> Unit = {},
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         if (selfActions != null) {
@@ -154,10 +174,30 @@ private fun StoryRingMenu(
                         leadingIcon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
                         onClick = onViewStories,
                     )
+                    StoryTraySelfAction.EditStory -> DropdownMenuItem(
+                        text = { Text(stringResource(R.string.my_stories_edit)) },
+                        leadingIcon = { Icon(MeeshyIcons.Edit, contentDescription = null) },
+                        onClick = onEdit,
+                    )
+                    StoryTraySelfAction.ManageStories -> DropdownMenuItem(
+                        text = { Text(stringResource(R.string.stories_tray_manage)) },
+                        leadingIcon = { Icon(Icons.Filled.Collections, contentDescription = null) },
+                        onClick = onManage,
+                    )
                     StoryTraySelfAction.AddStory -> DropdownMenuItem(
                         text = { Text(stringResource(R.string.stories_tray_add_story)) },
                         leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
                         onClick = onAdd,
+                    )
+                    StoryTraySelfAction.ChangeMood -> DropdownMenuItem(
+                        text = { Text(stringResource(R.string.story_tray_a11y_changeMood)) },
+                        leadingIcon = { Icon(MeeshyIcons.Emoji, contentDescription = null) },
+                        onClick = onChangeMood,
+                    )
+                    StoryTraySelfAction.ViewProfile -> DropdownMenuItem(
+                        text = { Text(stringResource(R.string.story_tray_menu_profile)) },
+                        leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) },
+                        onClick = { onShowProfile?.invoke() },
                     )
                 }
             }
@@ -180,61 +220,103 @@ private fun StoryRingMenu(
 
 @Composable
 private fun StoryAvatar(ring: StoryRing) {
-    if (ring.avatarUrl != null) {
-        AsyncImage(
-            model = ring.avatarUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.size(StoryEntryMetrics.avatar).clip(CircleShape),
-        )
-    } else {
-        MeeshyAvatar(
-            name = ring.displayName,
-            size = StoryEntryMetrics.avatar,
-            containerColor = hexColor(ring.accentHex),
-        )
-    }
+    MeeshyAvatar(
+        name = ring.displayName,
+        size = StoryEntryMetrics.avatar,
+        containerColor = hexColor(ring.accentHex),
+        imageUrl = ring.avatarUrl,
+    )
 }
 
+/** Le « + » de « Votre story », en coin haut-gauche (iOS `MyStoryButton`) : pastille de 20 dp, cible de 48 dp. */
 @Composable
 private fun BoxScope.AddBadge(onClick: (() -> Unit)? = null) {
     val addLabel = stringResource(R.string.stories_tray_add_story)
     Box(
         modifier = Modifier
-            .align(Alignment.BottomEnd)
-            .size(StoryEntryMetrics.badge * 0.625f)
+            .align(Alignment.TopStart)
+            .offset(x = -ADD_TARGET_BLEED, y = -ADD_TARGET_BLEED)
+            .size(BADGE_TARGET)
             .then(
                 if (onClick != null) {
                     Modifier.clickable(onClick = onClick).semantics { role = Role.Button; contentDescription = addLabel }
                 } else {
                     Modifier
                 },
-            )
-            .clip(CircleShape)
-            .background(MeeshyPalette.Indigo500),
+            ),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Filled.Add, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(14.dp))
+        Box(
+            modifier = Modifier
+                .size(ADD_BADGE)
+                .clip(CircleShape)
+                .background(MeeshyPalette.Indigo500),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(14.dp))
+        }
     }
 }
 
+/** L'humeur posée sur l'avatar ; appuyée, elle ouvre le statut (cible de 48 dp, pastille de 32 dp). */
 @Composable
-private fun BoxScope.MoodBadge(emoji: String) {
-    Box(
-        modifier = Modifier
-            .align(Alignment.BottomEnd)
-            .size(StoryEntryMetrics.badge)
-            .clip(CircleShape)
-            .background(MeeshyTheme.tokens.backgroundTertiary),
-        contentAlignment = Alignment.Center,
+private fun BoxScope.MoodBadge(emoji: String, onClick: (() -> Unit)? = null) {
+    val moodLabel = "${stringResource(R.string.stories_mood_kind)} $emoji"
+    BadgeTarget(
+        onClick = onClick,
+        contentDescription = moodLabel,
     ) {
         Text(text = emoji, fontSize = 18.sp)
     }
 }
 
+/**
+ * Le badge d'humeur du compte courant — iOS `MyStoryButton` : l'humeur posée quand il y en a une,
+ * le « 💭 » d'invite sinon. Toujours un bouton qui mène au composeur d'humeur.
+ */
+@Composable
+internal fun BoxScope.StatusBadge(moodEmoji: String?, onClick: () -> Unit) {
+    val changeLabel = stringResource(R.string.story_tray_a11y_changeMood)
+    BadgeTarget(onClick = onClick, contentDescription = changeLabel) {
+        Text(text = moodEmoji?.takeIf { it.isNotEmpty() } ?: MOOD_PROMPT_GLYPH, fontSize = 18.sp)
+    }
+}
+
+@Composable
+private fun BoxScope.BadgeTarget(
+    onClick: (() -> Unit)?,
+    contentDescription: String,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .offset(x = BADGE_TARGET_BLEED, y = BADGE_TARGET_BLEED)
+            .size(BADGE_TARGET)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                        .semantics { this.contentDescription = contentDescription }
+                } else {
+                    Modifier
+                },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(StoryEntryMetrics.badge)
+                .clip(CircleShape)
+                .background(MeeshyTheme.tokens.backgroundTertiary),
+            contentAlignment = Alignment.Center,
+        ) { content() }
+    }
+}
+
 @Composable
 private fun BoxScope.PresenceDot(ring: StoryRing) {
-    val color = meeshyPresenceDotColor(ring.presence) ?: return
+    val presence = rememberPresence(ring.userId, ring.servedPresence)
+    val color = meeshyPresenceDotColor(presence) ?: return
     Box(
         modifier = Modifier
             .align(Alignment.BottomEnd)
@@ -285,8 +367,7 @@ private fun StoryCountDotsRow(
     val description = stringResource(R.string.stories_count_dots, unviewedCount, storyCount)
     Row(
         modifier = Modifier
-            .padding(top = StoryEntryMetrics.labelSpacing)
-            .height(DOT_SIZE)
+            .height(StoryEntryMetrics.labelSpacing)
             .semantics { if (dots != null) contentDescription = description },
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(DOT_SPACING),
         verticalAlignment = Alignment.CenterVertically,
@@ -312,19 +393,25 @@ private fun StoryCountDotsRow(
 }
 
 @Composable
-internal fun StoryLabel(label: String, unread: Boolean) {
+internal fun StoryLabel(label: String, unread: Boolean, modifier: Modifier = Modifier) {
     Text(
         text = label,
         fontSize = StoryEntryMetrics.LABEL_FONT_SP.sp,
+        lineHeight = StoryEntryMetrics.LABEL_LINE_HEIGHT_SP.sp,
         color = if (unread) MeeshyTheme.tokens.textPrimary else MeeshyTheme.tokens.textSecondary,
         fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Medium,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         textAlign = TextAlign.Center,
-        modifier = Modifier.width(StoryEntryMetrics.labelWidth),
+        modifier = modifier.width(StoryEntryMetrics.labelWidth),
     )
 }
 
+private val BADGE_TARGET = 48.dp
+private val BADGE_TARGET_BLEED = (BADGE_TARGET - StoryEntryMetrics.badge) / 2
+private val ADD_BADGE = StoryEntryMetrics.badge * 0.625f
+private val ADD_TARGET_BLEED = (BADGE_TARGET - ADD_BADGE) / 2
+private const val MOOD_PROMPT_GLYPH = "\uD83D\uDCAD"
 private val DOT_SIZE = 4.dp
 private val DOT_SPACING = 3.dp
 private val PRESENCE_DOT_SIZE = 22.dp

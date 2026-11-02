@@ -55,8 +55,8 @@ public final class KeychainVoIPTokenStore: VoIPTokenStoring, @unchecked Sendable
     private let keychain: KeychainManager
     private let storageKey: String
     private let userDefaults: UserDefaults
-    private let decoder = JSONDecoder()
-    private let encoder = JSONEncoder()
+    private let decoder = MeeshyCoders.decoder(.persistence)
+    private let encoder = MeeshyCoders.encoder(.persistence)
     private let logger = MeeshyLog.logger(.voipToken, subsystem: .legacySDK)
 
     public init(
@@ -67,8 +67,6 @@ public final class KeychainVoIPTokenStore: VoIPTokenStoring, @unchecked Sendable
         self.keychain = keychain
         self.storageKey = storageKey
         self.userDefaults = userDefaults
-        encoder.dateEncodingStrategy = .iso8601
-        decoder.dateDecodingStrategy = .iso8601
     }
 
     public func read() async -> VoIPTokenRecord? {

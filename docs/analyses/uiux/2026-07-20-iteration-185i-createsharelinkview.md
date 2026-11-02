@@ -1,7 +1,7 @@
 # Iteration 185i — CreateShareLinkView : pluralisation native i18n (`inflect: true`)
 
 **Date** : 2026-07-20
-**Écran** : `apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift` (sheet de création
+**Écran** : `apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift` (sheet de création
 d'un lien de partage — section « Limites » → toggle « Limiter les utilisations »).
 **Suffixe** : `i` (piste iOS).
 **Numéro** : 185i, choisi strictement > plus haut en vol (184i `StatusComposerView` #2135).

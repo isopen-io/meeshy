@@ -3,10 +3,21 @@ package me.meeshy.app.stories
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.media.MediaUploadProgress
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.MosaicLayoutMode
+import me.meeshy.sdk.model.composer.ComposerAudienceSelection
+import me.meeshy.sdk.model.composer.ComposerFormat
+import me.meeshy.sdk.model.composer.ComposerFormatVariant
+import me.meeshy.sdk.model.composer.scene.ComposerSceneBackground
 import me.meeshy.sdk.model.composer.ComposerBandState
+import me.meeshy.sdk.model.composer.ComposerHashtags
+import me.meeshy.sdk.model.composer.ComposerMediaPlacement
+import me.meeshy.sdk.model.composer.MediaDescriptionLaw
+import me.meeshy.sdk.model.composer.StoryPublishTitle
+import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryColorMatrix
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
@@ -70,7 +81,11 @@ data class StoryComposerUiState(
     val attachments: List<UploadedMedia> = emptyList(),
     val pendingUploads: List<PendingMediaUpload> = emptyList(),
     val selectedTextElementId: String? = null,
+    /** Le texte touché sur la scène, SÉLECTIONNÉ sans être écrit (#13836) : son cadre et sa barre d'actions, pas de clavier. */
+    val framedTextElementId: String? = null,
     val elementMenuId: String? = null,
+    val stickerMenuId: String? = null,
+    val playheadSeconds: Float = 0f,
     val selectedStickerId: String? = null,
     val snapFeedback: SnapFeedback? = null,
     val band: ComposerBandState = ComposerBandState.Hidden,
@@ -79,13 +94,74 @@ data class StoryComposerUiState(
     val drawColorHex: String = StoryDrawingPalette.DEFAULT_COLOR,
     val drawWidthDesign: Double = StoryDrawingPalette.DEFAULT_WIDTH,
     val isUploadingMedia: Boolean = false,
+    /** Une ligne par média de la sélection en cours d'envoi, avec ses propres octets (#13429). */
+    val uploadingMedia: List<MediaUploadProgress> = emptyList(),
+    /** Où chaque média de la sélection en cours d'envoi se posera (R4 de #13863), décidé au choix, dans l'ordre des lignes. */
+    val mediaLandings: List<ComposerMediaPlacement.Landing> = emptyList(),
+    /** Les médias de la sélection en cours d'envoi, dans l'ordre des lignes : leur aperçu et leur poids (R5 de #13863). */
+    val incomingMedia: List<MediaUploadItem> = emptyList(),
+    /** Un envoi a échoué et ses octets sont gardés : la ligne d'erreur offre « Réessayer » (R5 de #13863). */
+    val canRetryMedia: Boolean = false,
+    /** Le réseau est coupé (#13959) : un média en file se dit « Hors ligne » — et seulement alors. */
+    val isOffline: Boolean = false,
+    /** Les médias en file qui repartent maintenant, composeur ouvert (#13959). */
+    val resendingUploads: Set<String> = emptySet(),
+    /** Les médias en file dont le dernier envoi a échoué en ligne : ils proposent « Réessayer » (#13959). */
+    val failedUploads: Set<String> = emptySet(),
     val isPublishing: Boolean = false,
+    /** Une story PUBLIÉE rouverte (#13632) : le bouton enregistre, et la scène reste à une slide. */
+    val editing: Boolean = false,
     val errorMessage: String? = null,
     val canvasWidthPx: Float = 0f,
     val canvasHeightPx: Float = 0f,
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
+    /** Le mode ANIMÉ de la scène : chaque objet a sa piste, un objet neuf entre à la tête de lecture. */
+    val sceneIsAnimated: Boolean = false,
+    /** La section de l'éditeur du texte dont les options sont ouvertes dans la colonne droite ; `null` ⇒ la première servie. */
+    val openObjectSection: me.meeshy.sdk.model.composer.ComposerObjectEditorSection? = null,
+    /** Le réglage du pinceau déplié dans la colonne droite. */
+    val openDrawingControl: DrawingControl = DrawingControl.COLOR,
+    /** Le média de la slide touché dans la rangée : ses sections s'ouvrent dans la colonne droite (jamais avec un texte ou un sticker). */
+    val selectedMediaId: String? = null,
+    /** La piste de la slide touchée dans la rangée du son. */
+    val selectedSoundId: String? = null,
+    /** La famille d'effets de scène dont le carrousel est ouvert au pied du plateau. */
+    val openSceneEffect: me.meeshy.sdk.model.composer.scene.ComposerSceneEffect? = null,
+    /** Le panneau Cadre de la scène est ouvert au pied du plateau (le bouton Cadre du rail gauche). */
+    /** La pastille de lieu touchée sur la scène (#13846). */
+    val selectedPlaceId: String? = null,
+    /** Le format que l'hôte compose sur cette scène (#13863) : la story, le post ou le réel. */
+    val format: ComposerFormat = ComposerFormat.STORY,
+    /** « Texte du post » : le texte du post ou du réel, hors de la scène. */
+    val postText: String = "",
+    /** La disposition des scènes que l'hôte a armée pour le post. */
+    val postLayout: MosaicLayoutMode? = null,
+    /**
+     * Les formats cochés que l'hôte pose avec [format] (#13919), dans l'ordre du menu : un seul geste les publie tous. [format]
+     * reste le premier — celui que la scène suit — et ne se répète pas ici.
+     */
+    val checkedFormats: List<ComposerFormat> = emptyList(),
+    /** Les formats d'un brouillon rouvert, ou ceux qu'un échec partiel laisse à republier : à rendre à l'hôte une fois. */
+    val restoredFormats: List<ComposerFormat>? = null,
+    /** Les formats qu'un geste de publication n'a pas fait partir (#13919) : la scène dit lesquels. */
+    val publishFailedFormats: List<ComposerFormat> = emptyList(),
 ) {
+    internal val variant: ComposerFormatVariant get() = ComposerFormatVariant.of(format)
+
+    /** Ce qui part d'un seul geste : [format] d'abord, puis les autres formats cochés. */
+    val publishedFormats: List<ComposerFormat> get() = listOf(format) + checkedFormats.filter { it != format }
+
+    private val publishedVariants: List<ComposerFormatVariant> get() = publishedFormats.map(ComposerFormatVariant::of)
+
+    /** « Texte du post » s'écrit dès qu'un post ou un réel est coché, même derrière une story. */
+    val writesPostText: Boolean get() = publishedVariants.any { it.writesPostText }
+
+    private val captionsSlides: Boolean get() = publishedVariants.any { it.captionsSlides }
+
+    /** Les plafonds de la story tiennent dès qu'une story est cochée, même derrière un post. */
+    private val keepsStoryLimits: Boolean get() = publishedVariants.any { it.keepsStoryLimits }
+
     /**
      * Publishable when some slide carries text, media **or** a publishable text
      * element, every slide is within the character cap, the per-slide media and
@@ -94,13 +170,36 @@ data class StoryComposerUiState(
      * off-screen slide, or media/elements on an off-screen slide, all count.
      */
     val canPublish: Boolean
-        get() = (deck.hasText || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing) &&
-            deck.isWithinTextLimit(StoryComposerDraft.MAX_CHARS) &&
-            deck.isWithinMediaLimit() &&
-            deck.isWithinTextElementLimit() &&
-            deck.isWithinStickerLimit() &&
+        get() = (writesPostText && postText.isNotBlank() || deck.hasText && captionsSlides || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing || deck.hasAudio || deck.hasPlaces) &&
+            publishBlock == null &&
+            ComposerAudienceSelection.isPublishable(draft.visibility, draft.visibilityUserIds) &&
             !isPublishing &&
-            !isUploadingMedia
+            !isUploadingMedia &&
+            !deck.awaitsStickerImage
+
+    /** Le plafond qui bloque la publication, ou `null` : l'écran en dit la raison, il ne grise pas le bouton en silence. */
+    internal val publishBlock: StoryPublishBlock?
+        get() = deck.publishBlock(StoryComposerDraft.MAX_CHARS, isRepost = !draft.repostOfId.isNullOrBlank())
+            ?.takeUnless { !keepsStoryLimits && it in StoryPublishBlock.storyOnly }
+
+    /** Les hashtags de la publication — DÉRIVÉS du texte de toutes les slides (du post, en post), jamais déclarés à côté. */
+    val hashtags: List<String>
+        get() = ComposerHashtags.tags(if (variant.writesPostText) postText else deck.slides.joinToString(" ") { it.text })
+
+    /** Ce que le bouton de publication nomme : la story, le nombre de stories (une par slide), le post, le réel, ou chaque format coché. */
+    val publishTitle: StoryPublishTitle
+        get() = StoryPublishTitle.of(publishedFormats, slideCount = deck.publishableSlides.size, editing = editing)
+
+    /** Une story publiée tient UNE slide : en édition l'ajout est fermé d'avance, plutôt que refusé à l'enregistrement. */
+    val canAddSlide: Boolean get() = !editing && deck.canAddSlide
+
+    /** Les médias de la slide sélectionnée sans texte alternatif — rappelés à l'auteur, jamais bloquants. */
+    val undescribedMediaIds: List<String>
+        get() = MediaDescriptionLaw.undescribed(deck.selectedSlide.mediaIds, draft.mediaAlt)
+
+    /** L'extraction du son ne se propose que si un média de la publication est une vidéo. */
+    val offersSoundExtraction: Boolean
+        get() = attachments.any { it.mimeType.startsWith("video/") }
 
     /**
      * The uploaded media of the **selected** slide, in slide order — the preview the
@@ -115,6 +214,25 @@ data class StoryComposerUiState(
     val selectedSlidePending: List<PendingMediaUpload>
         get() = deck.selectedSlide.mediaIds.mapNotNull { id -> pendingUploads.firstOrNull { it.cmid == id } }
 
+    /**
+     * Le média que le plateau peint en fond : celui que la publication désigne (envoyé ou encore en attente), sinon le
+     * premier média de la slide — jamais « le premier » quand un autre est désigné (loi 6 : l'aperçu ne ment pas). C'est
+     * aussi celui que « Retirer le fond de la scène » retire : on retire ce que l'on voit.
+     */
+    val selectedSlideBackdropMediaId: String?
+        get() = StoryPublishBackground.paintedId(deck.selectedSlide, this)
+
+    /** Le fond peint attend encore sa file d'envoi (hors ligne, R5 de #13863) : la scène le dit « en attente ». */
+    val selectedSlideBackdropIsPending: Boolean
+        get() = selectedSlideBackdropMediaId?.let { id -> selectedSlidePending.any { it.cmid == id } } == true
+
+    /** L'affiche du fond : sa vignette, l'image elle-même, ou pour une vidéo sans vignette l'image de son début ([ComposerVideoFrame]). */
+    fun selectedSlideBackdropModel(mediaBaseUrl: String?): Any? {
+        val id = selectedSlideBackdropMediaId ?: return null
+        selectedSlideAttachments.firstOrNull { it.id == id }?.let { return ComposerPicture.of(it, mediaBaseUrl) }
+        return selectedSlidePending.firstOrNull { it.cmid == id }?.item?.let { ComposerPicture.of(it) }
+    }
+
     /** The persisted 9:16 canvas pan/zoom of the **selected** slide — what the canvas renders. */
     val selectedSlideTransform: StoryCanvasTransform
         get() = deck.selectedSlide.transform
@@ -122,6 +240,30 @@ data class StoryComposerUiState(
     /** The on-canvas text elements of the **selected** slide, in z-order, for rendering. */
     val selectedSlideTextElements: List<StoryTextElement>
         get() = deck.selectedSlide.elements
+
+    /** Les sons de la slide sélectionnée (fond + premier plan). */
+    val selectedSlideAudio: List<me.meeshy.sdk.model.StoryAudioPlayerObject>
+        get() = deck.selectedSlide.audio
+
+    /** La scène accepte une piste de plus — ou le fond emprunté en REMPLACE un (jamais deux fonds). */
+    val canBorrowSound: Boolean
+        get() = me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement.canBorrow(deck.selectedSlide.audio, deck.selectedSlide.mediaIds.size)
+
+    /** Ce que la porte du son DIT au plafond : une scène pleine de médias n'est pas « cinq sons au plus ». */
+    @get:androidx.annotation.StringRes
+    val soundCapRefusal: Int
+        get() = when (me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement.borrowRefusal(deck.selectedSlide.audio, deck.selectedSlide.mediaIds.size)) {
+            me.meeshy.sdk.model.composer.SceneObjectCaps.Reason.MEDIA_FULL -> me.meeshy.feature.stories.R.string.composer_scene_cap_media
+            else -> me.meeshy.feature.stories.R.string.composer_scene_cap_sound
+        }
+
+    /** Le sélecteur système se règle sur les places de la SLIDE, sons compris — jamais sur les seuls médias du brouillon. */
+    val mediaPickMode: StoryMediaPickMode
+        get() = StoryMediaPicker.modeFor(deck.selectedRemainingMediaSlots)
+
+    /** Le son de FOND de la slide sélectionnée — ce que la trace de la scène montre. */
+    val selectedSlideBackgroundSound: me.meeshy.sdk.model.StoryAudioPlayerObject?
+        get() = me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement.background(deck.selectedSlide.audio)
 
     /** The on-canvas stickers of the **selected** slide, in order, for rendering. */
     val selectedSlideStickers: List<StoryStickerElement>
@@ -166,18 +308,12 @@ data class StoryComposerUiState(
     val selectedTextElement: StoryTextElement?
         get() = selectedTextElementId?.let { id -> deck.selectedSlide.elements.firstOrNull { it.id == id } }
 
-    /** True while the text field edits an on-canvas element rather than the slide caption. */
-    val isEditingTextElement: Boolean get() = selectedTextElement != null
+    /** True while the text field edits an on-canvas element rather than the slide caption — a text only touched is framed, not written. */
+    val isEditingTextElement: Boolean
+        get() = selectedTextElement != null && !isTimelineOpen && selectedTextElementId != framedTextElementId
 
-    /**
-     * The unified long-press context menu for the element [elementMenuId] on the selected
-     * slide, or `null` when no menu is open (or the id no longer resolves, e.g. after the
-     * element was removed) — the pure [StoryElementMenu.resolve] decides which of edit /
-     * duplicate / reorder / delete may fire, so the screen renders a greyed row it can
-     * never mis-dispatch and stays glue.
-     */
-    val elementContextMenu: StoryElementContextMenu?
-        get() = elementMenuId?.let { StoryElementMenu.resolve(deck, it) }
+    /** La frise est le panneau ouvert : sélectionner un texte y règle sa fenêtre, sans clavier. */
+    val isTimelineOpen: Boolean get() = band.activeTool == StoryToolMode.TIMELINE
 
     /**
      * The effective on-screen duration (seconds) of the **selected** slide — the
@@ -185,7 +321,7 @@ data class StoryComposerUiState(
      * pure [StorySlideDeck.selectedSlideDurationSeconds] so the duration control shows a
      * live value and the screen stays glue.
      */
-    val selectedSlideDurationSeconds: Double get() = deck.selectedSlideDurationSeconds
+    val selectedSlideDurationSeconds: Double get() = deck.slideDurationSeconds(deck.selectedSlide, selectedSlideBackdropMediaId, ::videoSourceSeconds)
 
     /**
      * The **selected** slide's author-chosen backdrop (`null` when none), projected from
@@ -205,6 +341,12 @@ data class StoryComposerUiState(
         get() = deck.selectedSlideBackgroundMediaId
             ?.let { id -> attachments.firstOrNull { it.id == id } }
             ?.mimeType?.startsWith("video", ignoreCase = true) == true
+
+    /** Le fond MÉDIA de la slide sélectionnée (image ou vidéo) — ce qui ouvre le cadre et les effets ; `null` sans fond média. */
+    val selectedSlideSceneBackground: ComposerSceneBackground?
+        get() = deck.selectedSlideBackgroundMediaId
+            ?.let { id -> attachments.firstOrNull { it.id == id } }
+            ?.let { if (it.mimeType.startsWith("video", ignoreCase = true)) ComposerSceneBackground.VIDEO else ComposerSceneBackground.IMAGE }
 
     /**
      * Whether the **selected** slide's background loops — what the loop toggle reflects,
@@ -248,6 +390,20 @@ internal fun StoryComposerUiState.mirrorDraftToSelection(): StoryComposerUiState
         draft = draft.withText(deck.selectedSlide.text).withMediaIds(deck.selectedSlide.mediaIds),
         selectedTextElementId = if (stillSelected) elementId else null,
         selectedStickerId = if (stickerStillSelected) stickerId else null,
+        selectedMediaId = selectedMediaId?.takeIf(deck.selectedSlide::holdsMediaObject),
+        selectedSoundId = selectedSoundId?.takeIf { id -> deck.selectedSlide.audio.any { it.id == id } },
+        selectedPlaceId = selectedPlaceId?.takeIf { id -> deck.selectedSlide.places.any { it.id == id } },
         drawingBoard = drawingBoard.resyncedTo(deck.selectedSlide.strokes),
+    )
+}
+
+/** Les descriptions ne survivent pas à leur média : retirer un média purge son alt et sa légende. */
+internal fun StoryComposerUiState.withDescriptionsPruned(): StoryComposerUiState {
+    val present = deck.slides.flatMap { it.mediaIds }
+    return copy(
+        draft = draft.copy(
+            mediaAlt = MediaDescriptionLaw.pruned(draft.mediaAlt, present),
+            mediaCaption = MediaDescriptionLaw.pruned(draft.mediaCaption, present),
+        ),
     )
 }

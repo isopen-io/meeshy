@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,11 +49,7 @@ internal fun StoryCaptionOverlay(text: String, storyId: String, modifier: Modifi
             .navigationBarsPadding()
             .padding(start = MeeshySpacing.lg, end = RAIL_CLEARANCE, bottom = MeeshySpacing.xl),
     ) {
-        Text(
-            text = shown,
-            color = MeeshyPalette.White,
-            style = MaterialTheme.typography.bodyLarge.copy(shadow = CAPTION_SHADOW),
-        )
+        StoryCaptionText(shown)
         if (folded.isTruncated) {
             Text(
                 text = stringResource(if (expanded) R.string.stories_caption_see_less else R.string.stories_caption_see_more),
@@ -65,4 +62,31 @@ internal fun StoryCaptionOverlay(text: String, storyId: String, modifier: Modifi
             )
         }
     }
+}
+
+/**
+ * La légende telle que la vidéo exportée la grave (#13897) : posée comme le lecteur l'OUVRE — repliée au-delà de trente
+ * mots, ombrée, en bas à gauche — mais sans « voir plus », qu'aucune vidéo ne peut toucher, ni les encarts du système, ni
+ * la bande du rail, absent de la vidéo.
+ */
+@Composable
+internal fun StoryExportCaption(text: String, modifier: Modifier = Modifier) {
+    val folded = remember(text) { MediaCaptionRule.collapse(text) }
+    StoryCaptionText(
+        text = if (folded.isTruncated) folded.head + "…" else text,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = MeeshySpacing.lg, end = MeeshySpacing.lg, bottom = MeeshySpacing.xl)
+            .testTag(STORY_EXPORT_CAPTION_TAG),
+    )
+}
+
+@Composable
+private fun StoryCaptionText(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        color = MeeshyPalette.White,
+        style = MaterialTheme.typography.bodyLarge.copy(shadow = CAPTION_SHADOW),
+        modifier = modifier,
+    )
 }

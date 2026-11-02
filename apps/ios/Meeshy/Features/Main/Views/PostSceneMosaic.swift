@@ -507,6 +507,7 @@ struct PostSceneMosaic: View {
             isPlaying: .constant(joue),
             accentColorHex: accentColor,
             carrier: carrier,
+            sceneFloorHex: post.storyAccentHex,
             isMuted: isMuted
         )
     }

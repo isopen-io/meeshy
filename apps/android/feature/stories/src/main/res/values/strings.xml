@@ -32,6 +32,11 @@
     <string name="stories_composer_add_slide">Add slide</string>
     <string name="stories_composer_duplicate_slide">Duplicate slide</string>
     <string name="stories_composer_remove_slide">Remove slide</string>
+    <string name="stories_composer_remove_slide_title">Remove this slide?</string>
+    <string name="stories_composer_remove_slide_message">Everything on it will be lost.</string>
+    <string name="stories_composer_remove_slide_confirm">Remove</string>
+    <string name="stories_composer_slide_move_earlier">Move earlier</string>
+    <string name="stories_composer_slide_move_later">Move later</string>
     <string name="stories_composer_text_placeholder">Type something…</string>
     <string name="stories_composer_remove_text">Remove text</string>
     <string name="stories_composer_bg_none">No background</string>
@@ -39,6 +44,8 @@
     <string name="stories_composer_fade_out">Text fade out</string>
     <string name="stories_composer_timing_start">Text start time</string>
     <string name="stories_composer_timing_duration">Text visible duration</string>
+    <string name="stories_composer_timing_unset">Not set</string>
+    <string name="stories_composer_timing_value">%1$s seconds</string>
     <string name="stories_composer_draw_undo">Undo stroke</string>
     <string name="stories_composer_draw_done">Done drawing</string>
     <string name="stories_composer_remove_sticker">Remove sticker</string>

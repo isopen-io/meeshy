@@ -68,7 +68,7 @@ final class OutboxDispatcherSendFailurePersistenceTests: XCTestCase {
             reactionService: MockReactionService(),
             reportService: MockReportService(),
             messageSocket: MockMessageSocket(),
-            dependencies: ConversationDependencies(dbPool: store.pool, persistence: store.persistence),
+            dependencies: ConversationDependencies(persistence: store.persistence),
             networkMonitor: FakeNetworkMonitor(isOnline: true),
             offlineQueue: queue
         )

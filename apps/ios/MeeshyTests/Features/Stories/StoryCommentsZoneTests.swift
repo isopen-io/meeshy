@@ -180,7 +180,7 @@ final class StoryCommentsZoneTests: XCTestCase {
         let views = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views")
+            .appendingPathComponent("Meeshy/Features/Stories/Views")
         let layer = AppSourceGuard.stripComments(try String(
             contentsOf: views.appendingPathComponent("StoryViewerView+CanvasComposerLayer.swift"), encoding: .utf8))
         XCTAssertTrue(layer.contains("StoryCommentsZone.state("))
@@ -190,14 +190,14 @@ final class StoryCommentsZoneTests: XCTestCase {
         XCTAssertTrue(host.contains("reading.frame(safeBottom: inputs.safeBottom)"),
                       "l'hôte ne calcule rien : il remet la lecture du composeur à la loi")
         let canvas = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift"))
         XCTAssertTrue(canvas.contains(".placed(commentsZoneReading(geometry: geometry))"))
         XCTAssertTrue(layer.contains("StoryComposerFold.chevronTapped"))
         XCTAssertTrue(layer.contains("StoryComposerFold.bubbleTapped"))
 
         let content = AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Views/StoryViewerView+Content.swift",
-            alsoIncluding: ["Meeshy/Features/Main/Views/StoryCommentsOverlayView.swift"]))
+            "Meeshy/Features/Stories/Views/StoryViewerView+Content.swift",
+            alsoIncluding: ["Meeshy/Features/Stories/Views/StoryCommentsOverlayView.swift"]))
         XCTAssertFalse(content.contains("composerSpaceReservation"), "plus de réserve constante")
         XCTAssertFalse(content.contains("window * 0.42"), "plus de fraction propre à la liste")
         XCTAssertTrue(content.contains(".frame(maxHeight: zone.maxHeight)"))

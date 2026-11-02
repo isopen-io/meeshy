@@ -141,3 +141,131 @@ describe('cleanupEmptyMessages', () => {
     expect(mockRecomputeIfTracked).toHaveBeenCalledTimes(2);
   });
 });
+
+/**
+ * #13027 — le balayage jugeait un message « vide » sur son seul `content`.
+ * Or `MessageProcessor` enregistre `content: ''` pour tout message chiffré par
+ * le serveur (`server`, `hybrid`) : son texte vit dans `encryptedContent`. Un
+ * tel message disparaissait en silence au bout d'un jour.
+ *
+ * Ces témoins font tourner le VRAI filtre que le balayage remet à Mongo sur une
+ * petite base en mémoire, au lieu de simuler sa réponse : c'est le filtre qui
+ * était faux, un `findRaw` simulé ne pouvait pas le voir.
+ */
+type StoredMessage = {
+  readonly _id: { $oid: string };
+  readonly conversationId: { $oid: string };
+  readonly content: string;
+  readonly createdAt: Date;
+  readonly isEncrypted?: boolean;
+  readonly encryptionMode?: string | null;
+  readonly encryptedContent?: string | null;
+  deletedAt: Date | null;
+};
+
+const asComparable = (value: unknown): unknown => {
+  if (value instanceof Date) return value.getTime();
+  if (value && typeof value === 'object' && '$date' in value) {
+    return new Date((value as { $date: string }).$date).getTime();
+  }
+  return value;
+};
+
+function fieldMatches(actual: unknown, condition: unknown): boolean {
+  if (condition === null) return actual === null || actual === undefined;
+  if (condition && typeof condition === 'object' && !('$date' in condition)) {
+    return Object.entries(condition).every(([operator, operand]) => {
+      if (operator === '$regex') return typeof actual === 'string' && new RegExp(operand as string).test(actual);
+      if (operator === '$lt') return (asComparable(actual) as number) < (asComparable(operand) as number);
+      if (operator === '$ne') return !fieldMatches(actual, operand);
+      throw new Error(`opérateur non simulé : ${operator}`);
+    });
+  }
+  return asComparable(actual) === asComparable(condition);
+}
+
+function documentMatches(doc: Record<string, unknown>, filter: Record<string, unknown>): boolean {
+  return Object.entries(filter).every(([key, condition]) => {
+    if (key === '$or') return (condition as Record<string, unknown>[]).some((f) => documentMatches(doc, f));
+    if (key === '$and') return (condition as Record<string, unknown>[]).every((f) => documentMatches(doc, f));
+    return fieldMatches(doc[key], condition);
+  });
+}
+
+function prismaOver(store: StoredMessage[]) {
+  const prisma = makePrisma();
+  prisma.message.findRaw.mockImplementation(async ({ filter }: { filter: Record<string, unknown> }) =>
+    store
+      .filter((doc) => documentMatches(doc as unknown as Record<string, unknown>, filter))
+      .map((doc) => ({ _id: doc._id, conversationId: doc.conversationId })));
+  prisma.message.updateMany.mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) => {
+    const hit = store.filter((doc) => where.id.in.includes(doc._id.$oid));
+    hit.forEach((doc) => { doc.deletedAt = new Date(); });
+    return { count: hit.length };
+  });
+  return prisma;
+}
+
+const hoursAgo = (hours: number): Date => new Date(Date.now() - hours * 3_600_000);
+
+function storedMessage(id: string, fields: Partial<StoredMessage> = {}): StoredMessage {
+  return {
+    _id: { $oid: id },
+    conversationId: { $oid: CONV_A },
+    content: '',
+    createdAt: hoursAgo(25),
+    isEncrypted: false,
+    encryptionMode: null,
+    encryptedContent: null,
+    deletedAt: null,
+    ...fields,
+  };
+}
+
+const sealedBy = (encryptionMode: 'server' | 'hybrid' | 'e2ee') => ({
+  isEncrypted: true,
+  encryptionMode,
+  encryptedContent: 'c2NlbGzDqQ==',
+});
+
+describe('cleanupEmptyMessages — un message chiffré n’est jamais vide (#13027)', () => {
+  it.each(['server', 'hybrid', 'e2ee'] as const)(
+    'garde un message chiffré %s au content vide, vieux de 25 h',
+    async (mode) => {
+      const sealed = storedMessage(MSG_1, sealedBy(mode));
+      const store = [sealed];
+
+      await sweep(prismaOver(store));
+
+      expect(sealed.deletedAt).toBeNull();
+    }
+  );
+
+  it('garde un message dont seul encryptedContent dit qu’il est chiffré', async () => {
+    const sealed = storedMessage(MSG_1, { encryptedContent: 'c2NlbGzDqQ==' });
+
+    await sweep(prismaOver([sealed]));
+
+    expect(sealed.deletedAt).toBeNull();
+  });
+
+  it('garde un message marqué isEncrypted même sans encryptedContent', async () => {
+    const sealed = storedMessage(MSG_1, { isEncrypted: true, encryptionMode: 'server' });
+
+    await sweep(prismaOver([sealed]));
+
+    expect(sealed.deletedAt).toBeNull();
+  });
+
+  it('retire toujours le fantôme en clair voisin, et lui seul', async () => {
+    const ghost = storedMessage(MSG_2, { content: '   ' });
+    const sealed = storedMessage(MSG_1, sealedBy('server'));
+    const young = storedMessage(MSG_3, { createdAt: hoursAgo(2) });
+
+    await sweep(prismaOver([sealed, ghost, young]));
+
+    expect(ghost.deletedAt).toBeInstanceOf(Date);
+    expect(sealed.deletedAt).toBeNull();
+    expect(young.deletedAt).toBeNull();
+  });
+});

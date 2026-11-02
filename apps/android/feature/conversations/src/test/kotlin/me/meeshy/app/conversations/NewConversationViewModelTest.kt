@@ -13,7 +13,11 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.conversation.ConversationRepository
+import kotlinx.coroutines.flow.MutableStateFlow
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.CreationEncryptionMode
+import me.meeshy.sdk.model.CreationEncryptionUnavailability
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
@@ -41,8 +45,9 @@ class NewConversationViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun session(currentUserId: String? = null) = mockk<SessionRepository>(relaxed = true) {
+    private fun session(currentUserId: String? = null, role: String? = null) = mockk<SessionRepository>(relaxed = true) {
         every { this@mockk.currentUserId } returns currentUserId
+        every { currentUser } returns MutableStateFlow(MeeshyUser(id = currentUserId ?: "me", username = "me", role = role))
     }
 
     private fun viewModel(
@@ -220,7 +225,7 @@ class NewConversationViewModelTest {
         val users = mockk<UserRepository>()
         coEvery { users.searchUsersPaged(any(), any(), any()) } returns paged(listOf("u1"))
         val conversations = mockk<ConversationRepository>()
-        coEvery { conversations.create(any(), any(), any()) } returns
+        coEvery { conversations.create(any(), any(), any(), any()) } returns
             NetworkResult.Success(ApiConversation(id = "c-new"))
         val vm = viewModel(users = users, conversations = conversations)
 
@@ -230,7 +235,7 @@ class NewConversationViewModelTest {
         vm.create()
         advanceUntilIdle()
 
-        coVerify { conversations.create(NewConversationLogic.TYPE_DIRECT, null, listOf("u1")) }
+        coVerify { conversations.create(NewConversationLogic.TYPE_DIRECT, null, listOf("u1"), "server") }
         assertThat(vm.state.value.createdConversationId).isEqualTo("c-new")
     }
 
@@ -239,7 +244,7 @@ class NewConversationViewModelTest {
         val users = mockk<UserRepository>()
         coEvery { users.searchUsersPaged(any(), any(), any()) } returns paged(listOf("u1", "u2"))
         val conversations = mockk<ConversationRepository>()
-        coEvery { conversations.create(any(), any(), any()) } returns
+        coEvery { conversations.create(any(), any(), any(), any()) } returns
             NetworkResult.Success(ApiConversation(id = "g-new"))
         val vm = viewModel(users = users, conversations = conversations)
 
@@ -251,7 +256,7 @@ class NewConversationViewModelTest {
         vm.create()
         advanceUntilIdle()
 
-        coVerify { conversations.create(NewConversationLogic.TYPE_GROUP, "Squad", listOf("u1", "u2")) }
+        coVerify { conversations.create(NewConversationLogic.TYPE_GROUP, "Squad", listOf("u1", "u2"), "server") }
         assertThat(vm.state.value.createdConversationId).isEqualTo("g-new")
     }
 
@@ -260,7 +265,7 @@ class NewConversationViewModelTest {
         val users = mockk<UserRepository>()
         coEvery { users.searchUsersPaged(any(), any(), any()) } returns paged(listOf("u1"))
         val conversations = mockk<ConversationRepository>()
-        coEvery { conversations.create(any(), any(), any()) } returns
+        coEvery { conversations.create(any(), any(), any(), any()) } returns
             NetworkResult.Failure(ApiError(code = "boom", message = "Network down"))
         val vm = viewModel(users = users, conversations = conversations)
 
@@ -280,7 +285,7 @@ class NewConversationViewModelTest {
         val users = mockk<UserRepository>()
         coEvery { users.searchUsersPaged(any(), any(), any()) } returns paged(listOf("u1"))
         val conversations = mockk<ConversationRepository>()
-        coEvery { conversations.create(any(), any(), any()) } returns
+        coEvery { conversations.create(any(), any(), any(), any()) } returns
             NetworkResult.Failure(ApiError(code = "USER_BLOCKED", message = "Forbidden", httpStatus = 403))
         val vm = viewModel(users = users, conversations = conversations)
 
@@ -327,5 +332,73 @@ class NewConversationViewModelTest {
         vm.onQueryChange("zzz")
 
         assertThat(vm.state.value.showsNoResults).isFalse()
+    }
+
+    // MARK: la section Chiffrement (décision du 2026-11-01)
+
+    private fun pickerWith(vararg ids: String): UserRepository = mockk {
+        coEvery { searchUsersPaged(any(), any(), any()) } returns paged(ids.toList())
+    }
+
+    @Test
+    fun an_ordinary_user_is_offered_server_and_hybrid_with_server_checked() = runTest(dispatcher) {
+        val vm = viewModel(users = pickerWith("u1"), session = session(role = "USER"))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.encryptionOffer.choices.map { it.mode })
+            .containsExactly(CreationEncryptionMode.SERVER, CreationEncryptionMode.HYBRID).inOrder()
+        assertThat(vm.state.value.encryptionMode).isEqualTo(CreationEncryptionMode.SERVER)
+    }
+
+    @Test
+    fun an_analyst_sees_end_to_end_soon_on_this_phone_and_server_stays_checked() = runTest(dispatcher) {
+        val vm = viewModel(users = pickerWith("u1"), session = session(role = "ANALYST"))
+        vm.onQueryChange("bob")
+        advanceUntilIdle()
+        vm.toggleSelection("u1")
+
+        val e2ee = vm.state.value.encryptionOffer.choices.last()
+        assertThat(e2ee.mode).isEqualTo(CreationEncryptionMode.E2EE)
+        assertThat(e2ee.available).isFalse()
+        assertThat(e2ee.unavailability).isEqualTo(CreationEncryptionUnavailability.CLIENT_NOT_YET)
+        assertThat(vm.state.value.encryptionMode).isEqualTo(CreationEncryptionMode.SERVER)
+    }
+
+    @Test
+    fun in_a_group_end_to_end_is_soon_for_groups() = runTest(dispatcher) {
+        val vm = viewModel(users = pickerWith("u1", "u2"), session = session(role = "ADMIN"))
+        vm.onQueryChange("team")
+        advanceUntilIdle()
+        vm.toggleSelection("u1")
+        vm.toggleSelection("u2")
+
+        assertThat(vm.state.value.encryptionOffer.choices.last().unavailability)
+            .isEqualTo(CreationEncryptionUnavailability.GROUPS_NOT_YET)
+    }
+
+    @Test
+    fun an_unavailable_mode_cannot_be_checked() = runTest(dispatcher) {
+        val vm = viewModel(users = pickerWith("u1"), session = session(role = "ADMIN"))
+        advanceUntilIdle()
+
+        vm.selectEncryptionMode(CreationEncryptionMode.E2EE)
+
+        assertThat(vm.state.value.encryptionMode).isEqualTo(CreationEncryptionMode.SERVER)
+    }
+
+    @Test
+    fun the_checked_mode_leaves_with_the_creation_request() = runTest(dispatcher) {
+        val conversations = mockk<ConversationRepository>()
+        coEvery { conversations.create(any(), any(), any(), any()) } returns NetworkResult.Success(ApiConversation(id = "c-new"))
+        val vm = viewModel(users = pickerWith("u1"), conversations = conversations, session = session(role = "USER"))
+        vm.onQueryChange("bob")
+        advanceUntilIdle()
+        vm.toggleSelection("u1")
+
+        vm.selectEncryptionMode(CreationEncryptionMode.HYBRID)
+        vm.create()
+        advanceUntilIdle()
+
+        coVerify { conversations.create(NewConversationLogic.TYPE_DIRECT, null, listOf("u1"), "hybrid") }
     }
 }

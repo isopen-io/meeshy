@@ -49,7 +49,7 @@ final class CameraSuspensionSignalGuardTests: XCTestCase {
     /// transition et `willStartPictureInPicture` peut arriver après.
     func test_backgroundObserver_neverEmitsCameraOffToThePeer() throws {
         let code = strippingComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         )
         // Le corps ÉQUILIBRÉ de l'observateur, pas la fenêtre « de la première
         // mention de l'arrière-plan à la première mention de l'avant-plan » :
@@ -80,7 +80,7 @@ final class CameraSuspensionSignalGuardTests: XCTestCase {
     /// l'avatar jusqu'à la fin de l'appel.
     func test_foregroundObserver_stillLiftsTheSuspension() throws {
         let code = strippingComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         )
         guard let start = code.range(of: "UIApplication.willEnterForegroundNotification") else {
             XCTFail("CallManager doit observer le retour en avant-plan")
@@ -100,7 +100,7 @@ final class CameraSuspensionSignalGuardTests: XCTestCase {
     /// couperait la vidéo d'appel sur un événement sans aucun rapport.
     func test_captureInterruptionObservation_isScopedToTheCallSession() throws {
         let code = strippingComments(
-            try source("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+CaptureInterruption.swift")
+            try source("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+CaptureInterruption.swift")
         )
         guard let start = code.range(of: "AVCaptureSession.wasInterruptedNotification") else {
             XCTFail("P2PWebRTCClient doit observer l'interruption de sa session de capture")
@@ -127,7 +127,7 @@ final class CameraSuspensionSignalGuardTests: XCTestCase {
     /// exhaustif deviendrait un point de rupture silencieux.
     func test_interruptionHandling_doesNotSwitchOnReason() throws {
         let code = strippingComments(
-            try source("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift") + source("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+CaptureInterruption.swift")
+            try source("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift") + source("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+CaptureInterruption.swift")
         )
         XCTAssertFalse(
             code.contains("AVCaptureSessionInterruptionReasonKey"),

@@ -79,7 +79,7 @@ final class TimelineExtendDurationTests: XCTestCase {
 
     func test_extend_isCappedAtTheMaximumEnd() {
         let vm = makeViewModel(project: projectWithVideo(duration: 7))
-        for _ in 0..<80 { vm.extendSlideDuration() }
+        for _ in 0..<Int(ClipWindowResolver.maximumEnd / 10) + 80 { vm.extendSlideDuration() }
 
         XCTAssertEqual(vm.project.slideDuration, ClipWindowResolver.maximumEnd, accuracy: 0.01)
     }
@@ -88,7 +88,7 @@ final class TimelineExtendDurationTests: XCTestCase {
     /// reconfigurations de moteur pour rien.
     func test_extend_atTheCapIsANoOp() {
         let vm = makeViewModel(project: projectWithVideo(duration: 7))
-        for _ in 0..<80 { vm.extendSlideDuration() }
+        for _ in 0..<Int(ClipWindowResolver.maximumEnd / 10) + 80 { vm.extendSlideDuration() }
         let capped = vm.project.slideDuration
 
         vm.extendSlideDuration()

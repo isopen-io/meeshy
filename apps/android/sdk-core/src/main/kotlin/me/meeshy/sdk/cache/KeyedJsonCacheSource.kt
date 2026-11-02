@@ -22,7 +22,8 @@ class KeyedJsonCacheSource<T>(
     override fun lastSyncedAt(): Flow<Long?> = cache.observeFetchedAt(namespace, key)
 
     override suspend fun revalidate() {
-        cache.put(namespace, key, fetch(), serializer)
+        val ticket = cache.ticket()
+        cache.put(namespace, key, fetch(), serializer, ticket)
     }
 
     fun results(

@@ -5,7 +5,7 @@ import XCTest
 /// que là où un verrou garde l'état, ou là où l'état mutable est nommé ici.
 final class ServicesSendabilityGuardTests: XCTestCase {
 
-    private static let namedUncheckedServices: Set<String> = ["BlockService.swift", "LocationService.swift"]
+    private static let namedUncheckedServices: Set<String> = []
     private static let lockPrimitive = try! NSRegularExpression(
         pattern: #"OSAllocatedUnfairLock|NSLock|os_unfair_lock|Mutex<"#
     )
@@ -49,14 +49,17 @@ final class ServicesSendabilityGuardTests: XCTestCase {
         )
     }
 
-    func test_theNamedUncheckedServicesStillNeedTheirEscapeHatch() throws {
-        let files = try services().filter { Self.namedUncheckedServices.contains($0.name) }
-        XCTAssertEqual(files.count, Self.namedUncheckedServices.count)
-        for file in files {
-            XCTAssertTrue(
-                file.text.contains("@unchecked Sendable"),
-                "\(file.name) est devenu Sendable vérifié : retirez-le de la liste nommée."
-            )
+    func test_blockConversationCardAndLocationServices_declareCompilerCheckedSendable() throws {
+        let declarations = [
+            ("BlockService.swift", "ObservableObject, BlockServiceProviding, Sendable"),
+            ("ConversationCardService.swift", "ConversationCardServiceProviding, Sendable"),
+            ("LocationService.swift", "LocationServiceProviding, Sendable")
+        ]
+        let files = try services()
+        for (name, declaration) in declarations {
+            let text = try XCTUnwrap(files.first { $0.name == name }?.text, name)
+            XCTAssertFalse(text.contains("@unchecked Sendable"), "\(name) doit être Sendable vérifié.")
+            XCTAssertTrue(text.contains(": \(declaration)"), "\(name) déclare `\(declaration)`.")
         }
     }
 

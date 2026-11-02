@@ -34,6 +34,7 @@ import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.imageLoader
 import coil.memory.MemoryCache
+import coil.request.CachePolicy
 import coil.request.ImageRequest
 import kotlin.math.abs
 import kotlinx.coroutines.launch
@@ -70,6 +71,7 @@ internal fun ZoomableImagePage(
     onTap: () -> Unit,
     onDragProgress: (Float) -> Unit,
     onDismiss: () -> Unit,
+    secure: Boolean = false,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -197,6 +199,7 @@ internal fun ZoomableImagePage(
                 val request = remember(mount.fullUrl, attempt) {
                     ImageRequest.Builder(context)
                         .data(mount.fullUrl)
+                        .apply { if (secure) diskCachePolicy(CachePolicy.DISABLED) }
                         .setParameter(RETRY_PARAMETER, attempt, memoryCacheKey = null)
                         .build()
                 }

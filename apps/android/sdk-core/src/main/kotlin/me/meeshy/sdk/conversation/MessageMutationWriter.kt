@@ -3,6 +3,7 @@ package me.meeshy.sdk.conversation
 import java.time.Instant
 import kotlinx.serialization.encodeToString
 import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.outbox.OutboxKind
@@ -22,6 +23,7 @@ internal class MessageMutationWriter(
     private val updater: CachedMessageUpdater,
     private val outboxRepository: OutboxRepository,
     private val clock: CacheClock,
+    private val revisions: EditRevisionLedger? = null,
 ) {
 
     /**
@@ -31,7 +33,7 @@ internal class MessageMutationWriter(
      * whether the toggle was applied.
      */
     suspend fun toggleReactionOptimistic(messageId: String, emoji: String, isAdding: Boolean): Boolean {
-        updater.update(messageId, requireSynced = true) { message ->
+        val updated = updater.update(messageId, requireSynced = true) { message ->
             message.copy(reactionSummary = message.reactionSummary.shifted(emoji, if (isAdding) 1 else -1))
         } ?: return false
         outboxRepository.enqueue(
@@ -39,7 +41,7 @@ internal class MessageMutationWriter(
                 kind = if (isAdding) OutboxKind.ADD_REACTION else OutboxKind.REMOVE_REACTION,
                 lane = OutboxLanes.REACTION,
                 targetId = messageId,
-                payload = MeeshyApi.json.encodeToString(ReactionPayload(emoji)),
+                payload = MeeshyApi.json.encodeToString(ReactionPayload(emoji, updated.conversationId)),
             ),
         )
         return true
@@ -53,15 +55,30 @@ internal class MessageMutationWriter(
     }
 
     /**
+     * Applies a `message:edited` frame — the gateway's FULL message, edited in place
+     * (a text edit, or a live call notice turned terminal) — over the cached row. The
+     * forward-watermark refresh never re-reads a message whose `createdAt` did not move,
+     * so without this the cached copy stays the old one. Returns `false` (nothing
+     * written) when this device never cached the message or only holds its optimistic
+     * local bubble.
+     */
+    suspend fun applyServerEdit(message: ApiMessage): Boolean =
+        updater.update(message.id, requireSynced = true) { message } != null
+
+    /**
      * Optimistic edit of a server-acked message: the cached content flips
      * instantly, stale translations are purged (the Prisme must never show a
      * translation of the old text — the retranslation arrives over the socket),
      * and an `EDIT_MESSAGE` mutation joins the conversation's FIFO lane.
      */
     suspend fun editOptimistic(messageId: String, content: String): Boolean {
+        val ticket = updater.ticket()
+        var previousContent: String? = null
         val updated = updater.update(messageId, requireSynced = true) { message ->
+            previousContent = message.content
             message.copy(content = content, isEdited = true, translations = emptyList())
         } ?: return false
+        revisions?.record(messageId, previousContent, content, ticket)
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.EDIT_MESSAGE,
@@ -86,6 +103,7 @@ internal class MessageMutationWriter(
                 deletedAt = Instant.ofEpochMilli(clock.nowMillis()).toString(),
             )
         } ?: return false
+        revisions?.forget(listOf(messageId))
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.DELETE_MESSAGE,

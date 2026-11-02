@@ -130,7 +130,7 @@ public func detach() {
 ### Bug
 
 ```swift
-// apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:996-1012
+// apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift:996-1012
 // prefetchAllMedia loop
 for url in uniqueURLs {
     Task {

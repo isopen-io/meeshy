@@ -35,6 +35,10 @@ class CategoryRepositoryTest {
         var response: ApiResponse<List<ApiCategory>>,
         var createResponse: ApiResponse<ApiCategory> = ApiResponse(success = false, error = "not stubbed"),
     ) : PreferencesApi {
+        override suspend fun updateAudio(body: me.meeshy.sdk.model.AudioPreferenceSyncBody) = ApiResponse<Unit>(success = false)
+
+        override suspend fun getAudio() = ApiResponse<me.meeshy.sdk.model.AudioPreferenceSyncBody>(success = false)
+
         var calls: Int = 0
         var createCalls: Int = 0
         var lastCreateBody: CreateCategoryBody? = null

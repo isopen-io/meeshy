@@ -54,6 +54,13 @@ export interface ErrorEventData {
    * L'appareil purge les données locales de CE compte, jamais d'un autre.
    */
   readonly accountId?: string;
+  /**
+   * #13954 — avec `code: 'UPGRADE_REQUIRED'` seulement : le client est sous le
+   * plancher de version de sa plateforme (D-5). La socket est fermée ensuite ;
+   * le client monte l'écran « Mettre à jour Meeshy » vers `storeUrl`.
+   */
+  readonly minVersion?: string;
+  readonly storeUrl?: string;
 }
 
 export interface AuthTokenExpiredEventData {

@@ -72,7 +72,7 @@ final class ComposerSoundCreditTests: XCTestCase {
                                          x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
         son.duration = 7
         let libelle = ComposerSoundCredit.label(for: son)
-        XCTAssertEqual(libelle, LocalizedNumber.duration(seconds: 7),
+        XCTAssertEqual(libelle, MediaFormat.duration(7),
                        "sans titre, le crédit est sa seule durée — \(libelle)")
     }
 
@@ -95,7 +95,7 @@ final class ComposerSoundCreditTests: XCTestCase {
         let libelle = ComposerSoundCredit.label(for: son)
         XCTAssertFalse(libelle.contains("Mémo du mardi"),
                        "un titre saisi sur un VOCAL n'en fait pas un emprunt — \(libelle)")
-        XCTAssertEqual(libelle, LocalizedNumber.duration(seconds: 7),
+        XCTAssertEqual(libelle, MediaFormat.duration(7),
                        "il ne lui reste que sa durée — \(libelle)")
     }
 
@@ -193,7 +193,7 @@ final class ComposerSoundCreditTests: XCTestCase {
                                          x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
         son.duration = 143
         XCTAssertEqual(ComposerSoundCredit.durationLabel(for: son, locale: Locale(identifier: "fr_FR")),
-                       LocalizedNumber.duration(seconds: 143, locale: Locale(identifier: "fr_FR")))
+                       MediaFormat.duration(143, locale: Locale(identifier: "fr_FR")))
     }
 
     /// Une durée inconnue rend `nil` — la vue ne peint alors rien, plutôt qu'un

@@ -3,6 +3,7 @@ package me.meeshy.sdk.model.scene
 import me.meeshy.sdk.model.ImageAdjustments as WireAdjustments
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.imageedit.ImageEditState
 import me.meeshy.sdk.model.imageedit.ImageEffect
 import me.meeshy.sdk.model.imageedit.ImageFilter
@@ -53,7 +54,11 @@ data class SceneLookRecipe(
         fun filterOf(effects: StoryEffects): StoryFilter? =
             effects.filter?.let { token -> StoryFilter.entries.firstOrNull { it.wireValue() == token } }
 
-        /** Le look du FOND de ces effets : le filtre de slide, puis les réglages du média de fond. */
+        /**
+         * Le look du FOND de ces effets : le filtre de slide, puis les réglages du média de fond. Un filtre d'objet posé sur
+         * le fond n'y entre pas, comme iOS (`StoryBackgroundLook` ne peint que `effects.filter`) : une même story se lit
+         * pareil sur les deux clients.
+         */
         fun forEffects(effects: StoryEffects?): SceneLookRecipe {
             if (effects == null) return NEUTRAL
             val background = effects.mediaObjects.orEmpty().firstOrNull { it.isBackground }
@@ -64,6 +69,10 @@ data class SceneLookRecipe(
                 isVideo = background?.mediaType == "video",
             )
         }
+
+        /** Le look d'UN média posé : SON filtre (à pleine force) puis ses réglages — jamais le filtre de la scène. */
+        fun forMedia(media: StoryMediaObject): SceneLookRecipe =
+            forStory(media.parsedFilter, 1f, media.adjustments, media.mediaType == "video")
 
         /** Le look complet d'un état d'éditeur d'image (filtre, réglages, effet). */
         fun forEdit(state: ImageEditState): SceneLookRecipe {

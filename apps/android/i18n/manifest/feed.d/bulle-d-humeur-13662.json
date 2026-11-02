@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "status.bubble.republish", "androidName": "status_bubble_republish", "status": "adopted" },
+        { "catalog": "app", "iosKey": "status.bubble.via", "androidName": "status_bubble_via", "status": "adopted" },
+        { "catalog": "app", "iosKey": "mood.reply.confirm.reply", "androidName": "mood_bubble_reply", "status": "adopted" },
+        { "catalog": "app", "iosKey": "conversation.row.reaction.a11y", "androidName": "mood_bubble_react", "status": "adopted" },
+        { "catalog": "app", "iosKey": "status.reactError", "androidName": "status_react_error", "status": "adopted" }
+      ]
+    }
+  }
+}

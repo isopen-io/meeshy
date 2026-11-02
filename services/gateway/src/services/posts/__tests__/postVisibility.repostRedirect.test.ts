@@ -60,6 +60,7 @@ function makePrisma(byId: Record<string, FakePost | null>) {
       findFirst: jest.fn(({ where }: { where: { id: string } }) =>
         Promise.resolve(byId[where.id] ?? null)),
     },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: { findFirst: jest.fn().mockResolvedValue(null) },
     communityMember: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
     participant: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },

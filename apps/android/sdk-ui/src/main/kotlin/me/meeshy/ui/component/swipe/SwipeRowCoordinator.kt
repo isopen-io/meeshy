@@ -1,5 +1,8 @@
 package me.meeshy.ui.component.swipe
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import me.meeshy.sdk.model.chrome.SwipeRowFrame
 import me.meeshy.sdk.model.chrome.SwipeRowLaw
@@ -10,15 +13,20 @@ import me.meeshy.sdk.model.chrome.SwipeRowLaw
  */
 public class SwipeRowCoordinator {
     private var openRowId: Any? = null
+    private var rowOpen by mutableStateOf(false)
     private var closeOpenRowAction: (() -> Unit)? = null
     private var openRowFrame: SwipeRowFrame? = null
 
     public val hasOpenRow: Boolean get() = openRowId != null
 
+    /** Lisible depuis Compose : les boutons flottants s'effacent tant qu'une ligne glissee reste ouverte. */
+    public val isRowOpen: Boolean get() = rowOpen
+
     public fun rowDidOpen(id: Any, close: () -> Unit) {
         val current = openRowId
         if (current != null && current != id) closeOpenRowAction?.invoke()
         openRowId = id
+        rowOpen = true
         closeOpenRowAction = close
         openRowFrame = null
     }
@@ -45,6 +53,7 @@ public class SwipeRowCoordinator {
 
     private fun forget() {
         openRowId = null
+        rowOpen = false
         closeOpenRowAction = null
         openRowFrame = null
     }

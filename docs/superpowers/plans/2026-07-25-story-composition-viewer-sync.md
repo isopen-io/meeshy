@@ -307,8 +307,8 @@ l'auto-advance. Division par zéro impossible."
 ## Task 3 : Câbler `onPlaybackTime` — le playhead pilote la barre
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:932-972` (ajout du paramètre `onPlaybackTime` au `StoryReaderRepresentable`)
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:160-200` (nouvel `@State` de playhead), `:792-836` (`installPrefetchPipelineIfNeeded`)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift:932-972` (ajout du paramètre `onPlaybackTime` au `StoryReaderRepresentable`)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift:160-200` (nouvel `@State` de playhead), `:792-836` (`installPrefetchPipelineIfNeeded`)
 
 **Interfaces:**
 - Consumes: `StoryPlaybackClock.resolve(playheadSeconds:wallClockElapsed:duration:isPaused:)` (Task 2). `StoryReaderRepresentable.init(..., onPlaybackTime: ((Double) -> Void)? = nil, ...)` (`StoryReaderRepresentable.swift:96`, déjà existant).
@@ -418,9 +418,9 @@ Attendu : build vert, suite verte.
 - [ ] **Step 8 : Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift \
-        apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift \
-        apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift \
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift \
+        apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift \
+        apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift \
         apps/ios/MeeshyTests/Unit/Views/StoryPlaybackClockTests.swift
 git commit -m "fix(ios/story): la barre de progression suit le playhead du canvas
 
@@ -437,8 +437,8 @@ StoryPlaybackClock arbitre : playhead prioritaire, wall-clock en repli."
 ## Task 4 : Corriger D9 — armer le timer avec la durée de la bonne slide
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:854-940` (`refreshPrefetchWindowAndTimer`)
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:619-631` (rendre `updateStoryDuration` accessible)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift:854-940` (`refreshPrefetchWindowAndTimer`)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift:619-631` (rendre `updateStoryDuration` accessible)
 
 **Interfaces:**
 - Consumes: `canvasPlayheadSeconds` (Task 3).
@@ -448,7 +448,7 @@ StoryPlaybackClock arbitre : playhead prioritaire, wall-clock en repli."
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
-sed -n '854,945p' apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
+sed -n '854,945p' apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
 grep -n "refreshPrefetchWindowAndTimer" apps/ios/Meeshy/Features/Main/Views/StoryViewerView*.swift
 ```
 
@@ -480,8 +480,8 @@ Dans `refreshPrefetchWindowAndTimer`, immédiatement avant la ligne `t.setCurren
 - [ ] **Step 5 : Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift \
-        apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift \
+        apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
 git commit -m "fix(ios/story): armer le timer avec la durée de la slide courante
 
 refreshPrefetchWindowAndTimer() est appelé sur les onChange d'index, donc
@@ -584,8 +584,8 @@ contenu pendant 350-400 ms, éléments terminés et pas encore apparus compris."
 ## Task 6 : Corriger D2/D3 — une seule application du `closing`, constantes alignées
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:360-433` (`crossFadeStory`)
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:905-915, 1010-1025`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift:360-433` (`crossFadeStory`)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift:905-915, 1010-1025`
 - Test: `apps/ios/MeeshyTests/Features/Stories/StoryTransitionParityTests.swift` (créer)
 
 **Interfaces:**
@@ -597,7 +597,7 @@ contenu pendant 350-400 ms, éléments terminés et pas encore apparus compris."
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
 sed -n '555,575p' packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift
-sed -n '360,433p' apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
+sed -n '360,433p' apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
 grep -n "closingScale\|outgoingOpacity\|openingScale\|textSlideOffset" apps/ios/Meeshy/Features/Main/Views/StoryViewerView+*.swift
 ```
 
@@ -671,8 +671,8 @@ Puis dans `crossFadeStory` (`+Content.swift`), remplacer les littéraux d'ouvert
 
 ```bash
 git add apps/ios/Meeshy/Features/Main/Views/StoryViewerTransitionConstants.swift \
-        apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift \
-        apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift \
+        apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift \
+        apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift \
         packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift \
         apps/ios/MeeshyTests/Features/Stories/StoryTransitionParityTests.swift
 git commit -m "fix(ios/story): une seule application du closing, constantes alignées
@@ -688,7 +688,7 @@ ne garde que le cross-fade inter-slides, que le SDK ne peut pas assurer."
 ## Task 7 : Corriger D7 — parsing du dégradé de fond
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:1630-1645`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift:1630-1645`
 - Test: `apps/ios/MeeshyTests/Unit/Views/StoryViewerBackgroundParsingTests.swift` (créer)
 
 **Interfaces:**
@@ -700,7 +700,7 @@ ne garde que le cross-fade inter-slides, que le SDK ne peut pas assurer."
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
 find packages/MeeshySDK -name "StoryBackgroundValue.swift" -exec sed -n '1,60p' {} \;
-sed -n '1625,1650p' apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift
+sed -n '1625,1650p' apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift
 ```
 
 Le viewer splitte `"gradient:RRGGBB:RRGGBB"` sur **virgule** ; la sérialisation utilise **deux-points**. Le split rend un seul élément → `LinearGradient` monochrome invalide.
@@ -756,7 +756,7 @@ Remplacer le parsing maison de `+Canvas.swift:1636` par un appel à `StoryBackgr
 
 ```bash
 ./apps/ios/meeshy.sh build && ./apps/ios/meeshy.sh test
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift \
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift \
         apps/ios/MeeshyTests/Unit/Views/StoryViewerBackgroundParsingTests.swift
 git commit -m "fix(ios/story): parser le dégradé de fond via StoryBackgroundValue
 
@@ -771,7 +771,7 @@ deux-points — le dégradé retombait silencieusement sur une seule couleur."
 **Files:**
 - Create: `apps/ios/Meeshy/Features/Main/Views/StoryViewedMarkingPolicy.swift`
 - Test: `apps/ios/MeeshyTests/Unit/Views/StoryViewedMarkingPolicyTests.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:455-470` (`groupTransition`), `StoryViewerView.swift:1640-1670` (`dismissGroupIntro`, `skipGroupIntro`, `goBackToPreviousGroupFromIntro`)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift:455-470` (`groupTransition`), `StoryViewerView.swift:1640-1670` (`dismissGroupIntro`, `skipGroupIntro`, `goBackToPreviousGroupFromIntro`)
 
 **Interfaces:**
 - Consumes: `showGroupIntro` (`StoryViewerView.swift:115`), `markCurrentViewed()` (`+Content.swift:920`).
@@ -853,8 +853,8 @@ Ne rien marquer dans `goBackToPreviousGroupFromIntro()` — l'utilisateur repart
 ./apps/ios/meeshy.sh build && ./apps/ios/meeshy.sh test
 git add apps/ios/Meeshy/Features/Main/Views/StoryViewedMarkingPolicy.swift \
         apps/ios/MeeshyTests/Unit/Views/StoryViewedMarkingPolicyTests.swift \
-        apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift \
-        apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
+        apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift \
+        apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
 git commit -m "fix(ios/story): marquer vue après l'interstitiel, pas pendant
 
 markCurrentViewed() était appelé dans groupTransition, donc à l'instant du
@@ -872,7 +872,7 @@ Le tri et l'index d'entrée fonctionnent déjà mais n'ont **aucun** test. On le
 **Files:**
 - Create: `apps/ios/MeeshyTests/Unit/Views/StoryGroupOrderingTests.swift`
 - Modify: `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift` (extraire `entryIndex` en fonction statique testable)
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:504-544` (`resolveGroupIntro` consomme `banner` du groupe si présent)
+- Modify: `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift:504-544` (`resolveGroupIntro` consomme `banner` du groupe si présent)
 
 **Interfaces:**
 - Consumes: `StoryGroup` (`StoryModels.swift:1896`), `banner` du payload (Task 1).
@@ -986,8 +986,8 @@ Vérifier que `StoryGroup` porte bien le champ ; sinon l'ajouter au mapping `toS
 ```bash
 ./apps/ios/meeshy.sh build && ./apps/ios/meeshy.sh test
 git add packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift \
-        apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift \
-        apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift \
+        apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift \
+        apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift \
         apps/ios/MeeshyTests/Unit/Views/StoryGroupOrderingTests.swift
 git commit -m "test(ios/story): verrouiller l'ordre non-vues, consommer banner du payload
 

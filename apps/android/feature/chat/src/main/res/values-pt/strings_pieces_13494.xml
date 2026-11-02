@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_piece_saved">Salvo em Downloads</string>
+    <string name="piece_action_save">Salvar</string>
+    <string name="piece_action_delete">Excluir</string>
+    <string name="chat_file_save_failed">Não foi possível guardar o ficheiro em Transferências.</string>
+</resources>

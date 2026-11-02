@@ -20,6 +20,8 @@ import { withOrphanedSenderRepair } from '../services/messaging/withOrphanedSend
 import { loadViewOnceConsumptions, viewOnceConsumptionKey } from '../services/messaging/readViewOnceConsumption';
 import { withoutCaptureNotices } from '../services/messaging/captureNoticeVisibility';
 import { loadSealedQuoteAudience, quotedDeathFor } from './quotedEphemeralAudience';
+import { AT_REST_MESSAGE_SELECT, revealAtRest } from '../services/messaging/serverAtRest';
+import { gatewayKeyring } from '../services/messaging/atRestTranslationSource';
 
 /**
  * Minimal Socket.IO surface used by this helper. Kept structural so the
@@ -86,6 +88,9 @@ const PREVIEW_MESSAGE_SELECT = {
   // TOUTES les pièces jointes ; le groupe n'en sert que la première en détail.
   attachments: { take: PREVIEW_ATTACHMENT_SUMMARY_LIMIT, select: PREVIEW_MEDIA_ATTACHMENT_SELECT, orderBy: MESSAGE_ATTACHMENT_ORDER },
   _count: { select: { attachments: true } },
+  // #12822 — de quoi ouvrir le repos d'un message `server`/`hybrid` : sans
+  // elles, la ligne recalculée passait à « Message chiffré » (`content: ''`).
+  ...AT_REST_MESSAGE_SELECT,
 } as const;
 
 /**
@@ -279,7 +284,7 @@ export async function emitConversationPreviewUpdate(
     // production lui passe réellement — d'où le cast, local à ce module
     // (même motif que `copyAttachments.ts`, #6516).
     const realPrisma = prisma as unknown as PrismaClient;
-    const [participants, latest] = await Promise.all([
+    const [participants, storedLatest] = await Promise.all([
       prisma.participant.findMany({
         where: { conversationId, isActive: true },
         // `id` is not decoration: it NAMES the personal room of a participant
@@ -301,7 +306,13 @@ export async function emitConversationPreviewUpdate(
       ) as Promise<PreviewMessage | null>,
     ]);
 
-    if (scope?.onlyIfLatestIs != null && latest?.id !== scope.onlyIfLatestIs) return;
+    if (scope?.onlyIfLatestIs != null && storedLatest?.id !== scope.onlyIfLatestIs) return;
+
+    // #12822 — le clair AVANT le Prisme, comme `GET /conversations` : le
+    // dernier message et chaque remplaçant personnel ci-dessous. Le chiffré et
+    // ses métadonnées ne partent pas : le groupe d'aperçu ne les lit pas.
+    const keyring = gatewayKeyring(realPrisma);
+    const latest = storedLatest ? await revealAtRest(storedLatest, keyring) : null;
 
     // La borne du LECTEUR se pose ICI, avant la sonde et avant la boucle, parce
     // qu'elle vaut pour les deux : demander à la base si CHAQUE participant a
@@ -341,7 +352,7 @@ export async function emitConversationPreviewUpdate(
     const served = targets.filter((_, index) => !unreadable.has(index));
     if (served.length === 0) return;
 
-    const overrides = await resolvePersonalPreviewOverrides<PreviewMessage>(prisma, {
+    const storedOverrides = await resolvePersonalPreviewOverrides<PreviewMessage>(prisma, {
       conversationId,
       latest,
       readers: served.map((p) => ({
@@ -351,6 +362,11 @@ export async function emitConversationPreviewUpdate(
       })),
       select: PREVIEW_MESSAGE_SELECT,
     });
+    const overrides = new Map(
+      await Promise.all(
+        [...storedOverrides].map(async ([participantId, own]) => [participantId, own ? await revealAtRest(own, keyring) : null] as const),
+      ),
+    );
 
     // La moitié du payload qui dépend du message, donc du LECTEUR dès qu'il en
     // a masqué un. `location` y appartient aussi, mais elle sort du groupe

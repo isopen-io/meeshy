@@ -31,7 +31,8 @@ final class SignupFormUsernameTests: XCTestCase {
         XCTAssertEqual(SignupForm.usernameMaxLength, RegistrationIdentity.pseudoMax)
         XCTAssertEqual(SignupForm.usernameMinLength, RegistrationIdentity.pseudoMin)
         XCTAssertEqual(SignupForm.usernameMaxLength, 16)
-        XCTAssertEqual(SignupForm.usernameMinLength, 2)
+        XCTAssertEqual(SignupForm.usernameMinLength, 3)
+        XCTAssertEqual(SignupForm.usernameMinLength, IdentityRules.pseudoMin)
     }
 
     // MARK: - Le motif du refus
@@ -46,6 +47,17 @@ final class SignupFormUsernameTests: XCTestCase {
 
     func test_usernameRefusal_singleCharacter_isTooShort() {
         XCTAssertEqual(SignupForm.usernameRefusal("a"), .tooShort)
+    }
+
+    func test_usernameRefusal_twoCharacters_isTooShort_threeAreAccepted() {
+        XCTAssertEqual(SignupForm.usernameRefusal("Al"), .tooShort)
+        XCTAssertEqual(SignupForm.usernameRefusal("Sy"), .tooShort)
+        XCTAssertNil(SignupForm.usernameRefusal("Ali"))
+    }
+
+    func test_usernameRefusal_isJudgedTrimmed() {
+        XCTAssertEqual(SignupForm.usernameRefusal("  Al  "), .tooShort)
+        XCTAssertNil(SignupForm.usernameRefusal("  Ali  "))
     }
 
     func test_usernameRefusal_spaceAccentOrDot_areInvalidCharacters() {
@@ -70,6 +82,21 @@ final class SignupFormUsernameTests: XCTestCase {
 
     func test_form_sixteenCharacterUsername_submits() {
         let form = makeForm(username: "direction_recett")
+
+        XCTAssertNil(form.usernameRefusal)
+        XCTAssertTrue(form.canSubmit)
+    }
+
+    func test_form_twoCharacterUsername_blocksSubmitAndIdentity() {
+        let form = makeForm(username: "Al")
+
+        XCTAssertEqual(form.usernameRefusal, .tooShort)
+        XCTAssertFalse(form.canSubmit)
+        XCTAssertFalse(form.isIdentityDefined)
+    }
+
+    func test_form_threeCharacterUsername_submits() {
+        let form = makeForm(username: "Ali")
 
         XCTAssertNil(form.usernameRefusal)
         XCTAssertTrue(form.canSubmit)

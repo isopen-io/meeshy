@@ -15,7 +15,7 @@ final class MyStoriesCreateStoryGuardTests: XCTestCase {
     }
 
     func test_myStoriesView_declaresOnCreateStoryCallback() throws {
-        let viewSource = try source("Meeshy/Features/Main/Views/MyStoriesView.swift")
+        let viewSource = try source("Meeshy/Features/Stories/Views/MyStoriesView.swift")
 
         XCTAssertTrue(
             viewSource.contains("let onCreateStory: () -> Void"),
@@ -34,7 +34,7 @@ final class MyStoriesCreateStoryGuardTests: XCTestCase {
     /// le composer soit présenté ; c'est simplement `onDismiss` qui l'ordonne
     /// désormais, au lieu d'un `Task.sleep(350ms)`.
     func test_storyTrayActions_wiresOnCreateStory_closingSheetBeforeComposer() throws {
-        let actions = try source("Meeshy/Features/Main/Views/StoryTrayActions.swift")
+        let actions = try source("Meeshy/Features/Stories/Views/StoryTrayActions.swift")
 
         guard let callbackRange = actions.range(of: "onCreateStory: {") else {
             XCTFail("Le modifier myStoriesSheet doit fournir onCreateStory: à MyStoriesView")

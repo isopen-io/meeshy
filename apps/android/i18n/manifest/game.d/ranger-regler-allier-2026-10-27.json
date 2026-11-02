@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game2.showcase.order_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.showcase.move_up",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.showcase.move_down",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.pseudonym.new",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.pseudonym.hint_change",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.pseudonym.save",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.pseudonym.invalid",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

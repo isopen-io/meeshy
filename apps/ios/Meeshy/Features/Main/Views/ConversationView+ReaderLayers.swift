@@ -26,8 +26,9 @@ struct ConversationRiverLayer: View {
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @Environment(\.routerCommands) private var router
     let showScript: () -> Void
-    /// #11224 — LE point d'entrée du menu d'un message (`presentLongPressMenu`).
-    let presentMenu: (Message) -> Void
+    /// #11224 — LE point d'entrée du menu d'un message (`presentLongPressMenu`),
+    /// avec la bulle pressée : son cadre de fenêtre et sa face (#12630).
+    let presentMenu: (Message, RiverPressedCell) -> Void
     let openViewOnce: (String) -> Bool
     let openMedia: (MessageAttachment) -> Void
 
@@ -93,11 +94,11 @@ struct ConversationRiverLayer: View {
                 scrollState.scrollToMessageTrigger += 1
             },
             // #11224 — l'appui long ouvre LE menu du message, avec les gardes
-            // de la liste : la loi d'actions, l'aperçu dans le mode du fil.
-            onLongPress: { messageId in
+            // de la liste : la loi d'actions, la bulle de la Rivière à sa place (#12630).
+            onLongPress: { pressed in
                 guard overlayState.longPressEnabled, overlayState.quickReactionMessageId == nil,
-                      let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                presentMenu(msg)
+                      let msg = viewModel.messages.first(where: { $0.id == pressed.messageId }) else { return }
+                presentMenu(msg, pressed)
             },
             // #7618 — MÊME canal que le Fil : la puce OUVRE, la
             // sortie consomme. La Rivière consommait au toucher.
@@ -133,6 +134,10 @@ struct ConversationSummaryLayer: View {
     @Binding var scrollState: ConversationScrollState
     let showScript: () -> Void
     let reply: (Message) -> Void
+    /// #11225 — le lecteur et la conversation tels que la loi des actions les
+    /// lit, relus à CHAQUE question : un droit retiré pendant que le Résumé est
+    /// ouvert ne s'offre plus.
+    let menuAuthority: () -> ConversationMenuAuthority
 
     var body: some View {
         LivingSummaryHost(
@@ -148,19 +153,16 @@ struct ConversationSummaryLayer: View {
             // `viewModel.messages`). Le digest, lui, ne se recompose
             // jamais : c'est pourquoi il ne contient PLUS leur texte.
             protections: LivingSummaryProtections.entries(messages: viewModel.messages),
+            // Le toucher d'un visage mène à sa première preuve ET la cite — par
+            // la porte du menu, donc seulement si la loi d'actions l'admet
+            // (comme le web, `summaryExits`). Celui d'un épisode y mène seulement.
             onReplyToPerson: { entry in
-                showScript()
-                guard let targetId = entry.evidenceMessageIds.first,
-                      let msg = viewModel.messages.first(where: { $0.id == targetId }) else { return }
-                reply(msg)
-                scrollState.scrollToMessageId = targetId
-                scrollState.scrollToMessageTrigger += 1
+                guard let targetId = SummaryEntryAction.target(of: entry) else { showScript(); return }
+                entryMenu.run(.reply, targetId)
             },
             onOpenEpisode: { episode in
-                showScript()
-                guard let targetId = episode.messageIds.first else { return }
-                scrollState.scrollToMessageId = targetId
-                scrollState.scrollToMessageTrigger += 1
+                guard let targetId = SummaryEntryAction.target(of: episode) else { showScript(); return }
+                entryMenu.run(.goToMessage, targetId)
             },
             onResumeThread: {
                 showScript()
@@ -172,7 +174,32 @@ struct ConversationSummaryLayer: View {
                     scrollState.scrollToMessageId = firstUnread
                     scrollState.scrollToMessageTrigger += 1
                 }
+            },
+            entryMenu: entryMenu
+        )
+    }
+
+    /// #11225 — Aller au message · Répondre, sur le message qu'une entrée du
+    /// Résumé désigne. « Aller » rend la main au Script et y défile ; « Répondre »
+    /// y défile ET cite le message, si la loi d'actions du SDK l'admet encore.
+    private var entryMenu: SummaryEntryMenu {
+        SummaryEntryMenu.make(
+            offered: { messageId in
+                SummaryEntryAction.offered(for: message(messageId), authority: menuAuthority(), now: Date())
+            },
+            goTo: { messageId in
+                showScript()
+                scrollState.scrollToMessageId = messageId
+                scrollState.scrollToMessageTrigger += 1
+            },
+            reply: { messageId in
+                guard let target = message(messageId) else { return }
+                reply(target)
             }
         )
+    }
+
+    private func message(_ id: String) -> Message? {
+        viewModel.messageIndex(for: id).map { viewModel.messages[$0] }
     }
 }
