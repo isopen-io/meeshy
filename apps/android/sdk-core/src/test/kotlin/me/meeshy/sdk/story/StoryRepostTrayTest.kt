@@ -26,6 +26,7 @@ import org.robolectric.RobolectricTestRunner
 /**
  * La barre montre la republication dès sa création (#14458) : la story que la passerelle rend en 201 rejoint le cache de
  * la barre, et une revalidation partie AVANT la republication ne l'efface pas en élaguant ce que sa page ne portait pas.
+ * Celle d'un ami arrive par `post:reposted`, la seule annonce que la passerelle émet pour une republication (#14466).
  */
 @RunWith(RobolectricTestRunner::class)
 class StoryRepostTrayTest {
@@ -113,5 +114,56 @@ class StoryRepostTrayTest {
         repository.repost("s1")
 
         assertThat(repository.cachedStories().map { it.id }).containsExactly("s1")
+    }
+
+    private val friendRepost = ApiPost(id = "rp2", type = "STORY", createdAt = "2026-11-02T11:00:00Z")
+
+    @Test
+    fun `a friend's story repost announced by post-reposted joins the tray at once`() = runTest {
+        seed(friendStory)
+        val repository = repository()
+
+        val adopted = repository.adoptAnnouncedRepost(friendRepost)
+
+        assertThat(adopted).isTrue()
+        assertThat(repository.cachedStories().map { it.id }).containsExactly("rp2", "s1")
+    }
+
+    @Test
+    fun `a friend's repost into the feed announced by post-reposted stays out of the tray`() = runTest {
+        seed(friendStory)
+        val repository = repository()
+
+        val adopted = repository.adoptAnnouncedRepost(friendRepost.copy(type = "POST"))
+
+        assertThat(adopted).isFalse()
+        assertThat(repository.cachedStories().map { it.id }).containsExactly("s1")
+    }
+
+    @Test
+    fun `an announced repost the tray already holds keeps what the reader saw`() = runTest {
+        seed(friendRepost.copy(isViewedByMe = true))
+        val repository = repository()
+
+        val adopted = repository.adoptAnnouncedRepost(friendRepost)
+
+        assertThat(adopted).isFalse()
+        assertThat(repository.cachedStories().single().isViewedByMe).isTrue()
+    }
+
+    @Test
+    fun `a friend's story repost announced while a revalidation is in flight survives it`() = runTest {
+        seed(friendStory)
+        val page = CompletableDeferred<ApiResponse<List<ApiPost>>>()
+        coEvery { api.list(any(), any()) } coAnswers { page.await() }
+        val repository = repository()
+        val sync = launch { repository.refresh() }
+        runCurrent()
+
+        repository.adoptAnnouncedRepost(friendRepost)
+        page.complete(ApiResponse(success = true, data = listOf(friendStory)))
+        sync.join()
+
+        assertThat(repository.cachedStories().map { it.id }).containsExactly("rp2", "s1")
     }
 }

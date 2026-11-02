@@ -24,6 +24,7 @@ import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.model.SocketPostRepostedData
 import me.meeshy.sdk.model.SocketStoryCreatedData
 import me.meeshy.sdk.model.SocketStoryDeletedData
 import me.meeshy.sdk.model.SocketStoryUpdatedData
@@ -100,12 +101,14 @@ class StoriesViewModelTest {
     private val storyDeletedFlow = MutableSharedFlow<SocketStoryDeletedData>(extraBufferCapacity = 8)
     private val storyUpdatedFlow = MutableSharedFlow<SocketStoryUpdatedData>(extraBufferCapacity = 8)
     private val storyCreatedFlow = MutableSharedFlow<SocketStoryCreatedData>(extraBufferCapacity = 8)
+    private val postRepostedFlow = MutableSharedFlow<SocketPostRepostedData>(extraBufferCapacity = 8)
 
     private fun socialSocket(): SocialSocketManager =
         mockk<SocialSocketManager>(relaxed = true).also {
             every { it.storyDeleted } returns storyDeletedFlow
             every { it.storyUpdated } returns storyUpdatedFlow
             every { it.storyCreated } returns storyCreatedFlow
+            every { it.postReposted } returns postRepostedFlow
         }
 
     private fun queueOf(
@@ -404,6 +407,21 @@ class StoriesViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { repo.adoptAnnounced(fresh) }
+    }
+
+    @Test
+    fun `a friend's repost announced by post-reposted is handed to the tray cache`() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(story("s1", "u1", "alice")), ageMillis = 0)),
+        )
+        viewModel(repo, session = session(userId = "me"))
+        advanceUntilIdle()
+
+        val repost = story("rp1", "u2", "bob")
+        postRepostedFlow.emit(SocketPostRepostedData(originalPostId = "s1", repost = repost))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.adoptAnnouncedRepost(repost) }
     }
 
     @Test

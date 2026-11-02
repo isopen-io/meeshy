@@ -110,6 +110,15 @@ class StoryRepository @Inject constructor(
     }
 
     /**
+     * Folds a realtime `post:reposted` into the tray cache (#14466): the gateway announces a
+     * republication only by `post:reposted`, never by `story:created`, to the reposter's
+     * visibility-filtered audience. A repost served as a story joins the tray like an announced
+     * story ([adoptAnnounced]); a repost into the feed stays out. Returns whether the cache changed.
+     */
+    suspend fun adoptAnnouncedRepost(repost: ApiPost): Boolean =
+        postTypeFromWire(repost.type) == PostType.STORY && adoptAnnounced(repost)
+
+    /**
      * Folds a realtime `story:deleted` into the authoritative Room cache so the tray
      * stream repaints without the removed story. Idempotent and inert for an unknown id
      * (over-broadcast delivery). Mirrors the viewer's `StoryPlayback.removingSlide`, but
