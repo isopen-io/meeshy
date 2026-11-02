@@ -43,7 +43,11 @@ export const TALKIE_ERROR_CODES = {
   BLOCKED: 'TALKIE_BLOCKED',
   /** La conversation directe de la paire est chiffrée de bout en bout : aucun clair ne passe (E10). */
   E2EE_CONVERSATION: 'TALKIE_E2EE_CONVERSATION',
-  /** Le destinataire est en appel ou en Ne pas déranger : envoyer un message vocal à la place. */
+  /**
+   * Envoyer un message vocal à la place : le destinataire est en appel, en Ne pas déranger, sans
+   * appareil connecté — ou sa présence n'est pas servie à l'émetteur (masquée), auquel cas c'est le
+   * même code quel que soit son état. Le client affiche un libellé NEUTRE, sans en dire la raison.
+   */
   FALLBACK_VOICE: 'TALKIE_FALLBACK_VOICE',
   /** Trop de prises de parole, ou un débit hors des bornes. */
   RATE_LIMITED: 'TALKIE_RATE_LIMITED',
