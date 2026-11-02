@@ -114,6 +114,8 @@ internal fun ChatMessageRow(
     /** Le mode sélection multiple est ouvert (#13294) : la rangée ne glisse plus, un toucher la coche. */
     selecting: Boolean = false,
     selected: Boolean = false,
+    /** L'overlay d'appui long présente CETTE cellule : elle s'efface en fondu, la copie élevée prend sa place. */
+    hiddenForOverlay: Boolean = false,
 ) {
     val uriHandler = LocalUriHandler.current
     val audioPlayback by remember(bubble.audios, audioPlayer) {
@@ -126,7 +128,8 @@ internal fun ChatMessageRow(
     val reacts = PlainSignalAdmission.offers(LocalChatSignalClearance.current)
     val replyLabel = stringResource(R.string.chat_action_reply)
     val forwardLabel = stringResource(R.string.chat_action_forward)
-    val callbacks = remember(bubble, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel, reacts) {
+    val menuLabel = stringResource(R.string.chat_swipe_action_menu)
+    val callbacks = remember(bubble, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel, menuLabel, reacts) {
         BubbleCallbacks(
             onLongPress = { actions.onLongPress(messageId) },
             onReactionClick = { emoji: String -> actions.onReactionClick(messageId, emoji) }.takeIf { reacts },
@@ -176,11 +179,7 @@ internal fun ChatMessageRow(
         }
     }
     // Une bulle audio/vidéo résiste : le glissé ne doit pas gêner la barre de lecture.
-    val swipeResistance = if (bubble.audios.isNotEmpty() || bubble.videoCount > 0) {
-        SwipeResistance.Resistant
-    } else {
-        SwipeResistance.Normal
-    }
+    val swipeResistance = BubbleSwipeResistance.of(bubble.audios.isNotEmpty(), bubble.videoCount)
     val linkUrl = remember(bubble.text) {
         LinkPreviewParser.firstUrl(bubble.text)
     }
@@ -241,6 +240,7 @@ internal fun ChatMessageRow(
         isOutgoing = bubble.isOutgoing,
         createdAtIso = bubble.createdAtIso,
         resistance = swipeResistance,
+        hiddenForOverlay = hiddenForOverlay,
         onReply = onSwipeReply.takeUnless { selecting },
         onForward = onSwipeForward.takeUnless { selecting },
         modifier = Modifier.onGloballyPositioned {

@@ -485,6 +485,7 @@ internal fun ChatListHost(
                         focalScale = scale,
                         selecting = host.selection.isActive,
                         selectedIds = host.selection.ids,
+                        overlayMessageId = state.actionMessageId,
                     ) }
                     if (focalMode) {
                         FocalPassageItem(item.key, focalScene, renderedIndexOf) { elected -> row(elected, focalScene.contentScale) }
