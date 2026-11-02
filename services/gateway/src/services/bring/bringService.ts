@@ -135,7 +135,15 @@ type Party = RecipientLanguagePrefs & {
 };
 
 type Judged =
-  | { readonly ok: true; readonly level: RelationLevel; readonly perDay: number | null; readonly sender: Party; readonly recipient: Party }
+  | {
+      readonly ok: true;
+      readonly level: RelationLevel;
+      readonly perDay: number | null;
+      readonly sender: Party;
+      readonly recipient: Party;
+      /** La langue de CADRAGE du destinataire (titre et corps du push). */
+      readonly language: string;
+    }
   | BringRefusal;
 
 /** Le plafond du jour pour un niveau OUVERT par la loi ; `null` = illimité. */
@@ -190,7 +198,7 @@ async function judge(deps: BringDeps, fromUserId: string, toUserId: string): Pro
 
   const perDay = perDayFor(deps.thresholds, verdict.effectiveLevel);
   if (perDay === 0) return NOT_ALLOWED;
-  return { ok: true, level: verdict.effectiveLevel, perDay, sender, recipient };
+  return { ok: true, level: verdict.effectiveLevel, perDay, sender, recipient, language: recipientLanguage(recipient, 'fr') };
 }
 
 const quotaKeyOf = (fromUserId: string, toUserId: string, day: string) => `${fromUserId}:${toUserId}:${day}`;
@@ -299,7 +307,7 @@ export async function sendBring(deps: BringDeps, fromUserId: string, toUserId: s
     fromAvatar: judged.sender.avatar,
     sentAt: now,
     expiresAt,
-    language: recipientLanguage(judged.recipient, 'fr'),
+    language: judged.language,
     criticalAlerts: deps.criticalAlerts,
   }));
 
