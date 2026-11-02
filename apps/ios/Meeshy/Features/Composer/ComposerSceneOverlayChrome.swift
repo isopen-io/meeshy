@@ -31,6 +31,8 @@ struct ComposerSceneOverlayChrome: View {
     var sound = Sound()
     var pasteEntry: AnyView?
     var backgroundIsMedia = false
+    /// Le texte du post déjà écrit (#14457) : l'option le dit par un point.
+    var postText = ""
     /// Le niveau du haut du rail d'édition (#13957, #13974, R6) : il prend la
     /// place de la colonne des outils, jamais une barre en plus.
     var selection: ComposerSelectionColumn?
@@ -121,6 +123,13 @@ struct ComposerSceneOverlayChrome: View {
                 .accessibilityActions { mediaSourceActions }
         case .sound:
             soundButton
+        case .postText:
+            roundButton(symbol: outil.symbol, label: ComposerRestChromeCopy.label(outil),
+                        id: "composer.rest.postText", action: { tap(outil) })
+                .overlay(alignment: .topTrailing) {
+                    if ComposerPostTextPill.isWritten(postText) { ComposerCarriedDot().offset(x: -6, y: 6) }
+                }
+                .accessibilityValue(Text(ComposerPostTextPill.spokenValue(postText)))
         default:
             roundButton(symbol: outil.symbol,
                         label: ComposerRestChromeCopy.label(outil, backgroundIsMedia: backgroundIsMedia),
@@ -132,13 +141,7 @@ struct ComposerSceneOverlayChrome: View {
         roundButton(symbol: ComposerRestTool.sound.symbol, label: ComposerRestChromeCopy.label(.sound),
                     id: "composer.rest.sound", action: soundTap)
             .overlay(alignment: .topTrailing) {
-                if sound.trace != nil {
-                    Circle().fill(MeeshyColors.brandPrimary)
-                        .frame(width: 8, height: 8)
-                        .offset(x: -6, y: 6)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
+                if sound.trace != nil { ComposerCarriedDot().offset(x: -6, y: 6) }
             }
             .modifier(ComposerSoundActionsMenu(supprimer: sound.trace == nil ? nil : sound.onDelete,
                                                promouvoir: sound.trace == nil ? nil : sound.onPromote))
@@ -215,5 +218,17 @@ struct ComposerSceneRoundGlyph: View {
                            tint: isOn ? MeeshyColors.brandPrimary : Color.black.opacity(Self.veil),
                            interactive: true)
             .contentShape(Circle())
+    }
+}
+
+/// **Le point discret d'une option qui porte déjà quelque chose** — le son de
+/// fond, le texte du post (#14457) : 8 pt de la couleur de la marque, muet pour
+/// VoiceOver, qui lit la valeur de l'option.
+struct ComposerCarriedDot: View {
+    var body: some View {
+        Circle().fill(MeeshyColors.brandPrimary)
+            .frame(width: 8, height: 8)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }

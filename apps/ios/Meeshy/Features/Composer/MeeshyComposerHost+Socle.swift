@@ -35,32 +35,21 @@ extension MeeshyComposerHost {
     }
 
     var socle: some View {
-        VStack(spacing: MeeshySpacing.xs) {
-            // **« Texte du post » au socle, au-dessus de l'envoi** (#13864, R2).
-            if socleServesPostText && !editsPostContent {
-                ComposerPostTextPillView(text: documentText, tint: tint.color) {
-                    handleRailDoor(.content)
-                }
-            }
-            HStack(spacing: MeeshySpacing.smPlus) {
-                if paintedSocleZones.contains(.audience) { audienceChip }
-                Spacer()
-                // **Sur la scène, Publier est TOUJOURS là** (#13839) : grisé tant
-                // qu'il n'y a rien à publier, et son toucher dit pourquoi.
-                if !socleHasNothingToPublish || mountedComposerView == .scene { publishButton }
-            }
+        // **Le même socle pour la story, le post et le réel** (#14457) : « Texte
+        // du post » est une option du rail. Une rangée de plus ici réduisait la
+        // scène dès qu'on cochait Post, sans clavier ni feuille.
+        HStack(spacing: MeeshySpacing.smPlus) {
+            if paintedSocleZones.contains(.audience) { audienceChip }
+            Spacer()
+            // **Sur la scène, Publier est TOUJOURS là** (#13839) : grisé tant
+            // qu'il n'y a rien à publier, et son toucher dit pourquoi.
+            if !socleHasNothingToPublish || mountedComposerView == .scene { publishButton }
         }
         .padding(.horizontal, ComposerSceneArrangementRelay(host: self).socleHorizontalPadding)
         // **Plus bas, sous la scène** : il
         // frôle la zone du geste d'accueil au lieu de mordre sur le dessin.
         .padding(.top, MeeshySpacing.xs)
         .padding(.bottom, MeeshySpacing.xxs)
-    }
-
-    /// **« Texte du post »** (#13864) : servi au socle d'un post et d'un réel
-    /// composés sur la scène — le format lu est celui que la flèche PUBLIERA.
-    var socleServesPostText: Bool {
-        ComposerPostTextPill.shows(format: armedChoice.format, sceneMounted: mountedComposerView == .scene)
     }
 
     // **La pastille de son n'est pas au socle.**

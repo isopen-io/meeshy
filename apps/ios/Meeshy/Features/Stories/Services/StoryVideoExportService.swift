@@ -278,24 +278,18 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
             // Voir `tasks/todo-story-export-single-pass.md` — à ne pas rebrancher
             // sans mesure préalable.
             //
-            // Échec non fatal : on livre la story nue plutôt que rien.
-            do {
-                let wrapStart = Date()
-                let finalURL = try await StoryExportBranding.wrap(
-                    storyURL: outputURL,
-                    intro: intro,
-                    outro: intro,
-                    renderSize: renderSize,
-                    appendsBrandOutro: appendsBrandOutro
-                )
-                let wrap = Date().timeIntervalSince(wrapStart)
-                logger.info("export-cost : emballage \(String(format: "%.1f", wrap), privacy: .public) s — TOTAL \(String(format: "%.1f", Date().timeIntervalSince(startedAt)), privacy: .public) s (slide \(slide.id, privacy: .public))")
-                cleanupExport(at: outputURL)
-                return finalURL
-            } catch {
-                logger.warning("StoryVideoExportService : emballage de marque ignoré pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
-                return outputURL
+            // Échec non fatal mais SIGNALÉ : la story part nue et l'échec se
+            // compte (`StoryExportBrandingFallback`, #14488).
+            let wrapStart = Date()
+            let branding = await StoryExportBrandingFallback.deliver(bareStory: outputURL, path: .shareOrSave, slideId: slide.id) {
+                try await StoryExportBranding.wrap(storyURL: outputURL, intro: intro, outro: intro,
+                                                   renderSize: renderSize, appendsBrandOutro: appendsBrandOutro)
             }
+            guard case .branded(let finalURL) = branding else { return outputURL }
+            let wrap = Date().timeIntervalSince(wrapStart)
+            logger.info("export-cost : emballage \(String(format: "%.1f", wrap), privacy: .public) s — TOTAL \(String(format: "%.1f", Date().timeIntervalSince(startedAt)), privacy: .public) s (slide \(slide.id, privacy: .public))")
+            cleanupExport(at: outputURL)
+            return finalURL
         } catch {
             logger.error("StoryVideoExportService : export FAILED for slide \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
             cleanupExport(at: outputURL)
