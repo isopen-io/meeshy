@@ -44,6 +44,7 @@ import me.meeshy.sdk.net.api.ParticipantRoleUpdate
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.apiCallUnit
 import me.meeshy.sdk.outbox.ConversationPrefsPayload
+import me.meeshy.sdk.outbox.ConversationPrefsPrevious
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
@@ -738,6 +739,10 @@ class ConversationRepository @Inject constructor(
         return updatePreferencesOptimistic(id) { it.copy(tags = normalized) }
     }
 
+    /** Tag edit relative to the CACHED set (add / remove one tag): [edit] runs against the stored tags, inside the write. */
+    suspend fun editTagsOptimistic(id: String, edit: (List<String>) -> List<String>): Boolean =
+        updatePreferencesOptimistic(id) { it.copy(tags = edit(it.tags).map { tag -> tag.trim() }.filter { tag -> tag.isNotEmpty() }.distinct()) }
+
     /**
      * Optimistic personal background + accent (parité iOS `ConversationAppearanceViewModel.commit`) : le fond change aussitôt
      * (la ligne Room émet, le fil ouvert se repeint), le snapshot part par la voie des préférences, sans doublon si rien ne change.
@@ -799,6 +804,7 @@ class ConversationRepository @Inject constructor(
     ): Boolean {
         var appearanceChanged = false
         var categoryCleared = false
+        var before: ConversationPrefsPrevious? = null
         val snapshot = database.withTransaction {
             val row = conversationDao.find(id) ?: return@withTransaction null
             val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
@@ -807,6 +813,7 @@ class ConversationRepository @Inject constructor(
             if (next == current) return@withTransaction null
             appearanceChanged = next.appearance != current.appearance
             categoryCleared = current.categoryId != null && next.categoryId == null
+            before = current.toPrevious()
             conversationDao.upsertAll(
                 listOf(
                     row.copy(
@@ -833,11 +840,35 @@ class ConversationRepository @Inject constructor(
                         tags = snapshot.tags,
                         appearance = if (appearanceChanged) snapshot.appearance else null,
                         clearCategory = categoryCleared,
+                        previous = before,
                     ),
                 ),
             ),
         )
         return true
+    }
+
+    /**
+     * Retour arrière d'un instantané de préférences que la file a abandonné : remet [previous] dans la ligne SANS rien
+     * remettre en file. Rien n'est défait quand une diffusion plus récente a déjà avancé la version des préférences
+     * (elle l'emporte sur l'optimiste obsolète). `true` = la ligne a été restaurée.
+     */
+    suspend fun restorePreferences(id: String, previous: ConversationPrefsPrevious): Boolean {
+        val ticket = fence?.currentTicket()
+        return fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val row = conversationDao.find(id) ?: return@withTransaction false
+                val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+                val current = conversation.resolvedPreferences ?: ApiConversationPreferences()
+                if (current.version != previous.baseVersion) return@withTransaction false
+                val restored = current.restoring(previous)
+                if (restored == current) return@withTransaction false
+                conversationDao.upsertAll(
+                    listOf(row.copy(payload = MeeshyApi.json.encodeToString(conversation.copy(preferences = restored)))),
+                )
+                true
+            }
+        } ?: false
     }
 
     companion object {
