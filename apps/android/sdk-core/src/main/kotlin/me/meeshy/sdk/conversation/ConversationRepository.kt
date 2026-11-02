@@ -54,6 +54,7 @@ import me.meeshy.sdk.session.commitOrWrite
 import me.meeshy.sdk.socket.ServedPresenceSink
 import me.meeshy.sdk.search.LocalSearchIndex
 import me.meeshy.sdk.sync.SyncAccountProvider
+import me.meeshy.sdk.sync.SyncDeltaFetching
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
@@ -69,6 +70,7 @@ class ConversationRepository @Inject constructor(
     endToEndRegimeLedger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
     private val fence: AccountFence? = null,
     presenceSink: ServedPresenceSink = ServedPresenceSink.None,
+    syncDelta: SyncDeltaFetching = SyncDeltaFetching.None,
 ) {
     /** conversationId → instant this client created it ([RecentlyCreatedMerge]); guarded by itself. */
     private val recentlyCreated = mutableMapOf<String, Long>()
@@ -88,6 +90,7 @@ class ConversationRepository @Inject constructor(
         endToEnd = endToEndRegimeLedger,
         fence = fence,
         presenceSink = presenceSink,
+        syncDelta = syncDelta,
     )
 
     /**
