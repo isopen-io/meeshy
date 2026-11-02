@@ -26,4 +26,13 @@ class MeeFilmCatalogTest {
         assertThat(MeeFilmCatalog.assetPath("inconnu")).isNull()
         assertThat(MeeFilmCatalog.isAnimated("inconnu")).isFalse()
     }
+
+    @Test
+    fun `un Instant de Mee resout son film embarque et dit s'il bouge`() {
+        val path = MeeFilmCatalog.assetPath("instant-bonjour")
+        assertThat(path).isEqualTo("mee_stickers/mee.instant-bonjour.lottie")
+        assertThat(File(assets, path!!).length()).isGreaterThan(0L)
+        assertThat(MeeFilmCatalog.isAnimated("instant-bonjour")).isTrue()
+        assertThat(MeeFilmCatalog.isAnimated("instant-printemps")).isFalse()
+    }
 }
