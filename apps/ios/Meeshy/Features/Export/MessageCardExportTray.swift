@@ -31,6 +31,8 @@ struct MessageCardExportTray: View {
     /// Ce que « Sauvegarder » produira — la durée et le passage n'existent qu'en vidéo (#8979).
     let output: MessageCardOutput
     let plan: MessageCardMotionPlan?
+    /// La part rendue d'un média de plus d'une minute, depuis le début (#14332).
+    @Binding var clipQuarter: ImagerQuarter
     let languages: [String]
     @Binding var exportLanguage: String?
     let thumbs: MessageCardThumbSource

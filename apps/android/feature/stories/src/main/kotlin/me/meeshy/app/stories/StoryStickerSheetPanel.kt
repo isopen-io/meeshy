@@ -34,6 +34,7 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.sticker.MeeStickerCatalog
 import me.meeshy.sdk.model.sticker.StickerPackSummary
 import me.meeshy.sdk.model.sticker.StickerUsageEntry
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.sticker.StickerLibraryStore
 import me.meeshy.sdk.sticker.StickerPackStore
@@ -60,6 +61,7 @@ interface StoryStickerSheetEntryPoint {
     fun stickerPackStore(): StickerPackStore
     fun stickerLibraryStore(): StickerLibraryStore
     fun subjectLifting(): SubjectLifting
+    fun meeshyConfig(): MeeshyConfig
 }
 
 /** Ce que la feuille du compositeur et le « Faire un sticker » d'un média partagent : les magasins et les octets. */
@@ -86,6 +88,31 @@ internal fun rememberStoryStickerKit(): StoryStickerKit {
 @Composable
 internal fun StoryStickerSheetPanel(viewModel: StoryComposerViewModel, onDismiss: () -> Unit) {
     val kit = rememberStoryStickerKit()
+    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val imageModel: (String) -> Any? = { url -> url.takeIf { it.isNotBlank() }?.let { ComposerMediaAddress.of(it, viewModel.mediaBaseUrl) } }
+    val capabilities = rememberStoryStickerCapabilities(kit, imageModel)
+    val destination = remember(viewModel, kit) {
+        StickerPlacementDestination { choice ->
+            val route = StickerChoiceRoute.of(choice, kit.entryPoint.stickerPackStore().packs.value, Instant.now(), ZoneId.systemDefault(), locale)
+            viewModel.onStickerRoute(route, kit.images, imageModel)
+        }
+    }
+    StickerSheet(
+        capabilities = capabilities,
+        usage = kit.entryPoint.stickerUsageStore(),
+        destination = destination,
+        onDismiss = onDismiss,
+        accountId = kit.entryPoint.sessionRepository().currentUserId,
+    )
+}
+
+/**
+ * TOUTES les capacités de la feuille (#13847) : Smileys et Recherche, Mee, Meo, Mee & Meo, les packs installés,
+ * Personnalisés (Mes stickers, cadres à mots, heure) et la Boutique. La scène d'une story et le composeur des
+ * conversations (#14334) montrent la même feuille ; seule la destination diffère.
+ */
+@Composable
+internal fun rememberStoryStickerCapabilities(kit: StoryStickerKit, imageModel: (String) -> Any?): StickerCapabilities {
     val packStore = kit.entryPoint.stickerPackStore()
     val library = kit.entryPoint.stickerLibraryStore()
     val packs by packStore.packs.collectAsStateWithLifecycle()
@@ -95,7 +122,6 @@ internal fun StoryStickerSheetPanel(viewModel: StoryComposerViewModel, onDismiss
     val liftServed by produceState(false, kit) { value = kit.images.isLiftServed() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
     LaunchedEffect(packStore) {
         launch { packStore.refresh() }
         launch { packStore.loadCatalogue() }
@@ -104,7 +130,6 @@ internal fun StoryStickerSheetPanel(viewModel: StoryComposerViewModel, onDismiss
         uri?.let { scope.launch { context.sayLift(kit.images.liftIntoLibrary(it)) } }
     }
     val openedAt = remember { Instant.now() }
-    val imageModel: (String) -> Any? = { url -> url.takeIf { it.isNotBlank() }?.let { ComposerMediaAddress.of(it, viewModel.mediaBaseUrl) } }
     val canPaste by produceState(kit.images.clipboardHoldsImage(), kit) {
         val stop = kit.images.watchClipboard { value = kit.images.clipboardHoldsImage() }
         awaitDispose(stop)
@@ -116,7 +141,7 @@ internal fun StoryStickerSheetPanel(viewModel: StoryComposerViewModel, onDismiss
         lift.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     })
     val shelf = StickerLibraryShelf(items = items.map { StickerLibraryThumb(it.id, it.file) }, onPaste = onPaste, onLift = onLift)
-    val capabilities = StickerCapabilities(
+    return StickerCapabilities(
         emojiCategories = StickerCategory.values().map { StickerEmojiCategory(it.name, it.label(), StickerCatalog.inCategory(it)) },
         emojiSearch = { query -> StickerCatalog.search(query) },
         installedPacks = packs,
@@ -129,19 +154,6 @@ internal fun StoryStickerSheetPanel(viewModel: StoryComposerViewModel, onDismiss
             }, imageModel = imageModel)
         },
         entryContent = { entry, modifier -> StickerEntryArt(entry, library, modifier) },
-    )
-    val destination = remember(viewModel, kit) {
-        StickerPlacementDestination { choice ->
-            val route = StickerChoiceRoute.of(choice, packStore.packs.value, Instant.now(), ZoneId.systemDefault(), locale)
-            viewModel.onStickerRoute(route, kit.images, imageModel)
-        }
-    }
-    StickerSheet(
-        capabilities = capabilities,
-        usage = kit.entryPoint.stickerUsageStore(),
-        destination = destination,
-        onDismiss = onDismiss,
-        accountId = kit.entryPoint.sessionRepository().currentUserId,
     )
 }
 

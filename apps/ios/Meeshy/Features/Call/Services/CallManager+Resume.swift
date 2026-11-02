@@ -101,7 +101,7 @@ final class CallReturnBinding {
                     isGroupMesh: manager.isGroupMeshCall,
                     isReconnecting: manager.isGroupPrimaryReconnecting
                 ) else { return }
-                manager.attemptReconnection()
+                manager.reconnector.attemptReconnection()
             }
     }
 }

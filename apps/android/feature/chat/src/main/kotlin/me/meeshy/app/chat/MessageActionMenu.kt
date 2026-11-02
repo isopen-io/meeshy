@@ -90,6 +90,10 @@ data class MessageActionContext(
     val isEdited: Boolean = false,
     /** The message carries a non-blank text body (gates sentiment and card export). */
     val hasText: Boolean = false,
+    /** A photo or a video the card can paint (iOS `hasPaintableMedia`, #14330): « Imager » is offered without text. */
+    val hasPaintableMedia: Boolean = false,
+    /** One of its pieces is protected (view once, blurred, ephemeral, withheld): the whole message never becomes a card. */
+    val holdsProtectedPiece: Boolean = false,
     /** The bubble carries a shared place the map fiche can show. */
     val hasPlace: Boolean = false,
     /** Which of the detail/selection entries the host can actually serve; inert (empty) by default. */
@@ -123,6 +127,10 @@ data class MessageActionContext(
     /** Deleting for everyone is judged on the message's ROW, as the gateway does ([PlainSignalAdmission.offersErasure]). */
     val offersPlainErasure: Boolean
         get() = PlainSignalAdmission.offersErasure(signalClearance, isReadByServer)
+
+    /** « Imager » (iOS `canImagine = hasText || hasPaintableMedia`), under the exit law and the protection of its pieces. */
+    val offersCard: Boolean
+        get() = (hasText || hasPaintableMedia) && !holdsProtectedPiece && exitOffer.offers(MessageExit.IMAGINE)
 
     /** The quick reaction strip of the menu (and its full picker). */
     val offersReaction: Boolean
@@ -180,7 +188,7 @@ object MessageActionMenu {
         }
         if (!ctx.isDeleted) {
             if (MessageAction.Select in ctx.hostedEntries) add(MessageAction.Select)
-            if (MessageAction.ExportCard in ctx.hostedEntries && ctx.hasText && ctx.exitOffer.offers(MessageExit.IMAGINE)) add(MessageAction.ExportCard)
+            if (MessageAction.ExportCard in ctx.hostedEntries && ctx.offersCard) add(MessageAction.ExportCard)
         }
         if (ctx.offersPlainSignals) {
             when (ctx.pinAction) {

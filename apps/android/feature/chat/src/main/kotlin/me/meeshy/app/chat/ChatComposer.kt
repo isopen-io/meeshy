@@ -33,6 +33,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import me.meeshy.ui.component.composer.ComposerStickerPick
 import me.meeshy.ui.component.composer.LocalComposerStickerSheet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -114,6 +115,11 @@ internal fun ChatComposer(
     configuration: ComposerConfiguration = ComposerConfiguration.CONVERSATION,
     /** Le texte indicatif du champ ; `null` = celui d'un message. */
     placeholder: String? = null,
+    /**
+     * Une conversation envoie le sticker choisi d'un geste, avec sa recette (#14334, iOS `sendStickerImage`) ; `null` (un
+     * commentaire) : son image rejoint les pièces.
+     */
+    onSendSticker: ((ComposerStickerPick) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var guestSheetOpen by rememberSaveable { mutableStateOf(false) }
@@ -279,12 +285,9 @@ internal fun ChatComposer(
     }
     if (stickerSheetOpen && stickerSheet != null) {
         stickerSheet(
-            { glyph ->
+            { pick ->
                 stickerSheetOpen = false
-                ioScope.launch {
-                    val file = withContext(Dispatchers.IO) { ComposerEmojiSticker.render(glyph, context.cacheDir) }
-                    onPickFile(file, file.name, ComposerEmojiSticker.MIME)
-                }
+                onSendSticker?.invoke(pick) ?: onPickFile(pick.file, pick.file.name, pick.mimeType)
             },
             { stickerSheetOpen = false },
         )

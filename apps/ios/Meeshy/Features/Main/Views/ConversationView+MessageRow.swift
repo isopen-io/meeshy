@@ -237,7 +237,7 @@ extension ConversationView {
     func consumePendingOpenSearch() async {
         guard router.pendingOpenSearch else { return }
         router.pendingOpenSearch = false
-        try? await Task.sleep(for: .milliseconds(250))
+        guard await cancellableSleep(for: .milliseconds(250)) else { return }
         guard !Task.isCancelled else { return }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             headerState.showSearch = true
@@ -251,7 +251,7 @@ extension ConversationView {
     func debounceSearch() {
         let query = headerState.searchQuery
         searchDebounce.replace(with: Task {
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard await cancellableSleep(for: .milliseconds(400)) else { return }
             guard !Task.isCancelled else { return }
             if query.count >= 2 {
                 await viewModel.searchMessages(query: query)

@@ -276,7 +276,7 @@
     <string name="export_card_tilt_left">Inclinado a la izquierda</string>
     <string name="export_card_tilt_none">Recto</string>
     <string name="export_card_tilt_right">Inclinado a la derecha</string>
-    <string name="export_card_title">Imagina</string>
+    <string name="export_card_title">Crear imagen</string>
     <string name="export_card_tone_all">Todos</string>
     <string name="export_card_tone_dark">Oscuro</string>
     <string name="export_card_tone_light">Claro</string>
@@ -290,6 +290,8 @@
     <string name="export_card_typeface_plume">Pluma</string>
     <string name="export_card_typeface_rond">Redonda</string>
     <string name="export_card_typeface_systeme">Sistema</string>
+    <string name="export_discussion_title">Conversación</string>
+    <string name="forward_image_discussion">Crear imagen de la conversación</string>
     <string name="guest_attach_cancel">Cancelar</string>
     <string name="guest_attach_create_account">Crea una cuenta para compartir el resto.</string>
     <string name="guest_attach_inline_audio">audio</string>

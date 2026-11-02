@@ -299,6 +299,8 @@ export class ZmqMessageHandler extends EventEmitter {
       messageId: event.messageId,
       error: event.error,
       conversationId: event.conversationId,
+      ...(event.errorCode ? { errorCode: event.errorCode } : {}),
+      ...(event.targetLanguage ? { targetLanguage: event.targetLanguage } : {}),
       metadata: event.metadata || {}
     });
   }

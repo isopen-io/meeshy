@@ -1,4 +1,4 @@
-package me.meeshy.app.chat
+package me.meeshy.app.stories
 
 import android.graphics.BitmapFactory
 import com.google.common.truth.Truth.assertThat

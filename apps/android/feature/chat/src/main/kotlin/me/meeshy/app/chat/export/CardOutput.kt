@@ -54,9 +54,9 @@ object CardOutput {
      * (`PermissionNature.PHOTO_LIBRARY_ADD`) : le fichier est écrit dans `Pictures/Meeshy` puis
      * indexé par MediaStore, pour paraître dans la galerie.
      */
-    suspend fun saveToGallery(context: Context, input: CardInput): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun saveToGallery(context: Context, input: CardInput, pictures: Map<String, Bitmap> = emptyMap()): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val bitmap = CardRenderer.render(input).bitmap
+            val bitmap = CardRenderer.render(input, pictures = pictures).bitmap
             try {
                 val name = fileName()
                 when (CardGalleryRoute.of(Build.VERSION.SDK_INT)) {
@@ -116,9 +116,9 @@ object CardOutput {
     private const val MIME = "image/png"
 
     /** L'IMAGE, jamais le chemin d'un fichier temporaire : la feuille de partage la reçoit comme une photo. */
-    suspend fun share(context: Context, input: CardInput, chooserTitle: String): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun share(context: Context, input: CardInput, chooserTitle: String, pictures: Map<String, Bitmap> = emptyMap()): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val bitmap = CardRenderer.render(input).bitmap
+            val bitmap = CardRenderer.render(input, pictures = pictures).bitmap
             val file = try {
                 val directory = File(context.cacheDir, "shared-media").apply { mkdirs() }
                 directory.listFiles()?.forEach { it.delete() }

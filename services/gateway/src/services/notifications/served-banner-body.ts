@@ -19,8 +19,8 @@ import { contentSynthesis, type SynthesisAttachment } from './content-synthesis'
  * Le texte que la bannière AFFICHE — cycle 122.
  *
  * Le Prisme ne s'arrête pas aux champs `translatedContent` /
- * `translatedLanguage` du fil push : ils voyagent depuis le cycle 121 et
- * AUCUN client ne les lit — ni la NSE iOS, ni l'application, ni Android, ni
+ * `translatedLanguage` du fil push : ils ont voyagé du cycle 121 à #14319 sans
+ * qu'AUCUN client ne les lise — ni la NSE iOS, ni l'application, ni Android, ni
  * le service worker web. Le seul texte que les trois plateformes rendent est
  * `payload.body`, composé depuis ce `content` : tant qu'il portait l'aperçu
  * ORIGINAL, la bannière restait dans la langue de l'expéditeur pendant que la

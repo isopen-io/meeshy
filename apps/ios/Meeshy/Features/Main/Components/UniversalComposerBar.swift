@@ -399,11 +399,11 @@ struct UniversalComposerBar: View {
 
     var resolvedFoldControl: ComposerFoldControl? { foldControl ?? environmentFoldControl }
 
-    /// La caméra confiée par l'ENVIRONNEMENT (#9736) — `commentCamera` la pose
-    /// sur un composeur de commentaire sans toucher à l'appel de la barre.
+    /// Caméra (#9736) et sticker (#14335) confiés par l'ENVIRONNEMENT : `commentMediaDoors` les pose sans toucher à l'appel.
     @Environment(\.composerCameraDoor) var environmentCameraDoor
-
+    @Environment(\.composerStickerDoor) var environmentStickerDoor
     var resolvedOnCamera: (() -> Void)? { onCamera ?? environmentCameraDoor?.open }
+    var resolvedOnStickerPicker: (() -> Void)? { onRequestStickerPicker ?? environmentStickerDoor?.open }
 
     /// L'hôte a une hauteur comptée (une feuille) : le panneau cède plutôt
     /// que de pousser la zone d'aperçu sous l'en-tête (`ComposerPanelFrame`).

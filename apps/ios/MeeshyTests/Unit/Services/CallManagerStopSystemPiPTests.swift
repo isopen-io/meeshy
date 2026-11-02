@@ -11,15 +11,15 @@ import XCTest
 @MainActor
 final class CallManagerStopSystemPiPTests: XCTestCase {
 
-    /// #8435 — le PiP système a quitté `CallManager.swift` (hors budget) pour
-    /// `CallManager+SystemPiP.swift` : la garde suit le code, sans s'assouplir.
+    /// #8435, #11522 — le PiP système vit dans `CallSystemPiPController` : la
+    /// garde suit le code, sans s'assouplir.
     private func callManagerSource() throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Call/Services/CallManager+SystemPiP.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/CallCollaborators/CallSystemPiPController.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

@@ -55,14 +55,39 @@ public class MutationSenderRegistry @Inject constructor(
      * (only known once rows are queued, so discovered via
      * [OutboxRepository.activeMessageLanes]) first, then every [sharedLanes] entry.
      * Lanes drain independently, so a transient failure on one never blocks another.
+     *
+     * #14378 — a lane that stopped on a still-queued prerequisite is drained again IN THE SAME PASS as long as the pass
+     * settles rows: the message lanes drain before the media lane, so a message waiting on its upload would otherwise
+     * wait for WorkManager's backoff (10 s) although its piece landed a few lines later. A lane is re-drained only for
+     * a blocked dependency — never for a transient failure — and the loop ends on the first round that settles nothing,
+     * bounded by [MAX_DEPENDENCY_ROUNDS]. The reports are one per lane: counts summed, stop signals from its last drain.
      */
     public suspend fun drainAll(outbox: OutboxRepository): List<DrainReport> {
         val drainer = drainerFor(outbox)
         val lanes = outbox.activeMessageLanes() + sharedLanes
-        return lanes.map { lane ->
-            drainer.drainLane(lane).also { report ->
-                Timber.d("OutboxFlush lane=$lane delivered=${report.delivered} exhausted=${report.exhausted}")
-            }
+        val reports = LinkedHashMap<String, DrainReport>()
+        var round = lanes
+        var rounds = 0
+        while (round.isNotEmpty() && rounds < MAX_DEPENDENCY_ROUNDS) {
+            val drained = round.associateWith { lane -> drainLogged(drainer, lane) }
+            drained.forEach { (lane, report) -> reports[lane] = reports[lane]?.let { merged(it, report) } ?: report }
+            rounds++
+            val settled = drained.values.any { it.delivered + it.exhausted > 0 }
+            round = if (settled) drained.filterValues { it.stoppedOnBlockedDependency }.keys.toList() else emptyList()
         }
+        return reports.values.toList()
+    }
+
+    private suspend fun drainLogged(drainer: OutboxDrainer, lane: String): DrainReport =
+        drainer.drainLane(lane).also { report ->
+            Timber.d("OutboxFlush lane=$lane delivered=${report.delivered} exhausted=${report.exhausted}")
+        }
+
+    private fun merged(earlier: DrainReport, later: DrainReport): DrainReport =
+        later.copy(delivered = earlier.delivered + later.delivered, exhausted = earlier.exhausted + later.exhausted)
+
+    public companion object {
+        /** Upload → message is one level deep; a few rounds cover any real chain without risking a spin. */
+        public const val MAX_DEPENDENCY_ROUNDS: Int = 4
     }
 }

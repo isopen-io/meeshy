@@ -34,7 +34,7 @@ extension CallManager {
             }
             // L'answer SDP = l'appelé a décroché : désarmer le cutoff 45s
             // "pas de réponse" (resté armé pendant .offering).
-            self.cancelOutgoingRingTimeout()
+            self.ringTimeouts.cancelOutgoingRingTimeout()
             // Phase 1 fix E5: now that remote answer is applied, ICE
             // checking starts. Transition .offering → .connecting.
             // The single source of truth for `.connected` remains
@@ -89,62 +89,6 @@ extension CallManager {
         endCallInternal(reason: localReason)
         playNotificationHaptic(.warning)
         Logger.calls.info("Call ended by remote: \(callId) (rawReason=\(rawReason ?? "nil"), cx=\(cxReason.rawValue))")
-    }
-
-    // MARK: - Private: Outgoing Ring Timeout
-
-    /// Schedules a defensive `outgoingRingTimeoutSeconds` cutoff for the caller.
-    /// If the recipient hasn't joined within the window, ends the call as
-    /// `.missed`. The gateway has its own 60s timeout but this guards against
-    /// dropped `call:ended` events and gives the user a snappier failure path.
-    @MainActor
-    func startOutgoingRingTimeout() {
-        outgoingRingTimeoutTask?.cancel()
-        let timeout = QualityThresholds.outgoingRingTimeoutSeconds
-        outgoingRingTimeoutTask = Task { @MainActor [weak self] in
-            _ = await cancellableSleep(for: .seconds(timeout))
-            guard let self else { return }
-            guard !Task.isCancelled else { return }
-            // `.offering` compte comme "sonne encore" : le join de l'appelé est
-            // automatique à la sonnerie, l'offer part avant tout décroché
-            // humain. Seule l'answer SDP (= accept) désarme ce cutoff.
-            switch self.callState {
-            case .ringing(isOutgoing: true), .offering: break
-            default: return
-            }
-            Logger.calls.warning("Outgoing call ring timeout after \(timeout)s — no answer; ending call")
-            if let uuid = self.activeCallUUID {
-                self.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
-            }
-            self.endCallInternal(reason: .missed)
-        }
-    }
-
-    /// Arms the callee-side cutoff (`incomingRingTimeoutTask`). The margin over the ring budget leaves the
-    /// gateway's own timeout and its `call:ended` the first word; this only closes a call nobody will close.
-    @MainActor
-    func startIncomingRingTimeout() {
-        incomingRingTimeoutTask?.cancel()
-        let timeout = QualityThresholds.outgoingRingTimeoutSeconds + 30
-        incomingRingTimeoutTask = Task { @MainActor [weak self] in
-            guard await cancellableSleep(for: .seconds(timeout)), let self, !Task.isCancelled else { return }
-            guard case .ringing(isOutgoing: false) = self.callState else { return }
-            Logger.calls.warning("Incoming call still ringing after \(timeout)s — its end was lost; closing as missed")
-            if let callId = self.currentCallId {
-                self.handleRemoteEnd(callId: callId, rawReason: "missed")
-            } else {
-                if let uuid = self.activeCallUUID {
-                    self.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
-                }
-                self.endCallInternal(reason: .missed)
-            }
-        }
-    }
-
-    @MainActor
-    func cancelOutgoingRingTimeout() {
-        outgoingRingTimeoutTask?.cancel()
-        outgoingRingTimeoutTask = nil
     }
 
     /// Démarre le ringback tone si l'appel est toujours en .ringing(outgoing).

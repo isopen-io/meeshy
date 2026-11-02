@@ -648,6 +648,10 @@ class ChatViewModel @Inject constructor(
     fun onPickFile(file: java.io.File, fileName: String, declaredMimeType: String?) =
         controllers.find<ComposerTrayController>()?.stageFile(file, declaredMimeType, fileName)
 
+    /** Un sticker part d'un geste, bulle optimiste d'abord (#14334). */
+    fun sendSticker(pick: me.meeshy.ui.component.composer.ComposerStickerPick) =
+        composer.sendSticker(pick.file, pick.mimeType, pick.sticker, pick.width, pick.height)
+
     /** Present the composer's message-effects picker sheet. */
     fun openEffectsPicker() = composer.openEffectsPicker()
 

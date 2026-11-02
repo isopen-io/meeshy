@@ -167,7 +167,8 @@ public struct MessageCardClip: Equatable, Sendable {
 /// quelle taille, et QUEL extrait. Un GIF est court et réduit de moitié (il
 /// pèse vite) ; une vidéo garde la pleine taille ; un son part sur la durée
 /// choisie (15 s, 30 s, une minute — bornée par le son), à partir du point
-/// choisi (#8979).
+/// choisi (#8979) ; au-delà d'une minute, la vidéo rend la part choisie depuis
+/// le début (#14332).
 public struct MessageCardMotionPlan: Equatable, Sendable {
     public let output: MessageCardOutput
     public let fps: Double
@@ -184,12 +185,19 @@ public struct MessageCardMotionPlan: Equatable, Sendable {
     /// `nil` pour une image fixe, ou pour une sortie que le contenu n'offre pas.
     /// - Parameters:
     ///   - length: la durée choisie pour un son.
+    ///   - quarter: la part choisie d'un média de plus d'une minute (#14332) —
+    ///     elle l'emporte sur `length` et sur `start` : un quart se compte depuis le début.
     ///   - start: le point de départ choisi — glissé pour que l'extrait tienne dans le média.
     public static func of(_ output: MessageCardOutput, media: [MessageCardMedia],
-                          length: MessageCardClipLength = .oneMinute, start: Double = 0) -> MessageCardMotionPlan? {
+                          length: MessageCardClipLength = .oneMinute, quarter: ImagerQuarter? = nil,
+                          start: Double = 0) -> MessageCardMotionPlan? {
         guard output != .image, MessageCardOutput.offered(for: media.map(\.kind)).contains(output) else { return nil }
         let video = media.first { $0.kind == .video }
         let audio = media.first { $0.kind == .audio }
+        if let quarter, let whole = quarters(output, media: media).last?.duration {
+            let part = ImagerLength.renderedDuration(total: whole, quarter: quarter)
+            return plan(output, fps: video == nil ? 10 : 15, window: MessageCardClip(start: 0, duration: part), scale: 1)
+        }
         switch (output, video, audio) {
         case (.gif, .some(let clip), _):
             return plan(output, fps: 10, window: .window(length: gifMaxDuration, start: start, in: clip.duration ?? 3), scale: 0.5)
@@ -200,6 +208,17 @@ public struct MessageCardMotionPlan: Equatable, Sendable {
         default:
             return nil
         }
+    }
+
+    /// **Les parts qu'offre une vidéo tirée d'un long média** (#14332, loi
+    /// d'`ImagerLength`, #13871) : au-delà d'une minute, la vidéo — ou à défaut
+    /// le son — se rend en 1/4 · 2/4 · 3/4 · 4/4 depuis le début. Un GIF reste
+    /// une boucle courte, une image n'a pas de durée.
+    public static func quarters(_ output: MessageCardOutput, media: [MessageCardMedia]) -> [ImagerLengthChoice] {
+        guard output == .video,
+              let source = media.first(where: { $0.kind == .video }) ?? media.first(where: { $0.kind == .audio }),
+              let total = source.duration else { return [] }
+        return ImagerLength.choices(total: total)
     }
 
     private static func plan(_ output: MessageCardOutput, fps: Double, window: MessageCardClip, scale: Double) -> MessageCardMotionPlan {

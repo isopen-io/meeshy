@@ -399,7 +399,7 @@ struct RootView: View {
 
         // Deferred cleanup
         Task.detached(priority: .background) {
-            try? await Task.sleep(for: .seconds(5))
+            guard await cancellableSleep(for: .seconds(5)) else { return }
             await ConversationSyncEngine.shared.cleanupRetentionIfNeeded()
         }
 
@@ -857,7 +857,7 @@ struct RootView: View {
         // over the poster that stays underneath (`ReelVideoView` keeps `ReelPoster`
         // behind the surface) → seamless, no flash and no black gap.
         Task {
-            try? await Task.sleep(for: .seconds(duration))
+            guard await cancellableSleep(for: .seconds(duration)) else { return }
             guard reelsPresenter.launch != nil, !reelsRevealClosing else { return }
             reelsRevealMasked = false
             reelsRevealCompleted = true
@@ -890,7 +890,7 @@ struct RootView: View {
             reelsRevealProgress = 0
         }
         Task {
-            try? await Task.sleep(for: .seconds(duration))
+            guard await cancellableSleep(for: .seconds(duration)) else { return }
             reelsPresenter.dismiss()
             reelsRevealClosing = false
         }

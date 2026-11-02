@@ -408,7 +408,7 @@ struct CommentsSheetView: View {
                     userId: uid,
                     onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
                     onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
-                )) }
+                )) }, dependencies: .live
             )
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
@@ -587,7 +587,7 @@ struct CommentsSheetView: View {
         .commentRecentMediaScene(image: $commentRecentImageToEdit, video: $commentRecentVideoToEdit,
                                  onDone: { pick in ingestCommentRecentMedia(pick) })
         .commentSceneRetouch(attachments: $commentAttachments)
-        .commentCamera(attachments: $commentAttachments)
+        .commentMediaDoors(attachments: $commentAttachments, accentColor: accentColor)
         .adaptiveOnChange(of: commentAttachments.isEmpty) { _, isEmpty in if !isEmpty { growSheetForComposer() } }
     }
 

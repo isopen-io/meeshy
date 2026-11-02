@@ -327,7 +327,7 @@ struct iPadRootView: View {
         await RealtimeRelays.arm()
 
         Task.detached(priority: .background) {
-            try? await Task.sleep(for: .seconds(5))
+            guard await cancellableSleep(for: .seconds(5)) else { return }
             await ConversationSyncEngine.shared.cleanupRetentionIfNeeded()
         }
 

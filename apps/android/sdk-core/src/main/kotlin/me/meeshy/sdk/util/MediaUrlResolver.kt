@@ -52,6 +52,10 @@ fun resolveMediaUrl(url: String, apiBaseUrl: String?): String = when {
     // Une URL complète porte déjà tout : hôte, route, version.
     url.startsWith("http") -> url
 
+    // #14378 — un fichier de l'APPAREIL (bulle optimiste : sticker, photo pas encore téléversée) se charge tel quel ;
+    // le traiter en clé de stockage fabriquait une route passerelle introuvable et la bulle restait un cadre vide.
+    url.startsWith("file:", ignoreCase = true) || url.startsWith("content:", ignoreCase = true) -> url
+
     // Le magasin se DÉCLARE dans la donnée (#4625). Il le fallait : aucune
     // FORME de clé ne dit d'où elle vient — `u/i/2025/11/a.jpg` (statique) et
     // `avatars/user/<id>.jpg` (passerelle) se ressemblent trop pour qu'un

@@ -85,6 +85,8 @@ internal data class ShareSheetActions(
     /** « Copier le lien » et « Partager hors de Meeshy » : l'hôte sait copier et ouvrir le partage système. */
     val onCopyLink: ((String) -> Unit)? = null,
     val onShareOut: ((String) -> Unit)? = null,
+    /** « Imager la discussion » (#14331) : l'hôte ne le fournit que quand la discussion qui mène au message a de quoi se peindre. */
+    val onImageDiscussion: (() -> Unit)? = null,
 )
 
 private val FLAME_PRESETS = listOf(30, 60, 300, 3600, 86_400)
@@ -156,7 +158,7 @@ internal fun ShareSheetBody(
     }
 }
 
-/** Ce qu'on peut faire du contenu sans l'envoyer : l'ouvrir au studio, copier son lien, le partager hors de Meeshy. */
+/** Ce qu'on peut faire du contenu sans l'envoyer : l'ouvrir au studio, copier son lien, le partager hors de Meeshy, imager la discussion. */
 @Composable
 private fun ShareToolsRow(model: ShareSheetModel, actions: ShareSheetActions) {
     val haptics = rememberMeeshyHaptics()
@@ -165,7 +167,8 @@ private fun ShareToolsRow(model: ShareSheetModel, actions: ShareSheetActions) {
     val copy = actions.onCopyLink
     val out = actions.onShareOut
     val studio = actions.onEditInStudio
-    if (studio == null && (link == null || copy == null) && (outText == null || out == null)) return
+    val discussion = actions.onImageDiscussion
+    if (studio == null && discussion == null && (link == null || copy == null) && (outText == null || out == null)) return
     var copied by remember { mutableStateOf(false) }
     LaunchedEffect(copied) {
         if (copied) {
@@ -184,6 +187,7 @@ private fun ShareToolsRow(model: ShareSheetModel, actions: ShareSheetActions) {
             }
         }
         if (outText != null && out != null) TextButton(onClick = { out(outText) }) { Text(stringResource(R.string.share_action_share_out)) }
+        if (discussion != null) TextButton(onClick = discussion) { Text(stringResource(R.string.forward_image_discussion)) }
     }
 }
 

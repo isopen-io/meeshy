@@ -470,8 +470,9 @@ export class NotificationService {
     if (!matched) return {};
     return {
       translatedContent: truncateByCodePoints(matched.text, PUSHED_TRANSLATION_MAX_CHARS),
-      // La clé TELLE QUE STOCKÉE, pas sa forme canonique : elle repart sur le
-      // fil APNs et le client la rapproche de sa propre carte.
+      // La clé TELLE QUE STOCKÉE, pas sa forme canonique : le contexte
+      // persisté la sert au client, qui la rapproche de sa propre carte. Elle
+      // ne part plus sur le fil APNs/FCM (#14319).
       translatedLanguage: matched.language,
     };
   }
@@ -480,7 +481,7 @@ export class NotificationService {
    * La descente NUE — le couple `{ language, text }` élu, ou `null` ⇒ servir
    * l'original. Les deux consommateurs en sont des projections :
    * `servedPreview` (`served-banner-body.ts`) pour le corps affiché (cycle 122) et
-   * {@link servedTranslationFields} pour les champs du fil push. Une descente,
+   * {@link servedTranslationFields} pour le contexte persisté. Une descente,
    * deux projections — c'est ce qui les empêche de diverger (cycle 123).
    */
   private prismTranslation(
@@ -1081,8 +1082,9 @@ export class NotificationService {
                 // GW7 — showPreview:false : AUCUN champ porteur de contenu dans
                 // data. La NSE réécrit inconditionnellement le body depuis
                 // encryptedContent et attache le média d'attachmentUrl — les
-                // embarquer vaincrait le mode privé (et translatedContent
-                // voyagerait en clair dans le canal push malgré l'opt-out).
+                // embarquer vaincrait le mode privé. La traduction servie, elle,
+                // ne voyage jamais (#14319) : elle compose le corps, que les
+                // trois plateformes rendent, et aucun client ne lisait la copie.
                 ...(showPreview ? {
                   // Phase A — le média inline (NSE iOS, lecture de la coque
                   // Android #10641), sous le SECOND VERROU du cycle 125 :
@@ -1091,10 +1093,6 @@ export class NotificationService {
                   encryptedContent: params.context.encryptedContent || '',
                   // #8857 — le détail du contenu, sous le MÊME second verrou que le média.
                   ...(params.context.notificationLocKey ? {} : contentDetailPushFields(params.context.contentDetail)),
-                  ...(params.context.translatedContent ? {
-                    translatedContent: params.context.translatedContent,
-                    translatedLanguage: params.context.translatedLanguage || '',
-                  } : {}),
                   // Cycle 124 — le couple que la NSE PRÉ-ENREGISTRE. Les DEUX
                   // clés portent le nom que `prePersistMessage` lit, et elles
                   // voyagent ensemble : un contenu sans son étiquette de langue

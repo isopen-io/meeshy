@@ -1,7 +1,6 @@
 package me.meeshy.app.feed
 
 import android.content.Context
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -43,7 +42,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaUploadItem
-import me.meeshy.sdk.media.MediaUploadSource
+import me.meeshy.ui.component.retouch.RetouchSourceDecoder
 import me.meeshy.ui.component.retouch.RetouchVideoProbe
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
@@ -56,6 +55,9 @@ private val PieceSize = 56.dp
 private val PieceRemoveDisc = 20.dp
 private val PieceRemoveTouch = 32.dp
 private val MediaSize = 120.dp
+
+/** Assez pour une vignette de 56 dp nette, l'orientation EXIF cuite : une prise de l'objectif n'y arrive pas couchée. */
+private const val PIECE_THUMBNAIL_LONG_SIDE = 256
 
 /**
  * Les médias d'un commentaire, sous son texte : une vignette par pièce, une vidéo marquée comme telle. Toucher une pièce
@@ -158,13 +160,7 @@ private fun PieceThumbnail(piece: CommentPendingPiece) {
         return
     }
     val bitmap = remember(piece.item) {
-        val options = BitmapFactory.Options().apply { inSampleSize = 8 }
-        runCatching {
-            when (val source = piece.item.source) {
-                is MediaUploadSource.OnDisk -> BitmapFactory.decodeFile(source.file.path, options)
-                else -> piece.item.bytes.let { BitmapFactory.decodeByteArray(it, 0, it.size, options) }
-            }
-        }.getOrNull()
+        runCatching { RetouchSourceDecoder.decode(piece.item.bytes, longSide = PIECE_THUMBNAIL_LONG_SIDE) }.getOrNull()
     }
     bitmap?.let { Image(it.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
 }

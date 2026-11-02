@@ -379,6 +379,11 @@ data class SendMessageRequest(
     val maxViewOnceCount: Int? = null,
     /** Lieu partagé : champ dédié que la passerelle valide (`parseSharedPlace`) et écrit dans `metadata.location`. */
     val location: SharedPlace? = null,
+    /**
+     * Le sticker du message (#14334) : champ dédié que la passerelle valide (`parseMessageSticker`) et écrit dans
+     * `metadata.sticker` ; l'image jointe en est le rendu de repli. Absent pour tout autre message.
+     */
+    val sticker: MessageSticker? = null,
 )
 
 internal object TolerantPostReplyTargetSerializer :
