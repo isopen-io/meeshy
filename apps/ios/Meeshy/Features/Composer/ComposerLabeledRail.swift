@@ -12,9 +12,8 @@ nonisolated enum ComposerLabeledRailEntry: Hashable, Sendable {
 
 /// **Le rail gauche, ce qu'on AJOUTE à la scène** (#13839, L6, maquette validée, spec iOS § 2.5).
 ///
-/// Fermer · Texte · Média · Sticker · Son · Dessin · Fond · Mention · Lieu (#14050), puis les entrées de ⋯ qui
-/// tiennent dans la hauteur, dans
-/// leur ordre du menu, puis « ⋯ Plus » pour le reste. Aucune entrée n'est perdue : ce que le rail ne pose pas, Plus
+/// Fermer · Texte · Média · Sticker · Son · Dessin · Fond · Mention · Lieu (#14050), Texte du post pour le post et le
+/// réel (#14457), puis les entrées de ⋯ qui tiennent dans la hauteur, dans leur ordre du menu, puis « ⋯ Plus » pour le reste. Aucune entrée n'est perdue : ce que le rail ne pose pas, Plus
 /// le sert. Animation (un sous-menu) et Tout effacer (une confirmation) restent toujours derrière Plus.
 nonisolated enum ComposerLabeledRailLayout {
 
@@ -208,6 +207,7 @@ struct ComposerLabeledRail: View {
     var sound = ComposerSceneOverlayChrome.Sound()
     var pasteEntry: AnyView?
     var backgroundIsMedia = false
+    var postText = ""
 
     @ScaledMetric(relativeTo: .caption) private var rowHeight: CGFloat = 44
     @State private var press = ComposerRailDoorPress()
@@ -243,6 +243,12 @@ struct ComposerLabeledRail: View {
             if let actions = self.plus { plusMenu(plus, actions: actions) }
         case .tool(.sound):
             soundRow
+        case .tool(.postText):
+            button(entree, id: "composer.rail.postText") { tap(.postText) }
+                .overlay(alignment: .leading) {
+                    if ComposerPostTextPill.isWritten(postText) { ComposerCarriedDot().offset(x: 26, y: -10) }
+                }
+                .accessibilityValue(Text(ComposerPostTextPill.spokenValue(postText)))
         case .tool(.media):
             button(entree, id: "composer.rail.media") { tap(.media) }
                 .simultaneousGesture(mediaLongPressGesture, including: mediaLongPress == nil ? .subviews : .all)
@@ -283,13 +289,7 @@ struct ComposerLabeledRail: View {
     private var soundRow: some View {
         button(.tool(.sound), id: "composer.rail.sound", action: soundTap)
             .overlay(alignment: .leading) {
-                if sound.trace != nil {
-                    Circle().fill(MeeshyColors.brandPrimary)
-                        .frame(width: 8, height: 8)
-                        .offset(x: 26, y: -10)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
+                if sound.trace != nil { ComposerCarriedDot().offset(x: 26, y: -10) }
             }
             .modifier(ComposerSoundActionsMenu(supprimer: sound.trace == nil ? nil : sound.onDelete,
                                                promouvoir: sound.trace == nil ? nil : sound.onPromote))

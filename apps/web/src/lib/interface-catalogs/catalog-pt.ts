@@ -599,6 +599,7 @@ const pt = {
   'discover.tab.discover': 'Descobrir',
   'discover.tab.requests': 'Pedidos',
   'discover.tab.blocked': 'Bloqueados',
+  'discover.tab.circles': 'Círculos',
   'discover.tab.requests.count.one': 'Pedidos, {count} recebido',
   'discover.tab.requests.count.other': 'Pedidos, {count} recebidos',
   'discover.invite.title': 'Convidar por e-mail',

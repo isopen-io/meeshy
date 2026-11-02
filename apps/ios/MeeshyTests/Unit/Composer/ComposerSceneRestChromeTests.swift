@@ -46,14 +46,15 @@ final class ComposerSceneRestChromeTests: XCTestCase {
         XCTAssertFalse(ComposerRestChrome.tools(offered: sansSon).contains(.sound))
     }
 
-    /// Fond, Mention, Lieu : sur le rail, en entrées directes (#14050) ; le
-    /// hashtag, la description et le texte du post restent ailleurs.
+    /// Fond, Mention, Lieu : sur le rail, en entrées directes (#14050), et le
+    /// texte du post quand le format en écrit un (#14457) ; le hashtag et la
+    /// description restent ailleurs.
     func test_tools_fondMentionLieuSontSurLeRail_leRestePasse() {
         let portes = ComposerRestChrome.tools(offered: ComposerRailDoor.allCases).compactMap(\.door)
-        for porte in [ComposerRailDoor.background, .mention, .place] {
+        for porte in [ComposerRailDoor.background, .mention, .place, .content] {
             XCTAssertTrue(portes.contains(porte), "\(porte.rawValue) doit être une entrée directe du rail")
         }
-        for porte in [ComposerRailDoor.hashtag, .description, .content] {
+        for porte in [ComposerRailDoor.hashtag, .description] {
             XCTAssertFalse(portes.contains(porte), "\(porte.rawValue) doit vivre ailleurs que sur la scène")
         }
     }
