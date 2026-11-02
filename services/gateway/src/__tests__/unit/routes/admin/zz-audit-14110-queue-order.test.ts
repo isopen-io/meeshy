@@ -14,48 +14,27 @@ import { describe, it, expect, jest } from '@jest/globals';
 jest.mock('../../../../utils/logger', () => ({ logError: jest.fn(), logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
 
 import { reportRoutes } from '../../../../routes/admin/reports';
+import { reportTable, type ReportRow } from '../../../helpers/report-table';
 
 const VIEWER = '507f1f77bcf86cd799439011';
 
-type ReportRow = { id: string; priority?: number; createdAt: Date; status: string; reportType: string; reportedType: string; reportedEntityId: string };
-
 const at = (hour: number) => new Date(Date.UTC(2026, 10, 2, hour));
-const row = (id: string, hour: number, priority?: number): ReportRow => ({
-  id, createdAt: at(hour), status: 'pending', reportType: 'spam', reportedType: 'user', reportedEntityId: VIEWER,
+const row = (id: string, hour: number, priority?: number, status = 'pending'): ReportRow => ({
+  id, createdAt: at(hour), status, reportType: 'spam', reportedType: 'user', reportedEntityId: VIEWER,
   ...(priority === undefined ? {} : { priority }),
 });
 
 const ROWS: readonly ReportRow[] = [
   row('507f1f77bcf86cd7994390a2', 11, 1),
   row('507f1f77bcf86cd7994390b1', 12, 0),
-  row('507f1f77bcf86cd7994390a1', 10, 1),
+  row('507f1f77bcf86cd7994390a1', 10, 1, 'under_review'),
   row('507f1f77bcf86cd7994390b2', 13),
   row('507f1f77bcf86cd7994390b3', 9, 0),
 ];
 const [P2, O1, P1, O2, O3] = ROWS.map((r) => r.id);
 
-type Where = { priority?: { gte: number }; NOT?: { priority: { gte: number } } };
-const urgent = (r: ReportRow) => (r.priority ?? 0) >= 1;
-const matches = (r: ReportRow, where: Where = {}) =>
-  (where.priority ? urgent(r) : true) && (where.NOT ? !urgent(r) : true);
-
-function reportTable() {
-  return {
-    count: jest.fn(async (args: { where?: Where } = {}) => ROWS.filter((r) => matches(r, args.where)).length),
-    findMany: jest.fn(async (args: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'>; skip?: number; take?: number } = {}) => {
-      const [key, dir] = Object.entries(args.orderBy ?? { createdAt: 'desc' })[0] as [keyof ReportRow, 'asc' | 'desc'];
-      const sorted = ROWS.filter((r) => matches(r, args.where)).sort((a, b) => {
-        const delta = Number(a[key] instanceof Date ? (a[key] as Date).getTime() : a[key]) - Number(b[key] instanceof Date ? (b[key] as Date).getTime() : b[key]);
-        return dir === 'asc' ? delta : -delta;
-      });
-      const skip = args.skip ?? 0;
-      return sorted.slice(skip, args.take === undefined ? undefined : skip + args.take);
-    }),
-  };
-}
-
 async function served(url: string): Promise<string[]> {
-  const prisma = { report: reportTable(), user: { findMany: jest.fn<any>().mockResolvedValue([]) } } as any;
+  const prisma = { report: reportTable(ROWS), user: { findMany: jest.fn<any>().mockResolvedValue([]) } } as any;
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('authenticate', async (req: any) => {
     req.authContext = { isAuthenticated: true, userId: VIEWER, registeredUser: { id: VIEWER, role: 'MODERATOR' } };

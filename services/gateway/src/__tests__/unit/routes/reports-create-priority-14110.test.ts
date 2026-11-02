@@ -78,7 +78,7 @@ const base = {
 function prismaDouble() {
   return {
     message: { findUnique: async () => base.message },
-    participant: { findFirst: async () => (base.participe ? { id: 'p1' } : null), findMany: async () => base.membres, findUnique: async () => ({ userId: '507f1f77bcf86cd799439099' }) },
+    participant: { findFirst: async () => (base.participe ? { id: 'p1' } : null), findMany: async () => base.membres, count: async (a: any) => base.membres.filter((m) => base.naissances.some((u) => u.id === m.userId && u.birthDate !== null && u.birthDate >= a.where.user.is.birthDate.gte)).length, findUnique: async () => ({ userId: '507f1f77bcf86cd799439099' }) },
     user: { findUnique: async () => base.utilisateur, findMany: async (a: any) => base.naissances.filter((u) => a?.where?.id?.in?.includes(u.id)) },
     post: { findUnique: async () => base.post },
     postComment: { findUnique: async () => base.commentaire },

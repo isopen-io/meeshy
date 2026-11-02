@@ -3,9 +3,10 @@
  * position ou un lien Sang passe en TÊTE de la file de modération.
  *
  * - **mineur** : le signalant, la personne signalée (l'auteur du contenu, le
- *   compte visé) ou un DESTINATAIRE du contenu (les membres actifs de la
- *   conversation d'un message ou de la conversation signalée, au plus
- *   `AUDIENCE_SCAN_CAP`) est un mineur DÉCLARÉ (audit M2) ;
+ *   compte visé) ou un DESTINATAIRE du contenu (un membre actif de la
+ *   conversation d'un message ou de la conversation signalée, sans borne : un
+ *   seul `count` filtré sur la date de naissance, contre-audit N4) est un
+ *   mineur DÉCLARÉ (audit M2) ;
  * - **position** : le contenu signalé est un message de position ;
  * - **Sang** : signalant et signalé sont liés au Sang sur la ligne ENREGISTRÉE,
  *   ou l'étaient il y a moins de `BLOOD_MEMORY_DAYS` jours — un blocage ou une
@@ -19,12 +20,11 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ReportPriorityReason } from '@meeshy/shared/types/report';
-import { declaredAgeClass } from '@meeshy/shared/utils/age';
+import { ADULT_AGE, declaredAgeClass } from '@meeshy/shared/utils/age';
 import { logger } from '../../utils/logger';
 import { lienSangDepuis } from '../friendship';
 import { reportedContentAuthorId } from './reportedContentAuthor';
 
-export const AUDIENCE_SCAN_CAP = 50;
 export const BLOOD_MEMORY_DAYS = 30;
 const DAY_MS = 86_400_000;
 
@@ -57,16 +57,22 @@ async function audienceConversationId(prisma: PrismaClient, reportedType: string
   return message?.conversationId ?? null;
 }
 
-/** Les destinataires du contenu : les membres ACTIFS inscrits de sa conversation, bornés. */
-async function audienceOf(prisma: PrismaClient, reportedType: string, reportedEntityId: string): Promise<string[]> {
+/**
+ * La première date de naissance d'un mineur DÉCLARÉ à `now` : celle du
+ * lendemain, il y a `ADULT_AGE` ans, en UTC — la même frontière que
+ * `ageInFullYearsUtc` (18 ans le jour de ses 18 ans).
+ */
+export const minorBirthDateFloor = (now: Date): Date =>
+  new Date(Date.UTC(now.getUTCFullYear() - ADULT_AGE, now.getUTCMonth(), now.getUTCDate() + 1));
+
+/** Un DESTINATAIRE du contenu est-il mineur ? Une seule lecture, quelle que soit la taille du groupe. */
+async function audienceHasMinor(prisma: PrismaClient, reportedType: string, reportedEntityId: string, now: Date): Promise<boolean> {
   const conversationId = await audienceConversationId(prisma, reportedType, reportedEntityId);
-  if (!conversationId) return [];
-  const members = await prisma.participant.findMany({
-    where: { conversationId, isActive: true, userId: { not: null } },
-    select: { userId: true },
-    take: AUDIENCE_SCAN_CAP,
+  if (!conversationId) return false;
+  const minors = await prisma.participant.count({
+    where: { conversationId, isActive: true, user: { is: { birthDate: { gte: minorBirthDateFloor(now) } } } },
   });
-  return members.flatMap((member) => (member.userId ? [member.userId] : []));
+  return minors > 0;
 }
 
 export async function assessReportPriority(
@@ -75,17 +81,15 @@ export async function assessReportPriority(
 ): Promise<ReportPriority> {
   const now = report.now ?? new Date();
   try {
-    const [subjectId, audience] = await Promise.all([
-      reportedContentAuthorId(prisma, report),
-      audienceOf(prisma, report.reportedType, report.reportedEntityId),
-    ]);
-    const people = [...new Set([report.reporterId, subjectId, ...audience].filter((id): id is string => Boolean(id)))];
-    const [minor, location, blood] = await Promise.all([
+    const subjectId = await reportedContentAuthorId(prisma, report);
+    const people = [report.reporterId, subjectId].filter((id): id is string => Boolean(id));
+    const [minorParty, minorAudience, location, blood] = await Promise.all([
       involvesMinor(prisma, people, now),
+      audienceHasMinor(prisma, report.reportedType, report.reportedEntityId, now),
       isLocation(prisma, report.reportedType, report.reportedEntityId),
       isBloodLink(prisma, report.reporterId, subjectId, now),
     ]);
-    const reasons = ([['minor', minor], ['location', location], ['blood', blood]] as const)
+    const reasons = ([['minor', minorParty || minorAudience], ['location', location], ['blood', blood]] as const)
       .filter(([, holds]) => holds)
       .map(([reason]) => reason);
     return reasons.length > 0 ? { priority: 1, priorityReasons: [...reasons] } : ORDINARY;

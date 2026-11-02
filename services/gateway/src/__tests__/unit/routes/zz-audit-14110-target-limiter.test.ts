@@ -56,7 +56,7 @@ describe('seuil par cible (#4155) vu depuis SEC-06', () => {
     await f.close();
   });
 
-  it('au-delà du seuil, le signalant reçoit le même accusé, sans 429, et l\'excédent n\'est pas écrit', async () => {
+  it('cinq signalants d\'une même cible dans l\'heure : cinq accusés, cinq écritures — aucun seuil par cible ne jette (contre-audit N2)', async () => {
     const { f, created } = await app();
     const corps = { reportedType: 'user', reportedEntityId: HARCELEUR, reportType: 'spam' };
     const signalants = ['507f1f77bcf86cd799439041', '507f1f77bcf86cd799439042', '507f1f77bcf86cd799439043', '507f1f77bcf86cd799439044', '507f1f77bcf86cd799439045'];
@@ -64,9 +64,7 @@ describe('seuil par cible (#4155) vu depuis SEC-06', () => {
     for (const qui of signalants) reponses.push(await f.inject({ method: 'POST', url: '/reports', headers: { 'x-as': qui }, payload: corps }));
     await f.close();
     expect(reponses.map((r) => r.statusCode)).toEqual([201, 201, 201, 201, 201]);
-    const forme = (r: { json: () => any }) => { const { data, ...rest } = r.json(); return { ...rest, data: Object.keys(data).sort(), status: data.status, cible: data.reportedEntityId }; };
-    expect(forme(reponses[4])).toEqual(forme(reponses[0]));
-    expect(reponses[4].headers['retry-after']).toBeUndefined();
-    expect(created).toHaveLength(3);
+    expect(created).toHaveLength(5);
+    expect(new Set(reponses.map((r) => r.json().data.id))).toEqual(new Set(['507f1f77bcf86cd7994390ff']));
   });
 });

@@ -1,5 +1,4 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 import { assessReportPriority } from '../../services/reports/reportPriority';
 import { logError } from '../../utils/logger';
@@ -28,20 +27,19 @@ import { verifierCible, type TypeSignale } from './target';
  * > jour où quelqu'un durcit `/admin` en croyant ne toucher qu'à
  * > l'administration.
  *
- * ## Trois seuils, trois clés — et c'est la troisième qui compte
+ * ## Deux seuils, par APPELANT — et aucun par cible
  *
- * `10/h user:<id>` et `30/h ip:<ip>` bornent l'APPELANT. Aucune clé par
- * appelant ne peut empêcher le harcèlement par signalement en masse d'une même
- * cible : dix comptes complices tiennent chacun leur quota. `3/h
- * target:<entityId>` borne la CIBLE, et c'est le seul seuil qui protège la
- * personne signalée.
+ * `10/h user:<id>` et `30/h ip:<ip>` bornent l'APPELANT (anti-spam). Il n'y a
+ * plus de seuil par CIBLE (#14110, contre-audit N2/N3) : TOUT signalement
+ * atteignable s'écrit, et le bruit d'une rafale se regroupe par cible à la
+ * LECTURE (la console). Un seuil par cible jetait des signalements légitimes —
+ * celui d'une mineure, quatrième de l'heure — et se laissait épuiser par
+ * l'auteur du contenu ; un refus distinct (429) ou un accusé fabriqué disait au
+ * signalé qu'on l'avait signalé. Rien ne consomme le NOMBRE de signalements
+ * d'une cible : une rafale ne coûte que du bruit dans la file.
  *
- * Le seuil par cible se compte APRÈS la vérification de la cible, sur un
- * signalement qui s'écrirait (#14110, audit M1), et il ne rend JAMAIS 429 : un
- * refus distinct dirait au signalé, qui sonde son propre identifiant, qu'on l'a
- * signalé — et trois auto-signalements refusés, comptés avant la vérification,
- * rendaient la cible insignalable. Au-delà du seuil, le signalant reçoit le même
- * accusé qu'un signalement accepté, et l'excédent n'est pas écrit.
+ * Signaler ce dont on est l'auteur ou le créateur est refusé pour tous les
+ * types (`verifierCible`), avec le même 404 qu'une cible introuvable.
  *
  * ## L'identité du signalant ne vient jamais du corps
  *
@@ -134,7 +132,6 @@ export async function signaler(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<unknown> {
-  const cible = limiteurDeCible(fastify);
   try {
     const corps = creerSchema.parse(request.body);
     const moi = signalant(request);
@@ -154,13 +151,6 @@ export async function signaler(
       return sendNotFound(reply, 'Contenu introuvable', {
         message: "Ce contenu n'existe pas ou n'est pas accessible",
       });
-    }
-
-    // #14110 (audit M1) — au-delà du seuil par cible, l'accusé est le même et
-    // rien ne s'écrit : l'excédent est dédoublonné en silence.
-    const surCible = await cible.consume(`target:${corps.reportedEntityId}`, 1);
-    if (surCible?.retryAfter !== undefined) {
-      return accuse(reply, { id: new ObjectId().toHexString(), reportedType: corps.reportedType, reportedEntityId: corps.reportedEntityId, reportType: corps.reportType, status: 'pending', createdAt: new Date() });
     }
 
     const priorite = await assessReportPriority(fastify.prisma, {
@@ -195,7 +185,7 @@ export async function signaler(
 const UNE_HEURE = 60 * 60 * 1000;
 
 /**
- * Les trois limiteurs — construits ici, pour les DEUX adresses.
+ * Les deux limiteurs — construits ici, pour les DEUX adresses.
  *
  * Ce ne sont pas les OBJETS qui sont partagés (chaque plugin monte les siens)
  * mais les COMPTEURS : même préfixe, même clé, donc mêmes entrées Redis. C'est
@@ -232,21 +222,6 @@ export function limiteursDeSignalement(fastify: FastifyInstance) {
   );
 
   return [parCompte.middleware(), parAdresse.middleware()];
-}
-
-const limiteursDeCible = new WeakMap<FastifyInstance, ReturnType<typeof createCustomRateLimiter>>();
-
-/**
- * Le seuil par CIBLE — compté DANS le geste, après la vérification de la cible
- * (audit M1). Un seul par instance, partagé par les deux adresses : sans Redis,
- * l'alias et l'adresse neuve comptent ainsi dans le même seau.
- */
-function limiteurDeCible(fastify: FastifyInstance) {
-  const existant = limiteursDeCible.get(fastify);
-  if (existant) return existant;
-  const neuf = createCustomRateLimiter({ max: 3, windowMs: UNE_HEURE, keyPrefix: 'reports:target', message: '' }, fastify.redis ?? undefined);
-  limiteursDeCible.set(fastify, neuf);
-  return neuf;
 }
 
 export async function reportCreationRoutes(fastify: FastifyInstance) {

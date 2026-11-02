@@ -389,7 +389,7 @@ describe('POST /reports — signaler un COMMENTAIRE de post ou de story (#8709)'
   });
 });
 
-describe('POST /reports — le seuil par CIBLE', () => {
+describe('POST /reports — plus de seuil par CIBLE (#14110)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     base.message = { conversationId: CONVERSATION_ID };
@@ -397,7 +397,7 @@ describe('POST /reports — le seuil par CIBLE', () => {
     createReport.mockResolvedValue({ id: 'rpt-1', status: 'pending' });
   });
 
-  it('écrit trois signalements de la même cible ; le quatrième reçoit le même accusé et n\'est pas écrit (#14110, audit M1)', async () => {
+  it('écrit chaque signalement de la même cible : aucun seuil par cible ne jette (#14110, contre-audit N2)', async () => {
     // Aucune clé par APPELANT ne peut faire ça : dix comptes complices tiennent
     // chacun leur quota. C'est le seul seuil qui protège la personne signalée.
     const app = await buildApp();
@@ -409,7 +409,7 @@ describe('POST /reports — le seuil par CIBLE', () => {
     }
 
     expect(statuts).toEqual([201, 201, 201, 201]);
-    expect(createReport).toHaveBeenCalledTimes(3);
+    expect(createReport).toHaveBeenCalledTimes(4);
 
     await app.close();
   });

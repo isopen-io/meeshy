@@ -10,7 +10,8 @@ const warn = jest.fn();
 jest.mock('../../../../utils/logger', () => ({ logger: { warn: (...a: unknown[]) => warn(...a), info: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { assessReportPriority } from '../../../../services/reports/reportPriority';
+import { assessReportPriority, minorBirthDateFloor } from '../../../../services/reports/reportPriority';
+import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { ADULT_BIRTH, MINOR_BIRTH, messagingWorld, table, type Row } from '../../../helpers/messaging-circle-world';
 
 const SIGNALANT = '6a00000000000000000000a1';
@@ -50,7 +51,14 @@ function monde(extra: { links?: readonly Row[]; signalantBloque?: readonly strin
     { id: MSG_GROUPE, senderId: 'g-adulte', messageType: 'text', conversationId: GROUPE },
   ]);
   const conversation = table([{ id: GROUPE, type: 'group' }]);
-  return { ...world.prisma, message, conversation, post: table([]), postComment: table([]), sound: table([]) } as unknown as PrismaClient;
+  const floorOf = (where: { user?: { is?: { birthDate?: { gte?: Date } } } }) => where.user?.is?.birthDate?.gte ?? new Date(0);
+  const participant = {
+    ...world.participant,
+    count: async ({ where }: { where: { conversationId: string; isActive: boolean; user?: { is?: { birthDate?: { gte?: Date } } } } }) =>
+      world.participant.rows.filter((p) => p.conversationId === where.conversationId && p.isActive === where.isActive)
+        .filter((p) => { const birth = world.users.rows.find((u) => u.id === p.userId)?.birthDate as Date | null | undefined; return birth instanceof Date && birth >= floorOf(where); }).length,
+  };
+  return { ...world.prisma, participant, message, conversation, post: table([]), postComment: table([]), sound: table([]) } as unknown as PrismaClient;
 }
 
 const assess = (reportedType: string, reportedEntityId: string, reporterId: string | null = SIGNALANT, prisma: PrismaClient = monde()) =>
@@ -106,5 +114,12 @@ describe('assessReportPriority', () => {
     const enPanne = { user: { findMany: async () => { throw new Error('db down'); } } } as unknown as PrismaClient;
     await expect(assess('user', MINEUR, SIGNALANT, enPanne)).resolves.toEqual({ priority: 0, priorityReasons: [] });
     expect(warn).toHaveBeenCalledWith(expect.any(String), { reportedType: 'user' });
+  });
+
+  it('la frontière du count d\'audience est celle de declaredAgeClass : 18 ans le jour même (contre-audit N4)', () => {
+    const floor = minorBirthDateFloor(NOW);
+    const births = ['2008-11-01', '2008-11-02', '2008-11-03', '2008-11-04'].map((d) => new Date(`${d}T00:00:00.000Z`));
+    expect(births.map((b) => b >= floor)).toEqual(births.map((b) => declaredAgeClass(b, NOW) === 'minor'));
+    expect(births.map((b) => b >= floor)).toEqual([false, false, true, true]);
   });
 });
