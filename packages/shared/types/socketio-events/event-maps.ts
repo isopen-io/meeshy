@@ -149,6 +149,7 @@ import type {
   ConversationActionData,
   ConversationClosedEventData,
   ConversationDeletedEventData,
+  ConversationObsoletedEventData,
   ConversationEncryptionChangedEventData,
   ConversationJoinErrorEventData,
   ConversationNewEventData,
@@ -482,6 +483,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CONVERSATION_UPDATED]: (data: ConversationUpdatedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED]: (data: ConversationEncryptionChangedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_CLOSED]: (data: ConversationClosedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_OBSOLETED]: (data: ConversationObsoletedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_DELETED]: (data: ConversationDeletedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_RESTORED]: (data: ConversationRestoredEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED]: (data: ConversationParticipantJoinedEventData) => void;

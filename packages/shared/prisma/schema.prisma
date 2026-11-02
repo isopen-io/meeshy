@@ -679,6 +679,15 @@ model Conversation {
   /// Conversation closed for all — no one can write, messages stay readable
   closedAt  DateTime?
   closedBy  String?   @db.ObjectId
+  /// #14643 — conversation rendue OBSOLÈTE par un administrateur
+  /// (`DELETE /conversations/:id/obsolete`) : contenu illisible tout de suite,
+  /// retirée de la liste de tous. Pose aussi `isActive: false` et `closedAt`
+  /// (ce que lisent les anciens clients). Absent ⇒ jamais rendue obsolète.
+  deletedAt   DateTime?
+  /// #14643 — l'instant à partir duquel `jobs/obsolete-conversation-purge.ts`
+  /// efface la conversation et tout son contenu (48 h après `deletedAt`).
+  /// Seul champ que la purge interroge : sans lui, rien ne s'efface.
+  purgeAfter  DateTime?
   /// Denormalized member count for performance
   memberCount   Int      @default(0)
   lastMessageAt DateTime @default(now())
@@ -820,6 +829,9 @@ model Conversation {
   // (`routes/conversations/utils/list-rank.ts`). EXPLOITATION : créer cet index
   // à la main sur la prod (aucune migration jouée).
   @@index([isActive, lastActivityAt])
+  // #14643 — le balayage de purge des conversations obsolètes
+  // (`purgeAfter <= now`). EXPLOITATION : créer cet index à la main sur la prod.
+  @@index([purgeAfter])
 }
 
 /// Share/forward a conversation to a community or another context
