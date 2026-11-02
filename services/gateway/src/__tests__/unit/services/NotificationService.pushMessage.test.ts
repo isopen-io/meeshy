@@ -651,7 +651,16 @@ describe('NotificationService — message push title/body', () => {
       expect(data.messageType).toBe('audio');
     });
 
-    it('test_messagePush_translationMatchingPrismLanguage_isIncluded', async () => {
+    function lastPersistedContext(): Record<string, unknown> {
+      const calls = (prisma.notification.create as jest.Mock).mock.calls;
+      return calls[calls.length - 1][0].data.context;
+    }
+
+    // #14319 — la traduction servie compose le CORPS de la bannière ; aucun
+    // client ne lit ses champs de service sur le fil (NSE iOS, app, Android,
+    // service worker web) : elle reste dans le contexte persisté, jamais sur
+    // la charge APNs/FCM.
+    it('test_messagePush_translationMatchingPrismLanguage_neverTravelsOnTheWire', async () => {
       mockLiveMessage({
         translations: {
           en: { text: 'Hello everyone', translationModel: 'medium', createdAt: MSG_CREATED_AT },
@@ -662,8 +671,25 @@ describe('NotificationService — message push title/body', () => {
       await sendMessageNotification();
 
       const data = (lastPushPayload().data ?? {}) as Record<string, string>;
-      expect(data.translatedContent).toBe('Hello everyone');
-      expect(data.translatedLanguage).toBe('en');
+      expect(data).not.toHaveProperty('translatedContent');
+      expect(data).not.toHaveProperty('translatedLanguage');
+      expect(lastPersistedContext().translatedContent).toBe('Hello everyone');
+      expect(lastPersistedContext().translatedLanguage).toBe('en');
+    });
+
+    it('test_messagePush_dataCarriesTheOriginalForTheNsePrePersistence', async () => {
+      mockLiveMessage({
+        originalLanguage: 'fr',
+        translations: {
+          en: { text: 'Hello everyone', translationModel: 'medium', createdAt: MSG_CREATED_AT },
+        },
+      });
+
+      await sendMessageNotification();
+
+      const data = (lastPushPayload().data ?? {}) as Record<string, string>;
+      expect(data.content).toBe('Bonjour tout le monde');
+      expect(data.originalLanguage).toBe('fr');
     });
 
     it('test_messagePush_noMatchingTranslation_fieldsAbsent', async () => {
@@ -678,9 +704,10 @@ describe('NotificationService — message push title/body', () => {
       const data = (lastPushPayload().data ?? {}) as Record<string, string>;
       expect(data).not.toHaveProperty('translatedContent');
       expect(data).not.toHaveProperty('translatedLanguage');
+      expect(lastPersistedContext()).not.toHaveProperty('translatedContent');
     });
 
-    it('test_messagePush_encryptedTranslation_isNeverPushed', async () => {
+    it('test_messagePush_encryptedTranslation_isNeverServed', async () => {
       mockLiveMessage({
         translations: {
           en: { text: 'ciphertextbase64', translationModel: 'medium', isEncrypted: true, createdAt: MSG_CREATED_AT },
@@ -691,9 +718,10 @@ describe('NotificationService — message push title/body', () => {
 
       const data = (lastPushPayload().data ?? {}) as Record<string, string>;
       expect(data).not.toHaveProperty('translatedContent');
+      expect(lastPersistedContext()).not.toHaveProperty('translatedContent');
     });
 
-    it('test_messagePush_translationTruncatedTo200Chars', async () => {
+    it('test_messagePush_servedTranslationTruncatedTo200Chars', async () => {
       mockLiveMessage({
         translations: {
           en: { text: 'x'.repeat(300), translationModel: 'medium', createdAt: MSG_CREATED_AT },
@@ -702,8 +730,7 @@ describe('NotificationService — message push title/body', () => {
 
       await sendMessageNotification();
 
-      const data = (lastPushPayload().data ?? {}) as Record<string, string>;
-      expect(data.translatedContent).toHaveLength(200);
+      expect(lastPersistedContext().translatedContent).toHaveLength(200);
     });
 
     it('test_messagePush_normalPayloadStaysUnderApns4KBBudget', async () => {
@@ -717,37 +744,29 @@ describe('NotificationService — message push title/body', () => {
 
       const payload = lastPushPayload();
       expect(Buffer.byteLength(JSON.stringify(payload), 'utf8')).toBeLessThan(4096);
-      expect((payload.data ?? {}).translatedContent).toBe('Hello everyone');
+      expect((payload.data ?? {}).encryptedContent).toBe('shortciphertext');
     });
 
     function payloadBytes(p: unknown): number {
       return Buffer.byteLength(JSON.stringify(p), 'utf8');
     }
 
-    it('test_messagePush_oversized_dropsTranslationFirst_keepsEncryptedContent', async () => {
+    it('test_messagePush_longTranslation_noLongerCompetesWithEncryptedContentForTheBudget', async () => {
       mockLiveMessage({
         translations: {
           en: { text: 'y'.repeat(300), translationModel: 'medium', createdAt: MSG_CREATED_AT },
         },
       });
 
-      // Probe: measure the fixed payload overhead with a known-size ciphertext,
-      // then pick E so that WITHOUT the translation the payload fits (50B slack)
-      // while WITH it the 3800B guard overflows — translation must be the first
-      // (and only) field sacrificed.
       await sendMessageNotification({ encryptedContent: 'z'.repeat(10) });
-      const probe = lastPushPayload() as { data?: Record<string, string> };
-      expect(probe.data?.translatedContent).toBe('y'.repeat(200));
-      const { translatedContent: _tc, translatedLanguage: _tl, ...probeSansTranslation } = probe.data!;
-      const bytesSansTranslation = payloadBytes({ ...probe, data: probeSansTranslation });
-      const E = 3800 - 50 - (bytesSansTranslation - 10);
+      const probe = lastPushPayload();
+      const E = 3800 - 50 - (payloadBytes(probe) - 10);
 
       await sendMessageNotification({ encryptedContent: 'z'.repeat(E) });
 
       const payload = lastPushPayload();
       const data = (payload.data ?? {}) as Record<string, string>;
       expect(data).not.toHaveProperty('translatedContent');
-      expect(data).not.toHaveProperty('translatedLanguage');
       expect(data.encryptedContent).toBe('z'.repeat(E));
       expect(data.createdAt).toBe('2026-07-20T09:30:00.000Z');
       expect(payloadBytes(payload)).toBeLessThanOrEqual(3800);
