@@ -47,6 +47,7 @@ class StickerSheetPagesRobolectricTest {
         usage: StickerUsageStore = StickerUsageStore(InMemoryStickerUsageStorage()),
         installed: List<StickerPackSummary>? = null,
         onDismiss: () -> Unit = {},
+        instants: Boolean = false,
     ) {
         val capabilities = StickerCapabilities(
             emojiCategories = listOf(StickerEmojiCategory("SMILEYS", "Faces", listOf("😀"))),
@@ -57,7 +58,7 @@ class StickerSheetPagesRobolectricTest {
                 if (cast != null) MeeStickerPackPage(cast)
                 else installed?.firstOrNull { it.slug == slug }?.let { StickerPackItemsPage(it, imageModel = { url -> url }) }
             },
-            custom = { StickerCustomPage(library = library, openedAt = noon) },
+            custom = { StickerCustomPage(library = library, openedAt = noon, instants = instants) },
             shop = {
                 StickerPackShopPage(
                     packs = listOf(
@@ -199,5 +200,26 @@ class StickerSheetPagesRobolectricTest {
         show()
         tab("Mee")
         compose.onNodeWithText("To greet, thank, say yes, apologize or say good night").assertIsDisplayed()
+    }
+
+    @Test
+    fun `les Instants de Mee ne se montrent que chez un hote qui les envoie`() {
+        show()
+        tab("Custom")
+        compose.onNodeWithContentDescription("Grand soleil").assertDoesNotExist()
+    }
+
+    @Test
+    fun `un Instant choisi part avec les mots tapes et l'heure de l'ouverture`() {
+        val placed = mutableListOf<StickerSheetChoice>()
+        show(placed = placed, instants = true)
+        tab("Custom")
+        compose.onNode(hasSetTextAction()).performTextInput("Salut")
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasContentDescription("Bonjour"))
+        compose.onNodeWithContentDescription("Bonjour").performClick()
+        val choice = placed.single() as StickerSheetChoice.Instant
+        assertThat(choice.instantId).isEqualTo("instant-bonjour")
+        assertThat(choice.slots).containsEntry("message", "Salut")
+        assertThat(choice.slots.keys).containsExactly("message", "time")
     }
 }
