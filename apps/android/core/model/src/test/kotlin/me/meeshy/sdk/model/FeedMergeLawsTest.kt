@@ -99,4 +99,51 @@ class FeedMergeLawsTest {
         assertThat(generation.isCurrent(token)).isFalse()
         assertThat(generation.isCurrent(generation.current())).isTrue()
     }
+
+    @Test
+    fun `une relecture silencieuse garde les pages defilees et le curseur plus profond`() {
+        val revalidated = FeedMergeLaws.revalidated(
+            fetched = listOf(post("c", 30), post("b", 20)),
+            existing = listOf(post("c", 30), post("b", 20), post("a", 10)),
+            pendingLikes = emptyMap(),
+            preserveLoadedPages = true,
+        )
+
+        assertThat(ids(revalidated.posts)).containsExactly("c", "b", "a").inOrder()
+        assertThat(revalidated.keepsDeeperCursor).isTrue()
+    }
+
+    @Test
+    fun `un tirer pour rafraichir ne garde que la tete temps reel et reprend le curseur serveur`() {
+        val revalidated = FeedMergeLaws.revalidated(
+            fetched = listOf(post("c", 30), post("b", 20)),
+            existing = listOf(post("rt", 40), post("c", 30), post("a", 10)),
+            pendingLikes = emptyMap(),
+            preserveLoadedPages = false,
+        )
+
+        assertThat(ids(revalidated.posts)).containsExactly("rt", "c", "b").inOrder()
+        assertThat(revalidated.keepsDeeperCursor).isFalse()
+    }
+
+    @Test
+    fun `un like encore en file est rejoue sur la page relue`() {
+        val revalidated = FeedMergeLaws.revalidated(
+            fetched = listOf(post("b", 20, liked = false, likes = 3)),
+            existing = emptyList(),
+            pendingLikes = mapOf("b" to true),
+            preserveLoadedPages = true,
+        )
+
+        assertThat(revalidated.posts.single().isLikedByMe).isTrue()
+        assertThat(revalidated.posts.single().likeCount).isEqualTo(4)
+    }
+
+    @Test
+    fun `le fil gardé sur disque est plafonne aux 100 posts les plus recents`() {
+        val posts = (1..130).map { post("p$it", 0) }
+
+        assertThat(FeedMergeLaws.capForDisk(posts)).hasSize(100)
+        assertThat(FeedMergeLaws.capForDisk(posts).first().id).isEqualTo("p1")
+    }
 }

@@ -58,6 +58,33 @@ object FeedMergeLaws {
         return current + page.filter { it.id !in known }
     }
 
+    /** Le fil relu : [posts] a rendre, et [keepsDeeperCursor] quand des pages plus anciennes sont gardees (le curseur serveur est alors trop haut). */
+    class Revalidated(val posts: List<ApiPost>, val keepsDeeperCursor: Boolean)
+
+    /**
+     * Une relecture du fil : silencieuse ([preserveLoadedPages]) elle garde les pages defilees, tirer-pour-rafraichir
+     * ne garde que la tete temps reel. Les likes encore en file sont rejoues dans les deux cas.
+     */
+    fun revalidated(
+        fetched: List<ApiPost>,
+        existing: List<ApiPost>,
+        pendingLikes: Map<String, Boolean>,
+        preserveLoadedPages: Boolean,
+    ): Revalidated {
+        val merged = if (preserveLoadedPages) mergePreservingLoadedPages(fetched, existing) else mergePreservingRealtimeHead(fetched, existing)
+        return Revalidated(reapplyPendingLikes(merged, pendingLikes), keepsDeeperCursor = merged.size > fetched.size && preserveLoadedPages && hasLoadedTail(fetched, merged))
+    }
+
+    private fun hasLoadedTail(fetched: List<ApiPost>, merged: List<ApiPost>): Boolean {
+        val oldest = fetched.lastOrNull()?.let(::timestampOf) ?: return false
+        return merged.any { timestampOf(it) < oldest }
+    }
+
+    /** Ce que le disque garde du fil : les [DISK_CAP] posts les plus recents. */
+    fun capForDisk(posts: List<ApiPost>): List<ApiPost> = if (posts.size <= DISK_CAP) posts else posts.take(DISK_CAP)
+
+    const val DISK_CAP = 100
+
     private fun timestampOf(post: ApiPost): Long = isoToEpochMillis(post.createdAt)
 }
 
