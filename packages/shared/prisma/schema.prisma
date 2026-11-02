@@ -2008,6 +2008,11 @@ type RelationTransition {
   from    String
   to      String
   at      DateTime
+  /// Ce qui a causé le passage (#14406, contre-audit #14464 N1/N2) :
+  /// "auto-acquaintance" (la Connaissance automatique) | "explicit" (un geste : demande
+  /// acceptée, rituel, baisse, rattrapage d'amitié). Absent sur les passages écrits
+  /// avant ce champ. Optionnel : aucune migration.
+  cause   String?
 }
 
 /// Le lien entre DEUX personnes, une ligne par paire NON orientée (#13926).

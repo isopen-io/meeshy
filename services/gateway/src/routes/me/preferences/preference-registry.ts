@@ -57,12 +57,16 @@ import {
   retireLegacyPrivacyRows,
 } from '../../../services/preferences/privacy-storage';
 import { invalidatePrivacyPreferences } from '../../../services/preferences/privacy-cache';
+import { revisitAutoAcquaintancesOnPrivacyWrite } from '../../../services/relations/autoAcquaintance';
 import {
   emitPreferenceCategoryUpdated,
   PREFERENCE_CATEGORIES,
   type PreferenceCategory,
 } from '../../../services/preferences/preferences-broadcast';
 import { submittedKeysOnly } from '../../../utils/partial-update';
+import { enhancedLogger } from '../../../utils/logger-enhanced';
+
+const logger = enhancedLogger.child({ module: 'PreferenceRegistry' });
 
 export { PREFERENCE_CATEGORIES };
 export type { PreferenceCategory };
@@ -142,8 +146,18 @@ export const PREFERENCE_REGISTRY: Readonly<Record<PreferenceCategory, Preference
     defaults: PRIVACY_PREFERENCE_DEFAULTS,
     storage: {
       readStored: resolveStoredPrivacyPreferences,
-      afterWrite: retireLegacyPrivacyRows,
+      // #14406 — un refus de la Connaissance automatique vaut tout de suite.
+      afterWrite: async (prisma, userId) => {
+        await retireLegacyPrivacyRows(prisma, userId);
+        revisitAutoAcquaintancesOnPrivacyWrite(prisma, { userId }).catch((error: unknown) =>
+          logger.warn('auto acquaintances not revisited after privacy write', { userId, error })
+        );
+      },
     },
+    // #14406 (contre-audit #14464 N3) — ni un remplacement qui ne la nomme pas, ni une
+    // réinitialisation ne lèvent un refus de la Connaissance automatique : le choix
+    // stocké reste celui de la personne.
+    keptWhenUnnamed: ['autoAcquaintance'],
   },
   audio: { schema: AudioPreferenceSchema, defaults: AUDIO_PREFERENCE_DEFAULTS },
   message: { schema: MessagePreferenceSchema, defaults: MESSAGE_PREFERENCE_DEFAULTS },
@@ -400,7 +414,9 @@ export async function keepUnnamedKeys(
 /**
  * Ce qu'une RÉINITIALISATION écrit pour une catégorie : `null` (les défauts), sauf les
  * clés `keptWhenUnnamed` stockées, qui survivent — « Réinitialiser les notifications »
- * ne rouvre pas en silence un son qui passe Ne pas déranger (contre-audit #14441, N3).
+ * ne rouvre pas en silence un son qui passe Ne pas déranger (contre-audit #14441, N3), et
+ * « Réinitialiser la confidentialité » ne lève pas un refus de la Connaissance automatique
+ * (#14406, contre-audit #14464 N3).
  */
 export async function resetDocumentFor(
   prisma: PrismaClient,

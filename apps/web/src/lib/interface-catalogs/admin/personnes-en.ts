@@ -85,6 +85,7 @@ const f = {
   'admin.people.pref.privacy.blockScreenshots': 'Block screenshots',
   'admin.people.pref.privacy.hideProfileFromSearch': 'Hide profile from search',
   'admin.people.pref.privacy.notifyContactsOnReturn': 'Tell my contacts when I come back',
+  'admin.people.pref.privacy.autoAcquaintance': 'Create Acquaintances automatically',
   'admin.people.pref.privacy.encryptionPreference': 'Encryption preference',
   'admin.people.pref.privacy.autoEncryptNewConversations': 'Encrypt new conversations automatically',
   'admin.people.pref.privacy.showEncryptionStatus': 'Show encryption status',
