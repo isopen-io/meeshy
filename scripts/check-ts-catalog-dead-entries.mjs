@@ -534,9 +534,6 @@ const PENDING_CLIENT_ENTRIES = {
   'bring.byUserId': { issue: 13936, reason: 'GET|POST /bring/:userId — disponibilité et envoi du Bring, sous-lot web' },
   'bring.byBringId': { issue: 13936, reason: 'DELETE /bring/:bringId — arrêter un Bring, sous-lot web' },
   'relations.byUserIdSettings': { issue: 13936, reason: 'GET|PUT /relations/:userId/settings — bloquer le Bring de quelqu’un, sous-lot web' },
-  // Rendre une conversation obsolète (#14643, faa7ac70a3) : la passerelle sert la route, le geste des
-  // trois clients est #14645 (« rendre obsolète en un geste »).
-  'conversations.byIdObsolete': { issue: 14645, reason: 'DELETE /conversations/:id/obsolete — le geste « rendre obsolète » des clients' },
 };
 
 const BASELINE_DEAD_ENTRIES = 279;

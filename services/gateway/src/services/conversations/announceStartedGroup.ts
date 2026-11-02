@@ -17,11 +17,10 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversation-helpers';
 import { isMemberCreator } from '@meeshy/shared/types/role-types';
+import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'AnnounceStartedGroup' });
-
-type Emitter = { to(room: string): { emit(event: string, payload: unknown): unknown } };
 
 export type StartedGroupInviteNotifier = {
   createConversationInviteNotification(params: {
@@ -37,7 +36,7 @@ export type StartedGroupInviteNotifier = {
 
 export type AnnounceStartedGroupDeps = {
   readonly prisma: Pick<PrismaClient, 'conversation'>;
-  readonly io: Emitter | null | undefined;
+  readonly io: ServerEmitIO | null | undefined;
   readonly notificationService: StartedGroupInviteNotifier | null | undefined;
 };
 
