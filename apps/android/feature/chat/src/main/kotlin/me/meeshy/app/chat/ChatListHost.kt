@@ -160,9 +160,11 @@ internal fun ChatListHost(
     // flag keeps the jump from firing against an empty/unsettled window; the
     // latch guarantees the boundary is stable, so this fires exactly once.
     var didOpenScroll by remember { mutableStateOf(false) }
+    // La conversation s'ouvre SUR un message : ramassé une fois, le saut ne se rejoue pas à la prochaine ouverture.
+    val landingMessageId = remember { host.takeLandingMessageId() }
     LaunchedEffect(state.unreadBoundaryResolved, renderedItems) {
         if (didOpenScroll || !state.unreadBoundaryResolved) return@LaunchedEffect
-        val target = InitialScrollTarget.of(renderedItems, orientation) ?: return@LaunchedEffect
+        val target = InitialScrollTarget.of(renderedItems, orientation, landingMessageId) ?: return@LaunchedEffect
         listState.scrollToItem(target)
         didOpenScroll = true
     }

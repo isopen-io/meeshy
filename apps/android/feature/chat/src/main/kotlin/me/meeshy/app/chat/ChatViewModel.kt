@@ -135,6 +135,11 @@ class ChatViewModel @Inject constructor(
      * draft restore normally.
      */
     private val initialDraft: String? = savedStateHandle.get<String>(DRAFT_ARG)
+
+    private var landingMessageId: String? = savedStateHandle.get<String>(LANDING_MESSAGE_ID_ARG)?.takeIf { it.isNotBlank() }
+
+    /** The message this conversation was opened ON (route arg `messageId`), handed out ONCE: a later open or recomposition never replays the jump. */
+    fun takeLandingMessageId(): String? = landingMessageId.also { landingMessageId = null }
         ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
         ?.takeIf { it.isNotBlank() }
 
@@ -1115,6 +1120,9 @@ class ChatViewModel @Inject constructor(
 
         /** Optional deep-link query arg (`?draft=...`) — see [initialDraft]. */
         const val DRAFT_ARG: String = "draft"
+
+        /** Optional route arg: the message to land on — the same name as the chat route's `messageId`. */
+        const val LANDING_MESSAGE_ID_ARG: String = "messageId"
         private const val TYPING_TIMEOUT_MS = 5_000L
     }
 }

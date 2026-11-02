@@ -1,5 +1,7 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.navigation.PresentedSurfaceKind
+import me.meeshy.ui.component.surface.DeclarePresentedSurface
 import me.meeshy.sdk.model.composer.edit.ComposerBackgroundSource
 import me.meeshy.sdk.media.readMediaUploadItem
 import android.net.Uri
@@ -97,6 +99,12 @@ fun StoryComposerScreen(
     }
     // Tuer l'app passe par l'arrière-plan (#13869, iOS didEnterBackground) : la dernière fenêtre où l'écriture n'attend pas l'accalmie.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.persistDraft() }
+    // Une conversation qui s'ouvre referme le composeur dont le brouillon s'écrit à la sortie ; une porte qui sème la matière RETIENT (iOS `ComposerConversationYield`).
+    DeclarePresentedSurface(
+        kind = PresentedSurfaceKind.COMPOSER,
+        retains = { seededByDoor || repostOfId != null || editStoryId != null || recomposeStoryId != null },
+        onClose = onClose,
+    )
 
     StoryEditGate(editStoryId = editStoryId, viewModel = viewModel, onClose = onClose)
     StoryRecomposeGate(recomposeStoryId = recomposeStoryId, viewModel = viewModel, onClose = onClose)

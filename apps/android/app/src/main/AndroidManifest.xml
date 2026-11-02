@@ -38,6 +38,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
+    <!-- lot: routeur-de-navigation-hubs-et-cibles-differees : enableOnBackInvokedCallback arme le retour prédictif (API 34+) -->
     <application
         android:name=".MeeshyApplication"
         android:allowBackup="false"
@@ -47,6 +48,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.Meeshy">
 
         <activity
