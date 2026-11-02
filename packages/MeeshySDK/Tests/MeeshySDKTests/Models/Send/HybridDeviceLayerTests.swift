@@ -48,10 +48,41 @@ struct HybridDeviceLayerTests {
 
     @Test func judge_differentText_isAMismatchCarryingTheSealedText() {
         #expect(HybridDeviceLayer.judge(served: "Rendez-vous à 20 h", sealed: "Rendez-vous à 18 h", edited: false)
-            == .mismatch(deviceText: "Rendez-vous à 18 h"))
+            == .mismatch(deviceText: "Rendez-vous à 18 h", servedAsEdited: false))
     }
 
-    @Test func judge_editedMessage_isUnverifiable_neverAMismatch() {
-        #expect(HybridDeviceLayer.judge(served: "Rendez-vous à 20 h", sealed: "Rendez-vous à 18 h", edited: true) == .unverifiable)
+    @Test func judge_editedWithoutAnEditSealedByTheAuthor_isAMismatch_neverSilence() {
+        #expect(HybridDeviceLayer.judge(served: "Rendez-vous à 20 h", sealed: "Rendez-vous à 18 h", edited: true)
+            == .mismatch(deviceText: "Rendez-vous à 18 h", servedAsEdited: true))
+    }
+
+    @Test func judge_editedButIdenticalToTheSealedText_isVerified() {
+        #expect(HybridDeviceLayer.judge(served: "Salut", sealed: "Salut", edited: true) == .verified)
+    }
+
+    @Test func mismatch_exposesTheDeviceText() {
+        #expect(HybridDeviceLayerIntegrity.mismatch(deviceText: "x", servedAsEdited: false).deviceText == "x")
+        #expect(HybridDeviceLayerIntegrity.verified.deviceText == nil)
+    }
+
+    private let servedAt = Date(timeIntervalSince1970: 1_790_000_000)
+    private var servedAtMs: Int64 { Int64(servedAt.timeIntervalSince1970 * 1000) }
+
+    @Test func isBound_sameClientIdAndCloseInstants() {
+        #expect(HybridDeviceLayer.isBound(sealedClientMessageId: "cid_1", servedClientMessageId: "cid_1", sealedAtMilliseconds: servedAtMs - 3_000, servedCreatedAt: servedAt))
+    }
+
+    @Test func isBound_requiresTheClientIdOnBothSides() {
+        #expect(!HybridDeviceLayer.isBound(sealedClientMessageId: nil, servedClientMessageId: "cid_1", sealedAtMilliseconds: servedAtMs, servedCreatedAt: servedAt))
+        #expect(!HybridDeviceLayer.isBound(sealedClientMessageId: "cid_1", servedClientMessageId: nil, sealedAtMilliseconds: servedAtMs, servedCreatedAt: servedAt))
+        #expect(!HybridDeviceLayer.isBound(sealedClientMessageId: "", servedClientMessageId: "", sealedAtMilliseconds: servedAtMs, servedCreatedAt: servedAt))
+        #expect(!HybridDeviceLayer.isBound(sealedClientMessageId: "cid_1", servedClientMessageId: "cid_2", sealedAtMilliseconds: servedAtMs, servedCreatedAt: servedAt))
+    }
+
+    @Test func isBound_refusesAnInstantOutsideTheTenMinuteWindow() {
+        let window = Int64(HybridDeviceLayer.sentAtWindow * 1000)
+        #expect(HybridDeviceLayer.isBound(sealedClientMessageId: "c", servedClientMessageId: "c", sealedAtMilliseconds: servedAtMs - window, servedCreatedAt: servedAt))
+        #expect(!HybridDeviceLayer.isBound(sealedClientMessageId: "c", servedClientMessageId: "c", sealedAtMilliseconds: servedAtMs - window - 1_000, servedCreatedAt: servedAt))
+        #expect(!HybridDeviceLayer.isBound(sealedClientMessageId: "c", servedClientMessageId: "c", sealedAtMilliseconds: servedAtMs + window + 1_000, servedCreatedAt: servedAt))
     }
 }
