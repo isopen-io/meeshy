@@ -85,15 +85,17 @@ describe('decideDirectOpening — direct dès Connaissance, demande en dessous (
     expect(permissions).toMatchObject({ canSendMessages: true, canSendFiles: false, canSendImages: false, canSendVideos: false, canSendAudios: false });
   });
 
-  it('une demande vers un majeur garde les droits fondateurs de l\'expéditeur', async () => {
-    const opening = await decideDirectOpening(db(monde()), { senderId: ALICE, recipientId: BOB, now: NOW });
-    expect(requesterPermissionsFor(opening, FOUNDING_MEMBER_PERMISSIONS)).toEqual(FOUNDING_MEMBER_PERMISSIONS);
+  it('une demande vers un majeur ferme aussi les médias de l\'expéditeur : la règle ne dépend pas de l\'âge (C1)', async () => {
+    const versMajeur = await decideDirectOpening(db(monde()), { senderId: ALICE, recipientId: BOB, now: NOW });
+    const versMineur = await decideDirectOpening(db(monde()), { senderId: ALICE, recipientId: MINEUR, now: NOW });
+    expect(requesterPermissionsFor(versMajeur, FOUNDING_MEMBER_PERMISSIONS)).toEqual(requesterPermissionsFor(versMineur, FOUNDING_MEMBER_PERMISSIONS));
+    expect(requesterPermissionsFor({ kind: 'direct' }, FOUNDING_MEMBER_PERMISSIONS)).toEqual(FOUNDING_MEMBER_PERMISSIONS);
   });
 
   it('le participant destinataire d\'une demande porte sa date et son score ; un direct n\'en porte rien', async () => {
     const opening = await decideDirectOpening(db(monde()), { senderId: NOUVEAU, recipientId: BOB, now: NOW });
-    expect(requestRecipientFields(opening, NOW)).toEqual({ messageRequestAt: NOW, messageRequestRisk: expect.any(Number) });
-    expect(requestRecipientFields({ kind: 'direct' }, NOW)).toEqual({});
+    expect(requestRecipientFields(opening, NOW, NOUVEAU)).toEqual({ messageRequestAt: NOW, messageRequestRisk: expect.any(Number), messageRequestFromId: NOUVEAU });
+    expect(requestRecipientFields({ kind: 'direct' }, NOW, NOUVEAU)).toEqual({ messageRequestAt: null, messageRequestRisk: null, messageRequestFromId: null });
   });
 
   it('un compte neuf qui ouvre beaucoup de demandes est filtré', async () => {
@@ -222,12 +224,13 @@ describe('noteMessageInteractions — répondre à une demande l\'accepte', () =
     });
   };
 
-  it('le destinataire qui répond accepte : la demande s\'efface et le lien monte', async () => {
+  it('le destinataire qui répond efface la demande, sans relever le lien ni rouvrir les médias (contre-audit M2)', async () => {
     const world = monde({ participants: demandeEnAttente() });
     reply(world, BOB);
     for (let i = 0; i < 20; i += 1) await flush();
     expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestAt).toBeNull();
-    expect(world.relations.relations()).toEqual(expect.arrayContaining([expect.objectContaining({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' })]));
+    expect(world.relations.relations().some((r) => [r.userLowId, r.userHighId].includes(BOB))).toBe(false);
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendImages: false });
   });
 
   it('après une baisse volontaire, répondre efface la demande sans recréer le lien (RG-07)', async () => {

@@ -125,11 +125,17 @@ class StoriesViewModel @Inject constructor(
      * Folds a realtime `story:created` — a friend just posted — into the authoritative Room
      * cache, so their ring appears (unseen, first) without waiting for a revalidation. A story
      * already held (our own publish echoed back, a re-broadcast) is left as is. Mirrors iOS `StoryViewModel.storyCreated`.
+     * A friend's republication in story arrives by `post:reposted` instead, and joins the same way.
      */
     private fun observeStoryCreations() {
         viewModelScope.launch {
             socialSocket.storyCreated.collectEachArrivedSafely { payload ->
                 storyRepository.adoptAnnounced(payload.story)
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.postReposted.collectEachArrivedSafely { payload ->
+                storyRepository.adoptAnnouncedRepost(payload.repost)
             }
         }
     }
