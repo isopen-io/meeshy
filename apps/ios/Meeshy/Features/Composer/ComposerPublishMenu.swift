@@ -397,7 +397,7 @@ struct ComposerPublishMenu<Etiquette: View>: View {
             label()
         }
         .menuIndicator(.hidden)
-        .staysOpenWhileChecking()
+        .modifier(StaysOpenWhileChecking())
     }
 
     @ViewBuilder
@@ -444,15 +444,15 @@ struct ComposerPublishMenu<Etiquette: View>: View {
     }
 }
 
-private extension View {
-    /// Les formats se cochent menu OUVERT, comme Android : une coche ne
-    /// referme pas le menu, l'auteur en coche plusieurs d'un seul déploiement.
+/// Les formats se cochent menu OUVERT, comme Android : une coche ne
+/// referme pas le menu, l'auteur en coche plusieurs d'un seul déploiement.
+private struct StaysOpenWhileChecking: ViewModifier {
     @ViewBuilder
-    func staysOpenWhileChecking() -> some View {
+    func body(content: Content) -> some View {
         if #available(iOS 16.4, *) {
-            menuActionDismissBehavior(.disabled)
+            content.menuActionDismissBehavior(.disabled)
         } else {
-            self
+            content
         }
     }
 }
