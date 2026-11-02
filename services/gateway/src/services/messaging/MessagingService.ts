@@ -50,6 +50,7 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import { announceConversationLanguageChange } from '../message-translation/conversationLanguageChanges';
 import { withOrphanedSenderRepair } from './withOrphanedSenderRepair';
 import { announceSenderBacklogRead, type ReadBroadcastDepsProvider } from './senderBacklogRead';
+import { startedGroupAnnouncer, type StartedGroupAnnouncer } from '../conversations/announceStartedGroup';
 import { isE2eePlaintextRefusal } from './e2eePlaintextAdmission';
 import { isServerAtRestCiphertextRefusal, isServerAtRestUnavailable } from './serverAtRest';
 import { isE2eeRelayRefusal } from '../e2ee/e2ee-relay-errors';
@@ -70,6 +71,8 @@ export class MessagingService {
   private processor: MessageProcessor;
   private readStatusService: MessageReadStatusService;
   private engagementService: EngagementService;
+  /** #14644 — l'annonce d'un groupe démarré par son premier message. */
+  private readonly startedGroups: StartedGroupAnnouncer;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -82,6 +85,11 @@ export class MessagingService {
     this.processor = new MessageProcessor(prisma, notificationService, translationService);
     this.readStatusService = new MessageReadStatusService(prisma);
     this.engagementService = new EngagementService(prisma);
+    this.startedGroups = startedGroupAnnouncer(() => ({
+      prisma,
+      io: readBroadcastDeps?.().io,
+      notificationService,
+    }));
   }
 
   /**
@@ -633,6 +641,7 @@ export class MessagingService {
       prisma: this.prisma,
       translationService: this.translationService,
       engagementService: this.engagementService,
+      startedGroupAnnouncer: this.startedGroups,
       message: {
         id: message.id,
         conversationId: message.conversationId,

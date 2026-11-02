@@ -12,6 +12,7 @@ import { stickerFromMetadata } from '../../services/stickers/messageSticker';
 import { stripClientMessageId } from '../../socketio/utils/message-ack-shaping.js';
 import { broadcastLinkMessage } from '../../socketio/broadcastLinkMessage.js';
 import { runMessagePostSaveEffects } from '../../services/messaging/messagePostSaveEffects.js';
+import { startedGroupAnnouncer } from '../../services/conversations/announceStartedGroup';
 import { notifyMessageRecipients } from '../../services/messaging/messageNotificationFanOut.js';
 import { resolveMessageMentions } from '../../services/messaging/messageMentions.js';
 import {
@@ -477,6 +478,11 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       runMessagePostSaveEffects({
         prisma: fastify.prisma,
         translationService: fastify.translationService,
+        startedGroupAnnouncer: startedGroupAnnouncer(() => ({
+          prisma: fastify.prisma,
+          io: fastify.socketIOHandler?.getManager()?.getIO(),
+          notificationService: fastify.notificationService,
+        })),
         message: {
           id: message.id,
           conversationId: participantShareLink.conversationId,
