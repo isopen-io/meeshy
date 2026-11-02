@@ -35,6 +35,6 @@ class PostShareDeepLinkTest {
 
     @Test
     fun `the patterns land on the post-detail route argument`() {
-        assertThat(Routes.POST_DETAIL).endsWith(argument)
+        assertThat(Routes.POST_DETAIL.substringBefore("?")).endsWith(argument)
     }
 }

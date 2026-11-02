@@ -1,17 +1,15 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -27,8 +25,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.background
 import me.meeshy.feature.conversations.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -52,7 +50,7 @@ internal fun SearchStatus(label: String, sublabel: String? = null, showSpinner: 
             CircularProgressIndicator(color = MeeshyPalette.Indigo500)
         } else {
             Icon(
-                imageVector = Icons.Filled.Search,
+                imageVector = MeeshyIcons.Search,
                 contentDescription = null,
                 tint = MeeshyTheme.tokens.textMuted,
                 modifier = Modifier.size(44.dp),
@@ -85,7 +83,7 @@ internal fun SearchOfflineState(onRetry: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
         Icon(
-            imageVector = Icons.Filled.WifiOff,
+            imageVector = MeeshyIcons.WifiOff,
             contentDescription = null,
             tint = MeeshyTheme.tokens.textMuted,
             modifier = Modifier.size(44.dp),

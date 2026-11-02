@@ -20,13 +20,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Message
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,10 +46,12 @@ import me.meeshy.feature.conversations.R
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.component.chrome.leadingNavigationIcon
 import me.meeshy.ui.component.chrome.leadingNavigationLabel
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.icons.MeeshyIcons
 
 @Composable
 internal fun SearchHeader(
@@ -88,7 +83,7 @@ internal fun SearchHeader(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Search,
+                    imageVector = MeeshyIcons.Search,
                     contentDescription = null,
                     tint = MeeshyPalette.Indigo500,
                     modifier = Modifier.size(20.dp),
@@ -120,7 +115,7 @@ internal fun SearchHeader(
                 if (query.isNotEmpty()) {
                     IconButton(onClick = { onQueryChange("") }, modifier = Modifier.size(32.dp)) {
                         Icon(
-                            imageVector = Icons.Filled.Close,
+                            imageVector = MeeshyIcons.Close,
                             contentDescription = stringResource(R.string.global_search_clear_field),
                             tint = MeeshyTheme.tokens.textMuted,
                             modifier = Modifier.size(18.dp),
@@ -148,9 +143,9 @@ internal fun SearchTabRow(
                 GlobalSearchTab.USERS -> stringResource(R.string.global_search_tab_users)
             }
             val icon = when (tab) {
-                GlobalSearchTab.MESSAGES -> Icons.AutoMirrored.Filled.Message
-                GlobalSearchTab.CONVERSATIONS -> Icons.Filled.Group
-                GlobalSearchTab.USERS -> Icons.Filled.Person
+                GlobalSearchTab.MESSAGES -> MeeshyIcons.MessageFilled
+                GlobalSearchTab.CONVERSATIONS -> MeeshyIcons.GroupFilled
+                GlobalSearchTab.USERS -> MeeshyIcons.PersonFilled
             }
             val count = countFor(tab)
             val description = GlobalSearchRows.tabLabel(label, count, stringResource(R.string.global_search_tab_description))
@@ -232,7 +227,7 @@ internal fun RecentSearchesSection(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(
-                    imageVector = Icons.Filled.History,
+                    imageVector = MeeshyIcons.History,
                     contentDescription = null,
                     tint = MeeshyPalette.Indigo500,
                     modifier = Modifier.size(18.dp),
@@ -268,7 +263,7 @@ internal fun RecentSearchesSection(
                 },
             ) {
                 Icon(
-                    imageVector = Icons.Filled.History,
+                    imageVector = MeeshyIcons.History,
                     contentDescription = null,
                     tint = MeeshyTheme.tokens.textMuted,
                     modifier = Modifier.size(18.dp),
@@ -283,7 +278,7 @@ internal fun RecentSearchesSection(
                 )
                 IconButton(onClick = { onRemove(query) }, modifier = Modifier.size(48.dp)) {
                     Icon(
-                        imageVector = Icons.Filled.Close,
+                        imageVector = MeeshyIcons.Close,
                         contentDescription = removeAction,
                         tint = MeeshyTheme.tokens.textMuted,
                         modifier = Modifier.size(16.dp),
