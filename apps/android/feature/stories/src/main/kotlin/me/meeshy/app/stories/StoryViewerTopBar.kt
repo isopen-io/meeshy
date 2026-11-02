@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -86,7 +87,7 @@ internal fun StoryViewerTopBar(
             }
             IconButton(onClick = actions.onClose) {
                 Icon(
-                    MeeshyIcons.Close,
+                    Icons.Filled.Close,
                     contentDescription = stringResource(R.string.stories_viewer_close),
                     tint = MeeshyPalette.White,
                 )
