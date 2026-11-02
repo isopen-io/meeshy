@@ -307,7 +307,10 @@ private fun audienceSubtitle(visibility: StoryVisibility, count: Int): String =
     when (ComposerAudienceSubtitle.of(visibility, count)) {
         ComposerAudienceSubtitle.Kind.PUBLIC -> stringResource(R.string.composer_audience_sub_public)
         ComposerAudienceSubtitle.Kind.COMMUNITY -> stringResource(R.string.composer_audience_sub_community)
+        ComposerAudienceSubtitle.Kind.ACQUAINTANCES -> stringResource(R.string.composer_audience_sub_acquaintances)
         ComposerAudienceSubtitle.Kind.FRIENDS -> stringResource(R.string.composer_audience_sub_friends)
+        ComposerAudienceSubtitle.Kind.CLOSE -> stringResource(R.string.composer_audience_sub_close)
+        ComposerAudienceSubtitle.Kind.BLOOD -> stringResource(R.string.composer_audience_sub_blood)
         ComposerAudienceSubtitle.Kind.PRIVATE -> stringResource(R.string.composer_audience_sub_private)
         ComposerAudienceSubtitle.Kind.PICK -> stringResource(R.string.composer_audience_sub_pick)
         ComposerAudienceSubtitle.Kind.COUNT -> stringResource(R.string.composer_audience_sub_count, count)

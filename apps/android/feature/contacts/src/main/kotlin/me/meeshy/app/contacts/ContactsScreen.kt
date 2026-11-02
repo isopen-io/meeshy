@@ -57,12 +57,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.app.contacts.circles.CirclesTab
 import me.meeshy.feature.contacts.R
+import me.meeshy.sdk.model.relation.RelationLevel
+import me.meeshy.sdk.model.relation.requestedLevel
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.friend.resolvedName
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.circles.levelTitle
+import me.meeshy.ui.component.circles.tint
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.MeeshyPalette
@@ -134,6 +139,7 @@ fun ContactsScreen(
             }
             when (state.selectedTab) {
                 ContactsTab.Contacts -> ContactsListTab(onOpenProfile = onOpenProfile)
+                ContactsTab.Circles -> CirclesTab(onFindContacts = { viewModel.selectTab(ContactsTab.Discover) })
                 ContactsTab.Requests -> RequestsTab(
                     state = state,
                     onAccept = viewModel::acceptRequest,
@@ -237,6 +243,8 @@ private fun ReceivedRequestRow(
         user = request.sender,
         userId = request.senderId,
         subtitle = request.personalMessage() ?: stringResource(R.string.contacts_requests_received_intent),
+        level = request.raisedLevel(),
+        levelCaption = R.string.circles_requests_incoming,
         onOpenProfile = onOpenProfile,
         modifier = modifier,
     ) {
@@ -274,6 +282,8 @@ private fun SentRequestRow(
         user = request.receiver,
         userId = request.receiverId,
         subtitle = null,
+        level = request.raisedLevel(),
+        levelCaption = R.string.circles_requests_outgoing,
         onOpenProfile = onOpenProfile,
         modifier = modifier,
     ) {
@@ -326,6 +336,8 @@ private fun RequestRow(
     subtitle: String?,
     onOpenProfile: () -> Unit,
     modifier: Modifier = Modifier,
+    level: RelationLevel? = null,
+    @StringRes levelCaption: Int = R.string.circles_requests_incoming,
     actions: @Composable () -> Unit,
 ) {
     val name = user.displayLabel()
@@ -368,6 +380,15 @@ private fun RequestRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            level?.let {
+                Text(
+                    text = stringResource(levelCaption, levelTitle(it, null)),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = it.tint(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         Spacer(Modifier.width(12.dp))
         Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
@@ -398,6 +419,12 @@ private fun EmptyState(message: String) {
     }
 }
 
+/**
+ * Le cran que vise une demande de montée (#13938) : Connaissance, Proche ou Sang. Une demande d'Ami (le sens historique,
+ * `targetLevel` absent) ou illisible reste une demande simple — rien n'est ajouté (iso `RequestsTab.levelCaption`, iOS).
+ */
+private fun FriendRequest.raisedLevel(): RelationLevel? = requestedLevel?.takeUnless { it == RelationLevel.FRIEND }
+
 private fun FriendRequestUser?.displayLabel(): String =
     this?.resolvedName?.takeIf { it.isNotBlank() } ?: "?"
 
@@ -405,6 +432,7 @@ private fun FriendRequestUser?.displayLabel(): String =
 private val ContactsTab.labelRes: Int
     get() = when (this) {
         ContactsTab.Contacts -> R.string.contacts_tab_contacts
+        ContactsTab.Circles -> R.string.contacts_tab_circles
         ContactsTab.Requests -> R.string.contacts_tab_requests
         ContactsTab.Discover -> R.string.contacts_tab_discover
         ContactsTab.Blocked -> R.string.contacts_tab_blocked

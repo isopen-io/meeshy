@@ -97,14 +97,43 @@ class ComposerPublicationAudienceTest {
     }
 
     @Test
-    fun `les modes proposes sont les six du serveur dans l'ordre de la feuille`() {
+    fun `les modes proposes suivent l'echelle des cercles puis les audiences nommees et le prive`() {
         assertThat(ComposerAudienceSelection.offered.map { it.wire })
-            .containsExactly("PUBLIC", "FRIENDS", "COMMUNITY", "ONLY", "EXCEPT", "PRIVATE").inOrder()
+            .containsExactly("PUBLIC", "COMMUNITY", "ACQUAINTANCES", "FRIENDS", "CLOSE", "BLOOD", "EXCEPT", "ONLY", "PRIVATE")
+            .inOrder()
     }
 
     @Test
-    fun `fromWire decroit vers PUBLIC pour une valeur inconnue`() {
+    fun `une audience servie inconnue se lit restreinte, jamais publique`() {
         assertThat(StoryVisibility.fromWire("ONLY")).isEqualTo(StoryVisibility.ONLY)
-        assertThat(StoryVisibility.fromWire("legacy")).isEqualTo(StoryVisibility.PUBLIC)
+        assertThat(StoryVisibility.fromWire("close")).isEqualTo(StoryVisibility.CLOSE)
+        assertThat(StoryVisibility.fromWire("legacy")).isEqualTo(StoryVisibility.PRIVATE)
+        assertThat(StoryVisibility.fromWire("")).isEqualTo(StoryVisibility.PRIVATE)
+    }
+
+    @Test
+    fun `chaque audience du serveur est connue de ce client`() {
+        val served = Regex("""'([A-Z]+)'""").findAll(sharedPostTypes().substringAfter("POST_VISIBILITIES").substringBefore("]"))
+            .map { it.groupValues[1] }.toList()
+        assertThat(served).isNotEmpty()
+        assertThat(StoryVisibility.entries.map { it.wire }).containsExactlyElementsIn(served)
+    }
+
+    @Test
+    fun `une audience de cercle ne dit rien d'une mention et decrit sa regle`() {
+        listOf(StoryVisibility.ACQUAINTANCES, StoryVisibility.CLOSE, StoryVisibility.BLOOD).forEach {
+            assertThat(ComposerAudienceReach.resolve("u", it, emptyList())).isEqualTo(ComposerAudienceReach.UNKNOWN)
+        }
+        assertThat(ComposerAudienceSubtitle.of(StoryVisibility.BLOOD, 0)).isEqualTo(ComposerAudienceSubtitle.Kind.BLOOD)
+    }
+
+    private fun sharedPostTypes(): String {
+        var dir: java.io.File? = java.io.File(".").absoluteFile
+        while (dir != null) {
+            val candidate = java.io.File(dir, "packages/shared/types/post.ts")
+            if (candidate.isFile) return candidate.readText()
+            dir = dir.parentFile
+        }
+        throw AssertionError("packages/shared/types/post.ts introuvable")
     }
 }

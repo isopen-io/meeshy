@@ -16,8 +16,9 @@ import kotlinx.serialization.json.intOrNull
  * La lecture de `storyEffects` d'un post SERVI (#13863 R7). Elle rend ce que [StoryEffectsWireSerializer] rend — la
  * première scène rabattue sur les familles v1, que tout consommateur plat lit déjà — et, pour un document de DEUX scènes
  * ou plus, garde le document lui-même dans [StoryEffects.canvas] : c'est de lui que le fil peint les scènes 2 à N
- * ([PostSceneReading]). Réencodé (un post recopié ou mis en cache), il réécrit le document servi, jamais sa seule
- * première scène.
+ * ([PostSceneReading]). Un document d'une scène qui déclare un son est gardé aussi : la projection plate n'a pas de place
+ * pour la source du son du document, que la fiche nomme (iOS `canvasV3.sound`, #14205). Réencodé (un post recopié ou mis
+ * en cache), il réécrit le document servi, jamais sa seule première scène.
  */
 object PostReadStoryEffectsSerializer : KSerializer<StoryEffects> {
     override val descriptor: SerialDescriptor = StoryEffectsWireSerializer.descriptor
@@ -28,7 +29,7 @@ object PostReadStoryEffectsSerializer : KSerializer<StoryEffects> {
         val input = decoder as? JsonDecoder ?: return StoryEffectsWireSerializer.deserialize(decoder)
         val element = input.decodeJsonElement()
         val flat = input.json.decodeFromJsonElement(StoryEffectsWireSerializer, element)
-        return severalScenes(element)?.let { flat.copy(canvas = it) } ?: flat
+        return keptDocument(element)?.let { flat.copy(canvas = it) } ?: flat
     }
 
     override fun serialize(encoder: Encoder, value: StoryEffects) {
@@ -38,11 +39,11 @@ object PostReadStoryEffectsSerializer : KSerializer<StoryEffects> {
         else StoryEffectsWireSerializer.serialize(encoder, value)
     }
 
-    private fun severalScenes(element: JsonElement): CanvasV3? {
+    private fun keptDocument(element: JsonElement): CanvasV3? {
         val document = element as? JsonObject ?: return null
         val mark = (document["v"] as? JsonPrimitive)?.intOrNull ?: return null
         if (mark < 3) return null
         return runCatching { tolerant.decodeFromJsonElement(CanvasV3.serializer(), document) }.getOrNull()
-            ?.takeIf { it.scenes.size >= 2 }
+            ?.takeIf { it.scenes.size >= 2 || it.sound != null }
     }
 }

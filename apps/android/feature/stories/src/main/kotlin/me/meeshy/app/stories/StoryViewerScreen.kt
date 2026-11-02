@@ -102,6 +102,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.StoryRepostAudience
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
@@ -116,6 +117,7 @@ import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.story.canvas.SceneLookChain
 import me.meeshy.ui.component.EmojiQuickStrip
+import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.LanguageQuickOption
 import me.meeshy.ui.component.LanguageQuickStrip
 import me.meeshy.ui.component.audio.AudioTrackSurface
@@ -136,7 +138,6 @@ import me.meeshy.ui.theme.hexColor
 @Composable
 fun StoryViewerScreen(
     onClose: () -> Unit,
-    onRepost: (String) -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
     onEditStory: ((String) -> Unit)? = null,
     /** « Composer » (#13849, iOS `message.compose.title`) : une scène NEUVE semée de celle de la story, pour toute story. */
@@ -213,6 +214,7 @@ fun StoryViewerScreen(
         canReply = StoryReplyRules.canReply(state.isOwnStory, state.currentStoryId, state.authorUserId),
         canCompose = onComposeStory != null && state.canCompose,
         commentCount = commentCount,
+        isRepublishable = StoryRepostAudience.isRepublishable(currentItem?.visibility),
     )
     val cover = StoryViewerCover(
         sheet = showViewers || showComments || showReply || showSendTo || state.languageExplorer != null,
@@ -231,6 +233,12 @@ fun StoryViewerScreen(
             messageText = shareContext.getString(R.string.share_story_text, state.authorName, ShareCards.storyUrl(storyId)),
             isPublic = currentItem?.visibility.equals(PUBLIC_STORY_VISIBILITY, ignoreCase = true),
         )
+    }
+
+    // « Republier » (#14443) : un geste publie, comme le rail iOS ; le lecteur reste ouvert et dit l'issue.
+    fun repost() {
+        meeshyHaptics.light()
+        viewModel.repostCurrentStory()
     }
 
     // « Envoyer » (#14315) : la feuille Meeshy, qui frappe le lien de l'utilisateur pour une story publique.
@@ -607,13 +615,13 @@ fun StoryViewerScreen(
                                     },
                                 )
                             } else {
-                                state.currentStoryId?.let { storyId ->
+                                if (railPlan.showsRepost) {
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.stories_action_repost)) },
                                         leadingIcon = { Icon(MeeshyIcons.Repeat, contentDescription = null) },
                                         onClick = {
                                             showOptions = false
-                                            onRepost(storyId)
+                                            repost()
                                         },
                                     )
                                 }
@@ -647,12 +655,13 @@ fun StoryViewerScreen(
                 counts = StoryRailCounts(
                     comments = commentCount,
                     shares = currentItem?.shareCount ?: 0,
-                    reposts = currentItem?.repostCount ?: 0,
+                    reposts = state.repostCount,
+                    reposted = state.hasReposted,
                     views = currentItem?.viewCount ?: 0,
                 ),
                 taps = StoryRailTaps(
                     onSend = { closeRailBars(); meeshyHaptics.light(); openSendTo() },
-                    onRepost = { closeRailBars(); state.currentStoryId?.let(onRepost) },
+                    onRepost = { closeRailBars(); repost() },
                     onViews = { closeRailBars(); meeshyHaptics.light(); showViewers = true },
                     onCompose = { closeRailBars(); meeshyHaptics.light(); state.currentStoryId?.let { id -> onComposeStory?.invoke(id) } },
                     onComments = { closeRailBars(); meeshyHaptics.light(); showComments = true },
@@ -754,6 +763,10 @@ fun StoryViewerScreen(
                 modifier = Modifier.align(Alignment.Center),
             )
         }
+        FeedbackToastHost(
+            toasts = viewModel.toasts,
+            modifier = Modifier.padding(bottom = with(density) { (if (composerPinned) composerHeightPx else 0).toDp() }),
+        )
     }
     }
 
