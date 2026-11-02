@@ -100,6 +100,10 @@
     <string name="notification_date_minutes">%1$d min</string>
     <string name="notification_date_now">à l’instant</string>
     <string name="notification_date_yesterdayAt">hier %1$s</string>
+    <string name="post_daily_limit_comment">Vous avez fait tous les commentaires permis aujourd’hui. La limite compte vos gestes, jamais vos étincelles : vous pourrez recommenter à %1$s.</string>
+    <string name="post_daily_limit_comment_untimed">Vous avez fait tous les commentaires permis aujourd’hui. La limite compte vos gestes, jamais vos étincelles.</string>
+    <string name="post_daily_limit_reaction">Vous avez fait toutes les réactions permises aujourd’hui. La limite compte vos gestes, jamais vos étincelles : vous pourrez réagir de nouveau à %1$s.</string>
+    <string name="post_daily_limit_reaction_untimed">Vous avez fait toutes les réactions permises aujourd’hui. La limite compte vos gestes, jamais vos étincelles.</string>
     <string name="presence_away">Absent</string>
     <string name="presence_here">Dans la conversation</string>
     <string name="presence_idle">Inactif</string>

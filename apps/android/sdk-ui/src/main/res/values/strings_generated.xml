@@ -100,6 +100,10 @@
     <string name="notification_date_minutes">%1$d min</string>
     <string name="notification_date_now">just now</string>
     <string name="notification_date_yesterdayAt">yesterday %1$s</string>
+    <string name="post_daily_limit_comment">You’ve made all the comments allowed today. The limit counts your actions, never your sparks: you can comment again at %1$s.</string>
+    <string name="post_daily_limit_comment_untimed">You’ve made all the comments allowed today. The limit counts your actions, never your sparks.</string>
+    <string name="post_daily_limit_reaction">You’ve made all the reactions allowed today. The limit counts your actions, never your sparks: you can react again at %1$s.</string>
+    <string name="post_daily_limit_reaction_untimed">You’ve made all the reactions allowed today. The limit counts your actions, never your sparks.</string>
     <string name="presence_away">Away</string>
     <string name="presence_here">In the conversation</string>
     <string name="presence_idle">Idle</string>
