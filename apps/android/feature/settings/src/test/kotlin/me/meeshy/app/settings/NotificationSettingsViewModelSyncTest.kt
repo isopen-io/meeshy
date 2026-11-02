@@ -32,13 +32,13 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * The backend-sync wiring in [SettingsViewModel]: every notification-preference toggle
+ * The backend-sync wiring in [NotificationSettingsViewModel]: every notification-preference toggle
  * persists to the device-local store instantly (UI SSOT) and then enqueues a durable
  * `UPDATE_SETTINGS` mutation through [NotificationPreferencesSyncRepository], waking the
  * flush worker only when a real row was queued. The UI-only search query never syncs.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class SettingsViewModelSyncTest {
+class NotificationSettingsViewModelSyncTest {
 
     private val dispatcher = StandardTestDispatcher()
 
@@ -56,14 +56,8 @@ class SettingsViewModelSyncTest {
         store: NotificationPreferencesStore = InMemoryNotificationPreferencesStore(),
         sync: NotificationPreferencesSyncRepository,
         workManager: WorkManager,
-    ): SettingsViewModel {
-        val session = mockk<SessionRepository>()
-        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
-        return SettingsViewModel(
-            sessionRepository = session,
-            userRepository = mockk<UserRepository>(relaxed = true),
-            themeStore = InMemoryThemeStore(),
-            interfaceLanguageStore = InMemoryInterfaceLanguageStore(),
+    ): NotificationSettingsViewModel {
+        return NotificationSettingsViewModel(
             notificationPreferencesStore = store,
             notificationPreferencesSyncRepository = sync,
             workManager = workManager,
