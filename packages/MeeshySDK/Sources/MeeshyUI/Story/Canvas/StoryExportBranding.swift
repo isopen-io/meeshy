@@ -489,24 +489,8 @@ public enum StoryExportBranding {
         let audioMix = AVMutableAudioMix()
         audioMix.inputParameters = audioParameters
 
-        let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("meeshy-story-\(UUID().uuidString).mp4")
-        guard let session = AVAssetExportSession(
-            asset: composition, presetName: AVAssetExportPresetHighestQuality)
-        else { throw BrandingError.compositionTrackUnavailable }
-        session.outputURL = outputURL
-        session.outputFileType = .mp4
-        session.shouldOptimizeForNetworkUse = true
-        session.videoComposition = videoComposition
-        session.audioMix = audioMix
-
-        // `export()` sans argument — le `export(to:as:)` d'iOS 18 tombe en
-        // SIGSEGV combiné à outputURL/outputFileType (même piège que
-        // `StoryExportIntro` et `StoryExportOutro`).
-        await session.export()
-        guard session.status == .completed else {
-            throw BrandingError.encodingFailed(session.error)
+        return try await exportRetryingDecodeFailure {
+            try await export(composition, videoComposition: videoComposition, audioMix: audioMix)
         }
-        return outputURL
     }
 }

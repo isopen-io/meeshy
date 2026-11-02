@@ -7,7 +7,13 @@ import me.meeshy.sdk.model.MessageExit
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.bubble.BubbleContent
 
-data class CardPart(val author: String, val text: String, val handle: String? = null)
+data class CardPart(
+    val author: String,
+    val text: String,
+    val handle: String? = null,
+    /** Les entrées du fil quand ce bloc en porte un, chacune à son niveau ([CardThread]) ; vide sinon. */
+    val thread: List<CardThreadLine> = emptyList(),
+)
 
 data class CardSubject(
     val quoted: CardPart?,

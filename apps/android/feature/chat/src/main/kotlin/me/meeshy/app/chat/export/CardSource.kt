@@ -49,7 +49,7 @@ internal fun CardSubjects.of(card: PostCommentCardSubject, mediaBaseUrl: String?
     val painted = card.media.mapNotNull { placed -> paintable(placed.media, mediaBaseUrl)?.let { placed.hero to it } }
     return CardSubject(
         quoted = card.quoted?.let(::partOf),
-        reply = partOf(card.reply),
+        reply = partOf(card.reply).copy(thread = card.thread.map { CardThreadLine(it.text, it.level) }),
         sentAtMillis = card.sentAtMillis,
         quotedAtMillis = card.quotedAtMillis,
         media = painted.filterNot { it.first }.map { it.second },
