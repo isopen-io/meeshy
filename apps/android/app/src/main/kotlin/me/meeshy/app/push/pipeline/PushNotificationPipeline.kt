@@ -18,7 +18,6 @@ import me.meeshy.app.push.NotificationChannelIds
 import me.meeshy.sdk.model.FocusFilterSnapshot
 import me.meeshy.sdk.model.UserNotificationPreferences
 import me.meeshy.sdk.model.push.PushBadgePolicy
-import me.meeshy.sdk.model.push.PushChannelCategory
 import me.meeshy.sdk.model.push.PushDelivery
 import me.meeshy.sdk.model.push.PushDeliveryContext
 import me.meeshy.sdk.model.push.PushDeliveryGate
@@ -94,7 +93,7 @@ class PushNotificationPipeline @Inject constructor(
         val channelId = if (passive) {
             NotificationChannelIds.CHANNEL_SILENT
         } else {
-            NotificationChannelIds.forCategory(PushChannelCategory.of(payload.type))
+            NotificationChannelIds.forPayload(payload)
         }
         val notificationId = MessageNotificationId.of(payload.type, payload.conversationId, payload.notificationId)
         val groupKey = PushGrouping.groupKey(payload, preferences)
