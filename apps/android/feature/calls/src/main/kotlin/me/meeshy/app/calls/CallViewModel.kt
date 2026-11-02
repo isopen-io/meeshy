@@ -71,7 +71,11 @@ class CallViewModel @Inject constructor(
     private val preview: CallPreviewCoordinator,
     private val turnCredentials: CallTurnCredentialsController,
     private val groupTitleWording: GroupCallTitleWordingSource,
+    private val reliability: CallReliability = CallReliability.Inert,
 ) : ViewModel() {
+
+    /** Appel établi, socket de signalisation tombée : la bannière « Signalisation interrompue » (le média tient). */
+    val signalingDegraded: StateFlow<Boolean> get() = reliability.signalingDegraded
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
     private val selfId: String get() = sessionRepository.currentUser.value?.id.orEmpty()
@@ -160,7 +164,8 @@ class CallViewModel @Inject constructor(
         coordinator.onPrimaryVacated = ::onPrimaryVacated
         peers.attach(host)
         waiting.attach(host)
-        watchdogs.attach(host)
+        watchdogs.attach(host) { reliability.catchUpConnected() }
+        reliability.attach(host, coordinator)
         analytics.attach(host)
         turnCredentials.attach(host)
         ongoing.attach(viewModelScope, state, onHangUp = ::hangUp, onToggleMute = ::toggleMute, onAnswer = ::accept, onDecline = ::decline)
@@ -336,6 +341,7 @@ class CallViewModel @Inject constructor(
         stopTicker()
         stopQuality()
         watchdogs.reset()
+        reliability.reset()
         peers.clear()
         resolvePeerVisual(config)
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
@@ -599,6 +605,7 @@ class CallViewModel @Inject constructor(
         syncTicker()
         syncQuality()
         watchdogs.onTransition(callState)
+        reliability.onTransition(callState)
         peers.onTransition(callState)
         if (callState != previous) extensions.controllers.notifyTransition(previous, callState, session())
         publish()

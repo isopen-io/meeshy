@@ -29,6 +29,9 @@ internal class CallNegotiator(
     private var selfId: String = ""
     private var negotiationId: Int = 0
 
+    /** Le pair a-t-il déjà remis son offre ? Un appelé qui l'attend n'est pas en panne ICE (le minuteur d'offre tient la phase). */
+    private var remoteOfferSeen: Boolean = false
+
     /** Whether WE placed this call — the initial caller re-offers on an ICE restart (anti-glare). */
     private var isCaller: Boolean = false
 
@@ -74,7 +77,11 @@ internal class CallNegotiator(
         this.selfId = selfId
         this.negotiationId = 0
         this.isCaller = isCaller
+        this.remoteOfferSeen = false
     }
+
+    /** `true` pour l'appelé tant que l'offre du pair n'est pas arrivée. */
+    val awaitingRemoteOffer: Boolean get() = !isCaller && !remoteOfferSeen
 
     /** Relay the remote signals into the engine and the local ICE candidates to the peer, in [scope]. */
     fun observe(scope: CoroutineScope) {
@@ -178,6 +185,7 @@ internal class CallNegotiator(
         when (signal.type) {
             "offer" -> {
                 val sdp = signal.sdp ?: return
+                remoteOfferSeen = true
                 // The offer's sender is our reply target. An incoming call may carry no
                 // peerId through the ring/route (an older push without its caller), so the
                 // answer + ICE candidates would otherwise be sent with a blank `to`

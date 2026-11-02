@@ -9,6 +9,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.plus
 import me.meeshy.sdk.call.CallQualityStatsFeed
+import me.meeshy.sdk.call.CallStatsCollector
 import me.meeshy.sdk.call.WebRtcEngine
 import me.meeshy.sdk.call.inboundAudioLevel
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
@@ -39,9 +40,10 @@ class WebRtcCallCoordinator @Inject constructor(
     @ApplicationContext appContext: Context,
     names: GroupCallNameSource,
     statsFeed: CallQualityStatsFeed = CallQualityStatsFeed(),
-) {
+) : CallReliabilityMedia {
     private val negotiator = CallNegotiator(engine, signals)
     private val iceMonitor = CallIceStateMonitor(engine, signals)
+    private val statsCollector = CallStatsCollector(engine)
     private val audio = CallAudioSession(appContext) { hasFocus ->
         interrupted = !hasFocus
         applyMicrophone()
@@ -322,4 +324,20 @@ class WebRtcCallCoordinator @Inject constructor(
     }
 
     private fun restartIceAndRenegotiate() = negotiator.restartIce(callScope)
+
+    override val peerConnected: Boolean get() = iceMonitor.isPeerConnected
+
+    override val awaitingRemoteOffer: Boolean get() = callScope == null || negotiator.awaitingRemoteOffer
+
+    override suspend fun packetCounts(): CallPacketCounts? =
+        statsCollector.collect()?.let { CallPacketCounts(it.inboundPacketsReceived, it.outboundPacketsSent) }
+
+    override fun beginReconnectCycle() = iceMonitor.beginExternalCycle()
+
+    override fun catchUpConnected() = iceMonitor.catchUpConnected()
+
+    override fun restartIceNow() {
+        if (callScope == null || mesh.isPrimaryVacated) return
+        restartIceAndRenegotiate()
+    }
 }
