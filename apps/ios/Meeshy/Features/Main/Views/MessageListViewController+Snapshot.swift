@@ -279,6 +279,6 @@ extension MessageListViewController {
         observePerMessageDictionary(vm.$revealedViewOnceIds, initial: vm.revealedViewOnceIds)
         observePerMessageDictionary(vm.$burningEphemeralIds, initial: vm.burningEphemeralIds)
         observePerMessageDictionary(vm.startupDependencies.endToEndClear.$adopted, initial: vm.startupDependencies.endToEndClear.adopted)
-        observePerMessageDictionary(vm.startupDependencies.endToEndClear.hybrid.$verdicts, initial: vm.startupDependencies.endToEndClear.hybrid.verdicts)
+        observePerMessageDictionary(vm.startupDependencies.endToEndClear.hybrid.$layers, initial: vm.startupDependencies.endToEndClear.hybrid.layers)
     }
 }

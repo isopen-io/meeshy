@@ -32021,96 +32021,237 @@
         }
       }
     },
-    "message.deviceLayer.mismatch": {
+    "message.deviceLayer.deviceText.title": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لم يطابق النص الوارد من خوادمنا النص الذي شفّره جهاز صاحب الرسالة: يُعرض الأخير."
+            "value": "النص الذي شفّره جهاز المرسل"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der von unseren Servern erhaltene Text stimmte nicht mit dem vom Gerät des Verfassers verschlüsselten überein: Angezeigt wird Letzterer."
+            "value": "Vom Gerät des Absenders verschlüsselter Text"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The text received from our servers did not match the one encrypted by the author’s device: the latter is shown."
+            "value": "Text encrypted by the sender’s device"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El texto recibido de nuestros servidores no coincidía con el cifrado por el dispositivo del autor: se muestra este último."
+            "value": "Texto cifrado por el dispositivo del remitente"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le texte reçu de nos serveurs ne correspondait pas à celui chiffré par l’appareil de l’auteur : c’est ce dernier qui est affiché."
+            "value": "Texte chiffré par l’appareil de l’expéditeur"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il testo ricevuto dai nostri server non corrispondeva a quello crittografato dal dispositivo dell’autore: viene mostrato quest’ultimo."
+            "value": "Testo crittografato dal dispositivo del mittente"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O texto recebido dos nossos servidores não correspondia ao criptografado pelo aparelho do autor: este último é exibido."
+            "value": "Texto criptografado pelo aparelho do remetente"
           }
         }
       }
     },
-    "message.deviceLayer.verified": {
+    "message.deviceLayer.editedUnproven": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تحقّق منه جهازك: وصلت هذه الرسالة كما كتبها صاحبها تمامًا."
+            "value": "معدَّلة — النص الأصلي الذي شفّره جهاز المرسل متاح."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Von deinem Gerät geprüft: Diese Nachricht ist genau so angekommen, wie sie geschrieben wurde."
+            "value": "Bearbeitet – der vom Gerät des Absenders verschlüsselte Originaltext ist verfügbar."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verified by your device: this message arrived exactly as its author wrote it."
+            "value": "Edited — the original text encrypted by the sender’s device is available."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verificado por tu dispositivo: este mensaje llegó tal como su autor lo escribió."
+            "value": "Modificado: el texto original cifrado por el dispositivo del remitente está disponible."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vérifié par votre appareil : ce message est arrivé tel que son auteur l’a écrit."
+            "value": "Modifié — le texte d’origine chiffré par l’appareil de l’expéditeur est disponible."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verificato dal tuo dispositivo: questo messaggio è arrivato esattamente come il suo autore l’ha scritto."
+            "value": "Modificato — il testo originale crittografato dal dispositivo del mittente è disponibile."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verificado pelo seu aparelho: esta mensagem chegou exatamente como o autor a escreveu."
+            "value": "Editada — o texto original criptografado pelo aparelho do remetente está disponível."
+          }
+        }
+      }
+    },
+    "message.deviceLayer.mismatchServed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النص المستلَم لا يطابق النص الذي شفّره جهاز المرسل."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der empfangene Text stimmt nicht mit dem überein, den das Gerät des Absenders verschlüsselt hat."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The text received does not match the one encrypted by the sender’s device."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El texto recibido no coincide con el que cifró el dispositivo del remitente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le texte reçu ne correspond pas à celui chiffré par l’appareil de l’expéditeur."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il testo ricevuto non corrisponde a quello crittografato dal dispositivo del mittente."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O texto recebido não corresponde ao que o aparelho do remetente criptografou."
+          }
+        }
+      }
+    },
+    "message.deviceLayer.reveal": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض نص الجهاز"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text des Geräts anzeigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show the device text"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver el texto del dispositivo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir le texte de l’appareil"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedi il testo del dispositivo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver o texto do aparelho"
+          }
+        }
+      }
+    },
+    "message.deviceLayer.verifiedOriginal": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النص الأصلي موثَّق بواسطة جهازك: إنه مطابق للنص الذي شفّره جهاز المرسل."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Originaltext von deinem Gerät geprüft: Er ist identisch mit dem, den das Gerät des Absenders verschlüsselt hat."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original text verified by your device: it is identical to the one the sender’s device encrypted."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto original verificado por tu dispositivo: es idéntico al que cifró el dispositivo del remitente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texte original vérifié par votre appareil : il est identique à celui que l’appareil de l’expéditeur a chiffré."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Testo originale verificato dal tuo dispositivo: è identico a quello crittografato dal dispositivo del mittente."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto original verificado pelo seu aparelho: é idêntico ao que o aparelho do remetente criptografou."
           }
         }
       }
