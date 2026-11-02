@@ -12,6 +12,7 @@ data class ApiCommunityUser(
     val avatar: String? = null,
     val isOnline: Boolean? = null,
     /** Contour d'avatar équipé (#10945) ; absent ou illisible => aucun contour. */
+    @Serializable(with = TolerantServedProfileDecorSerializer::class)
     val profileDecor: ServedProfileDecor? = null,
 )
 
