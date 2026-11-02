@@ -28,13 +28,14 @@ const CONVERSATION_SCOPED = [
   'conversationMessageStats', 'agentAnalytic', 'agentScanLog', 'agentTopicUsageLog', 'conversationShareLink', 'participant',
 ] as const;
 
-type Candidate = { id: string; type: string; identifier: string; deletedAt: Date; purgeAfter: Date };
+type Candidate = { id: string; type: string; identifier: string; isActive: boolean; deletedAt: Date; purgeAfter: Date };
 
 function candidate(overrides: Partial<Candidate> = {}): Candidate {
   return {
     id: CONV,
     type: 'group',
     identifier: 'mshy_equipe',
+    isActive: false,
     deletedAt: new Date(NOW.getTime() - H48 - 1000),
     purgeAfter: new Date(NOW.getTime() - 1000),
     ...overrides,
@@ -120,6 +121,22 @@ describe('#14643 — ce que la purge peut viser', () => {
     const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
     expect(report.purged).toBe(0);
     expect(log).toEqual([]);
+  });
+});
+
+describe('#14643 — une conversation rouverte n\'est plus une cible', () => {
+  it('écarte une ligne marquée mais ACTIVE, même si la requête l\'a rendue', async () => {
+    const { prisma, log } = prismaDouble([candidate({ isActive: true })]);
+    const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
+    expect(report.purged).toBe(0);
+    expect(log).toEqual([]);
+  });
+
+  it('relit isActive avec les autres marques', async () => {
+    const { prisma } = prismaDouble([candidate()]);
+    await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
+    const args = prisma.conversation.findMany.mock.calls[0][0];
+    expect(args.select).toMatchObject({ isActive: true, deletedAt: true, purgeAfter: true });
   });
 });
 

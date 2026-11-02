@@ -161,6 +161,7 @@ type PurgeCandidate = {
   readonly id: string;
   readonly type: string;
   readonly identifier: string;
+  readonly isActive: boolean | null;
   readonly deletedAt: Date | null;
   readonly purgeAfter: Date | null;
 };
@@ -168,6 +169,7 @@ type PurgeCandidate = {
 /** La relecture en mémoire des trois marques : une requête mal formée ne suffit pas à effacer. */
 function stillMarkedForPurge(conversation: PurgeCandidate, now: Date): boolean {
   if (isProtectedFromObsolescence(conversation)) return false;
+  if (conversation.isActive !== false) return false;
   if (!conversation.purgeAfter || conversation.purgeAfter.getTime() > now.getTime()) return false;
   if (!conversation.deletedAt) return false;
   return conversation.deletedAt.getTime() <= now.getTime() - OBSOLETE_PURGE_DELAY_MS;
@@ -187,7 +189,7 @@ export async function purgeObsoleteConversations(
 
   const rows: readonly PurgeCandidate[] = await prisma.conversation.findMany({
     where,
-    select: { id: true, type: true, identifier: true, deletedAt: true, purgeAfter: true },
+    select: { id: true, type: true, identifier: true, isActive: true, deletedAt: true, purgeAfter: true },
     orderBy: { purgeAfter: 'asc' },
     take: CONVERSATIONS_PER_PASS,
   });
