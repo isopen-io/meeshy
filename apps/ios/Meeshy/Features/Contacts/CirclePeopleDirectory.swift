@@ -33,7 +33,7 @@ actor CirclePeopleDirectory: CirclePeopleResolving {
         let store = await CacheCoordinator.shared.friends
         guard let cached = await store.loadIgnoringExpiry(for: FriendshipCache.PersistenceKeys.friendsList) else { return }
         for friend in cached.items where ids.contains(friend.id) {
-            known[friend.id] = CirclePerson(id: friend.id, name: friend.name, username: friend.username, avatarURL: friend.avatar)
+            known[friend.id] = CirclePerson(id: friend.id, name: friend.name, username: friend.username, avatarURL: friend.avatar, ring: friend.avatarRing)
         }
     }
 
@@ -60,6 +60,6 @@ extension CirclePerson {
     nonisolated init(user: MeeshyUser) {
         let composed = [user.firstName, user.lastName].compactMap { $0 }.joined(separator: " ")
         let name = user.displayName ?? (composed.isEmpty ? user.username : composed)
-        self.init(id: user.id, name: name, username: user.username, avatarURL: user.avatar)
+        self.init(id: user.id, name: name, username: user.username, avatarURL: user.avatar, ring: user.profileDecor?.avatarRing)
     }
 }

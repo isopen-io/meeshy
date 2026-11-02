@@ -53,7 +53,7 @@ final class BloodRitualViewModel: ObservableObject {
 
     private let relations: RelationsProviding
     private let networkMonitor: any NetworkMonitorProviding
-    private let sleep: @Sendable (UInt64) async -> Void
+    private let sleep: @concurrent @Sendable (UInt64) async -> Void
     private var token: String?
     private var holdWindowMs = 15_000
     private var holdTask: Task<Void, Never>?
@@ -65,7 +65,7 @@ final class BloodRitualViewModel: ObservableObject {
         displayName: String,
         relations: RelationsProviding,
         networkMonitor: any NetworkMonitorProviding,
-        sleep: @escaping @Sendable (UInt64) async -> Void = BloodRitualViewModel.wait,
+        sleep: @escaping @concurrent @Sendable (UInt64) async -> Void = BloodRitualViewModel.wait,
         startedEvents: AnyPublisher<RelationRitualStartedEvent, Never> = RelationEvents.ritualStarted,
         progressEvents: AnyPublisher<RelationRitualProgressEvent, Never> = RelationEvents.ritualProgress,
         completedEvents: AnyPublisher<RelationRitualCompletedEvent, Never> = RelationEvents.ritualCompleted
@@ -75,15 +75,17 @@ final class BloodRitualViewModel: ObservableObject {
         self.relations = relations
         self.networkMonitor = networkMonitor
         self.sleep = sleep
-        startedEvents.receive(on: DispatchQueue.main)
-            .sink { [weak self] event in Task { @MainActor in self?.receive(started: event) } }
+        let lane = OrderedEventLane()
+        startedEvents
+            .relay(through: lane) { [weak self] event in await self?.receive(started: event) }
             .store(in: &subscriptions)
-        progressEvents.receive(on: DispatchQueue.main)
-            .sink { [weak self] event in Task { @MainActor in await self?.receive(progress: event) } }
+        progressEvents
+            .relay(through: lane) { [weak self] event in await self?.receive(progress: event) }
             .store(in: &subscriptions)
-        completedEvents.receive(on: DispatchQueue.main)
-            .sink { [weak self] event in Task { @MainActor in self?.receive(completed: event) } }
+        completedEvents
+            .relay(through: lane) { [weak self] event in await self?.receive(completed: event) }
             .store(in: &subscriptions)
+        lane.store(in: &subscriptions)
     }
 
     nonisolated deinit {
@@ -91,7 +93,7 @@ final class BloodRitualViewModel: ObservableObject {
     }
 
     /// L'attente de production d'une tenue : annulable, elle rend la main dès que la tenue prend fin.
-    nonisolated static let wait: @Sendable (UInt64) async -> Void = { nanoseconds in
+    nonisolated static let wait: @concurrent @Sendable (UInt64) async -> Void = { nanoseconds in
         do {
             try await Task.sleep(for: .nanoseconds(nanoseconds))
         } catch {

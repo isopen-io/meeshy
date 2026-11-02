@@ -42,12 +42,14 @@ struct CircleLinkSheet: View {
 
     private var header: some View {
         HStack(spacing: MeeshySpacing.mdPlus) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: name,
                 context: .userListItem,
                 accentColor: DynamicColorGenerator.colorForName(name),
-                avatarURL: row.person?.avatarURL
-            )
+                avatarURL: row.person?.avatarURL,
+                presenceState: PresenceManager.shared.knownPresenceState(for: row.id),
+                ring: row.person?.ring
+            ) }
             .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name).font(.headline).foregroundStyle(theme.textPrimary)
@@ -65,21 +67,26 @@ struct CircleLinkSheet: View {
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
-            if !settingsEnabled {
-                Text(String(localized: "circles.sheet.settings.unavailable", defaultValue: "Ces réglages arrivent avec la prochaine étape de Meeshy. Ils sont désactivés pour l'instant.", bundle: .main))
+            if settings.isEmpty {
+                Text(String(localized: "circles.sheet.settings.none", defaultValue: "Rien à régler à ce niveau.", bundle: .main))
                     .font(.footnote)
                     .foregroundStyle(theme.textMuted)
+            } else {
+                if !settingsEnabled {
+                    Text(String(localized: "circles.sheet.settings.unavailable", defaultValue: "Ces réglages arrivent avec la prochaine étape de Meeshy. Ils sont désactivés pour l'instant.", bundle: .main))
+                        .font(.footnote)
+                        .foregroundStyle(theme.textMuted)
+                }
+                ForEach(settings) { setting in
+                    Toggle(setting.title, isOn: .constant(false))
+                        .disabled(!settingsEnabled)
+                        .frame(minHeight: MeeshyControlSize.tapTarget)
+                }
             }
-            settingToggle(String(localized: "circles.settings.listening", defaultValue: "Ce que j'écoute", bundle: .main))
-            settingToggle(String(localized: "circles.settings.talkie", defaultValue: "Talkie", bundle: .main))
-            settingToggle(String(localized: "circles.settings.bring", defaultValue: "Bring", bundle: .main))
-            settingToggle(String(localized: "circles.settings.location", defaultValue: "Position en direct", bundle: .main))
         }
     }
 
-    private func settingToggle(_ title: String) -> some View {
-        Toggle(title, isOn: .constant(false))
-            .disabled(!settingsEnabled)
-            .frame(minHeight: MeeshyControlSize.tapTarget)
-    }
+    /// Ce que le cercle ouvre pour cette personne. Les interrupteurs restent désactivés derrière le drapeau tant que le
+    /// serveur ne sert pas l'état de chaque réglage (jalon 2, #14229).
+    private var settings: [CirclePersonSetting] { CirclePersonSetting.offered(at: level) }
 }

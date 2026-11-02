@@ -10,6 +10,46 @@ nonisolated struct CirclePerson: Identifiable, Equatable, Sendable {
     let name: String
     let username: String?
     let avatarURL: String?
+    /// Le contour d'avatar servi avec la personne (#10945) ; `nil` sans contour. Relayé, jamais fabriqué.
+    let ring: ServedProfileDecorItem?
+
+    init(id: String, name: String, username: String?, avatarURL: String?, ring: ServedProfileDecorItem? = nil) {
+        self.id = id
+        self.name = name
+        self.username = username
+        self.avatarURL = avatarURL
+        self.ring = ring
+    }
+}
+
+/// Ce qu'une fiche de lien laisse régler pour CETTE personne, selon ce que le cercle ouvre (spec § 1.3, § 1.5).
+/// Le Bring est disponible par défaut dès Ami (D-3) : son réglage est un BLOCAGE. Le talkie et l'écoute s'ouvrent à
+/// Proche, la position continue au Sang. Une Connaissance n'a rien à régler.
+nonisolated enum CirclePersonSetting: String, CaseIterable, Identifiable, Sendable {
+    case blockBring, talkie, listening, liveLocation
+
+    var id: String { rawValue }
+
+    static func offered(at level: RelationLevel) -> [CirclePersonSetting] {
+        allCases.filter { level >= $0.opensAt }
+    }
+
+    private var opensAt: RelationLevel {
+        switch self {
+        case .blockBring: return .friend
+        case .talkie, .listening: return .close
+        case .liveLocation: return .blood
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .blockBring: return String(localized: "circles.settings.blockBring", defaultValue: "Bloquer ses Bring", bundle: .main)
+        case .talkie: return String(localized: "circles.settings.talkie", defaultValue: "Talkie", bundle: .main)
+        case .listening: return String(localized: "circles.settings.listening", defaultValue: "Ce que j'écoute", bundle: .main)
+        case .liveLocation: return String(localized: "circles.settings.location", defaultValue: "Position en direct", bundle: .main)
+        }
+    }
 }
 
 /// Qui sait nommer une personne à partir de son identifiant. Un identifiant inconnu est ABSENT du résultat : l'écran

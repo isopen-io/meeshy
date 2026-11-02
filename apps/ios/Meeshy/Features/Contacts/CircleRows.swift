@@ -17,12 +17,14 @@ struct CircleRowView: View {
         HStack(spacing: MeeshySpacing.mdPlus) {
             Button(action: onOpen) {
                 HStack(spacing: MeeshySpacing.mdPlus) {
-                    MeeshyAvatar(
+                    LivePresence { MeeshyAvatar(
                         name: name,
                         context: .userListItem,
                         accentColor: DynamicColorGenerator.colorForName(name),
-                        avatarURL: row.person?.avatarURL
-                    )
+                        avatarURL: row.person?.avatarURL,
+                        presenceState: PresenceManager.shared.knownPresenceState(for: row.id),
+                        ring: row.person?.ring
+                    ) }
                     .accessibilityHidden(true)
                     texts
                     Spacer(minLength: MeeshySpacing.sm)
@@ -106,12 +108,14 @@ struct CircleRequestRow: View {
 
     var body: some View {
         HStack(spacing: MeeshySpacing.mdPlus) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: name,
                 context: .userListItem,
                 accentColor: DynamicColorGenerator.colorForName(name),
-                avatarURL: other?.avatar
-            )
+                avatarURL: other?.avatar,
+                presenceState: PresenceManager.shared.knownPresenceState(for: otherId),
+                ring: other?.avatarRing
+            ) }
             .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name).font(.subheadline.weight(.semibold)).foregroundStyle(theme.textPrimary).lineLimit(1)

@@ -6,7 +6,7 @@ import MeeshySDK
 
 /// Le store des liens, lu à la demande : `CacheCoordinator` est un acteur, on l'attend à chaque lecture.
 nonisolated enum CirclesLinkStore {
-    static let live: @Sendable () async -> GRDBCacheStore<String, RelationLink> = {
+    static let live: @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink> = {
         await CacheCoordinator.shared.relationLinks
     }
 }

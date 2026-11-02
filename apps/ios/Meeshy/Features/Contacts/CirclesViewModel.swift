@@ -51,7 +51,7 @@ final class CirclesViewModel: ObservableObject {
     private let networkMonitor: any NetworkMonitorProviding
     private let languageCode: String
     private let now: () -> Date
-    private let linksStore: @Sendable () async -> GRDBCacheStore<String, RelationLink>
+    private let linksStore: @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink>
     private var revalidationTask: Task<Void, Never>?
     private var levelSubscription: AnyCancellable?
 
@@ -65,7 +65,7 @@ final class CirclesViewModel: ObservableObject {
         networkMonitor: any NetworkMonitorProviding,
         languageCode: String = CirclesViewModel.interfaceLanguageCode,
         now: @escaping () -> Date = { Date() },
-        linksStore: @escaping @Sendable () async -> GRDBCacheStore<String, RelationLink> = CirclesLinkStore.live,
+        linksStore: @escaping @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink> = CirclesLinkStore.live,
         levelEvents: AnyPublisher<RelationLevelRaisedEvent, Never> = RelationEvents.levelRaised
     ) {
         self.relations = relations
@@ -77,10 +77,7 @@ final class CirclesViewModel: ObservableObject {
         self.now = now
         self.linksStore = linksStore
         levelSubscription = levelEvents
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                Task { @MainActor in await self?.receive(levelRaised: event) }
-            }
+            .relay(through: OrderedEventLane()) { [weak self] event in await self?.receive(levelRaised: event) }
     }
 
     nonisolated deinit {
