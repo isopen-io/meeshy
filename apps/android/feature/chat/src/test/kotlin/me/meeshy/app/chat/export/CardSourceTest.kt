@@ -34,7 +34,12 @@ class CardSourceTest {
         val subject = source.subject(language = "en")
 
         assertThat(subject.quoted).isEqualTo(CardPart("Awa", "Le coucher de soleil à Dakar", "awa"))
-        assertThat(subject.reply).isEqualTo(CardPart("Fil de commentaires", "Bob : Magnifique !\nCleo : Tu étais où ?", null))
+        assertThat(subject.reply).isEqualTo(
+            CardPart(
+                "Fil de commentaires", "Bob : Magnifique !\nCleo : Tu étais où ?", null,
+                thread = listOf(CardThreadLine("Bob : Magnifique !", 0), CardThreadLine("Cleo : Tu étais où ?", 1)),
+            ),
+        )
         assertThat(subject.sentAtMillis).isEqualTo(2_000L)
         assertThat(subject.quotedAtMillis).isEqualTo(1_000L)
         assertThat(source.languages).isEmpty()
