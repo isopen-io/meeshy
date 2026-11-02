@@ -6,9 +6,11 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ReportService, getReportService } from '../../../../services/admin/report.service';
+import { reportTable, type ReportRow } from '../../../helpers/report-table';
 
 function makePrisma(methods: Partial<{
   create: jest.Mock;
+  findFirst: jest.Mock;
   findUnique: jest.Mock;
   findMany: jest.Mock;
   count: jest.Mock;
@@ -19,6 +21,7 @@ function makePrisma(methods: Partial<{
   return {
     report: {
       create: methods.create ?? jest.fn(),
+      findFirst: methods.findFirst ?? jest.fn().mockResolvedValue(null),
       findUnique: methods.findUnique ?? jest.fn(),
       findMany: methods.findMany ?? jest.fn(),
       count: methods.count ?? jest.fn(),
@@ -99,6 +102,95 @@ describe('ReportService.createReport', () => {
     expect(create).toHaveBeenCalledWith({
       data: expect.objectContaining({ reporterId: null, reporterName: null, reason: null }),
     });
+  });
+});
+
+// ─── createReport : un seul signalement OUVERT par paire (#14627, audit 3 M1) ──
+
+const SIGNALANT = '507f1f77bcf86cd799439003';
+const CIBLE = '507f1f77bcf86cd799439002';
+
+const ligne = (overrides: Partial<ReportRow> = {}): ReportRow => ({
+  id: '507f1f77bcf86cd7994390a1',
+  createdAt: new Date('2026-11-01T10:00:00Z'),
+  status: 'pending',
+  reportType: 'spam',
+  reportedType: 'user',
+  reportedEntityId: CIBLE,
+  reporterId: SIGNALANT,
+  priority: 0,
+  ...overrides,
+});
+
+function serviceSur(rows: readonly ReportRow[]) {
+  const table = reportTable(rows);
+  const create = jest.fn(async (args: { data: Record<string, unknown> }) => ({ id: '507f1f77bcf86cd7994390ff', createdAt: new Date(), ...args.data }));
+  const prisma = { report: { ...table, create } } as unknown as PrismaClient;
+  return { svc: new ReportService(prisma), create };
+}
+
+const nouveau = (overrides: Record<string, unknown> = {}) => ({
+  reportedType: 'user',
+  reportedEntityId: CIBLE,
+  reportType: 'harassment',
+  reporterId: SIGNALANT,
+  reporterName: 'alice',
+  priority: 1 as const,
+  priorityReasons: ['minor' as const],
+  ...overrides,
+});
+
+describe('ReportService.createReport — un signalement ouvert par signalant et par cible', () => {
+  it.each(['pending', 'under_review'])('un doublon d\'une ligne %s rend cette ligne, sans écriture', async (status) => {
+    const existante = ligne({ status });
+    const { svc, create } = serviceSur([existante]);
+
+    const rendu = await svc.createReport(nouveau());
+
+    expect(create).not.toHaveBeenCalled();
+    expect(rendu).toEqual(existante);
+  });
+
+  it('un signalement CLOS ne retient pas le suivant', async () => {
+    const { svc, create } = serviceSur([ligne({ status: 'resolved' }), ligne({ id: '507f1f77bcf86cd7994390a2', status: 'dismissed' })]);
+
+    await svc.createReport(nouveau());
+
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('un autre signalant, un autre type ou une autre cible s\'écrit', async () => {
+    const { svc, create } = serviceSur([ligne()]);
+
+    await svc.createReport(nouveau({ reporterId: '507f1f77bcf86cd799439004' }));
+    await svc.createReport(nouveau({ reportedType: 'message' }));
+    await svc.createReport(nouveau({ reportedEntityId: '507f1f77bcf86cd799439005' }));
+
+    expect(create).toHaveBeenCalledTimes(3);
+  });
+
+  it('un autre MOTIF sur la même cible ne fait pas un second signalement ouvert', async () => {
+    const { svc, create } = serviceSur([ligne({ reportType: 'spam' })]);
+
+    await svc.createReport(nouveau({ reportType: 'violence' }));
+
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('un signalant ANONYME n\'est pas dédoublonné : rien ne l\'identifie d\'un signalement à l\'autre', async () => {
+    const { svc, create } = serviceSur([ligne({ reporterId: null })]);
+
+    await svc.createReport(nouveau({ reporterId: undefined, reporterName: 'invité' }));
+
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('de deux lignes ouvertes antérieures, c\'est la plus ANCIENNE qui est rendue', async () => {
+    const ancienne = ligne({ id: '507f1f77bcf86cd7994390a1', createdAt: new Date('2026-10-01T10:00:00Z') });
+    const recente = ligne({ id: '507f1f77bcf86cd7994390a2', createdAt: new Date('2026-11-01T10:00:00Z') });
+    const { svc } = serviceSur([recente, ancienne]);
+
+    await expect(svc.createReport(nouveau())).resolves.toEqual(ancienne);
   });
 });
 

@@ -195,6 +195,9 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // `Participant` par son id. Jamais la relation `sender` — un expéditeur disparu
   // rend « sans auteur ».
   'reports/reportedContentAuthor.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #14110 / #14627 — la priorité d'un signalement : `messageType` (une
+  // position ?) et `conversationId` (l'audience). Jamais `sender`.
+  'reports/reportPriority.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   // #10726 — le mode de chiffrement du porteur et de sa conversation, pour
   // savoir si la passerelle lit le vocal. Jamais `sender`.
   'attachments/attachmentCarrierServerReadable.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },

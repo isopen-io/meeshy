@@ -10,6 +10,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 jest.mock('../../../utils/logger', () => ({ logError: jest.fn(), logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
 
 import { reportCreationRoutes } from '../../../routes/reports';
+import { reportMatches, type ReportRow } from '../../helpers/report-table';
 
 const VICTIME = '507f1f77bcf86cd799439032';
 const HARCELEUR = '507f1f77bcf86cd799439031';
@@ -35,7 +36,7 @@ async function app() {
     user: { findMany: async () => [] },
     message: { findUnique: async () => null },
     userRelation: { findUnique: async () => null },
-    report: { create: async (a: any) => { created.push(a.data); return { id: '507f1f77bcf86cd7994390ff', createdAt: new Date(), ...a.data }; } },
+    report: { findFirst: async (a: any) => (created as ReportRow[]).find((row) => reportMatches(row, a.where)) ?? null, create: async (a: any) => { created.push(a.data); return { id: '507f1f77bcf86cd7994390ff', createdAt: new Date(), ...a.data }; } },
   } as any);
   await f.register(reportCreationRoutes, { prefix: '/reports' });
   await f.ready();

@@ -2,7 +2,8 @@
  * Une table `report` en mémoire qui ÉVALUE ce que la file de modération lui
  * demande (`priorityFirst`, #14110) : `AND`, `NOT`, `priority.gte`, `status`
  * (valeur ou `in`), les égalités simples, `createdAt.gte` ; `orderBy` en objet
- * ou en tableau de clés ; `skip` et `take`. Un champ absent se lit comme Mongo :
+ * ou en tableau de clés ; `skip` et `take` ; `findFirst` (le dédoublonnage d'un
+ * signalement ouvert, #14627). Un champ absent se lit comme Mongo :
  * `priority` absente ne vaut pas `>= 1`.
  */
 import { jest } from '@jest/globals';
@@ -52,11 +53,15 @@ function compare(orders: readonly Order[]) {
 }
 
 export function reportTable(rows: readonly ReportRow[]) {
+  const ordered = (args: { where?: Where; orderBy?: Order | Order[] }) => {
+    const orders = Array.isArray(args.orderBy) ? args.orderBy : [args.orderBy ?? { createdAt: 'desc' }];
+    return rows.filter((row) => reportMatches(row, args.where)).sort(compare(orders));
+  };
   return {
     count: jest.fn(async (args: { where?: Where } = {}) => rows.filter((row) => reportMatches(row, args.where)).length),
+    findFirst: jest.fn(async (args: { where?: Where; orderBy?: Order | Order[] } = {}) => ordered(args)[0] ?? null),
     findMany: jest.fn(async (args: { where?: Where; orderBy?: Order | Order[]; skip?: number; take?: number } = {}) => {
-      const orders = Array.isArray(args.orderBy) ? args.orderBy : [args.orderBy ?? { createdAt: 'desc' }];
-      const sorted = rows.filter((row) => reportMatches(row, args.where)).sort(compare(orders));
+      const sorted = ordered(args);
       const skip = args.skip ?? 0;
       return sorted.slice(skip, args.take === undefined ? undefined : skip + args.take);
     }),

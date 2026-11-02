@@ -37,6 +37,8 @@ async function app() {
     message: { findUnique: async () => null },
     userRelation: { findUnique: async () => null },
     report: {
+      // Adapté (#14627) : le dédoublonnage lit la ligne ouverte du signalant — le double l'évalue sur les lignes écrites.
+      findFirst: (a: any) => reportTable(rows).findFirst(a),
       create: async (a: any) => {
         const row = { id: (rows.length + 1).toString(16).padStart(24, '0'), createdAt: new Date((clock += 1000)), ...a.data };
         rows.push(row);
