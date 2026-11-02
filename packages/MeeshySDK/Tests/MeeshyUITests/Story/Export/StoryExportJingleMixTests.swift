@@ -3,6 +3,7 @@ import XCTest
 @testable import MeeshySDK
 
 /// **Le jingle s'entend en entier, et jamais sous le son de la story.**
+@MainActor
 final class StoryExportJingleMixTests: XCTestCase {
 
     private let hold = StoryExportIntro.holdDuration
