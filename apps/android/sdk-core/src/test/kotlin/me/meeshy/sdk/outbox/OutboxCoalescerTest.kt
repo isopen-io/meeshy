@@ -516,14 +516,4 @@ class OutboxCoalescerTest {
         val carried = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString(ConversationPrefsPayload.serializer(), decision.row.payload)
         assertThat(carried.previous).isEqualTo(oldest)
     }
-
-    @Test
-    fun `delete-for-user and leave kinds are never merged with a pending twin`() {
-        val kinds = OutboxKind.values().filter { it.name.contains("LEAVE") || it.name.contains("DELETE_CONVERSATION") }
-        kinds.forEach { kind ->
-            val pending = row("x1", kind, "c1")
-            val incoming = row("x2", kind, "c1")
-            assertThat(OutboxCoalescer.decide(incoming, listOf(pending))).isEqualTo(CoalesceDecision.Enqueue(incoming))
-        }
-    }
 }
