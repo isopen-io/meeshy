@@ -8,6 +8,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import {
+  OBSOLETE_PURGE_RETRY_DELAY_MS,
   obsoletePurgeArmed,
   obsoletePurgeWhere,
   purgeObsoleteConversations,
@@ -67,7 +68,14 @@ function prismaDouble(candidates: Candidate[], messagePages: string[][] = [['m1'
       deleteMany: deleteManyOf('trackingLink'),
     },
     trackingLinkClick: { deleteMany: deleteManyOf('trackingLinkClick') },
+    callRecording: { deleteMany: deleteManyOf('callRecording') },
+    serverEncryptionKey: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      deleteMany: deleteManyOf('serverEncryptionKey'),
+    },
   };
+  prisma.conversation.findUnique = jest.fn<any>().mockResolvedValue({ serverEncryptionKeyId: null });
+  prisma.callSession = { findMany: jest.fn<any>().mockResolvedValue([{ id: 'call-1' }]) };
   for (const model of new Set([...MESSAGE_SCOPED, ...CONVERSATION_SCOPED])) {
     prisma[model] = { ...(prisma[model] ?? {}), deleteMany: deleteManyOf(model) };
   }
@@ -165,7 +173,7 @@ describe('#14643 — la cascade', () => {
     expect(log[log.length - 1]).toBe('conversation.update');
     expect(prisma.conversation.update).toHaveBeenCalledWith({
       where: { id: CONV },
-      data: { purgeAfter: null, title: null, description: null, avatar: null, banner: null },
+      data: { purgeAfter: null, title: null, description: null, avatar: null, banner: null, serverEncryptionKeyId: null },
     });
   });
 
@@ -174,7 +182,9 @@ describe('#14643 — la cascade', () => {
     const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover(true) });
     expect(report).toEqual({ applied: true, candidates: 1, purged: 0, failed: 1, truncated: false });
     expect(log).not.toContain('message.deleteMany');
-    expect(log).not.toContain('conversation.update');
+    expect(prisma.conversation.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ purgeAfter: null }) }),
+    );
   });
 
   it('une pièce déjà partie n\'est pas un échec (idempotence)', async () => {
@@ -191,5 +201,104 @@ describe('#14643 — la cascade', () => {
     for (const call of prisma.message.findMany.mock.calls as any[]) {
       expect(call[0].where).toEqual({ conversationId: CONV });
     }
+  });
+});
+
+describe('#14643 — un échec ne bloque pas la file', () => {
+  it('un candidat qui échoue voit sa purge reculer, sans toucher aux autres marques', async () => {
+    const { prisma, log } = prismaDouble([candidate()]);
+    const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover(true) });
+    expect(report.failed).toBe(1);
+    expect(prisma.conversation.update).toHaveBeenCalledWith({
+      where: { id: CONV },
+      data: { purgeAfter: new Date(NOW.getTime() + OBSOLETE_PURGE_RETRY_DELAY_MS) },
+    });
+    expect(log).not.toContain('message.deleteMany');
+  });
+
+  it('vingt têtes de file qui échouent à chaque passe ne bloquent pas la suivante : elle est purgée à la passe d\'après', async () => {
+    const failing = Array.from({ length: 20 }, (_, i) =>
+      candidate({ id: `bad${String(i).padStart(21, '0')}`, purgeAfter: new Date(NOW.getTime() - 10_000 + i) }),
+    );
+    const healthy = candidate({ id: 'good00000000000000000000', purgeAfter: new Date(NOW.getTime() - 1000) });
+    const store = [...failing, healthy].map((row) => ({ ...row }));
+    const { prisma } = prismaDouble([], [[], [], [], []]);
+    prisma.conversation.findMany = jest.fn<any>(async (args: any) =>
+      store
+        .filter((row) => row.purgeAfter !== null && row.purgeAfter.getTime() <= args.where.purgeAfter.lte.getTime())
+        .sort((a, b) => a.purgeAfter.getTime() - b.purgeAfter.getTime())
+        .slice(0, args.take)
+        .map((row) => ({ ...row })),
+    );
+    prisma.conversation.update = jest.fn<any>(async (args: any) => {
+      const row = store.find((r) => r.id === args.where.id);
+      if (row && 'purgeAfter' in args.data) row.purgeAfter = args.data.purgeAfter;
+      return {};
+    });
+    const failingIds = new Set(failing.map((row) => row.id));
+    prisma.message.findMany = jest.fn<any>(async (args: any) => (failingIds.has(args.where.conversationId) ? [{ id: 'm' }] : []));
+    const attachmentRemover = { deleteAttachment: jest.fn<any>().mockRejectedValue(new Error('disk')) };
+
+    const first = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover });
+    expect(first).toMatchObject({ purged: 0, failed: 20 });
+
+    const second = await purgeObsoleteConversations(prisma, { now: new Date(NOW.getTime() + 60_000), apply: true, attachmentRemover });
+    expect(second).toMatchObject({ purged: 1, failed: 0 });
+    expect(store.find((row) => row.id === healthy.id)?.purgeAfter).toBeNull();
+  });
+
+  it('le recul revient en tête une fois son délai écoulé', async () => {
+    expect(OBSOLETE_PURGE_RETRY_DELAY_MS).toBeGreaterThanOrEqual(60 * 60 * 1000);
+    const { prisma } = prismaDouble([candidate({ purgeAfter: new Date(NOW.getTime() + OBSOLETE_PURGE_RETRY_DELAY_MS) })]);
+    const later = new Date(NOW.getTime() + OBSOLETE_PURGE_RETRY_DELAY_MS);
+    const report = await purgeObsoleteConversations(prisma, { now: later, apply: true, attachmentRemover: remover() });
+    expect(report.purged).toBe(1);
+  });
+});
+
+describe('#14643 — les restes sans relation Prisma', () => {
+  it('efface les enregistrements des appels de la conversation, avant leurs appels', async () => {
+    const { prisma, log } = prismaDouble([candidate()]);
+    await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
+    expect(prisma.callSession.findMany).toHaveBeenCalledWith({ where: { conversationId: CONV }, select: { id: true } });
+    expect(prisma.callRecording.deleteMany).toHaveBeenCalledWith({ where: { callSessionId: { in: ['call-1'] } } });
+    expect(log.indexOf('callRecording.deleteMany')).toBeLessThan(log.indexOf('callSession.deleteMany'));
+  });
+
+  function keysDouble(otherUsers: Record<string, number>, otherFiles: Record<string, number> = {}) {
+    const { prisma, log } = prismaDouble([candidate()]);
+    prisma.attachmentFileAtRest.count = jest.fn<any>(async (args: any) => otherFiles[args.where.keyId] ?? 0);
+    prisma.conversation.findUnique = jest.fn<any>().mockResolvedValue({ serverEncryptionKeyId: 'key-linked' });
+    prisma.serverEncryptionKey.findMany = jest.fn<any>().mockResolvedValue([{ id: 'key-own' }, { id: 'key-linked' }]);
+    prisma.conversation.count = jest.fn<any>(async (args: any) => otherUsers[args.where.serverEncryptionKeyId] ?? 0);
+    return { prisma, log };
+  }
+
+  it('efface les clés serveur de la conversation qu\'aucune autre conversation n\'utilise', async () => {
+    const { prisma } = keysDouble({});
+    const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
+    expect(report.purged).toBe(1);
+    expect(prisma.serverEncryptionKey.findMany).toHaveBeenCalledWith({ where: { conversationId: CONV }, select: { id: true } });
+    expect(prisma.serverEncryptionKey.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['key-own', 'key-linked'] } } });
+  });
+
+  it('garde une clé qu\'une autre conversation utilise encore', async () => {
+    const { prisma } = keysDouble({ 'key-linked': 1 });
+    await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
+    expect(prisma.conversation.count).toHaveBeenCalledWith({ where: { serverEncryptionKeyId: 'key-linked', id: { not: CONV } } });
+    expect(prisma.serverEncryptionKey.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['key-own'] } } });
+  });
+
+  it('garde une clé qui scelle encore un fichier d\'une autre conversation', async () => {
+    const { prisma } = keysDouble({}, { 'key-own': 1 });
+    await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
+    expect(prisma.attachmentFileAtRest.count).toHaveBeenCalledWith({ where: { keyId: 'key-own', conversationId: { not: CONV } } });
+    expect(prisma.serverEncryptionKey.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['key-linked'] } } });
+  });
+
+  it('n\'efface aucune clé quand toutes servent ailleurs', async () => {
+    const { prisma } = keysDouble({ 'key-own': 2, 'key-linked': 1 });
+    await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
+    expect(prisma.serverEncryptionKey.deleteMany).not.toHaveBeenCalled();
   });
 });

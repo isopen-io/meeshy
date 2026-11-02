@@ -7,7 +7,8 @@
  * deleteAttachment`, qui n'efface des octets que lorsque plus aucune ligne ne
  * les désigne), lignes de scellement, réactions, mentions, accusés, enveloppes
  * E2EE, traductions partagées, messages, liens de suivi et de partage, appels,
- * préférences, résumés d'agent, participants. La ligne `Conversation` reste,
+ * préférences, résumés d'agent, participants, enregistrements d'appel (sans
+ * relation Prisma) et clés serveur qu'aucune autre conversation n'utilise. La ligne `Conversation` reste,
  * vidée de son titre et de ses images : c'est la pierre tombale que lisent les
  * anciens clients (`closedAt`), et `purgeAfter: null` marque la purge faite.
  *
@@ -21,7 +22,9 @@
  *
  * IDEMPOTENTE. Chaque étape est un `deleteMany` filtré : une passe interrompue
  * laisse `purgeAfter` posé, et la suivante reprend là où elle s'est arrêtée.
- * Une pièce dont le fichier résiste arrête SA conversation avant les messages.
+ * Une pièce dont le fichier résiste arrête SA conversation avant les messages,
+ * et la fait reculer de six heures dans la file : un échec tenace ne bloque
+ * jamais les suivantes.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
@@ -30,6 +33,8 @@ import { isProtectedFromObsolescence, OBSOLETE_PURGE_DELAY_MS } from '../service
 const logger = enhancedLogger.child({ module: 'ObsoleteConversationPurge' });
 
 export const OBSOLETE_PURGE_EVERY_MS = 60 * 60 * 1000;
+/** Le recul d'une conversation dont la purge a échoué : elle cède la tête de file aux suivantes. */
+export const OBSOLETE_PURGE_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;
 const CONVERSATIONS_PER_PASS = 20;
 const MESSAGE_PAGE = 500;
 const MAX_MESSAGE_PAGES = 200;
@@ -69,7 +74,7 @@ export type ObsoletePurgePrisma = Pick<
   | 'conversationReadCursor' | 'callSession' | 'conversationPreference' | 'userConversationPreferences'
   | 'conversationPublicKey' | 'conversationShare' | 'agentConfig' | 'agentUserRole' | 'agentConversationSummary'
   | 'agentAnalysisSnapshot' | 'conversationMessageStats' | 'agentAnalytic' | 'agentScanLog' | 'agentTopicUsageLog'
-  | 'conversationShareLink' | 'participant'
+  | 'conversationShareLink' | 'participant' | 'callRecording' | 'serverEncryptionKey'
 >;
 
 /** Ce qui pend à un message, effacé avant lui. */
@@ -141,7 +146,40 @@ async function purgeConversation(
   return false;
 }
 
+/** `CallRecording` ne pend à son appel par aucune relation Prisma : il part avant lui, explicitement. */
+async function purgeCallRecordings(prisma: ObsoletePurgePrisma, conversationId: string): Promise<void> {
+  const calls = await prisma.callSession.findMany({ where: { conversationId }, select: { id: true } });
+  if (calls.length === 0) return;
+  await prisma.callRecording.deleteMany({ where: { callSessionId: { in: calls.map((call) => call.id) } } });
+}
+
+/**
+ * Les clés serveur de la conversation — celles qu'elle désigne et celles qui la
+ * nomment — partent, sauf celles qu'une AUTRE conversation désigne encore ou
+ * qui scellent encore un fichier d'une autre conversation.
+ */
+async function purgeServerEncryptionKeys(prisma: ObsoletePurgePrisma, conversationId: string): Promise<void> {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { serverEncryptionKeyId: true },
+  });
+  const owned = await prisma.serverEncryptionKey.findMany({ where: { conversationId }, select: { id: true } });
+  const candidates = [...new Set([...owned.map((key) => key.id), ...(conversation?.serverEncryptionKeyId ? [conversation.serverEncryptionKeyId] : [])])];
+  const usedElsewhere = await Promise.all(
+    candidates.map(async (keyId) => {
+      const conversations = await prisma.conversation.count({ where: { serverEncryptionKeyId: keyId, id: { not: conversationId } } });
+      if (conversations > 0) return true;
+      const files = await prisma.attachmentFileAtRest.count({ where: { keyId, conversationId: { not: conversationId } } });
+      return files > 0;
+    }),
+  );
+  const orphans = candidates.filter((_, index) => !usedElsewhere[index]);
+  if (orphans.length === 0) return;
+  await prisma.serverEncryptionKey.deleteMany({ where: { id: { in: orphans } } });
+}
+
 async function purgeConversationScoped(prisma: ObsoletePurgePrisma, conversationId: string): Promise<void> {
+  await purgeCallRecordings(prisma, conversationId);
   const trackingLinks = await prisma.trackingLink.findMany({ where: { conversationId }, select: { id: true } });
   const trackingLinkIds = trackingLinks.map((link) => link.id);
   if (trackingLinkIds.length > 0) {
@@ -151,9 +189,10 @@ async function purgeConversationScoped(prisma: ObsoletePurgePrisma, conversation
   for (const delegate of conversationScoped(prisma)) {
     await delegate.deleteMany({ where: { conversationId } });
   }
+  await purgeServerEncryptionKeys(prisma, conversationId);
   await prisma.conversation.update({
     where: { id: conversationId },
-    data: { purgeAfter: null, title: null, description: null, avatar: null, banner: null },
+    data: { purgeAfter: null, title: null, description: null, avatar: null, banner: null, serverEncryptionKeyId: null },
   });
 }
 
@@ -173,6 +212,23 @@ function stillMarkedForPurge(conversation: PurgeCandidate, now: Date): boolean {
   if (!conversation.purgeAfter || conversation.purgeAfter.getTime() > now.getTime()) return false;
   if (!conversation.deletedAt) return false;
   return conversation.deletedAt.getTime() <= now.getTime() - OBSOLETE_PURGE_DELAY_MS;
+}
+
+/**
+ * Un candidat qui échoue recule de `OBSOLETE_PURGE_RETRY_DELAY_MS` : trié par
+ * `purgeAfter` croissant, il resterait sinon en tête pour toujours, et vingt
+ * échecs tenaces bloqueraient toute la file. Seul `purgeAfter` bouge — les
+ * deux autres marques restent, la conversation reste une cible.
+ */
+async function postponePurge(prisma: ObsoletePurgePrisma, conversationId: string, now: Date): Promise<void> {
+  try {
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { purgeAfter: new Date(now.getTime() + OBSOLETE_PURGE_RETRY_DELAY_MS) },
+    });
+  } catch (error) {
+    logger.error('obsolete conversation purge could not be postponed', { conversationId, error });
+  }
 }
 
 export async function purgeObsoleteConversations(
@@ -207,7 +263,8 @@ export async function purgeObsoleteConversations(
       }
     } catch (error) {
       failed += 1;
-      logger.error('obsolete conversation purge stopped — the next pass resumes', { conversationId: conversation.id, error });
+      logger.error('obsolete conversation purge stopped — it retries after its delay', { conversationId: conversation.id, error });
+      await postponePurge(prisma, conversation.id, now);
     }
   }
   return { applied: true, candidates: rows.length, purged, failed, truncated };
