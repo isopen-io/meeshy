@@ -164,6 +164,7 @@ private fun ProfileActionsViewModel.callbacks(
     onDecline = this::declineConnection,
     onBlock = this::block,
     onUnblock = this::unblock,
+    onRaise = this::requestRaise,
     onReport = {
         val profile = state.profile
         if (profile != null) environment.onReport(profile.id, profile.username)
@@ -293,6 +294,8 @@ private fun ProfileActionFeedback.toToastRequest(): FeedbackToastRequest = Feedb
         ProfileActionFeedback.UnblockFailed -> R.string.profile_toast_unblock_failed
         ProfileActionFeedback.OpenConversationFailed -> R.string.profile_open_conversation_error
         ProfileActionFeedback.CallNotPlaced -> R.string.profile_call_not_placed
+        ProfileActionFeedback.RaiseSent -> me.meeshy.ui.R.string.connection_toast_request_sent
+        ProfileActionFeedback.RaiseFailed -> me.meeshy.ui.R.string.connection_toast_request_send_failed
     },
     kind = if (isError) FeedbackKind.Error else FeedbackKind.Success,
 )

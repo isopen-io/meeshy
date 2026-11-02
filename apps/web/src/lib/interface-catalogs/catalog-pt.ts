@@ -508,6 +508,7 @@ const pt = {
 
   'media.video.play': 'Reproduzir vídeo',
   'media.video.pause': 'Pausar',
+  'media.video.paused': 'Pausado',
   'media.video.position': 'Posição de reprodução',
   'media.audio.position': 'Posição de reprodução',
   'media.audio.speed': 'Velocidade de reprodução',

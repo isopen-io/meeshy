@@ -41,11 +41,13 @@ class FriendRepository @Inject constructor(
     private val friendApi: FriendApi,
     private val outboxRepository: OutboxRepository,
 ) {
+    /** [targetLevel] is the circles rung a raise aims at (#13938); `null` is omitted from the body (Friend, as before). */
     suspend fun sendFriendRequest(
         receiverId: String,
         message: String? = null,
+        targetLevel: String? = null,
     ): NetworkResult<FriendRequest> =
-        apiCall { friendApi.sendFriendRequest(SendFriendRequest(receiverId, message)) }
+        apiCall { friendApi.sendFriendRequest(SendFriendRequest(receiverId, message, targetLevel)) }
 
     /**
      * Queues a friend-request send durably (ARCHITECTURE.md §5; ADR-006) instead
@@ -64,6 +66,7 @@ class FriendRepository @Inject constructor(
         receiverId: String,
         cmid: String = OutboxIds.cmid(),
         message: String? = null,
+        targetLevel: String? = null,
     ): String? {
         if (receiverId.isBlank()) return null
         return outboxRepository.enqueue(
@@ -71,7 +74,7 @@ class FriendRepository @Inject constructor(
                 kind = OutboxKind.SEND_FRIEND_REQUEST,
                 lane = OutboxLanes.FRIEND,
                 targetId = receiverId,
-                payload = MeeshyApi.json.encodeToString(FriendRequestPayload(message)),
+                payload = MeeshyApi.json.encodeToString(FriendRequestPayload(message, targetLevel)),
                 cmid = cmid,
             ),
         )

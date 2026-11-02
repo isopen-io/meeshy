@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Audiences du cercle (#13939) : android-only tant que les clés ne sont pas au catalogue iOS de dev ; texte exact de lot/ui-audience-ios-13939. -->
+<resources>
+    <string name="stories_visibility_acquaintances">Acquaintances</string>
+    <string name="stories_visibility_close">Close</string>
+    <string name="stories_visibility_blood">Blood</string>
+    <string name="composer_audience_sub_acquaintances">Your Acquaintances, Friends, Close and Blood</string>
+    <string name="composer_audience_sub_close">Your Close and Blood</string>
+    <string name="composer_audience_sub_blood">Your Blood only — never reshared</string>
+</resources>

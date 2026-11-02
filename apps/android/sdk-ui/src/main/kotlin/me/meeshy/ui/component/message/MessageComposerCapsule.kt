@@ -156,8 +156,12 @@ public fun MessageComposerCapsule(
 private fun ComposerPlaceholder(text: String, style: TextStyle) {
     val measurer = rememberTextMeasurer()
     BoxWithConstraints {
-        val natural = remember(text, style) { measurer.measure(text, style, maxLines = 1, softWrap = false).size.width }
-        val scale = ComposerPlaceholderFit.scale(natural, constraints.maxWidth)
+        val available = constraints.maxWidth
+        val scale = remember(text, style, available) {
+            ComposerPlaceholderFit.fit(available) { factor ->
+                measurer.measure(text, style.copy(fontSize = style.fontSize * factor), maxLines = 1, softWrap = false).size.width
+            }
+        }
         Text(
             text = text,
             style = style.copy(fontSize = style.fontSize * scale),

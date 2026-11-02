@@ -21,6 +21,13 @@ class MoodBubbleModelTest {
     }
 
     @Test
+    fun `l humeur de Sang d un ami ne se republie pas`() {
+        val model = MoodBubbleModel.of(entry().copy(visibility = "BLOOD"), currentUserId = "me")
+        assertThat(model.canRepublish).isFalse()
+        assertThat(model.canReact).isTrue()
+    }
+
+    @Test
     fun `sa propre humeur n offre aucun geste`() {
         val model = MoodBubbleModel.of(entry(userId = "me"), currentUserId = "me")
         assertThat(model.canReact).isFalse()

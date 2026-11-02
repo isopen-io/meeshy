@@ -26,7 +26,8 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.AccountTicket
 import javax.inject.Inject
 
-enum class ContactsTab { Contacts, Requests, Discover, Blocked }
+/** Les onglets du carnet ; « Cercles » (#13938) suit Contacts, comme dans le hub People d'iOS. */
+enum class ContactsTab { Contacts, Circles, Requests, Discover, Blocked }
 
 data class ContactsUiState(
     val selectedTab: ContactsTab = ContactsTab.Contacts,
