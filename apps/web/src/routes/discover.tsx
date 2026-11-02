@@ -1,6 +1,6 @@
 import { rememberSearchId, useSearchTelemetry } from '@/lib/telemetry/search-telemetry';
 import { keepPreviousData, useInfiniteQuery, useQuery, type UseInfiniteQueryResult } from '@tanstack/react-query';
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -36,7 +36,7 @@ import {
   type RequestFilter,
 } from '@/lib/discover/view';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { useOnline } from '@/lib/net/online';
 import { useSearch } from '@/lib/router';
@@ -74,13 +74,36 @@ import {
 import { PhoneAddPrompt } from '@/components/phone-add-prompt';
 import { usePhoneAddPrompt } from '@/lib/view/use-phone-add-prompt';
 import type { RelationRequestLevel } from '@meeshy/shared/types/relation';
-import { RELATION_LINKS_QUERY_KEY } from '@/lib/api/relations';
-import { translateCircles } from '@/lib/i18n-circles-catalog';
-import { requestedLevelOf } from '@/lib/relations/circles';
-import { relationLevelLabel } from '@/lib/relations/level-labels';
-import { BloodRitualDialog } from '@/routes/blood-ritual-dialog';
-import { CirclesPanel, useCirclesCatalog } from '@/routes/discover-circles';
+import { RELATION_LINKS_QUERY_KEY } from '@/lib/api/friends-keys';
+import { loadCirclesCatalog } from '@/lib/i18n-circles-catalog';
 import type { CircleRequestHandlers } from '@/routes/discover-circles-parts';
+import type { raiseCaption as RaiseCaption } from '@/routes/discover-raise-caption';
+
+/* L'onglet « Cercles » et le rituel du Sang (#13938) se chargent À LA DEMANDE :
+   Découvrir ne les paie que si on les ouvre (`budgets.json` › `discover`). */
+const CirclesPanel = lazy(() => import('@/routes/discover-circles').then((m) => ({ default: m.CirclesPanel })));
+const BloodRitualDialog = lazy(() => import('@/routes/blood-ritual-dialog').then((m) => ({ default: m.BloodRitualDialog })));
+
+/** Le cran d'une demande de montée (« Demande le niveau Proche ») : son module et le catalogue des cercles ne se chargent que si une demande en porte un. */
+function useRaiseCaption(rows: readonly FriendRequestRecord[], language: InterfaceLanguage): typeof RaiseCaption | null {
+  const needed = rows.some((row) => row.targetLevel !== undefined);
+  const [caption, setCaption] = useState<{ readonly language: InterfaceLanguage; readonly of: typeof RaiseCaption } | null>(null);
+  const ready = caption !== null && caption.language === language;
+  useEffect(() => {
+    if (!needed || ready) return undefined;
+    let live = true;
+    void Promise.all([import('@/routes/discover-raise-caption'), loadCirclesCatalog(language)]).then(
+      ([m]) => {
+        if (live) setCaption({ language, of: m.raiseCaption });
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [needed, ready, language]);
+  return ready ? caption.of : null;
+}
 
 /**
  * **DÉCOUVRIR** (#6363) — quatrième barreau de l'échelle, miroir de
@@ -189,7 +212,7 @@ export default function DiscoverScreen() {
   }, []);
   const onAccept = useCallback(
     (request: FriendRequestRecord) => {
-      if (requestedLevelOf(request) === 'BLOOD') {
+      if (request.targetLevel === 'BLOOD') {
         openRitual(request.senderId, request.sender);
         return;
       }
@@ -232,13 +255,12 @@ export default function DiscoverScreen() {
     () => ({ onAccept, onDecline: onReject, onCancel, onRitual: openRitual }),
     [onAccept, onReject, onCancel, openRitual],
   );
-  /* Le cran d'une demande de montée dans « Demandes » (iso `RequestsTab.levelCaption`) — dès que le catalogue des cercles est là. */
-  const circlesCatalog = useCirclesCatalog(language);
-  const levelCaption = (request: FriendRequestRecord, direction: 'incoming' | 'outgoing'): string | null => {
-    const level = requestedLevelOf(request);
-    if (!circlesCatalog || level === 'FRIEND') return null;
-    return translateCircles(language, direction === 'incoming' ? 'circles.requests.incoming' : 'circles.requests.outgoing', { level: relationLevelLabel(language, level) });
-  };
+  /* Le cran d'une demande de montée dans « Demandes » (iso `RequestsTab.levelCaption`) — dès que son module et le catalogue des cercles sont là. */
+  const caption = useRaiseCaption(
+    useMemo(() => [...receivedRows, ...sentRows], [receivedRows, sentRows]),
+    language,
+  );
+  const levelCaption = (request: FriendRequestRecord, direction: 'incoming' | 'outgoing'): string | null => (caption === null ? null : caption(language, request, direction));
 
   /* Débloquer passe par une confirmation modale : un double tap n'y retire
      personne, il ne peut qu'ouvrir une confirmation — la porte n'y est pas. */
@@ -426,7 +448,8 @@ export default function DiscoverScreen() {
       </section>
     ),
     circles: () => (
-      <CirclesPanel
+      <Suspense fallback={<DiscoverSkeleton />}>
+        <CirclesPanel
         language={language}
         enabled={enabled}
         online={online}
@@ -437,7 +460,8 @@ export default function DiscoverScreen() {
         requestHandlers={circleHandlers}
         onRaise={onRaise}
         onFindContacts={() => selectTab('discover')}
-      />
+        />
+      </Suspense>
     ),
     blocked: () => (
       <section data-discover-blocked className="flex flex-1 flex-col">
@@ -490,7 +514,11 @@ export default function DiscoverScreen() {
       {/* **UNE SEULE CONFIRMATION, PARTOUT** (revue-correction #6149, défaut
           majeur 2, issue #7858) — `UnblockConfirm` était la SECONDE des trois
           copies divergentes, blanc sur `--color-warning` mêlé de noir. */}
-      {ritualTarget === null ? null : <BloodRitualDialog language={language} userId={ritualTarget.userId} name={ritualTarget.name} onFinished={closeRitual} />}
+      {ritualTarget === null ? null : (
+        <Suspense fallback={null}>
+          <BloodRitualDialog language={language} userId={ritualTarget.userId} name={ritualTarget.name} onFinished={closeRitual} />
+        </Suspense>
+      )}
       {unblockTarget === null ? null : (
         <ConfirmDialog
           name="unblock"

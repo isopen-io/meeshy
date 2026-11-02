@@ -4,7 +4,7 @@ import type { RelationRitualConsents, RelationRitualPhase } from '@meeshy/shared
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
-import { FRIENDS_QUERY_PREFIX } from './friends-keys';
+import { RELATION_LINKS_QUERY_KEY } from './friends-keys';
 import type { ApiFailure, ApiResult, HttpTransport } from './http';
 
 /**
@@ -46,7 +46,7 @@ export type RelationLink = {
   readonly eligibleFor: RelationEligibility | null;
 };
 
-export const RELATION_LINKS_QUERY_KEY = [...FRIENDS_QUERY_PREFIX, 'relations'] as const;
+export { RELATION_LINKS_QUERY_KEY } from './friends-keys';
 
 /**
  * TRENTE SECONDES — la famille garde ses cinq minutes parce que le temps réel

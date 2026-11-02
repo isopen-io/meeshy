@@ -10,7 +10,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { INITIAL_RITUAL, holdIntervalMs, reduceRitual, shouldSeal, type RitualEvent, type RitualNotice, type RitualState } from '@/lib/relations/blood-ritual';
 import { relationLevelIcon } from '@/lib/relations/level-labels';
 import type { SocketClient } from '@/lib/net/socket';
-import { useCirclesCatalog } from '@/routes/discover-circles';
+import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 
 /**
  * **LE RITUEL DU SANG** (#13938) — miroir de `BloodRitualView`

@@ -9,7 +9,8 @@ import { FRIENDS_QUERY_PREFIX } from '@/lib/api/friends-keys';
 import { publicProfileQueryOptions, type PublicProfileView } from '@/lib/api/public-profile';
 import { appQueryClient } from '@/lib/api/query-client';
 import { relationLinksQueryOptions, type RelationLink } from '@/lib/api/relations';
-import { isCirclesCatalogLoaded, loadCirclesCatalog, translateCircles } from '@/lib/i18n-circles-catalog';
+import { translateCircles } from '@/lib/i18n-circles-catalog';
+import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { circleSections, listedLinks, pendingRaiseOf, raiseRequests } from '@/lib/relations/circles';
 import { coldStateOf } from '@/lib/view/cold-state';
@@ -47,24 +48,6 @@ import { DiscoverEmpty, DiscoverError, DiscoverOfflineNotice, DiscoverSkeleton }
  */
 
 const PROFILE_FETCH_CAP = 40;
-
-export function useCirclesCatalog(language: InterfaceLanguage): boolean {
-  const [, setLoaded] = useState<InterfaceLanguage | null>(null);
-  useEffect(() => {
-    if (isCirclesCatalogLoaded(language)) return undefined;
-    let live = true;
-    loadCirclesCatalog(language).then(
-      () => {
-        if (live) setLoaded(language);
-      },
-      () => undefined,
-    );
-    return () => {
-      live = false;
-    };
-  }, [language]);
-  return isCirclesCatalogLoaded(language);
-}
 
 const personOfProfile = (view: PublicProfileView | undefined): PersonSummary | null =>
   view === undefined ? null : { id: view.profile.id, username: view.profile.username, displayName: view.profile.displayName, avatar: view.profile.avatar };
