@@ -515,6 +515,9 @@ export const callersIn = (contents, nsNames) => {
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
+  // La recherche (#14619, #14620) : la passerelle sert les messages et les publications avant le tour client du web.
+  'messages.search': { issue: 14619, reason: 'GET /messages/search — les messages trouvés par la recherche de la liste des conversations (web)' },
+  'posts.search': { issue: 14620, reason: 'GET /posts/search — les posts, réels et stories de la recherche générale (web)' },
   // La boîte de demandes (#14107, PR #14449) : le serveur sert « Accepter » avant le tour client, qui le portera.
   'conversations.byIdMessageRequestAccept': { issue: 14107, reason: 'POST /conversations/:id/message-request/accept — le bouton « Accepter » de la boîte de demandes (web)' },
   // #11327 (S26) — `/api/v1/lens` : le crédit « Lens par X », le logo du filigrane et le ping d'usage, que la
