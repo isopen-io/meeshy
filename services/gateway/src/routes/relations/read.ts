@@ -11,6 +11,7 @@ import { sendSuccess, sendInternalError } from '../../utils/response';
 import { logError } from '../../utils/logger';
 import { listRelationLinks } from '../../services/relations/relationLinks';
 import { thresholdsNow } from '../../services/relations/relationRequestGate';
+import { bringServiceEnabled } from '../../services/bring/bringPush';
 import { errorResponses, relationLimiter, relationLinkSchema } from './shared';
 
 const configView = () => ({
@@ -22,6 +23,8 @@ const configView = () => ({
   })),
   thresholds: thresholdsNow(),
   features: RELATION_FEATURE_MIN_LEVEL,
+  // Le service du Bring est-il allumé sur cette passerelle (#13936) ? Éteint ⇒ aucun bouton Bring.
+  services: { bring: bringServiceEnabled() },
 });
 
 const configSchema = {
@@ -41,6 +44,7 @@ const configSchema = {
     },
     thresholds: { type: 'object', additionalProperties: true },
     features: { type: 'object', additionalProperties: { type: 'string' } },
+    services: { type: 'object', properties: { bring: { type: 'boolean' } } },
   },
 } as const;
 

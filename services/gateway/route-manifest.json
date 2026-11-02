@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 781,
+  "routeCount": 786,
   "routes": [
     {
       "method": "DELETE",
@@ -310,6 +310,20 @@
       "path": "/api/v1/auth/sessions/:sessionId",
       "module": "authRoutes",
       "mountPrefix": "/api/v1/auth",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/bring/:bringId",
+      "module": "bringRoutes",
+      "mountPrefix": "/api/v1/bring",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -2912,6 +2926,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/bring/:userId",
+      "module": "bringRoutes",
+      "mountPrefix": "/api/v1/bring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/calls/:callId",
       "module": "callRoutes",
       "mountPrefix": "/api/v1",
@@ -5299,6 +5327,20 @@
       "method": "GET",
       "path": "/api/v1/relations/:userId",
       "module": "relationsLevelRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/relations/:userId/settings",
+      "module": "relationsRoutes",
       "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
@@ -8271,6 +8313,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/bring/:userId",
+      "module": "bringRoutes",
+      "mountPrefix": "/api/v1/bring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/calls",
       "module": "callRoutes",
       "mountPrefix": "/api/v1",
@@ -10980,6 +11036,20 @@
       "path": "/api/v1/posts/:postId",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/relations/:userId/settings",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
