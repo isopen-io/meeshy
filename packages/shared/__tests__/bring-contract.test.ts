@@ -99,4 +99,14 @@ describe('le contrat du Bring', () => {
     expect(relationPersonSettingsUpdateSchema.safeParse({ bringBlocked: true, talkieDirect: false }).success).toBe(false);
     expect(relationPersonSettingsUpdateSchema.safeParse({}).success).toBe(false);
   });
+
+  it('#14401 — un partage consenti au rituel se RETIRE par le réglage, il ne s’y accorde jamais', () => {
+    expect(relationPersonSettingsUpdateSchema.safeParse({ locationShared: false }).success).toBe(true);
+    expect(
+      relationPersonSettingsUpdateSchema.safeParse({ listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false }).success,
+    ).toBe(true);
+    expect(relationPersonSettingsUpdateSchema.safeParse({ locationShared: true }).success).toBe(false);
+    expect(relationPersonSettingsUpdateSchema.safeParse({ proximityShared: 'false' }).success).toBe(false);
+    expect(relationPersonSettingsUpdateSchema.safeParse({ bringBlocked: true, locationShared: false }).success).toBe(true);
+  });
 });

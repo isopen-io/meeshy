@@ -28,7 +28,7 @@ export type BringAppOptions = {
   readonly liens?: ReadonlyArray<Record<string, unknown>>;
   readonly demandes?: ReadonlyArray<Record<string, unknown>>;
   readonly personnes?: Readonly<Record<string, Personne>>;
-  readonly reglages?: ReadonlyArray<{ ownerId: string; otherId: string; bringBlockedAt: Date | null }>;
+  readonly reglages?: ReadonlyArray<{ ownerId: string; otherId: string; bringBlockedAt: Date | null } & Record<string, unknown>>;
 };
 
 export type BringTestApp = {
@@ -111,6 +111,13 @@ export async function buildBringApp(
         const next = { ...(reglages.get(key) ?? args.create), ...(reglages.has(key) ? args.update : {}) };
         reglages.set(key, next);
         return next;
+      }),
+      updateMany: jest.fn(async (args: { where: { ownerId: string; otherId: string }; data: Record<string, unknown> }) => {
+        const key = cleDe(args.where.ownerId, args.where.otherId);
+        const row = reglages.get(key);
+        if (!row) return { count: 0 };
+        reglages.set(key, { ...row, ...args.data });
+        return { count: 1 };
       }),
     },
     userPreferences: {

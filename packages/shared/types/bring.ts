@@ -105,14 +105,39 @@ export const bringStoppedEventSchema = z.object({
 });
 export type BringStoppedEventData = z.infer<typeof bringStoppedEventSchema>;
 
+/**
+ * Les partages que J'AI consentis à l'autre au rituel du Sang (`RelationFeatureSetting`,
+ * #14401). Ils s'accordent au rituel seulement, et se RETIRENT ici, un par un, sans
+ * quitter le Sang (RGPD art. 7(3)).
+ */
+export const RELATION_RITUAL_SHARES = ['listeningTitleShared', 'locationShared', 'locationHistoryShared', 'proximityShared'] as const;
+export type RelationRitualShare = (typeof RELATION_RITUAL_SHARES)[number];
+
 /** Les réglages par personne que JE pose pour l'autre (`/relations/:userId/settings`). */
 export const relationPersonSettingsSchema = z.object({
   userId: z.string(),
   bringBlocked: z.boolean(),
+  listeningTitleShared: z.boolean(),
+  locationShared: z.boolean(),
+  locationHistoryShared: z.boolean(),
+  proximityShared: z.boolean(),
 });
 export type RelationPersonSettings = z.infer<typeof relationPersonSettingsSchema>;
 
-export const relationPersonSettingsUpdateSchema = z.object({ bringBlocked: z.boolean() }).strict();
+/**
+ * Un réglage au moins. `bringBlocked` se pose dans les deux sens ; un partage du rituel
+ * ne se règle qu'à `false` (le retrait) : l'accorder hors du rituel est refusé.
+ */
+export const relationPersonSettingsUpdateSchema = z
+  .object({
+    bringBlocked: z.boolean().optional(),
+    listeningTitleShared: z.literal(false).optional(),
+    locationShared: z.literal(false).optional(),
+    locationHistoryShared: z.literal(false).optional(),
+    proximityShared: z.literal(false).optional(),
+  })
+  .strict()
+  .refine((update) => Object.keys(update).length > 0);
 export type RelationPersonSettingsUpdate = z.infer<typeof relationPersonSettingsUpdateSchema>;
 
 /**
