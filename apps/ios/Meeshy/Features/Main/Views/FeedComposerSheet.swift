@@ -79,9 +79,9 @@ struct FeedComposerSheet: View {
     @State private var audiencePickerMode: PostVisibility? = nil
 
     /// La visibilité choisie, relue comme un mode du modèle — un `rawValue`
-    /// inconnu (état corrompu) retombe sur PUBLIC, le défaut produit.
+    /// inconnu se lit RESTREINT (#13939), jamais public.
     private var selectedPostVisibility: PostVisibility {
-        PostVisibility(rawValue: postVisibility) ?? .public
+        PostVisibility(served: postVisibility)
     }
 
     /// EXCEPT sans exclus = privé fantôme ; ONLY sans inclus = invisible pour

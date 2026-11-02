@@ -70,10 +70,11 @@ import {
 import {
   PREFERENCE_REGISTRY,
   applyCategoryWriteEffects,
+  keepUnnamedKeys,
+  resetDocumentFor,
   isPreferenceCategory,
   parseSubmittedKeys,
   resolveComplete,
-  resetDocumentOf,
   resolveCompleteCategories,
   type PreferenceCategory,
   type PreferenceDocument,
@@ -326,17 +327,19 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
             ? await resolveCompleteCategories(fastify.prisma, userId, categories)
             : {};
 
-        const writes: CategoryWrite[] = categories.map((category) => {
+        const writes: CategoryWrite[] = await Promise.all(categories.map(async (category) => {
           const submitted = parseSubmittedKeys(category, body[category]);
           const stored =
-            mode === 'merge' ? { ...(base[category] ?? {}), ...submitted } : submitted;
+            mode === 'merge'
+              ? { ...(base[category] ?? {}), ...submitted }
+              : await keepUnnamedKeys(fastify.prisma, userId, category, submitted, submitted);
           return {
             category,
             stored,
             effective: resolveComplete(PREFERENCE_REGISTRY[category].defaults, stored),
             submitted,
           };
-        });
+        }));
 
         // #4578 — la garde lit `submitted`, pas `effective`.
         //
@@ -512,7 +515,7 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
         await fastify.prisma.userPreferences.updateMany({
           where: { userId },
           data: Object.fromEntries(
-            await Promise.all(categories.map(async (category) => [category, await resetDocumentOf(fastify.prisma, userId, category)] as const))
+            await Promise.all(categories.map(async (category) => [category, await resetDocumentFor(fastify.prisma, userId, category)] as const))
           ),
         });
 

@@ -1,4 +1,4 @@
-import type { RelationLevel, RelationRequestLevel } from '@meeshy/shared/types/relation';
+import type { RelationRequestLevel } from '@meeshy/shared/types/relation';
 import { memo, type ReactNode } from 'react';
 
 import { Glyph } from '@/components/glyph';
@@ -9,8 +9,9 @@ import { personNameOf } from '@/lib/discover/view';
 import { translate } from '@/lib/i18n-catalog';
 import { translateCircles } from '@/lib/i18n-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { progressSummary, raiseOffer, requestedLevelOf, type CircleLevel, type MissingPiece, type ProgressSummary } from '@/lib/relations/circles';
-import { relationLevelIcon, relationLevelLabel } from '@/lib/relations/level-labels';
+import { progressSummary, raiseOffer, requestedLevelOf, type CircleLevel } from '@/lib/relations/circles';
+import { relationLevelIcon } from '@/lib/relations/level-labels';
+import { levelTitle, progressText } from '@/lib/relations/progress-text';
 import { PERSON_ROW_HEIGHT, PersonAvatar, PersonText } from '@/routes/discover-parts';
 
 /**
@@ -45,32 +46,6 @@ const LEVEL_TINT: Readonly<Record<CircleLevel, string>> = {
   FRIEND: 'var(--color-success)',
   ACQUAINTANCE: 'var(--ios-info)',
 };
-
-export const levelTitle = (language: InterfaceLanguage, level: RelationLevel): string => relationLevelLabel(language, level);
-
-const pieceNoun = (language: InterfaceLanguage, piece: MissingPiece): string => translateCircles(language, `circles.missing.${piece}`);
-
-/** « un message audio et une réaction » : la conjonction de la langue, jamais une virgule recopiée. */
-const listOf = (language: InterfaceLanguage, nouns: readonly string[]): string =>
-  new Intl.ListFormat(language, { style: 'long', type: 'conjunction' }).format(nouns);
-
-/**
- * La phrase de la ligne, ou `null` quand il n'y a rien à dire. « Semaines
- * d'affilée : 3 sur 4 » plutôt que « 3 semaines sur 4 » : la forme neutre ne
- * dépend d'aucune règle de pluriel (l'arabe en compte six).
- */
-export function progressText(language: InterfaceLanguage, summary: ProgressSummary): string | null {
-  switch (summary.kind) {
-    case 'none':
-      return null;
-    case 'weeks':
-      return translateCircles(language, 'circles.progress.weeks', { done: String(summary.done), needed: String(summary.needed) });
-    case 'eligible':
-      return translateCircles(language, 'circles.progress.eligible', { level: levelTitle(language, summary.target) });
-    case 'missing':
-      return translateCircles(language, 'circles.progress.missing', { pieces: listOf(language, summary.pieces.map((piece) => pieceNoun(language, piece))) });
-  }
-}
 
 export const circlePersonName = (language: InterfaceLanguage, person: PersonSummary | null): string =>
   personNameOf(person, translate(language, 'discover.unknown'));

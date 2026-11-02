@@ -155143,43 +155143,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جهات الاتصال"
+            "value": "الأصدقاء"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kontakte"
+            "value": "Freunde"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contacts"
+            "value": "Friends"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contactos"
+            "value": "Amigos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contacts"
+            "value": "Amis"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contatti"
+            "value": "Amici"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contatos"
+            "value": "Amigos"
           }
         }
       }
@@ -326781,6 +326781,147 @@
           "stringUnit": {
             "state": "translated",
             "value": "Só se %@ também tiver aceitado. Nada sobre o local é guardado."
+          }
+        }
+      }
+    },
+    "composer.audience.sub.acquaintances": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "معارفك وأصدقاؤك والمقرّبون والدم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Bekannten, Freunde, Vertrauten und Blut"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Acquaintances, Friends, Close and Blood"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus Conocidos, Amigos, Cercanos y Sangre"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos Connaissances, Amis, Proches et Sangs"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi Conoscenti, Amici, Intimi e Sangue"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus Conhecidos, Amigos, Próximos e Sangue"
+          }
+        }
+      }
+    },
+    "composer.audience.sub.close": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المقرّبون منك والدم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Vertrauten und dein Blut"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Close and Blood"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus Cercanos y tu Sangre"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos Proches et vos Sangs"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi Intimi e il tuo Sangue"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus Próximos e seu Sangue"
+          }
+        }
+      }
+    },
+    "composer.audience.sub.blood": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الدم فقط — لا يُعاد نشره أبدًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur dein Blut — wird nie weitergeteilt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Blood only — never reshared"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo tu Sangre — nunca se vuelve a compartir"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos Sangs seulement — jamais repartagé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo il tuo Sangue — mai ricondiviso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Só seu Sangue — nunca recompartilhado"
           }
         }
       }

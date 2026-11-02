@@ -172,6 +172,7 @@ import type {
   RelationRitualProgressEventData,
   RelationRitualStartedEventData,
 } from './relation.js';
+import type { BringRingEventData, BringStoppedEventData } from '../bring.js';
 import type {
   LocationLiveStartData,
   LocationLiveStartedEventData,
@@ -333,6 +334,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.RELATION_RITUAL_STARTED]: (data: RelationRitualStartedEventData) => void;
   [SERVER_EVENTS.RELATION_RITUAL_PROGRESS]: (data: RelationRitualProgressEventData) => void;
   [SERVER_EVENTS.RELATION_RITUAL_COMPLETED]: (data: RelationRitualCompletedEventData) => void;
+  [SERVER_EVENTS.BRING_RING]: (data: BringRingEventData) => void;
+  [SERVER_EVENTS.BRING_STOPPED]: (data: BringStoppedEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED]: (data: MessageViewOncePurgedEventData) => void;

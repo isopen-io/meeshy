@@ -70,13 +70,15 @@ type Deps = {
 };
 
 /**
- * Lisibles, jamais écrites par un administrateur au nom d'un membre : la famille
- * chiffrement, et « Créer des Connaissances automatiquement » (#14406, audit #14464
- * C1) — lever une opposition (RGPD art. 21) ou le défaut protecteur d'un mineur est
- * le geste du membre seul.
+ * Lisibles, jamais écrites par un administrateur au nom d'un membre : la famille chiffrement
+ * (baisser le chiffrement d'autrui), « Recevoir des Bring » (#13936, contre-audit #14441
+ * N2) — rouvrir la réception d'un son qui passe Ne pas déranger est le geste du membre seul —,
+ * et « Créer des Connaissances automatiquement » (#14406, audit #14464 C1) : lever une
+ * opposition (RGPD art. 21) ou le défaut protecteur d'un mineur aussi.
  */
 export const ADMIN_READ_ONLY_PREFERENCE_KEYS: Readonly<Partial<Record<PreferenceCategory, readonly string[]>>> = {
-  privacy: ['encryptionPreference', 'autoEncryptNewConversations', 'warnOnUnencrypted', 'autoAcquaintance']
+  privacy: ['encryptionPreference', 'autoEncryptNewConversations', 'warnOnUnencrypted', 'autoAcquaintance'],
+  notification: ['bringEnabled'],
 };
 
 /**

@@ -11,6 +11,7 @@ import { withMutationLog } from '../../utils/withMutationLog';
 import { getCacheStore } from '../../services/CacheStore';
 import { blockCacheKey } from '../../utils/block-cache';
 import { cancelAutoAcquaintanceOnBlock } from '../../services/relations/autoAcquaintance';
+import { stopBringsAfterUserBlock } from '../bring';
 import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
 import { callerRateKey } from '../../utils/client-rate-key';
 import { sendWithETag } from '../../utils/etag';
@@ -131,6 +132,9 @@ export async function bloquer(
 
   // Les cercles (#13932) : un blocage annule la Connaissance née toute seule.
   cancelAutoAcquaintanceOnBlock(fastify.prisma, { blockerId: moi, blockedId: cibleId });
+
+  // Le Bring (#13936) : un Bring qui sonne entre les deux s'arrête, sans rien apprendre au bloqué.
+  stopBringsAfterUserBlock(fastify, moi, cibleId);
 
   // `dejaBloque` remonte pour que l'ALIAS puisse rendre son 409 historique
   // SANS relire la ligne : un pré-contrôle chez l'appelant ajouterait une

@@ -78,6 +78,23 @@ export interface PushNotificationPayload {
   callerAvatar?: string;
   // APNs collapse-id: allows replacing an existing notification in Notification Center
   collapseId?: string;
+  /**
+   * iOS `aps.interruption-level` (iOS 15+). `time-sensitive` passe les modes de
+   * concentration que l'utilisateur a ouverts à Meeshy, jamais le bouton
+   * silencieux ; `critical` exige l'entitlement Critical Alerts ET l'autorisation
+   * `.criticalAlert` de l'utilisateur. Absent = `active` (le défaut d'Apple).
+   */
+  interruptionLevel?: 'passive' | 'active' | 'time-sensitive' | 'critical';
+  /** Son CRITIQUE (`aps.sound = { critical: 1, name, volume }`), avec `interruptionLevel: 'critical'` seulement. */
+  criticalSound?: { volume: number };
+  /** Durée de vie du push : expiration APNs et TTL FCM Android — une sonnerie périmée ne doit pas sonner. */
+  ttlMs?: number;
+  /**
+   * FCM Android en DATA-ONLY : le client rend lui-même (service au premier plan,
+   * flux alarme). Un bloc `notification` serait rendu par le système et le
+   * gestionnaire du client ne tournerait jamais app fermée (le Bring, #13936).
+   */
+  dataOnlyOnAndroid?: boolean;
 }
 
 export interface PushResult {
@@ -174,6 +191,17 @@ function isTransientFcmErrorCode(code: string | undefined): boolean {
 // transient failure is surfaced as a real delivery failure.
 const PUSH_RETRY_MAX_ATTEMPTS = 2;
 const PUSH_RETRY_BASE_DELAY_MS = 200;
+
+/**
+ * Le son APNs : le nom, ou le dictionnaire CRITIQUE quand le producteur l'a
+ * demandé avec le niveau `critical` — jamais l'un sans l'autre.
+ */
+function apnsSoundOf(payload: PushNotificationPayload): string | { critical: 1; name: string; volume: number } {
+  const name = payload.sound || 'default';
+  return payload.criticalSound && payload.interruptionLevel === 'critical'
+    ? { critical: 1, name, volume: Math.min(1, Math.max(0, payload.criticalSound.volume)) }
+    : name;
+}
 
 // ============================================
 // SERVICE CLASS
@@ -461,7 +489,9 @@ export class PushNotificationService {
       // l'utilisateur (Prisme).
       const isCallPush = isCallPushDataType(payload.data?.type);
       const dataOnly =
-        payload.silent === true || ((tokenRecord.platform === 'android' || tokenRecord.platform === 'web') && isCallPush);
+        payload.silent === true ||
+        ((tokenRecord.platform === 'android' || tokenRecord.platform === 'web') && isCallPush) ||
+        (tokenRecord.platform === 'android' && payload.dataOnlyOnAndroid === true);
 
       const message: any = dataOnly
         ? {
@@ -505,7 +535,8 @@ export class PushNotificationService {
         // one as APNs honours the more specific payload.
         const apsBase: Record<string, unknown> = {
           badge: payload.badge,
-          ...(payload.muted ? {} : { sound: payload.sound || 'default' }),
+          ...(payload.muted ? {} : { sound: apnsSoundOf(payload) }),
+          ...(payload.interruptionLevel ? { 'interruption-level': payload.interruptionLevel } : {}),
           category: payload.category,
           'thread-id': apnsThreadIdOf(payload),
           'mutable-content': 1,
@@ -546,6 +577,7 @@ export class PushNotificationService {
           ? {
               priority: 'high',
               ...(isCallPush ? { ttl: CALL_PUSH_TTL_MS } : {}),
+              ...(payload.ttlMs !== undefined && !isCallPush ? { ttl: payload.ttlMs } : {}),
               ...(isNotificationRevocationPush(payload) ? { ttl: NOTIFICATION_REVOCATION_TTL_MS } : {}),
             }
           : {
@@ -684,7 +716,10 @@ export class PushNotificationService {
         // GW8 — `muted` = bannière visible sans son : la clé `sound` doit être
         // ABSENTE du payload compilé (une valeur vide/inconnue rejouerait le
         // son par défaut côté APNs).
-        notification.sound = payload.muted ? (undefined as never) : (payload.sound || 'default');
+        notification.sound = payload.muted ? (undefined as never) : apnsSoundOf(payload);
+        if (payload.interruptionLevel) {
+          notification.aps = { ...notification.aps, 'interruption-level': payload.interruptionLevel };
+        }
       }
       notification.topic = isVoIP
         ? config.apns.voipBundleId
@@ -710,6 +745,8 @@ export class PushNotificationService {
       const isCallPush = isVoIP || isCallPushDataType(payload.data?.type);
       if (isCallPush) {
         notification.expiry = Math.floor(Date.now() / 1000) + CALL_PUSH_TTL_MS / 1000;
+      } else if (payload.ttlMs !== undefined) {
+        notification.expiry = Math.floor((Date.now() + payload.ttlMs) / 1000);
       }
 
       if (payload.category) {

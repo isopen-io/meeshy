@@ -19,7 +19,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { storyReturn } from '@/lib/onboarding/story-return';
-import { audienceLabelKey, defaultAudienceOf, seededAudience, type ChoosableAudience } from '@/lib/stories/publication-audience';
+import { audienceLabelKey, defaultAudienceOf, seededAudience, servedAudience, shownAudience, type ChoosableAudience } from '@/lib/stories/publication-audience';
 import { studioPublishRefusal, type PublicationKind, type StudioOrigin } from '@/lib/stories/publication-kind';
 import { layoutIsServed, type PublishChoice } from '@/lib/stories/publication-layout';
 import { composeStoryCanvas } from '@/lib/stories/story-document';
@@ -84,7 +84,7 @@ import { useReaderLanguages } from '@/lib/view/use-reader';
 import { PublishSplitButton } from '@/components/publish-split-button';
 import { href, navigate } from '@/routes/route-table';
 import { StudioShell } from '@/routes/story-compose-shell';
-import { AudienceChip, type AudienceSource } from '@/routes/story-compose-audience';
+import { AudienceChip } from '@/routes/story-compose-audience';
 import { publicationRefusalText, studioAssetsShown, StudioFooterMessage, studioFooterSpeaks, StudioPageAssets, type StudioPlaceRefusalNotice, type StudioPublishFailureNotice } from '@/routes/story-compose-footer';
 import { FrameMark, StudioAnimatedToggle, StudioMoreMenu, StudioPostTextButton, StudioTile, type StudioMenuItem } from '@/routes/story-compose-chrome';
 import { StudioRefusal } from '@/routes/story-compose-parts';
@@ -693,8 +693,8 @@ function StoryStudio({
   /** **CE QUI PARTIRA** (#7683) — l'audience CHOISIE, sinon le défaut de la
    * passerelle pour le format en cours (`defaultAudienceOf`) : la pastille
    * dit toujours ce qui part, même quand rien n'a été choisi. */
-  const audienceValue = draft.visibility ?? defaultAudienceOf(kind);
-  const audienceSource: AudienceSource = draft.visibility === null ? 'default' : 'chosen';
+  const shown = shownAudience({ chosen: draft.visibility, served: servedAudience(reopened?.origin.visibility), fallback: defaultAudienceOf(kind) });
+  const { value: audienceValue, source: audienceSource } = shown;
   /** Ce que CHAQUE format du menu partirait (§ 1.6) — un choix explicite
    * s'applique aux trois formats identiquement ; sans choix, chacun a son
    * propre défaut serveur. */

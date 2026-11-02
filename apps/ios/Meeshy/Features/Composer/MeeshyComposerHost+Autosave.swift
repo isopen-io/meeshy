@@ -116,7 +116,7 @@ extension MeeshyComposerHost {
                                               stickerAnimations: state.stickerAnimations)
         documentText = state.text
         documentBackground = state.background
-        composerVisibility = PostVisibility(rawValue: state.visibility) ?? composerVisibility
+        composerVisibility = PostVisibility(served: state.visibility)
         composerVisibilityUserIds = state.visibilityUserIds
         documentLanguage = state.language
         documentLocation = state.location

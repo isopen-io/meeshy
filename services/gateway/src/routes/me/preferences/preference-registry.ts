@@ -122,6 +122,14 @@ export type PreferenceEntry = {
   readonly schema: PreferenceSchema;
   readonly defaults: PreferenceDocument;
   readonly storage?: CategoryStorage;
+  /**
+   * Les clés qu'un REMPLACEMENT (`PUT` d'alias, `PATCH ?mode=replace`) ne remet
+   * jamais à leur défaut quand le corps ne les NOMME pas : la valeur stockée est
+   * gardée. Des coupures de RÉCEPTION dont le défaut ouvre (« Recevoir des Bring »,
+   * #13936) : un client qui ne connaît pas la clé ne doit pas rouvrir ce que la
+   * personne a fermé.
+   */
+  readonly keptWhenUnnamed?: readonly string[];
 };
 
 /**
@@ -154,6 +162,7 @@ export const PREFERENCE_REGISTRY: Readonly<Record<PreferenceCategory, Preference
   notification: {
     schema: NotificationPreferenceSchema,
     defaults: NOTIFICATION_PREFERENCE_DEFAULTS,
+    keptWhenUnnamed: ['bringEnabled'],
   },
   video: { schema: VideoPreferenceSchema, defaults: VIDEO_PREFERENCE_DEFAULTS },
   document: { schema: DocumentPreferenceSchema, defaults: DOCUMENT_PREFERENCE_DEFAULTS },
@@ -382,16 +391,39 @@ export async function applyCategoryWriteEffects(
 }
 
 /**
- * Ce qu'une RÉINITIALISATION écrit pour une catégorie : `null` (les défauts), sauf
- * ce que son rangement garde (`keptOnReset`, #14406). Une lecture de plus, pour la
- * seule catégorie qui garde quelque chose.
+ * Un REMPLACEMENT qui ne nomme pas une clé `keptWhenUnnamed` garde sa valeur
+ * STOCKÉE (#13936). Une lecture de plus, seulement quand une telle clé manque au
+ * corps ; rien de stocké ⇒ le document est rendu tel quel.
  */
-export async function resetDocumentOf(
+export async function keepUnnamedKeys(
+  prisma: PrismaClient,
+  userId: string,
+  category: PreferenceCategory,
+  named: PreferenceDocument,
+  document: PreferenceDocument
+): Promise<PreferenceDocument> {
+  const kept = (PREFERENCE_REGISTRY[category].keptWhenUnnamed ?? []).filter((key) => !Object.prototype.hasOwnProperty.call(named, key));
+  if (kept.length === 0) return document;
+  const stored = await readStoredCategory(prisma, userId, category);
+  const carried = Object.fromEntries(kept.filter((key) => stored && key in stored).map((key) => [key, stored![key]]));
+  return { ...document, ...carried };
+}
+
+/**
+ * Ce qu'une RÉINITIALISATION écrit pour une catégorie : `null` (les défauts), sauf les
+ * clés `keptWhenUnnamed` stockées, qui survivent — « Réinitialiser les notifications »
+ * ne rouvre pas en silence un son qui passe Ne pas déranger (contre-audit #14441, N3) —,
+ * et ce que son rangement garde (`keptOnReset`) : « Réinitialiser la confidentialité »
+ * ne lève pas un refus de la Connaissance automatique (#14406, audit #14464 C7).
+ */
+export async function resetDocumentFor(
   prisma: PrismaClient,
   userId: string,
   category: PreferenceCategory
 ): Promise<PreferenceDocument | null> {
+  const kept = await keepUnnamedKeys(prisma, userId, category, {}, {});
   const storage = PREFERENCE_REGISTRY[category].storage;
-  if (!storage?.keptOnReset) return null;
-  return storage.keptOnReset(await storage.readStored(prisma, userId));
+  const own = storage?.keptOnReset ? storage.keptOnReset(await storage.readStored(prisma, userId)) : null;
+  const document = { ...kept, ...(own ?? {}) };
+  return Object.keys(document).length === 0 ? null : document;
 }

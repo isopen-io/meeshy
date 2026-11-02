@@ -351,6 +351,15 @@ describe('PATCH /admin/users/:userId/preferences/:category', () => {
     expect(auditRows(prisma)).toHaveLength(0);
   });
 
+  it('#13936 — refuse de rouvrir « Recevoir des Bring » au nom du membre (403), sans rien écrire', async () => {
+    const prisma = createMockPrisma();
+    const res = await call(prisma, 'BIGBOSS', 'PATCH', url('notification'), { bringEnabled: true });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual(expect.objectContaining({ success: false, error: 'ADMIN_READ_ONLY_PREFERENCE' }));
+    expect(prisma.userPreferences.upsert).not.toHaveBeenCalled();
+    expect(auditRows(prisma)).toHaveLength(0);
+  });
+
   it('refuse d\'allumer une fonction dont le membre n\'a pas donné le consentement (403)', async () => {
     const prisma = createMockPrisma();
     const res = await call(prisma, 'ADMIN', 'PATCH', url('audio'), { transcriptionEnabled: true });
