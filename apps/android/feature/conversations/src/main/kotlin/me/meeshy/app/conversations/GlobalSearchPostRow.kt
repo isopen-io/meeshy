@@ -1,6 +1,8 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
@@ -9,6 +11,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
+import coil.compose.AsyncImage
+import me.meeshy.sdk.util.resolveMediaUrl
+import me.meeshy.ui.component.LocalMediaBaseUrl
+import me.meeshy.ui.theme.MeeshyRadius
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -30,6 +40,7 @@ import me.meeshy.ui.icons.MeeshyIcons
 @Composable
 internal fun PostHitRow(
     hit: PostSearchHit,
+    resultsQuery: String,
     onClick: () -> Unit,
 ) {
     val kind = stringResource(hit.kind.labelRes())
@@ -63,16 +74,44 @@ internal fun PostHitRow(
                 maxLines = 1,
             )
             if (hit.text.isNotBlank()) {
+                val highlighted = remember(hit.text, resultsQuery) {
+                    washed(GlobalSearchRows.highlight(hit.text, resultsQuery), SEARCH_HIGHLIGHT_WASH)
+                }
                 Text(
-                    text = hit.text,
+                    text = highlighted,
                     style = MaterialTheme.typography.bodySmall,
                     color = MeeshyTheme.tokens.textSecondary,
                     maxLines = 2,
                 )
             }
         }
+        hit.thumbnailUrl?.let { url ->
+            Spacer(Modifier.width(MeeshySpacing.md))
+            PostHitThumbnail(url)
+        }
     }
 }
+
+/** La vignette du premier média, à droite (iOS `PostSearchResultRow`, 52 pt) ; décorative pour le lecteur d'écran. */
+@Composable
+private fun PostHitThumbnail(url: String) {
+    val baseUrl = LocalMediaBaseUrl.current
+    val model = remember(url, baseUrl) { resolveMediaUrl(url, baseUrl) }
+    AsyncImage(
+        model = model,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+            .size(THUMBNAIL_SIZE)
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .background(MeeshyTheme.tokens.textMuted.copy(alpha = 0.15f))
+            .testTag(POST_THUMBNAIL_TAG),
+    )
+}
+
+private val THUMBNAIL_SIZE = 52.dp
+
+internal const val POST_THUMBNAIL_TAG = "global_search_post_thumbnail"
 
 private fun PostType.labelRes(): Int = when (this) {
     PostType.REEL -> R.string.global_search_post_kind_reel

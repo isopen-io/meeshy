@@ -741,8 +741,10 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "search.global.subtitle",
           "androidName": "global_search_empty_subtitle",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "androidName": "global_search_empty_title",

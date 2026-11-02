@@ -130,7 +130,7 @@ internal fun MessageHitRow(
 }
 
 /** Colle uniquement le lavis sur les segments surlignes ; la decision de correspondance vit dans `MessageTextParser`. */
-private fun washed(segments: List<HighlightSegment>, wash: Color): AnnotatedString =
+internal fun washed(segments: List<HighlightSegment>, wash: Color): AnnotatedString =
     buildAnnotatedString {
         segments.forEach { segment ->
             if (segment.highlighted) {
@@ -141,7 +141,7 @@ private fun washed(segments: List<HighlightSegment>, wash: Color): AnnotatedStri
         }
     }
 
-private val SEARCH_HIGHLIGHT_WASH = MeeshyPalette.Warning.copy(alpha = 0.45f)
+internal val SEARCH_HIGHLIGHT_WASH = MeeshyPalette.Warning.copy(alpha = 0.45f)
 
 private fun typeIcon(type: String): ImageVector = when (type.lowercase()) {
     "direct", "bot" -> MeeshyIcons.PersonFilled

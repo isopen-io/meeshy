@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -32,6 +35,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -164,29 +172,17 @@ internal fun SearchTabRow(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(vertical = MeeshySpacing.sm),
                 ) {
-                    Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+                    TabIconWithCount(icon = icon, tint = tint, count = count)
                     Spacer(Modifier.width(MeeshySpacing.xs))
                     Text(
                         text = label,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = tint,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
                     )
-                    if (count > 0) {
-                        Spacer(Modifier.width(MeeshySpacing.xs))
-                        Box(
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(MeeshyPalette.Indigo500)
-                                .padding(horizontal = 6.dp, vertical = 1.dp),
-                        ) {
-                            Text(
-                                text = GlobalSearchRows.badge(count),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MeeshyPalette.White,
-                            )
-                        }
-                    }
                 }
                 Box(
                     modifier = Modifier
@@ -198,6 +194,43 @@ internal fun SearchTabRow(
         }
     }
 }
+
+/**
+ * #14671 — iOS `GlobalSearchView.tabButton` : le compte flotte en pastille au coin haut-droit de
+ * l'icône, hors du flux de la rangée. Posé APRÈS le libellé, il lui disputait la largeur et, sur
+ * 360 dp, s'écrasait en pilule vide et haute ou cassait « 20 » sur deux lignes. Sa taille est fixe
+ * (iOS : 9 pt hors Dynamic Type) pour ne jamais déborder de son ancrage.
+ */
+@Composable
+private fun TabIconWithCount(icon: ImageVector, tint: Color, count: Int) {
+    Box {
+        Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+        if (count > 0) {
+            val badgeSize = with(LocalDensity.current) { 9.dp.toSp() }
+            Text(
+                text = GlobalSearchRows.badge(count),
+                fontSize = badgeSize,
+                lineHeight = badgeSize * 1.25f,
+                fontWeight = FontWeight.Bold,
+                color = MeeshyPalette.White,
+                maxLines = 1,
+                softWrap = false,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .wrapContentSize(unbounded = true)
+                    .offset(x = 10.dp, y = (-8).dp)
+                    .testTag(TAB_COUNT_TAG)
+                    .defaultMinSize(minWidth = 14.dp)
+                    .clip(CircleShape)
+                    .background(MeeshyPalette.Indigo500)
+                    .padding(horizontal = 4.dp, vertical = 1.dp),
+            )
+        }
+    }
+}
+
+internal const val TAB_COUNT_TAG = "global_search_tab_count"
 
 /** Section « Recherches recentes » (parite iOS) : tap = relance, action nommee ou croix = oubli. */
 @Composable

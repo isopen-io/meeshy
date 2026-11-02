@@ -155,6 +155,7 @@
     <string name="encryption_mode_server_description">I tuoi messaggi sono crittografati sui nostri server. Traduzione, trascrizione e ricerca funzionano.</string>
     <string name="encryption_mode_server_label">Server</string>
     <string name="global_search_back">Indietro</string>
+    <string name="global_search_empty_subtitle">Messaggi, post, utenti</string>
     <plurals name="global_search_members">
         <item quantity="one">%1$d membro</item>
         <item quantity="many">%1$d membri</item>

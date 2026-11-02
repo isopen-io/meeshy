@@ -5,8 +5,8 @@
       "resDir": "feature/conversations/src/main/res",
       "entries": [
         {
-          "catalog": "ui",
-          "iosKey": "profile.tab.posts",
+          "catalog": "app",
+          "iosKey": "tab.posts",
           "androidName": "global_search_tab_posts",
           "status": "adopted"
         },

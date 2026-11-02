@@ -172,7 +172,7 @@ private fun SearchResults(
                 key = { it.postId },
                 contentType = { "post" },
             ) { hit ->
-                PostHitRow(hit = hit, onClick = { onOpenPost(hit.destination) })
+                PostHitRow(hit = hit, resultsQuery = state.resultsQuery, onClick = { onOpenPost(hit.destination) })
             }
             GlobalSearchTab.USERS -> items(
                 state.results.users,
