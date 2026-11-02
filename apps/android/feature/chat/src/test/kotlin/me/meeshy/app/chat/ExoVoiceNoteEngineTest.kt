@@ -9,6 +9,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.collect.Range
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.net.URI
@@ -134,15 +135,25 @@ class ExoVoiceNoteEngineTest {
         }
     }
 
+    /** Ce que le lecteur a dit en échouant — son code et la chaîne de ses causes —, pour que le rouge nomme la panne. */
+    private fun ExoVoiceNoteEngine.failure(): String =
+        lastError?.let { error ->
+            generateSequence<Throwable>(error) { it.cause }.take(4)
+                .joinToString(" <- ") { "${it.javaClass.simpleName}: ${it.message}" }
+                .let { "${error.errorCodeName} — $it" }
+        } ?: "aucune erreur du lecteur"
+
+    private fun Loaded.assertPrepared() {
+        assertWithMessage(engine.failure()).that(outcome.failed).isFalse()
+        assertWithMessage(engine.failure()).that(outcome.prepared).isTrue()
+    }
+
     private fun fixture(name: String): String =
         requireNotNull(javaClass.getResource("/voice/$name")) { "fixture $name absente" }.toURI().toString()
 
     @Test
     fun `a translated voice note in Ogg Opus is prepared on Android 9`() {
-        val outcome = loading(fixture("translated-voice-note.opus")).outcome
-
-        assertThat(outcome.failed).isFalse()
-        assertThat(outcome.prepared).isTrue()
+        loading(fixture("translated-voice-note.opus")).assertPrepared()
     }
 
     @Test
@@ -163,10 +174,7 @@ class ExoVoiceNoteEngineTest {
 
     @Test
     fun `an original voice note in M4A is still prepared`() {
-        val outcome = loading(fixture("original-voice-note.m4a")).outcome
-
-        assertThat(outcome.failed).isFalse()
-        assertThat(outcome.prepared).isTrue()
+        loading(fixture("original-voice-note.m4a")).assertPrepared()
     }
 
     @Test
@@ -184,11 +192,10 @@ class ExoVoiceNoteEngineTest {
         val log = LeaseLog()
         val url = fixture("original-voice-note.m4a")
 
-        val outcome = loading(url, leased(log)).outcome
+        val loaded = loading(url, leased(log))
 
         assertThat(log.opened).containsExactly(url)
-        assertThat(outcome.failed).isFalse()
-        assertThat(outcome.prepared).isTrue()
+        loaded.assertPrepared()
     }
 
     @Test
@@ -233,7 +240,7 @@ class ExoVoiceNoteEngineTest {
         idleUntil { loaded.outcome.settled }
 
         assertThat(log.opened).isEmpty()
-        assertThat(loaded.outcome.prepared).isTrue()
+        loaded.assertPrepared()
     }
 
     @Test
@@ -246,10 +253,7 @@ class ExoVoiceNoteEngineTest {
         }
         assertThat(adopted).isTrue()
 
-        val outcome = loading(url).outcome
-
-        assertThat(outcome.failed).isFalse()
-        assertThat(outcome.prepared).isTrue()
+        loading(url).assertPrepared()
     }
 
     private companion object {
