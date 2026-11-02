@@ -5,6 +5,7 @@ import me.meeshy.sdk.lang.PrismTranslationResolver
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.PostType
+import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.postType
@@ -73,11 +74,16 @@ public object PostSearch {
      * La vignette d'une publication (#14671) : l'aperçu de son premier média ; à défaut (une story, dont l'image
      * vit sur la scène), l'image de son fond puis sa première image posée, par l'adresse que la scène porte ou
      * par le média qu'elle désigne ; enfin un fond de modèle qui est une image. Jamais le fichier d'une vidéo.
+     * Une REPUBLICATION sans image propre (`media: []`, `storyEffects: null`, recette S8) montre celle de sa
+     * source, `repostOf`, par la même descente.
      */
-    private fun thumbnailOf(post: ApiPost): String? {
-        val media = post.media.orEmpty()
+    private fun thumbnailOf(post: ApiPost): String? =
+        thumbnailOf(post.media.orEmpty(), post.storyEffects)
+            ?: post.repostOf?.let { source -> thumbnailOf(source.media.orEmpty(), source.storyEffects) }
+
+    private fun thumbnailOf(media: List<ApiPostMedia>, effects: StoryEffects?): String? {
         media.firstNotNullOfOrNull(::thumbnailOf)?.let { return it }
-        val effects = post.storyEffects ?: return null
+        if (effects == null) return null
         return effects.mediaObjects.orEmpty()
             .filter { it.mediaType.equals("image", ignoreCase = true) }
             .sortedByDescending { it.isBackground }

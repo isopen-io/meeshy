@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.StoryEffects
@@ -23,6 +24,7 @@ class PostSearchTest {
         translations: Map<String, ApiPostTranslationEntry>? = mapOf("fr" to ApiPostTranslationEntry(text = "Bonjour")),
         media: List<ApiPostMedia>? = null,
         storyEffects: StoryEffects? = null,
+        repostOf: ApiRepostOf? = null,
     ) = ApiPost(
         id = id,
         type = type,
@@ -34,6 +36,7 @@ class PostSearchTest {
         translations = translations,
         media = media,
         storyEffects = storyEffects,
+        repostOf = repostOf,
     )
 
     @Test
@@ -83,6 +86,25 @@ class PostSearchTest {
             .isEqualTo("https://x/scene.jpg")
         assertThat(PostSearch.hitOf(story(effects = StoryEffects(mediaObjects = listOf(sticker))), emptyList(), now)?.thumbnailUrl)
             .isEqualTo("https://x/sticker.jpg")
+    }
+
+    @Test
+    fun `a republication without an image of its own shows its source's first image, story, post or reel alike`() {
+        val source = ApiRepostOf(
+            id = "src",
+            type = "POST",
+            media = listOf(
+                ApiPostMedia(id = "a", mimeType = "image/jpeg", fileUrl = "https://x/a.jpg", thumbnailUrl = "https://x/a-t.jpg"),
+                ApiPostMedia(id = "b", mimeType = "image/jpeg", fileUrl = "https://x/b.jpg"),
+            ),
+        )
+        listOf("STORY", "POST", "REEL").forEach { type ->
+            val republished = post(type = type, expiresAt = "2026-11-03T10:00:00Z", media = emptyList(), repostOf = source)
+            assertThat(PostSearch.hitOf(republished, emptyList(), now)?.thumbnailUrl).isEqualTo("https://x/a-t.jpg")
+        }
+        val own = ApiPostMedia(id = "o", mimeType = "image/jpeg", fileUrl = "https://x/own.jpg")
+        assertThat(PostSearch.hitOf(post(media = listOf(own), repostOf = source), emptyList(), now)?.thumbnailUrl)
+            .isEqualTo("https://x/own.jpg")
     }
 
     @Test
