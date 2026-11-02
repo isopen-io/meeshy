@@ -53,11 +53,17 @@ class MediaHttpClientTest {
     }
 
     @Test
-    fun `le client des medias partage le pool et le repartiteur du client partage`() {
+    fun `le client des medias partage les connexions du client partage, pas sa file d attente`() {
         val media = MediaHttpClient.derive(shared, contributors)
 
         assertThat(media.connectionPool).isSameInstanceAs(shared.connectionPool)
-        assertThat(media.dispatcher).isSameInstanceAs(shared.dispatcher)
+        assertThat(media.dispatcher).isNotSameInstanceAs(shared.dispatcher)
+    }
+
+    @Test
+    fun `une redirection https vers http n est jamais suivie par le client des medias`() {
+        assertThat(shared.followSslRedirects).isTrue()
+        assertThat(MediaHttpClient.derive(shared, contributors).followSslRedirects).isFalse()
     }
 
     @Test

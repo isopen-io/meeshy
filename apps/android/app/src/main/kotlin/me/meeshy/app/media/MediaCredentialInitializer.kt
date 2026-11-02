@@ -17,6 +17,7 @@ import me.meeshy.ui.component.media.MediaRequestHeaders
 import me.meeshy.ui.component.media.MeeshyMediaCache
 import okhttp3.Authenticator
 import okhttp3.Call
+import okhttp3.Dispatcher
 import okhttp3.EventListener
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -54,11 +55,15 @@ class MediaCredentialInitializer @Inject constructor(
 }
 
 /**
- * **Le client HTTP des médias** (#14567) : le pool de connexions et le répartiteur du client partagé (HTTP/2, une
- * connexion multiplexée par hôte), sans un seul de ses intercepteurs ni son authentificateur ; seuls remontent les
- * contributeurs que [MediaClientDerivation] garde — l'épinglage des certificats et la frontière de session. Un jeton,
- * une garde d'URL ou une relance d'API n'y montent jamais : l'identité d'une requête média est posée requête par
- * requête, et seulement vers la route des sons de la bibliothèque (`MediaRequestCredential`).
+ * **Le client HTTP des médias** (#14567) : le pool de connexions du client partagé (HTTP/2, une connexion multiplexée
+ * par hôte), sans un seul de ses intercepteurs ni son authentificateur ; seuls remontent les contributeurs que
+ * [MediaClientDerivation] garde — l'épinglage des certificats et la frontière de session. Un jeton, une garde d'URL ou
+ * une relance d'API n'y montent jamais : l'identité d'une requête média est posée requête par requête, et seulement vers
+ * la route des sons de la bibliothèque (`MediaRequestCredential`).
+ *
+ * Sa file d'attente est la sienne : les lecteurs et préchargements d'un fil ne prennent pas les places par hôte des
+ * appels d'API. Et une redirection HTTPS vers HTTP n'est pas suivie, comme sous la pile intégrée de Media3
+ * (`allowCrossProtocolRedirects` faux) : un jeton média ne repart jamais en clair.
  */
 internal object MediaHttpClient {
     fun derive(shared: OkHttpClient, contributors: Collection<HttpClientContributor>): OkHttpClient {
@@ -68,8 +73,10 @@ internal object MediaHttpClient {
                 interceptors().clear()
                 networkInterceptors().clear()
             }
+            .dispatcher(Dispatcher())
             .authenticator(Authenticator.NONE)
             .eventListener(EventListener.NONE)
+            .followSslRedirects(false)
         return HttpClientAssembler.build(contributors.filter { it.id in kept }, bare)
     }
 }
