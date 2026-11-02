@@ -23,7 +23,7 @@ final class ImageFullscreenAutoLoadWiringTests: XCTestCase {
 
     func test_imageFullscreen_forcesAutoLoad_bypassingPolicyGate() throws {
         let source = try sdkSource("Sources/MeeshyUI/Media/ImageViewerView.swift")
-        XCTAssertTrue(source.contains("CachedAsyncImage(url: url.absoluteString, autoLoad: true)"),
+        XCTAssertTrue(source.contains("CachedAsyncImage(url: url.absoluteString, autoLoad: true"),
                       "ImageFullscreen must force autoLoad:true — a manual tap overrides the network policy gate (contract §14.1); otherwise Low Data Mode leaves the fullscreen viewer spinning forever.")
     }
 

@@ -149,8 +149,10 @@ final class MeeshyVideoPosterWiringTests: XCTestCase {
         let source = ComposerSourceGuard.stripComments(
             try sdkSource("Sources/MeeshyUI/Media/MeeshyVideoThumbnail.swift")
         )
-        XCTAssertTrue(source.contains("cachedFileURL(for: thumbKey)"),
-                      "la relecture du poster persisté doit interroger le disque (`cachedFileURL`)")
+        XCTAssertTrue(source.contains("persistedPoster(forKey: thumbKey"),
+                      "la relecture du poster persisté passe par `persistedPoster`")
+        XCTAssertTrue(source.contains("loader.persistedFileURL(for: key)"),
+                      "la relecture du poster persisté doit interroger le disque (`persistedFileURL`)")
         XCTAssertFalse(source.contains("cachedData(for: thumbKey)"),
                        "`cachedData` ne voit que la NSCache mémoire — le poster disque était invisible après relance")
         XCTAssertTrue(source.contains("static func extractRemoteFirstFrame("),
