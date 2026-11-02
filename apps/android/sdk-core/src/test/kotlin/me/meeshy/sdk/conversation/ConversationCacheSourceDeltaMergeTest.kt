@@ -118,11 +118,14 @@ class ConversationCacheSourceDeltaMergeTest {
     @Test
     fun `une activite plus recente que l'apercu garde le merge puis relit la route riche`() = runTest {
         source(SyncDeltaFetching.None).revalidate()
+        coEvery { api.listConditional(any(), any(), any(), any()) } returns Response.success(
+            ApiResponse(success = true, data = emptyList<ApiConversation>(), pagination = Pagination(total = 0, offset = 0, limit = 100, hasMore = false)),
+        )
 
         source(delta(row(lastMessageAt = "2023-11-14T12:00:00.000Z"))).revalidate()
 
         assertThat(cached()!!.title).isEqualTo("Apres")
-        coVerify(atLeast = 1) { api.listConditional(any(), any(), any(), any()) }
+        coVerify(exactly = 2) { api.listConditional(any(), any(), any(), any()) }
     }
 
     @Test
