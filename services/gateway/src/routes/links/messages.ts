@@ -21,6 +21,7 @@ import {
   describeConversationWriteRefusal,
   writeRefusalHttpResponse
 } from '../../services/messaging/conversationWriteAdmission.js';
+import { sealMessageIfConversationObsoleted } from '../../services/conversations/obsoleteMessageSeal';
 import type { ConversationWriteRefused } from '../../services/messaging/conversationWriteAdmission.js';
 import { sharedSendReservations } from '../../services/messaging/newcomerSendReservations.js';
 import { resolveParticipantRights } from '../../services/participantRights.js';
@@ -432,6 +433,11 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           }
         }
       });
+      // #14643 — admis quand la conversation était ouverte, écrit pendant son obsolescence : né effacé, diffusé à personne.
+      if (await sealMessageIfConversationObsoleted(fastify.prisma, { conversationId: participantShareLink.conversationId, messageId: stored.id })) {
+        return sendWriteRefusal(reply, { admitted: false, reason: 'conversation-closed' });
+      }
+
       // L'invité, `message:new` et la traduction reçoivent le CLAIR ; la notification, la ligne scellée.
       const message = sealedText ? servedClearAtRest(stored, body.content) : stored;
 
