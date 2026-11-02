@@ -216,11 +216,13 @@ class ComposerAttachmentLadderTest {
     }
 
     @Test
-    fun `le réglage commentaire n'offre que la caméra, le vocal et l'emoji, la photothèque restant à la barre`() {
+    fun `le réglage commentaire offre la caméra, le fichier, le lieu, le vocal et l'emoji, la photothèque restant à la barre`() {
         val tiles = ComposerAttachmentLadder.tiles(affordances(), hasRecentMediaStrip = true, configuration = ComposerConfiguration.COMMENT)
 
         assertThat(kinds(tiles)).containsExactly(
             AttachmentTileKind.Camera,
+            AttachmentTileKind.File,
+            AttachmentTileKind.Location,
             AttachmentTileKind.Voice,
             AttachmentTileKind.Emoji,
         ).inOrder()

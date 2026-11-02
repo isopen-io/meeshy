@@ -910,11 +910,12 @@ class PostRepository @Inject constructor(
         clientMutationId: String? = null,
         originalLanguage: String? = null,
         attachmentIds: List<String>? = null,
+        location: SharedPlace? = null,
     ): NetworkResult<ApiPostComment> =
         apiCall {
             postApi.addComment(
                 postId,
-                CreateCommentRequest(content, parentId, effectFlags, originalLanguage, attachmentIds?.takeIf { it.isNotEmpty() }),
+                CreateCommentRequest(content, parentId, effectFlags, originalLanguage, attachmentIds?.takeIf { it.isNotEmpty() }, location),
                 clientMutationId,
             )
         }
