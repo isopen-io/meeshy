@@ -504,6 +504,7 @@ const es = {
 
   'media.video.play': 'Reproducir vídeo',
   'media.video.pause': 'Pausa',
+  'media.video.paused': 'En pausa',
   'media.video.position': 'Posición de reproducción',
   'media.audio.position': 'Posición de reproducción',
   'media.audio.speed': 'Velocidad de reproducción',
