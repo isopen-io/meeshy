@@ -10,6 +10,9 @@
 		8E36FA6855A823D07DECD389 /* CirclesLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33DEBB999EA71343F4B68A2B /* CirclesLive.swift */; };
 		508F49595C58102D1E265EC5 /* BloodRitualView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB47286F187C24DDD017BE62 /* BloodRitualView.swift */; };
 		7545FA95F8689F5F09A7C685 /* CircleLinkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92C197C511D2097C25DB8C4D /* CircleLinkSheet.swift */; };
+		2A8D51CF21CB67BF25AFF180 /* ProfileCircleSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7030AD796023C0EAB7FEB988 /* ProfileCircleSection.swift */; };
+		C2193D0BE6EE4FFEFBFA4289 /* ProfileCircleViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80DD2FE1287574B7F984B664 /* ProfileCircleViewModel.swift */; };
+		8A586605FBC84118EBD1AF1D /* CircleRaiseSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3F76FB74540F3EC6E2226D /* CircleRaiseSender.swift */; };
 		A41CD4883F036BFD91C8EC90 /* CircleRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = E320F7C41EE8842615339547 /* CircleRows.swift */; };
 		314A7885365EC87AE95ABF5C /* CirclesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FDD4C55760E793B3B45DD4F /* CirclesTab.swift */; };
 		B2D436DB2643DD3AA6A72A18 /* BloodRitualViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 600C32C277873049991801DA /* BloodRitualViewModel.swift */; };
@@ -20,6 +23,7 @@
 		146CDFFDB3EB6792153046CD /* MeeshyFeatureFlagsCirclesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580E2249114FE362291B2FB5 /* MeeshyFeatureFlagsCirclesTests.swift */; };
 		6A54814636CF8053385533A8 /* PeopleTabCirclesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5FEA2ED672462353857B853 /* PeopleTabCirclesTests.swift */; };
 		CD61A97AA0A80297FC27E72C /* CircleProgressSummaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 315BB62A0DD858B35D0005AB /* CircleProgressSummaryTests.swift */; };
+		C6B36734122EB22437FE2AD6 /* ProfileCircleViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA7FE4F08FB763C609B54CA /* ProfileCircleViewModelTests.swift */; };
 		84B260EA8C6AF9347F4850F2 /* CirclePersonSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30729DD16DCD3E37E9B621C1 /* CirclePersonSettingsTests.swift */; };
 		DF9033208668789383734EC7 /* BloodRitualViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40A08E0F08FBFACB4FB3D6E /* BloodRitualViewModelTests.swift */; };
 		98FB838B19C172A7430A2943 /* CirclesViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA364F1D4CFC107B8BE72AB2 /* CirclesViewModelTests.swift */; };
@@ -4330,6 +4334,9 @@
 		33DEBB999EA71343F4B68A2B /* CirclesLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirclesLive.swift; sourceTree = "<group>"; };
 		BB47286F187C24DDD017BE62 /* BloodRitualView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloodRitualView.swift; sourceTree = "<group>"; };
 		92C197C511D2097C25DB8C4D /* CircleLinkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircleLinkSheet.swift; sourceTree = "<group>"; };
+		7030AD796023C0EAB7FEB988 /* ProfileCircleSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCircleSection.swift; sourceTree = "<group>"; };
+		80DD2FE1287574B7F984B664 /* ProfileCircleViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCircleViewModel.swift; sourceTree = "<group>"; };
+		FB3F76FB74540F3EC6E2226D /* CircleRaiseSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircleRaiseSender.swift; sourceTree = "<group>"; };
 		E320F7C41EE8842615339547 /* CircleRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircleRows.swift; sourceTree = "<group>"; };
 		7FDD4C55760E793B3B45DD4F /* CirclesTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirclesTab.swift; sourceTree = "<group>"; };
 		600C32C277873049991801DA /* BloodRitualViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloodRitualViewModel.swift; sourceTree = "<group>"; };
@@ -4340,6 +4347,7 @@
 		580E2249114FE362291B2FB5 /* MeeshyFeatureFlagsCirclesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyFeatureFlagsCirclesTests.swift; sourceTree = "<group>"; };
 		A5FEA2ED672462353857B853 /* PeopleTabCirclesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeopleTabCirclesTests.swift; sourceTree = "<group>"; };
 		315BB62A0DD858B35D0005AB /* CircleProgressSummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircleProgressSummaryTests.swift; sourceTree = "<group>"; };
+		AAA7FE4F08FB763C609B54CA /* ProfileCircleViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCircleViewModelTests.swift; sourceTree = "<group>"; };
 		30729DD16DCD3E37E9B621C1 /* CirclePersonSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirclePersonSettingsTests.swift; sourceTree = "<group>"; };
 		F40A08E0F08FBFACB4FB3D6E /* BloodRitualViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloodRitualViewModelTests.swift; sourceTree = "<group>"; };
 		AA364F1D4CFC107B8BE72AB2 /* CirclesViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirclesViewModelTests.swift; sourceTree = "<group>"; };
@@ -12594,6 +12602,9 @@
 				33DEBB999EA71343F4B68A2B /* CirclesLive.swift */,
 				BB47286F187C24DDD017BE62 /* BloodRitualView.swift */,
 				92C197C511D2097C25DB8C4D /* CircleLinkSheet.swift */,
+				7030AD796023C0EAB7FEB988 /* ProfileCircleSection.swift */,
+				80DD2FE1287574B7F984B664 /* ProfileCircleViewModel.swift */,
+				FB3F76FB74540F3EC6E2226D /* CircleRaiseSender.swift */,
 				E320F7C41EE8842615339547 /* CircleRows.swift */,
 				7FDD4C55760E793B3B45DD4F /* CirclesTab.swift */,
 				600C32C277873049991801DA /* BloodRitualViewModel.swift */,
@@ -13354,6 +13365,7 @@
 				F1E073DF0767D8B30C28394A /* BlockedViewModelTests.swift */,
 				A5FEA2ED672462353857B853 /* PeopleTabCirclesTests.swift */,
 				315BB62A0DD858B35D0005AB /* CircleProgressSummaryTests.swift */,
+				AAA7FE4F08FB763C609B54CA /* ProfileCircleViewModelTests.swift */,
 				30729DD16DCD3E37E9B621C1 /* CirclePersonSettingsTests.swift */,
 				F40A08E0F08FBFACB4FB3D6E /* BloodRitualViewModelTests.swift */,
 				AA364F1D4CFC107B8BE72AB2 /* CirclesViewModelTests.swift */,
@@ -14640,6 +14652,9 @@
 				8E36FA6855A823D07DECD389 /* CirclesLive.swift in Sources */,
 				508F49595C58102D1E265EC5 /* BloodRitualView.swift in Sources */,
 				7545FA95F8689F5F09A7C685 /* CircleLinkSheet.swift in Sources */,
+				2A8D51CF21CB67BF25AFF180 /* ProfileCircleSection.swift in Sources */,
+				C2193D0BE6EE4FFEFBFA4289 /* ProfileCircleViewModel.swift in Sources */,
+				8A586605FBC84118EBD1AF1D /* CircleRaiseSender.swift in Sources */,
 				A41CD4883F036BFD91C8EC90 /* CircleRows.swift in Sources */,
 				314A7885365EC87AE95ABF5C /* CirclesTab.swift in Sources */,
 				B2D436DB2643DD3AA6A72A18 /* BloodRitualViewModel.swift in Sources */,
@@ -16863,6 +16878,7 @@
 				883BECB240EC6E20BA95EFA5 /* BlockedViewModelTests.swift in Sources */,
 				6A54814636CF8053385533A8 /* PeopleTabCirclesTests.swift in Sources */,
 				CD61A97AA0A80297FC27E72C /* CircleProgressSummaryTests.swift in Sources */,
+				C6B36734122EB22437FE2AD6 /* ProfileCircleViewModelTests.swift in Sources */,
 				84B260EA8C6AF9347F4850F2 /* CirclePersonSettingsTests.swift in Sources */,
 				DF9033208668789383734EC7 /* BloodRitualViewModelTests.swift in Sources */,
 				98FB838B19C172A7430A2943 /* CirclesViewModelTests.swift in Sources */,
