@@ -35,7 +35,7 @@ import me.meeshy.sdk.model.media.ExportContainerPolicy
  * **LE RENDU D'UNE VIDÉO RETOUCHÉE** (#12650) — la recette de [ComposerVideoEdit] gravée par Media3
  * Transformer : la fenêtre de coupe ([MediaItem.ClippingConfiguration]), le son (muet ⇒ piste retirée,
  * sinon un gain sur chaque canal), puis les images par [RetouchVideoEffects] — les mêmes effets que l'aperçu. Le fichier
- * commence sur une image et ne rapporte rien à la plateforme ([ExportContainerPolicy]).
+ * commence sur une image, ne garde aucune métadonnée de sa source et ne rapporte rien à la plateforme ([writingContainer]).
  */
 public object RetouchVideoExporter {
 
@@ -59,7 +59,7 @@ public object RetouchVideoExporter {
         withContext(Dispatchers.Main) {
             val finished = CompletableDeferred<Unit>()
             val transformer = Transformer.Builder(context)
-                .writingContainer(ExportContainerPolicy.of(hasVideo = true, publishes = true), keepsSourceMetadata = true)
+                .writingContainer(ExportContainerPolicy.of(hasVideo = true, publishes = true))
                 .addListener(
                     object : Transformer.Listener {
                         override fun onCompleted(composition: Composition, exportResult: ExportResult) {

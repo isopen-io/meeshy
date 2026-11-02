@@ -32,9 +32,9 @@ import me.meeshy.sdk.model.media.VideoTranscodePlan
  * Media3 Transformer derrière [VideoTransformRunner]. Le remux ne pose ni effet ni type
  * MIME : Transformer recopie alors les échantillons. Le ré-encodage fixe le codec (HEVC
  * ou H.264), le débit vidéo, l'AAC au débit du budget, la cadence plafonnée et la taille
- * cible ; la rotation est cuite dans les pixels. Le fichier commence sur une image et ne
- * rapporte rien à la plateforme ([ExportContainerPolicy]). Transformer vit sur le fil
- * principal, d'où le dispatcher injecté.
+ * cible ; la rotation est cuite dans les pixels. Le fichier commence sur une image, ne
+ * garde aucune métadonnée de sa source et ne rapporte rien à la plateforme
+ * ([writingContainer]). Transformer vit sur le fil principal, d'où le dispatcher injecté.
  */
 internal class Media3VideoTransformRunner(
     private val context: Context,
@@ -71,7 +71,7 @@ internal class Media3VideoTransformRunner(
 
     private fun buildTransformer(plan: VideoTranscodePlan, finished: CompletableDeferred<Unit>): Transformer {
         val builder = Transformer.Builder(context)
-            .writingContainer(ExportContainerPolicy.of(hasVideo = true, publishes = true), keepsSourceMetadata = true)
+            .writingContainer(ExportContainerPolicy.of(hasVideo = true, publishes = true))
             .addListener(
                 object : Transformer.Listener {
                     override fun onCompleted(composition: Composition, exportResult: ExportResult) {
