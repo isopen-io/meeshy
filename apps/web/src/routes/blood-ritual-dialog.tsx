@@ -183,6 +183,8 @@ function holdCaption(language: InterfaceLanguage, name: string, state: RitualSta
   return state.holding ? translateCircles(language, 'circles.ritual.waitingOther', { name }) : translateCircles(language, 'circles.ritual.hold');
 }
 
+/** Les transitions et la pulsation sont coupées par la règle générale `prefers-reduced-motion` (`styles/app.css`). */
+const RING_SIZE = 180;
 const RADIUS = 80;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
@@ -215,8 +217,8 @@ function HoldStep({ language, name, state, dispatch }: { readonly language: Inte
         onKeyDown={onKeyDown}
         onKeyUp={onKeyUp}
         onContextMenu={(event) => event.preventDefault()}
-        className={`relative grid size-[180px] touch-none select-none place-items-center rounded-full ${state.holding ? '' : 'motion-safe:animate-pulse'} ${FOCUS}`}
-        style={{ outlineColor: BLOOD }}
+        className={`relative grid touch-none select-none place-items-center rounded-full ${state.holding ? '' : 'motion-safe:animate-pulse'} ${FOCUS}`}
+        style={{ width: RING_SIZE, height: RING_SIZE, outlineColor: BLOOD }}
       >
         <svg aria-hidden="true" viewBox="0 0 180 180" className="absolute inset-0 size-full -rotate-90">
           <circle cx="90" cy="90" r={RADIUS} fill="none" strokeWidth="8" style={{ stroke: `color-mix(in srgb, ${BLOOD} 20%, transparent)` }} />
@@ -229,11 +231,10 @@ function HoldStep({ language, name, state, dispatch }: { readonly language: Inte
             strokeLinecap="round"
             strokeDasharray={CIRCUMFERENCE}
             strokeDashoffset={CIRCUMFERENCE * (1 - fill)}
-            className="motion-safe:transition-[stroke-dashoffset] motion-safe:duration-300"
-            style={{ stroke: BLOOD }}
+            style={{ stroke: BLOOD, transition: 'stroke-dashoffset 300ms ease-out' }}
           />
         </svg>
-        <span aria-hidden="true" className="text-[2.5rem]">
+        <span aria-hidden="true" style={{ fontSize: '2.5rem' }}>
           {relationLevelIcon('BLOOD')}
         </span>
       </button>
@@ -360,7 +361,7 @@ export function BloodRitualDialog({
       <div className="grid gap-4 px-5 pb-6">
         <BloodRitualBody language={language} name={name} state={state} dispatch={dispatch} onClose={onFinished} />
         {/* La région vit AVANT qu'on y écrive (leçon 519) : seul son texte change. */}
-        <p role="status" data-ritual-notice={state.notice ?? ''} className="min-h-[1lh] text-caption font-semibold" style={{ color: INK }}>
+        <p role="status" data-ritual-notice={state.notice ?? ''} className="text-caption font-semibold" style={{ color: INK, minHeight: '1lh' }}>
           {state.notice === null ? '' : translateCircles(language, NOTICE_KEY[state.notice])}
         </p>
       </div>
