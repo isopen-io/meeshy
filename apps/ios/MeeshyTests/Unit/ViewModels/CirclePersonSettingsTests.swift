@@ -51,3 +51,28 @@ final class CirclePersonRingTests: XCTestCase {
         XCTAssertNil(CirclePerson(user: user).ring)
     }
 }
+
+/// Le dépliant de chaque partage du rituel (#13942, § 6) : ce que ça montre, à qui, combien de temps, où c'est gardé,
+/// comment arrêter. Chaque partage a le sien, et celui de la proximité nomme l'autre.
+final class BloodRitualConsentCopyTests: XCTestCase {
+
+    func test_everyShare_hasItsOwnFolding() {
+        let foldings = RelationRitualConsentKey.allCases.map { BloodRitualConsentCopy.folding(for: $0, otherName: "Alice") }
+        XCTAssertFalse(foldings.contains(where: \.isEmpty))
+        XCTAssertEqual(Set(foldings).count, RelationRitualConsentKey.allCases.count)
+    }
+
+    func test_theHistoryFolding_saysHowLongAndWhere() {
+        let history = BloodRitualConsentCopy.folding(for: .locationHistory, otherName: "Alice")
+        XCTAssertTrue(history.contains("30"))
+    }
+
+    func test_theProximityFolding_namesTheOther() {
+        XCTAssertTrue(BloodRitualConsentCopy.folding(for: .locationProximity, otherName: "Alice").contains("Alice"))
+    }
+
+    func test_theWithdrawalPlace_isSaid_andTheFoldingIsTitled() {
+        XCTAssertFalse(BloodRitualConsentCopy.withdrawal.isEmpty)
+        XCTAssertFalse(BloodRitualConsentCopy.foldingTitle.isEmpty)
+    }
+}
