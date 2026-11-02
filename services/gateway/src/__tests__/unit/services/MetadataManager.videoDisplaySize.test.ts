@@ -20,7 +20,7 @@ describe('MetadataManager — taille d’affichage d’une vidéo (#14609)', () 
   it('records a video filmed upright on a phone with its portrait display size', async () => {
     mockFfprobe.mockImplementation((_path: string, callback: Function) => {
       callback(null, {
-        streams: [{ codec_type: 'video', width: 1920, height: 1080, side_data_list: [{ rotation: -90 }] } as FfprobeStream],
+        streams: [{ codec_type: 'video', width: 1920, height: 1080, side_data_list: [{ rotation: -90 }] } as unknown as FfprobeStream],
         format: {},
       });
     });

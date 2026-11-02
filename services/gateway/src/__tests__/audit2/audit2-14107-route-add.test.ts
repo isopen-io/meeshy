@@ -65,7 +65,7 @@ async function monter(extra: any[] = []) {
   const app = Fastify({ logger: false });
   const notificationService = {
     createAddedToConversationNotification: jest.fn(async () => undefined),
-    createMemberJoinedNotificationsBatch: jest.fn(async () => 0),
+    createMemberJoinedNotificationsBatch: jest.fn(async (_recipientIds: readonly string[], _joined: Record<string, unknown>) => 0),
   };
   (app as any).prisma = prisma;
   (app as any).notificationService = notificationService;
