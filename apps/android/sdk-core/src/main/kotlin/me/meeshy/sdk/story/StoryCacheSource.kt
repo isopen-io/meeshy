@@ -22,6 +22,8 @@ import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.commitOrWrite
 import me.meeshy.sdk.util.isoToEpochMillis
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /** Thrown when a stories revalidation fails; carries the API error message. */
 internal class StorySyncException(message: String) : Exception(message)
@@ -41,6 +43,14 @@ internal class StoryCacheSource(
     private val clock: CacheClock,
     private val fence: AccountFence? = null,
 ) : SwrCacheSource<List<ApiPost>> {
+
+    /**
+     * L'ordre des écritures locales ([upsertLocal]) : une revalidation retient le rang où elle part, et son élagage
+     * épargne toute story écrite APRÈS — une republication adoptée pendant qu'elle était en vol n'est pas sur la page
+     * qu'elle a lue, sans être absente du serveur pour autant (#14458).
+     */
+    private val writeSequence = AtomicLong()
+    private val localWrites = ConcurrentHashMap<String, Long>()
 
     override fun observe(): Flow<List<ApiPost>?> =
         combine(
@@ -83,10 +93,13 @@ internal class StoryCacheSource(
      * the API's pre-pagination shape. Any page failing (including the first) throws
      * without persisting anything — Room already holds a complete prior tray, and
      * replacing it with an unproven partial one is worse than serving the stale one
-     * a beat longer.
+     * a beat longer. A story written locally after this revalidation started (a repost
+     * adopted from its 201, a realtime fold) is never pruned by it: its page was read
+     * before that story existed, so it proves nothing about it.
      */
     override suspend fun revalidate() {
         val ticket = ticket()
+        val startedAt = writeSequence.get()
         val collected = mutableListOf<ApiPost>()
         var cursor: String? = null
         var isComplete = false
@@ -106,7 +119,7 @@ internal class StoryCacheSource(
             }
         }
 
-        persist(collected, prune = isComplete, ticket)
+        persist(collected, prune = isComplete, ticket, writtenAfter = startedAt)
     }
 
     /**
@@ -136,6 +149,7 @@ internal class StoryCacheSource(
      * not touch `sync_meta`: a realtime fold is not a full revalidation.
      */
     suspend fun upsertLocal(story: ApiPost, ticket: AccountTicket?) {
+        localWrites[story.id] = writeSequence.incrementAndGet()
         fence.commitOrWrite(ticket) { storyDao.upsertAll(listOf(story.toEntity(clock.nowMillis()))) }
     }
 
@@ -152,7 +166,7 @@ internal class StoryCacheSource(
      * soit arrivée au serveur ne regriserait pas l'anneau à l'envers (vue monotone, comme
      * [me.meeshy.sdk.model.StoryUpdateMerge]).
      */
-    private suspend fun persist(stories: List<ApiPost>, prune: Boolean, ticket: AccountTicket?) {
+    private suspend fun persist(stories: List<ApiPost>, prune: Boolean, ticket: AccountTicket?, writtenAfter: Long) {
         val now = clock.nowMillis()
         val seenHere = readLocal().filter { it.isViewedByMe == true }.mapTo(HashSet()) { it.id }
         val rows = stories
@@ -161,7 +175,7 @@ internal class StoryCacheSource(
         fence.commitOrWrite(ticket) {
             database.withTransaction {
                 storyDao.upsertAll(rows)
-                if (prune) storyDao.deleteNotIn(rows.map { it.id })
+                if (prune) storyDao.deleteNotIn(rows.map { it.id } + localWrites.filterValues { it > writtenAfter }.keys)
                 syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now))
             }
         }

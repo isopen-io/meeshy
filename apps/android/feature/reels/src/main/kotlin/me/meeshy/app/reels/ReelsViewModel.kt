@@ -13,6 +13,8 @@ import me.meeshy.sdk.model.EngagementSessions
 import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.model.ReelThreadOrder
+import me.meeshy.sdk.model.PostType
+import me.meeshy.app.feed.RepostCommand
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.toContentFetchFailure
@@ -424,16 +426,37 @@ class ReelsViewModel @Inject constructor(
         }
     }
 
-    /** Repost simple : compteur optimiste, rollback si echec. */
+    /**
+     * Repost simple, EN RÉEL et vers l'original quand ce réel en republie un autre (iOS `ReelsViewModel.repost`,
+     * #14443, #14456) : compteur et marque au geste, confirmés ou rendus, et l'issue dite. Un second geste pendant
+     * l'envoi n'envoie rien.
+     */
     fun repost(reelId: String) {
         val before = _state.value.reels.firstOrNull { it.id == reelId } ?: return
-        updateReel(reelId) { it.copy(repostCount = before.repostCount + 1) }
+        if (!repostsInFlight.add(reelId)) return
+        val command = RepostCommand.of(reelId, before.repostOf, quote = false, commentary = null, cardType = PostType.REEL.name)
+        updateReel(reelId) { it.copy(repostCount = it.repostCount + 1, isReposted = true) }
         viewModelScope.launch {
-            if (postRepository.repost(reelId) is NetworkResult.Failure) {
-                updateReel(reelId) { it.copy(repostCount = before.repostCount) }
+            val refused = try {
+                postRepository.repost(command.targetId, targetType = command.targetType) is NetworkResult.Failure
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                true
+            }
+            repostsInFlight.remove(reelId)
+            if (refused) {
+                updateReel(reelId) {
+                    it.copy(repostCount = (it.repostCount - 1).coerceAtLeast(0), isReposted = before.isReposted)
+                }
+                toast(R.string.reels_toast_repost_failed, FeedbackKind.Error)
+            } else {
+                toast(R.string.reels_toast_reposted, FeedbackKind.Success)
             }
         }
     }
+
+    private val repostsInFlight = mutableSetOf<String>()
 
     private fun updateReel(reelId: String, transform: (ReelPresentation) -> ReelPresentation) {
         _state.update { state ->
