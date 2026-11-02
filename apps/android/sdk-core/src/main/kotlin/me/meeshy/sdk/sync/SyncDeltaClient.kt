@@ -106,7 +106,7 @@ class SyncDeltaClient @Inject constructor(
                 rows += page.rows
                 deleted += page.deleted.map { it.id }
             }
-            val next = page?.nextCursor?.takeIf { page.truncated }
+            val next = page?.takeIf { it.truncated }?.nextCursor
             if (next == null) {
                 return SyncDeltaOutcome.Delta(
                     rows = rows,
