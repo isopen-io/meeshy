@@ -137,12 +137,16 @@ public enum StoryExportBranding {
     /// La piste audio du jingle et sa durée. Un fichier en cache tronqué ou
     /// illisible est purgé puis régénéré une fois ; s'il reste sans son,
     /// l'export échoue au lieu de livrer une marque muette.
-    static func loadJingle(_ jingle: Jingle) async throws -> (track: AVAssetTrack, duration: CMTime) {
+    ///
+    /// L'ASSET voyage avec sa piste : `AVAssetTrack` ne retient pas l'asset
+    /// qui la porte, et une piste dont l'asset est libéré fait échouer
+    /// l'export (-11800 / -12780). L'appelant le garde jusqu'à la fin.
+    static func loadJingle(_ jingle: Jingle) async throws -> (asset: AVURLAsset, track: AVAssetTrack, duration: CMTime) {
         for attempt in 0..<2 {
             let asset = AVURLAsset(url: try await brandJingle(jingle))
             if let track = try? await asset.loadTracks(withMediaType: .audio).first,
                let duration = try? await asset.load(.duration), duration > .zero {
-                return (track, duration)
+                return (asset, track, duration)
             }
             if attempt == 0 { await CacheCoordinator.shared.video.remove(for: jingleCacheKey(jingle)) }
         }
@@ -276,7 +280,8 @@ public enum StoryExportBranding {
 
         let composition = AVMutableComposition()
         var temporaryFiles: [URL] = []
-        defer { temporaryFiles.forEach { try? FileManager.default.removeItem(at: $0) } }
+        var brandAssets: [AVAsset] = []
+        defer { withExtendedLifetime(brandAssets) { temporaryFiles.forEach { try? FileManager.default.removeItem(at: $0) } } }
 
         // La story démarre après la tenue de l'interlude quand il y en a un.
         let storyStart = intro != nil
@@ -325,6 +330,7 @@ public enum StoryExportBranding {
             // Artefact de marque mémoïsé — surtout PAS dans `temporaryFiles`,
             // qui est purgé en sortie : ce fichier appartient au cache.
             let jingle = try await loadJingle(.intro)
+            brandAssets.append(jingle.asset)
 
             guard let introVideo = composition.addMutableTrack(
                     withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
@@ -416,6 +422,7 @@ public enum StoryExportBranding {
         // sonore de fermeture. Ni l'un ni l'autre ne dépend de la story.
         let outroURL = try await brandOutroClip(size: renderSize, content: outro)
         let outroJingle = try await loadJingle(.outro)
+        brandAssets.append(outroJingle.asset)
 
         guard let outroVideo = composition.addMutableTrack(
                 withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
