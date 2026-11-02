@@ -31,6 +31,7 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     userVoiceModel: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     userRelation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     pairInteractionDay: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    relationFeatureSetting: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // L'annuaire E2EE (#12543) : un compte qui n'a jamais enrôlé d'appareil chiffré.
     ...Object.fromEntries(['e2EEDevice', 'e2EEOneTimePreKey', 'messageEnvelope', 'e2EERevokedIdentity', 'e2EEBindingProof'].map((model) =>
       [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }])),
@@ -228,6 +229,7 @@ describe('purgeAccountIsolatedData', () => {
       contactJoinNoticesDeleted: 0,
       arrivalAnnouncementsDeleted: 0,
       sharedTranslationsDeleted: 0,
+      relationConsentsDeleted: 0,
     });
   });
 });
@@ -279,6 +281,27 @@ describe('purgeAccountIsolatedData — liens de proximité', () => {
 
     expect(pairInteractionDay.rows.map((row) => row.id)).toEqual(['d3']);
     expect(summary.pairInteractionDaysDeleted).toBe(2);
+  });
+
+  it("#14399 — efface les consentements de cercle qu'il a donnés et ceux qu'on lui a donnés, et laisse ceux des autres", async () => {
+    const consents = [
+      { id: 's1', ownerId: USER_ID, otherId: OTHER },
+      { id: 's2', ownerId: THIRD, otherId: USER_ID },
+      { id: 's3', ownerId: THIRD, otherId: OTHER },
+    ];
+    const relationFeatureSetting = {
+      rows: [...consents],
+      deleteMany: jest.fn<any>(async ({ where }: { where: Record<string, unknown> }) => {
+        const before = relationFeatureSetting.rows.length;
+        relationFeatureSetting.rows = relationFeatureSetting.rows.filter((row) => !matchesMongoWhere(row, where));
+        return { count: before - relationFeatureSetting.rows.length };
+      }),
+    };
+
+    const summary = await purgeAccountIsolatedData(fakePrisma({ relationFeatureSetting }), USER_ID, NO_FILES);
+
+    expect(relationFeatureSetting.rows.map((row) => row.id)).toEqual(['s3']);
+    expect(summary.relationConsentsDeleted).toBe(2);
   });
 });
 

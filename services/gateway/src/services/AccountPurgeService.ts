@@ -28,6 +28,12 @@ export type AccountPurgeSummary = {
   readonly relationsDeleted: number;
   /** L'agrégat des échanges par paire (`PairInteractionDay`, #13932) : qui a échangé avec qui, quel jour et combien. */
   readonly pairInteractionDaysDeleted: number;
+  /**
+   * Les consentements de cercle (`RelationFeatureSetting`, #14399) qu'il a
+   * donnés (`ownerId`) et ceux qu'on lui a donnés (`otherId`) : un partage
+   * consenti envers un compte effacé ne désigne plus personne (RGPD art. 17).
+   */
+  readonly relationConsentsDeleted: number;
   readonly contactJoinNoticesDeleted: number;
   readonly arrivalAnnouncementsDeleted: number;
   /** Les traductions PARTAGÉES (#9899) que les participants du compte avaient scellées pour les autres. */
@@ -99,12 +105,13 @@ export async function purgeAccountIsolatedData(
   userId: string,
   options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
-  const [sessions, voiceProfile, relations, pairInteractionDays, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee] =
+  const [sessions, voiceProfile, relations, pairInteractionDays, relationConsents, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee] =
     await Promise.all([
       prisma.userSession.deleteMany({ where: { userId } }),
       prisma.userVoiceModel.deleteMany({ where: { userId } }),
       prisma.userRelation.deleteMany({ where: { OR: [{ userLowId: userId }, { userHighId: userId }] } }),
       prisma.pairInteractionDay.deleteMany({ where: { OR: [{ userLowId: userId }, { userHighId: userId }] } }),
+      prisma.relationFeatureSetting.deleteMany({ where: { OR: [{ ownerId: userId }, { otherId: userId }] } }),
       // #10492 — les invités de ses liens sont révoqués AVANT la suppression :
       // la ligne emportait la marque d'une révocation différée, et ses invités
       // restaient actifs. Un lien dont la révocation échoue reste, fermé et
@@ -136,6 +143,7 @@ export async function purgeAccountIsolatedData(
     voiceProfileDeleted: voiceProfile.count,
     relationsDeleted: relations.count,
     pairInteractionDaysDeleted: pairInteractionDays.count,
+    relationConsentsDeleted: relationConsents.count,
     shareLinksDeleted: shareLinks.count,
     notificationsDeleted: notifications.count,
     addressBookContactsDeleted: addressBook.contactsDeleted,
@@ -151,7 +159,7 @@ export async function purgeAccountIsolatedData(
 
   logger.info(
     `[AccountPurge] user=${userId} sessions=${summary.sessionsDeleted} voiceProfile=${summary.voiceProfileDeleted} ` +
-      `relations=${summary.relationsDeleted} pairInteractionDays=${summary.pairInteractionDaysDeleted} shareLinks=${summary.shareLinksDeleted} notifications=${summary.notificationsDeleted} ` +
+      `relations=${summary.relationsDeleted} pairInteractionDays=${summary.pairInteractionDaysDeleted} relationConsents=${summary.relationConsentsDeleted} shareLinks=${summary.shareLinksDeleted} notifications=${summary.notificationsDeleted} ` +
       `addressBook=${summary.addressBookContactsDeleted} joinNotices=${summary.contactJoinNoticesDeleted} ` +
       `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} sharedTranslations=${summary.sharedTranslationsDeleted} ` +
       `gameDuos=${summary.game.duosDeleted} ` +

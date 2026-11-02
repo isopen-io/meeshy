@@ -83,6 +83,7 @@ function base() {
     userVoiceModel: table([]),
     userRelation: table([]),
     pairInteractionDay: table([]),
+    relationFeatureSetting: table([]),
     conversationShareLink: table([]),
     userContact,
     contactJoinNotice,
