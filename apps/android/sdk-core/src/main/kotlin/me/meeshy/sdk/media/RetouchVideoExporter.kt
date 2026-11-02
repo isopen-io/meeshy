@@ -25,14 +25,17 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.meeshy.sdk.audioedit.writingContainer
 import me.meeshy.sdk.model.composer.look.ComposerVideoEdit
 import me.meeshy.sdk.model.composer.look.ComposerVideoFramePlacement
 import me.meeshy.sdk.model.imageedit.NormalizedCrop
+import me.meeshy.sdk.model.media.ExportContainerPolicy
 
 /**
  * **LE RENDU D'UNE VIDÉO RETOUCHÉE** (#12650) — la recette de [ComposerVideoEdit] gravée par Media3
  * Transformer : la fenêtre de coupe ([MediaItem.ClippingConfiguration]), le son (muet ⇒ piste retirée,
- * sinon un gain sur chaque canal), puis les images par [RetouchVideoEffects] — les mêmes effets que l'aperçu.
+ * sinon un gain sur chaque canal), puis les images par [RetouchVideoEffects] — les mêmes effets que l'aperçu. Le fichier
+ * commence sur une image et ne rapporte rien à la plateforme ([ExportContainerPolicy]).
  */
 public object RetouchVideoExporter {
 
@@ -55,17 +58,20 @@ public object RetouchVideoExporter {
     ) {
         withContext(Dispatchers.Main) {
             val finished = CompletableDeferred<Unit>()
-            val transformer = Transformer.Builder(context).addListener(
-                object : Transformer.Listener {
-                    override fun onCompleted(composition: Composition, exportResult: ExportResult) {
-                        finished.complete(Unit)
-                    }
+            val transformer = Transformer.Builder(context)
+                .writingContainer(ExportContainerPolicy.of(hasVideo = true, publishes = true), keepsSourceMetadata = true)
+                .addListener(
+                    object : Transformer.Listener {
+                        override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                            finished.complete(Unit)
+                        }
 
-                    override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
-                        finished.completeExceptionally(exportException)
-                    }
-                },
-            ).build()
+                        override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
+                            finished.completeExceptionally(exportException)
+                        }
+                    },
+                )
+                .build()
             transformer.start(editedItem(input, edit, RetouchVideoEffects.of(edit.crop?.let(::ndc), look, overlay)), output.absolutePath)
             try {
                 finished.await()
@@ -94,7 +100,7 @@ public object RetouchVideoExporter {
     }
 
     private fun gainProcessor(gain: Float): AudioProcessor = ChannelMixingAudioProcessor().apply {
-        (1..2).forEach { channels -> putChannelMixingMatrix(ChannelMixingMatrix.create(channels, channels).scaleBy(gain)) }
+        (1..2).forEach { channels -> putChannelMixingMatrix(ChannelMixingMatrix.createForConstantGain(channels, channels).scaleBy(gain)) }
     }
 }
 
