@@ -191,7 +191,7 @@ async function scanCandidates(prisma: PrismaClient, scope: Scope, needle: string
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: TRANSLATION_SCAN_SIZE,
         }),
-      ]),
+      ])
   )) as unknown as [HitRow[], HitRow[]];
   const bound = newestBound([boundOf(contentRows, contentTake), boundOf(translationRows, TRANSLATION_SCAN_SIZE)]);
   const seen = new Set<string>();

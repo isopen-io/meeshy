@@ -162,3 +162,49 @@ describe('#14643 — rendre une conversation obsolète', () => {
     expect(outcome).toEqual({ kind: 'not-found' });
   });
 });
+
+describe('#14643 — un message admis avant l\'obsolescence mais écrit pendant sa transaction ne reste pas lisible', () => {
+  function storeDouble() {
+    const messages: Array<{ id: string; deletedAt: Date | null }> = [{ id: 'm-old', deletedAt: null }];
+    const applyErase = (args: any) => {
+      for (const message of messages) {
+        if (message.deletedAt === null) message.deletedAt = args.data.deletedAt;
+      }
+      return { count: messages.length };
+    };
+    const prisma = {
+      conversation: {
+        findUnique: jest.fn<any>().mockResolvedValue({ deletedAt: null, purgeAfter: null }),
+        update: jest.fn<any>((args: any) => ({ op: 'conversation.update', args })),
+      },
+      conversationShareLink: { updateMany: jest.fn<any>(() => ({ op: 'shareLink.updateMany' })) },
+      message: {
+        updateMany: jest.fn<any>((args: any) => ({
+          op: 'message.updateMany',
+          args,
+          then: (resolve: (value: unknown) => void) => resolve(applyErase(args)),
+        })),
+      },
+      notification: { findMany: jest.fn<any>().mockResolvedValue([]), deleteMany: jest.fn<any>() },
+      $runCommandRaw: jest.fn<any>(async () => ({ cursor: { firstBatch: [] } })),
+      $transaction: jest.fn<any>(async (ops: any[]) => {
+        const results = ops.map((op) => (op.op === 'message.updateMany' ? applyErase(op.args) : op.op === 'conversation.update' ? { participants: [] } : { count: 0 }));
+        messages.push({ id: 'm-late', deletedAt: null });
+        return results;
+      }),
+    };
+    return { prisma, messages };
+  }
+
+  it('rejoue l\'effacement après la transaction : le message écrit pendant elle naît lisible puis est effacé', async () => {
+    const { prisma, messages } = storeDouble();
+    await obsoleteConversation(
+      { prisma: prisma as never, io: null, manager: null, announcer: null },
+      { conversationId: CONV, actorId: ADMIN, now: NOW },
+    );
+    expect(messages).toEqual([
+      { id: 'm-old', deletedAt: NOW },
+      { id: 'm-late', deletedAt: NOW },
+    ]);
+  });
+});

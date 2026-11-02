@@ -38,6 +38,8 @@ class Media3AudioPlaybackEngineTest {
         port.prepare(durationMs)
     }
 
+    private fun Rig.playWhenReady(value: Boolean) = port.playWhenReady(value)
+
     @Test fun `jouer un vocal le charge, puis la preparation lance la lecture`() = runTest {
         val rig = rig(this)
 
@@ -177,7 +179,7 @@ class Media3AudioPlaybackEngineTest {
 
         rig.engine.cycleSpeed()
         assertThat(rig.engine.state.value.speed).isEqualTo(PlaybackSpeed.X1_25)
-        assertThat(rig.port.currentSpeed).isEqualTo(1.25f)
+        assertThat(rig.port.speed).isEqualTo(1.25f)
 
         rig.engine.play("b", "https://cdn/b.mp3")
         assertThat(rig.port.loads.last().third).isEqualTo(1.25f)

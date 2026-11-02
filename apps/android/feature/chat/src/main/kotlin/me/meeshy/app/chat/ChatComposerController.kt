@@ -98,6 +98,7 @@ internal class ChatComposerController(
     private var typingIdleJob: Job? = null
     private var lastPersistedDraft: ConversationDraft? = null
     private var draftPersistJob: Job? = null
+    private var endToEndDraftForgotten = false
 
     /** The draft being written when « Modifier » was tapped, given back when the edit ends (iOS `draftBeforeEdit`). */
     private var draftBeforeEdit: String? = null
@@ -217,6 +218,7 @@ internal class ChatComposerController(
      */
     private fun persistDraft(rawText: String, replyToId: String?) {
         if (state.value.isEditing) return
+        if (state.value.isEndToEnd) return forgetEndToEndDraftOnDisk()
         val decision = DraftAutosave.resolve(
             conversationId = conversationId,
             rawText = rawText,
@@ -243,6 +245,30 @@ internal class ChatComposerController(
                 throw e
             } catch (_: Exception) {
                 // Draft persistence is best-effort; a failed write never disrupts composing.
+            }
+        }
+    }
+
+    /**
+     * #14632 — le brouillon d'une conversation chiffrée de bout en bout ne s'écrit pas sur le disque (miroir de
+     * `ConversationDraftCoordinator.keepsDraftsOnDisk`, iOS) : le magasin des brouillons est un fichier ordinaire, hors du
+     * coffre. Le texte reste dans le composeur, en mémoire ; un brouillon écrit en clair AVANT (conversation pas encore
+     * reconnue chiffrée, réponse gardée depuis une notification) est d'abord repris dans le composeur, puis effacé.
+     * Une fois par écran : les frappes suivantes n'écrivent rien.
+     */
+    fun forgetEndToEndDraftOnDisk() {
+        if (!state.value.isEndToEnd || endToEndDraftForgotten) return
+        endToEndDraftForgotten = true
+        draftPersistJob?.cancel()
+        draftPersistJob = scope.launch {
+            try {
+                restoreStoredDraft()
+                lastPersistedDraft = null
+                draftStore.clear(conversationId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                endToEndDraftForgotten = false
             }
         }
     }

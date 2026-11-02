@@ -6,7 +6,7 @@ import Foundation
 /// I/O ni état mutable.
 public enum MediaDownloadPolicyEngine {
     /// **Sous 100 Ko, un média se télécharge seul, quel que soit le réseau** (#14639,
-    /// directive porteur 2026-11-02) : seul le hors-ligne le retient. Miroir de
+    /// directive porteur) : seul le hors-ligne le retient. Miroir de
     /// `SMALL_MEDIA_AUTO_DOWNLOAD_BYTES` (`packages/shared`) et de sa jumelle Kotlin.
     public static let smallMediaAutoDownloadBytes = 102_400
 

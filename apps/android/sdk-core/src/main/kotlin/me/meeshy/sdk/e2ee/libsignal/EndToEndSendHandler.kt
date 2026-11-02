@@ -96,4 +96,7 @@ internal interface EndToEndSendModule {
 
     @Binds
     fun thread(impl: LibsignalEndToEndThread): EndToEndThreadAccess
+
+    @Binds
+    fun eraser(impl: VaultPlaintextEraser): me.meeshy.sdk.e2ee.EndToEndPlaintextEraser
 }

@@ -70,6 +70,11 @@ internal class ConversationListRealtimeBinder(
             }
         }
         scope.launch {
+            messageSocketManager.conversationObsoleted.collect { event ->
+                ConversationPurge.onConversationObsoleted(event)?.let(::purge)
+            }
+        }
+        scope.launch {
             messageSocketManager.participantLeft.collect { event ->
                 val mine = ConversationPurge.onParticipantLeft(event, currentUserId())
                 if (mine != null) purge(mine) else enqueue { patcher.applyLeft(event) }

@@ -97,6 +97,10 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
     let report: Bool
     let adminOpen: Bool
     let removal: Removal?
+    /// « Rendre obsolète » (#14645) — effacer le contenu POUR TOUS : la porte
+    /// de `DELETE /conversations/:id/obsolete`, celle de la suppression pour
+    /// tous (`deleteForAll`, administrateur d'un type à autorité, ouvert).
+    let obsolete: Bool
     /// Appeler le pair d'un direct — l'appel du menu compose UN pair, donc
     /// jamais un groupe ni soi-même (`CallPermission.canStartCall`).
     let call: Bool
@@ -135,6 +139,7 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
             report: actions.report && !talksToSelf,
             adminOpen: actions.adminOpen,
             removal: actions.hide ? (conversation.type == .direct ? .delete : .hide) : nil,
+            obsolete: actions.deleteForAll,
             call: actions.call && talksToPeer,
             videoCall: actions.videoCall && talksToPeer,
             groupSettings: actions.rename,
