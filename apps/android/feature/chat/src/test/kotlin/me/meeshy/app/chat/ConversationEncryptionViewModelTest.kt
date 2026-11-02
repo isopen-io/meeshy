@@ -132,12 +132,12 @@ class ConversationEncryptionViewModelTest {
     }
 
     @Test
-    fun `end to end cannot be selected from this phone`() = runTest {
+    fun `end to end cannot be selected for a group from this phone`() = runTest {
         val provider = mockk<ConversationEncryptionProviding>()
         coEvery { provider.status("c1") } returns ok(null)
         coEvery { provider.enable("c1", ConversationEncryptionModeChoice.SERVER) } returns ok("server")
         val vm = viewModel(provider)
-        vm.load("c1", isDirect = true)
+        vm.load("c1", isDirect = false)
         advanceUntilIdle()
 
         vm.select(ConversationEncryptionModeChoice.E2EE)
@@ -269,13 +269,13 @@ class ConversationEncryptionViewModelTest {
     }
 
     @Test
-    fun `end to end is never a switch target from this phone`() = runTest {
+    fun `end to end is never a switch target for a group from this phone`() = runTest {
         val provider = mockk<ConversationEncryptionProviding>()
         coEvery { provider.status("c1") } returns ok("hybrid")
         // Le choix refusé laisse le mode valide d'avant, que le changement peut viser.
         coEvery { provider.enable("c1", any()) } returns ok("server")
         val vm = viewModel(provider)
-        vm.load("c1", isDirect = true)
+        vm.load("c1", isDirect = false)
         advanceUntilIdle()
 
         vm.select(ConversationEncryptionModeChoice.E2EE)

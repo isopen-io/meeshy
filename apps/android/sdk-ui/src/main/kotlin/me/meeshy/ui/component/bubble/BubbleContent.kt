@@ -138,6 +138,11 @@ public data class BubbleContent(
      */
     val isEndToEndSealed: Boolean = false,
     /**
+     * End-to-end encrypted and opened on THIS device (#14591): its text shows, read from the device's vault, but it never
+     * leaves as clear — no forward, as on iOS (the server has no plaintext of it).
+     */
+    val isEndToEndOpened: Boolean = false,
+    /**
      * The server already reads this row — written in clear (or server-encrypted) before end-to-end was turned on (#13804):
      * deleting it for everyone keeps its clear route, as the gateway judges the erasure on the row. Closed by default.
      */

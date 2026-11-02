@@ -78,12 +78,13 @@ class NewConversationLogicTest {
     }
 
     @Test
-    fun this_phone_offers_end_to_end_as_soon_only() {
+    fun this_phone_offers_end_to_end_for_a_direct_conversation() {
         val offer = NewConversationLogic.encryptionOffer(platformRole = "ADMIN", selectedCount = 1)
 
-        assertThat(NewConversationLogic.END_TO_END_SUPPORTED).isFalse()
-        assertThat(offer.choices.last().unavailability).isEqualTo(CreationEncryptionUnavailability.CLIENT_NOT_YET)
-        assertThat(offer.defaultMode).isEqualTo(CreationEncryptionMode.SERVER)
+        assertThat(NewConversationLogic.END_TO_END_SUPPORTED).isTrue()
+        assertThat(offer.choices.last().mode).isEqualTo(CreationEncryptionMode.E2EE)
+        assertThat(offer.choices.last().available).isTrue()
+        assertThat(offer.defaultMode).isEqualTo(CreationEncryptionMode.E2EE)
     }
 
     @Test

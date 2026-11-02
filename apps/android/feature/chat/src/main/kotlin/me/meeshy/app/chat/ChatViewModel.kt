@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.e2ee.libsignal.EndToEndThreadAccess
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
@@ -119,6 +120,8 @@ class ChatViewModel @Inject constructor(
     ownReactionWithdrawals: OwnReactionWithdrawals,
     outOfThreadSendGate: OutOfThreadSendGate,
     mentionContacts: MentionContacts = MentionContacts.None,
+    /** #14591 — le texte d'un tête-à-tête chiffré de bout en bout part scellé, et le fil relit son clair au coffre. */
+    private val endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -138,7 +141,9 @@ class ChatViewModel @Inject constructor(
         ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
         ?.takeIf { it.isNotBlank() }
 
-    private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId))
+    private val _state = MutableStateFlow(
+        ChatUiState(conversationId = conversationId, endToEndAvailable = endToEnd !== EndToEndThreadAccess.None),
+    )
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     private val composerTextHolder = ComposerTextHolder(initialDraft.orEmpty())
@@ -209,6 +214,7 @@ class ChatViewModel @Inject constructor(
         recentEmojis = recentEmojiStore,
         languageIdentifier = languageIdentifier,
         mentionContacts = mentionContacts,
+        endToEnd = endToEnd,
     )
 
     private val reactions = ChatReactionController(
@@ -370,14 +376,16 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             combine(
-                messageRepository.messagesStream(
-                    conversationId,
-                    onSyncError = { error ->
-                        windowAnswered.value = true
-                        _state.update {
-                            it.copy(errorMessage = error.message, showSkeleton = false, isSyncing = false)
-                        }
-                    },
+                endToEnd.overlay(
+                    messageRepository.messagesStream(
+                        conversationId,
+                        onSyncError = { error ->
+                            windowAnswered.value = true
+                            _state.update {
+                                it.copy(errorMessage = error.message, showSkeleton = false, isSyncing = false)
+                            }
+                        },
+                    ),
                 ),
                 sessionRepository.currentUser,
                 reactions.ownReactions,

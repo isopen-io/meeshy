@@ -104,6 +104,9 @@ object SocketEventNames {
     const val CONVERSATION_UNREAD_UPDATED = "conversation:unread-updated"
     const val CONVERSATION_UPDATED = "conversation:updated"
 
+    // e2ee (#14591) — vers la room de la GÉNÉRATION de l'appareil, jamais de l'utilisateur
+    const val E2EE_ENVELOPE = "e2ee:envelope"
+
     // location
     const val LOCATION_LIVE_START = "location:live-start"
     const val LOCATION_LIVE_STARTED = "location:live-started"
@@ -315,6 +318,7 @@ object SocketEventNames {
         CONVERSATION_RESTORED,
         CONVERSATION_UNREAD_UPDATED,
         CONVERSATION_UPDATED,
+        E2EE_ENVELOPE,
         ENGAGEMENT_CONVERSATION_UPDATED,
         GAME_UPDATED,
         LOCATION_LIVE_START,

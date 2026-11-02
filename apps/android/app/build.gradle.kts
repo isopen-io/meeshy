@@ -111,6 +111,12 @@ android {
         compose = true
         buildConfig = true
     }
+    // libsignal (#14591, ADR-030) : seule `libsignal_jni.so` part dans l'APK. La bibliothèque de TEST de Signal et les
+    // natifs de bureau que `libsignal-client` porte en ressources Java (Linux, macOS, Windows) n'y ont rien à faire.
+    packaging {
+        jniLibs { excludes += setOf("**/libsignal_jni_testing.so") }
+        resources { excludes += setOf("libsignal_jni_*.so", "libsignal_jni_*.dylib", "signal_jni_*.dll") }
+    }
     testOptions {
         unitTests {
             isIncludeAndroidResources = true

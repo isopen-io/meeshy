@@ -58,11 +58,10 @@ object NewConversationLogic {
         rawTitle.trim().takeIf { it.isNotEmpty() && conversationType(selectedCount) == TYPE_GROUP }
 
     /**
-     * Ce téléphone ne sait encore ni lire ni écrire le bout en bout (pile libsignal, #13015) :
-     * l'écran de création le montre « bientôt » aux rôles qui pourraient le choisir, et le défaut
-     * reste Serveur. Passe à `true` le jour où l'Android natif chiffre un tête-à-tête.
+     * Ce téléphone chiffre et lit le texte d'un tête-à-tête de bout en bout (libsignal, #14591) : l'écran de création
+     * le propose aux rôles qui peuvent le choisir, comme iOS. Un groupe le montre toujours « bientôt ».
      */
-    const val END_TO_END_SUPPORTED: Boolean = false
+    const val END_TO_END_SUPPORTED: Boolean = true
 
     /** Ce que la section Chiffrement propose pour [selectedCount] personnes choisies (`creationEncryptionOffer`). */
     fun encryptionOffer(platformRole: String?, selectedCount: Int): CreationEncryptionOffer =

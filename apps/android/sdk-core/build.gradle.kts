@@ -46,6 +46,8 @@ dependencies {
     implementation(project(":core:common"))
     implementation(project(":core:datastore"))
     implementation(project(":core:crypto"))
+    // L'E2EE libsignal par appareil (#14591, ADR-030).
+    api(project(":core:e2ee"))
     implementation(project(":core:database"))
 
     implementation(libs.androidx.core.ktx)
