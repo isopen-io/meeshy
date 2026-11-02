@@ -57,6 +57,7 @@ import {
   retireLegacyPrivacyRows,
 } from '../../../services/preferences/privacy-storage';
 import { invalidatePrivacyPreferences } from '../../../services/preferences/privacy-cache';
+import { revisitAutoAcquaintancesOnPrivacyWrite } from '../../../services/relations/autoAcquaintance';
 import {
   emitPreferenceCategoryUpdated,
   PREFERENCE_CATEGORIES,
@@ -134,7 +135,11 @@ export const PREFERENCE_REGISTRY: Readonly<Record<PreferenceCategory, Preference
     defaults: PRIVACY_PREFERENCE_DEFAULTS,
     storage: {
       readStored: resolveStoredPrivacyPreferences,
-      afterWrite: retireLegacyPrivacyRows,
+      // #14406 — un refus de la Connaissance automatique vaut tout de suite.
+      afterWrite: async (prisma, userId) => {
+        await retireLegacyPrivacyRows(prisma, userId);
+        revisitAutoAcquaintancesOnPrivacyWrite(prisma, { userId });
+      },
     },
   },
   audio: { schema: AudioPreferenceSchema, defaults: AUDIO_PREFERENCE_DEFAULTS },
