@@ -217,7 +217,7 @@ describe('#14369 — message:send-with-attachments et la couche appareil d’un 
     const { handler, messagingService } = makeHandler({ success: true, data: savedMessage });
     const cb = jest.fn();
 
-    await handler.handleMessageSendWithAttachments(socket(), hybridWithAttachment(), cb);
+    await handler.handleMessageSendWithAttachments(socket(), hybridWithAttachment() as unknown as Parameters<MessageHandler['handleMessageSendWithAttachments']>[1], cb);
 
     expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     const [request] = (messagingService.handleMessage as any).mock.calls[0];
@@ -232,7 +232,7 @@ describe('#14369 — message:send-with-attachments et la couche appareil d’un 
     const cb = jest.fn();
     const { attachmentIds: _dropped, ...textOnly } = hybridWithAttachment();
 
-    await handler.handleMessageSend(socket(), textOnly, cb);
+    await handler.handleMessageSend(socket(), textOnly as unknown as Parameters<MessageHandler['handleMessageSend']>[1], cb);
 
     const [request] = (messagingService.handleMessage as any).mock.calls[0];
     expect(request.deviceLayer).toMatchObject({ relay: { protocol: 'libsignal-v1' } });
