@@ -186,7 +186,7 @@ export function ConversationDetailsSheet({
     [deps, queryClient, conversation.id],
   );
 
-  /* RENDRE OBSOLÈTE (#14645) — la loi du menu de la ligne (`deleteForAll`), le mot du catalogue de gestion. */
+  /* RENDRE OBSOLÈTE (#14645, #14653) — la loi du menu de la ligne (`obsolete`), le mot du catalogue de gestion. */
   const mayObsolete =
     manageReady &&
     rowConversationActions({
@@ -197,7 +197,7 @@ export function ConversationDetailsSheet({
         isAnonymous: false,
         platformRole: queryClient.getQueryData<AdminIdentity>(ADMIN_PERMISSIONS_QUERY_KEY)?.role ?? null,
       },
-    }).deleteForAll;
+    }).obsolete;
   const departures: readonly DepartureKind[] =
     onRequestDeparture === undefined ? [] : [...departureKindsOf(conversation), ...(mayObsolete ? (['obsolete'] as const) : [])];
   const closing = departures.filter((kind) => kind !== 'leave');

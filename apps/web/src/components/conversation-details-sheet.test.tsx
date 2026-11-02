@@ -269,13 +269,17 @@ describe('ConversationDetailsSheet — quitter et supprimer (#7837, #7285)', () 
     expect(asked).toEqual(['leave', 'delete']);
   });
 
-  test('une conversation DIRECTE ne se quitte pas : seule la suppression est offerte', async () => {
+  test('une conversation DIRECTE ne se quitte pas : la suppression, et l’obsolescence pour l’un OU l’autre membre (#14653)', async () => {
+    const asked: DepartureKind[] = [];
     await monteFeuille({
-      conversation: conversation({ type: 'direct', title: 'Nour' }),
+      conversation: conversation({ type: 'direct', title: 'Nour', currentUserRole: 'member' }),
       replies: { [MEMBERS]: 'pending' },
-      onRequestDeparture: () => {},
+      onRequestDeparture: (kind) => asked.push(kind),
     });
-    expect(departures().map((b) => b.dataset.conversationDeparture)).toEqual(['delete']);
+    await settle();
+    expect(departures().map((b) => b.dataset.conversationDeparture)).toEqual(['delete', 'obsolete']);
+    act(() => departures()[1]?.click());
+    expect(asked).toEqual(['obsolete']);
   });
 
   test('RENDRE OBSOLÈTE (#14645) : offert à l’administrateur de la conversation, en bas, après la suppression ; il DEMANDE le geste', async () => {
