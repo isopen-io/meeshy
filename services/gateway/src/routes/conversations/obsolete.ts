@@ -11,6 +11,14 @@
  * anormale, retombe sous la règle de l'administrateur) ; les groupes gardent
  * la règle de l'administrateur.
  *
+ * #14676 (décision porteur du 2026-11-02, option c) — tant qu'une DEMANDE de
+ * message n'est pas acceptée, seul son DESTINATAIRE rend la directe obsolète :
+ * l'expéditeur — créateur de la directe, donc administrateur, et quel que soit
+ * son rôle de plateforme — reçoit 403 sans écriture. « Non acceptée » se lit
+ * sur `Participant.messageRequestFromId`, posé sur la ligne du destinataire et
+ * effacé par « Accepter » seulement ; la ligne n'est pas filtrée sur
+ * `isActive` : un destinataire parti ne rend pas la main à l'expéditeur.
+ *
  * Rétrocompatible : la conversation est AUSSI fermée (`isActive: false`,
  * `closedAt`, `conversation:closed`), donc un ancien client qui ne connaît ni
  * cette route ni `conversation:obsoleted` la retire de sa liste comme avant.
@@ -63,6 +71,21 @@ async function directMemberMayObsolete(
   return activeParticipants <= DIRECT_CONVERSATION_MAX_ACTIVE_PARTICIPANTS;
 }
 
+/** L'appelant est-il l'EXPÉDITEUR d'une demande non acceptée dans cette directe ? Une autre ligne porte la demande. */
+async function sendsPendingDirectRequest(
+  prisma: PrismaClient,
+  conversationId: string,
+  userId: string,
+  membership: ObsoleteMembership | null,
+): Promise<boolean> {
+  if (membership?.conversation?.type !== 'direct') return false;
+  const recipient = await prisma.participant.findFirst({
+    where: { conversationId, userId: { not: userId }, messageRequestFromId: { not: null } },
+    select: { id: true },
+  });
+  return recipient !== null;
+}
+
 export function registerObsoleteConversationRoute(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -70,7 +93,7 @@ export function registerObsoleteConversationRoute(
 ): void {
   fastify.delete<{ Params: ObsoleteParams }>('/conversations/:id/obsolete', {
     schema: {
-      description: 'Make a conversation obsolete (#14643): its content becomes unreadable at once, it leaves every member\'s list (also closed, as DELETE /conversations/:id does), and its data is erased after purgeAfter (48 h). Requires the conversation admin role, or, in a direct conversation, being one of its two active registered members (#14653). Idempotent: a second call returns the first dates.',
+      description: 'Make a conversation obsolete (#14643): its content becomes unreadable at once, it leaves every member\'s list (also closed, as DELETE /conversations/:id does), and its data is erased after purgeAfter (48 h). Requires the conversation admin role, or, in a direct conversation, being one of its two active registered members (#14653) — while a message request is not accepted, only its recipient (#14676). Idempotent: a second call returns the first dates.',
       tags: ['conversations'],
       summary: 'Make conversation obsolete',
       params: {
@@ -118,6 +141,9 @@ export function registerObsoleteConversationRoute(
         where: { conversationId, userId, isActive: true },
         select: { role: true, type: true, leftAt: true, bannedAt: true, conversation: { select: { type: true } } },
       });
+      if (await sendsPendingDirectRequest(prisma, conversationId, userId, membership)) {
+        return sendForbidden(reply, 'Seul le destinataire d\'une demande de message non acceptée peut rendre cette conversation obsolète');
+      }
       const allowed = actorHasMinimumRole(
         { conversationRole: membership?.role, platformRole: authRequest.authContext.registeredUser?.role },
         MemberRole.ADMIN,

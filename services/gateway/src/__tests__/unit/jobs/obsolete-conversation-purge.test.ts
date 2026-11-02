@@ -8,6 +8,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import {
+  OBSOLETE_PURGE_REPORT_HOLD_MS,
   OBSOLETE_PURGE_RETRY_DELAY_MS,
   obsoletePurgeArmed,
   obsoletePurgeWhere,
@@ -43,7 +44,9 @@ function candidate(overrides: Partial<Candidate> = {}): Candidate {
   };
 }
 
-function prismaDouble(candidates: Candidate[], messagePages: string[][] = [['m1', 'm2']]) {
+type OpenReport = { reportedType: string; reportedEntityId: string; status?: string };
+
+function prismaDouble(candidates: Candidate[], messagePages: string[][] = [['m1', 'm2']], reports: OpenReport[] = [], reportedMessagesInConversation = 0) {
   const log: string[] = [];
   const pages = [...messagePages];
   const deleteManyOf = (model: string) => jest.fn<any>(async (args: any) => {
@@ -60,7 +63,9 @@ function prismaDouble(candidates: Candidate[], messagePages: string[][] = [['m1'
       findMany: jest.fn<any>(async () => (pages.shift() ?? []).map((id) => ({ id }))),
       updateMany: jest.fn<any>(async () => { log.push('message.updateMany'); return { count: 0 }; }),
       deleteMany: deleteManyOf('message'),
+      count: jest.fn<any>().mockResolvedValue(reportedMessagesInConversation),
     },
+    report: { findMany: jest.fn<any>().mockResolvedValue(reports) },
     messageAttachment: { findMany: jest.fn<any>().mockResolvedValue([{ id: 'a1' }]) },
     attachmentFileAtRest: { deleteMany: deleteManyOf('attachmentFileAtRest') },
     trackingLink: {
@@ -112,7 +117,7 @@ describe('#14643 — ce que la purge peut viser', () => {
   it('désarmée, elle COMPTE et n\'écrit rien', async () => {
     const { prisma, log } = prismaDouble([candidate()]);
     const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: false, attachmentRemover: remover() });
-    expect(report).toEqual({ applied: false, candidates: 1, purged: 0, failed: 0, truncated: false });
+    expect(report).toEqual({ applied: false, candidates: 1, purged: 0, failed: 0, held: 0, truncated: false });
     expect(log).toEqual([]);
     expect(prisma.conversation.findMany).not.toHaveBeenCalled();
   });
@@ -154,7 +159,7 @@ describe('#14643 — la cascade', () => {
     const attachmentRemover = remover();
     const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover });
 
-    expect(report).toEqual({ applied: true, candidates: 1, purged: 1, failed: 0, truncated: false });
+    expect(report).toEqual({ applied: true, candidates: 1, purged: 1, failed: 0, held: 0, truncated: false });
     expect(attachmentRemover.deleteAttachment).toHaveBeenCalledWith('a1');
     expect(prisma.attachmentFileAtRest.deleteMany).toHaveBeenCalledWith({ where: { attachmentId: { in: ['a1'] } } });
     for (const model of MESSAGE_SCOPED) {
@@ -180,7 +185,7 @@ describe('#14643 — la cascade', () => {
   it('une pièce dont le fichier résiste arrête la conversation : rien n\'est désarmé, la passe suivante reprend', async () => {
     const { prisma, log } = prismaDouble([candidate()]);
     const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover(true) });
-    expect(report).toEqual({ applied: true, candidates: 1, purged: 0, failed: 1, truncated: false });
+    expect(report).toEqual({ applied: true, candidates: 1, purged: 0, failed: 1, held: 0, truncated: false });
     expect(log).not.toContain('message.deleteMany');
     expect(prisma.conversation.update).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ purgeAfter: null }) }),
@@ -300,5 +305,84 @@ describe('#14643 — les restes sans relation Prisma', () => {
     const { prisma } = keysDouble({ 'key-own': 2, 'key-linked': 1 });
     await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
     expect(prisma.serverEncryptionKey.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('#14676 — un signalement OUVERT gèle la purge (décision porteur 2026-11-02, option a)', () => {
+  const REPORTED_MESSAGE = '507f1f77bcf86cd799439033';
+
+  it('lit les signalements non clos visant une conversation ou un message — tout statut hors resolved/rejected/dismissed', async () => {
+    const { prisma } = prismaDouble([candidate()]);
+    await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
+    expect(prisma.report.findMany).toHaveBeenCalledWith({
+      where: { reportedType: { in: ['conversation', 'message'] }, status: { notIn: ['resolved', 'rejected', 'dismissed'] } },
+      select: { reportedType: true, reportedEntityId: true },
+    });
+  });
+
+  it('une conversation signalée elle-même n\'est pas effacée : rien n\'est écrit, sa purge recule', async () => {
+    const { prisma, log } = prismaDouble([candidate()], [['m1', 'm2']], [{ reportedType: 'conversation', reportedEntityId: CONV }]);
+    const attachmentRemover = remover();
+    const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover });
+    expect(report).toEqual({ applied: true, candidates: 1, purged: 0, failed: 0, held: 1, truncated: false });
+    expect(attachmentRemover.deleteAttachment).not.toHaveBeenCalled();
+    expect(log).toEqual(['conversation.update']);
+    expect(prisma.conversation.update).toHaveBeenCalledWith({
+      where: { id: CONV },
+      data: { purgeAfter: new Date(NOW.getTime() + OBSOLETE_PURGE_REPORT_HOLD_MS) },
+    });
+  });
+
+  it('une conversation dont UN message est signalé n\'est pas effacée — message déjà masqué compris', async () => {
+    const { prisma, log } = prismaDouble([candidate()], [['m1', 'm2']], [{ reportedType: 'message', reportedEntityId: REPORTED_MESSAGE }], 1);
+    const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
+    expect(report.held).toBe(1);
+    expect(report.purged).toBe(0);
+    expect(log).not.toContain('message.deleteMany');
+    expect(prisma.message.count).toHaveBeenCalledWith({ where: { conversationId: CONV, id: { in: [REPORTED_MESSAGE] } } });
+  });
+
+  it('un message signalé d\'une AUTRE conversation ne gèle rien', async () => {
+    const { prisma } = prismaDouble([candidate()], [['m1', 'm2']], [{ reportedType: 'message', reportedEntityId: REPORTED_MESSAGE }], 0);
+    const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
+    expect(report).toMatchObject({ purged: 1, held: 0 });
+  });
+
+  it('une conversation signalée ne gèle QU\'ELLE : la suivante de la passe est purgée', async () => {
+    const other = '507f1f77bcf86cd799439044';
+    const { prisma } = prismaDouble(
+      [candidate(), candidate({ id: other })],
+      [['m1'], []],
+      [{ reportedType: 'conversation', reportedEntityId: CONV }],
+    );
+    const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
+    expect(report).toMatchObject({ purged: 1, held: 1 });
+    expect(prisma.message.deleteMany).toHaveBeenCalledWith({ where: { conversationId: other, id: { in: ['m1'] } } });
+    expect(prisma.message.deleteMany).not.toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ conversationId: CONV }) }));
+  });
+
+  it('une fois le signalement clos, la passe suivante la reprend', async () => {
+    const { prisma } = prismaDouble([candidate()], [['m1', 'm2']], []);
+    const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
+    expect(report).toMatchObject({ purged: 1, held: 0 });
+  });
+
+  it('fail-closed : si les signalements ne se lisent pas, la passe n\'efface rien', async () => {
+    const { prisma, log } = prismaDouble([candidate()]);
+    prisma.report.findMany = jest.fn<any>().mockRejectedValue(new Error('mongo down'));
+    await expect(purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() })).rejects.toThrow('mongo down');
+    expect(log).toEqual([]);
+  });
+
+  it('fail-closed : si le décompte des messages signalés échoue, la conversation recule sans rien perdre', async () => {
+    const { prisma, log } = prismaDouble([candidate()], [['m1', 'm2']], [{ reportedType: 'message', reportedEntityId: REPORTED_MESSAGE }]);
+    prisma.message.count = jest.fn<any>().mockRejectedValue(new Error('timeout'));
+    const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
+    expect(report).toMatchObject({ purged: 0, failed: 1 });
+    expect(log).toEqual(['conversation.update']);
+  });
+
+  it('le gel recule d\'au moins une heure : la file ne bute pas sur une conversation gelée', () => {
+    expect(OBSOLETE_PURGE_REPORT_HOLD_MS).toBeGreaterThanOrEqual(60 * 60 * 1000);
   });
 });

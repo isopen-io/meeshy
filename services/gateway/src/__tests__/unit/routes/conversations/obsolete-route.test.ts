@@ -53,6 +53,7 @@ type Appel = {
   bannedAt?: Date | null;
   anonymous?: boolean;
   activeParticipants?: number;
+  pendingRequestToOther?: boolean;
 };
 
 async function appeler(options: Appel) {
@@ -67,7 +68,8 @@ async function appeler(options: Appel) {
     : null;
   const prisma = {
     participant: {
-      findFirst: jest.fn<any>().mockResolvedValue(membership),
+      findFirst: jest.fn<any>(async (args: any) =>
+        'messageRequestFromId' in (args?.where ?? {}) ? (options.pendingRequestToOther ? { id: 'recipient-row' } : null) : membership),
       count: jest.fn<any>().mockResolvedValue(options.activeParticipants ?? 2),
     },
   };
@@ -222,6 +224,43 @@ describe('#14653 — dans un tête-à-tête, l\'un OU l\'autre des deux membres 
 
   it('l\'administrateur d\'une directe anormale garde la règle de l\'administrateur', async () => {
     const { reply } = await appeler({ conversationRole: 'admin', conversationType: 'direct', activeParticipants: 3 });
+    expect(reply.statusCode).toBe(200);
+  });
+});
+
+describe('#14676 — une demande de message non acceptée : seul son DESTINATAIRE la rend obsolète (décision porteur 2026-11-02, option c)', () => {
+  it('l\'expéditeur (créateur de la directe) d\'une demande non acceptée reçoit 403, sans écriture', async () => {
+    const { reply } = await appeler({ conversationRole: 'creator', conversationType: 'direct', pendingRequestToOther: true });
+    expect(reply.statusCode).toBe(403);
+    expect(obsoleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('l\'expéditeur simple membre aussi', async () => {
+    const { reply } = await appeler({ conversationRole: 'member', conversationType: 'direct', pendingRequestToOther: true });
+    expect(reply.statusCode).toBe(403);
+    expect(obsoleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('un rôle de plateforme ne lève pas la règle quand il est lui-même l\'expéditeur', async () => {
+    const { reply } = await appeler({ conversationRole: 'creator', conversationType: 'direct', platformRole: 'BIGBOSS', pendingRequestToOther: true });
+    expect(reply.statusCode).toBe(403);
+    expect(obsoleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('même si le destinataire est parti, l\'expéditeur reste refusé', async () => {
+    const { reply, prisma } = await appeler({ conversationRole: 'creator', conversationType: 'direct', activeParticipants: 1, pendingRequestToOther: true });
+    expect(reply.statusCode).toBe(403);
+    const pendingQuery = prisma.participant.findFirst.mock.calls.map((call: any) => call[0]).find((args: any) => 'messageRequestFromId' in args.where);
+    expect(pendingQuery.where).toEqual({ conversationId: CONV, userId: { not: MOI }, messageRequestFromId: { not: null } });
+  });
+
+  it('le destinataire (sa propre ligne porte la demande, pas celle de l\'autre) la rend obsolète', async () => {
+    const { reply } = await appeler({ conversationRole: 'member', conversationType: 'direct', pendingRequestToOther: false });
+    expect(reply.statusCode).toBe(200);
+  });
+
+  it('un groupe garde la règle de l\'administrateur, demande en attente ou non', async () => {
+    const { reply } = await appeler({ conversationRole: 'admin', conversationType: 'group', pendingRequestToOther: true });
     expect(reply.statusCode).toBe(200);
   });
 });
