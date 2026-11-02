@@ -193,7 +193,17 @@ function passerelleServant(ligne: Record<string, unknown>) {
       update: jest.fn<any>(async (args: any) => ({ id: args?.where?.id, ...args?.data, user: ligne })),
       count: jest.fn<any>().mockResolvedValue(2),
     },
-    user: { findUnique: surLeCompte, findFirst: surLeCompte },
+    // La porte d'ouverture (#14107, decideDirectOpening → pairAccessAmong) : l'acteur et la cible sont AMIS, donc
+    // l'ajout est DIRECT et ce témoin reste sur son sujet — la langue écrite, pas la boîte de demandes. Personne n'a
+    // bloqué personne, aucune communauté partagée, aucun niveau explicite.
+    user: { findUnique: surLeCompte, findFirst: surLeCompte, findMany: jest.fn<any>().mockResolvedValue([]) },
+    friendRequest: {
+      findMany: jest.fn<any>().mockResolvedValue([
+        { senderId: ACTOR_ID, receiverId: TARGET_ID, respondedAt: new Date('2026-01-02'), updatedAt: new Date('2026-01-02') },
+      ]),
+    },
+    userRelation: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    communityMember: { findMany: jest.fn<any>().mockResolvedValue([]) },
     message: { create: jest.fn<any>(async (args: any) => ({ id: 'sys-row', ...args?.data })) },
     __surLeCompte: surLeCompte,
   } as any;
