@@ -72,6 +72,7 @@ nonisolated enum ComposerCaptureHorizonRule {
 /// juste avant la prise. Un par caméra ; `follow` à chaque objectif installé.
 @MainActor
 final class ComposerCaptureHorizon {
+    nonisolated deinit {}
 
     private var coordinator: AnyObject?
     private var lastAngle: CGFloat = ComposerCaptureMirrorRule.portraitAngle
