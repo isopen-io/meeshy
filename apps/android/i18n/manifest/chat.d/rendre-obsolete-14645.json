@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "androidName": "conversation_options_obsolete",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_options_obsolete_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_options_obsolete_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_options_error_obsolete",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

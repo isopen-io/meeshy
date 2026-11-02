@@ -10,6 +10,7 @@ import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.conversation.CategoryCreation
 import me.meeshy.sdk.conversation.ConversationPreferenceActions
+import me.meeshy.sdk.conversation.ConversationObsoleting
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.conversation.PreferenceWrite
@@ -32,6 +33,8 @@ internal class ConversationListRowActions(
     private val workManager: WorkManager,
     /** La conversation à l'écran ([me.meeshy.sdk.notification.ActiveConversationStore]), ou `null`. */
     private val activeConversationId: () -> String? = { null },
+    /** « Rendre obsolète » (#14645). */
+    private val obsoleter: ConversationObsoleting = ConversationObsoleting.Unavailable,
 ) {
 
     /** L'écrivain partagé des préférences (le même que les Options de la fiche Conversation, #13777). */
@@ -152,6 +155,24 @@ internal class ConversationListRowActions(
         state.update { it.copy(pendingRemovals = it.pendingRemovals + id).withVisible(rawConversations()) }
         scope.launch {
             when (val result = repository.deleteForMe(id)) {
+                is NetworkResult.Success -> reportError(null)
+                is NetworkResult.Failure -> state.update {
+                    it.copy(pendingRemovals = it.pendingRemovals - id, errorMessage = result.error.message)
+                        .withVisible(rawConversations())
+                }
+            }
+        }
+    }
+
+    /**
+     * Rend [id] obsolète (#14645) : la rangee tombe tout de suite ([ConversationListUiState.pendingRemovals]),
+     * l'accord de la passerelle l'efface du cache (et la purge socket chez les autres), un refus la rend
+     * avec son message.
+     */
+    fun makeConversationObsolete(id: String) {
+        state.update { it.copy(pendingRemovals = it.pendingRemovals + id).withVisible(rawConversations()) }
+        scope.launch {
+            when (val result = obsoleter.makeObsolete(id)) {
                 is NetworkResult.Success -> reportError(null)
                 is NetworkResult.Failure -> state.update {
                     it.copy(pendingRemovals = it.pendingRemovals - id, errorMessage = result.error.message)
