@@ -1,4 +1,4 @@
-package me.meeshy.app.chat
+package me.meeshy.app.stories
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -21,7 +21,7 @@ internal object ComposerEmojiSticker {
     const val GLYPH_TEXT_SIZE: Float = 160f
 
     private const val DRAW_SIDE: Int = 256
-    private const val SIDE: Int = 512
+    const val SIDE: Int = 512
 
     fun render(glyph: String, directory: File): File {
         val drawn = Bitmap.createBitmap(DRAW_SIDE, DRAW_SIDE, Bitmap.Config.ARGB_8888)

@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import androidx.work.WorkManager
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -36,6 +37,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.MessageSticker
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.location.ComposerSendEligibility
 import me.meeshy.sdk.model.MessageEffectsEditor
@@ -459,6 +461,60 @@ internal class ChatComposerController(
         )
     }
 
+    /**
+     * Un sticker part d'UN geste (#14334, iOS `ConversationView+Sticker.sendStickerImage`) : son image rejoint la file
+     * d'envoi durable et la bulle optimiste paraît aussitôt, peinte depuis le fichier de l'appareil, avec sa recette
+     * `sticker` (que la passerelle valide et que le web et iOS redessinent). La réponse armée le suit ; dans une
+     * conversation chiffrée de bout en bout rien ne part.
+     */
+    fun sendSticker(file: File, mimeType: String, sticker: MessageSticker?, width: Int?, height: Int?) {
+        val sentAtMillis = clock.nowMillis()
+        val allowed = !state.value.isEndToEnd &&
+            ComposerSendGate.evaluate(ComposerSendKind.IMAGE, state.value.composerAffordances, state.value.slowModeState(sentAtMillis)).allowed
+        val user = sessionRepository.currentUser.value
+        if (!allowed || user == null) {
+            file.delete()
+            return
+        }
+        val replyToId = state.value.replyingToMessageId
+        state.update { it.copy(replyingToMessageId = null, lastSelfSentAtMillis = sentAtMillis) }
+        stopTypingEmission()
+        val gesture = mediaUploadQueue.ticket()
+        scope.launch(gesture.asCoroutineContext()) {
+            try {
+                val item = MediaUploadItem.onDisk(file, STICKER_ATTACHMENT_NAME, mimeType)
+                val cmid = mediaUploadQueue.enqueue(item, conversationId = conversationId)
+                messageRepository.sendOptimistic(
+                    conversationId = conversationId,
+                    content = "",
+                    originalLanguage = LanguageResolver.resolveUserLanguage(user),
+                    sender = user,
+                    replyToId = replyToId,
+                    messageType = AttachmentMessageType.forMime(mimeType),
+                    attachmentUploadCmids = listOf(cmid),
+                    attachments = listOf(
+                        ApiMessageAttachment(
+                            id = cmid,
+                            fileName = STICKER_ATTACHMENT_NAME,
+                            originalName = STICKER_ATTACHMENT_NAME,
+                            mimeType = mimeType,
+                            fileSize = item.sizeBytes.toInt(),
+                            fileUrl = "file://" + file.absolutePath,
+                            width = width,
+                            height = height,
+                        ),
+                    ),
+                    sticker = sticker,
+                )
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
     /** Les emojis tapés dans le message rejoignent les récents (iOS `RecentEmojiStore.record`). */
     private fun recordTypedEmojis(text: String) {
         val store = recentEmojis ?: return
@@ -665,5 +721,6 @@ internal class ChatComposerController(
         const val CLIPBOARD_ATTACHMENT_NAME = "clipboard-content.txt"
         const val CLIPBOARD_ATTACHMENT_MIME = "text/plain"
         const val DEFAULT_ATTACHMENT_NAME = "attachment"
+        const val STICKER_ATTACHMENT_NAME = "sticker.png"
     }
 }

@@ -11,6 +11,8 @@ import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.composer.ComposerConfiguration
+import me.meeshy.sdk.model.MessageSticker
+import me.meeshy.ui.component.composer.ComposerStickerPick
 import me.meeshy.ui.component.composer.ComposerStickerSheet
 import me.meeshy.ui.component.composer.LocalComposerStickerSheet
 import me.meeshy.ui.component.composer.UniversalComposerSpec
@@ -60,13 +62,15 @@ class UniversalComposerHostTest {
         }
     }
 
-    @Test fun `#14320 en commentaire, la porte sticker ouvre la feuille, et le sticker choisi rejoint les pièces en PNG`() {
+    @Test fun `#14320 #14334 en commentaire, la porte sticker ouvre la feuille, et le sticker choisi rejoint les pièces en image`() {
         val attached = mutableListOf<String?>()
         val base = spec(ComposerConfiguration.COMMENT)
         var opened = 0
+        val png = java.io.File.createTempFile("sticker", ".png")
+        val pick = ComposerStickerPick(png, "image/png", MessageSticker(emoji = "🔥"), 512, 512)
         showWithStickers(base.copy(onAttachFile = { file, _, mime -> attached += mime; file.delete() })) { onPick, _ ->
             opened += 1
-            androidx.compose.runtime.LaunchedEffect(Unit) { onPick("🔥") }
+            androidx.compose.runtime.LaunchedEffect(Unit) { onPick(pick) }
         }
         compose.onNodeWithContentDescription(string(R.string.composer_attach_sticker)).performClick()
         compose.waitUntil(timeoutMillis = 5_000) { attached.isNotEmpty() }

@@ -73,6 +73,7 @@ class ChatHostsSmokeTest {
         setPendingPlace = { },
         clearPendingPlace = { },
         pickFile = { _, _, _ -> },
+        sendSticker = {},
         removePendingAttachment = { _ -> },
         stagePendingUris = { _ -> },
         dismissImageViewer = { },
