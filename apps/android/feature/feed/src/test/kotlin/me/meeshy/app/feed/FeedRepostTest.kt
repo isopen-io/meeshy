@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PostType
+import me.meeshy.sdk.model.SocketPostRepostedData
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -57,6 +58,7 @@ class FeedRepostTest {
         every { notices } returns MutableSharedFlow<PublicationNotice>()
     }
     private val feed = MutableStateFlow<CacheResult<List<ApiPost>>>(CacheResult.Empty)
+    private val reposted = MutableSharedFlow<SocketPostRepostedData>(extraBufferCapacity = 8)
 
     private fun card(id: String, type: String = "POST", reposts: Int = 3, repostOf: ApiRepostOf? = null) =
         ApiPost(id = id, type = type, content = "Post $id", repostCount = reposts, repostOf = repostOf)
@@ -79,7 +81,7 @@ class FeedRepostTest {
         every { socialSocket.postTranslationUpdated } returns MutableSharedFlow()
         every { socialSocket.mediaCaptionTranslationUpdated } returns MutableSharedFlow()
         every { socialSocket.postUpdated } returns MutableSharedFlow()
-        every { socialSocket.postReposted } returns MutableSharedFlow()
+        every { socialSocket.postReposted } returns reposted
         return FeedViewModel(
             repository, session, socialSocket, MeeshyConfig(), mockk(relaxed = true), mockk(relaxed = true),
             mockk(relaxed = true), publications,
@@ -177,5 +179,27 @@ class FeedRepostTest {
 
         coVerify(exactly = 1) { repository.repost("root9", PostType.POST, null, false) }
         assertThat(vm.shown("p1").repostCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a friend's repost in story announced live joins the tray, never the feed`() = runTest {
+        serve(card("p1"))
+        val vm = viewModel()
+
+        reposted.emit(SocketPostRepostedData(originalPostId = "s1", repost = card("rs", type = "STORY")))
+        reposted.emit(SocketPostRepostedData(originalPostId = "s2", repost = card("rt", type = "STATUS")))
+
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("p1")
+        assertThat(vm.state.value.newPostsCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `a friend's repost into the feed announced live still lands at its head`() = runTest {
+        serve(card("p1"))
+        val vm = viewModel()
+
+        reposted.emit(SocketPostRepostedData(originalPostId = "p0", repost = card("rp", type = "POST")))
+
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("rp", "p1").inOrder()
     }
 }
