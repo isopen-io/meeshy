@@ -68,6 +68,7 @@ import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.format.bubbleClockLabel
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.sticker.MessageStickerArtwork
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -150,6 +151,7 @@ internal object FlatRowMetrics {
     val quoteRail = FocalMetrics.Quote.RAIL_WIDTH.toFloat().dp
     val mediaRadius = FocalMetrics.Media.RADIUS.toFloat().dp
     val mediaMaxWidth = 300.dp
+    val stickerSide = FocalMetrics.Sticker.SIDE.toFloat().dp
     const val TEXT_SIZE_SP = 15f
     val lineHeightSp = (TEXT_SIZE_SP * FocalMetrics.Text.LINE_HEIGHT_RATIO.toFloat())
     const val TIME_SIZE_SP = 10.5f
@@ -382,6 +384,12 @@ private fun FlatContentSections(
                 StoryCitationCard(story = story, accentColor = accentColor, onOpen = callbacks.onStoryCitationClick)
             }
         }
+        val sticker = content.drawnSticker
+        if (sticker != null) {
+            // iOS `FocalRow.stickerBlock` : le sticker se dessine, sans carte ni fond, au côté de la rangée.
+            MessageStickerArtwork(sticker, side = FlatRowMetrics.stickerSide)
+            return@Column
+        }
         if (content.hasRenderedAttachments) {
             Column(
                 modifier = Modifier
@@ -467,7 +475,7 @@ private fun FlatText(content: BubbleContent, accentColor: Color, ink: Color, dec
     if (content.text.isBlank()) return
     val emojiFontSize = if (content.replyToText == null) EmojiDetector.fontSizeSp(content.emojiOnlyCount) else null
     if (emojiFontSize != null) {
-        Text(text = content.text.trim(), fontSize = emojiFontSize.sp, lineHeight = (emojiFontSize * 1.15f).sp)
+        Text(text = content.text.trim(), style = largeEmojiTextStyle(emojiFontSize.sp))
         return
     }
     val excerpt = remember(content.text) { LongMessageExcerpt.of(content.text) }
