@@ -19,6 +19,9 @@ import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.UserSearchResult
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 import me.meeshy.sdk.user.UserRepository
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -52,6 +55,7 @@ internal class RoomSuggestionsSource(
     private val syncMetaDao: SyncMetaDao,
     private val userRepository: UserRepository,
     private val clock: CacheClock,
+    private val fence: AccountFence? = null,
 ) : SwrCacheSource<List<UserSearchResult>> {
 
     override fun observe(): Flow<List<UserSearchResult>?> =
@@ -69,13 +73,14 @@ internal class RoomSuggestionsSource(
     override fun lastSyncedAt(): Flow<Long?> = syncMetaDao.observe(RESOURCE_KEY)
 
     override suspend fun revalidate() {
+        val ticket = fence?.currentTicket()
         when (val result = userRepository.searchUsers(SUGGESTIONS_QUERY, SUGGESTIONS_LIMIT, 0)) {
-            is NetworkResult.Success -> persist(result.data)
+            is NetworkResult.Success -> persist(result.data, ticket)
             is NetworkResult.Failure -> throw SuggestionsSyncException(result.error.message)
         }
     }
 
-    private suspend fun persist(users: List<UserSearchResult>) {
+    private suspend fun persist(users: List<UserSearchResult>, ticket: AccountTicket?) {
         val now = clock.nowMillis()
         val rows = users.mapIndexed { index, user ->
             SuggestionEntity(
@@ -85,14 +90,16 @@ internal class RoomSuggestionsSource(
                 cachedAt = now,
             )
         }
-        database.withTransaction {
-            if (rows.isEmpty()) {
-                suggestionDao.clear()
-            } else {
-                suggestionDao.upsertAll(rows)
-                suggestionDao.deleteNotIn(rows.map { it.userId })
+        fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                if (rows.isEmpty()) {
+                    suggestionDao.clear()
+                } else {
+                    suggestionDao.upsertAll(rows)
+                    suggestionDao.deleteNotIn(rows.map { it.userId })
+                }
+                syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now))
             }
-            syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now))
         }
     }
 
@@ -118,6 +125,7 @@ class SuggestionsRepository @Inject constructor(
     suggestionDao: SuggestionDao,
     syncMetaDao: SyncMetaDao,
     userRepository: UserRepository,
+    fence: AccountFence? = null,
 ) {
     private val source = RoomSuggestionsSource(
         database = database,
@@ -125,6 +133,7 @@ class SuggestionsRepository @Inject constructor(
         syncMetaDao = syncMetaDao,
         userRepository = userRepository,
         clock = SystemCacheClock,
+        fence = fence,
     )
 
     fun suggestionsStream(

@@ -30,6 +30,7 @@ import { MessageHandler } from './handlers/MessageHandler';
 import { StatusHandler } from './handlers/StatusHandler';
 import { ConversationViewingHandler } from './handlers/ConversationViewingHandler';
 import { captureNoticeDelivery, listenContentCapture } from './handlers/ContentCaptureHandler';
+import { e2eeSignalHandlerDeps, listenE2EESignals } from './handlers/E2EESignalHandler';
 import { ReactionHandler } from './handlers/ReactionHandler';
 import { AttachmentReactionHandler } from './handlers/AttachmentReactionHandler';
 import { AttachmentReactionService } from '../services/AttachmentReactionService';
@@ -111,12 +112,14 @@ import { broadcastReactionMutation } from './broadcastReactionMutation';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
+import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { syncConversationListOnNewMessage } from './postMessageSyncFanOut';
 import { wireCallMessageBroadcasters } from './callMessageBroadcasters';
 import { attachSocketIORedisAdapter, type SocketIORedisAdapterHandle } from './redis-adapter';
 import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
+import { loadTranslatableMessage } from '../services/messaging/atRestTranslationSource';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -1143,6 +1146,8 @@ export class MeeshySocketIOManager {
     actorParticipantId: string | null | undefined;
     messageId: string;
     payload: QueuedPayloadFor<'link-message'>;
+    /** #12822 — la conversation est chiffrée au repos : l'entrée part scellée. */
+    atRest: boolean;
   }): Promise<void> {
     await this._enqueueForOfflineParticipants({ ...params, eventType: 'link-message' });
   }
@@ -1383,8 +1388,8 @@ export class MeeshySocketIOManager {
   /**
    * Applique la visibilité de présence de CHAQUE contact pour CE lecteur —
    * amitié acceptée, rôle du lecteur, blocage bidirectionnel et préférences,
-   * tenus ensemble par `PresenceVisibilityService.resolveForTargets`, la même
-   * porte que `GET /users/presence`.
+   * tenus ensemble par `PresenceVisibilityService.resolveForPresenceEvent` (porte
+   * de `GET /users/presence` + blocage plus fort que le privilège ADMIN, #13298).
    *
    * Directive produit (2026-08-25) : partager une conversation n'autorise plus
    * rien. Le prédécesseur (`_applyPresencePrefs`) n'appliquait que les
@@ -1407,7 +1412,7 @@ export class MeeshySocketIOManager {
     users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[],
   ): Promise<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[]> {
     if (users.length === 0) return users;
-    const visibility = await this.presenceVisibilityService.resolveForTargets(
+    const visibility = await this.presenceVisibilityService.resolveForPresenceEvent(
       viewer,
       users.map(u => u.userId),
     );
@@ -1854,6 +1859,8 @@ export class MeeshySocketIOManager {
       this.conversationViewingHandler.listen(socket);
       // #9617 — une capture d'écran d'un contenu qui disparaît, annoncée au fil.
       listenContentCapture(socket, { prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers, deliver: captureNoticeDelivery({ io: this.io, prisma: this.prisma, readStatusService: this.readStatusService, bridgeService: this.bridgeService }) });
+      // #13142 — la porte unique des signaux chiffrés d'une conversation e2ee.
+      listenE2EESignals(socket, e2eeSignalHandlerDeps({ prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers }));
 
       this.callEventsHandler.setupCallEvents(
         socket,
@@ -2109,10 +2116,8 @@ export class MeeshySocketIOManager {
       // traduit à un non-participant : le contrôle n'existait que côté on-demand,
       // donc un message déjà mis en cache fuitait vers n'importe quel socket
       // connaissant son id (IDOR / message-content disclosure).
-      const message = await this.prisma.message.findUnique({
-        where: { id: messageId },
-        select: { id: true, conversationId: true, content: true, originalLanguage: true, senderId: true, encryptionMode: true }
-      });
+      // #11381 — le texte d'un message `server`/`hybrid` est ouvert par la passerelle ; scellé, il reste vide.
+      const message = await loadTranslatableMessage(this.prisma, messageId);
 
       if (!message || !message.content) {
         socket.emit(SERVER_EVENTS.ERROR, {
@@ -2715,9 +2720,8 @@ export class MeeshySocketIOManager {
    * `return` précoce sur cette préférence coupait les trois d'un coup. La
    * décision « quelle charge pour quel sous-ensemble » vit dans
    * `presenceStatusEmissions` (`./presence-audience`), pure et testée à part —
-   * `lastActiveAt` y tombe avec `showLastSeen` pour les amis seulement, car il
-   * voyage À CÔTÉ d'`isOnline` et un gate posé sur le seul drapeau le
-   * laisserait partir.
+   * `lastActiveAt` y est nul pour les AMIS (binaires, #13928) et tombe avec
+   * `showLastSeen` pour les proches : il voyage À CÔTÉ d'`isOnline`.
    *
    * Un sujet DÉSACTIVÉ n'émet AUCUNE charge — pas même la privilégiée. La loi
    * partagée (`resolvePresenceVisibility`) tranche `targetIsDeactivated` AVANT
@@ -2769,7 +2773,7 @@ export class MeeshySocketIOManager {
         for (const emission of presenceStatusEmissions({
           subjectId: participant.id,
           isAnonymous: true,
-          friendIds: [],
+          friendLevels: new Map(),
           adminIds,
           lastActiveAt: participant.lastActiveAt,
           showOnlineStatus: true,
@@ -2807,16 +2811,20 @@ export class MeeshySocketIOManager {
       // amis, ni les ADMIN, ni ses autres appareils ne reçoivent la transition.
       if (user.deactivatedAt) return;
 
+      // La relation de blocage est lue UNE fois (#13350) : elle retire les
+      // bloqués de l'audience AMIS et, plus bas, leurs sockets par `.except()`.
+      const blockedUserIds = await getBlockRelatedUserIds(this.prisma, user.id);
+
       // La requête d'amitiés n'est même pas lancée quand elle ne peut servir
       // personne : `showOnlineStatus = false` retire tout le sous-ensemble AMIS.
-      const friendIds = privacyPrefs.showOnlineStatus
-        ? [...await this.presenceVisibilityService.acceptedFriendIds(user.id)]
-        : [];
+      const friendLevels = privacyPrefs.showOnlineStatus
+        ? await this.presenceVisibilityService.acceptedFriendLevels(user.id, { blockRelated: blockedUserIds })
+        : new Map();
 
       const emissions = presenceStatusEmissions({
         subjectId: user.id,
         isAnonymous: false,
-        friendIds,
+        friendLevels,
         adminIds,
         lastActiveAt: user.lastActiveAt,
         showOnlineStatus: privacyPrefs.showOnlineStatus,
@@ -2840,7 +2848,6 @@ export class MeeshySocketIOManager {
       // socket vivant n'apporte rien à `.except()`. `userSockets` est vidé à la
       // déconnexion (`AuthHandler.handleDisconnection`), donc l'intersection se
       // fait ici, en mémoire, au lieu d'en base.
-      const blockedUserIds = await getBlockRelatedUserIds(this.prisma, user.id);
       const blockedSocketIds = [...blockedUserIds].flatMap(
         id => [...(this.userSockets.get(id) ?? [])],
       );
@@ -3268,6 +3275,7 @@ export class MeeshySocketIOManager {
         eventType: 'edited',
         messageId: message.id,
         payload: editedPayload,
+        atRest: isServerAtRestMode(message.encryptionMode),
       });
     } catch (error) {
       logger.error('broadcast message:edited (call) failed', error);

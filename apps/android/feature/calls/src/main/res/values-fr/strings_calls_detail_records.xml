@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_network_title">Qualité et réseau</string>
+    <string name="call_network_timeline">Chronologie</string>
+    <string name="call_network_packet_loss">Perte de paquets</string>
+    <string name="call_network_latency">Latence</string>
+    <string name="call_network_jitter">Gigue</string>
+    <string name="call_network_reconnections">Reconnexions</string>
+    <string name="call_network_route">Chemin réseau</string>
+    <string name="call_network_route_relayed">Relais</string>
+    <string name="call_network_route_direct">Direct</string>
+    <string name="call_network_profiles">Profil de données</string>
+    <string name="call_network_faults">Incidents média</string>
+    <string name="call_network_peak">%1$s (pic %2$s)</string>
+    <string name="call_network_ms">%1$s ms</string>
+    <string name="call_network_event_link_connecting">Liaison en cours</string>
+    <string name="call_network_event_link_connected">Liaison établie</string>
+    <string name="call_network_event_link_disconnected">Liaison interrompue</string>
+    <string name="call_network_event_link_failed">Liaison perdue</string>
+    <string name="call_network_event_reconnecting">Reconnexion, tentative %1$d</string>
+    <string name="call_network_event_reconnected">Reconnecté</string>
+    <string name="call_network_event_route">Chemin : %1$s</string>
+    <string name="call_network_event_tier">Qualité : %1$s</string>
+    <string name="call_network_event_profile">Profil : %1$s</string>
+    <string name="call_network_event_fault">Incident média</string>
+    <string name="call_network_event_ended">Fin de l’appel</string>
+    <string name="call_network_tier_excellent">Excellente</string>
+    <string name="call_network_tier_good">Bonne</string>
+    <string name="call_network_tier_fair">Moyenne</string>
+    <string name="call_network_tier_poor">Faible</string>
+    <string name="call_transcript_disclaimer">Copie chiffrée conservée sur cet appareil. Le journal de l’appel est aussi conservé sur le serveur Meeshy, lisible par ses seuls participants. Il inclut les paroles de votre interlocuteur, telles que reçues pendant l’appel.</string>
+    <string name="call_transcript_delete">Supprimer ce transcript</string>
+    <string name="call_transcript_delete_confirm_title">Supprimer ce transcript ?</string>
+    <string name="call_transcript_delete_confirm_message">Il disparaît de cet appareil, définitivement. Le journal conservé sur le serveur n’est pas effacé.</string>
+</resources>

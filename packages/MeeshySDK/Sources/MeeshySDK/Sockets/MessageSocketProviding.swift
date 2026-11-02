@@ -72,6 +72,8 @@ public protocol MessageSocketProviding: Sendable {
     /// enrichissement async (transcription Whisper, traduction audio NLLB+TTS).
     /// Le subscriber remplace l'attachment dans son store atomiquement.
     var attachmentUpdated: PassthroughSubject<AttachmentUpdatedEvent, Never> { get }
+    /// `attachment:deleted` — une pièce retirée d'un message par un membre, diffusée à la room de la conversation.
+    var attachmentDeleted: PassthroughSubject<AttachmentDeletedEvent, Never> { get }
     var conversationJoined: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var conversationJoinError: PassthroughSubject<ConversationJoinErrorEvent, Never> { get }
     var conversationLeft: PassthroughSubject<ConversationParticipationEvent, Never> { get }

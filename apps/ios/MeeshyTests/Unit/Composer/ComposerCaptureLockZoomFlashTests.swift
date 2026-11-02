@@ -148,15 +148,11 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
     // MARK: - Le vocabulaire, dans les sept langues
 
     private static let clesNeuves = [
-        "composer.scene.empty.title",
-        "composer.scene.empty.invite",
+        "composer.scene.empty.line",
         "composer.camera.lock.hint",
         "composer.camera.lock.done",
         "composer.camera.zoom",
         "composer.camera.flashIntensity",
-        "composer.camera.gesture.tapArm",
-        "composer.camera.gesture.tapAgainPhoto",
-        "composer.camera.gesture.holdFilm",
     ]
 
     func test_catalogue_serLesClesNeuvesDansLesSeptLangues() throws {
@@ -171,74 +167,53 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
 
     func test_catalogue_laSceneVideParleAuRegistreDuComposer() throws {
         let catalogue = try Self.catalogue()
-        let titre = try XCTUnwrap(catalogue["composer.scene.empty.title"])
-        XCTAssertTrue(titre["fr"]?.contains("votre") == true, "le composer vouvoie en français")
-        XCTAssertTrue(titre["de"]?.contains("deine") == true, "et tutoie en allemand, comme son catalogue")
+        let ligne = try XCTUnwrap(catalogue["composer.scene.empty.line"])
+        XCTAssertTrue(ligne["fr"]?.hasPrefix("Touchez") == true, "le composer vouvoie en français")
+        XCTAssertTrue(ligne["de"]?.hasPrefix("Tippe") == true, "et tutoie en allemand, comme son catalogue")
     }
+
+    // MARK: - La scène vide : UNE ligne (#13899, inventaire B13 du composer « scène d'abord »)
 
     @MainActor
-    func test_sceneVide_ditTitreInvitationPuisGestes() {
-        let parle = ComposerSceneCameraCopy.emptySceneSpoken(.photoOrVideo)
-        XCTAssertTrue(parle.hasPrefix(ComposerSceneCameraCopy.emptySceneTitle))
-        XCTAssertTrue(parle.contains(ComposerSceneCameraCopy.emptySceneInvite))
-        XCTAssertTrue(parle.hasSuffix(ComposerSceneCameraCopy.gestureLine(.holdFilm)))
-        XCTAssertTrue(parle.contains(ComposerSceneCameraCopy.gestureLine(.tapArm)))
-        XCTAssertTrue(parle.contains(ComposerSceneCameraCopy.gestureLine(.tapAgainPhoto)))
-    }
-
-    // MARK: - Les gestes : une ligne chacun, précédée de son icône (complément porteur)
-
-    /// **L'indication dit les DEUX temps de la photo** (#8711) : toucher arme,
-    /// toucher encore prend — puis la vidéo au maintien.
-    func test_gestes_armerPuisPhotographierPuisFilmer_chacunSaLigne() {
-        XCTAssertEqual(ComposerSceneQuickCapture.gestureLines(.photoOrVideo), [.tapArm, .tapAgainPhoto, .holdFilm])
-        XCTAssertEqual(ComposerSceneQuickCapture.gestureLines(.videoOnly), [.holdFilm],
-                       "un réel n'offre pas la photo : sa ligne ne s'affiche pas")
-    }
-
-    func test_gestes_chaqueLigneASonIcone() {
-        XCTAssertEqual(ComposerSceneQuickCapture.GestureLine.tapArm.symbol, "camera.viewfinder")
-        XCTAssertEqual(ComposerSceneQuickCapture.GestureLine.tapAgainPhoto.symbol, "camera")
-        XCTAssertEqual(ComposerSceneQuickCapture.GestureLine.holdFilm.symbol, "video")
-    }
-
-    func test_laSceneVide_nePorteAucunAppareilPhotoAuDessusDuTitre() throws {
-        let cadre = try source("Meeshy/Features/Main/Composer/ComposerSceneCameraFrame.swift")
-        XCTAssertFalse(cadre.contains("hint == .videoOnly ? \"video\" : \"camera\""),
-                       "l'appareil photo au-dessus du titre ne représente pas une scène")
-        XCTAssertTrue(cadre.contains("ComposerSceneQuickCapture.gestureLines(hint)"))
+    func test_sceneVide_neDitQuUneLigne_quelQueSoitLeFormat() {
+        XCTAssertEqual(ComposerSceneCameraCopy.emptySceneSpoken(.photoOrVideo), ComposerSceneCameraCopy.emptySceneLine)
+        XCTAssertEqual(ComposerSceneCameraCopy.emptySceneSpoken(.videoOnly), ComposerSceneCameraCopy.emptySceneLine)
+        XCTAssertFalse(ComposerSceneCameraCopy.emptySceneLine.contains("\n"))
     }
 
     // MARK: - Le câblage
 
-    func test_laSceneVideMontreLeTitreEtLInvitation() throws {
-        let cadre = try source("Meeshy/Features/Main/Composer/ComposerSceneCameraFrame.swift")
-        XCTAssertTrue(cadre.contains("ComposerSceneCameraCopy.emptySceneTitle"))
-        XCTAssertTrue(cadre.contains("ComposerSceneCameraCopy.emptySceneInvite"))
+    func test_laSceneVideMontreUneSeuleLigne() throws {
+        let cadre = try source("Meeshy/Features/Composer/ComposerSceneCameraFrame.swift")
+        XCTAssertTrue(cadre.contains("ComposerSceneCameraCopy.emptySceneLine"))
+        XCTAssertFalse(cadre.contains("emptySceneTitle"), "le titre de vente a quitté la scène vide")
+        XCTAssertFalse(cadre.contains("emptySceneInvite"), "l'invitation a quitté la scène vide")
+        XCTAssertFalse(cadre.contains("gestureLines"), "les trois lignes de gestes ont quitté la scène vide")
+        XCTAssertTrue(cadre.contains(".lineLimit(1)"))
     }
 
     func test_laBarreMontreLeCadenasLeZoomEtLeCurseur() throws {
-        let barre = try source("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        let barre = try source("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
         XCTAssertTrue(barre.contains("ComposerFlashIntensity.showsSlider"))
         XCTAssertTrue(barre.contains("accessibilityAdjustableAction"), "le curseur est ajustable à la voix")
         // #9351 — le cadenas, le zoom et la phrase sont passés au bas de la capture.
-        let bas = try source("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try source("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("ComposerCaptureHold.showsLock"))
         XCTAssertTrue(bas.contains("ComposerCaptureZoomBar("), "les crans, montés par la barre qui morphe (#9753)")
         XCTAssertTrue(bas.contains("ComposerSceneCameraCopy.lockHint"), "la phrase du bas dit le cadenas")
-        let bande = try source("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let bande = try source("Meeshy/Features/Composer/ComposerLookStrip.swift")
         XCTAssertTrue(bande.contains("session.releaseStaleHold()"),
                       "un appui long dont la levée s'est perdue se clôt sur la miniature choisie")
     }
 
     func test_lHoteZoomeLaCameraEtRegleLaTorche() throws {
         // #9134 — la machine de capture câble les lois pour les deux montages.
-        let machine = try source("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
+        let machine = try source("Meeshy/Features/Composer/ComposerCaptureSession.swift")
         XCTAssertTrue(machine.contains("ComposerCaptureZoom.factor"))
         XCTAssertTrue(machine.contains("ComposerCaptureHold.release"))
         XCTAssertTrue(machine.contains("ComposerCaptureHold.verticalDrag"))
         XCTAssertTrue(machine.contains("ComposerFlashIntensity.floorWhite"))
-        let chrome = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try source("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("ComposerCaptureGesture.action(zone: .scene, gesture: .drag"),
                       "le glissé de la nappe lit la table, qui suit la même loi")
         let camera = try source("Meeshy/Features/Main/Components/CameraModel.swift")
@@ -458,7 +433,7 @@ final class ComposerCaptureFocusAndPinchTests: XCTestCase {
     // MARK: - Le câblage
 
     func test_leChromePartage_porteLeDoubleToucherEtLePincement() throws {
-        let chrome = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try source("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("SpatialTapGesture(count: 1, coordinateSpace: .global)"), "un toucher vise (#9464)")
         XCTAssertTrue(chrome.contains("session.focus(atGlobalPoint:"))
         XCTAssertTrue(chrome.contains("MagnificationGesture()"), "pincer zoome")
@@ -477,8 +452,8 @@ final class ComposerCaptureFocusAndPinchTests: XCTestCase {
     }
 
     func test_lesDeuxMontages_profitentDesGestesSansLesRecabler() throws {
-        for montage in ["Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift",
-                        "Meeshy/Features/Main/Composer/ComposerViewfinder.swift"] {
+        for montage in ["Meeshy/Features/Composer/MeeshyComposerHost+Viewfinder.swift",
+                        "Meeshy/Features/Composer/ComposerViewfinder.swift"] {
             let code = try source(montage)
             XCTAssertTrue(code.contains("ComposerCaptureMount("), "\(montage) monte le montage partagé")
             XCTAssertFalse(code.contains("MagnificationGesture"), "\(montage) recâble le pincement")

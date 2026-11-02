@@ -875,8 +875,8 @@ final class MessageExitOfferTests: XCTestCase {
     // MARK: - Rangée de durée de l'écran de partage
 
     func test_durationRow_speaksAWholeDuration() {
-        XCTAssertFalse(ShareDurationRow.spokenDuration(seconds: 30).isEmpty)
-        XCTAssertNotEqual(ShareDurationRow.spokenDuration(seconds: 30), ShareDurationRow.spokenDuration(seconds: 300))
+        XCTAssertFalse(MediaFormat.duration(30, style: .spoken).isEmpty)
+        XCTAssertNotEqual(MediaFormat.duration(30, style: .spoken), MediaFormat.duration(300, style: .spoken))
     }
 
     // MARK: - Visionneuses
@@ -1082,7 +1082,7 @@ final class MessageExitOfferTests: XCTestCase {
     /// #11224 — la Rivière n'a plus de menu à elle : sa copie est celle du menu
     /// unifié, gardée par le transport. Elle n'écrit plus dans le presse-papiers.
     func test_river_neverCopiesByItself_theUnifiedMenuDoes() throws {
-        let code = try source("Riviere/View/RiverBubbleView.swift")
+        let code = try source("../River/View/RiverBubbleView.swift")
         XCTAssertFalse(code.contains("UIPasteboard"))
         XCTAssertTrue(code.contains("onLongPress(content.bubble.messageId)"))
     }
@@ -1157,13 +1157,13 @@ final class MessageExitOfferTests: XCTestCase {
     /// celui de son porteur, et seuls les hôtes de PUBLICATION ouvrent.
     func test_hosts_poseTheGateOfTheirCarrier() throws {
         XCTAssertTrue(try source("Views/ThemedMessageBubble.swift").contains(".contentExitGate(message.exitGate)"))
-        XCTAssertTrue(try source("Focal/Row/FocalRow.swift").contains(".contentExitGate(content.exitGate)"))
+        XCTAssertTrue(try source("../Focal/Row/FocalRow.swift").contains(".contentExitGate(content.exitGate)"))
         XCTAssertTrue(try source("Views/ConversationView+MediaGallery.swift").contains(".contentExitGate(mediaExitGate)"))
         XCTAssertTrue(try source("Views/ConversationMediaViews.swift").contains(".mediaExitGate(carriers:allAudioItems.map(\\.message))"))
         let hub = try source("Components/MediaHub/ConversationMediaHubView.swift")
         XCTAssertTrue(hub.contains(".contentExitGate(model.carrier(item.messageId)?.exitGate??.sealed)"))
         XCTAssertFalse(hub.contains(".contentExitGate(.open)"))
-        for conversationHost in ["Views/ThemedMessageBubble.swift", "Focal/Row/FocalRow.swift",
+        for conversationHost in ["Views/ThemedMessageBubble.swift", "../Focal/Row/FocalRow.swift",
                                  "Views/ConversationView+MediaGallery.swift", "Views/ConversationMediaViews.swift"] {
             XCTAssertFalse(try source(conversationHost).contains(".contentExitGate(.open)"),
                            "\(conversationHost) : un hôte de conversation n'ouvre jamais d'office")

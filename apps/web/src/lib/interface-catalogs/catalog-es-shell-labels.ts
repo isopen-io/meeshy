@@ -10,6 +10,8 @@ const esShellLabels = {
   'thread.header.back.unread.one': 'Atrás — {count} mensaje sin leer en otra parte',
   'thread.header.back.unread.other': 'Atrás — {count} mensajes sin leer en otra parte',
   'thread.header.details': 'Detalles de la conversación',
+  'thread.header.encryption.endToEnd': 'Cifrado de extremo a extremo',
+  'thread.header.encryption.server': 'Cifrado en el servidor',
   'thread.scrollToBottom': 'Desplazarse hasta abajo',
   'thread.scrollToBottom.unread.one': '{count} mensaje sin leer, Desplazarse hasta abajo',
   'thread.scrollToBottom.unread.other': '{count} mensajes sin leer, Desplazarse hasta abajo',

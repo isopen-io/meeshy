@@ -123,7 +123,7 @@ final class ConversationSyncEngineRehydratationTests: XCTestCase {
           }
         }
         """
-        return try! APIClient.makeAPIPayloadDecoder().decode(APIConversation.self, from: Data(json.utf8))
+        return try! MeeshyCoders.decoder(.api).decode(APIConversation.self, from: Data(json.utf8))
     }
 
     private func pageRiche() -> OffsetPaginatedAPIResponse<[APIConversation]> {
@@ -243,7 +243,7 @@ final class ConversationSyncEngineRehydratationTests: XCTestCase {
     }
 
     private func pageRiche(json: String) -> OffsetPaginatedAPIResponse<[APIConversation]> {
-        let ligne = try! APIClient.makeAPIPayloadDecoder().decode(APIConversation.self, from: Data(json.utf8))
+        let ligne = try! MeeshyCoders.decoder(.api).decode(APIConversation.self, from: Data(json.utf8))
         return OffsetPaginatedAPIResponse<[APIConversation]>(
             success: true, data: [ligne],
             pagination: OffsetPagination(total: 1, hasMore: false, limit: 100, offset: 0),

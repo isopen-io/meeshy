@@ -201,6 +201,14 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
 
       const registeredAt = new Date();
 
+      // A token belongs to the LAST account that registered it: the previous
+      // owner's rows are detached first, so no instant has the token aimed at
+      // two accounts (#13570).
+      await fastify.prisma.pushToken.updateMany({
+        where: { isActive: true, token, userId: { not: userId } },
+        data: { isActive: false }
+      });
+
       // Upsert the token (create or update if exists)
       const pushToken = await fastify.prisma.pushToken.upsert({
         where: {
@@ -247,21 +255,19 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
       });
 
       // A device holds ONE live token per type: superseded tokens of the same
-      // (userId, deviceId, type) and the same APNs token left behind by a
-      // previous owner (reassigned device) must stop receiving sends.
-      await fastify.prisma.pushToken.updateMany({
-        where: {
-          isActive: true,
-          id: { not: pushToken.id },
-          OR: [
-            ...(body.deviceId
-              ? [{ userId, deviceId: body.deviceId, type: tokenType }]
-              : []),
-            { token, userId: { not: userId } },
-          ],
-        },
-        data: { isActive: false }
-      });
+      // (userId, deviceId, type) must stop receiving sends.
+      if (body.deviceId) {
+        await fastify.prisma.pushToken.updateMany({
+          where: {
+            isActive: true,
+            id: { not: pushToken.id },
+            userId,
+            deviceId: body.deviceId,
+            type: tokenType,
+          },
+          data: { isActive: false }
+        });
+      }
 
       await retireSurplusTokens(fastify, { userId, type: tokenType, keepId: pushToken.id });
 

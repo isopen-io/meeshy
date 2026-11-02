@@ -196,7 +196,7 @@ final class FeedSceneCoherenceGuardTests: XCTestCase {
     /// scène COMPOSÉE à côté restait gelée. C'est l'incohérence exacte que la
     /// directive nomme.
     func test_storyRepostEmbed_derivesItsPauseFromTheElection() throws {
-        let text = try source(of: "Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift")
+        let text = try source(of: "Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift")
         XCTAssertTrue(
             text.contains("isPaused: !isActive"),
             "La pause de l'embed doit être DÉRIVÉE de l'élection du viewport. Laissée à " +
@@ -247,7 +247,7 @@ final class FeedSceneCoherenceGuardTests: XCTestCase {
     /// se paie sur toutes les cellules.
     func test_bothLeaves_areEquatableAndMountedAsSuch() throws {
         let autoplay = try source(of: "Meeshy/Features/Main/Views/FeedSceneAutoplay.swift")
-        let embed = try source(of: "Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift")
+        let embed = try source(of: "Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift")
 
         XCTAssertTrue(autoplay.contains("extension PostSceneCard: Equatable"),
                       "PostSceneCard doit être Equatable.")

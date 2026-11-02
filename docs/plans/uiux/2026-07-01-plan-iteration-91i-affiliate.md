@@ -2,7 +2,7 @@
 
 **Base** : `main` HEAD (`ae1d5434`)
 **Branche** : `claude/upbeat-euler-f80iih`
-**Fichier** : `apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift`
+**Fichier** : `apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift`
 
 ## Objectif
 Rendre l'écran « Parrainage » conforme Dynamic Type + combler les lacunes VoiceOver, sans toucher

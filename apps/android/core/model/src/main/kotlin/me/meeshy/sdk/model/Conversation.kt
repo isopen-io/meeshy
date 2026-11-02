@@ -51,6 +51,12 @@ data class ApiConversation(
     val lastMessageTranslations: Map<String, String>? = null,
     val lastMessageOriginalLanguage: String? = null,
     val unreadCount: Int = 0,
+    /**
+     * Ce que cette conversation a rapporté au LECTEUR (« N (M) 🔥 », #8906) : servi par la passerelle sur
+     * chaque ligne de la liste et du détail. Alimente la Flamme de l'en-tête du fil ; jamais recalculé ici.
+     */
+    @Serializable(with = TolerantEngagementSerializer::class)
+    val viewerEngagement: ConversationEngagementSnapshot? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
     val defaultWriteRole: String? = null,
@@ -153,6 +159,16 @@ fun ApiConversation.resolvedLastMessagePreview(preferredLanguages: List<String>)
 fun ApiConversation.currentUserRole(currentUserId: String?): MemberRole =
     MemberRole.from(participants.firstOrNull { it.userId == currentUserId }?.role)
 
+/**
+ * Le lecteur est-il un membre ACTIF de cette conversation ? La passerelle ne sert
+ * [ApiConversation.currentUserRole] qu'à un participant actif (`resolveCallerParticipant`) ;
+ * à défaut, sa présence dans le roster servi le prouve aussi. Rien de cela ⇒ `false` :
+ * une appartenance inconnue n'en est pas une (#14066, fail-closed).
+ */
+fun ApiConversation.isActiveMember(currentUserId: String?): Boolean =
+    currentUserRole != null ||
+        (currentUserId != null && participants.any { it.userId == currentUserId || it.id == currentUserId })
+
 @Serializable
 data class ApiParticipant(
     val id: String,
@@ -162,6 +178,13 @@ data class ApiParticipant(
     val avatar: String? = null,
     val role: String? = null,
     val joinedAt: String? = null,
+    /**
+     * La présence que la passerelle sert sur la ligne de liste (amis acceptés / soi / ADMIN, sinon
+     * masquée : `false` et `null`). Elle ne sert qu'à SEMER la carte de présence au démarrage à froid
+     * ([servedPresence]) : le cache Room n'en garde rien ([withoutServedPresence]).
+     */
+    val isOnline: Boolean? = null,
+    val lastActiveAt: String? = null,
 )
 
 /**
@@ -232,6 +255,9 @@ internal object LossyTagListSerializer : KSerializer<List<String>> by LossyListS
 internal object LossyRecentMessagesSerializer :
     KSerializer<List<ApiConversationLastMessage>> by LossyListSerializer(ApiConversationLastMessage.serializer())
 
+internal object TolerantEngagementSerializer :
+    KSerializer<ConversationEngagementSnapshot?> by TolerantSerializer(ConversationEngagementSnapshot.serializer())
+
 internal object TolerantMessageCountSerializer :
     KSerializer<ApiMessageCount?> by TolerantSerializer(ApiMessageCount.serializer())
 
@@ -249,6 +275,8 @@ data class ApiConversationPreferences(
     val tags: List<String> = emptyList(),
     /** Position de la conversation dans sa catégorie ; `null` = aucun ordre manuel. */
     val orderInCategory: Int? = null,
+    /** Le fond et l'accent PERSONNELS (`ConversationAppearance`), blob lu en tolérant — `null` = Signature. */
+    val appearance: kotlinx.serialization.json.JsonElement? = null,
     /**
      * Optimistic-vs-socket arbiter for `user:preferences-updated`
      * ([applyRemote]) — the port of iOS `ConversationUserState.version` and of
@@ -268,6 +296,13 @@ data class CreateConversationRequest(
     val type: String,
     val title: String? = null,
     val participantIds: List<String>,
+    /**
+     * Le mode de chiffrement choisi sur l'écran de création (`server` | `hybrid` | `e2ee`,
+     * [CreationEncryptionMode.wire]). `null` = aucun choix : le champ part absent (encodeur
+     * `explicitNulls = false`) et la passerelle pose Serveur — c'est le cas de toute création hors
+     * de l'écran de création (profil, partage, transfert, réponse à une story).
+     */
+    val encryptionMode: String? = null,
 )
 
 /**

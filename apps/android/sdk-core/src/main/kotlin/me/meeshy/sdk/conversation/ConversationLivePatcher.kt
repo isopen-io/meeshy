@@ -111,7 +111,7 @@ class ConversationLivePatcher @Inject constructor(
 
     /** Un bannissement est levé : +1 seulement si l'appartenance est rendue. */
     suspend fun applyUnbanned(event: ParticipantUnbannedEvent) {
-        if (event.membershipRestored == false) return
+        if (event.memberCount == null && event.membershipRestored == false) return
         if (event.names(readerId().orEmpty())) {
             discover(event.conversationId)
             return

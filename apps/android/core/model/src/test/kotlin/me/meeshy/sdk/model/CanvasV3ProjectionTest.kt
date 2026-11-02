@@ -337,6 +337,49 @@ class CanvasV3ProjectionTest {
     }
 
     /**
+     * **Le cadrage d'un fond posé en plan `content` traverse la projection** (#14199, iOS « second passage » de
+     * `StoryEffects(rendering:)`). Le post de recette « Hors ligne 13416 » porte son image de fond en `plane: content`,
+     * `isBackground: true`, et son AJUSTÉ (`videoFitMode: "fit"`) dans `payload.transform`. Seul le plan `bg` était lu : le
+     * cadrage tombait, le player remplissait la scène et rognait le texte gravé près du bord.
+     */
+    @Test
+    fun `le cadrage d'un fond pose en plan content traverse la projection`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "page-1", "objects": [
+              { "id": "background", "kind": "media", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                "plane": "content", "z": 0,
+                "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                "payload": { "postMediaId": "6ae0f5853ee363fd25a2d2b9", "mediaURL": "2026/10/u/hors-ligne.webp",
+                             "mediaType": "image", "isBackground": true,
+                             "transform": { "videoFitMode": "fit", "backdrop": "black" }, "aspectRatio": 0.75 } }
+            ] } ] }
+            """.trimIndent(),
+        )
+
+        assertThat(projected.backgroundTransform?.videoFitMode).isEqualTo("fit")
+        assertThat(projected.backgroundTransform?.backdrop).isEqualTo("black")
+        assertThat(projected.mediaObjects?.single()?.isBackground).isTrue()
+    }
+
+    /** Un média POSÉ (pas le fond) ne prête jamais son `payload.transform` au fond de la scène. */
+    @Test
+    fun `un media pose ne prete pas son cadrage au fond`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+              { "id": "m1", "kind": "media", "anchor": { "t": "free", "x": 0.3, "y": 0.3 },
+                "plane": "content", "z": 1,
+                "transform": { "scale": 0.5, "rotation": 0, "opacity": 1 },
+                "payload": { "mediaURL": "https://cdn/x.jpg", "mediaType": "image", "transform": { "videoFitMode": "fit" } } }
+            ] } ] }
+            """.trimIndent(),
+        )
+
+        assertThat(projected.backgroundTransform).isNull()
+    }
+
+    /**
      * **Un recadrage amputé ne devient pas un cadrage fabriqué.** Le contrat le
      * refuse au fil ; le modèle le refuse aussi, parce qu'un document déjà
      * stocké sous l'ancienne forme ne repasse par aucune validation.
@@ -583,5 +626,37 @@ class CanvasV3ProjectionTest {
         val neutre = v3Scene("""{"id":"m","kind":"media","payload":{"postMediaId":"p","adjustments":{}}}""")
             .mediaObjects!!.single()
         assertThat(neutre.adjustments).isNull()
+    }
+    /**
+     * #13893 — un son de la bibliothèque POSÉ sur la scène d'un post (recette « Recette 14200 ») : le projeté gardait sa durée
+     * et perdait son fichier, sa provenance et son nom. Le lecteur ne trouvait rien à jouer, la fiche rien à nommer. iOS lit
+     * les sept clés (`CanvasV3RenderRules.audioObject`).
+     */
+    @Test
+    fun `un son emprunte pose sur la scene garde son fichier, sa provenance et son nom`() {
+        val audio = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "s1", "objects": [
+              { "id": "borrowed-6ada52e99bc6c72f73df09c4", "kind": "audio", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                "plane": "content", "z": 1, "transform": { "scale": 1.5, "rotation": 10, "opacity": 1 },
+                "timing": { "keyframes": [ { "time": 0.5, "volume": 0.4 } ] },
+                "payload": { "duration": 5.023, "soundId": "6ada52e99bc6c72f73df09c4", "soundAuthorUsername": "recretrait_b",
+                             "soundCreatedAt": "2026-10-22T18:16:09.512Z", "postMediaId": null, "name": "Pluie",
+                             "mediaURL": "/api/v1/static/3b5f3f05.m4a", "placement": null, "mutedVolumeMemento": 0.8,
+                             "waveformSamples": [0.25, 0.5] } }
+            ] } ] }
+            """.trimIndent(),
+        ).audioPlayerObjects!!.single()
+
+        assertThat(audio.mediaURL).isEqualTo("/api/v1/static/3b5f3f05.m4a")
+        assertThat(audio.soundId).isEqualTo("6ada52e99bc6c72f73df09c4")
+        assertThat(audio.soundAuthorUsername).isEqualTo("recretrait_b")
+        assertThat(audio.soundCreatedAt).isEqualTo("2026-10-22T18:16:09.512Z")
+        assertThat(audio.name).isEqualTo("Pluie")
+        assertThat(audio.waveformSamples).containsExactly(0.25f, 0.5f).inOrder()
+        assertThat(audio.mutedVolumeMemento).isEqualTo(0.8f)
+        assertThat(audio.keyframes).hasSize(1)
+        assertThat(audio.scale).isEqualTo(1.5)
+        assertThat(audio.rotation).isEqualTo(10.0)
     }
 }

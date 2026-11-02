@@ -40,6 +40,7 @@ import androidx.room.PrimaryKey
     tableName = "messages",
     indices = [
         Index("conversationId"),
+        Index("conversationId", "createdAt"),
         Index("serverId"),
         Index("expiresAt"),
         Index("pinnedAt"),

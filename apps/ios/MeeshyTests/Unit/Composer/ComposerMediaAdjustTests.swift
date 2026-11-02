@@ -19,10 +19,11 @@ final class ComposerMediaAdjustTests: XCTestCase {
     }
 
     /// #9169 : la vidéo posée peint ses réglages trame par trame — le
-    /// sous-outil lui est servi, en tête puisqu'elle n'a pas de filtre.
+    /// sous-outil lui est servi juste après ses filtres et cadres (#13840),
+    /// puisqu'elle n'a pas de `StoryFilter`.
     func test_reglages_servisAUneVideoPosee_avantLeRognage() {
         let sections = ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true)
-        XCTAssertEqual(sections.first, .media(.adjust))
+        XCTAssertEqual(Array(sections.prefix(2)), [.media(.look), .media(.adjust)])
         XCTAssertLessThan(sections.firstIndex(of: .media(.adjust)) ?? .max, sections.firstIndex(of: .media(.trim)) ?? .min)
     }
 
@@ -97,8 +98,8 @@ final class ComposerMediaAdjustTests: XCTestCase {
     func test_reglages_servisAuFond_imageEtVideo() {
         let image = ComposerInlineEditing.sections(for: .background(isVideo: false), hasTrimmableSource: false)
         XCTAssertEqual(image.firstIndex(of: .media(.adjust)), image.firstIndex(of: .media(.filter)).map { $0 + 1 })
-        XCTAssertEqual(ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true).first,
-                       .media(.adjust))
+        XCTAssertEqual(Array(ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true)
+                                 .prefix(2)), [.media(.look), .media(.adjust)])
     }
 
     func test_reglages_nonServisAuxFamillesQuiNeLesPeignentPas() {

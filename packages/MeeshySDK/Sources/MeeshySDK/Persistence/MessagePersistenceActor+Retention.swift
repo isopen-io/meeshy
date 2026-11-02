@@ -49,27 +49,7 @@ extension MessagePersistenceActor {
             if !expiredIds.isEmpty {
                 // grdb-02 — cascade sur la clé RÉELLE (messageLocalId, pas
                 // messageId) et uniquement sur les tables de CETTE base.
-                let placeholders = expiredIds.map { _ in "?" }.joined(separator: ",")
-                try db.execute(
-                    sql: "DELETE FROM message_translations WHERE messageLocalId IN (\(placeholders))",
-                    arguments: StatementArguments(expiredIds)
-                )
-                try db.execute(
-                    sql: "DELETE FROM message_transcriptions WHERE messageLocalId IN (\(placeholders))",
-                    arguments: StatementArguments(expiredIds)
-                )
-                try db.execute(
-                    sql: "DELETE FROM message_audio_translations WHERE messageLocalId IN (\(placeholders))",
-                    arguments: StatementArguments(expiredIds)
-                )
-                try db.execute(
-                    sql: "DELETE FROM pending_ids WHERE localId IN (\(placeholders))",
-                    arguments: StatementArguments(expiredIds)
-                )
-                try db.execute(
-                    sql: "DELETE FROM send_attempts WHERE localId IN (\(placeholders))",
-                    arguments: StatementArguments(expiredIds)
-                )
+                try MessageChildRows.delete(ofLocalIds: expiredIds, in: db)
             }
 
             // Delete the messages themselves

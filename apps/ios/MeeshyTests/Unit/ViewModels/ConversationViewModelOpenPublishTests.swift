@@ -61,7 +61,7 @@ final class ConversationViewModelOpenPublishTests: XCTestCase {
             reactionService: MockReactionService(),
             reportService: MockReportService(),
             messageSocket: MockMessageSocket(),
-            dependencies: ConversationDependencies(dbPool: dbPool, persistence: persistence)
+            dependencies: ConversationDependencies(persistence: persistence)
         )
         // Le `.task` de la vue : `start()` puis `loadMessages()`.
         sut.start()

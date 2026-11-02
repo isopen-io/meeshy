@@ -48,7 +48,8 @@ extension StoryComposerViewModel {
     ///   `StorySticker.posedScale`, à laquelle le sticker se voit d'emblée.
     public func addSticker(emoji: String,
                            provider: String? = nil,
-                           scale: Double? = nil) -> StorySticker {
+                           scale: Double? = nil) -> StorySticker? {
+        guard canAddSticker else { refuse(.sticker); return nil }
         let count = currentEffects.stickerObjects?.count ?? 0
         let offset = Double(count % 5) * 0.04
         var sticker = StorySticker(emoji: emoji, provider: provider,
@@ -84,7 +85,8 @@ extension StoryComposerViewModel {
     ///   dessous.
     @discardableResult
     public func addSticker(template: StickerTemplate,
-                           slots: [String: String]) -> StorySticker {
+                           slots: [String: String]) -> StorySticker? {
+        guard canAddSticker else { refuse(.sticker); return nil }
         let count = currentEffects.stickerObjects?.count ?? 0
         let offset = Double(count % 5) * 0.04
         var sticker = StorySticker(emoji: template.fallbackEmoji,
@@ -125,9 +127,9 @@ extension StoryComposerViewModel {
     public func addSticker(image: UIImage,
                            provider: String,
                            scale: Double? = nil,
-                           animatedData: Data? = nil) -> StorySticker {
-        let sticker = addSticker(emoji: StorySticker.imageFallbackEmoji,
-                                 provider: provider, scale: scale)
+                           animatedData: Data? = nil) -> StorySticker? {
+        guard let sticker = addSticker(emoji: StorySticker.imageFallbackEmoji,
+                                       provider: provider, scale: scale) else { return nil }
         registerLoadedImage(image, for: sticker.id)
         if let animatedData {
             registerLoadedStickerAnimation(animatedData, for: sticker.id)

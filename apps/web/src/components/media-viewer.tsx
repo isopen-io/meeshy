@@ -698,7 +698,7 @@ export default function MediaViewer({
   const footer = carrierFooter({ carrier: currentCarrier, ...(currentSceneEntry !== undefined ? { sceneEntry: currentSceneEntry } : {}) });
   /* Répondre, Réagir, Transférer, Enregistrer, Créer : tout vit dans le rail (#12424). */
   const railOffered = page !== null && (page.offers.reply || page.offers.react || page.offers.compose || page.offers.share || page.offers.save);
-  const menuOffered = page !== null && (page.offers.save || (page.offers.share && page.share !== undefined));
+  const menuOffered = page !== null && (page.offers.save || (page.offers.share && page.share !== undefined) || page.imager !== undefined);
   /* UNE VIDÉO QUI SE LIT (#9577) — sa page pose, par portail, le muet et « ⋯ »
      dans la colonne d'actions et la durée dans la ligne d'informations. Une
      scène n'a ni cotes ni poids ; une pièce masquée ne se lit pas. */

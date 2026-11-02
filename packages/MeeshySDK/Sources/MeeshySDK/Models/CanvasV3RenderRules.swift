@@ -103,6 +103,7 @@ enum CanvasV3RenderRules {
         media.mutedVolumeMemento = object.payload.double("mutedVolumeMemento").map { Float($0) }
         if !media.isBackground { media.filter = object.payload.string("filter") }
         media.adjustments = ImageAdjustments(canvasPayload: object.payload["adjustments"]) // #9175
+        media.look = StoryMediaLook(canvasPayload: object.payload["look"]) // #13840
         media.sourceStart = object.payload.double("sourceStart")
         media.sourceEnd = object.payload.double("sourceEnd")
         media.crop = crop

@@ -406,7 +406,7 @@ final class ICECandidateBufferSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTCService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -455,7 +455,7 @@ final class AdjustBitrateSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTCService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -531,7 +531,7 @@ final class ApplyVideoQualitySourceGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTCService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -630,7 +630,7 @@ final class DisconnectDebounceSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTCService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -701,7 +701,7 @@ final class AdjustBitrateAudioEncodingSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTCService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -750,7 +750,7 @@ final class AdjustBitrateJitterGateSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTCService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -872,7 +872,7 @@ final class WebRTCQualityDelegateSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTCService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -911,7 +911,7 @@ final class WebRTCQualityDelegateSourceGuardTests: XCTestCase {
 final class WebRTCInputValidationSourceGuardTests: XCTestCase {
 
     private func p2pClientSource() throws -> String {
-        try AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        try AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
     }
 
     /// ICE candidate sdpMLineIndex must be validated in the range 0-255 before
@@ -1095,7 +1095,7 @@ final class SwitchCameraSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTCService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -1212,7 +1212,7 @@ final class SwitchCameraSourceGuardTests: XCTestCase {
 final class P2PWebRTCClientFallbackConformanceSourceGuardTests: XCTestCase {
 
     private func p2pClientSource() throws -> String {
-        try AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+Fallback.swift")
+        try AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+Fallback.swift")
     }
 
     private func fallbackClassBody() throws -> String {
@@ -1438,7 +1438,7 @@ final class ApplyVideoQualitySurvivalFloorOrderSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTCService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

@@ -15,6 +15,7 @@ const esCallCaptions = {
   'callCaptions.listening': 'Tu voz se está transcribiendo',
   'callCaptions.unsupported': 'Tu voz no se transcribe en este dispositivo: lees a los demás',
   'callCaptions.denied': 'Reconocimiento de voz denegado: lees a los demás',
+  'callCaptions.sealed': 'Subtítulos no disponibles: esta conversación está cifrada de extremo a extremo, o no se pudo verificar su cifrado',
   'callCaptions.journal.title': 'Registro de la llamada',
   'callCaptions.participant': 'Participante',
   'callTranscript.show': 'Transcripción',

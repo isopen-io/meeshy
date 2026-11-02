@@ -18,10 +18,10 @@ import me.meeshy.sdk.model.friend.FriendshipStatus
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.PostApi
-import me.meeshy.sdk.net.api.PreferencesApi
 import me.meeshy.sdk.net.api.ReactionApi
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
+import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.PinPayload
 import me.meeshy.sdk.post.PostRepository
@@ -51,7 +51,7 @@ class ExhaustionHandlersTest {
 
     @Test
     fun `an exhausted media upload drops its stored bytes`() = runTest {
-        val handler = UploadMediaHandler(mediaBlobStore, mockk<MediaRepository>(), mockk<TusUploadRepository>(), senderJson)
+        val handler = UploadMediaHandler(mediaBlobStore, mockk<MediaRepository>(), mockk<TusUploadRepository>(), senderJson, me.meeshy.sdk.media.MediaUploadProgressLedger())
 
         handler.onExhausted(outboxRow(OutboxKind.UPLOAD_MEDIA, cmid = "cmid-7"))
 
@@ -108,6 +108,14 @@ class ExhaustionHandlersTest {
     }
 
     @Test
+    fun `an exhausted delete for everyone refreshes the conversation of its lane, so the message comes back`() = runTest {
+        DeleteMessageHandler(mockk<MessageApi>(), messageRepository)
+            .onExhausted(outboxRow(OutboxKind.DELETE_MESSAGE, targetId = "m1", lane = OutboxLanes.forMessage("c1")))
+
+        coVerify(exactly = 1) { messageRepository.refresh("c1") }
+    }
+
+    @Test
     fun `an exhausted pin whose payload cannot be read refreshes nothing`() = runTest {
         PinMessageHandler(mockk<MessageApi>(), messageRepository, senderJson)
             .onExhausted(outboxRow(OutboxKind.PIN_MESSAGE, payload = "garbage"))
@@ -120,8 +128,8 @@ class ExhaustionHandlersTest {
         LikePostHandler(mockk<PostApi>(), postRepository).onExhausted(outboxRow(OutboxKind.LIKE_POST, targetId = "p1"))
         UnlikePostHandler(mockk<PostApi>(), postRepository).onExhausted(outboxRow(OutboxKind.UNLIKE_POST, targetId = "p2"))
 
-        verify(exactly = 1) { postRepository.rollbackLike("p1", liked = false) }
-        verify(exactly = 1) { postRepository.rollbackLike("p2", liked = true) }
+        coVerify(exactly = 1) { postRepository.rollbackLike("p1", liked = false, cmid = "cmid-1") }
+        coVerify(exactly = 1) { postRepository.rollbackLike("p2", liked = true, cmid = "cmid-1") }
     }
 
     @Test
@@ -131,8 +139,8 @@ class ExhaustionHandlersTest {
         UnbookmarkPostHandler(mockk<PostApi>(), postRepository)
             .onExhausted(outboxRow(OutboxKind.UNBOOKMARK_POST, targetId = "p2"))
 
-        verify(exactly = 1) { postRepository.rollbackBookmark("p1", bookmarked = false) }
-        verify(exactly = 1) { postRepository.rollbackBookmark("p2", bookmarked = true) }
+        coVerify(exactly = 1) { postRepository.rollbackBookmark("p1", bookmarked = false, cmid = "cmid-1") }
+        coVerify(exactly = 1) { postRepository.rollbackBookmark("p2", bookmarked = true, cmid = "cmid-1") }
     }
 
     @Test
@@ -140,24 +148,18 @@ class ExhaustionHandlersTest {
         val messageApi = mockk<MessageApi>()
         val reactionApi = mockk<ReactionApi>()
         val conversationApi = mockk<ConversationApi>()
-        val preferencesApi = mockk<PreferencesApi>()
         val postApi = mockk<PostApi>()
         val outboxRepository = mockk<OutboxRepository>()
         val untouchable: Map<OutboxKind, OutboxKindHandler> = mapOf(
             OutboxKind.EDIT_MESSAGE to EditMessageHandler(messageApi, senderJson),
-            OutboxKind.DELETE_MESSAGE to DeleteMessageHandler(messageApi),
-            OutboxKind.ADD_REACTION to AddReactionHandler(reactionApi, senderJson),
-            OutboxKind.REMOVE_REACTION to RemoveReactionHandler(reactionApi, senderJson),
             OutboxKind.READ_RECEIPT to ReadReceiptHandler(conversationApi),
             OutboxKind.MARK_UNREAD to MarkUnreadHandler(conversationApi),
             OutboxKind.UPDATE_CONVERSATION_PREFS to UpdateConversationPrefsHandler(conversationApi, senderJson),
-            OutboxKind.UPDATE_SETTINGS to UpdateSettingsHandler(preferencesApi, senderJson),
-            OutboxKind.UPDATE_PRIVACY_SETTINGS to UpdatePrivacySettingsHandler(preferencesApi, senderJson),
-            OutboxKind.PUBLISH_STORY to PublishStoryHandler(postApi, outboxRepository, senderJson, mockk(relaxed = true)),
+            OutboxKind.PUBLISH_STORY to PublishStoryHandler(postApi, outboxRepository, senderJson, mockk(relaxed = true), mockk(relaxed = true)),
         )
 
         untouchable.forEach { (kind, handler) -> handler.onExhausted(outboxRow(kind)) }
 
-        confirmVerified(messageApi, reactionApi, conversationApi, preferencesApi, postApi, outboxRepository)
+        confirmVerified(messageApi, reactionApi, conversationApi, postApi, outboxRepository)
     }
 }

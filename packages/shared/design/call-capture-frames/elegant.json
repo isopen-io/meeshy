@@ -5,6 +5,15 @@
       "id": "elegant.gala",
       "mood": "elegant",
       "name": "Gala",
+      "localizedNames": {
+        "fr": "Gala",
+        "en": "Gala",
+        "es": "Gala",
+        "pt": "Gala",
+        "de": "Gala",
+        "it": "Gala",
+        "ar": "حفل"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -157,6 +166,15 @@
       "id": "elegant.art-deco",
       "mood": "elegant",
       "name": "Art déco",
+      "localizedNames": {
+        "fr": "Art déco",
+        "en": "Art Deco",
+        "es": "Art déco",
+        "pt": "Art déco",
+        "de": "Art déco",
+        "it": "Art déco",
+        "ar": "آرت ديكو"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -306,6 +324,15 @@
       "id": "elegant.opera",
       "mood": "elegant",
       "name": "Opéra",
+      "localizedNames": {
+        "fr": "Opéra",
+        "en": "Opera",
+        "es": "Ópera",
+        "pt": "Ópera",
+        "de": "Oper",
+        "it": "Opera",
+        "ar": "أوبرا"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -460,6 +487,15 @@
       "id": "elegant.tete-a-tete",
       "mood": "elegant",
       "name": "Tête-à-tête",
+      "localizedNames": {
+        "fr": "Tête-à-tête",
+        "en": "Tête-à-tête",
+        "es": "Cara a cara",
+        "pt": "Frente a frente",
+        "de": "Zu zweit",
+        "it": "A tu per tu",
+        "ar": "وجهاً لوجه"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -536,6 +572,207 @@
       },
       "variants": {
         "duo": {}
+      }
+    },
+    {
+      "id": "elegant.premiere-neige",
+      "mood": "elegant",
+      "name": "Première neige",
+      "localizedNames": {
+        "fr": "Première neige",
+        "en": "First Snow",
+        "es": "Primera nieve",
+        "pt": "Primeira neve",
+        "de": "Erster Schnee",
+        "it": "Prima neve",
+        "ar": "أول ثلج"
+      },
+      "surfaces": [
+        "capture",
+        "live"
+      ],
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.2,
+          "bottom": 0.14
+        },
+        "slot": {
+          "shape": "oval",
+          "stroke": {
+            "color": "#E2E8F0",
+            "width": 0.005
+          },
+          "glow": "#BFDBFE55",
+          "tilt": "none",
+          "tone": "cool"
+        },
+        "background": {
+          "kind": "radial",
+          "colors": [
+            "#1E3A5F",
+            "#0B1426",
+            "#050A14"
+          ]
+        },
+        "border": {
+          "kind": "hairline",
+          "color": "#CBD5E1",
+          "width": 0.004,
+          "inset": 0.03
+        },
+        "ornaments": [
+          {
+            "kind": "snow",
+            "color": "#FFFFFF",
+            "density": "mid",
+            "layer": "back",
+            "motion": "loop"
+          },
+          {
+            "kind": "bokeh",
+            "color": "#93C5FD55",
+            "density": "low",
+            "layer": "back",
+            "motion": "loop"
+          },
+          {
+            "kind": "sparkles",
+            "color": "#E0F2FE",
+            "density": "low",
+            "layer": "front",
+            "motion": "loop"
+          },
+          {
+            "kind": "snow",
+            "color": "#FFFFFFCC",
+            "density": "low",
+            "layer": "front",
+            "motion": "loop"
+          }
+        ],
+        "brand": {
+          "mark": "both",
+          "place": "bottom",
+          "color": "#E2E8F0",
+          "size": "m",
+          "font": "elegant"
+        },
+        "names": {
+          "show": "name",
+          "style": "caption",
+          "font": "elegant",
+          "color": "#F1F5F9"
+        },
+        "title": {
+          "source": "group",
+          "font": "calligraphy",
+          "color": "#F8FAFC",
+          "place": "top",
+          "size": "l",
+          "effect": "glow"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "elegant",
+          "color": "#93C5FD",
+          "place": "top",
+          "size": "s",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "column",
+            "margin": 0.08,
+            "gap": 0.04,
+            "top": 0.22,
+            "bottom": 0.14
+          },
+          "title": {
+            "source": "names",
+            "font": "calligraphy",
+            "color": "#F8FAFC",
+            "place": "top",
+            "size": "l",
+            "effect": "glow"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "arch",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.2,
+            "bottom": 0.14
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "honeycomb",
+            "margin": 0.06,
+            "gap": 0.02,
+            "top": 0.18,
+            "bottom": 0.12
+          },
+          "names": {
+            "show": "name",
+            "style": "badge",
+            "font": "elegant",
+            "color": "#F1F5F9",
+            "fill": "#0B1426D9"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.015,
+            "top": 0.16,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "oval",
+            "stroke": {
+              "color": "#E2E8F0",
+              "width": 0.003
+            },
+            "tilt": "none",
+            "tone": "cool"
+          },
+          "ornaments": [
+            {
+              "kind": "snow",
+              "color": "#FFFFFF",
+              "density": "mid",
+              "layer": "back",
+              "motion": "loop"
+            },
+            {
+              "kind": "bokeh",
+              "color": "#93C5FD55",
+              "density": "low",
+              "layer": "back",
+              "motion": "loop"
+            },
+            {
+              "kind": "sparkles",
+              "color": "#E0F2FE",
+              "density": "low",
+              "layer": "front",
+              "motion": "loop"
+            }
+          ],
+          "names": {
+            "show": "none",
+            "style": "badge",
+            "font": "elegant",
+            "color": "#F1F5F9"
+          }
+        }
       }
     }
   ]

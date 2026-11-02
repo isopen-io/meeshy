@@ -155,6 +155,46 @@ class ComposerLanguageStateTest {
         assertThat(state.isLocked).isFalse()
     }
 
+    // MARK: - weak signals never relabel (#12484)
+
+    @Test
+    fun `typing a french draft letter by letter never leaves the fallback`() {
+        val text = "Recette offline Android"
+        val states = text.indices.runningFold(ComposerLanguageState()) { state, end ->
+            state.onDraftChanged(text.substring(0, end + 1))
+        }
+        assertThat(states.map { it.display(fallback = "fr") }.toSet()).containsExactly("fr")
+        assertThat(states.last().detected).isNull()
+    }
+
+    @Test
+    fun `a comment draft without signal keeps the fallback`() {
+        val state = "Commentaire test".let { ComposerLanguageState().onDraftChanged(it) }
+        assertThat(state.display(fallback = "fr")).isEqualTo("fr")
+    }
+
+    // MARK: - onDraftReplaced
+
+    @Test
+    fun `replacing the draft by an empty text forgets the detection`() {
+        val replaced = ComposerLanguageState().onDraftChanged(germanLong).onDraftReplaced("")
+        assertThat(replaced).isEqualTo(ComposerLanguageState())
+    }
+
+    @Test
+    fun `replacing the draft re-detects from scratch even after a lock`() {
+        val replaced = ComposerLanguageState().onDraftChanged(germanLong).onDraftReplaced(spanishShort)
+        assertThat(replaced.detected).isEqualTo("es")
+        assertThat(replaced.isLocked).isFalse()
+    }
+
+    @Test
+    fun `replacing the draft keeps a manual pick`() {
+        val picked = ComposerLanguageState().withManualPick("en")
+        assertThat(picked.onDraftReplaced(spanishShort)).isEqualTo(picked)
+        assertThat(picked.onDraftReplaced("")).isEqualTo(picked)
+    }
+
     // MARK: - withManualPick
 
     @Test

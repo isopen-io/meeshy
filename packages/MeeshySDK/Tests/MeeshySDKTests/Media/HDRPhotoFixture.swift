@@ -11,10 +11,44 @@ import XCTest
 enum HDRPhotoFixture {
     /// Les pixels HDR (au-delà du blanc de référence) ne s'écrivent avec leur
     /// carte de gain que depuis iOS 18 : en deçà, le témoin n'a pas de fixture.
+    ///
+    /// Et seulement là où ImageIO sait les écrire : le simulateur iOS 26.1 de
+    /// la CI refuse `kCGImageDestinationEncodeToISOGainmap` sur TOUTE entrée
+    /// HDR — PQ, HLG ou linéaire étendu, demi-flottants ou flottants, JPEG ou
+    /// HEIC, 1200×800 comme 64×48 — et n'écrit aucune carte depuis une entrée
+    /// SDR (sonde du run 39979122593). La fixture ET le code de production
+    /// (`PhotoCaptureProcessor.renderHDR`, `OutgoingImageGainMap`) passent par
+    /// cette requête : sans elle, il n'y a rien à prouver. La capacité est
+    /// MESURÉE sur le runtime qui juge, jamais supposée par sa version.
     static func requireHDREncoding() throws {
         guard #available(iOS 18.0, macOS 15.0, *) else {
             throw XCTSkip("L'écriture d'une carte de gain ISO demande iOS 18.")
         }
+        guard writesISOGainMap() else {
+            throw XCTSkip("ImageIO de ce runtime n'écrit aucune carte de gain ISO depuis des pixels HDR "
+                + "(sonde 16×16 PQ : Finalize refusé ou carte absente, \(system)) — capacité absente, mesurée.")
+        }
+    }
+
+    /// La sonde : 16×16 pixels au-delà du blanc de référence, rendus en PQ
+    /// demi-flottants comme le fait la production, écrits en JPEG avec
+    /// `kCGImageDestinationEncodeToISOGainmap`. Vrai si et seulement si la
+    /// sortie porte une carte de gain.
+    @available(iOS 18.0, macOS 15.0, *)
+    static func writesISOGainMap() -> Bool {
+        guard let linear = CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3),
+              let pq = CGColorSpace(name: CGColorSpace.displayP3_PQ),
+              let bright = CIColor(red: 4, green: 3, blue: 2, alpha: 1, colorSpace: linear) else { return false }
+        let frame = CGRect(x: 0, y: 0, width: 16, height: 16)
+        guard let image = CIContext().createCGImage(CIImage(color: bright).cropped(to: frame), from: frame,
+                                                    format: .RGBAh, colorSpace: pq) else { return false }
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else {
+            return false
+        }
+        let options: [CFString: Any] = [kCGImageDestinationEncodeRequest: kCGImageDestinationEncodeToISOGainmap]
+        CGImageDestinationAddImage(destination, image, options as CFDictionary)
+        return CGImageDestinationFinalize(destination) && hasGainMap(data as Data)
     }
 
     @available(iOS 18.0, macOS 15.0, *)

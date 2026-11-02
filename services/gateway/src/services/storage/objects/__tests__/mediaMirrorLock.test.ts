@@ -9,11 +9,11 @@
  *
  * @jest-environment node
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, jest } from '@jest/globals';
 import { mkdtemp, readFile, writeFile, mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { withMirrorLock } from '../mediaMirrorLock';
+import { withLockHeartbeat, withMirrorLock } from '../mediaMirrorLock';
 
 const NOW = new Date('2026-10-23T12:00:00Z');
 const MINUTE = 60 * 1000;
@@ -66,5 +66,57 @@ describe('withMirrorLock', () => {
       const held = JSON.parse(await readFile(file, 'utf8')) as { expiresAt: string };
       expect(new Date(held.expiresAt).getTime()).toBeGreaterThan(clock);
     });
+  });
+});
+
+/**
+ * Le battement qui repousse l'échéance pendant un passage long. Son rappel part
+ * de la boucle d'événements : un renouvellement qui échoue (disque plein,
+ * volume démonté) y était avalé en silence, et le passage continuait sur un
+ * verrou qu'un autre pouvait reprendre à l'échéance. Il se dit désormais au
+ * journal, sous la minuterie gardée (#9480), et le battement suivant a lieu.
+ */
+describe('withLockHeartbeat', () => {
+  const recorder = () => {
+    const errors: string[] = [];
+    return { errors, logger: { error: (message: string) => { errors.push(message); } } };
+  };
+
+  it('renouvelle à chaque battement tant que le passage tourne, puis s\'arrête', async () => {
+    jest.useFakeTimers();
+    try {
+      let renewals = 0;
+      const { logger } = recorder();
+      let finish: (value: string) => void = () => undefined;
+      const running = withLockHeartbeat({ renew: async () => { renewals += 1; }, everyMs: 1000, logger }, () => new Promise<string>((resolve) => { finish = resolve; }));
+      await jest.advanceTimersByTimeAsync(3000);
+      finish('fait');
+      await expect(running).resolves.toBe('fait');
+      await jest.advanceTimersByTimeAsync(5000);
+      expect(renewals).toBe(3);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('un renouvellement raté se dit au journal, et le battement suivant a lieu', async () => {
+    jest.useFakeTimers();
+    try {
+      let attempts = 0;
+      const { errors, logger } = recorder();
+      let finish: () => void = () => undefined;
+      const running = withLockHeartbeat(
+        { renew: async () => { attempts += 1; throw new Error('ENOSPC'); }, everyMs: 1000, logger },
+        () => new Promise<void>((resolve) => { finish = resolve; }),
+      );
+      await jest.advanceTimersByTimeAsync(2000);
+      finish();
+      await running;
+      expect(attempts).toBe(2);
+      expect(errors).toHaveLength(2);
+      expect(errors[0]).toContain('ENOSPC');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

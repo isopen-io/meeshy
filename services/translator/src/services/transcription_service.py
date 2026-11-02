@@ -32,7 +32,13 @@ from config.settings import get_settings
 
 # Import du smart segment merger pour fusionner intelligemment les mots courts
 from utils.smart_segment_merger import merge_short_segments
-from .audio_pipeline.transcription_guards import resolve_transcription_confidence
+
+def _resolve_confidence(text, probability):
+    # Import différé : `audio_pipeline/__init__` charge `transcription_stage`, qui
+    # importe ce module — un import en tête de fichier forme une boucle.
+    from .audio_pipeline.transcription_guards import resolve_transcription_confidence
+    return resolve_transcription_confidence(text, probability)
+
 
 # Configuration du logging
 logger = logging.getLogger(__name__)
@@ -60,6 +66,7 @@ except ImportError:
 from utils.audio_utils import get_audio_duration as _get_librosa_duration
 from utils.audio_pipeline_metrics import timed_audio_stage
 from .audio_pipeline.speaker_probe import ProbeDecision, diarization_mode, probe_multi_speaker, should_diarize
+from services.task_privacy import shown
 
 # La sonde n'a entendu qu'une voix : la transcription part sans diarization (#11268).
 DIARIZATION_SKIPPED = object()
@@ -512,7 +519,7 @@ class TranscriptionService:
             result = TranscriptionResult(
                 text=full_text,
                 language=info.language,
-                confidence=resolve_transcription_confidence(full_text, info.language_probability),
+                confidence=_resolve_confidence(full_text, info.language_probability),
                 segments=segments,
                 duration_ms=int(info.duration * 1000),
                 source="whisper",
@@ -818,7 +825,7 @@ class TranscriptionService:
                     marker = "⭐" if speaker.is_primary else " "
                     logger.info(
                         f"[{speaker.speaker_id}]{marker} ({speaker.speaking_ratio * 100:.0f}%): "
-                        f"\"{full_text}\""
+                        f"\"{shown(full_text)}\""
                     )
 
             unassigned = [s for s in sorted_segments if not s.speaker_id]

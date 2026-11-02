@@ -27,6 +27,7 @@ const cached: AppPreferences = {
   notifyContactsOnReturn: true,
   contactActivityEnabled: true,
   gameEnabled: true,
+  gamePhotoEnabled: true,
 };
 
 const deferred = () => {

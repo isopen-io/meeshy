@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
@@ -96,7 +96,7 @@ fun StarredMessagesScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
+                                MeeshyIcons.Back,
                                 contentDescription = stringResource(R.string.starred_back),
                             )
                         }
@@ -216,7 +216,12 @@ private fun StarredRow(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MeeshyAvatar(name = name, size = 44.dp, containerColor = accent)
+            MeeshyAvatar(
+                name = message.senderName?.takeIf { it.isNotBlank() } ?: name,
+                size = 44.dp,
+                containerColor = accent,
+                imageUrl = message.senderAvatarUrl,
+            )
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(

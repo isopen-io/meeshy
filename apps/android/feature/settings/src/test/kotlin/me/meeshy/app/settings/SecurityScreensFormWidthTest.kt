@@ -44,6 +44,7 @@ private val TABLET_MIN_WIDTH = 840.dp
 private const val TOLERANCE_DP = 0.5f
 
 private const val ENABLE_TWO_FACTOR = "Set up two-factor authentication"
+private const val SETUP_NEXT = "Next"
 private const val UNVERIFIED_PHONE = "+33612345678"
 
 /**
@@ -104,6 +105,8 @@ class SecurityScreensFormWidthTest {
         show { TwoFactorScreen(onBack = {}, viewModel = viewModel) }
 
         compose.onNodeWithText(ENABLE_TWO_FACTOR).performClick()
+        compose.waitUntil { compose.onAllNodes(hasText(SETUP_NEXT)).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(SETUP_NEXT).performClick()
         compose.waitUntil { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
 
         compose.assertInCenteredFormColumn(hasSetTextAction())

@@ -162,8 +162,8 @@ public actor MessagePersistenceActor {
         let cutoff = Date().addingTimeInterval(-TimeInterval(days) * 86_400)
         return try await dbWriter.write { db in
             try OutboxRecord
-                .filter(Column("status") == OutboxStatus.exhausted.rawValue)
-                .filter(Column("createdAt") < cutoff)
+                .filter(Column("status") == OutboxStatus.exhausted.rawValue && Column("createdAt") < cutoff)
+                .filter(!OutboxKind.keptUntilTheAuthorDecides.contains(Column("kind")))
                 .deleteAll(db)
         }
     }

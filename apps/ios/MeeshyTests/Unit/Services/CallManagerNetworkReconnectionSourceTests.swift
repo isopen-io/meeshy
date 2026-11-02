@@ -22,7 +22,7 @@ import XCTest
 final class CallManagerNetworkReconnectionSourceTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// `.connecting` is the answer-received/ICE-negotiating window — the FSM's
@@ -33,13 +33,13 @@ final class CallManagerNetworkReconnectionSourceTests: XCTestCase {
     /// watchdog window instead of triggering an immediate reconnect attempt.
     func test_networkMonitor_isInActiveCall_includesConnectingState() throws {
         let source = try callManagerSource()
-        guard let body = DeclarationBodyScanner.body(containing: "func startNetworkMonitoring() {", in: source) else {
-            XCTFail("startNetworkMonitoring not found"); return
+        guard let body = DeclarationBodyScanner.body(containing: "static func evaluate(", in: source) else {
+            XCTFail("CallNetworkPathChange.evaluate not found"); return
         }
 
         XCTAssertTrue(
             body.contains("case .connected, .reconnecting, .connecting: isInActiveCall = true"),
-            "startNetworkMonitoring's isInActiveCall switch must include .connecting — " +
+            "CallNetworkPathChange.evaluate's isInActiveCall switch must include .connecting — " +
             "matching CallReliabilityPolicy.reconnectingAllowed(from:), which already " +
             "whitelists it. Excluding it drops network-handoff reconnection during the " +
             "answer/ICE-negotiating window."

@@ -47,6 +47,33 @@ struct GalleryLotShape: Equatable {
 }
 
 /// La règle du suivi, sans vue : la page à rétablir après une extension.
+/// **Les marges de la galerie ne se lisent jamais sur la fenêtre pendant le `body`** (#12422).
+///
+/// Le `fullScreenCover` ne reçoit pas les marges que la racine publie. Le repli de `WindowInsets` interrogeait alors
+/// `UIWindow.safeAreaInsets`, qui demande au contrôleur d'hébergement sa préférence `statusBarHidden` — celle que la
+/// galerie pose — et réentre la mise à jour en cours : cycle du graphe, et le fil principal tournait jusqu'au chien de
+/// garde dès que le défilement du rail réévaluait le `body` à chaque page. Les marges viennent donc de la racine, sinon
+/// de la mesure de la galerie elle-même, et valent zéro le temps de la première passe.
+enum GallerySafeArea {
+    static func resolve(published: EdgeInsets?, measured: EdgeInsets?) -> EdgeInsets {
+        published ?? measured ?? EdgeInsets()
+    }
+}
+
+/// Le viewport et les marges de la galerie, lus sur son fond hors de `body` (#10352, #12422).
+struct GalleryMeasurement: ViewModifier {
+    @Binding var viewport: CGSize
+    @Binding var safeArea: EdgeInsets?
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { viewport = $0 }
+            .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { insets in
+                if safeArea != insets { safeArea = insets }
+            }
+    }
+}
+
 enum GalleryPagePinning {
     /// **Une pièce, une page** (#11162). Le pager suit ses pages par leur
     /// identifiant : un doublon y ferait deux pages au même nom, et la position

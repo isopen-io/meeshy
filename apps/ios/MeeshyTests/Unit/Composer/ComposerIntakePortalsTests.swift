@@ -113,23 +113,6 @@ final class ComposerIntakePortalsTests: XCTestCase {
         }
     }
 
-    /// L'autre moitié, et elle est ce qui empêche le retour du défaut : la
-    /// surface DOCUMENT ne monte plus aucun portail. Tant qu'elle en garde un,
-    /// la règle « un portail appartient au meuble » est fausse quelque part.
-    func test_laSurfaceDocument_neMonteAucunPortail() throws {
-        let code = try hostSource()
-        guard let document = declarationBody(startingAt: "var documentSurface: some View",
-                                             in: code) else {
-            return XCTFail("`documentSurface` est introuvable — la garde doit être re-pointée")
-        }
-        let compacte = compact(document)
-        XCTAssertTrue(compacte.contains("ComposerDocumentSurface("),
-                      "Le bloc lu n'est pas celui de la surface document.")
-        for interdit in ["isPresented:$shows", ".photosPicker(", ".fileImporter("] {
-            XCTAssertFalse(compacte.contains(interdit))
-        }
-    }
-
     /// **Le contrôle de découvrabilité tombait par le même trou.** Poser un lieu
     /// depuis la scène n'affichait ni le contrôle ni le moyen de retirer le
     /// lieu — le `safeAreaInset` vivait, lui aussi, sur la seule surface

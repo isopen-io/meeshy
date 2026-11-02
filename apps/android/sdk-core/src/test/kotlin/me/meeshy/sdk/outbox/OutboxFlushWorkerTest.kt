@@ -99,7 +99,7 @@ class OutboxFlushWorkerTest {
     }
 
     @Test
-    fun `a dependent held behind its upload retries once and completes on the next pass`() = withOutbox { outbox ->
+    fun `a dependent held behind its upload leaves in the same pass, without waiting for a retry`() = withOutbox { outbox ->
         val upload = RecordingHandler(SendResult.SuccessWithId("media-1"))
         val message = RecordingHandler()
         val worker = workerOver(
@@ -111,11 +111,9 @@ class OutboxFlushWorkerTest {
             mutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "m1", "m-1", dependsOn = setOf("up-1")),
         )
 
-        val first = worker.doWork()
-        val second = worker.doWork()
+        val result = worker.doWork()
 
-        assertThat(first).isEqualTo(ListenableWorker.Result.retry())
-        assertThat(second).isEqualTo(ListenableWorker.Result.success())
+        assertThat(result).isEqualTo(ListenableWorker.Result.success())
         assertThat(message.sent.map { it.cmid }).containsExactly("m-1")
     }
 

@@ -49,6 +49,30 @@ const SCANNED_ROOTS: readonly string[] = [
 const FORBIDDEN = /\bresolvePrefsOnly\b/;
 
 /**
+ * TROISIÈME CLAUSE (#13928) — la présence se lit sur le NIVEAU effectif, jamais sur un
+ * booléen d'amitié. `areConnected` était l'entrée booléenne de la loi : « ami » ou
+ * « pas ami ». Elle ne sait pas dire qu'un Ami ne voit que « en ligne » alors qu'un
+ * Proche voit le détail, et la laisser revenir réouvre la porte par laquelle
+ * `lastActiveAt` partait vers tout ami. Un Ami ne reçoit JAMAIS `lastActiveAt` : c'est
+ * la loi (`resolvePresenceVisibility`), seule à le décider, que les témoins de
+ * comportement rejouent sur chaque porte.
+ */
+const FORBIDDEN_BOOLEAN_FRIENDSHIP_INPUT = /\bareConnected\b/;
+
+/**
+ * QUATRIÈME CLAUSE (#13928) — UN site demande à la loi d'accès ce qu'un lecteur voit
+ * de la présence : `resolvePresenceVisibility`. Un fichier qui interrogerait lui-même
+ * `presence.online` / `presence.detailed` rendrait un second verdict, et le jour où
+ * les deux divergent, un Ami recevrait la dernière connexion par la porte d'à côté.
+ * La matrice (`relation-levels.ts`) DÉCLARE les features ; elle ne les interroge pas.
+ */
+const PRESENCE_FEATURE_LITERAL = /['"]presence\.(?:online|detailed)['"]/;
+const PRESENCE_FEATURE_SITES: readonly string[] = [
+  'packages/shared/utils/presence-visibility.ts',
+  'packages/shared/utils/relation-levels.ts',
+];
+
+/**
  * Une clé de tri liée DIRECTEMENT à un champ homonyme de la requête —
  * `sortBy: query.sortBy`, `sortOrder: q.sortOrder ?? 'desc'`. Le défaut ne vit pas
  * dans l'opérateur de repli (`||`, `??`) mais dans l'absence de RÉSOLVEUR : la
@@ -122,5 +146,36 @@ describe('garde — un ORDRE demandé par le client passe par une liste close', 
       .map((file) => relative(REPO_ROOT, file));
 
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('garde — la présence se lit sur le niveau, jamais sur un booléen d\'amitié (#13928)', () => {
+  it('interdit bien l\'identifiant, défini comme passé', () => {
+    expect(FORBIDDEN_BOOLEAN_FRIENDSHIP_INPUT.test('areConnected: boolean;')).toBe(true);
+    expect(FORBIDDEN_BOOLEAN_FRIENDSHIP_INPUT.test('areConnected,')).toBe(true);
+    expect(FORBIDDEN_BOOLEAN_FRIENDSHIP_INPUT.test('relationLevel,')).toBe(false);
+  });
+
+  it('aucun `areConnected` ne subsiste hors tests — ni dans le gateway, ni dans la loi partagée', () => {
+    const offenders = scannedFiles()
+      .filter((file) => FORBIDDEN_BOOLEAN_FRIENDSHIP_INPUT.test(readFileSync(file, 'utf8')))
+      .map((file) => relative(REPO_ROOT, file));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('reconnaît une interrogation directe des features de présence', () => {
+    expect(PRESENCE_FEATURE_LITERAL.test("feature: 'presence.detailed',")).toBe(true);
+    expect(PRESENCE_FEATURE_LITERAL.test('feature: "presence.online"')).toBe(true);
+    expect(PRESENCE_FEATURE_LITERAL.test("feature: 'post.read',")).toBe(false);
+  });
+
+  it('seule la loi de présence interroge `presence.online` / `presence.detailed` — aucune porte ne rend un second verdict', () => {
+    const sites = scannedFiles()
+      .filter((file) => PRESENCE_FEATURE_LITERAL.test(readFileSync(file, 'utf8')))
+      .map((file) => relative(REPO_ROOT, file))
+      .sort();
+
+    expect(sites).toEqual([...PRESENCE_FEATURE_SITES].sort());
   });
 });

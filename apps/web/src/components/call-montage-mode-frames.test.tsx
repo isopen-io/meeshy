@@ -8,6 +8,8 @@ import { montageCircle, type MontageCall } from '@/lib/calls/call-montage-circle
 import type { CallMember } from '@/lib/calls/call-store';
 import { inked, recorder } from '@/lib/calls/frames/frame-recorder.test-support';
 import type { FrameStudioModule } from '@/components/use-montage-frames';
+import { packQueryKeys } from '@/lib/api/pack-query-keys';
+import { appQueryClient } from '@/lib/api/query-client';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 import { loadFrameUsageCatalog } from '@/lib/i18n-frame-usage-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -52,6 +54,8 @@ describe('CallMontageMode — les cadres', () => {
   beforeAll(async () => {
     await loadCallStudioCatalog('fr');
     await loadFrameUsageCatalog('fr');
+    await loadCallStudioCatalog('en');
+    await loadFrameUsageCatalog('en');
     loaded.module = await import('@/lib/calls/frames/frame-studio');
     ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
@@ -63,7 +67,7 @@ describe('CallMontageMode — les cadres', () => {
     await releaseHappyDomIfRegistered();
   });
 
-  const mount = async (call: MontageCall | undefined, options: { readonly frames?: boolean; readonly module?: FrameStudioModule; readonly clipEnv?: boolean } = {}) => {
+  const mount = async (call: MontageCall | undefined, options: { readonly frames?: boolean; readonly module?: FrameStudioModule; readonly clipEnv?: boolean; readonly shelf?: readonly string[] | null; readonly language?: 'fr' | 'en' } = {}) => {
     const saved: Array<readonly CaptureFile[]> = [];
     const painted = recorder();
     const sizes: Array<{ width: number; height: number }> = [];
@@ -83,7 +87,7 @@ describe('CallMontageMode — les cadres', () => {
     const render = (next: MontageCall | undefined) =>
       root.render(
         <CallMontageMode
-          language="fr"
+          language={options.language ?? 'fr'}
           quitGlyph={null}
           onExit={() => undefined}
           stage={() => shown}
@@ -96,6 +100,7 @@ describe('CallMontageMode — les cadres', () => {
           {...(next === undefined ? {} : { call: next })}
           {...(options.frames === false ? {} : { loadFrames: async () => options.module ?? (loaded.module as FrameStudioModule) })}
           circleOf={circleOf}
+          loadShelf={async () => options.shelf ?? null}
           {...(options.clipEnv === true ? { clipEnv } : {})}
         />,
       );
@@ -149,6 +154,18 @@ describe('CallMontageMode — les cadres', () => {
     expect(preview?.getAttribute('aria-label')).toBe(`Aperçu du cadre ${first}`);
     expect(view.find('[data-call-mode-carousel] [role="radiogroup"]')?.getAttribute('aria-label')).toBe('Choisir un cadre');
     view.done();
+  });
+
+  test('le nom d’un cadre se lit dans la langue d’interface, au carrousel comme à l’aperçu (#13953)', async () => {
+    const english = await mount(duo, { language: 'en' });
+    await english.press('[data-call-frame-mood="jovial"]');
+    expect(english.find('[data-carousel-item="jovial.fete.duo"]')?.getAttribute('aria-label')).toBe('Party');
+    expect(english.find('[data-call-capture-preview]')?.getAttribute('aria-label')).toContain('Party');
+    english.done();
+    const french = await mount(duo);
+    await french.press('[data-call-frame-mood="jovial"]');
+    expect(french.find('[data-carousel-item="jovial.fete.duo"]')?.getAttribute('aria-label')).toBe('Fête');
+    french.done();
   });
 
   test('les vignettes ne se rendent que pour la fenêtre visible, ± 3 autour du cadre choisi', async () => {
@@ -311,5 +328,35 @@ describe('CallMontageMode — les cadres', () => {
     const view = await mount(duo, { frames: false });
     expect(view.chips()).toEqual([['classics', 'Classiques', 'true']]);
     view.done();
+  });
+
+  const forgetShelf = () => appQueryClient.removeQueries({ queryKey: packQueryKeys('capture-frame').installed });
+
+  test('une ambiance RETIRÉE (#10169) n’a plus de puce ; les installées gardent la leur, dans l’ordre du catalogue', async () => {
+    forgetShelf();
+    const moods = loaded.module?.createFrameStudio({ fonts: undefined }).moods(2) ?? [];
+    const kept = moods.filter((mood) => mood !== 'jovial');
+    const view = await mount(duo, { shelf: kept });
+    expect(view.chips().map(([id]) => id)).toEqual(['classics', ...kept]);
+    expect(view.find('[data-call-frame-mood="jovial"]')).toBeNull();
+    view.done();
+  });
+
+  test('une étagère INCONNUE (ancien serveur, invité, panne) ne cache aucune puce', async () => {
+    forgetShelf();
+    const moods = loaded.module?.createFrameStudio({ fonts: undefined }).moods(2) ?? [];
+    const view = await mount(duo, { shelf: null });
+    expect(view.chips().map(([id]) => id)).toEqual(['classics', ...moods]);
+    view.done();
+  });
+
+  test('cache d’abord : la dernière étagère connue sert l’entrée suivante, et une réponse inconnue ne l’efface pas', async () => {
+    forgetShelf();
+    const first = await mount(duo, { shelf: ['signature'] });
+    first.done();
+    const offline = await mount(duo, { shelf: null });
+    expect(offline.chips().map(([id]) => id)).toEqual(['classics', 'signature']);
+    offline.done();
+    forgetShelf();
   });
 });

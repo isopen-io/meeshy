@@ -27,6 +27,15 @@ object CollapsibleHeaderMetrics {
     const val CENTER_REVEAL_HEIGHT_FACTOR = 1.3f
     const val SUBTITLE_SWITCH = 0.7f
 
+    /**
+     * Opacité de la surface de l'en-tête (teinte de fond) du haut au bas : quasi opaque jusqu'à [SURFACE_OPAQUE_UNTIL]
+     * de la hauteur — le titre et la barre d'état se lisent sans que le texte de la page passe dessous (#13386) —,
+     * puis fondu vers le contenu. iOS tient la même lisibilité par un verre dépoli que Compose n'a pas.
+     */
+    const val SURFACE_TOP_ALPHA = 0.96f
+    const val SURFACE_BODY_ALPHA = 0.92f
+    const val SURFACE_OPAQUE_UNTIL = 0.8f
+
     private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 
     fun progress(scrollOffsetDp: Float): Float = (-scrollOffsetDp / COLLAPSE_THRESHOLD).coerceIn(0f, 1f) + 0f

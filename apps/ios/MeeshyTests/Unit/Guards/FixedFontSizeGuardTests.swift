@@ -162,8 +162,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         //
         // C'est le pendant de la leçon 347 pour un cliquet : une liste qui
         // nomme des FICHIERS se périme au premier découpage.
-        "Features/Main/Composer/ComposerMoodSurface.swift",
-        "Features/Main/Composer/ComposerTopBar.swift",
+        "Features/Composer/ComposerMoodSurface.swift",
         // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés
         // ont suivi `+Surfaces` et `+Intake`. La POPULATION ne bouge pas, donc
         // ni `totalCeiling` ni `textCeiling` ne baissent — seul le NOM change.
@@ -175,29 +174,33 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // taille figée du fichier a suivi — un DÉPLACEMENT, donc les deux
         // plafonds ci-dessous ne bougent pas. `+Intake` n'en porte plus
         // aucune et sort de la liste, comme la règle 4 l'exige.
-        "Features/Main/Composer/MeeshyComposerHost+Overflow.swift",
-        "Features/Main/Views/AchievementBadgeView.swift",
-        "Features/Main/Views/ActiveSessionsView.swift",
-        "Features/Main/Views/AffiliateView.swift",
+        // #14056 — `+Overflow` a perdu à son tour sa dernière taille figée :
+        // le `⋯` de la scène est servi par `ComposerMoreMenuPolicy` (#13839),
+        // et le fichier sort de la liste (règle 4).
+        "Features/Profile/Views/AchievementBadgeView.swift",
+        "Features/Settings/Views/ActiveSessionsView.swift",
+        "Features/Links/Views/AffiliateView.swift",
         "Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",
-        "Features/Main/Views/CallEffectsOverlay.swift",
+        // #13132 — RELOCALISATION pure : le conteneur de glissé des bulles a quitté `MessageListView.swift` avec ses deux glyphes.
+        "Features/Main/Views/BubbleSwipeContainer.swift",
+        "Features/Call/Views/CallEffectsOverlay.swift",
         // #8276 — `CallView.swift` découpé : ses glyphes figés ont suivi leurs
         // surfaces (tous dans un cercle ou un cadre fixe — doctrine 82i/86i).
         // #8394 : la pilule remplace la barre ; le glyphe de ses boutons est
         // dimensionné par le diamètre de leur cercle (`CallDeviceControls`).
-        "Features/Main/Views/CallDeviceControls.swift",
-        "Features/Main/Views/CallView+Controls.swift",
-        "Features/Main/Views/CallView+Header.swift",
-        "Features/Main/Views/CallView+SelfView.swift",
-        "Features/Main/Views/CallView+States.swift",
-        "Features/Main/Views/ChangePasswordView.swift",
-        "Features/Main/Views/CommunityLinkDetailView.swift",
+        "Features/Call/Views/CallDeviceControls.swift",
+        "Features/Call/Views/CallView+Controls.swift",
+        "Features/Call/Views/CallView+Header.swift",
+        // #12568 : `CallView+SelfView` et `CallView+States` sortent — leurs
+        // initiales figées sous la photo laissent la place à `CachedAvatarImage`.
+        "Features/Settings/Views/ChangePasswordView.swift",
+        "Features/Links/Views/CommunityLinkDetailView.swift",
         // RELOCALISATION pure : le bandeau « en réponse à » quitte
         // `FeedCommentsSheet.swift` avec son glyphe de croix en CADRE FIXE 24×24
         // (doctrine 82i). La POPULATION ne bouge pas ; le fichier d'origine en
         // garde un (la croix de l'en-tête) et reste dans la liste.
         "Features/Main/Views/CommentSheetBanners.swift",
-        "Features/Main/Views/CommunityLinksView.swift",
+        "Features/Links/Views/CommunityLinksView.swift",
         "Features/Main/Views/ConversationAnimatedBackground.swift",
         "Features/Main/Views/ConversationBackgroundComponents.swift",
         "Features/Main/Views/ConversationHelperViews.swift",
@@ -237,8 +240,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/ComposerAttachmentZone.swift",
         "Features/Main/Views/ConversationView+ComposerBanners.swift",
         "Features/Main/Views/ConversationView+MessageRow.swift",
-        "Features/Main/Views/DataExportView.swift",
-        "Features/Main/Views/DeleteAccountView.swift",
+        "Features/Settings/Views/DataExportView.swift",
+        "Features/Settings/Views/DeleteAccountView.swift",
         "Features/Main/Views/FeedCommentsSheet.swift",
         // #6040 — RELOCALISATION pure, même forme qu'au #4084 et au #4102 : la
         // FEUILLE de composition quitte `FeedView+Attachments.swift` (1 391
@@ -256,6 +259,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // quitté la feuille avec ses glyphes en CADRE FIXE (tuile de 72, pastille
         // de 20). RELOCALISATION pure : ni `totalCeiling` ni `textCeiling` ne bougent.
         "Features/Main/Views/FeedComposerAttachmentsRow.swift",
+        // #13132 — RELOCALISATION pure : le « + » du placeholder du fil (18 pt dans son cercle de 40) a quitté `FeedView.swift`.
+        "Features/Main/Views/FeedComposerPlaceholder.swift",
         "Features/Main/Views/FeedComposerSheet.swift",
         "Features/Main/Views/FeedPostCard+Media.swift",
         // #4096 — la vue `3f` remplace la mosaïque par un carrousel. Le fichier
@@ -275,15 +280,14 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/FeedPostCardCarousel.swift",
         "Features/Main/Views/FeedView.swift",
         "Features/Main/Views/GlobalSearchView.swift",
-        "Features/Main/Views/IncomingCallView.swift",
-        "Features/Main/Views/MagicLinkView.swift",
-        "Features/Main/Views/MessageListView.swift",
-        "Features/Main/Views/MyStoriesView.swift",
-        "Features/Main/Views/MyStoryActionBar.swift",
-        "Features/Main/Views/MyStoryCard.swift",
+        "Features/Call/Views/IncomingCallView.swift",
+        "Features/Auth/Views/MagicLinkView.swift",
+        "Features/Stories/Views/MyStoriesView.swift",
+        "Features/Stories/Views/MyStoryActionBar.swift",
+        "Features/Stories/Views/MyStoryCard.swift",
         // #5218 — le carrousel de cinq pages est parti avec son unique site
         // figé (le glyphe de 80 pt de chaque page). `WelcomeView` n'en a pas.
-        "Features/Main/Views/ParticipantProfileSheet.swift",
+        "Features/Profile/Views/ParticipantProfileSheet.swift",
         "Features/Main/Views/ReelAudioBackdrop.swift",
         // #7625 — RELOCALISATION pure : la couche audio d'un réel (glyphe héros de
         // 220 pt et bouton de 84 pt, cadres fixes plein écran) quitte l'hôte hors
@@ -298,11 +302,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // posé sur le glyphe de l'atome à la MÊME taille figée. `ReelsPlayerView.swift`
         // sort de la liste (règle 4) : sa croix monte `FullscreenTopBar`.
         "Features/Main/Views/ReelsPlayerView+ActionRail.swift",
-        "Features/Main/Views/ShareLinksView.swift",
-        "Features/Main/Views/StoryExportShareSheet.swift",
-        "Features/Main/Views/StoryLanguageQuickBar.swift",
-        "Features/Main/Views/StoryTrayView.swift",
-        "Features/Main/Views/StoryViewerContainer.swift",
+        "Features/Links/Views/ShareLinksView.swift",
+        "Features/Stories/Views/StoryExportShareSheet.swift",
+        "Features/Stories/Views/StoryLanguageQuickBar.swift",
+        "Features/Stories/Views/StoryTrayView.swift",
+        "Features/Stories/Views/StoryViewerContainer.swift",
         // #8878 — `StoryViewerView+ActionButton.swift` sort de la liste (règle 4) :
         // `StoryActionButton` monte `FullscreenActionButton` (MeeshyUI), qui porte
         // SES glyphe et libellé figés dans sa cellule de 56.
@@ -312,25 +316,22 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // pour son propre fichier (dette de taille). La population ne bouge pas
         // — ni `totalCeiling` ni `textCeiling` — seul le NOM change ; le canvas
         // n'en porte plus aucun, il sort de la liste et n'y revient jamais.
-        "Features/Main/Views/StoryViewerView+CanvasComposerBar.swift",
-        // #8582 — RELOCALISATION pure : `StoryCommentRowView` quitte
-        // `StoryViewerView+Content.swift` et emporte son site figé — le
-        // monogramme de 13 pt d'un avatar fixe de 32×32, doctrine 82i. La
-        // POPULATION ne bouge pas ; l'hôte en garde un autre et reste dans la liste.
-        "Features/Main/Views/StoryCommentRowView.swift",
+        "Features/Stories/Views/StoryViewerView+CanvasComposerBar.swift",
+        // #12568 : `StoryCommentRowView` sort — son monogramme de 13 pt laisse la
+        // place à `CachedAvatarImage`, photo sinon initiales.
         // Cohésion de `StoryViewerView` — RELOCALISATION pure, même forme : la liste des
         // commentaires de story (`StoryCommentsOverlayView`) a QUITTÉ
         // `StoryViewerView+Content.swift` pour son propre fichier et emporte son site
         // figé — le glyphe héros de l'état vide, masqué de VoiceOver. L'hôte n'en garde
         // plus aucun et sort de la liste ; la POPULATION ne bouge pas.
-        "Features/Main/Views/StoryCommentsOverlayView.swift",
+        "Features/Stories/Views/StoryCommentsOverlayView.swift",
         // #8878 — `StoryViewerView+Header.swift` sort de la liste (règle 4) : la
         // croix et le menu ⋯ montent `FullscreenCloseButton` / `FullscreenMoreMenu`
         // (MeeshyUI), qui portent leur glyphe figé dans leur disque.
-        "Features/Main/Views/SupportView.swift",
-        "Features/Main/Views/TrackingLinksView.swift",
-        "Features/Main/Views/UserStatsView.swift",
-        "Features/Main/Views/VoiceProfileWizardView.swift",
+        "Features/Settings/Views/SupportView.swift",
+        "Features/Links/Views/TrackingLinksView.swift",
+        "Features/Profile/Views/UserStatsView.swift",
+        "Features/Settings/Views/VoiceProfileWizardView.swift",
         "Features/Main/Views/WebRTCVideoView.swift",
         "Features/Stories/Notifications/StoryExpiredContent.swift",
         "Features/Stories/Notifications/StoryNotificationOfflineContent.swift",
@@ -349,7 +350,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // 35 → 34 (#8878) : le libellé de 10 pt du rail de la story part avec son fichier.
     // 34 → 33 (#10366) : le code pays figé de la puce de langue repasse en `.caption2`.
     // 33 → 26 (S7c, #11494) : sept emoji passent par `MeeshyFont.emoji`.
-    private static let textCeiling = 26
+    // 26 → 21 (#12568) : cinq initiales d'avatar figées (appel ×4, commentaire
+    // de story) laissent la place à `CachedAvatarImage`.
+    private static let textCeiling = 21
 
     /// Tous receveurs confondus. **Ne doit que DESCENDRE.** 247 avant le
     /// correctif du 264i, 245 après (le glyphe et le chiffre de la tuile de
@@ -461,7 +464,13 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // `MessageOverlayMenu.swift` sort de `bearingFiles` (règle 4) ; le texte
     // figé ne bouge pas.
     // 185 → 178 (S7c, #11494) : les mêmes sept emoji.
-    private static let totalCeiling = 178
+    // 178 → 173 (#12568) : les mêmes cinq initiales d'avatar.
+    // 173 → 172 (#13907) : la barre haute quitte le projet avec le glyphe figé
+    // de sa croix ; `ComposerTopBar.swift` sort de `bearingFiles` (règle 4).
+    // 172 → 171 (#14056) : le glyphe figé du `⋯` quitte
+    // `MeeshyComposerHost+Overflow.swift` ; le fichier sort de `bearingFiles`
+    // (règle 4).
+    private static let totalCeiling = 171
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 
@@ -559,12 +568,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
     ]
 
     private static let exactSizeTextExceptions: Set<ExactSizeTextSite> = [
-        ExactSizeTextSite(file: "Features/Main/Views/StoryTrayView.swift",
+        ExactSizeTextSite(file: "Features/Stories/Views/StoryTrayView.swift",
                           head: #"Text("\(Int(displayedProgress * 100))%")"#),
         ExactSizeTextSite(file: "Features/Main/Views/ConversationHelperViews.swift",
                           head: "Text(Self.displayedUnread(unreadCount))"),
-        ExactSizeTextSite(file: "Features/Main/Views/StoryCommentRowView.swift",
-                          head: "Text(String(comment.author.prefix(1)).uppercased())"),
         ExactSizeTextSite(file: "Features/Main/Views/GlobalSearchView.swift",
                           head: #"Text("\(result.unreadCount)")"#),
         ExactSizeTextSite(file: "Features/Main/Components/ConversationDashboardView.swift",
@@ -737,7 +744,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         EmojiSite(file: "Features/Stories/Notifications/StoryExpiredContent.swift",
                   head: "Text(emoji)",
                   marker: ".font(MeeshyFont.emoji(64))"),
-        EmojiSite(file: "Features/Main/Views/StoryReactionFlightView.swift",
+        EmojiSite(file: "Features/Stories/Views/StoryReactionFlightView.swift",
                   head: "Text(flight.emoji)",
                   marker: ".font(MeeshyFont.emoji(MeeshyFont.displaySize))"),
         EmojiSite(file: "Features/Main/Components/UniversalComposerBar+Send.swift",
@@ -746,10 +753,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
         EmojiSite(file: "Features/Main/Views/ConversationAnimatedBackground.swift",
                   head: "Text(flags[i])",
                   marker: ".font(MeeshyFont.emoji(24))"),
-        EmojiSite(file: "Features/Main/Views/StoryLanguageQuickBar.swift",
+        EmojiSite(file: "Features/Stories/Views/StoryLanguageQuickBar.swift",
                   head: "Text(language.flag)",
                   marker: ".font(MeeshyFont.emoji(MeeshyFont.titleSize))"),
-        EmojiSite(file: "Features/Main/Views/StoryTrayView.swift",
+        EmojiSite(file: "Features/Stories/Views/StoryTrayView.swift",
                   head: #"Text("\u{1F4AD}")"#,
                   marker: ".font(MeeshyFont.emoji(MeeshyFont.title3Size))")
     ]

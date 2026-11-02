@@ -1,24 +1,41 @@
 package me.meeshy.app.chat
 
+import java.io.File
+import me.meeshy.sdk.media.MediaUploadSource
+import me.meeshy.sdk.media.MediaIntake
 import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
-import androidx.compose.foundation.layout.padding
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.graphicsLayer
+import me.meeshy.sdk.model.PlainSignalAdmission
+import me.meeshy.sdk.model.reading.focal.FocalMetrics
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Alignment
+import me.meeshy.ui.theme.MeeshySpacing
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.model.call.ActiveCallSession
+import me.meeshy.ui.component.bubble.LocalBubbleContactCardAccounts
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.hexColor
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
+import me.meeshy.app.chat.appearance.rememberConversationAppearance
 import me.meeshy.sdk.model.composer.ComposerAttachmentLimits
 
 /**
@@ -36,10 +53,16 @@ fun ChatScreen(
      * « Rejoindre » pill so a minimised call viewing its own chat isn't offered
      * to rejoin the call it's already in. */
     hasLocalLiveCall: Boolean = false,
+    /** Ouvre le post (story) cité par un message : le toucher de la carte de citation (#13296). */
+    onOpenCitedPost: (postId: String) -> Unit = {},
+    onOpenConversation: (conversationId: String) -> Unit = {},
+    /** La feuille de réglages du partage de position, fournie par l'application (voir [ChatNavigationActions]). */
+    locationSettingsSheet: @Composable (accent: Color, onDismiss: () -> Unit) -> Unit = { _, _ -> },
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val callEntry by viewModel.callEntry.collectAsStateWithLifecycle()
+    val mayInviteFriends by viewModel.mayInviteFriends.collectAsStateWithLifecycle()
 
     // Re-probe the server for a still-active call each time the screen resumes
     // (returning from the call itself, an app relaunch mid-call) so the
@@ -49,13 +72,40 @@ fun ChatScreen(
         onPauseOrDispose { }
     }
 
-    val accentColor = state.accentColorHex
+    val appearance = rememberConversationAppearance(state.conversationId, state.accentColorHex)
+    val accentColor = appearance.accentHex
         ?.let { hexColor(it) }
         ?.takeIf { it != Color.Unspecified }
         ?: MeeshyPalette.Indigo500
     val actions = remember(viewModel) { viewModel.hostActions() }
+    val pendingPlace by viewModel.pendingPlace.collectAsStateWithLifecycle()
     val pendingTray = remember(viewModel) { viewModel.controllers.find<ComposerTrayController>() }
     val pending by (pendingTray?.state ?: NO_PENDING).collectAsStateWithLifecycle()
+    val headerController = remember(viewModel) { viewModel.controllers.find<ChatHeaderController>() }
+    val header by (headerController?.state ?: NO_HEADER).collectAsStateWithLifecycle()
+    val selectionController = remember(viewModel) { viewModel.controllers.find<MessageSelectionController>() }
+    val selection by (selectionController?.selection ?: NO_SELECTION).collectAsStateWithLifecycle()
+    BackHandler(enabled = selection.isActive, onBack = actions.endSelection)
+    val engagementController = remember(viewModel) { viewModel.controllers.find<ChatEngagementController>() }
+    val engagementSnapshot by (engagementController?.snapshot ?: NO_ENGAGEMENT).collectAsStateWithLifecycle()
+    val engagement = remember(engagementSnapshot, engagementController) {
+        ChatEngagementBinding(engagementSnapshot, engagementController?.sent ?: NO_SENT)
+    }
+    val readingModeController = remember(viewModel) { viewModel.controllers.find<ReadingModeController>() }
+    val readingModeState by (readingModeController?.state ?: NO_READING_MODE).collectAsStateWithLifecycle()
+    val summaryController = remember(viewModel) { viewModel.controllers.find<LivingSummaryController>() }
+    val summaryBinding = remember(summaryController) {
+        summaryController?.let { LivingSummaryBinding(it.agent, it.viewer, it::refreshAgent) } ?: LivingSummaryBinding.NONE
+    }
+    val readingMode = readingModeState?.let { modeState ->
+        ChatReadingModeBinding(
+            state = modeState,
+            select = { readingModeController?.select(it) },
+            resetToAuto = { readingModeController?.resetToAuto() },
+            summary = summaryBinding,
+        )
+    }
+    val downloadedFileIds by viewModel.downloadedFileIds.collectAsStateWithLifecycle()
     val host = rememberChatHostContext(
         state = state,
         composerText = viewModel.composerText,
@@ -68,48 +118,120 @@ fun ChatScreen(
             onRejoinCall = onRejoinCall,
             onCreateShareLink = onCreateShareLink,
             hasLocalLiveCall = hasLocalLiveCall,
+            onOpenCitedPost = onOpenCitedPost,
+            onOpenConversation = onOpenConversation,
             callEntry = callEntry,
+            mayInviteFriends = mayInviteFriends,
+            locationSettingsSheet = locationSettingsSheet,
         ),
+        header = header,
+        readingMode = readingMode,
+        pendingPlace = pendingPlace,
+        selection = selection,
+        engagement = engagement,
+        downloadedFileIds = downloadedFileIds,
     )
 
-    ChatBackgroundHost {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = { ChatHeaderHost(host) },
-            bottomBar = { ChatBottomBarHost(host) },
-        ) { padding ->
-            ChatListHost(host, Modifier.padding(padding))
+    val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()
+    val isEndToEnd = state.isEndToEnd
+    val clearance = remember(cardsViewModel, state.conversationId, state.encryptionMode, isEndToEnd) {
+        cardsViewModel.clearance(state.conversationId, state.encryptionMode)
+    }
+    val contactCards = remember(cardsViewModel, viewModel, isEndToEnd, clearance) {
+        ChatContactCardAccounts(cardsViewModel.lookup, isEndToEnd, clearance, viewModel::downloadedFileUri)
+    }
+    // #13790 — relu à chaque recomposition, jamais retenu : une conversation confirmée claire en cours d'écran ouvre aussitôt
+    // ses gestes, et un fil qui montre du bout en bout les ferme.
+    val signalClearance = PlainSignalAdmission.clearanceOf(
+        cardsViewModel.clearance(state.conversationId, state.encryptionMode),
+        threadShowsEndToEnd = isEndToEnd,
+    )
+    CompositionLocalProvider(
+        LocalBubbleContactCardAccounts provides contactCards,
+        LocalChatContactCardScope provides contactCards::underConversation,
+        LocalChatSignalClearance provides signalClearance,
+    ) {
+    ChatBackgroundHost(appearance) {
+        // L'en-tête est une bande FLOTTANTE posée au-dessus du fil (iOS : ZStack, zIndex 100) :
+        // sa hauteur mesurée décale le haut du fil (`bandHeight`), et les bulles passent dessous.
+        var headerHeightPx by remember { mutableIntStateOf(0) }
+        val headerHeight = with(LocalDensity.current) { headerHeightPx.toDp() }
+        // La barre de composition FLOTTE aussi (iOS : `ConversationComposerDock` superposé au fil) :
+        // sa hauteur mesurée, clavier compris, devient la réserve basse du fil, et les bulles
+        // défilent sous le verre.
+        var composerHeightPx by remember { mutableIntStateOf(0) }
+        val composerHeight = with(LocalDensity.current) { composerHeightPx.toDp() }
+        Scaffold(containerColor = Color.Transparent) { _ ->
+            Box(Modifier.fillMaxSize()) {
+                ChatListHost(
+                    host,
+                    topInset = headerHeight,
+                    bottomInset = composerHeight + MeeshySpacing.sm,
+                )
+                // Rangée plate (Script) : pendant un défilement du doigt, l'en-tête ET le composeur
+                // s'effacent par opacité — aucun inset ne bouge — et reviennent à l'arrêt ; sauf
+                // recherche ouverte ou suggestions de mention (iOS `FocalChromeReturn`).
+                val chromeHidden = host.readingMode?.state?.mode?.usesFlatRow == true &&
+                    host.chrome.isUserScrolling &&
+                    !state.search.isActive &&
+                    !state.mention.isActive
+                val chromeAlpha by animateFloatAsState(
+                    targetValue = if (chromeHidden) 0f else 1f,
+                    animationSpec = tween((FocalMetrics.HiddenChrome.EASE_OUT_SECONDS * 1000).toInt()),
+                    label = "flat-chrome",
+                )
+                Box(
+                    Modifier
+                        .onSizeChanged { headerHeightPx = it.height }
+                        .graphicsLayer { alpha = chromeAlpha },
+                ) {
+                    ChatHeaderHost(host)
+                }
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .onSizeChanged { composerHeightPx = it.height }
+                        .graphicsLayer { alpha = chromeAlpha },
+                ) {
+                    ChatBottomBarHost(host)
+                }
+            }
         }
         ChatSheetsHost(host)
+    }
     }
 }
 
 /**
  * The bytes + display name + declared content-type read back from a picked content Uri.
- * Shared with [me.meeshy.app.chat.ShareTargetScreen] (an inbound `ACTION_SEND` attachment is
+ * Shared with [me.meeshy.app.chat.IncomingShareScreen] (an inbound `ACTION_SEND` attachment is
  * read through the exact same content-Uri glue as a locally picked one).
  */
 internal data class PickedAttachment(
-    val bytes: ByteArray,
+    val file: File,
     val fileName: String,
     val mimeType: String?,
-)
+) {
+    /** Les octets, pour une IMAGE à retoucher seulement : un média plus gros reste sur son fichier. */
+    val bytes: ByteArray get() = file.readBytes()
+}
 
 /**
- * Reads a document/photo the user picked from the system picker into memory,
- * resolving its display name and the platform's declared content-type. Returns
- * `null` when the stream cannot be opened (a revoked grant / deleted document) or
- * when the file is above the upload ceiling ([ComposerAttachmentLimits.MAX_UPLOAD_BYTES]):
- * a long video is never pulled whole into memory. The byte read and cursor query are
- * the Android-framework glue behind the pure send pipeline.
+ * Copies a document/photo the user picked from the system picker, IN A STREAM, into a private file
+ * ([MediaIntake]), resolving its display name and the platform's declared content-type. Returns
+ * `null` when the stream cannot be opened (a revoked grant / deleted document) or when the file is
+ * above the upload ceiling ([ComposerAttachmentLimits.MAX_UPLOAD_BYTES]), which stops the copy at
+ * the first octet over: a long video is never pulled into memory nor fully copied.
  */
 internal fun readPickedAttachment(context: Context, uri: Uri): PickedAttachment? {
     val resolver = context.contentResolver
-    val bytes = runCatching {
-        resolver.openInputStream(uri)?.use { readWithin(it, ComposerAttachmentLimits.MAX_UPLOAD_BYTES) }
-    }.getOrNull() ?: return null
     val fileName = queryDisplayName(resolver, uri) ?: uri.lastPathSegment ?: "attachment"
-    return PickedAttachment(bytes = bytes, fileName = fileName, mimeType = resolver.getType(uri))
+    val mimeType = resolver.getType(uri)
+    val item = runCatching {
+        resolver.openInputStream(uri)?.use { MediaIntake.copy(it, context.cacheDir, fileName, mimeType.orEmpty(), ComposerAttachmentLimits.MAX_UPLOAD_BYTES) }
+    }.getOrNull() ?: return null
+    val file = (item.source as? MediaUploadSource.OnDisk)?.file ?: return null
+    return PickedAttachment(file = file, fileName = fileName, mimeType = mimeType)
 }
 
 private fun queryDisplayName(resolver: ContentResolver, uri: Uri): String? =
@@ -121,18 +243,3 @@ private fun queryDisplayName(resolver: ContentResolver, uri: Uri): String? =
         }
     }.getOrNull()
 
-/** Reads [input] whole, or `null` as soon as it runs past [maxBytes] — never more than the ceiling. */
-internal fun readWithin(input: InputStream, maxBytes: Long): ByteArray? {
-    val out = ByteArrayOutputStream()
-    val buffer = ByteArray(READ_BUFFER_BYTES)
-    var total = 0L
-    while (true) {
-        val read = input.read(buffer)
-        if (read < 0) return out.toByteArray()
-        total += read
-        if (total > maxBytes) return null
-        out.write(buffer, 0, read)
-    }
-}
-
-private const val READ_BUFFER_BYTES = 64 * 1024

@@ -197,6 +197,86 @@ final class ConversationRowMenuCapabilitiesTests: XCTestCase {
         XCTAssertEqual(caps.removal, .delete)
     }
 
+    // MARK: - Gérer les membres (#12631)
+
+    /// La grille type × rôle de `ConversationActionPolicy.manageMembers` : un
+    /// membre ne gère rien, un modérateur de groupe gère, un direct jamais, et
+    /// un rôle de plateforme PRIVILÉGIÉ vaut créateur une fois DANS (#11217).
+    func test_make_manageMembers_followsTheTypeByRoleGrid() {
+        let grid: [(type: MeeshyConversation.ConversationType, member: String, platform: String, expected: Bool)] = [
+            (.group, "member", "USER", false),
+            (.group, "moderator", "USER", true),
+            (.group, "admin", "USER", true),
+            (.group, "creator", "USER", true),
+            (.group, "MODERATOR", "USER", true),
+            (.public, "member", "USER", false),
+            (.public, "moderator", "USER", true),
+            (.broadcast, "member", "USER", false),
+            (.broadcast, "admin", "USER", true),
+            (.global, "member", "USER", false),
+            (.global, "member", "MODERATOR", true),
+            (.group, "member", "MODERATOR", true),
+            (.group, "member", "ADMIN", true),
+            (.group, "member", "AUDIT", false),
+            (.group, "member", "ANALYST", false)
+        ]
+        for row in grid {
+            let caps = capabilities(makeConversation(type: row.type, currentUserRole: row.member), user: makeUser(role: row.platform))
+            XCTAssertEqual(caps.manageMembers, row.expected, "\(row.type.rawValue) · \(row.member) · \(row.platform)")
+        }
+    }
+
+    func test_make_direct_neverManagesMembers_whateverTheRole() {
+        for platform in ["USER", "MODERATOR", "ADMIN", "BIGBOSS"] {
+            for member in ["member", "moderator", "admin", "creator"] {
+                let caps = capabilities(
+                    makeConversation(type: .direct, currentUserRole: member, participantUserId: "peer"),
+                    user: makeUser(role: platform)
+                )
+                XCTAssertFalse(caps.manageMembers, "Un direct n'a pas de membres à gérer (\(member), \(platform)).")
+            }
+        }
+    }
+
+    func test_make_closedGroup_managesNoMember() {
+        let caps = capabilities(makeConversation(currentUserRole: "creator", isActive: false), user: makeUser())
+        XCTAssertFalse(caps.manageMembers, "Une conversation terminée ne se modifie plus.")
+    }
+
+    func test_make_unloadedUser_managesNoMember() {
+        let caps = capabilities(makeConversation(currentUserRole: "creator"), user: nil)
+        XCTAssertFalse(caps.manageMembers)
+    }
+
+    // MARK: - Le rang des réglages (#11230)
+
+    /// L'entrée « Paramètres du groupe » s'ouvre sur le rang EFFECTIF de la
+    /// loi : l'écran ne doit pas retenir ce que l'entrée a promis.
+    func test_settingsRole_platformAdminMember_isCreator() {
+        let role = ConversationRowMenuCapabilities.settingsRole(of: makeConversation(currentUserRole: "member"), currentUser: makeUser(role: "ADMIN"))
+        XCTAssertEqual(role, .creator, "ADMIN de plateforme membre ⇒ rang effectif créateur, comme la passerelle.")
+    }
+
+    func test_settingsRole_servedAdmin_staysAdmin_caseFolded() {
+        let role = ConversationRowMenuCapabilities.settingsRole(of: makeConversation(currentUserRole: "ADMIN"), currentUser: makeUser())
+        XCTAssertEqual(role, .admin)
+    }
+
+    func test_settingsRole_platformModeratorMember_isCreator() {
+        let role = ConversationRowMenuCapabilities.settingsRole(of: makeConversation(currentUserRole: "member"), currentUser: makeUser(role: "MODERATOR"))
+        XCTAssertEqual(role, .creator, "MODERATOR de plateforme membre ⇒ créateur, comme ADMIN (#11217).")
+    }
+
+    func test_settingsRole_plainMember_staysMember() {
+        let role = ConversationRowMenuCapabilities.settingsRole(of: makeConversation(currentUserRole: "member"), currentUser: makeUser(role: "AUDIT"))
+        XCTAssertEqual(role, .member, "AUDIT de plateforme n'est qu'un membre dans la conversation.")
+    }
+
+    func test_settingsRole_unreadableRole_fallsToMember() {
+        let role = ConversationRowMenuCapabilities.settingsRole(of: makeConversation(currentUserRole: "owner"), currentUser: makeUser())
+        XCTAssertEqual(role, .member)
+    }
+
     // MARK: - Administration
 
     func test_adminConsoleURL_pointsAtTheConversationSheetOfTheWebConsole() {
@@ -231,28 +311,38 @@ final class ConversationContextMenuAccessibilityTests: XCTestCase {
             onDelete: { recorder.calls.append("delete") },
             onLeave: { recorder.calls.append("leave") },
             onReport: { recorder.calls.append("report") },
-            onOpenAdmin: { recorder.calls.append("adminOpen") }
+            onOpenAdmin: { recorder.calls.append("adminOpen") },
+            onDetach: { recorder.calls.append("detach") },
+            onSearch: { recorder.calls.append("search") },
+            onCall: { recorder.calls.append("call") },
+            onVideoCall: { recorder.calls.append("videoCall") },
+            onGroupSettings: { recorder.calls.append("groupSettings") },
+            onManageMembers: { recorder.calls.append("manageMembers") }
         )
     }
 
     private func makeMenu(memberRole: String, platformRole: String, recorder: Recorder) -> ConversationContextMenuView {
         let conversation = MeeshyConversation(id: "c1", identifier: "c1", type: .group, title: "Équipe", currentUserRole: memberRole)
         let user = MeeshyUser(id: "me", username: "me", role: platformRole, isAnonymous: false)
-        return ConversationContextMenuView(
-            accentHex: "6366F1",
+        let catalog = ConversationMenuCatalog.make(ConversationMenuCatalog.Input(
+            capabilities: ConversationRowMenuCapabilities.make(conversation: conversation, currentUser: user),
             isPinned: false,
             isMuted: false,
             hasUnread: false,
+            isLocked: false,
+            isArchived: false,
+            canToggleArchive: true,
+            isPeerBlocked: nil,
+            windowsAvailable: false,
+            offersReadingModes: false
+        ))
+        return ConversationContextMenuView(
+            accentHex: "6366F1",
+            catalog: catalog,
             currentReaction: nil,
             categories: [],
             currentSectionId: nil,
-            isLocked: false,
-            isArchived: false,
-            isBlockableDM: false,
-            isBlocked: false,
-            capabilities: ConversationRowMenuCapabilities.make(conversation: conversation, currentUser: user),
             actions: makeActions(recorder),
-            onOpenFocalBetaPreview: {},
             onDismiss: { recorder.calls.append("dismiss") }
         )
     }
@@ -261,7 +351,7 @@ final class ConversationContextMenuAccessibilityTests: XCTestCase {
         let ids = makeMenu(memberRole: "member", platformRole: "USER", recorder: Recorder()).accessibilityEntries.map(\.id)
         XCTAssertTrue(ids.contains("leave"))
         XCTAssertTrue(ids.contains("report"))
-        XCTAssertTrue(ids.contains("removal"))
+        XCTAssertTrue(ids.contains("hide"), "Un membre MASQUE la discussion.")
         XCTAssertFalse(ids.contains("rename"))
         XCTAssertFalse(ids.contains("adminOpen"))
     }

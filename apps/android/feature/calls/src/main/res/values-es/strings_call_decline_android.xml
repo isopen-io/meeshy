@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_decline_end_to_end_refused">Mensaje no enviado: esta conversación está cifrada de extremo a extremo. Responde desde la app Meeshy en iPhone.</string>
+</resources>

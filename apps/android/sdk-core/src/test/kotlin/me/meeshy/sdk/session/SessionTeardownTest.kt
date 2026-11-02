@@ -70,6 +70,7 @@ class SessionTeardownTest {
         preferenceSnapshots: me.meeshy.sdk.preferences.PreferenceSnapshotStore =
             me.meeshy.sdk.preferences.InMemoryPreferenceSnapshotStore(),
         perAccountCaches: Set<PerAccountCache> = emptySet(),
+        guestSessions: AnonymousSessionStore? = null,
     ) = DefaultSessionTeardown(
         db,
         categoryStore,
@@ -81,6 +82,7 @@ class SessionTeardownTest {
         blockCache,
         preferenceSnapshots,
         perAccountCaches,
+        guestSessions,
     )
 
     private class RecordingCache(private val failure: Exception? = null) : PerAccountCache {
@@ -96,6 +98,23 @@ class SessionTeardownTest {
         selectedId = "s1",
         updatedAt = "2026-08-27T12:00:00Z",
     )
+
+    @Test
+    fun wipe_dropsTheGuestSessionSoNoLaterAccountInheritsItsPermissionsOrToken() = runTest {
+        val guest = InMemoryAnonymousSessionStore(
+            me.meeshy.sdk.model.AnonymousSessionContext(
+                sessionToken = "guest-token",
+                participantId = "p1",
+                permissions = me.meeshy.sdk.model.ParticipantPermissions.anonymous(false, false, false),
+                linkId = "l1",
+                conversationId = "c1",
+            ),
+        )
+
+        teardown(guestSessions = guest).wipe()
+
+        assertThat(guest.load()).isNull()
+    }
 
     @Test
     fun wipe_clearsEveryRoomTable() = runTest {
@@ -241,6 +260,25 @@ class SessionTeardownTest {
 
         assertThat(first.clears).isEqualTo(1)
         assertThat(second.clears).isEqualTo(1)
+    }
+
+    @Test
+    fun wipe_leavesNoLinkOfTheFirstAccountForTheNext() = runTest {
+        val shareLinks = me.meeshy.sdk.sharelink.ShareLinksCache()
+        val hubLinks = me.meeshy.sdk.link.LinksCache()
+        shareLinks.put(listOf(me.meeshy.sdk.model.MyShareLink(id = "1", linkId = "mshy_first")))
+        hubLinks.putTrackingLinks(listOf(me.meeshy.sdk.model.TrackingLink(id = "2", token = "first")))
+        hubLinks.putAffiliateTokens(listOf(me.meeshy.sdk.model.AffiliateToken(id = "3", token = "t", name = "n")))
+        hubLinks.putCommunityLinks(listOf(me.meeshy.sdk.model.CommunityLink(id = "4")))
+
+        teardown(perAccountCaches = setOf(shareLinks, hubLinks)).wipe()
+
+        assertThat(shareLinks.read()).isNull()
+        assertThat(shareLinks.find("mshy_first")).isNull()
+        assertThat(hubLinks.trackingLinks()).isNull()
+        assertThat(hubLinks.affiliateTokens()).isNull()
+        assertThat(hubLinks.communityLinks()).isNull()
+        assertThat(hubLinks.figures()).isNull()
     }
 
     @Test

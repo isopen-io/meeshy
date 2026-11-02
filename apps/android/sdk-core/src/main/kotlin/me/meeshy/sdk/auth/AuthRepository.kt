@@ -5,6 +5,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.AuthSession
 import me.meeshy.sdk.model.AvailabilityResult
 import me.meeshy.sdk.model.LoginRequest
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RegisterRequest
 import me.meeshy.sdk.model.auth.EmailVerificationRequest
 import me.meeshy.sdk.model.auth.EmailVerificationWatchStatus
@@ -18,14 +19,22 @@ import me.meeshy.sdk.model.auth.ResetTokenVerificationRequest
 import me.meeshy.sdk.model.auth.SendPhoneCodeRequest
 import me.meeshy.sdk.model.auth.TwoFactorLoginRequest
 import me.meeshy.sdk.model.auth.TwoFactorVerifyResult
+import me.meeshy.sdk.model.guest.GuestSessionEnd
 import me.meeshy.sdk.model.auth.VerificationStatusRequest
 import me.meeshy.sdk.model.auth.VerifyPhoneData
 import me.meeshy.sdk.model.auth.VerifyPhoneRequest
+import me.meeshy.sdk.net.AccountShelf
 import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.NoAccountShelf
+import me.meeshy.sdk.net.NoSessionBackup
+import me.meeshy.sdk.net.SessionBackup
+import me.meeshy.sdk.net.SessionRefresher
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.session.SessionTeardown
 import me.meeshy.sdk.sync.SyncSeqTracker
@@ -40,8 +49,18 @@ class AuthRepository @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val sessionTeardown: SessionTeardown,
     private val syncSeqTracker: SyncSeqTracker,
+    private val fence: AccountFence? = null,
+    private val sessionBackup: SessionBackup = NoSessionBackup,
+    private val keepSignedIn: KeepSignedInConsent? = null,
+    private val accountShelf: AccountShelf = NoAccountShelf,
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
+
+    /** Un COMPTE est connecté (JWT) : une session d'invité de lien est [isAuthenticated] sans l'être (#13530). */
+    val hasAccountSession: Boolean get() = tokenStore.jwt != null
+
+    /** Of [accountIds], those whose session sleeps on the device: only then is "stay signed in" offered. */
+    fun accountsKeepingASession(accountIds: Collection<String>): Set<String> = tokenStore.accountsWithTokens(accountIds)
 
     /**
      * La connexion par mot de passe, dans TOUTES ses issues : la session, le défi
@@ -58,11 +77,13 @@ class AuthRepository @Inject constructor(
         username: String,
         password: String,
         rememberDevice: Boolean,
-    ): NetworkResult<LoginOutcome> =
-        when (val result = apiCall { authApi.login(LoginRequest(username, password, rememberDevice)) }) {
+    ): NetworkResult<LoginOutcome> {
+        keepSignedIn?.open(rememberDevice)
+        return when (val result = apiCall { authApi.login(LoginRequest(username, password, rememberDevice)) }) {
             is NetworkResult.Failure -> result
             is NetworkResult.Success -> result.data.openIfAuthenticated(typedIdentifier = username)
         }
+    }
 
     /**
      * La porte de l'écran de connexion actuel : une session ou un échec. Toute autre
@@ -360,6 +381,37 @@ class AuthRepository @Inject constructor(
     suspend fun regenerateTwoFactorBackupCodes(code: String): NetworkResult<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo> =
         apiCall { authApi.regenerateTwoFactorBackupCodes(me.meeshy.sdk.net.api.TwoFactorCodeRequest(code)) }
 
+    /**
+     * Réinstaller l'app garde la connexion (#14058) : au démarrage SANS session locale, la session sauvegardée
+     * hors de l'app ([SessionBackup], Block Store) est renouvelée auprès de la passerelle puis adoptée — l'identité
+     * ouverte, `null` quand l'app reste sur la connexion. Un refus de la passerelle (session révoquée, échue, compte fermé,
+     * âge : [SessionRefresher.refuses]) efface la sauvegarde et l'entrée du compte au coffre des comptes gardés
+     * ([AccountShelf], #14079) : l'écran de connexion s'affiche, sans message. Hors ligne, en panne serveur ou derrière un
+     * proxy qui répond à sa place, elle est gardée pour le lancement suivant. Une connexion faite pendant l'appel n'est jamais écrasée.
+     */
+    suspend fun restoreBackedUpSession(): MeeshyUser? {
+        if (tokenStore.isAuthenticated) return null
+        val saved = sessionBackup.read() ?: return null
+        val result = apiCall { authApi.refresh(RefreshTokenRequest(token = saved.jwt, sessionToken = saved.sessionToken)) }
+        if (tokenStore.isAuthenticated) return null
+        return when (result) {
+            is NetworkResult.Success -> {
+                val renewed = result.data
+                storeSession(renewed.copy(sessionToken = renewed.sessionToken ?: saved.sessionToken), SessionOrigin.RESTORED)
+                renewed.user
+            }
+            is NetworkResult.Failure -> {
+                if (result.error.refusesTheSession()) {
+                    sessionBackup.erase()
+                    accountShelf.erase(saved.userId)
+                }
+                null
+            }
+        }
+    }
+
+    private fun ApiError.refusesTheSession(): Boolean = SessionRefresher.refuses(httpStatus, code)
+
     /** Re-hydrates the session on app start when a token is already present. */
     suspend fun restoreSession() {
         sessionRepository.refresh()
@@ -381,6 +433,24 @@ class AuthRepository @Inject constructor(
     suspend fun logout() {
         val frozenJwt = tokenStore.jwt
         val frozenSessionToken = tokenStore.sessionToken
+        purgeLocalSession()
+        closeServerSession(frozenJwt, frozenSessionToken)
+    }
+
+    /**
+     * La passerelle a TERMINE la session d'un invite de lien (lien echu, acces retire) : l'appareil est purge comme apres
+     * une deconnexion — jetons, caches, brouillons, file d'envoi, session invitee persistee — et rien ne part vers une
+     * session que la passerelle a deja fermee. Ne vise que la session refusee ([refusedToken], `null` ne vise rien) :
+     * le refus tardif d'une session quittee ne purge pas celle ouverte depuis, et un compte inscrit n'est jamais touche.
+     * Rend `true` quand la purge a eu lieu.
+     */
+    suspend fun endGuestSession(refusedToken: String?): Boolean {
+        if (tokenStore.jwt != null || !GuestSessionEnd.targets(tokenStore.sessionToken, refusedToken)) return false
+        purgeLocalSession()
+        return true
+    }
+
+    private suspend fun purgeLocalSession() {
         tokenStore.clear()
         sessionRepository.clear()
         sessionTeardown.wipe()
@@ -390,7 +460,6 @@ class AuthRepository @Inject constructor(
         // PAR USER côté serveur : hérité, il ferait manquer au compte suivant
         // tous ses trous tant qu'il n'aurait pas dépassé la valeur du précédent.
         syncSeqTracker.reset()
-        closeServerSession(frozenJwt, frozenSessionToken)
     }
 
     private suspend fun closeServerSession(jwt: String?, sessionToken: String?) {
@@ -425,9 +494,24 @@ class AuthRepository @Inject constructor(
     }
 
     private fun storeSession(session: AuthSession, origin: SessionOrigin = SessionOrigin.LOGIN) {
+        // #13558 : un compte posé par-dessus un autre, sans purge, retire d'abord les envois en vol du compte remplacé —
+        // leur prochaine requête partirait sinon sous les jetons du compte adopté.
+        // #13567 : les jetons de B ne s'écrivent jamais sous l'identité de A — ni dans l'emplacement de coffre de A, ni
+        // pendant une fenêtre où un push de A serait jugé destiné au compte connecté. Sans identité, le temps de
+        // l'écriture, un push nommé est écarté (fail-closed) ; `adopt` pose ensuite B, puis les jetons s'écrivent sous B.
+        keepSignedIn?.bind(session.user.id)
+        val replaced = sessionRepository.currentUserId ?: tokenStore.userId
+        if (replaced != null && replaced != session.user.id) {
+            fence?.revoke()
+            tokenStore.userId = null
+        }
         tokenStore.jwt = session.token
         tokenStore.sessionToken = session.sessionToken
         sessionRepository.adopt(session.user, origin)
+        // L'adoption ne recopie pas un jeton sur l'emplacement d'un compte qui en garde déjà un (compte enregistré) :
+        // les jetons de CETTE session s'y réécrivent, sans quoi l'ancien serait lu.
+        tokenStore.jwt = session.token
+        tokenStore.sessionToken = session.sessionToken
     }
 
     private companion object {

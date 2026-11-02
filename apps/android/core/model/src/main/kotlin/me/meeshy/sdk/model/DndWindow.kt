@@ -1,7 +1,9 @@
 package me.meeshy.sdk.model
 
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 /**
  * Pure Do-Not-Disturb (quiet-hours) logic for [UserNotificationPreferences] (feature-parity §L).
@@ -100,5 +102,30 @@ public object DndWindow {
     public fun isActive(prefs: UserNotificationPreferences, at: LocalDateTime): Boolean =
         isActive(prefs, at.dayOfWeek, at.hour * MINUTES_PER_HOUR + at.minute)
 
+    /**
+     * The quiet-hours verdict for the instant [epochMillis] read in the user's LOCAL time,
+     * [utcOffsetMinutes] minutes ahead of UTC (Tokyo = 540, New York summer = -240) — never
+     * in UTC. The day filter applies to the LOCAL day, so a window that crosses midnight is
+     * judged against the local calendar too.
+     */
+    public fun isActiveAt(prefs: UserNotificationPreferences, epochMillis: Long, utcOffsetMinutes: Int): Boolean {
+        val local = LocalDateTime.ofInstant(
+            Instant.ofEpochMilli(epochMillis),
+            ZoneOffset.ofTotalSeconds(utcOffsetMinutes.coerceIn(MIN_OFFSET_MINUTES, MAX_OFFSET_MINUTES) * SECONDS_PER_MINUTE),
+        )
+        return isActive(prefs, local)
+    }
+
+    /**
+     * Records the device's current UTC offset alongside the quiet-hours schedule, so the
+     * gateway evaluates the window in the user's local time (GW7). Out-of-range offsets are
+     * clamped into the gateway's accepted UTC-12 h..UTC+14 h.
+     */
+    public fun withRecordedOffset(prefs: UserNotificationPreferences, utcOffsetMinutes: Int): UserNotificationPreferences =
+        prefs.copy(dndUtcOffsetMinutes = utcOffsetMinutes.coerceIn(MIN_OFFSET_MINUTES, MAX_OFFSET_MINUTES))
+
     private const val MINUTES_PER_HOUR = 60
+    private const val SECONDS_PER_MINUTE = 60
+    private const val MIN_OFFSET_MINUTES = -12 * 60
+    private const val MAX_OFFSET_MINUTES = 14 * 60
 }

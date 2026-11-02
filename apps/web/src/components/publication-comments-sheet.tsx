@@ -4,6 +4,7 @@ import { CommentThread } from '@/components/comment-thread';
 import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import type { StoryPlaybackStory } from '@/lib/stories/playback';
 import { useFlip } from '@/lib/use-flip';
 import { COMMENTS_ZONE_MOTION, commentsZoneOf, commentsZoneStageOf, type CommentsComposerPresence, type CommentsZone, type CommentsZoneStage } from '@/lib/view/comments-zone';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
@@ -71,6 +72,8 @@ export type PublicationCommentsSheetProps = {
    * des Réels) : la loi d'écriture de #8643.
    */
   readonly risesWithComposer?: boolean;
+  /** La story que le lecteur joue (#13922) — « Imager » compose la carte de ses commentaires autour d'elle. */
+  readonly story?: StoryPlaybackStory;
 };
 
 /** LE CLAVIER ET LE COMPOSEUR FONT LA ZONE (#9894) — `null` hors lecteur de stories. */
@@ -82,7 +85,7 @@ function useRisingZone(rises: boolean): { readonly stage: CommentsZoneStage; rea
   return { stage, zone: commentsZoneOf({ stage, keyboardInset: keyboard.inset }), onComposerChange: setComposer };
 }
 
-export function PublicationCommentsSheet({ postId, onClose, onWritingBar, risesWithComposer = false }: PublicationCommentsSheetProps) {
+export function PublicationCommentsSheet({ postId, onClose, onWritingBar, risesWithComposer = false, story }: PublicationCommentsSheetProps) {
   const language = currentInterfaceLanguage();
   const panneau = useRef<HTMLDivElement | null>(null);
   /* ÉCRIRE (#8643, jumelle de #8642) — lecteur des Réels : la liste se
@@ -227,6 +230,7 @@ export function PublicationCommentsSheet({ postId, onClose, onWritingBar, risesW
         foldOnSend
         listHidden={writing}
         {...(rising === null ? {} : { onComposerChange: rising.onComposerChange })}
+        {...(story === undefined ? {} : { story })}
       />
     </div>
   );

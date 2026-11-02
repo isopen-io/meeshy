@@ -23,13 +23,25 @@ class SignupAvailabilityTest {
     // --- isUsernameValidLocally ---
 
     @Test
-    fun username_minBoundary_twoChars_isValid() {
-        assertThat(SignupFieldValidation.isUsernameValidLocally("ab")).isTrue()
+    fun username_minBoundary_threeChars_isValid() {
+        assertThat(SignupFieldValidation.isUsernameValidLocally("Ali")).isTrue()
+    }
+
+    @Test
+    fun username_twoChars_isTooShort() {
+        // #13825 : « Al » est un prénom valable, pas un pseudo — le pseudo commence à 3 caractères.
+        assertThat(SignupFieldValidation.isUsernameValidLocally("Al")).isFalse()
     }
 
     @Test
     fun username_oneChar_isTooShort() {
         assertThat(SignupFieldValidation.isUsernameValidLocally("a")).isFalse()
+    }
+
+    @Test
+    fun username_minimumIsTheSingleSourceOfTheIdentityRules() {
+        assertThat(SignupFieldValidation.USERNAME_MIN_LENGTH).isEqualTo(RegistrationIdentity.PSEUDO_MIN)
+        assertThat(RegistrationIdentity.PSEUDO_MIN).isEqualTo(3)
     }
 
     @Test
@@ -44,8 +56,9 @@ class SignupAvailabilityTest {
 
     @Test
     fun username_lengthMeasuredAfterTrim() {
-        // Padded to 20 raw chars but only 2 significant → still valid.
-        assertThat(SignupFieldValidation.isUsernameValidLocally("         ab         ")).isTrue()
+        // Padded to 20 raw chars but only 3 significant → still valid ; 2 significant → refused.
+        assertThat(SignupFieldValidation.isUsernameValidLocally("         abc         ")).isTrue()
+        assertThat(SignupFieldValidation.isUsernameValidLocally("         ab         ")).isFalse()
     }
 
     @Test
@@ -85,7 +98,7 @@ class SignupAvailabilityTest {
 
     @Test
     fun username_digitsOnly_areValid() {
-        assertThat(SignupFieldValidation.isUsernameValidLocally("42")).isTrue()
+        assertThat(SignupFieldValidation.isUsernameValidLocally("421")).isTrue()
     }
 
     // --- normalizedUsername ---

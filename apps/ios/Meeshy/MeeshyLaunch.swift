@@ -18,6 +18,8 @@ enum MeeshyLaunch {
         // écran se préparent pendant que UIKit monte la scène.
         LaunchPrefetch.start()
         UILanguageOverride.applyIfNeeded()
+        // #13840 — le canvas du SDK peint le look d'un média par le peintre de l'app.
+        ComposerLookPainterAdapter.install()
         MeeshyApp.main()
     }
 }

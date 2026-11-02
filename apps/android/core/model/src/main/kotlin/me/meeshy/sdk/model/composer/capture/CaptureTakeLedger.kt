@@ -19,6 +19,10 @@ data class CaptureTakeLedger(
     fun deliver(token: String): CaptureTakeLedger =
         if (token !in pending) this else copy(pending = pending - token, delivered = delivered + token)
 
+    /** L'auteur a annulé la prise avant qu'elle ne parte : elle n'est ni livrée ni perdue. */
+    fun cancel(token: String): CaptureTakeLedger =
+        if (token !in pending) this else copy(pending = pending - token)
+
     /** La prise n'a produit aucun fichier : elle est signalée perdue. */
     fun abandon(token: String): CaptureTakeLedger =
         if (token !in pending) this else copy(pending = pending - token, lost = lost + token)

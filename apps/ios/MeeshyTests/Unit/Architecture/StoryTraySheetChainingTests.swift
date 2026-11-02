@@ -36,7 +36,7 @@ final class StoryTraySheetChainingTests: XCTestCase {
     }
 
     private func traySource() throws -> String {
-        try source("Features/Main/Views/StoryTrayView.swift")
+        try source("Features/Stories/Views/StoryTrayView.swift")
     }
 
     private func occurrences(of needle: String, in haystack: String) -> Int {
@@ -75,7 +75,7 @@ final class StoryTraySheetChainingTests: XCTestCase {
     }
 
     private func trayActionsSource() throws -> String {
-        try source("Features/Main/Views/StoryTrayActions.swift")
+        try source("Features/Stories/Views/StoryTrayActions.swift")
     }
 
     func test_theStoryTrayNeverSleepsBeforePresenting() throws {

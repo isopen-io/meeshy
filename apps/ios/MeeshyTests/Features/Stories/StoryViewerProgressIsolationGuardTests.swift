@@ -12,7 +12,7 @@ import XCTest
 
 final class StoryViewerProgressIsolationGuardTests: XCTestCase {
 
-    private static let viewerPath = "Meeshy/Features/Main/Views/StoryViewerView.swift"
+    private static let viewerPath = "Meeshy/Features/Stories/Views/StoryViewerView.swift"
 
     private static func viewerUnit() throws -> String {
         // L'unité ET les types que la découpe par cohésion a rangés sous leur nom (`StoryViewerSources`).

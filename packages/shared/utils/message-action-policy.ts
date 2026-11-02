@@ -2,19 +2,21 @@
  * CE QU'UN LECTEUR PEUT FAIRE D'UN MESSAGE (#11205) — loi PURE des clients,
  * `now` injecté. Elle reprend `admitMessageEdit`, `admitMessageDelete` et
  * `admitConversationWriteFor`, qui font foi : elle n'offre jamais ce qu'ils
- * refusent, et peut offrir MOINS (E2EE, vue unique, message système) — tenu
+ * refusent, et peut offrir MOINS — tenu
  * par `action-policy-parity.test.ts` (passerelle) sur `fixtures/action-policy/`.
- * Rôle de plateforme comparé EXACTEMENT, comme la passerelle (AUDIT, ANALYST,
+ * Rôle de plateforme comparé EXACTEMENT sur `PRIVILEGED_PLATFORM_ROLES` (AUDIT, ANALYST,
  * inconnu et minuscules ne modèrent pas) ; rang de conversation exact, inconnu
  * ⇒ 0. Réagir n'est pas écrire : `ReactionService.addReaction` ne lit ni rang
  * d'écriture, ni canal d'annonces, ni règle des mineurs. E2EE au sens de
  * `sharedTranslationServerReadsMessage` (régime inconnu ⇒ chiffré) : ni édition
  * ni transfert, traduction sur l'appareil, services qui lisent le clair ABSENTS.
+ * Chiffré au repos (`server`/`hybrid`) : lisible par le serveur, l'édition y est rescellée par la passerelle (décision porteur 2026-11-01).
  * Transférer, copier, enregistrer : `contentExitLaw`.
  */
 
 import { MEMBER_ROLE_HIERARCHY, WRITE_PERMISSION_HIERARCHY, isGlobalAdmin } from '../types/role-types.js';
 import { contentExitLaw, type ContentExitLaw } from './content-exit-law.js';
+import { isPrivilegedPlatformRole } from './platform-privilege.js';
 import { GLOBAL_CONVERSATION_TYPE } from './global-minor-restriction.js';
 import { messageContentKind, type MessageContentKind, type MessageContentShape, type MessageContentSubject } from './message-content-kind.js';
 import { sharedTranslationServerReadsMessage } from './shared-translation-eligibility.js';
@@ -89,6 +91,7 @@ export type ServerFeatureAbsence = 'e2ee-server-feature-absent';
 export type MessageActionVerdicts = {
   readonly edit: EditVerdict | null;
   readonly deleteForEveryone: boolean;
+  /** `DELETE /messages/:id/delete-for-me` : un inscrit, participant ACTIF (#11415) — l'appartenance inconnue se dit fermée. */
   readonly deleteForMe: boolean;
   /** Retrait par un tiers modérateur : un motif est exigé, l'auteur en est prévenu. */
   readonly remove: { readonly reasonRequired: true } | null;
@@ -121,15 +124,14 @@ const WRITE_RANKS: ReadonlyMap<string, number> = new Map(Object.entries(WRITE_PE
 const NOTICE_KINDS: ReadonlySet<MessageContentKind> = new Set(['system', 'call']);
 /** Un lieu, un sondage, un sticker : leur texte n'en porte pas la structure (`metadata`). */
 const EDITABLE_KINDS: ReadonlySet<MessageContentKind> = new Set(['text', 'link', 'image', 'video', 'audio', 'file', 'contact', 'multi']);
-/** `PRIVILEGED_GLOBAL_ROLES` et `PLATFORM_STAFF_ROLES` de la passerelle, comparés EXACTEMENT. */
-const PLATFORM_MODERATOR_ROLES: ReadonlySet<string> = new Set(['MODERATOR', 'ADMIN', 'BIGBOSS']);
 
 const msOf = (instant: Instant | null | undefined): number =>
   instant == null ? Number.NaN : (instant instanceof Date ? instant.getTime() : new Date(instant).getTime());
 
-export const platformModerates = (viewer: ActionViewer): boolean => PLATFORM_MODERATOR_ROLES.has(viewer.platformRole ?? '');
+/** `PRIVILEGED_PLATFORM_ROLES` (#11217), la table que lisent aussi les admissions de la passerelle, comparée EXACTEMENT. */
+export const platformModerates = (viewer: ActionViewer): boolean => isPrivilegedPlatformRole(viewer.platformRole);
 
-/** `isGlobalAdmin`, comme `actsWithCreatorRights` de la passerelle. */
+/** `isGlobalAdmin` : la console d'administration — jamais l'autorité dans une conversation, qui lit `platformModerates` (#11217). */
 export const platformAdministers = (viewer: ActionViewer): boolean => isGlobalAdmin(viewer.platformRole ?? '');
 
 export const viewerIsRegistered = (viewer: ActionViewer): boolean => viewer.hasAccount && !viewer.isAnonymous;
@@ -210,10 +212,27 @@ function contextOf(input: MessageActionInput): Context {
   };
 }
 
-/** `admitMessageEdit` — auteur 24 h, rôle global au-delà ou sur autrui — plus les refus propres au client. */
+/** Ce que le CONTENU d'un message refuse à toute édition, quel que soit l'éditeur (auteur, modérateur, rang). */
+export type EditContentRefusal = 'view-once' | 'encrypted-message' | 'not-editable-kind';
+
+/**
+ * Le message, PAR SON CONTENU, se modifie-t-il ? `null` : oui. Un site UNIQUE pour deux lecteurs —
+ * `editVerdict` ne l'offre pas, `admitMessageEdit` (passerelle) le refuse sur ses quatre transports (#12792).
+ */
+export function editContentRefusal(content: MessageContentShape): EditContentRefusal | null {
+  if (content.flags.viewOnce) return 'view-once';
+  if (content.flags.encrypted) return 'encrypted-message';
+  return EDITABLE_KINDS.has(content.kind) ? null : 'not-editable-kind';
+}
+
+/**
+ * `admitMessageEdit` — auteur 24 h, rôle global au-delà ou sur autrui — plus les refus propres au client.
+ * Un régime au repos (`server`/`hybrid`) ne retire plus « Modifier » (décision porteur 2026-11-01) : la
+ * passerelle rescelle le texte modifié comme un message neuf. Seul le bout en bout (`e2ee`) le retire, et une
+ * ligne servie SCELLÉE (aucune clé ne l'a ouverte) n'a pas de texte à modifier (`hasText`).
+ */
 function editVerdict(ctx: Context): EditVerdict | null {
-  const { flags } = ctx.content;
-  const offered = ctx.live && ctx.registered && ctx.hasText && EDITABLE_KINDS.has(ctx.content.kind) && !ctx.e2ee && !flags.viewOnce;
+  const offered = ctx.live && ctx.registered && ctx.hasText && editContentRefusal(ctx.content) === null && !ctx.e2ee;
   if (!offered || conversationIsClosed(ctx.conversation)) return null;
   if (ctx.conversation.type === GLOBAL_CONVERSATION_TYPE && ctx.viewer.isDeclaredMinor) return null;
   if (!ctx.isAuthor) return ctx.viewer.isActiveMember && platformModerates(ctx.viewer) ? { asModerator: true, windowEndsAt: null } : null;

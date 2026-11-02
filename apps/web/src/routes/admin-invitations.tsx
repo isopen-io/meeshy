@@ -111,7 +111,7 @@ export function AdminInvitationsPanel({ language, deps = apiDeps, now = defaultN
         language={language}
         title={translateAdmin(language, 'admin.nav.invitations')}
         subtitle={translateAdmin(language, 'admin.invitation.subtitle')}
-        crumbs={[{ label: translateAdmin(language, 'admin.group.people') }, { label: translateAdmin(language, 'admin.nav.invitations') }]}
+        place={{ section: 'invitations' }}
       />
       <AdminOfflineNotice language={language} />
       <InvitationsOverview language={language} deps={deps} />

@@ -6,9 +6,16 @@ import SwiftUI
 struct LocalCameraVideoView: View {
     let track: Any?
     let intendedFront: Bool
-    var contentMode: UIView.ContentMode = .scaleAspectFill
+    var contentMode: UIView.ContentMode
+    @ObservedObject var liveCamera: CallLiveCamera
 
-    @ObservedObject var liveCamera: CallLiveCamera = .shared
+    init(track: Any?, intendedFront: Bool, contentMode: UIView.ContentMode = .scaleAspectFill,
+         liveCamera: CallLiveCamera = .shared) {
+        self.track = track
+        self.intendedFront = intendedFront
+        self.contentMode = contentMode
+        self.liveCamera = liveCamera
+    }
 
     private var mirror: Bool {
         CallCameraMirror.isMirrored(

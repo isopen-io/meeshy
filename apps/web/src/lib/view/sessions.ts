@@ -69,7 +69,7 @@ function countryName(code: string, language: InterfaceLanguage): string {
   }
 }
 
-function dateTime(iso: string | null, language: InterfaceLanguage): string | null {
+export function dateTime(iso: string | null, language: InterfaceLanguage): string | null {
   const date = iso === null ? Number.NaN : new Date(iso).getTime();
   if (Number.isNaN(date)) return null;
   return new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
@@ -85,7 +85,7 @@ const STEPS: readonly (readonly [Intl.RelativeTimeFormatUnit, number])[] = [
   ['year', Number.POSITIVE_INFINITY],
 ];
 
-function sinceNow(iso: string | null, language: InterfaceLanguage, now: Date): string | null {
+export function sinceNow(iso: string | null, language: InterfaceLanguage, now: Date): string | null {
   const at = iso === null ? Number.NaN : new Date(iso).getTime();
   if (Number.isNaN(at)) return null;
   const format = new Intl.RelativeTimeFormat(language, { numeric: 'auto' });

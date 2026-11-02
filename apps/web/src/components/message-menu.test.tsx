@@ -559,6 +559,13 @@ describe('MessageMenu — les groupes (#11210)', () => {
     expect(buttons.filter((b) => b.dataset.variant === 'destructive').length).toBe(1);
   });
 
+  test('#12632 — un envoi en échec offre « Abandonner », en dernier, dans la couleur de l’erreur', () => {
+    const failed = message({ id: 'cid_x', conversationId: 'c-a', senderId: 'u-viewer', content: 'texte', originalLanguage: 'fr', translations: [], createdAt: minutesAgo(1) });
+    open(messageMenuItems({ ...messageMenuContextOf(failed, { now: Date.now(), scope: menuScope(), failed: true }), piecesLabels: true, canDiscard: true }));
+    const last = Array.from(document.querySelectorAll<HTMLElement>('.message-menu-list [role="menuitem"]')).at(-1);
+    expect([last?.textContent, last?.dataset.variant, last?.style.color]).toEqual(['Abandonner', 'destructive', 'var(--color-error)']);
+  });
+
   test('« Traduire sur l’appareil » DEMANDE la traduction (l’hôte agit) — jamais le sous-menu des langues présentes', () => {
     const actions: string[] = [];
     const items = messageMenuItems({

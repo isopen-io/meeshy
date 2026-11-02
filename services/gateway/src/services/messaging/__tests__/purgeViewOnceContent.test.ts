@@ -17,6 +17,7 @@ import {
   isLegacyViewOnceBurn,
   purgeDueViewOnceContent,
   reevaluateLegacyViewOnceBurn,
+  type ViewOncePurgeAttachmentRemover,
 } from '../purgeViewOnceContent';
 import { sharedTranslationRow, sharedTranslationTable } from '../../../__tests__/helpers/shared-translation-table';
 
@@ -27,11 +28,20 @@ function dueRow(overrides: Record<string, unknown> = {}) {
 }
 
 function buildPrisma(rows: unknown[]) {
+  const update = jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({});
   return {
     message: {
       findMany: jest.fn<(args: unknown) => Promise<unknown[]>>().mockResolvedValue(rows),
-      update: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({}),
+      update,
+      // L'estampille se pose par une écriture CONDITIONNÉE (#11269, F5) : ce
+      // double la fait passer par `update`, pour que chaque témoin lise toutes
+      // les écritures — et leurs échecs — au même endroit.
+      updateMany: jest.fn<(args: unknown) => Promise<{ count: number }>>().mockImplementation(async (args) => {
+        await update(args);
+        return { count: 1 };
+      }),
     },
+    messageAttachment: { count: jest.fn<(args: unknown) => Promise<number>>().mockResolvedValue(0) },
     messageStatusEntry: { findMany: jest.fn<(args: unknown) => Promise<unknown[]>>().mockResolvedValue([]) },
     participant: {
       findMany: jest.fn<(args: unknown) => Promise<unknown[]>>().mockResolvedValue([]),
@@ -40,7 +50,9 @@ function buildPrisma(rows: unknown[]) {
   };
 }
 
-const remover = () => ({ deleteAttachment: jest.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined) });
+type DeleteAttachment = ViewOncePurgeAttachmentRemover['deleteAttachment'];
+
+const remover = () => ({ deleteAttachment: jest.fn<DeleteAttachment>().mockResolvedValue(undefined) });
 
 describe('purgeDueViewOnceContent', () => {
   it('efface le contenu et les fichiers, SANS poser deletedAt : la bulle reste', async () => {
@@ -50,7 +62,7 @@ describe('purgeDueViewOnceContent', () => {
     const result = await purgeDueViewOnceContent(prisma as any, { now: NOW, attachmentRemover: attachments });
 
     expect(result).toEqual({ purged: 1 });
-    expect(attachments.deleteAttachment).toHaveBeenCalledWith('att-1');
+    expect(attachments.deleteAttachment).toHaveBeenCalledWith('att-1', { requireBytesGone: true });
     const { data } = prisma.message.update.mock.calls[0][0] as { data: Record<string, unknown> };
     expect(data).toMatchObject({ content: '', translations: null, metadata: null, viewOnceBurnedAt: NOW, viewOnceBurnAt: null });
     expect(data).not.toHaveProperty('deletedAt');
@@ -85,6 +97,108 @@ describe('purgeDueViewOnceContent', () => {
 
     expect(result).toEqual({ purged: 0 });
     expect(announce).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * #11269 — les OCTETS d'une vue unique partent une fois lue par tous, et la
+ * purge ne prétend jamais les avoir effacés quand elle n'en est pas sûre.
+ *
+ * Avant : les effacements de pièces passaient par `allSettled` sans être lus,
+ * puis l'échéance était remise à `null`. Une pièce qui résistait restait donc
+ * en base sous un message dont l'échéance avait DISPARU — la loi du porteur
+ * (`carrierMessageStillServesBytes`) la rendait de nouveau lisible, et aucune
+ * passe ne la revoyait jamais.
+ */
+describe('purgeDueViewOnceContent — effacement des octets, fail-closed (#11269)', () => {
+  const failing = () => ({
+    deleteAttachment: jest.fn<DeleteAttachment>().mockRejectedValue(new Error('disk busy')),
+  });
+
+  it("une pièce qui résiste : le contenu part, mais l'échéance reste PASSÉE pour que la passe suivante reprenne les fichiers", async () => {
+    const prisma = buildPrisma([dueRow()]);
+    prisma.messageAttachment.count.mockResolvedValue(1);
+
+    await purgeDueViewOnceContent(prisma as any, { now: NOW, attachmentRemover: failing() });
+
+    const { data } = prisma.message.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(data).toMatchObject({ content: '', viewOnceBurnedAt: NOW, viewOnceBurnAt: NOW });
+  });
+
+  it('une relecture des pièces qui échoue vaut « pas fini » — jamais « effacé »', async () => {
+    const prisma = buildPrisma([dueRow()]);
+    prisma.messageAttachment.count.mockRejectedValue(new Error('mongo down'));
+
+    await purgeDueViewOnceContent(prisma as any, { now: NOW, attachmentRemover: remover() });
+
+    const { data } = prisma.message.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(data.viewOnceBurnAt).toEqual(NOW);
+  });
+
+  it('relit les pièces du message ÉCHU, et elles seules', async () => {
+    const prisma = buildPrisma([dueRow({ id: 'msg-9' })]);
+
+    await purgeDueViewOnceContent(prisma as any, { now: NOW, attachmentRemover: remover() });
+
+    expect(prisma.messageAttachment.count).toHaveBeenCalledWith({ where: { messageId: 'msg-9' } });
+  });
+
+  it("toutes les pièces parties : l'échéance s'efface, la purge est finie", async () => {
+    const prisma = buildPrisma([dueRow()]);
+
+    await purgeDueViewOnceContent(prisma as any, { now: NOW, attachmentRemover: remover() });
+
+    const { data } = prisma.message.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(data.viewOnceBurnAt).toBeNull();
+  });
+
+  it("une ligne DÉJÀ purgée que la passe reprend garde son estampille d'origine et n'est pas réannoncée", async () => {
+    const firstBurn = new Date('2026-09-23T14:00:00.000Z');
+    const prisma = buildPrisma([dueRow({ viewOnceBurnedAt: firstBurn })]);
+    const announce = jest.fn();
+
+    const result = await purgeDueViewOnceContent(prisma as any, { now: NOW, attachmentRemover: remover(), announce });
+
+    const { data } = prisma.message.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(data).not.toHaveProperty('viewOnceBurnedAt');
+    expect(data.viewOnceBurnAt).toBeNull();
+    expect(announce).not.toHaveBeenCalled();
+    expect(result).toEqual({ purged: 0 });
+  });
+
+  it("lit l'estampille de purge des lignes échues — c'est elle qui distingue une reprise d'une première purge", async () => {
+    const prisma = buildPrisma([]);
+
+    await purgeDueViewOnceContent(prisma as any, { now: NOW, attachmentRemover: remover() });
+
+    const { select } = prisma.message.findMany.mock.calls[0][0] as { select: Record<string, unknown> };
+    expect(select).toMatchObject({ viewOnceBurnedAt: true });
+  });
+
+  it('journalise chaque ligne écrite : pièces visées, fichiers en attente, première purge ou reprise', async () => {
+    const prisma = buildPrisma([dueRow({ attachments: [{ id: 'a' }, { id: 'b' }] })]);
+    prisma.messageAttachment.count.mockResolvedValue(1);
+    const onPurged = jest.fn();
+
+    await purgeDueViewOnceContent(prisma as any, { now: NOW, attachmentRemover: failing(), onPurged });
+
+    expect(onPurged).toHaveBeenCalledWith({
+      id: 'msg-1',
+      conversationId: 'conv-1',
+      attachments: 2,
+      filesPending: true,
+      firstPurge: true,
+    });
+  });
+
+  it("une ligne dont l'écriture résiste n'est pas journalisée comme purgée", async () => {
+    const prisma = buildPrisma([dueRow()]);
+    prisma.message.update.mockRejectedValue(new Error('mongo down'));
+    const onPurged = jest.fn();
+
+    await purgeDueViewOnceContent(prisma as any, { now: NOW, attachmentRemover: remover(), onPurged });
+
+    expect(onPurged).not.toHaveBeenCalled();
   });
 });
 

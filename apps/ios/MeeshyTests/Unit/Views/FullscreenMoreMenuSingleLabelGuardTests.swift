@@ -15,7 +15,7 @@ final class FullscreenMoreMenuSingleLabelGuardTests: XCTestCase {
 
     private static let hosts = [
         "Meeshy/Features/Main/Views/ConversationMediaGalleryView+Menu.swift",
-        "Meeshy/Features/Main/Views/StoryViewerView+Header.swift",
+        "Meeshy/Features/Stories/Views/StoryViewerView+Header.swift",
         "Meeshy/Features/Main/Views/ReelsPlayerView+ActionRail.swift",
     ]
 

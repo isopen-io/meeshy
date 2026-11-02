@@ -17,20 +17,20 @@ class NavGraphRouteSetTest {
     private val registered: List<String> = graphDir.listFiles { file -> file.name.endsWith("NavGraph.kt") }
         .orEmpty()
         .flatMap { file ->
-            Regex("""composable\(\s*(?:route = )?(?:"\$\{)?Routes\.([A-Z_]+)""").findAll(file.readText()).map { it.groupValues[1] }.toList()
+            Regex("""[cC]omposable\(\s*(?:route = )?(?:"\$\{)?Routes\.([A-Z_]+)""").findAll(file.readText()).map { it.groupValues[1] }.toList()
         }
 
     @Test
     fun `every pre-split destination is registered exactly once`() {
         assertThat(registered).containsExactly(
-            "LOGIN", "FORGOT_PASSWORD", "MAGIC_LINK", "MAGIC_LINK_VALIDATE", "REGISTRATION", "GUEST_JOIN",
+            "LOGIN", "FORGOT_PASSWORD", "MAGIC_LINK", "MAGIC_LINK_VALIDATE", "VERIFY_EMAIL_LINK", "RESET_PASSWORD", "REGISTRATION", "GUEST_JOIN", "WORLD_ENTRY",
             "CONVERSATIONS", "SHARE_LINK_PICKER", "GLOBAL_SEARCH", "DASHBOARD", "CREATE_SHARE_LINK",
-            "MY_SHARE_LINKS", "SHARE_LINK_DETAIL", "NEW_CONVERSATION", "CHAT", "STARRED",
-            "FEED", "SAVED_POSTS", "NEARBY_DISCOVERY", "POST_DETAIL", "REELS", "STORY_VIEWER", "STORY_COMPOSER_ROUTE",
-            "SETTINGS", "CHANGE_PASSWORD", "TWO_FACTOR", "ACCOUNT_CONTACT", "DELETE_ACCOUNT", "MEDIA_DOWNLOAD",
-            "MEDIA_CACHE", "DATA_EXPORT", "DIAGNOSTICS", "ABOUT", "SUPPORT", "LICENSES", "LEGAL", "PRIVACY",
-            "ACTIVE_SESSIONS", "SECURITY",
-            "CONTACTS", "CONTACTS_DISCOVER", "BLOCKED_USERS", "NOTIFICATIONS", "PROFILE_USER", "USER_POSTS", "REPORT_USER",
+            "MY_SHARE_LINKS", "SHARE_LINK_DETAIL", "SHARE_LINK_ARRIVALS", "NEW_CONVERSATION", "CHAT", "STARRED",
+            "FEED", "SAVED_POSTS", "NEARBY_DISCOVERY", "POST_DETAIL", "REELS", "STORY_VIEWER", "COMPOSER", "STORY_COMPOSER_ROUTE",
+            "SETTINGS", "NOTIFICATION_SETTINGS", "CHANGE_PASSWORD", "TWO_FACTOR", "ACCOUNT_CONTACT", "DELETE_ACCOUNT", "MEDIA_DOWNLOAD",
+            "MEDIA_CACHE", "PACK_SHOP", "DATA_EXPORT", "DIAGNOSTICS", "ABOUT", "SUPPORT", "LICENSES", "LEGAL", "PRIVACY",
+            "ACTIVE_SESSIONS", "SECURITY", "ENCRYPTED_DEVICES",
+            "CONTACTS", "CONTACTS_DISCOVER", "BLOCKED_USERS", "NOTIFICATIONS", "PROFILE_USER", "USER_POSTS", "REPORT_USER", "HASHTAG_RESULTS", "MY_STORIES", "MOOD_SPOTLIGHT",
             "CALLS", "CALL",
         )
     }
@@ -46,11 +46,12 @@ class NavGraphRouteSetTest {
             .flatMap { Regex("""uriPattern = (Routes\.[A-Z_]+)""").findAll(it.readText()).map { m -> m.groupValues[1] }.toList() }
         assertThat(deepLinks).containsExactly(
             "Routes.GUEST_JOIN_DEEP_LINK", "Routes.GUEST_JOIN_WEB_DEEP_LINK", "Routes.GUEST_JOIN_CHAT_WEB_DEEP_LINK",
+            "Routes.WORLD_ENTRY_DEEP_LINK", "Routes.WORLD_ENTRY_WEB_DEEP_LINK",
             "Routes.CONVERSATIONS_DEEP_LINK",
             "Routes.CHAT_DEEP_LINK", "Routes.CONVERSATION_DEEP_LINK", "Routes.CONVERSATION_SINGULAR_DEEP_LINK",
             "Routes.CONVERSATION_SHORT_DEEP_LINK", "Routes.CONVERSATION_DRAFT_DEEP_LINK",
             "Routes.PROFILE_DEEP_LINK", "Routes.PROFILE_SHARE_APP_DEEP_LINK", "Routes.PROFILE_SHARE_WEB_DEEP_LINK",
-            "Routes.STORY_DEEP_LINK",
+            "Routes.STORY_DEEP_LINK", "Routes.PACK_SHOP_DEEP_LINK",
         )
     }
 

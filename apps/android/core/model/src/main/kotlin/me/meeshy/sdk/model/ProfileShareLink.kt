@@ -5,7 +5,7 @@ package me.meeshy.sdk.model
  * behind "share profile", "copy link", and the profile QR code.
  *
  * The link shape mirrors the iOS `DeepLinkParser` contract
- * (apps/ios/Meeshy/Features/Main/Navigation/DeepLinkRouter.swift):
+ * (apps/ios/Meeshy/Features/Navigation/DeepLinkRouter.swift):
  *  - web Universal Link: `https://meeshy.me/u/{username}`
  *  - custom scheme:      `meeshy://u/{username}`
  *

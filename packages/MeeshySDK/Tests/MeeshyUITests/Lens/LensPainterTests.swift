@@ -137,6 +137,49 @@ final class LensPainterTests: XCTestCase {
         XCTAssertEqual(try Self.pixel(of: peinte, at: CGPoint(x: 56, y: 32)), [0, 0, 255])
     }
 
+    // MARK: - Le verre (#12602)
+
+    /// Rouge à gauche, bleu à droite : la frontière passe en x = 32.
+    private static func split() -> CIImage {
+        solid(red: 0, green: 0, blue: 1)
+            .cropped(to: CGRect(x: 32, y: 0, width: 32, height: side))
+            .composited(over: solid(red: 1, green: 0, blue: 0))
+    }
+
+    /// Une vitre verticale de x = 24 à x = 40, recadrée sur elle-même.
+    private static let vitre = CIImage(color: .white).cropped(to: CGRect(x: 24, y: 0, width: 16, height: side))
+
+    func test_frosted_blursWhatIsUnderTheMask() throws {
+        let peinte = LensPainter.paint(Self.split(), passes: [.frosted(under: Self.vitre, sigma: 6, stage: .overlays)],
+                                       input: LensFrameInput())
+
+        let frontiere = try Self.pixel(of: peinte, at: CGPoint(x: 31, y: 32))
+        XCTAssertGreaterThan(Int(frontiere[2]), 40, "sous la vitre, le bleu voisin se mêle au rouge")
+        XCTAssertGreaterThan(Int(frontiere[0]), 40)
+    }
+
+    func test_frosted_leavesWhatIsOutsideTheMask() throws {
+        let peinte = LensPainter.paint(Self.split(), passes: [.frosted(under: Self.vitre, sigma: 6, stage: .overlays)],
+                                       input: LensFrameInput())
+
+        XCTAssertEqual(try Self.pixel(of: peinte, at: CGPoint(x: 21, y: 32)), [255, 0, 0], "hors de la vitre, l'image reste nette")
+        XCTAssertEqual(try Self.pixel(of: peinte, at: CGPoint(x: 43, y: 32)), [0, 0, 255])
+    }
+
+    func test_frosted_keepsTheImageExtent() {
+        let peinte = LensPainter.paint(Self.split(), passes: [.frosted(under: Self.vitre, sigma: 6, stage: .overlays)],
+                                       input: LensFrameInput())
+
+        XCTAssertEqual(peinte.extent, CGRect(x: 0, y: 0, width: Self.side, height: Self.side), "le flou ne déborde jamais de l'image")
+    }
+
+    func test_frosted_withoutBlur_leavesTheImage() throws {
+        let peinte = LensPainter.paint(Self.split(), passes: [.frosted(under: Self.vitre, sigma: 0, stage: .overlays)],
+                                       input: LensFrameInput())
+
+        XCTAssertEqual(try Self.pixel(of: peinte, at: CGPoint(x: 31, y: 32)), [255, 0, 0])
+    }
+
     // MARK: - Un seul contexte, un seul rendu
 
     func test_painter_rendersOnTheSharedMetalContext() {

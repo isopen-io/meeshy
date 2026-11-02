@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "story.repost.error.unavailable",
+          "androidName": "story_repost_error_unavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.repost.error.forbidden",
+          "androidName": "story_repost_error_forbidden",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.repost.error.generic",
+          "androidName": "story_repost_error_generic",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

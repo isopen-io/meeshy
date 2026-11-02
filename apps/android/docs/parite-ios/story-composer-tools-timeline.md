@@ -8,7 +8,7 @@
 
 **story-composer-tools-timeline#1** (couverture Android estimée ≈ 15 %)
 
-Cette partie couvre le « meuble » MeeshyComposer côté app iOS (dossier Features/Main/Composer : 205 fichiers, ~46,8 k lignes) : un hôte unique piloté par la porte d'entrée (neuf origines) et une table de profils pure, quatre formats (story, post, réel, mood) basculables sans perte, trois surfaces (scène 9:16 plein écran à rails flottants, document de post, mood), le socle Publier/audience avec menu « Publier comme » et raisons de refus, l'éditeur d'objet, la frise de temps du mode Animé, le son (fond, contenu, puce), l'import/collage de médias, la pré-montée TUS, l'autosave, les stickers (Mes stickers, détourage, lieux alentour), l'édition/republication, la porte d'upgrade et un viseur complet (gestes, cadenas, segments, filtres/effets/cadres Metal, retouche crop/trim/volume, galerie EXIF). Côté Android il n'existe que trois composers indépendants et beaucoup plus étroits : StoryComposerScreen (canvas, texte à 5 styles, stickers emoji, dessin, filtres de slide, slides, fond, durées, 4 visibilités, autosave story sans traits, upload TUS), FeedComposerSheet (médias, caméra par intents système, micro, lieu brut, langue, texte alternatif, bascule réel) et StatusComposerSheet (grille d'emojis, 122 caractères, 4 visibilités). Absents : hôte unifié et capsule Publier/format, audience ONLY/EXCEPT, hashtags et mentions de publication, rails de portes et de contrôleurs, éditeur d'objet complet, frise, son de composition, caméra intégrée (CameraX absent du catalogue) et tout le pipeline looks/retouche, édition et recomposition de contenus publiés, outbox durable post/mood, collage riche, Mes stickers, upgrade gate. Couverture estimée de la parité pour cette partie : environ 15 %, le chemin critique P0 (hôte, capsule, audience, document, scène plein écran, rails, intake média) représentant ~16 k lignes Kotlin sur ~57 k estimées au total.
+Cette partie couvre le « meuble » MeeshyComposer côté app iOS (dossier Features/Composer : 205 fichiers, ~46,8 k lignes) : un hôte unique piloté par la porte d'entrée (neuf origines) et une table de profils pure, quatre formats (story, post, réel, mood) basculables sans perte, trois surfaces (scène 9:16 plein écran à rails flottants, document de post, mood), le socle Publier/audience avec menu « Publier comme » et raisons de refus, l'éditeur d'objet, la frise de temps du mode Animé, le son (fond, contenu, puce), l'import/collage de médias, la pré-montée TUS, l'autosave, les stickers (Mes stickers, détourage, lieux alentour), l'édition/republication, la porte d'upgrade et un viseur complet (gestes, cadenas, segments, filtres/effets/cadres Metal, retouche crop/trim/volume, galerie EXIF). Côté Android il n'existe que trois composers indépendants et beaucoup plus étroits : StoryComposerScreen (canvas, texte à 5 styles, stickers emoji, dessin, filtres de slide, slides, fond, durées, 4 visibilités, autosave story sans traits, upload TUS), FeedComposerSheet (médias, caméra par intents système, micro, lieu brut, langue, texte alternatif, bascule réel) et StatusComposerSheet (grille d'emojis, 122 caractères, 4 visibilités). Absents : hôte unifié et capsule Publier/format, audience ONLY/EXCEPT, hashtags et mentions de publication, rails de portes et de contrôleurs, éditeur d'objet complet, frise, son de composition, caméra intégrée (CameraX absent du catalogue) et tout le pipeline looks/retouche, édition et recomposition de contenus publiés, outbox durable post/mood, collage riche, Mes stickers, upgrade gate. Couverture estimée de la parité pour cette partie : environ 15 %, le chemin critique P0 (hôte, capsule, audience, document, scène plein écran, rails, intake média) représentant ~16 k lignes Kotlin sur ~57 k estimées au total.
 
 **story-composer-tools-timeline#2** (couverture Android estimée ≈ 12 %)
 
@@ -131,12 +131,12 @@ Transposition Android : Menu SwiftUI liquid glass -> Material3 DropdownMenu ancr
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerPublishMenu.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerFormatAvailability.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerPublishChannel.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerFloatingSocle.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerHostRules.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Socle.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerPublishMenu.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerFormatAvailability.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerPublishChannel.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerFloatingSocle.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerHostRules.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Socle.swift`
 
 </details>
 
@@ -162,15 +162,15 @@ Transposition Android : AVCaptureDevice.focusPointOfInterest -> CameraControl.st
 
 <details><summary>Sources iOS (9)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureFocus.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureFocusGeometry.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCameraFlash.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerFlashIntensitySlider.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCameraSwitchVeil.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCameraSwitchVeilStyle.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureMotion.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession+Switch.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureFocus.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureFocusGeometry.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCameraFlash.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerFlashIntensitySlider.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCameraSwitchVeil.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCameraSwitchVeilStyle.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureMotion.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureSession+Switch.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureBottomRow.swift`
 
 </details>
 
@@ -194,14 +194,14 @@ Transposition Android : DragGesture/LongPress/Magnify -> Compose pointerInput(aw
 
 <details><summary>Sources iOS (8)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureGesture.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureTapRule.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerShutterGesture.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureHold.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureLockTrack.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession+Tap.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerTriggerOutline.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureMotion.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureGesture.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureTapRule.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerShutterGesture.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureHold.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureLockTrack.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureSession+Tap.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerTriggerOutline.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureMotion.swift`
 
 </details>
 
@@ -225,15 +225,15 @@ Transposition Android : AVCaptureMovieFileOutput -> CameraX Recorder ; concat AV
 
 <details><summary>Sources iOS (9)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSegments.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureTopRow.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneCameraCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureChromeLegibility.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCapturePhase.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureSegments.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureSession.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureSession+Takes.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureTopRow.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureBottomRow.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneCameraBar.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneCameraCopy.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureChromeLegibility.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCapturePhase.swift`
 
 </details>
 
@@ -258,17 +258,17 @@ Transposition Android : AVCaptureSession/CameraModel -> CameraX ProcessCameraPro
 
 <details><summary>Sources iOS (11)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureMount.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureStage.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureViews.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCapturePlacement.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneCamera.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneCameraFrame.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneCaptureGesture.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureRefusedChrome.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerViewfinder.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerViewfinder+Provider.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureMount.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureStage.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureViews.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCapturePlacement.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneCamera.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneCameraFrame.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneCaptureGesture.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureRefusedChrome.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerViewfinder.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerViewfinder+Provider.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Viewfinder.swift`
 
 </details>
 
@@ -292,9 +292,9 @@ Transposition Android : fullScreenCover -> destination NavHost plein écran para
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/StoryEditComposer.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/PostEditRoute.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerHydration.swift`
+- `apps/ios/Meeshy/Features/Composer/StoryEditComposer.swift`
+- `apps/ios/Meeshy/Features/Composer/PostEditRoute.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerHydration.swift`
 
 </details>
 
@@ -319,10 +319,10 @@ Transposition Android : ModalBottomSheet + FlowRow de puces ; suggestions via le
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerHashtags.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerHashtagSheet.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneReferenceFooter.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Audience.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerHashtags.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerHashtagSheet.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneReferenceFooter.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Audience.swift`
 
 </details>
 
@@ -345,11 +345,11 @@ Transposition Android : Réutiliser MentionComposer (sdk-core) et le répertoire
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerObjectEditorView+Mentions.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneReferenceFooter.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerAudienceReach.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Draft.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Audience.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerObjectEditorView+Mentions.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneReferenceFooter.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerAudienceReach.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Draft.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Audience.swift`
 
 </details>
 
@@ -375,8 +375,8 @@ Transposition Android : Canvas/Box + pointerInput(detectDragGestures) ; lecture 
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneFrise.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Animated.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneFrise.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Animated.swift`
 
 </details>
 
@@ -402,10 +402,10 @@ Transposition Android : AVAudioRecorder -> MediaRecorder (AAC/MPEG_4) ; fileImpo
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Sound.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSoundDisposition.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSoundPromotion.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSoundActionsMenu.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Sound.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSoundDisposition.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSoundPromotion.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSoundActionsMenu.swift`
 
 </details>
 
@@ -429,8 +429,8 @@ Transposition Android : App Store URL -> Play Store (market:// avec repli https)
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/UpgradeGateController.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/UpgradeGateView.swift`
+- `apps/ios/Meeshy/Features/Composer/UpgradeGateController.swift`
+- `apps/ios/Meeshy/Features/Composer/UpgradeGateView.swift`
 
 </details>
 
@@ -452,11 +452,11 @@ Transposition Android : MeeshyColors.plateau* -> MeeshyPalette ; adaptiveGlass -
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerPlateau.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerBounceButtonStyle.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerRailGlass.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerRailGeometry.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerFloatingSocle.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerPlateau.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerBounceButtonStyle.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerRailGlass.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerRailGeometry.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerFloatingSocle.swift`
 
 </details>
 
@@ -1310,17 +1310,17 @@ Transposition Android : AVPlayerItemVideoOutput -> ExoPlayer + GL surface ; AVMu
 
 <details><summary>Sources iOS (11)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerEditScene.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerEditSources.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerEditTools.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCropBrackets.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerTrimRule.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerTrimTrack.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSoundTrack.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerFraming.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCapturePhase.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerEditedObject.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureSession+Edit.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerEditScene.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerEditSources.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerEditTools.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCropBrackets.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerTrimRule.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerTrimTrack.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSoundTrack.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerFraming.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCapturePhase.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerEditedObject.swift`
 
 </details>
 
@@ -1345,9 +1345,9 @@ Transposition Android : PHPhotoLibrary -> MediaStore ; ImageIO/CGImageDestinatio
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerGallery.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerPhotoEncoding.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureOrientation.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerGallery.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerPhotoEncoding.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureOrientation.swift`
 
 </details>
 
@@ -1375,21 +1375,21 @@ Transposition Android : CIContext/Metal/MTKView -> GLSurfaceView/TextureView + s
 
 <details><summary>Sources iOS (15)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerLookStrip.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerLookStripPainting.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerLookStripRule.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerLookStripSurface.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerLiveLook.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerLiveLookSurface.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerLookPainter.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerLookSceneCache.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerPhotoLook.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerFaceEffects.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCameraFeed.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerFramePacing.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerThermalBudget.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession+Thermal.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerLookStrip.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerLookStripPainting.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerLookStripRule.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerLookStripSurface.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerLiveLook.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerLiveLookSurface.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerLookPainter.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerLookSceneCache.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerLookVideoExporter.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerPhotoLook.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerFaceEffects.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCameraFeed.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerFramePacing.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerThermalBudget.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerCaptureSession+Thermal.swift`
 
 </details>
 
@@ -1412,7 +1412,7 @@ Transposition Android : Share Extension -> ShareTargetActivity (déjà là pour 
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/MediaComposerDoor.swift`
+- `apps/ios/Meeshy/Features/Composer/MediaComposerDoor.swift`
 
 </details>
 
@@ -1435,9 +1435,9 @@ Transposition Android : fullScreenCover -> destination plein écran avec résult
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ConversationPieceRetouch.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerRetouchSeries.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerReturnMedia.swift`
+- `apps/ios/Meeshy/Features/Composer/ConversationPieceRetouch.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerRetouchSeries.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerReturnMedia.swift`
 
 </details>
 
@@ -1459,7 +1459,7 @@ Transposition Android : Sous-menu du chevron Publier.
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerMosaicChoice.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerMosaicChoice.swift`
 
 </details>
 
@@ -1482,9 +1482,9 @@ Transposition Android : LazyRow de AssistChip/Surface capsule.
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerObjectChips.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerObjectChipsCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerObjectChipsRow.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerObjectChips.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerObjectChipsCopy.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerObjectChipsRow.swift`
 
 </details>
 
@@ -1506,10 +1506,10 @@ Transposition Android : PHPhotoLibrary -> MediaStore + scoped storage ; UIActivi
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Overflow.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneExportController.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerExportProgressVeil.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSurfaceRules.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Overflow.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneExportController.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerExportProgressVeil.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSurfaceRules.swift`
 
 </details>
 
@@ -1531,8 +1531,8 @@ Transposition Android : NSItemProvider/UIPasteboard -> ClipData + ContentResolve
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/PasteDestination.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/PasteIntoComposer.swift`
+- `apps/ios/Meeshy/Features/Composer/PasteDestination.swift`
+- `apps/ios/Meeshy/Features/Composer/PasteIntoComposer.swift`
 
 </details>
 
@@ -1555,9 +1555,9 @@ Transposition Android : LazyRow de vignettes d'effet ; plaque = Surface transluc
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneEffectCarousel.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneColumns.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+SceneColumns.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneEffectCarousel.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneColumns.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+SceneColumns.swift`
 
 </details>
 
@@ -1580,9 +1580,9 @@ Transposition Android : actor + FileManager -> classe Kotlin avec Mutex + java.i
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/StickerLibraryArtwork.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/StickerLibraryPaste.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/StickerLibraryStore.swift`
+- `apps/ios/Meeshy/Features/Composer/StickerLibraryArtwork.swift`
+- `apps/ios/Meeshy/Features/Composer/StickerLibraryPaste.swift`
+- `apps/ios/Meeshy/Features/Composer/StickerLibraryStore.swift`
 
 </details>
 
@@ -1604,7 +1604,7 @@ Transposition Android : VNGenerateForegroundInstanceMaskRequest -> ML Kit Subjec
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/StickerSubjectLift.swift`
+- `apps/ios/Meeshy/Features/Composer/StickerSubjectLift.swift`
 
 </details>
 
@@ -2196,20 +2196,20 @@ Transposition Android : MeeshyComposerHost (View SwiftUI + @State) -> ComposerHo
 
 <details><summary>Sources iOS (14)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerIntent.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSurfaceRules.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerMountedView.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerStoryCanvas.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerHostRules.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerPortal.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerFirstView.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+MountedView.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Layers.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Resolution.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+SceneState.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+AtelierHandOff.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Portals.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerIntent.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSurfaceRules.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerMountedView.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerStoryCanvas.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerHostRules.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerPortal.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerFirstView.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+MountedView.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Layers.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Resolution.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+SceneState.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+AtelierHandOff.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Portals.swift`
 
 </details>
 
@@ -2236,13 +2236,13 @@ Transposition Android : ZStack Compose plein écran + WindowInsets ; PreferenceK
 
 <details><summary>Sources iOS (7)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneSurface.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneSurfaceKeys.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneFloorRules.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneBand.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerFirstView.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+SceneState.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneSurface.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneSurfaceKeys.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneFloorRules.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneBand.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerFirstView.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Surfaces.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+SceneState.swift`
 
 </details>
 
@@ -2321,8 +2321,8 @@ Transposition Android : RangeSlider Material3 pour la fenêtre ; Slider pour un 
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerObjectTiming.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerObjectTimingControls.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerObjectTiming.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerObjectTimingControls.swift`
 
 </details>
 
@@ -2454,11 +2454,11 @@ Transposition Android : ModalBottomSheet plein écran (ou écran de navigation) 
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerAudienceSheet.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerAudienceReach.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSurfaceRules.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Audience.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Socle.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerAudienceSheet.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerAudienceReach.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSurfaceRules.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Audience.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Socle.swift`
 
 </details>
 
@@ -2483,12 +2483,12 @@ Transposition Android : OutboxKind (Room) + WorkManager pour le vidage ; TUS dé
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSendRules.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentDurablePublisher.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/DocumentComposerDoor.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneAssetCarriage.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentRules.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Draft.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerDocumentSendRules.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerDocumentDurablePublisher.swift`
+- `apps/ios/Meeshy/Features/Composer/DocumentComposerDoor.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneAssetCarriage.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerDocumentRules.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Draft.swift`
 
 </details>
 
@@ -2515,14 +2515,14 @@ Transposition Android : PhotosPicker -> PickVisualMedia ; fileImporter -> OpenMu
 
 <details><summary>Sources iOS (8)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSurface+Copy.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentToolRow.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentRules.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSlideTextRole.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+DocumentSurface.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Pickers.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Captions.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerDocumentSurface.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerDocumentSurface+Copy.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerDocumentToolRow.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerDocumentRules.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSlideTextRole.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+DocumentSurface.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Pickers.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Captions.swift`
 
 </details>
 
@@ -2549,13 +2549,13 @@ Transposition Android : Column/Row Compose avec LazyColumn défilable ; BadgedBo
 
 <details><summary>Sources iOS (7)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerLeadingRail.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerRailDoor.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerRailDoorBadge.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerRailDoorLongPress.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerRailMode.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Intake.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerLeadingRail.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerRailDoor.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerRailDoorBadge.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerRailDoorLongPress.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerRailMode.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Intake.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Viewfinder.swift`
 
 </details>
 
@@ -2581,13 +2581,13 @@ Transposition Android : PhotosPicker -> PickVisualMedia/PickMultipleVisualMedia 
 
 <details><summary>Sources iOS (7)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerMediaPlacement.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerMediaPorterStore.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSeedIngestion.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Intake.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Ingestion.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+ScenePicking.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Porters.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerMediaPlacement.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerMediaPorterStore.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSeedIngestion.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Intake.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Ingestion.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+ScenePicking.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Porters.swift`
 
 </details>
 
@@ -2613,13 +2613,13 @@ Transposition Android : Colonne Compose + panneau (Surface) ancré en haut-fin ;
 
 <details><summary>Sources iOS (7)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerTrailingRail.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneColumns.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerInlineEdit.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerInlineToolPanel.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+SceneColumns.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+InlineEdit.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+ObjectEditing.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerTrailingRail.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneColumns.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerInlineEdit.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerInlineToolPanel.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+SceneColumns.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+InlineEdit.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+ObjectEditing.swift`
 
 </details>
 
@@ -2777,11 +2777,11 @@ Transposition Android : DropdownMenu au point du doigt ; Brush pour pastilles de
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerFrameBand.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerBackgroundMenu.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneFloorRules.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Frame.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+BackgroundMenu.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerFrameBand.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerBackgroundMenu.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneFloorRules.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Frame.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+BackgroundMenu.swift`
 
 </details>
 
@@ -2807,11 +2807,11 @@ Transposition Android : Application Support -> Context.filesDir (hors cache, exc
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerAutosaveCodec.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerAutosaveController.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerAutosaveSnapshot.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerAutosaveStore.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Autosave.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerAutosaveCodec.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerAutosaveController.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerAutosaveSnapshot.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerAutosaveStore.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Autosave.swift`
 
 </details>
 
@@ -2837,12 +2837,12 @@ Transposition Android : CIFilter -> GPUImage/RenderScript remplacé par AGSL Run
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerMediaAdjust.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerMediaControls.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerInlineToolPanel.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerObjectEditorView+Media.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerObjectEditorRail.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Captions.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerMediaAdjust.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerMediaControls.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerInlineToolPanel.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerObjectEditorView+Media.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerObjectEditorRail.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Captions.swift`
 
 </details>
 
@@ -2866,10 +2866,10 @@ Transposition Android : TUS client déjà présent (TusUploadRepository + checkp
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerPreUpload.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerPreUploadCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerPreUploadRegistry.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+PreUpload.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerPreUpload.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerPreUploadCopy.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerPreUploadRegistry.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+PreUpload.swift`
 
 </details>
 
@@ -2891,9 +2891,9 @@ Transposition Android : Fonctions pures dans :feature:stories.
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerMediaRetraction.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerMediaPorterStore.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Retract.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerMediaRetraction.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerMediaPorterStore.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Retract.swift`
 
 </details>
 
@@ -2919,9 +2919,9 @@ Transposition Android : StatusComposerSheet existant à enrichir ; ModalBottomSh
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerMoodSurface.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerMoodBarePublish.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MoodComposerDoor.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerMoodSurface.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerMoodBarePublish.swift`
+- `apps/ios/Meeshy/Features/Composer/MoodComposerDoor.swift`
 
 </details>
 
@@ -2947,14 +2947,14 @@ Transposition Android : fullScreenCover -> destination plein écran ou Dialog fu
 
 <details><summary>Sources iOS (8)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerObjectEditorView+Keyboard.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerObjectEditorView+Media.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerObjectEditorView+Mentions.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerObjectEditorRail.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerObjectEditorCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerEditedObject.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+ObjectEditing.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerObjectEditorView.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerObjectEditorView+Keyboard.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerObjectEditorView+Media.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerObjectEditorView+Mentions.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerObjectEditorRail.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerObjectEditorCopy.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerEditedObject.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+ObjectEditing.swift`
 
 </details>
 
@@ -2977,12 +2977,12 @@ Transposition Android : CLLocation/MapKit -> FusedLocation/LocationManager + Map
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentRules.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSendRules.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentDurablePublisher.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/DocumentComposerDoor.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Draft.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Pickers.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerDocumentRules.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerDocumentSendRules.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerDocumentDurablePublisher.swift`
+- `apps/ios/Meeshy/Features/Composer/DocumentComposerDoor.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Draft.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Pickers.swift`
 
 </details>
 
@@ -3006,9 +3006,9 @@ Transposition Android : AlertDialog Material3 ; annonce via semantics liveRegion
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+ReelOffer.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+ReelAutoSwitch.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerHostRules.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+ReelOffer.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+ReelAutoSwitch.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerHostRules.swift`
 
 </details>
 
@@ -3030,10 +3030,10 @@ Transposition Android : Popup/DropdownMenu ancré aux coordonnées de l'appui lo
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneMenu.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerBackgroundMenu.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+SceneMenu.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+BackgroundMenu.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneMenu.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerBackgroundMenu.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+SceneMenu.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+BackgroundMenu.swift`
 
 </details>
 
@@ -3057,12 +3057,12 @@ Transposition Android : Compose AnnotatedString + ClickableText ; Modifier.blur 
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneDescriptionPanel.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneDescriptionEditor.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSlideTextRole.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Captions.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerDescriptionLayer.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneDescriptionPanel.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneDescriptionEditor.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSlideTextRole.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Captions.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Surfaces.swift`
 
 </details>
 
@@ -3086,9 +3086,9 @@ Transposition Android : LazyRow ; vignette rendue par un renderer partagé scèn
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSlideRail.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneObjectCount.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Retract.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSlideRail.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneObjectCount.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Retract.swift`
 
 </details>
 
@@ -3111,8 +3111,8 @@ Transposition Android : Coil/OkHttp cache pour rapatrier ; coroutines async/awai
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/StoryRepublishComposer.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/StoryRecompositionSeeding.swift`
+- `apps/ios/Meeshy/Features/Composer/StoryRepublishComposer.swift`
+- `apps/ios/Meeshy/Features/Composer/StoryRecompositionSeeding.swift`
 
 </details>
 
@@ -3135,9 +3135,9 @@ Transposition Android : Pile de snapshots immuables dans le ViewModel (StateFlow
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerTrailingRail.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneColumns.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+SceneState.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerTrailingRail.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneColumns.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+SceneState.swift`
 
 </details>
 
@@ -3307,7 +3307,7 @@ Transposition Android : OutboxRepository + MediaUploadQueue existants (dépendan
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublishIntent.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+PublishIntent.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+OfflinePublish.swift`
 
 </details>
@@ -3725,12 +3725,12 @@ Transposition Android : Waveform déjà disponible côté chat (MicAmplitude/Aud
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneSoundHeader.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSoundTraceRow.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerAvatarSoundBadge.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSoundColumn.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneSoundChips.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerForegroundSound.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneSoundHeader.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSoundTraceRow.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerAvatarSoundBadge.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSoundColumn.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerSceneSoundChips.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerForegroundSound.swift`
 
 </details>
 
@@ -3754,9 +3754,9 @@ Transposition Android : CLLocationManager one-shot -> FusedLocation getCurrentLo
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/SceneStickerPose.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/StickerNearbyPlaces.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Pickers.swift`
+- `apps/ios/Meeshy/Features/Composer/SceneStickerPose.swift`
+- `apps/ios/Meeshy/Features/Composer/StickerNearbyPlaces.swift`
+- `apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Pickers.swift`
 
 </details>
 
@@ -3949,7 +3949,7 @@ Transposition Android : Équivalent déjà en place : slides précalculées dans
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/RenderableSlideCache.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/RenderableSlideCache.swift`
 
 </details>
 

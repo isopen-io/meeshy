@@ -15,6 +15,8 @@ const frShellLabels = {
   'thread.header.back.unread.one': 'Retour — {count} message non lu ailleurs',
   'thread.header.back.unread.other': 'Retour — {count} messages non lus ailleurs',
   'thread.header.details': 'Détails de la conversation',
+  'thread.header.encryption.endToEnd': 'Chiffré de bout en bout',
+  'thread.header.encryption.server': 'Chiffré sur le serveur',
   'thread.scrollToBottom': 'Défiler vers le bas',
   'thread.scrollToBottom.unread.one': '{count} message non lu, Défiler vers le bas',
   'thread.scrollToBottom.unread.other': '{count} messages non lus, Défiler vers le bas',

@@ -28,9 +28,10 @@ struct SendResultAcceptanceTests {
             .slowMode(NewcomerSlowMode(retryAfterSeconds: 30)),
             .recipientBlocked,
             .queuedForRetry(reason: "r"),
-            .retryEnqueueFailed(reason: "r")
+            .retryEnqueueFailed(reason: "r"),
+            .endToEndUnsealed(.sessionUnavailable)
         ]
-        #expect(failures.count == 7)
+        #expect(failures.count == 8)
         for failure in failures {
             let result: Result<SentMessageReceipt, SendFailure> = .failure(failure)
             #expect(!result.isAccepted)

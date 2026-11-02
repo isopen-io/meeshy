@@ -16,8 +16,9 @@ public enum RegistrationIdentity {
 
     /// Longueur maximale d'un `username` — bornée par `registerRequestSchema`.
     public static let pseudoMax = 16
-    /// En deçà, un pseudo n'est pas recevable (borne basse du même schéma).
-    public static let pseudoMin = 2
+    /// En deçà, un pseudo n'est pas recevable (borne basse du même schéma) —
+    /// lue sur `IdentityRules`, la source unique des bornes d'identité.
+    public static let pseudoMin = IdentityRules.pseudoMin
     /// Le recours quand le nom affiché ET l'adresse ne donnent rien de slugifiable.
     public static let pseudoDeSecours = "user"
 
@@ -77,14 +78,14 @@ public enum RegistrationIdentity {
     /// Le nom affiché tiré d'une adresse — `jean.dupont@…` rend `Jean Dupont`.
     /// Les CHIFFRES séparent comme `.`, `-` et `_` (#7912) : le nom part au
     /// serveur, qui refuse tout chiffre dans `displayName` — `jean42@…` rend `Jean`.
+    /// Les mots d'une lettre sont écartés (`j.dupont@…` rend `Dupont`) : un nom
+    /// affiché a au moins `IdentityRules.personNameMin` caractères.
     /// Rend `""` quand rien n'est slugifiable : l'écran doit alors rendre le
     /// PSEUDO plutôt qu'une promesse vide.
     public static func displayNameDepuisEmail(_ email: String?) -> String {
-        let slug = slugDAdresse(email)
-        guard slug.count >= pseudoMin else { return "" }
-        return slug
+        slugDAdresse(email)
             .split(whereSeparator: { !$0.isLetter })
-            .filter { !$0.isEmpty }
+            .filter { $0.count >= IdentityRules.personNameMin }
             .map { capitalizeName(String($0)) }
             .joined(separator: " ")
     }

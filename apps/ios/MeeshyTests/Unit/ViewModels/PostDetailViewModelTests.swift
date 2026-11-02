@@ -176,7 +176,7 @@ final class PostDetailViewModelTests: XCTestCase {
 
     /// C5 — le like de commentaire dans le détail de post doit s'amorcer depuis
     /// l'état serveur : un commentaire déjà cœur-réagi (`currentUserReactions`)
-    /// apparaît "liké" (`commentLikedIds`) après chargement, les autres non.
+    /// apparaît "liké" (`commentHearts`) après chargement, les autres non.
     func test_loadComments_seedsCommentLikedIds_fromCurrentUserReactions() async {
         let (sut, mock) = makeSUT()
         // postId unique : le store de cache `comments` est un singleton partagé —
@@ -193,9 +193,9 @@ final class PostDetailViewModelTests: XCTestCase {
 
         await sut.loadComments(postId)
 
-        XCTAssertTrue(sut.commentLikedIds.contains("cLiked"))
-        XCTAssertFalse(sut.commentLikedIds.contains("cFire"))
-        XCTAssertFalse(sut.commentLikedIds.contains("cNone"))
+        XCTAssertTrue(sut.commentHearts.isLiked("cLiked"))
+        XCTAssertFalse(sut.commentHearts.isLiked("cFire"))
+        XCTAssertFalse(sut.commentHearts.isLiked("cNone"))
     }
 
     func test_loadComments_error_keepsEmptyComments() async {
@@ -1001,7 +1001,8 @@ final class PostDetailViewModelTests: XCTestCase {
         await sut.loadPost("p1")
         sut.subscribeToSocket("p1")
         sut.comments = [FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", likes: 2)]
-        sut.commentLikeDelta["c1"] = 1
+        sut.commentHearts.markLiked(["c1"])
+        _ = sut.commentHearts.begin("c1")
 
         let event: SocketCommentReactionUpdateEvent = JSONStub.decode("""
         {"commentId":"c1","postId":"p1","userId":"me","emoji":"\u{2764}\u{FE0F}","action":"added","aggregation":{"emoji":"\u{2764}\u{FE0F}","count":3,"userIds":["me","u2","u3"],"hasCurrentUser":true}}
@@ -1011,7 +1012,7 @@ final class PostDetailViewModelTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 50_000_000)
 
         XCTAssertEqual(sut.comments.first?.likes, 3, "le count absolu de l'agrégat fait autorité")
-        XCTAssertNil(sut.commentLikeDelta["c1"], "le delta optimiste est purgé — likes + delta ne compte plus double")
+        XCTAssertNil(sut.commentHearts.likeDelta["c1"], "le delta optimiste est purgé — likes + delta ne compte plus double")
     }
 
     func test_commentReactionAggregate_updatesReplyRowInsideRepliesMap() async {
@@ -1020,12 +1021,13 @@ final class PostDetailViewModelTests: XCTestCase {
         await sut.loadPost("p1")
         sut.comments = [FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 1)]
         sut.repliesMap = ["c1": [FeedComment(id: "r1", author: "bob", authorId: "a2", content: "Reply", likes: 0, parentId: "c1")]]
-        sut.commentLikeDelta["r1"] = 1
+        sut.commentHearts.markLiked(["r1"])
+        _ = sut.commentHearts.begin("r1")
 
         sut.applyCommentReactionAggregate(commentId: "r1", count: 5, reactorUserIds: ["u9"], actorUserId: "u9")
 
         XCTAssertEqual(sut.repliesMap["c1"]?.first?.likes, 5)
-        XCTAssertNil(sut.commentLikeDelta["r1"])
+        XCTAssertNil(sut.commentHearts.likeDelta["r1"])
     }
 
     /// L'agrégat d'un TIERS ne connaît pas un like local encore en vol : il ne
@@ -1041,18 +1043,18 @@ final class PostDetailViewModelTests: XCTestCase {
         mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
         await sut.loadPost("p1")
         sut.comments = [FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", likes: 1)]
-        sut.commentLikedIds.insert("c1")
+        _ = sut.commentHearts.begin("c1")
 
         // Tiers "u9" like pendant que MON like n'est pas encore persisté
         // (absent de userIds) : cœur préservé, mon like compté par-dessus.
         sut.applyCommentReactionAggregate(commentId: "c1", count: 1, reactorUserIds: ["u9"], actorUserId: "u9")
-        XCTAssertTrue(sut.commentLikedIds.contains("c1"), "le cœur en vol n'est pas éteint par l'agrégat d'un tiers")
+        XCTAssertTrue(sut.commentHearts.isLiked("c1"), "le cœur en vol n'est pas éteint par l'agrégat d'un tiers")
         XCTAssertEqual(sut.comments.first?.likes, 2, "le like en vol est compté par-dessus l'agrégat du tiers")
 
         // Événement dont JE suis l'acteur (unlike depuis un autre appareil) :
         // l'agrégat fait autorité et retire le cœur.
         sut.applyCommentReactionAggregate(commentId: "c1", count: 1, reactorUserIds: ["u9"], actorUserId: myId)
-        XCTAssertFalse(sut.commentLikedIds.contains("c1"), "mon propre événement fait autorité pour mon cœur")
+        XCTAssertFalse(sut.commentHearts.isLiked("c1"), "mon propre événement fait autorité pour mon cœur")
         XCTAssertEqual(sut.comments.first?.likes, 1)
     }
 

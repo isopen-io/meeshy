@@ -15,6 +15,7 @@ const frCallCaptions = {
   'callCaptions.listening': 'Votre voix est transcrite',
   'callCaptions.unsupported': 'Votre voix n’est pas transcrite sur cet appareil : vous lisez les autres',
   'callCaptions.denied': 'Reconnaissance vocale refusée : vous lisez les autres',
+  'callCaptions.sealed': 'Sous-titres indisponibles : cette conversation est chiffrée de bout en bout, ou son chiffrement n’a pas pu être vérifié',
   'callCaptions.journal.title': 'Journal de l’appel',
   'callCaptions.participant': 'Participant',
   'callTranscript.show': 'Transcription',

@@ -9,6 +9,7 @@ import asyncio
 import base64
 import json
 import logging
+import os
 import time
 import traceback
 import uuid
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 from .segment_serialization import _get_voice_similarity_score, _segment_to_dict
 from utils.audio_format import read_audio_bytes
 from config.message_limits import validate_audio_duration
+from services.task_privacy import in_at_rest_task, shown, under_declared_regime
 
 # Import du pipeline audio.
 #
@@ -102,6 +104,7 @@ class AudioHandler:
             self.audio_pipeline = get_audio_pipeline()
         else:
             self.audio_pipeline = None
+    @under_declared_regime
     async def _handle_audio_process_request(self, request_data: dict):
         """
         Traite une requête de processing audio.
@@ -309,13 +312,16 @@ class AudioHandler:
                     logger.info(f"   🌍 Langue détectée: {transcription.language} (confiance: {transcription.confidence:.2f})")
                     logger.info(f"   🎭 Locuteurs: {transcription.speaker_count or 1}")
                     logger.info(f"   ⏱️ Durée: {transcription.duration_ms}ms")
-                    logger.info(f"   📝 TEXTE: \"{transcription.text}\"")
+                    logger.info(f"   📝 TEXTE: \"{shown(transcription.text)}\"")
                     logger.info("=" * 70)
                 await self._publish_transcription_result(task_id, transcription_data)
 
             # Callback pour publier chaque traduction dès qu'elle est prête
-            # (envoi progressif des traductions au lieu d'attendre la fin)
+            # (envoi progressif des traductions au lieu d'attendre la fin).
+            # #13102 — retenues pour être effacées même si la tâche échoue ensuite.
+            progressive_tracks = []
             async def on_translation_ready(translation_data: dict):
+                progressive_tracks.append(translation_data.get('translation'))
                 await self._publish_translation_ready(task_id, translation_data)
 
             # Exécuter le pipeline audio avec le chemin local acquis
@@ -355,7 +361,7 @@ class AudioHandler:
             logger.info("═" * 70)
             logger.info(f"📊 [TRANSLATOR] RÉSULTAT TRAITEMENT AUDIO")
             logger.info(f"   ├─ Message ID: {result.message_id}")
-            logger.info(f"   ├─ Texte: \"{orig_text[:100]}{'...' if len(orig_text) > 100 else ''}\"")
+            logger.info(f"   ├─ Texte: \"{shown(orig_text, 100)}{'...' if len(orig_text) > 100 else ''}\"")
             logger.info(f"   ├─ Langue: {original.language} (confiance: {original.confidence:.2f})")
             logger.info(f"   ├─ Durée: {original.duration_ms}ms")
 
@@ -369,7 +375,7 @@ class AudioHandler:
             logger.info(f"   ├─ Traductions: {len(result.translations)} langue(s)")
             for lang, trans in result.translations.items():
                 trans_text = trans.translated_text if hasattr(trans, 'translated_text') else trans.get('translated_text', '')
-                logger.info(f"   │   └─ {lang}: \"{trans_text[:50]}{'...' if len(trans_text) > 50 else ''}\"")
+                logger.info(f"   │   └─ {lang}: \"{shown(trans_text, 50)}{'...' if len(trans_text) > 50 else ''}\"")
 
             # Info clonage vocal
             logger.info(f"   ├─ Voice quality: {result.voice_model_quality:.2f}")
@@ -380,6 +386,7 @@ class AudioHandler:
             logger.info(f"📤 [TRANSLATOR] Publication résultat audio: {task_id}")
             await self._publish_audio_result(task_id, result, processing_time)
             logger.info(f"✅ [TRANSLATOR] Résultat audio publié: {task_id}")
+            self._forget_translated_audio_files(result)
 
             # Le résultat porte la transcription même sans traduction : on le
             # publie d'abord, puis on signale l'échec pour sortir le client de
@@ -402,6 +409,7 @@ class AudioHandler:
             logger.error(f"❌ [TRANSLATOR] Erreur audio process: {e}")
             import traceback
             traceback.print_exc()
+            self._forget_tracks(locals().get('progressive_tracks') or [])
 
             # Nettoyer le fichier temporaire en cas d'erreur
             try:
@@ -419,6 +427,34 @@ class AudioHandler:
                 error=str(e),
                 error_code="processing_failed"
             )
+
+    @staticmethod
+    def _forget_translated_audio_files(result) -> int:
+        """
+        #13102 — une tâche au repos ou éphémère ne laisse aucune piste sur le
+        disque du translator : une fois publiées à la passerelle (qui les
+        scelle), elles sont effacées. Une tâche ordinaire les garde.
+        """
+        return AudioHandler._forget_tracks((getattr(result, 'translations', None) or {}).values())
+
+    @staticmethod
+    def _forget_tracks(translations) -> int:
+        """Efface du disque les pistes de ces traductions, pour une tâche au repos ou éphémère seulement."""
+        if not in_at_rest_task():
+            return 0
+        removed = 0
+        for translation in translations:
+            path = getattr(translation, 'audio_path', None)
+            if not path:
+                continue
+            try:
+                os.remove(path)
+                removed += 1
+            except FileNotFoundError:
+                continue
+            except OSError as error:
+                logger.warning(f"[TRANSLATOR] piste d'une tâche au repos non effacée ({type(error).__name__})")
+        return removed
 
     async def _report_total_translation_failure(self, task_id: str, request_data: dict, result) -> bool:
         """Signale au client l'échec de TOUTES les langues demandées.
@@ -620,7 +656,7 @@ class AudioHandler:
             logger.info(f"📜 [TRANSLATOR] TRANSCRIPTION FINALE: {result.message_id}")
             logger.info(f"   🌍 Langue: {result.original.language} | Confiance: {result.original.confidence:.2f}")
             logger.info(f"   🎭 Speakers: {result.original.speaker_count or 1} | Primary: {result.original.primary_speaker_id or 'N/A'}")
-            logger.info(f"   📝 Texte complet: \"{result.original.transcription}\"")
+            logger.info(f"   📝 Texte complet: \"{shown(result.original.transcription)}\"")
 
             # Log par speaker si diarisation disponible
             if result.original.segments and result.original.speaker_count and result.original.speaker_count > 1:
@@ -631,7 +667,7 @@ class AudioHandler:
                     txt = seg.text if hasattr(seg, 'text') else seg.get('text', '')
                     by_speaker[spk or '?'].append(txt)
                 for spk_id, texts in sorted(by_speaker.items()):
-                    logger.info(f"   [{spk_id}]: \"{' '.join(texts)}\"")
+                    logger.info(f"   [{spk_id}]: \"{shown(' '.join(texts))}\"")
             logger.info("─" * 70)
 
             metadata = {
@@ -727,7 +763,7 @@ class AudioHandler:
                 payload_str = json.dumps(metadata)
                 logger.info(f"[DEBUG] Transcription payload size: {len(payload_str)} bytes")
                 logger.info(f"[DEBUG] Transcription payload type: {metadata['type']}")
-                logger.info(f"[DEBUG] Transcription text preview: {transcription.text[:50]}...")
+                logger.info(f"[DEBUG] Transcription text preview: {shown(transcription.text, 50)}...")
 
                 # Envoyer en simple frame (pas de binaire pour la transcription)
                 await self.pub_socket.send_json(metadata)

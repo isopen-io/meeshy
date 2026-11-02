@@ -2,7 +2,7 @@
 
 **Date** : 2026-07-19
 **Piste** : iOS (suffixe `i`).
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift`
+**Surface** : `apps/ios/Meeshy/Features/Settings/Views/ActiveSessionsView.swift`
 **Base** : `main` HEAD (`efedb69`)
 **Branche** : `claude/laughing-thompson-170gcd`
 **Gate** : CI `iOS Tests`

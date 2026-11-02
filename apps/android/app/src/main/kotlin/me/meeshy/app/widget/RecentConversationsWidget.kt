@@ -35,6 +35,9 @@ import me.meeshy.app.widget.kit.WidgetAvatarBitmap
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import me.meeshy.app.widget.kit.WidgetTheme
+import me.meeshy.app.widget.kit.widgetSurface
+import me.meeshy.app.widget.kit.WidgetReaderPrismStore
+import me.meeshy.app.widget.kit.widgetEphemeralLabel
 import me.meeshy.app.widget.kit.widgetPreviewLabels
 import androidx.glance.appwidget.action.actionStartActivity as actionStartActivityIntent
 
@@ -48,10 +51,11 @@ import androidx.glance.appwidget.action.actionStartActivity as actionStartActivi
  * `navDeepLink` — see `MeeshyApp.Routes.CONVERSATION_SINGULAR_DEEP_LINK`); tapping
  * the empty state or the header opens the app.
  *
- * **Deliberately minimal**, same posture as `UnreadCountWidget`: static/OS-triggered
- * refresh only (no push-refresh-on-data-change), Room-only read (no network — a
+ * **Deliberately minimal**, same posture as `UnreadCountWidget`: repeint par
+ * [WidgetRepaintInitializer] à chaque changement du cache local, Room-only read (no network — a
  * disconnected device still renders whatever is cached, never blocks), no mark-read
- * quick action yet (iOS's own `MarkConversationReadIntent` is the natural next
+ * quick action yet, and the presence dot of a direct peer comes from the live
+ * `PresenceStore` at paint time (#13747; repaint on tier change only) (iOS's own `MarkConversationReadIntent` is the natural next
  * sub-tranche once a Glance `ActionCallback` wiring precedent exists in this app).
  */
 internal class RecentConversationsWidget : GlanceAppWidget() {
@@ -61,7 +65,14 @@ internal class RecentConversationsWidget : GlanceAppWidget() {
         val conversations = entryPoint.conversationRepository().recentCachedConversations()
         val currentUserId = entryPoint.tokenStore().userId
         val labels = widgetPreviewLabels(context)
-        val presentation = RecentConversationsWidgetPresentation.from(conversations, currentUserId, labels)
+        val presentation = RecentConversationsWidgetPresentation.from(
+            conversations = conversations,
+            currentUserId = currentUserId,
+            previewLabels = labels,
+            preferredLanguages = WidgetReaderPrismStore(context).load(),
+            ephemeralLabel = widgetEphemeralLabel(context),
+            presence = WidgetPresenceTiers.forDisplay(entryPoint.presenceStore(), conversations, currentUserId),
+        )
 
         provideContent {
             RecentConversationsWidgetContent(presentation)
@@ -75,7 +86,7 @@ private fun RecentConversationsWidgetContent(presentation: RecentConversationsWi
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(WidgetTheme.background)
+            .widgetSurface()
             .padding(12.dp),
     ) {
         Text(
@@ -116,7 +127,7 @@ private fun RecentConversationRowContent(row: RecentConversationRow) {
         verticalAlignment = Alignment.Vertical.CenterVertically,
     ) {
         Image(
-            provider = ImageProvider(WidgetAvatarBitmap.render(context, row.title, row.accentHex, AVATAR_DP, presence = null)),
+            provider = ImageProvider(WidgetAvatarBitmap.render(context, row.title, row.accentHex, AVATAR_DP, presence = row.presence)),
             contentDescription = null,
             modifier = GlanceModifier.size(AVATAR_DP.dp),
         )

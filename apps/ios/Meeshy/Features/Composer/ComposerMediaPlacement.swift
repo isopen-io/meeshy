@@ -1,0 +1,312 @@
+import Foundation
+import MeeshySDK
+
+/// **Le rôle d'un média VISUEL qui entre dans le composer** (#4724) — jumeau
+/// exact de `ComposerAudioRole`, pour l'autre matière.
+///
+/// > Directive porteur 2026-09-01 : « Il faut t'assurer que Meeshy Composer
+/// > puisse faire la différence entre les medias sur la scene en foreground et
+/// > les media en background (apparaissent comme nouveau tuile en haut sur la
+/// > rangé des headers). »
+///
+/// Le modèle porte la distinction depuis toujours — `StoryMediaObject.isBackground`.
+/// Ce qui manquait est un mot pour la DEMANDER à l'entrée : l'ingestion posait
+/// tout média visuel comme une page du carrousel, quelle que soit la porte, et
+/// laissait `addMediaObject` deviner le reste.
+nonisolated enum ComposerMediaRole: String, Equatable, Hashable, CaseIterable, Sendable {
+    /// Le FOND de sa slide — une page. Il gagne une tuile dans la rangée haute.
+    case background
+    /// Un objet parmi les autres sur la slide COURANTE. Aucune tuile, aucune page.
+    case foreground
+}
+
+/// **Par quelle porte un média est entré.**
+///
+/// Deux portes, deux gestes — et c'est la porte qui porte l'intention, pas le
+/// fichier : le même JPEG vaut une page quand il arrive par la rangée du
+/// document, et un objet posé quand il arrive par le rail de la scène.
+nonisolated enum ComposerMediaDoor: Equatable, Sendable {
+    /// La rangée d'outils du DOCUMENT (photothèque, caméra, fichiers).
+    /// Doctrine de la vue `1g` : en Post, une slide EST un média.
+    case documentRow
+    /// La porte du rail, ouverte SUR la scène. Elle ajoute « en additif » —
+    /// créer une page est le geste de `[+]`, et lui seul (directive porteur
+    /// 2026-08-30).
+    case sceneRail
+    /// **Une SÉRIE choisie d'un coup** (directive porteur 2026-09-28 : « on
+    /// créera autant de scènes que d'images/vidéos chargées »). Chaque média
+    /// fonde SA scène — le premier remplit la scène courante si elle n'a pas
+    /// encore de fond —, sur tous les formats : post, story, réel.
+    case sceneSeries
+}
+
+/// **Quand un choix de la photothèque FONDE des scènes** (directive porteur
+/// 2026-09-28). Plusieurs médias choisis ensemble fondent chacun la leur ; un
+/// média seul choisi par le rail se POSE sur la scène (une image sur une
+/// vidéo, un son sur une image) — sauf au choix d'OUVERTURE, où il n'y a
+/// encore rien sur quoi poser.
+nonisolated enum ComposerScenePicking {
+
+    static func foundsScenes(count: Int, openingPick: Bool) -> Bool {
+        openingPick ? count >= 1 : count >= 2
+    }
+
+    /// **La photothèque s'ouvre TOUT DE SUITE** à la création d'un post ou d'un
+    /// réel — plus d'une story, qui s'ouvre sur sa scène au repos (#13839 :
+    /// le bouton Média sert Photos d'un
+    /// geste). Jamais la porte qui reprend un contenu (brouillon, édition, republication, partage,
+    /// média d'une conversation) ni l'humeur, qui est un texte.
+    /// Et seulement sur une composition VIERGE : un brouillon restauré a déjà
+    /// sa matière.
+    static func opensOnPicker(origin: ComposerOrigin, compositionIsEmpty: Bool) -> Bool {
+        guard compositionIsEmpty else { return false }
+        switch origin {
+        case .feedComposer:
+            return true
+        case .storyTray, .moodChip, .repost, .edit, .draft, .share, .conversationMedia, .socialMedia:
+            return false
+        }
+    }
+}
+
+/// **Ce qu'une écriture dans la liste média du document fait de l'INTENTION du
+/// rail** (#6008).
+///
+/// `ComposerMediaDoor` ci-dessus dit par quelle porte un média est ENTRÉ ;
+/// celle-ci dit ce que l'écriture fait du drapeau qui porte cette porte. Les
+/// deux moitiés d'une même question, et c'est la seconde qui manquait : le
+/// drapeau était ARMÉ par la porte du rail et consommé par la seule ingestion.
+/// Trois autres sites écrivaient dans la liste sans jamais y toucher, et le
+/// bouton d'annulation de la feuille de choix avait un corps VIDE — une
+/// intention abandonnée survivait donc à son geste et se posait sur le média
+/// SUIVANT, quelle que soit sa porte.
+///
+/// > **Une règle qui vit dans un fichier ne gouverne pas les portes qui
+/// > n'ouvrent pas ce fichier.** Les deux portes son n'ont rien fait de mal :
+/// > elles ont été écrites sans jamais croiser la ligne qui posait
+/// > l'invariant. C'est pourquoi la discipline est remplacée ici par une
+/// > question que le compilateur POSE — le `switch` de
+/// > `ecrireDansLaListeDuDocument` est exhaustif et n'a pas de `default`.
+nonisolated enum ComposerRailPosing: Equatable, Sendable {
+    /// La liste vient du sélecteur QUE le rail a ouvert : elle prend
+    /// l'intention et la fait retomber.
+    case consomme
+    /// L'écriture vient d'ailleurs — une porte son, la démotion d'un objet de
+    /// scène en carte de contenu. Une intention encore armée à cet instant est
+    /// PÉRIMÉE par construction : la porte du rail présente son sélecteur dans
+    /// la même instruction qu'elle arme, donc rien ne peut s'intercaler tant
+    /// qu'il est à l'écran.
+    case abandonne
+    /// Le rôle du média est posé EXPLICITEMENT avant l'écriture (la graine).
+    /// `syncPostMediaIntoSlides` ne consulte `railPosedMediaURLs` que pour les
+    /// médias sans rôle : l'intention ne concerne celui-ci ni dans un sens ni
+    /// dans l'autre, et la jeter priverait le média d'après d'une intention
+    /// encore valide.
+    case roleDejaPose
+}
+
+/// **Où se range un média visuel posé — la loi du #4724.**
+///
+/// Elle a une jumelle qui l'a précédée d'un an de commits : `ComposerAudioPlacement`,
+/// qui range un SON. Les deux disent la même chose dans deux matières, et c'est
+/// délibérément deux règles et non une : un son n'a pas de place de fond VISUEL
+/// (`applyContentMedia` le refuse en toutes lettres), et un média n'a pas de
+/// crédit d'auteur. Les fondre aurait donné une règle qui doit demander de quoi
+/// elle parle avant de répondre.
+nonisolated enum ComposerMediaPlacement {
+
+    /// **Le rail ne pose en premier plan que s'il a un fond SUR QUOI poser.**
+    ///
+    /// C'est la moitié de la règle qu'on oublie en la résumant à « rail ⇒ premier
+    /// plan ». Une slide vierge n'a pas de fond : le premier média qu'on y pose
+    /// le DEVIENT — `addMediaObject` l'y range depuis toujours
+    /// (`resolvedBackgroundMedia == nil`), et l'auteur le voit plein cadre. Le
+    /// déclarer « premier plan » ici donnerait un objet que le modèle marque
+    /// pourtant `isBackground: true` : la rangée haute et la scène se
+    /// contrediraient sur le MÊME média, ce qui est pire que le défaut qu'on
+    /// ferme.
+    ///
+    /// > **Un rôle déclaré à l'entrée doit être celui que le modèle écrira à la
+    /// > sortie**, sinon ce n'est pas un rôle, c'est un vœu.
+    static func role(door: ComposerMediaDoor, currentSlideHasBackground: Bool) -> ComposerMediaRole {
+        switch door {
+        case .documentRow:
+            return .background
+        case .sceneRail:
+            return currentSlideHasBackground ? .foreground : .background
+        case .sceneSeries:
+            return .background
+        }
+    }
+}
+
+/// **Ce qui gagne une TUILE dans la rangée haute** — et rien d'autre (#4724).
+///
+/// > **Une tuile de la rangée haute dit le FOND d'une slide.** Un média posé en
+/// > premier plan vit sur la scène ; un son vit dans sa carte ; un document part
+/// > en pièce jointe. Aucun des trois n'est une page, donc aucun des trois n'a
+/// > de tuile.
+///
+/// La rangée était alimentée par `documentLocalMedia` — la liste ENTIÈRE — donc
+/// elle montrait une tuile pour tout ce qui entre, jusqu'au son et au PDF. Le
+/// symptôme se lisait comme un carrousel qui grossit sans qu'on ait ajouté de
+/// page.
+///
+/// **La règle lit l'INDEX des fondations, pas une seconde vérité.**
+/// `slideIdByMediaURL` dit déjà « ce média a fondé cette slide » ; c'est
+/// exactement l'ensemble des fonds. Reconstruire la liste depuis les
+/// `mediaObjects` du modèle aurait donné une deuxième source à faire diverger —
+/// et une tuile a besoin de la VIGNETTE, que seul `ComposerDocumentMedia` porte.
+nonisolated enum ComposerHeaderTiles {
+
+    /// Les médias qui ont droit à une tuile, dans l'ordre de la liste du
+    /// document — le seul ordre que l'auteur puisse prévoir.
+    /// **La rangée compte les SCÈNES** (constat porteur 2026-09-06 : « lorsque
+    /// je crée une nouvelle scène elle n'apparaît pas immédiatement dans la
+    /// mini-preview »).
+    ///
+    /// La règle précédente filtrait les MÉDIAS par l'index des fondations —
+    /// « une tuile par média posé en fond ». Elle rendait le bon résultat tant
+    /// que toute scène naissait d'un média, et le doc-comment de
+    /// `ComposerTopBar` énonçait d'ailleurs cette coïncidence comme une
+    /// définition : « une par `MeeshySlide`, ce qui veut dire une par média
+    /// posé en FOND ».
+    ///
+    /// Un fond COLORÉ sépare les deux termes : la scène existe, elle n'a aucun
+    /// média, et la rangée n'avait rien à montrer. L'auteur créait une scène
+    /// et rien à l'écran ne le lui disait.
+    ///
+    /// > **Une équivalence écrite comme un fait ne se relit pas** — elle se lit
+    /// > comme une définition. C'est ce qui la rend invisible le jour où ses
+    /// > deux termes divergent.
+    ///
+    /// La règle est donc devenue la QUESTION qui restait posée : que compte la
+    /// rangée ? Des scènes. Elle ne filtre plus — et c'est le point : tout
+    /// filtre y était une occasion de perdre une scène.
+    static func tiles(for slides: [StorySlide]) -> [StorySlide] {
+        slides
+    }
+
+    /// **Quelle tuile porte la corbeille** (constat porteur 2026-09-06 : « il
+    /// manque la poubelle pour supprimer les scènes »).
+    ///
+    /// Deux conditions, et chacune évite un contrôle qui MENT :
+    ///
+    /// 1. **la tuile COURANTE seulement.** Une corbeille sur chaque tuile ferait
+    ///    six cibles destructrices dans une rangée où le doigt navigue ; le
+    ///    geste de suppression vise ce qu'on REGARDE, comme l'ancienne rangée le
+    ///    faisait déjà pour les médias (`showsRemove(isSelected:…)`) ;
+    /// 2. **jamais sous deux scènes.** `removeSlide` refuse de descendre
+    ///    au-dessous d'une slide (`guard slides.count > 1`) : offrir la
+    ///    corbeille là serait un bouton qui ne fait rien — exactement le
+    ///    contrôle inerte que la loi 4 interdit.
+    ///
+    /// > La seconde condition ne se DÉDUIT pas de la première : une rangée
+    /// > montée à une seule scène aurait une tuile courante, donc une corbeille,
+    /// > et elle serait morte. C'est le modèle qui la donne, pas la vue.
+    static func showsDelete(sceneIndex: Int, currentIndex: Int, sceneCount: Int) -> Bool {
+        sceneCount > 1 && sceneIndex == currentIndex
+    }
+
+    /// **Le rail se monte dès qu'une scène EXISTE** (#5037 : « dès qu'une scène
+    /// existe » ; #5009 : créer une scène se VOIT).
+    ///
+    /// Il se taisait sous deux scènes, au motif qu'un rail d'un seul élément ne
+    /// navigue vers rien. C'était juste pour un rail de NAVIGATION ; depuis que
+    /// la tuile est la vignette de sa scène, une vignette seule est un APERÇU —
+    /// elle a quelque chose à dire. Une scène seule n'existe pour l'auteur que
+    /// si elle est MONTÉE : le document d'un post sans scène porte une slide
+    /// vide en mémoire, et une vignette noire y annoncerait une scène absente.
+    static func showsRail(sceneCount: Int, scenePresent: Bool) -> Bool {
+        sceneCount > 1 || (sceneCount == 1 && scenePresent)
+    }
+
+    /// Les tuiles sont des BOUTONS à partir de deux scènes — seules, elles
+    /// n'amènent nulle part et ne s'annoncent pas activables (loi 4).
+    static func tilesNavigate(sceneCount: Int) -> Bool {
+        sceneCount > 1
+    }
+}
+
+/// **Quand la scène reste MONTÉE** (#4724, défaut V2 mesuré au simulateur).
+///
+/// La scène était liée aux seules FONDATIONS : `documentBackground != nil ||
+/// !slideIdByMediaURL.isEmpty`. C'était juste tant que tout média fondait une
+/// slide — la même coïncidence qui a cassé la garde d'idempotence, un cran plus
+/// bas. Depuis qu'un média peut être posé en PREMIER PLAN, retirer la dernière
+/// tuile vidait l'index sans vider la slide : `removeSlide` refuse de descendre
+/// sous une slide, ses objets restaient donc là, mais la scène se DÉMONTAIT et
+/// l'écran revenait au document vide. Les médias de premier plan devenaient
+/// invisibles ET irretirables — et repartaient quand même à la publication
+/// (mesuré : le `⋯` continuait de servir « Tout effacer », que
+/// `ComposerOverflowPolicy` ne sert que si `hasMedia`).
+///
+/// > **Ce qui décide de MONTRER une surface doit compter ce qu'elle CONTIENT,
+/// > jamais ce qui l'a fait naître.** Une condition de naissance placée là tient
+/// > tant que naître et contenir coïncident ; elle démonte la surface le jour
+/// > où ils divergent, et emporte son contenu hors de vue sans rien effacer.
+/// **Ce prédicat répond à « y a-t-il de la matière à CADRER ? », jamais à
+/// « cette unité mérite-t-elle un post ? »** (distinction établie avec la
+/// session voisine, 2026-09-01).
+///
+/// La seconde question a sa propre loi — `StorySlidePublishMatter.deservesAPost`
+/// (SDK) —, qui énumère les champs et TRIM les textes. Les deux coïncident
+/// presque partout et divergent exactement sur la page blanche EFFLEURÉE : le
+/// tap y pose une coquille de texte vide, donc `sceneObjects` n'est plus vide.
+/// Cette slide A une scène — son canevas et son inspecteur doivent rester — et
+/// ne mérite AUCUN post : la compter comme méritante fabriquait la story
+/// fantôme du #4730, un post vide publié à côté du vrai.
+///
+/// Ne repointer ni l'une sur l'autre. Y substituer `deservesAPost` ferait
+/// disparaître le canevas d'une slide qu'on vient d'ouvrir.
+///
+/// **Et le sixième lecteur n'est pas de la même nature que les cinq autres.**
+/// `backgroundPaletteIsReachable`, `socleZones`, `showsScene`, `sceneInspector`
+/// et `mountedComposerView` demandent tous s'il y a quelque chose à MONTRER.
+/// `ComposerMoodGate.compositionQualifiesAsMood` (par `moodGate`) décide, lui,
+/// de l'OFFRE des formats — et il ouvre par `guard !hasMedia, !hasScene`. Un
+/// prédicat qui gouverne à la fois le montage et l'offre couple deux choses :
+/// tout élargissement de ce que « avoir une scène » veut dire retire des
+/// formats de l'éventail, sans qu'aucun témoin de montage ne rougisse.
+nonisolated enum ComposerScenePresence {
+
+    /// - Parameter sceneObjectCount: `StorySlide.sceneObjects.count` — la somme
+    ///   à cinq cas du SDK (texte · média · sticker · lieu · audio), jamais une
+    ///   énumération de tableaux réécrite ici : c'est exactement ce que le type
+    ///   `MeeshySceneObject` existe pour éviter.
+    static func hasScene(backgroundHex: String?,
+                         foundedSlides: Int,
+                         sceneObjectCount: Int) -> Bool {
+        backgroundHex != nil || foundedSlides > 0 || sceneObjectCount > 0
+    }
+}
+
+/// **La scène que l'outil Texte du document fait naître** (#9137) — d'un
+/// toucher, et sans laisser de fantôme quand le texte reste vide.
+///
+/// Le fond que l'outil pose est IMPLICITE : l'auteur a demandé un texte, pas
+/// une couleur. Il ne survit donc qu'à ce que la scène porte réellement — un
+/// texte saisi, un autre objet, un média fondateur, une seconde scène, ou une
+/// couleur choisie ensuite à la palette.
+nonisolated enum ComposerTextSceneDoor {
+
+    /// Le fond déjà choisi, sinon la première couleur de la palette du document.
+    static func background(chosen: String?, palette: [String]) -> String? {
+        chosen ?? palette.first
+    }
+
+    /// Le fond que l'outil a posé DE LUI-MÊME — `nil` quand l'auteur en avait
+    /// déjà choisi un.
+    static func implicitBackground(chosen: String?, posed: String) -> String? {
+        chosen == nil ? posed : nil
+    }
+
+    static func returnsToDocument(implicitBackground: String?,
+                                  currentBackground: String?,
+                                  foundedSlides: Int,
+                                  sceneObjectCount: Int,
+                                  slideCount: Int) -> Bool {
+        guard let implicitBackground, implicitBackground == currentBackground else { return false }
+        return foundedSlides == 0 && sceneObjectCount == 0 && slideCount <= 1
+    }
+}

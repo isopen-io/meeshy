@@ -37,6 +37,7 @@ import { sweepPreferenceWriteSites, formatSite } from './preference-writer-sweep
  * | `community-preferences.ts` (reorder) | `USER_PREFERENCES_COMMUNITY_REORDERED` — ajouté au cycle 128 |
  * | `conversationPreferencesSync.detachConversationsFromCategory` | `USER_PREFERENCES_UPDATED`, une par conversation détachée — ajouté au cycle 129 |
  * | `services/packs/PackCatalog.settle` (bascule conditionnelle, contact d'`updatedAt`, création) | `PACK_INSTALLATION_UPDATED` après chaque écriture — #10148 (LP0), témoin `packs-engine.test.ts` |
+ * | `services/packs/LensPacks.restore` (remise à zéro des installations d'une lens rétablie, #12321) | `PACK_INSTALLATION_UPDATED` (`installed: false`) à chaque compte remis à zéro — témoin `lens-packs.test.ts` |
  *
  * Les trois écrivains de `user-deletions.ts` n'y figurent PAS : ils passent par
  * `writeConversationPreferences`, ce qui est précisément la forme voulue — un
@@ -50,6 +51,7 @@ const FROZEN_WRITE_SITES = [
   'routes/community-preferences.ts|userCommunityPreferences|upsert',
   'routes/community-preferences.ts|userCommunityPreferences|upsert',
   'routes/conversation-preferences.ts|userConversationPreferences|update',
+  'services/packs/LensPacks.ts|userStickerPack|updateMany',
   'services/packs/PackCatalog.ts|userStickerPack|create',
   'services/packs/PackCatalog.ts|userStickerPack|updateMany',
   'services/packs/PackCatalog.ts|userStickerPack|updateMany',

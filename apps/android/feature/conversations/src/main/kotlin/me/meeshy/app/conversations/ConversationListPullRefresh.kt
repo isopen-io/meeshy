@@ -38,6 +38,22 @@ internal class ConversationListPullRefresh(
         }
     }
 
+    /**
+     * The same three reloads, each one THROWING on failure, for [me.meeshy.sdk.conversation.ListRefreshCoordinator]:
+     * it runs them beside the conversations and invalidates the neighbour caches only when every one
+     * of them came back.
+     */
+    fun reloads(onMoods: (List<StatusEntry>) -> Unit): List<suspend () -> Unit> = listOf<suspend () -> Unit>(
+        { storyRepository.refresh() },
+        { categoryRepository.refresh() },
+        {
+            val page = statusRepository.list(mode = StatusFeedMode.FRIENDS)
+            if (page !is NetworkResult.Success) throw IllegalStateException("statuses not refreshed")
+            statusBarCache.save(StatusFeedMode.FRIENDS, page.data.statuses)
+            onMoods(page.data.statuses)
+        },
+    )
+
     private suspend fun quietly(block: suspend () -> Unit) {
         try {
             block()

@@ -5,7 +5,7 @@ import MeeshySDK
 // MARK: - StoryExportIntroFactory
 //
 // Task 9 (2026-07-26) : déplacée depuis
-// `apps/ios/Meeshy/Features/Main/Services/StoryExportPreflight.swift`, où
+// `apps/ios/Meeshy/Features/Stories/Services/StoryExportPreflight.swift`, où
 // elle ne vivait que par accident de la Task 1. Aucune de ses dépendances
 // n'est app-side : `AuthManager` / `CacheCoordinator` (MeeshySDK),
 // `MeeshyConfig` / `ThumbHashDecoder` / `StoryExportIntroContent` (MeeshyUI,
@@ -32,19 +32,34 @@ public nonisolated struct StoryExportIntroSource: Equatable, Sendable {
     public let bannerURL: String?
     /// Fond de repli quand la bannière manque : un thumbHash (bannière ou avatar).
     public let backgroundThumbHash: String?
+    /// Le contour équipé, tel que servi ; la fabrique le résout dans le catalogue
+    /// embarqué (`ProfileDecorResolver.ring`). `nil` ⇒ l'avatar nu.
+    public let avatarRing: ServedProfileDecorItem?
+    /// La présence de l'auteur que le serveur a SERVIE (#13997), déjà projetée par l'app ;
+    /// `nil` ⇒ aucune information de présence n'est peinte.
+    public let presence: StoryExportPresence?
+    /// Le niveau EFFECTIF du lien lecteur ↔ auteur, tel que servi (chaîne brute) ; la fabrique en
+    /// tire le logo du cercle (`RelationExportBadge`). `nil` ⇒ aucun logo.
+    public let servedRelationLevel: String?
 
     public init(userId: String?,
                 displayName: String,
                 username: String,
                 avatarURL: String? = nil,
                 bannerURL: String? = nil,
-                backgroundThumbHash: String? = nil) {
+                backgroundThumbHash: String? = nil,
+                avatarRing: ServedProfileDecorItem? = nil,
+                presence: StoryExportPresence? = nil,
+                servedRelationLevel: String? = nil) {
         self.userId = userId
         self.displayName = displayName
         self.username = username
         self.avatarURL = avatarURL
         self.bannerURL = bannerURL
         self.backgroundThumbHash = backgroundThumbHash
+        self.avatarRing = avatarRing
+        self.presence = presence
+        self.servedRelationLevel = servedRelationLevel
     }
 }
 
@@ -62,7 +77,13 @@ public enum StoryExportIntroFactory {
     @MainActor
     public static func currentUser() async -> StoryExportIntroContent? {
         guard let user = AuthManager.shared.currentUser else { return nil }
-        return await content(for: StoryExportIntroSource(
+        return await content(for: source(forSignedInUser: user))
+    }
+
+    /// L'identité de l'utilisateur connecté. Sa PROPRE story : soi est toujours visible, donc
+    /// en ligne (#13997) ; et on ne porte jamais le logo d'un cercle avec soi-même.
+    nonisolated static func source(forSignedInUser user: MeeshyUser) -> StoryExportIntroSource {
+        StoryExportIntroSource(
             userId: user.id,
             displayName: resolveDisplayName(displayName: user.displayName,
                                             firstName: user.firstName,
@@ -71,7 +92,10 @@ public enum StoryExportIntroFactory {
             username: user.username,
             avatarURL: user.avatar,
             bannerURL: user.banner,
-            backgroundThumbHash: user.avatarThumbHash))
+            backgroundThumbHash: user.avatarThumbHash,
+            avatarRing: user.profileDecor?.avatarRing,
+            presence: .online,
+            servedRelationLevel: nil)
     }
 
     @MainActor
@@ -93,18 +117,25 @@ public enum StoryExportIntroFactory {
             banner: backgroundImage,
             moodEmoji: status?.moodEmoji,
             moodMessage: status?.content,
-            accentColorHex: DynamicColorGenerator.colorForName(source.username)
+            accentColorHex: DynamicColorGenerator.colorForName(source.username),
+            avatarRing: ProfileDecorResolver.ring(source.avatarRing),
+            presence: source.presence,
+            relationLogo: RelationExportBadge.emoji(forServedLevel: source.servedRelationLevel)
         )
     }
 
     /// L'interlude SANS image — nom, pseudo, teinte de repli. Ce qu'on peint
     /// quand l'avatar et la bannière ne sont pas revenus dans la borne de
-    /// temps : un interlude sobre plutôt qu'une story sans prélude.
+    /// temps : un interlude sobre plutôt qu'une story sans prélude. Le contour
+    /// reste : il se lit dans le catalogue EMBARQUÉ, sans réseau ni attente.
     @MainActor
     public static func unresolvedContent(for source: StoryExportIntroSource) -> StoryExportIntroContent {
         StoryExportIntroContent(displayName: source.displayName,
                                 username: source.username,
-                                accentColorHex: DynamicColorGenerator.colorForName(source.username))
+                                accentColorHex: DynamicColorGenerator.colorForName(source.username),
+                                avatarRing: ProfileDecorResolver.ring(source.avatarRing),
+                                presence: source.presence,
+                                relationLogo: RelationExportBadge.emoji(forServedLevel: source.servedRelationLevel))
     }
 
     /// Nom à graver sur l'interlude. Priorité au `displayName` explicite de

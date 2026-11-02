@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "message.menu.export",
+          "androidName": "feed_comment_imagine",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.compose.thread",
+          "androidName": "feed_comment_card_thread",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.compose.folded",
+          "androidName": "feed_comment_card_folded",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

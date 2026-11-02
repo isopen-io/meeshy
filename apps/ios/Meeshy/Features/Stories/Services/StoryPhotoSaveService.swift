@@ -1,0 +1,602 @@
+import Foundation
+import os
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - StorySaveProgressMapper
+
+/// Découpage de l'anneau affiché sur la ligne « Mes stories ».
+///
+/// Le bake MP4 occupe 0…90 %, l'écriture dans la photothèque les 10 %
+/// restants. Sans ce découpage, l'anneau atteindrait 100 % à la fin du
+/// bake — soit avant que la vidéo n'existe dans Photos — et l'utilisateur
+/// croirait à tort que l'enregistrement est terminé.
+enum StorySaveProgressMapper {
+
+    /// Part de l'anneau attribuée au bake.
+    static let bakeShare: Double = 0.9
+
+    /// Mappe une fraction de bake `0…1` (bornée) sur `0…bakeShare`.
+    static func bake(_ fraction: Double) -> Double {
+        min(max(fraction, 0), 1) * bakeShare
+    }
+}
+
+// MARK: - StoryPhotoSaveService
+
+/// Sauvegardes de stories vers la photothèque actuellement en vol.
+///
+/// Singleton et NON `@StateObject` d'une vue : `MyStoriesView` est une sheet,
+/// et sa fermeture détruirait un état de vue — le `Task` du bake garde
+/// `[weak self]`, donc le résultat tardif partirait à la poubelle en silence.
+/// L'anneau doit survivre à la fermeture de la sheet et à la navigation, donc
+/// l'état vit ici. Même patron que `StoryPublishService.shared`.
+///
+/// Orchestration app-side (SDK purity) : le SDK bake, ce service décide de
+/// l'enchaînement bake → Photos → toast et de ce qui s'affiche.
+@MainActor
+final class StoryPhotoSaveService: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+
+    static let shared = StoryPhotoSaveService()
+
+    /// `storyId → progression 0…1`. L'absence de clé signifie « aucune
+    /// sauvegarde en vol pour cette story » : c'est ce que la ligne lit pour
+    /// choisir entre le glyphe `⋯` et l'anneau.
+    @Published private(set) var jobs: [String: Double] = [:]
+
+    /// Stories dont l'écriture dans la photothèque a COMMENCÉ — donc plus
+    /// annulables (voir `isCancellable(storyId:)`). `@Published` parce que
+    /// c'est ce qui rend l'anneau non tappable sur les deux surfaces : sans
+    /// republication, la ligne et le rail ne réévalueraient pas leur `.disabled`.
+    @Published private(set) var uncancellableJobs: Set<String> = []
+
+    private var tasks: [String: Task<Void, Never>] = [:]
+
+    private let exporter: StoryVideoExportServiceProviding
+    private let photoSaver: PhotoLibrarySaving
+    private let toasts: FeedbackToastSurfacing
+    private let preferredLanguages: @MainActor () -> [String]
+    /// L'habillage se résout ICI et nulle part ailleurs (`StoryExportDressing`,
+    /// #10536) : interlude, carte de fin, pseudo du filigrane. Borné dans le
+    /// temps — voir `BoundedAsyncResolution.resolve(_:timeout:)`.
+    private let dressings: StoryExportDressingResolver
+
+    /// Tentative courante par story : incrémentée à chaque `save()` ET à
+    /// chaque `cancel()` — c'est la SEULE source de vérité sur « quelle
+    /// tentative est la bonne », jamais dérivée de `jobs`/`tasks`. Une
+    /// tentative annulée continue de baker en tâche de fond (`AVAssetWriter`
+    /// ignore `Task.isCancelled`) ; sans ce jeton intrinsèque, ses écritures
+    /// post-suspension (progression, `jobs`/`tasks`) pourraient s'appliquer
+    /// PENDANT ou APRÈS qu'une tentative relancée pour la même story soit en
+    /// cours — voir `isCurrent(_:for:)`.
+    private var generations: [String: Int] = [:]
+
+    /// Met bout à bout les scènes rendues d'une publication à plusieurs scènes.
+    private let concatenate: @MainActor ([URL], URL) async -> Bool
+
+    /// **Le filigrane nomme l'AUTEUR de l'œuvre, jamais celui qui l'enregistre**
+    /// (recette #9681, 2026-10-08) : un réel de @demo-test-staging enregistré par
+    /// @atabeth sortait signé « @atabeth ».
+    private let watermark: @MainActor (String?) -> StoryExportWatermark?
+
+    /// La vue « Imager » (#14325) : c'est elle qui montre l'œuvre, offre la
+    /// longueur (#13871), puis enregistre ou partage — jamais l'entrée du menu.
+    typealias ImagerPresent = @MainActor (ImagerWork, StoryPhotoSaveService) -> Void
+    private let presentImager: ImagerPresent
+
+    /// L'image tirée du MP4 d'une scène fixe et muette (#13871) — `StoryExportStill`.
+    typealias StillFrame = @MainActor (URL) async -> URL?
+    private let stillFrame: StillFrame
+
+    init(
+        exporter: StoryVideoExportServiceProviding? = nil,
+        photoSaver: PhotoLibrarySaving = PhotoLibraryManagerAdapter(),
+        toasts: FeedbackToastSurfacing? = nil,
+        preferredLanguages: (@MainActor () -> [String])? = nil,
+        introTimeout: Duration = BoundedAsyncResolution.defaultTimeout,
+        intro: StoryExportDressingResolver.ViewerIntro? = nil,
+        authorIntro: StoryExportDressingResolver.AuthorIntro? = nil,
+        concatenate: (@MainActor ([URL], URL) async -> Bool)? = nil,
+        watermark: (@MainActor (String?) -> StoryExportWatermark?)? = nil,
+        presentImager: ImagerPresent? = nil,
+        stillFrame: StillFrame? = nil
+    ) {
+        self.presentImager = presentImager ?? { ImagerPresenter.present($0, service: $1) }
+        self.stillFrame = stillFrame ?? { @MainActor video in await StoryExportStill.frame(ofVideoAt: video) }
+        // `StoryVideoExportService.shared` et `FeedbackToastManager.shared`
+        // sont `@MainActor`-isolés : impossible en expression de valeur par
+        // défaut, résolus ici.
+        self.exporter = exporter ?? StoryVideoExportService.shared
+        self.photoSaver = photoSaver
+        self.toasts = toasts ?? FeedbackToastManager.shared
+        self.preferredLanguages = preferredLanguages
+            // Défaut de COMPOSITION (langue proposée, repli « fr ») — pas une lecture (#11875).
+            ?? { AuthManager.shared.currentUser?.preferredContentLanguages ?? [] }
+        self.dressings = StoryExportDressingResolver(viewerIntro: intro, authorIntro: authorIntro,
+                                                     timeout: introTimeout)
+        self.watermark = watermark ?? { @MainActor handle in MeeshyExportWatermark.make(username: handle) }
+        self.concatenate = concatenate ?? { @MainActor parts, output in
+            await StoryExportSequence.concatenate(parts, to: output)
+        }
+    }
+
+    // MARK: - Lecture
+
+    /// Progression `0…1` de la sauvegarde en vol, `nil` si aucune.
+    func progress(for storyId: String) -> Double? { jobs[storyId] }
+
+    /// Vrai tant que taper l'anneau peut RÉELLEMENT annuler quelque chose.
+    ///
+    /// Faux dès que `PHPhotoLibrary.performChanges` a démarré : cette écriture
+    /// n'est pas annulable. Auparavant l'anneau restait tappable pendant tout
+    /// le palier à 90 %, et taper affichait « Export annulé » alors que la
+    /// vidéo finissait quand même d'atterrir dans la photothèque — puis la
+    /// garde `isCurrent` faisait retourner la méthode en silence, sans toast
+    /// de succès. L'utilisateur croyait avoir annulé et se retrouvait avec un
+    /// doublon invisible.
+    ///
+    /// Choix retenu : rendre l'annulation IMPOSSIBLE sur cette dernière étape
+    /// plutôt que d'inventer un troisième message. On ne peut pas rendre vrai
+    /// le mot « annulé » — l'écriture est irréversible — et un message honnête
+    /// (« trop tard pour annuler ») décrirait un état sur lequel l'utilisateur
+    /// n'a de toute façon aucune prise. Le contrat « taper l'anneau annule »
+    /// reste tenu sur TOUT le bake, c'est-à-dire sur `0…bakeShare` (90 %) de
+    /// l'anneau, là où passe l'essentiel du temps.
+    func isCancellable(storyId: String) -> Bool {
+        jobs[storyId] != nil && !uncancellableJobs.contains(storyId)
+    }
+
+    // MARK: - Actions
+
+    /// Bake la story en MP4 puis l'écrit dans la photothèque, en publiant la
+    /// progression sur `jobs[story.id]`. Idempotent : un second appel pendant
+    /// qu'un job tourne pour la même story est ignoré (le menu reste
+    /// atteignable via le long-press pendant l'export).
+    /// - Parameter author: l'AUTEUR de la story. Une story sort TOUJOURS avec
+    ///   son prélude et sa carte de fin (#10536) ; l'interlude présente
+    ///   l'auteur — jamais le lecteur qui enregistre la story d'un autre
+    ///   (#9953) — et le filigrane le nomme. `nil` : l'utilisateur connecté est
+    ///   l'auteur.
+    func save(story: StoryItem, author: StoryExportAuthor?) {
+        let languages = exportLanguages(of: story)
+        bakeThenSave(jobKey: story.id,
+                     slides: [story.toRenderableSlide(preferredLanguages: languages)],
+                     languages: languages,
+                     stickerMedia: story.media,
+                     dressing: .forStory(of: author, viewer: .current))
+    }
+
+    /// SA propre story (« Mes stories », rail de l'auteur) : l'utilisateur
+    /// connecté EST l'auteur — son pseudo au filigrane, son interlude devant.
+    func save(story: StoryItem) {
+        save(story: story, author: nil)
+    }
+
+    /// **UNE SCÈNE DE POST S'ENREGISTRE COMME UNE STORY** (#7052) — même bake,
+    /// même anneau, même annulation, même nettoyage.
+    ///
+    /// Deux différences, toutes décidées par le porteur (#7043) :
+    ///
+    /// - la slide est celle de la scène OUVERTE (`renderableSlide`), et non la
+    ///   scène 0 que le porteur du post rendrait ;
+    /// - l'habillage `.bareWork` — l'œuvre SEULE : pas d'interlude, donc rien
+    ///   à résoudre (et surtout pas les 4 s de `BoundedAsyncResolution` avant
+    ///   un bake qu'on sait déjà sans prélude), et pas de carte de fin.
+    ///
+    /// Un second chemin qui réimplémenterait le jeton de génération, la
+    /// coupure d'avant-bake, `uncancellableJobs` ou le nettoyage du MP4
+    /// périmé serait faux — et faux d'une façon qui ne se voit qu'en
+    /// production. D'où le passage par le MÊME corps.
+    func save(scene: GallerySceneItem) {
+        let languages = preferredLanguages()
+        bakeThenSave(jobKey: scene.id,
+                     slides: [scene.renderableSlide(preferredLanguages: languages)],
+                     languages: languages,
+                     // Les images des stickers vivent sur le média du POST,
+                     // que le porteur transporte (#4852) : sans cet index,
+                     // Photos recevrait 🖼️ à leur place.
+                     stickerMedia: scene.carrier.media,
+                     dressing: .bareWork(author: scene.authorUsername))
+    }
+
+    /// **UN RÉEL (OU UN POST COMPOSÉ) S'ENREGISTRE COMME UNE STORY** (#9681) —
+    /// même bake, même anneau, même annulation, clé de job = l'id du post.
+    ///
+    /// La scène rendue est celle que le lecteur de réels rejoue
+    /// (`ReelSceneRouting.sceneDocument`, scène 0), son de fond compris ; sans
+    /// document `canvasV3`, les effets de story du post tels quels. Comme une
+    /// scène de post (#7052) : ni interlude, ni carte de fin — l'œuvre seule.
+    func save(post: FeedPost) {
+        let languages = preferredLanguages()
+        bakeThenSave(jobKey: post.id,
+                     slides: Self.renderableSlides(of: post, preferredLanguages: languages),
+                     languages: languages,
+                     stickerMedia: post.media,
+                     dressing: .bareWork(author: post.savedWorkAuthorUsername))
+    }
+
+    // MARK: - Imager (#13871)
+
+    /// **« Imager » OUVRE LA VUE IMAGER** (#14325) : elle montre l'œuvre, offre
+    /// au-delà d'une minute 1/4 · 2/4 · 3/4 · 4/4 depuis le début, puis
+    /// « Sauvegarder » ou « Partager » rendent la MÊME composition
+    /// qu'« Enregistrer » — calques, son, habillage —, coupée à la part choisie.
+    /// Rien ne se rend ni ne s'enregistre avant ce geste. « Enregistrer » et
+    /// « Partager » hors de la vue ne coupent jamais.
+    func image(story: StoryItem, author: StoryExportAuthor?) {
+        let languages = exportLanguages(of: story)
+        image(jobKey: story.id,
+              slides: [story.toRenderableSlide(preferredLanguages: languages)],
+              languages: languages,
+              stickerMedia: story.media,
+              dressing: .forStory(of: author, viewer: .current))
+    }
+
+    /// Un réel ou un post composé, l'œuvre seule — comme `save(post:)`.
+    func image(post: FeedPost) {
+        let languages = preferredLanguages()
+        image(jobKey: post.id,
+              slides: Self.renderableSlides(of: post, preferredLanguages: languages),
+              languages: languages,
+              stickerMedia: post.media,
+              dressing: .bareWork(author: post.savedWorkAuthorUsername))
+    }
+
+    /// La scène ouverte dans la galerie d'une conversation — comme `save(scene:)`.
+    func image(scene: GallerySceneItem) {
+        let languages = preferredLanguages()
+        image(jobKey: scene.id,
+              slides: [scene.renderableSlide(preferredLanguages: languages)],
+              languages: languages,
+              stickerMedia: scene.carrier.media,
+              dressing: .bareWork(author: scene.authorUsername))
+    }
+
+    /// Une image n'a pas de longueur : une scène fixe et muette ne propose aucun quart.
+    private func image(jobKey: String, slides: [StorySlide], languages: [String],
+                       stickerMedia: [FeedMedia], dressing: StoryExportDressing) {
+        let isStill = StoryExportStill.isStill(slides)
+        let work = ImagerWork(
+            id: jobKey, slides: slides, languages: languages, stickerMedia: stickerMedia, dressing: dressing,
+            isStill: isStill,
+            choices: isStill ? [] : StoryExportMode.imager.lengthChoices(total: ImagerLength.total(of: slides)))
+        presentImager(work, self)
+    }
+
+    /// « Sauvegarder » depuis la vue : la part choisie, par le MÊME corps
+    /// qu'« Enregistrer » — anneau, annulation, Photos, toast.
+    func saveImaged(_ work: ImagerWork, quarter: ImagerQuarter?) {
+        bakeThenSave(jobKey: work.id, slides: work.slides(for: quarter), languages: work.languages,
+                     stickerMedia: work.stickerMedia, dressing: work.dressing)
+    }
+
+    /// « Partager » depuis la vue : le fichier de la part choisie, que la feuille
+    /// du système emporte. L'appelant le rend par `discardImaged(_:)`.
+    func renderImaged(_ work: ImagerWork, quarter: ImagerQuarter?,
+                      onProgress: ((Double) -> Void)? = nil) async -> URL? {
+        let plan = await dressings.plan(for: work.dressing)
+        return await render(slides: work.slides(for: quarter), languages: work.languages,
+                            stickerMedia: work.stickerMedia, plan: plan, onProgress: onProgress)?.url
+    }
+
+    func discardImaged(_ url: URL) {
+        exporter.cleanupExport(at: url)
+    }
+
+    // MARK: - Une scène fixe sort en image (#13871)
+
+    /// Ce que la feuille de partage annonce AVANT le rendu : une image ou une vidéo.
+    func exportsStill(story: StoryItem) -> Bool {
+        StoryExportStill.isStill([story.toRenderableSlide(preferredLanguages: exportLanguages(of: story))])
+    }
+
+    func exportsStill(post: FeedPost) -> Bool {
+        StoryExportStill.isStill(Self.renderableSlides(of: post, preferredLanguages: preferredLanguages()))
+    }
+
+    /// Ce que le rendu laisse : une vidéo, ou l'image d'une scène fixe et muette.
+    private struct RenderedWork {
+        let url: URL
+        let isStill: Bool
+
+        /// Une image entre dans Photos comme une PHOTO, une vidéo comme une vidéo.
+        func save(with photos: PhotoLibrarySaving) async throws {
+            if isStill {
+                try await photos.saveImageFile(at: url, moveFile: true)
+            } else {
+                try await photos.saveVideo(at: url)
+            }
+        }
+
+        var savedMessage: String {
+            isStill
+                ? String(localized: "story.mine.save.imageSuccess", defaultValue: "Image enregistrée dans Photos")
+                : String(localized: "story.mine.save.success", defaultValue: "Vidéo enregistrée dans Photos")
+        }
+    }
+
+    /// **Le seul aiguillage vidéo / image.** Une scène fixe et muette se rend en
+    /// une seconde, sans prélude ni carte de fin — une image ne se déroule pas —,
+    /// filigrane compris ; son image est tirée du MP4, qui ne reste pas.
+    private func render(slides: [StorySlide], languages: [String], stickerMedia: [FeedMedia],
+                        plan: StoryExportDressingPlan,
+                        onProgress: ((Double) -> Void)? = nil) async -> RenderedWork? {
+        guard StoryExportStill.isStill(slides), let slide = slides.first else {
+            return await bake(slides: slides, languages: languages, stickerMedia: stickerMedia,
+                              plan: plan, onProgress: onProgress).map { RenderedWork(url: $0, isStill: false) }
+        }
+        let still = StoryExportDressingPlan(intro: nil, appendsBrandOutro: false, watermarkHandle: plan.watermarkHandle)
+        guard let video = await bake(slides: [StoryExportStill.pinned(slide)], languages: languages,
+                                     stickerMedia: stickerMedia, plan: still, onProgress: onProgress) else { return nil }
+        let image = await stillFrame(video)
+        exporter.cleanupExport(at: video)
+        return image.map { RenderedWork(url: $0, isStill: true) }
+    }
+
+    /// **Le MP4 de la scène d'un post, rendu À LA DEMANDE pour la feuille de partage**
+    /// (#9682) — le même rendu que `save(post:)`, sans anneau ni Photos : c'est
+    /// l'activité choisie (Enregistrer la vidéo, Fichiers, AirDrop) qui l'emporte.
+    /// L'appelant possède le fichier temporaire et le jette après usage.
+    func renderSceneFile(of post: FeedPost) async -> URL? {
+        let languages = preferredLanguages()
+        return await render(slides: Self.renderableSlides(of: post, preferredLanguages: languages),
+                            languages: languages, stickerMedia: post.media,
+                            plan: await dressings.plan(for: .bareWork(author: post.savedWorkAuthorUsername)))?.url
+    }
+
+    /// Le MP4 d'une story pour la feuille de partage (#9682) — le MÊME
+    /// habillage que `save(story:author:)` : prélude d'identité et carte de fin
+    /// (#10536). Ce chemin passait `intro: nil` : « Enregistrer la vidéo »,
+    /// Fichiers et AirDrop sortaient une story sans prélude, comme un réel. La
+    /// résolution d'identité reste bornée — la feuille n'attend pas un avatar
+    /// qui ne revient pas.
+    func renderStoryFile(of story: StoryItem, author: StoryExportAuthor?) async -> URL? {
+        let languages = exportLanguages(of: story)
+        return await render(slides: [story.toRenderableSlide(preferredLanguages: languages)],
+                            languages: languages, stickerMedia: story.media,
+                            plan: await dressings.plan(for: .forStory(of: author, viewer: .current)))?.url
+    }
+
+    /// **Le rendu d'une ou plusieurs slides en UN MP4** (#9681). Une slide : un
+    /// seul passage du moteur, comme toujours. Plusieurs (un réel à N scènes) :
+    /// chaque scène se rend à son tour — l'interlude sur la première, la carte de
+    /// fin sur la dernière —, puis les morceaux s'enchaînent dans l'ordre du
+    /// document, comme le lecteur les enchaîne (#6763). La progression couvre la
+    /// suite entière ; une annulation arrête avant la scène suivante.
+    private func bake(slides: [StorySlide], languages: [String], stickerMedia: [FeedMedia],
+                      plan: StoryExportDressingPlan,
+                      onProgress: ((Double) -> Void)? = nil) async -> URL? {
+        let watermark = self.watermark(plan.watermarkHandle)
+        var parts: [URL] = []
+        for (index, slide) in slides.enumerated() {
+            guard !Task.isCancelled else { break }
+            let part = await exporter.prepareExport(
+                slide: slide,
+                languages: languages,
+                watermark: watermark,
+                intro: index == 0 ? plan.intro : nil,
+                inputs: StoryExportInputs(stickerImageSources: StoryExporter.stickerImageSources(
+                    for: slide.effects.stickerObjects, media: stickerMedia)),
+                appendsBrandOutro: plan.appendsBrandOutro && index == slides.count - 1,
+                onProgress: onProgress.map { report in
+                    { fraction in report((Double(index) + fraction) / Double(slides.count)) }
+                },
+                onPhaseChange: nil
+            )
+            guard let part else { break }
+            parts.append(part)
+        }
+        guard parts.count == slides.count, !slides.isEmpty else {
+            parts.forEach(exporter.cleanupExport(at:))
+            return nil
+        }
+        guard parts.count > 1 else { return parts.first }
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("meeshy-scenes-\(UUID().uuidString).mp4")
+        let joined = await concatenate(parts, output)
+        parts.forEach(exporter.cleanupExport(at:))
+        return joined ? output : nil
+    }
+
+    private func exportLanguages(of story: StoryItem) -> [String] {
+        let available = StoryExportLanguageResolver.availableLanguages(story: story)
+        let language = StoryExportLanguageResolver.defaultLanguage(available: available, preferred: preferredLanguages())
+        return language.map { [$0] } ?? []
+    }
+
+    /// Une slide par scène du document, dans l'ordre ; sans document `canvasV3`,
+    /// la seule slide des effets du post.
+    static func renderableSlides(of post: FeedPost, preferredLanguages: [String]) -> [StorySlide] {
+        let slide = { (effects: StoryEffects?) in
+            StoryItem(id: post.id, content: post.content, media: post.media,
+                      storyEffects: effects, createdAt: post.timestamp)
+                .toRenderableSlide(preferredLanguages: preferredLanguages)
+        }
+        guard let document = ReelSceneRouting.sceneDocument(for: post) else { return [slide(post.storyEffects)] }
+        return document.scenes.indices.map { slide(StoryEffects(rendering: document, sceneIndex: $0)) }
+    }
+
+    /// Le corps PARTAGÉ des entrées ci-dessus : bake, écriture Photos,
+    /// anneau, annulation, nettoyage. Ce qui varie est passé en paramètre —
+    /// dont l'HABILLAGE, que l'entrée déclare et que ce corps ne choisit pas ;
+    /// tout le reste — et c'est l'essentiel — ne se duplique pas.
+    private func bakeThenSave(jobKey storyId: String,
+                              slides: [StorySlide],
+                              languages: [String],
+                              stickerMedia: [FeedMedia],
+                              dressing: StoryExportDressing) {
+        guard jobs[storyId] == nil else { return }
+
+        // Nouvelle tentative pour cette story : voir la doc de `generations`.
+        let generation = (generations[storyId] ?? 0) + 1
+        generations[storyId] = generation
+
+        jobs[storyId] = 0
+
+        let task = Task { [weak self] in
+            guard let self else { return }
+            // Résolu DANS le Task (async), BORNÉ dans le temps : l'identité
+            // (avatar / fond / mood) se charge depuis le cache, réseau si
+            // absent — voir `StoryExportDressingResolver.plan(for:)`. Les
+            // closures d'identité sont celles injectées à l'init, pas le
+            // singleton — l'injection en test reste honorée.
+            // `.bareWork` (scène de post #7052, réel #9681) : aucun interlude
+            // n'est dû, donc rien n'est résolu — et surtout pas les 4 s de
+            // borne avant un bake qu'on sait déjà sans prélude. L'anneau
+            // resterait à 0 % pour rien.
+            let plan = await self.dressings.plan(for: dressing)
+            // Tentative déjà périmée AVANT même que le bake ne démarre.
+            // Sur une installation fraîche, la résolution d'identité court
+            // jusqu'à `introTimeout` (4 s) : l'anneau affiche 0 %, et
+            // l'utilisateur qui le tape immédiatement obtenait bien
+            // « Export annulé »… puis un bake complet de 10 à 60 s partait
+            // quand même, chauffait l'appareil, et son MP4 finissait jeté par
+            // la garde `isCurrent` d'après-bake. Les trois chemins d'export
+            // coupent désormais au même endroit (cf.
+            // `StoryExportShareViewModel.startExport` et
+            // `TimelineExportController.start`).
+            //
+            // Garde ancrée sur le JETON DE GÉNÉRATION, pas sur
+            // `Task.isCancelled` : c'est le mécanisme d'annulation RÉEL de ce
+            // chemin — `cancel(storyId:)` avance `generations[storyId]`, et
+            // c'est cette valeur que consultent déjà tous les autres points de
+            // contrôle de cette méthode. Elle est aussi strictement plus
+            // forte : elle est fausse dès que la tentative est périmée pour
+            // N'IMPORTE QUELLE raison (annulée OU remplacée par un `save()`
+            // relancé), là où `Task.isCancelled` ne couvre que l'annulation
+            // explicite. Rien à nettoyer ici : aucun MP4 n'existe encore, et
+            // `cancel()` a déjà posé son toast.
+            guard self.isCurrent(generation, for: storyId) else { return }
+            let work = await self.render(
+                slides: slides,
+                languages: languages,
+                stickerMedia: stickerMedia,
+                plan: plan,
+                onProgress: { [weak self] fraction in
+                    guard let self, self.isCurrent(generation, for: storyId) else { return }
+                    self.jobs[storyId] = StorySaveProgressMapper.bake(fraction)
+                }
+            )
+
+            // Tentative périmée : annulée (`cancel(storyId:)` a déjà avancé
+            // la génération et posé son toast) OU remplacée par un `save()`
+            // relancé pour la même story pendant que CE bake tournait encore
+            // (`AVAssetWriter` n'observe pas `Task.isCancelled`, le MP4 peut
+            // arriver bien après). Dans les deux cas on nettoie le MP4 sans
+            // toucher à `jobs`/`tasks` — qui appartiennent à la tentative
+            // courante — et sans second toast. Aucune suspension entre cette
+            // vérification et le `guard let url else` suivant : la valeur
+            // reste valide pour ce dernier sans nouvelle vérification.
+            guard self.isCurrent(generation, for: storyId) else {
+                if let work { self.exporter.cleanupExport(at: work.url) }
+                return
+            }
+
+            guard let work else {
+                self.finish(storyId: storyId)
+                self.toasts.showError(String(
+                    localized: "story.mine.save.failed",
+                    defaultValue: "L'export de la story a échoué. Réessayez."
+                ))
+                return
+            }
+
+            self.jobs[storyId] = StorySaveProgressMapper.bakeShare
+            // Point de non-retour : `PHPhotoLibrary.performChanges` n'est pas
+            // annulable — voir `isCancellable(storyId:)`. Posé AVANT le
+            // `await`, sinon la fenêtre qu'on ferme resterait ouverte.
+            self.uncancellableJobs.insert(storyId)
+
+            let url = work.url
+            do {
+                try await work.save(with: self.photoSaver)
+                // Nouvelle suspension au-dessus (l'écriture Photos) : la
+                // tentative a pu être annulée-puis-relancée PENDANT
+                // l'écriture Photos (la fenêtre que le round précédent de
+                // cette correction laissait passer). Le fichier temporaire
+                // est nettoyé dans tous les cas ; `jobs`/`tasks` et le toast
+                // n'appartiennent qu'à la tentative encore courante.
+                self.exporter.cleanupExport(at: url)
+                guard self.isCurrent(generation, for: storyId) else { return }
+                self.jobs[storyId] = 1
+                self.finish(storyId: storyId)
+                HapticFeedback.medium()
+                self.toasts.showSuccess(work.savedMessage)
+            } catch {
+                Logger.stories.error(
+                    "story save to photos failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                self.exporter.cleanupExport(at: url)
+                guard self.isCurrent(generation, for: storyId) else { return }
+                self.finish(storyId: storyId)
+                self.toasts.showError(String(
+                    localized: "story.mine.save.photosDenied",
+                    defaultValue: "Impossible d'enregistrer dans Photos. Vérifie l'autorisation Photos de Meeshy dans Réglages."
+                ))
+            }
+        }
+        tasks[storyId] = task
+    }
+
+    /// Annule la sauvegarde en vol : la ligne retrouve son `⋯` immédiatement.
+    /// Le MP4 déjà baké (s'il arrive après coup) est nettoyé par le `Task`.
+    ///
+    /// Sans effet une fois l'écriture photothèque commencée — voir
+    /// `isCancellable(storyId:)`. Les deux surfaces désactivent alors leur
+    /// anneau, donc ce chemin n'est atteignable que par une course (tap
+    /// exactement au moment du basculement) : il retourne en silence plutôt
+    /// que d'afficher « Export annulé » sur une écriture qui aboutira.
+    func cancel(storyId: String) {
+        guard isCancellable(storyId: storyId) else { return }
+        tasks[storyId]?.cancel()
+        // Avance la génération AVANT `finish` : c'est ce qui invalide
+        // intrinsèquement et DÉFINITIVEMENT la tentative annulée — que
+        // l'utilisateur relance ou non ensuite. `jobs[storyId]` seul ne
+        // suffit pas comme marqueur (voir `isCurrent`) : n'importe quelle
+        // tentative peut le repeupler via un `save()` relancé.
+        generations[storyId] = (generations[storyId] ?? 0) + 1
+        finish(storyId: storyId)
+        toasts.showSuccess(String(
+            localized: "story.mine.save.cancelled",
+            defaultValue: "Export annulé"
+        ))
+    }
+
+    // MARK: - Privé
+
+    private func finish(storyId: String) {
+        jobs[storyId] = nil
+        tasks[storyId] = nil
+        uncancellableJobs.remove(storyId)
+    }
+
+    /// Vrai si `generation` est toujours la tentative courante pour `storyId`.
+    ///
+    /// Comparaison **intrinsèque**, contre `generations[storyId]` UNIQUEMENT
+    /// — jamais contre `jobs[storyId] != nil`. `jobs`/`tasks` sont un état
+    /// PARTAGÉ que `finish(storyId:)` efface sans discernement ; une
+    /// tentative périmée qui s'en servirait comme marqueur d'identité
+    /// pourrait voir une tentative B, fraîchement relancée, repeupler
+    /// `jobs[storyId]` et se faire passer — à tort — pour périmée dès que A
+    /// appelle `finish` après elle (régression du round précédent : A
+    /// ressort de `saveVideo` après le relancement de B, écrit
+    /// `jobs[storyId] = 1` puis `finish()`, qui efface la RÉFÉRENCE DE B —
+    /// B se croit alors périmé et jette son propre MP4 sans jamais écrire
+    /// dans Photos, en silence).
+    ///
+    /// `generations[storyId]` n'est JAMAIS réinitialisé, seulement avancé —
+    /// par `save()` (nouvelle tentative) ET par `cancel()` (invalide
+    /// intrinsèquement et définitivement la tentative annulée, que
+    /// l'utilisateur relance ou non ensuite). Le token qu'une tentative
+    /// capture à son lancement ne peut donc plus jamais redevenir courant
+    /// une fois dépassé, indépendamment de ce que d'autres tentatives font
+    /// de `jobs`/`tasks` entre-temps.
+    private func isCurrent(_ generation: Int, for storyId: String) -> Bool {
+        generations[storyId] == generation
+    }
+}

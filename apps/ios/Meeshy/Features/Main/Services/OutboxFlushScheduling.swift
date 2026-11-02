@@ -33,8 +33,8 @@ import MeeshySDK
 enum OutboxFlushTrigger {
     static func flushNow() async {
         let flusher = OutboxFlusher(
-            pool: DependencyContainer.shared.dbPool,
-            dispatcher: OutboxDispatcher(),
+            pool: DependencyContainer.shared.database.pool,
+            dispatcher: EndToEndOutboxGate(),
             onOutcome: { @Sendable outcome in
                 Task { await OfflineQueue.shared.publishOutcome(outcome) }
             },

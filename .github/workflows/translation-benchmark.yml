@@ -1,4 +1,4 @@
-name: Banc de traduction
+name: Veille · banc de traduction NLLB
 
 # Mesure le moteur de traduction de texte sur FLORES-200 et sur le jeu doré de
 # conversations, puis refuse une régression face à la référence committée (#3662).

@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:reels": {
+      "resDir": "feature/reels/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.open",
+          "androidName": "reels_menu_open",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.copy_text",
+          "androidName": "reels_menu_copy_text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.share",
+          "androidName": "reels_menu_share",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.pin",
+          "androidName": "reels_menu_pin",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.delete",
+          "androidName": "reels_menu_delete",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.report",
+          "androidName": "reels_menu_report",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.more_options.hint",
+          "androidName": "reels_menu_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reels.scrub",
+          "androidName": "reels_scrub",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reels.author.profile",
+          "androidName": "reels_author_profile",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.reel.impressions",
+          "androidName": "reels_impressions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.reel.views",
+          "androidName": "reels_views",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.deleted",
+          "androidName": "reels_toast_deleted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.deleteError",
+          "androidName": "reels_toast_delete_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.reported",
+          "androidName": "reels_toast_reported",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.reportError",
+          "androidName": "reels_toast_report_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.pinned",
+          "androidName": "reels_toast_pinned",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.pinError",
+          "androidName": "reels_toast_pin_failed",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

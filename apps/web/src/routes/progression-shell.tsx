@@ -190,3 +190,13 @@ export function OfflineNotice({ children }: { readonly children: ReactNode }) {
     </p>
   );
 }
+
+/**
+ * LA BANDE HORS-LIGNE DE LA ZONE PROGRESSION, dans la langue du lecteur
+ * (iter-77w). Site unique du texte que le hub et les pages dédiées montraient
+ * chacun en dur en français ; `scope` distingue le libellé du hub de celui
+ * d'une page.
+ */
+export function ProgressionOfflineNotice({ scope }: { readonly scope: 'hub' | 'page' }) {
+  return <OfflineNotice>{gameText(scope === 'hub' ? 'game.page.offline_notice' : 'game.page.offline_notice_brief')}</OfflineNotice>;
+}

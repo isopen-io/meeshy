@@ -7,7 +7,7 @@ package me.meeshy.sdk.model.about
  */
 public object AboutPresentationBuilder {
     public const val PLATFORM_PREFIX: String = "Android"
-    public const val DEFAULT_APPLICATION_ID: String = "me.meeshy.android"
+    public const val DEFAULT_APPLICATION_ID: String = "me.meeshy.app"
     public const val DEFAULT_SDK_VERSION: String = "1.0.0"
 
     /** The canonical external links, mirroring the iOS About "Liens" section (all https). */

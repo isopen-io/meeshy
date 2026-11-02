@@ -55,7 +55,7 @@ final class CallVideoFallbackTests: XCTestCase {
 
     func test_performLocalMediaStart_routesEveryCameraFailureThroughTheAudioFallback() throws {
         let unit = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         )
         let start = try XCTUnwrap(
             DeclarationBodyScanner.body(containing: "func performLocalMediaStart(", in: unit)
@@ -108,7 +108,7 @@ final class CallVideoBadgeAccessibilityTests: XCTestCase {
 
     func test_videoLayout_showsThePeerMutedBadgeOutsideTheFadingChrome() throws {
         let connected = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallView+Connected.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift")
         )
         let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var videoCallLayout: some View", in: connected))
         XCTAssertTrue(layout.contains("CallPeerMutedBadge(compact: false)"))
@@ -168,7 +168,7 @@ final class CallGroupStageSizingTests: XCTestCase {
 
     func test_groupStage_keepsTheGridMinimumAndMeasuresItsHeightByPreference() throws {
         let connected = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallView+Connected.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift")
         )
         let stage = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: connected))
         XCTAssertTrue(stage.contains(".frame(minHeight: CallGroupStageSizing.minimumGridHeight)"))
@@ -200,22 +200,22 @@ final class CallScreenTickTests: XCTestCase {
 
     func test_durationDisplays_redrawThemselvesUnderTheClock() throws {
         let sites = [
-            "Meeshy/Features/Main/Views/CallView+Header.swift",
-            "Meeshy/Features/Main/Views/FloatingCallPillView.swift",
+            "Meeshy/Features/Call/Views/CallView+Header.swift",
+            "Meeshy/Features/Call/Views/FloatingCallPillView.swift",
             "Meeshy/Features/Main/Views/ConversationLayers/ConversationHeaderCallButton.swift",
         ]
         for site in sites {
             let source = try AppSourceGuard.unit(site)
             XCTAssertTrue(source.contains("CallDurationClock {"), "\(site) lit la durée sous `CallDurationClock`")
         }
-        let connected = try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallView+Connected.swift")
+        let connected = try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift")
         XCTAssertEqual(connected.components(separatedBy: "CallDurationClock {").count - 1, 2,
                        "la disposition audio et son en-tête compact")
     }
 
     func test_audioRoute_isReadAndChangedOffTheMainThread() throws {
         let service = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallAudioRouteService.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallAudioRouteService.swift")
         )
         XCTAssertTrue(service.contains("@concurrent nonisolated static func readRoute() async"))
         XCTAssertTrue(service.contains("@concurrent nonisolated static func applyPreferredInput(id: String) async throws"))
@@ -223,7 +223,7 @@ final class CallScreenTickTests: XCTestCase {
 
     func test_transcriptionEngineTeardown_leavesTheMainThread() throws {
         let source = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallTranscriptionService.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
         )
         let stop = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func stopLocalCapture()", in: source))
         XCTAssertTrue(stop.contains("Self.engineTeardownQueue.async(execute: teardown)"))

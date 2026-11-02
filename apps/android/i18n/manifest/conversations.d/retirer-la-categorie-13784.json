@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "category.remove",
+          "androidName": "conversations_action_remove_category",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

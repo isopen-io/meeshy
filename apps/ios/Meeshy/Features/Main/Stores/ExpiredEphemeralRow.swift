@@ -87,7 +87,9 @@ enum CachedThreadSurfacing {
                     messageType: message.messageType.rawValue,
                     expiresAt: message.expiresAt,
                     effectFlags: message.protectionFlags.rawValue,
-                    ephemeralDuration: message.effects.ephemeralDuration
+                    ephemeralDuration: message.effects.ephemeralDuration,
+                    isEncrypted: message.isEncrypted,
+                    encryptionMode: message.encryptionMode
                 )
             }
     }

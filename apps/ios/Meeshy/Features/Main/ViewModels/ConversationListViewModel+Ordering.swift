@@ -13,7 +13,7 @@ extension ConversationListViewModel {
     /// E6) : drapeau OFF ⇒ branche legacy INCHANGÉE (`legacyGroupConversations`,
     /// vérifiée bit-à-bit par `LentilleGroupingGraftTests`). Drapeau ON ⇒ le
     /// classement/tri passe par le miroir `LentilleSectionResolver`
-    /// (`Lentille/Core/LentilleSectionResolver.swift`, GELÉ S1). Signature,
+    /// (`Lens/Core/LentilleSectionResolver.swift`, GELÉ S1). Signature,
     /// `nonisolated`, staticité : inchangées — c'est le seul point de greffe
     /// (§4.4 du contrat). Le drapeau entre en paramètre (lu par défaut) pour que
     /// les deux branches s'éprouvent sans écrire dans `UserDefaults.standard`.

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "a11y.floating.feed.hint", "androidName": "a11y_floating_feed_hint", "status": "candidate" },
+        { "catalog": "app", "iosKey": "a11y.floating.menu.hint", "androidName": "a11y_floating_menu_hint", "status": "candidate" },
+        { "catalog": "app", "iosKey": "a11y.floating.menu.notifications-value", "androidName": "a11y_floating_menu_notifications_value", "status": "candidate" },
+        { "catalog": "app", "iosKey": "a11y.menu.item.hint", "androidName": "a11y_menu_item_hint", "status": "candidate" },
+        { "catalog": "app", "iosKey": "root.menu.communities", "androidName": "menu_communities", "status": "candidate" }
+      ]
+    }
+  }
+}

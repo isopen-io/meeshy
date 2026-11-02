@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "stories_scene_export_verifying",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

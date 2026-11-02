@@ -151,7 +151,7 @@ final class ComposerTrimTrackTests: XCTestCase {
     }
 
     func test_10356_theTrack_letsThePlayheadBeDragged_underTheHandles() throws {
-        let vue = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerTrimTrack.swift")
+        let vue = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerTrimTrack.swift")
         guard let debut = vue.range(of: "private func playheadLine("),
               let fin = vue.range(of: "private func releasePlayhead()", range: debut.upperBound..<vue.endIndex) else {
             return XCTFail("la tête de lecture est introuvable — la garde ne mesurerait rien")
@@ -172,7 +172,7 @@ final class ComposerTrimTrackTests: XCTestCase {
     // MARK: - Le montage
 
     func test_track_sitsAboveTheRailAndTheBand_andCarriesThePrecisionLaw() throws {
-        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         let retouche = try XCTUnwrap(bas.range(of: "private var editTools: some View {"))
         let piste = try XCTUnwrap(bas.range(of: "ComposerTrimTrack(", range: retouche.upperBound..<bas.endIndex),
                                   "la piste se monte avec les outils de la retouche")
@@ -180,7 +180,7 @@ final class ComposerTrimTrackTests: XCTestCase {
         XCTAssertLessThan(piste.lowerBound, rail.lowerBound, "la piste se pose AU-DESSUS du rail, donc de la bande")
         XCTAssertTrue(bas.contains("case .editing(.video(let url)) = session.phase"),
                       "elle n'existe qu'en retouche d'une vidéo")
-        let vue = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerTrimTrack.swift")
+        let vue = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerTrimTrack.swift")
         XCTAssertTrue(vue.contains("ComposerTrimRule.preciseTime("), "l'appui long amène l'instant sous le trait")
         XCTAssertTrue(vue.contains("ComposerTrimRule.precisionWindow("), "la loupe ne dessine que sa fenêtre")
         XCTAssertTrue(vue.contains("ComposerTrimRule.millisecondText("))
@@ -196,9 +196,9 @@ final class ComposerTrimTrackTests: XCTestCase {
     }
 
     func test_finishEditingVideo_passesTheKeptRangeToTheExporter() throws {
-        let edition = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift")
+        let edition = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureSession+Edit.swift")
         XCTAssertTrue(edition.contains("ComposerLookVideoExporter.export(url, look: regard, framing: cadrage, timeRange: plage"))
-        let export = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
+        let export = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerLookVideoExporter.swift")
         XCTAssertTrue(export.contains("session.timeRange"), "la découpe part dans le rendu")
         XCTAssertTrue(export.contains("session.metadata"), "la vidéo rendue garde les métadonnées de la prise")
     }
@@ -285,7 +285,7 @@ final class ComposerTrimTrackTests: XCTestCase {
     }
 
     func test_finishEditingVideo_aFailedRender_neverFallsBackToTheRawClip() throws {
-        let edition = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift")
+        let edition = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureSession+Edit.swift")
         XCTAssertFalse(edition.contains("neuve ?? url"), "le brut ne remplace jamais un rendu raté")
         XCTAssertTrue(edition.contains("guard let rendue = rendition?.delivery else {"), "un rendu raté s'arrête avant toute remise")
     }

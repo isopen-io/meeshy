@@ -228,6 +228,18 @@ class ConversationLivePatcherTest {
     }
 
     @Test
+    fun `an unban that restored nothing counts only when the server served a headcount`() = runTest {
+        seed(group())
+        val p = patcher()
+
+        p.applyUnbanned(ParticipantUnbannedEvent(conversationId = "c1", userId = "y", membershipRestored = false))
+        assertThat(stored("c1")!!.memberCount).isEqualTo(3)
+
+        p.applyUnbanned(ParticipantUnbannedEvent(conversationId = "c1", userId = "y", membershipRestored = false, memberCount = 12))
+        assertThat(stored("c1")!!.memberCount).isEqualTo(12)
+    }
+
+    @Test
     fun `being banned or leaving removes the row and invalidates its cached messages`() = runTest {
         seed(group("c1"))
         seed(group("c2"))

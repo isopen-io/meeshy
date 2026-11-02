@@ -100,11 +100,15 @@ final class ComposerSceneAudioLoopTests: XCTestCase {
                        "Le fond entre à 1 s — la phase de 10 s sur une passe de 3 s")
     }
 
-    // MARK: - 3. Le repos de l'horloge d'édition ne coupe pas le son
+    // MARK: - 3. Le repos de l'horloge d'édition ne coupe ni le son ni la vidéo
 
-    func test_idleSuspension_neverSuspendsTheSceneSound() {
-        XCTAssertEqual(EditIdleSuspension.suspended(playsVideo: true, playsAudio: true), [.video],
-                       "Le repos refroidit l'image ; la musique qu'on écoute en composant continue")
+    /// La scène du compositeur joue comme le PLAYER (loi 6, directive porteur
+    /// du 2026-10-31, #13864) : la vidéo de fond, les vidéos posées et les sons
+    /// continuent quand le doigt quitte l'écran. Le repos ne refroidit que
+    /// l'horloge des gestes.
+    func test_idleSuspension_neverSuspendsTheSceneVideoNorItsSound() {
+        XCTAssertEqual(EditIdleSuspension.suspended(playsVideo: true, playsAudio: true), [],
+                       "la vidéo qu'on compose joue encore quatre secondes après la dernière touche")
         XCTAssertEqual(EditIdleSuspension.suspended(playsVideo: false, playsAudio: true), [])
     }
 

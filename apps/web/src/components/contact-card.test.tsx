@@ -296,3 +296,43 @@ describe('la fiche de verre', () => {
     expect(host.querySelector('[data-contact-sheet]')).toBeNull();
   });
 });
+
+/**
+ * **UN SEUL VISAGE PAR PERSONNE** (#12571) — la bulle peignait un disque
+ * d'initiales du carnet, puis juste dessous la rangée du compte avec sa PHOTO :
+ * la même personne deux fois. iOS (`ContactCardView`) n'en montre qu'un : la
+ * photo du compte. Les initiales ne servent que sans compte associé.
+ */
+describe('un seul visage par personne (#12571)', () => {
+  const faces = (node: ParentNode | null) => node?.querySelectorAll('.avatar-root') ?? [];
+
+  test('un compte avec photo : UN avatar dans la bulle, la photo, aucun disque d’initiales du carnet', async () => {
+    const { host } = await mountCard({ accounts: [account({ avatarUrl: '2026/09/awa/photo.png' })] });
+    expect(faces(host)).toHaveLength(1);
+    expect(host.querySelectorAll('img')).toHaveLength(1);
+    expect(host.querySelector('[data-contact-open] img')?.getAttribute('src')).toContain('/attachments/file/');
+    expect(host.querySelector('[data-contact-open] .rounded-full')).toBeNull();
+  });
+
+  test('un compte sans photo : UN avatar, aux initiales du compte', async () => {
+    const { host } = await mountCard({ accounts: [account({ avatarUrl: null })] });
+    expect(faces(host)).toHaveLength(1);
+    expect(host.querySelector('[data-avatar-initials]')?.textContent).toBe('AD');
+  });
+
+  test('aucun compte associé : les initiales du carnet, un seul disque', async () => {
+    const { host } = await mountCard({ accounts: [] });
+    expect(faces(host)).toHaveLength(1);
+    expect(host.querySelector('img')).toBeNull();
+    expect(host.querySelector('[data-avatar-initials]')?.textContent).toBe('AD');
+  });
+
+  test('la fiche : un avatar en tête, jamais un second pour le même compte', async () => {
+    const mounted = await mountCard({ accounts: [account({ avatarUrl: '2026/09/awa/photo.png' })] });
+    await mounter.click(mounted.host.querySelector('[data-contact-open]'));
+    const sheet = mounted.host.querySelector('[data-contact-sheet]');
+    expect(faces(sheet)).toHaveLength(1);
+    expect(sheet?.querySelector('header img')).not.toBeNull();
+    expect(sheet?.querySelector('[data-contact-account]')?.textContent).toContain('@awa');
+  });
+});

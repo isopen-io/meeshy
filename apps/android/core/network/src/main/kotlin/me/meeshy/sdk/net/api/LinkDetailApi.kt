@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.MyShareLink
 import me.meeshy.sdk.model.ShareLinkArrivalStats
 import me.meeshy.sdk.model.ShareLinkArrivalsPage
 import me.meeshy.sdk.model.ShareLinkInfo
+import me.meeshy.sdk.model.conversationcard.ConversationCard
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -45,9 +46,16 @@ interface LinkDetailApi {
     @GET("links/{identifier}")
     suspend fun info(@Path("identifier") identifier: String): ApiResponse<ShareLinkInfo>
 
-    /** La carte d'un lien : aperçu de la conversation (identité optionnelle). */
+    /** La carte d'un lien de partage : aperçu de la conversation (identité optionnelle). */
     @GET("links/{identifier}/card")
-    suspend fun card(@Path("identifier") identifier: String): ApiResponse<JsonElement>
+    suspend fun card(@Path("identifier") identifier: String): ApiResponse<ConversationCard>
+
+    /**
+     * La carte d'un lien DIRECT vers une conversation : servie au seul membre ; un non-membre reçoit le
+     * même 404 qu'un identifiant inexistant (#8099).
+     */
+    @GET("conversations/{id}/card")
+    suspend fun directCard(@Path("id") conversationId: String): ApiResponse<ConversationCard>
 
     /** Les messages visibles par le lien (identité optionnelle). */
     @GET("links/{identifier}/messages")

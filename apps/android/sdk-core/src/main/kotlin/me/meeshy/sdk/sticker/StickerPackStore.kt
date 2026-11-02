@@ -21,10 +21,20 @@ import me.meeshy.sdk.net.apiCall
 public class StickerPackStore @Inject constructor(private val api: StickerPackApi) {
     private val _packs = MutableStateFlow<List<StickerPackSummary>?>(null)
     private val _state = MutableStateFlow(StickerPackState())
+    private val _catalogue = MutableStateFlow<List<StickerPackSummary>?>(null)
 
     /** `null` = on ne sait pas encore (les packs intégrés sont alors présumés installés). */
     public val packs: StateFlow<List<StickerPackSummary>?> = _packs.asStateFlow()
     public val state: StateFlow<StickerPackState> = _state.asStateFlow()
+
+    /** La Boutique (`GET /sticker-packs`, la route qu'iOS appelle) : `null` tant qu'elle n'a pas répondu une fois. */
+    public val catalogue: StateFlow<List<StickerPackSummary>?> = _catalogue.asStateFlow()
+
+    /** Revalide la Boutique ; une panne garde le dernier catalogue servi. */
+    public suspend fun loadCatalogue() {
+        val result = apiCall { api.catalogue() }
+        (result as? NetworkResult.Success)?.data?.packs?.let { _catalogue.value = it }
+    }
 
     public suspend fun refresh() {
         val result = apiCall { api.installed() }

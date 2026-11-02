@@ -34,6 +34,7 @@ class MessageDetailRouteTest {
             MessageDetailRoute.Report("m1"),
             MessageDetailRoute.CallDetails("m1"),
             MessageDetailRoute.Map("m1"),
+            MessageDetailRoute.Transcription("m1"),
         ).forEach { assertThat(MessageDetailRoute.decode(it.encode())).isEqualTo(it) }
     }
 

@@ -85,7 +85,7 @@ Importer dans `QueryProvider.tsx` pour initialisation.
 
 ### 2.2 `loadUserStats` stale-while-revalidate [iOS]
 
-**Fichier** : `apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift`
+**Fichier** : `apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift`
 
 **Problème** : Case `.stale` dans `loadUserStats` n'initie pas de background refresh (contrairement à `loadFullProfile`).
 

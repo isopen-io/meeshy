@@ -111,7 +111,7 @@ export function AdminAgentPanel({
         language={language}
         title={translateAdmin(language, 'admin.agent.title')}
         subtitle={translateAdmin(language, 'admin.agentPanel.subtitle')}
-        crumbs={[{ label: translateAdmin(language, 'admin.group.operations') }, { label: translateAdmin(language, 'admin.nav.agent') }]}
+        place={{ section: 'agent' }}
       />
       <AdminOfflineNotice language={language} />
 

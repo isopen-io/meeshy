@@ -35,7 +35,7 @@ Rivière/Résumé, escamotage du chrome), `Views/MessageListViewController.swift
 ciblées : mux bulle/rangée, construction de `FocalRowInput`, passe de défilement),
 `Views/ConversationView+Header.swift` (vérifié : **aucun** sélecteur de mode n'y vit),
 `Views/MessageListViewController+SeenTracking.swift:60-64`,
-`Lentille/Mode/{LentilleModeMenu, LentilleModeLabels}.swift`, `Lentille/Core/LentilleFeatureFlag.swift`.
+`Lens/Mode/{LentilleModeMenu, LentilleModeLabels}.swift`, `Lens/Core/LentilleFeatureFlag.swift`.
 `Focal/Summary/` (1 060 l) n'a été ouvert que pour la puce et le catalogue : hors périmètre v3.1 (D-8).
 
 **Loi partagée.** `packages/shared/utils/reading-modes.ts` (418 l),
@@ -61,7 +61,7 @@ gate composite `package.json:16`), `apps/web-v2/decisions.md` (615 l), `apps/web
 `reading_modes` se lit par `MeeshyFeatureFlags.isReadingModesEnabled`
 (`Focal/Preferences/MeeshyFeatureFlags.swift:44-46`), qui **délègue intégralement** à
 `LentilleFeatureFlag.readingModes` — cascade à trois étages
-(`Lentille/Core/LentilleFeatureFlag.swift:173-192`) :
+(`Lens/Core/LentilleFeatureFlag.swift:173-192`) :
 
 1. `ProcessInfo` `MEESHY_FLAG_READING_MODES` (`"1"`/`"0"`) **prime** ;
 2. `UserDefaults` clé `meeshy.flag.reading_modes` **si posée explicitement** ;

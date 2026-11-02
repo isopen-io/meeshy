@@ -20,8 +20,11 @@ package me.meeshy.sdk.model.auth
  */
 object SignupFieldValidation {
 
-    /** Inclusive minimum trimmed username length (iOS `trimmed.count >= 2`). */
-    const val USERNAME_MIN_LENGTH: Int = 2
+    /**
+     * Inclusive minimum trimmed username length — LA MÊME borne que [RegistrationIdentity.PSEUDO_MIN]
+     * (3 depuis #13825), jamais une seconde valeur : le pseudo tapé et le pseudo dérivé la partagent.
+     */
+    const val USERNAME_MIN_LENGTH: Int = RegistrationIdentity.PSEUDO_MIN
 
     /** Inclusive maximum trimmed username length (iOS `trimmed.count <= 16`). */
     const val USERNAME_MAX_LENGTH: Int = 16
@@ -57,7 +60,7 @@ object SignupFieldValidation {
         value.filter(::isUsernameChar).take(USERNAME_MAX_LENGTH)
 
     /**
-     * True when the trimmed username is 2..16 chars and every character is an
+     * True when the trimmed username is 3..16 chars and every character is an
      * ASCII letter, an ASCII digit, or one of `_ -`.
      */
     fun isUsernameValidLocally(value: String): Boolean {

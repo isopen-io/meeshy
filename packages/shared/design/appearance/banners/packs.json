@@ -109,79 +109,79 @@
     },
     "preview": null,
     "contract": {
-      "src": "9803b7afd2cc715a.json",
-      "bytes": 1093,
-      "sha256": "9803b7afd2cc715a214cc257a0742413fe7ff460829b0216958b078a5dc86b4c"
+      "src": "98334128ac6565a1.json",
+      "bytes": 2857,
+      "sha256": "98334128ac6565a13a3c45dd6921a86de4c8ec622d6662bd666d5ca394869cf7"
     },
     "strings": {
       "fr": {
-        "src": "c1c26b807f9decbc.json",
-        "bytes": 34,
-        "sha256": "c1c26b807f9decbce2d5fc31dcaadb5b41591610312674d91efc0fc8aa14952b"
+        "src": "1eeb5ab8dcce6c60.json",
+        "bytes": 77,
+        "sha256": "1eeb5ab8dcce6c60b3274874c5f1c4bb40e05ab8462a7846c38e5e3f2e738391"
       },
       "en": {
-        "src": "355338cc62581315.json",
-        "bytes": 35,
-        "sha256": "355338cc62581315cf2ffee2e18d55e025410c14dab388ce1b5970ff8bf077d4"
+        "src": "f79e3b6933641bf7.json",
+        "bytes": 75,
+        "sha256": "f79e3b6933641bf794e475502385eea428de462521d0a55d7827aad44f7f1e8b"
       },
       "es": {
-        "src": "5343d24134f22a3e.json",
-        "bytes": 34,
-        "sha256": "5343d24134f22a3e3a0d6abf07c2de7fa9420288a8992847bfd323f3c094f167"
+        "src": "763ff085c1294105.json",
+        "bytes": 75,
+        "sha256": "763ff085c1294105326612b9f471d13332ae887bcb17db7a70272548a8ae3225"
       },
       "pt": {
-        "src": "5343d24134f22a3e.json",
-        "bytes": 34,
-        "sha256": "5343d24134f22a3e3a0d6abf07c2de7fa9420288a8992847bfd323f3c094f167"
+        "src": "366e8d069180f3f4.json",
+        "bytes": 75,
+        "sha256": "366e8d069180f3f422660632e6548971e09cf6104a2645ef005044d4df4550df"
       },
       "de": {
-        "src": "1911e82637411866.json",
-        "bytes": 38,
-        "sha256": "1911e82637411866a0cbb14e743578ee6ada9a2939c66a1d84e370249039ad71"
+        "src": "709f4d8b1270a9de.json",
+        "bytes": 80,
+        "sha256": "709f4d8b1270a9de3aa421183a50fbd82dda56e58d44758a0b02afaa07a05b08"
       },
       "it": {
-        "src": "5343d24134f22a3e.json",
-        "bytes": 34,
-        "sha256": "5343d24134f22a3e3a0d6abf07c2de7fa9420288a8992847bfd323f3c094f167"
+        "src": "4103c366e06901db.json",
+        "bytes": 74,
+        "sha256": "4103c366e06901db790c76f2999466e55f28f8fdd7437e3f5b725f30bfa01d2c"
       },
       "ar": {
-        "src": "45ae33fc04fc8cae.json",
-        "bytes": 38,
-        "sha256": "45ae33fc04fc8cae8c79ff4019a474b2c1c222bddbae2ce29225405d48dc0f95"
+        "src": "d16c57fcf6f083db.json",
+        "bytes": 93,
+        "sha256": "d16c57fcf6f083db186ade2757791a253dc4926bcb4d6bd79972f930649caa7d"
       }
     },
     "downloadBytes": {
-      "story": 1093,
+      "story": 2857,
       "square": null
     },
     "names": {
       "fr": {
         "name": "Bannières animées",
-        "description": "Un reflet discret traverse la bannière."
+        "description": "Une aurore, une marée, des braises : la bannière s’anime."
       },
       "en": {
         "name": "Animated banners",
-        "description": "A subtle glint sweeps across the banner."
+        "description": "An aurora, a tide, embers: your banner comes alive."
       },
       "es": {
         "name": "Banners animados",
-        "description": "Un reflejo discreto cruza el banner."
+        "description": "Una aurora, una marea, unas brasas: el banner cobra vida."
       },
       "pt": {
         "name": "Banners animados",
-        "description": "Um reflexo discreto atravessa o banner."
+        "description": "Uma aurora, uma maré, brasas: o banner ganha vida."
       },
       "de": {
         "name": "Animierte Banner",
-        "description": "Ein dezenter Glanz zieht über das Banner."
+        "description": "Polarlicht, Gezeiten, Glut: Dein Banner wird lebendig."
       },
       "it": {
         "name": "Banner animati",
-        "description": "Un riflesso discreto attraversa il banner."
+        "description": "Un’aurora, una marea, le braci: il banner prende vita."
       },
       "ar": {
         "name": "لافتات متحركة",
-        "description": "وميض خفيف يعبر اللافتة."
+        "description": "شفق ومدّ وجمرات: لافتتك تنبض بالحياة."
       }
     }
   }

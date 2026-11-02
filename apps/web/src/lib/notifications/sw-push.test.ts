@@ -583,6 +583,21 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
     expect(worker.opened).toEqual(['/me/progression?section=missions']);
   });
 
+  test('« moments à immortaliser » ouvre le carnet, malgré l’indice `progression` du serveur (#10175)', async () => {
+    const worker = mount();
+    await worker.dispatch('notificationclick', clic({ type: 'game_photo_moment', route: 'progression' }).event);
+    expect(worker.opened).toEqual(['/me/progression/carnet']);
+  });
+
+  test('« moments à immortaliser » se tait quand une fenêtre est visible : l’hôte de l’app est la surface (#10175)', async () => {
+    const charge = banner({ notificationId: 'n1', type: 'game_photo_moment', route: 'progression' });
+    const regarde = mount({ clients: [windowClient('visible')] });
+    await regarde.dispatch('push', push(charge));
+    const cache = mount({ clients: [windowClient('hidden')] });
+    await cache.dispatch('push', push(charge));
+    expect([regarde.shown.length, cache.shown.length]).toEqual([0, 1]);
+  });
+
   test('sans destination, le tap ouvre la liste des notifications — il atterrit toujours', async () => {
     const worker = mount();
     await worker.dispatch('notificationclick', clic({ type: 'un_type_sans_ecran' }).event);
@@ -606,6 +621,7 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
       progression: '/me/progression',
       progressionLigue: '/me/progression/ligue',
       progressionSaison: '/me/progression/saison',
+      progressionCarnet: '/me/progression/carnet',
       settings: '/settings',
       notifications: '/notifications',
     });

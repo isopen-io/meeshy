@@ -16,6 +16,7 @@ import { EngagementService } from './engagement/EngagementService';
 import { DailyGestureGate, mayCredit } from './engagement/DailyGestureGate';
 import { isBlockedWithAny } from '../utils/blocking';
 import { receiptBucket } from './engagement/EngagementReceipts';
+import { notePairInteraction } from './relations/pairInteractionRecorder.js';
 import {
   creditPostGesture,
   creditSource,
@@ -186,6 +187,8 @@ export class PostReactionService {
       });
 
       await this.updatePostReactionSummary(postId);
+      // Les cercles (#13932) : réagir au post de l'autre compte pour la paire.
+      notePairInteraction(this.prisma, { actorId: userId, otherId: post.authorId, nature: 'reaction', at: reaction.createdAt });
       // Un geste que la limite du jour n'a pas pu compter passe, sans rien rapporter.
       if (mayCredit(ticket)) creditPostGesture(
         this.prisma,

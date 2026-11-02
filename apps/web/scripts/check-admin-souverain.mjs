@@ -752,6 +752,68 @@ async function main() {
       await cliche(page, 'fil-long-retour-au-message');
       await ctx.close();
     }
+
+    // ------------------------ 8. la navigation dit une seule fois où l'on est (#12670)
+    console.log('\n8. LA NAVIGATION DIT UNE SEULE FOIS OÙ L’ON EST, ET SE PARCOURT AU CLAVIER (#12670)');
+    {
+      const ctx = await openContext(browser, { base, avecAgent: true });
+      const { page } = ctx;
+      const visible = (selecteur) =>
+        page.evaluate((s) => {
+          const el = document.querySelector(s);
+          if (el === null) return false;
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+        }, selecteur);
+      const deborde = () =>
+        page.evaluate(() => {
+          const main = document.querySelector('#contenu');
+          return main === null ? -1 : main.scrollWidth - main.clientWidth;
+        });
+
+      // TÉLÉPHONE (430 px) : la barre nomme le parent, la page ne répète pas le fil.
+      await page.goto(`${base}/adm/users/${MEMBRE_ID}`, { waitUntil: 'load' });
+      check(await attendre(() => present(page, '[data-admin-page-title]')), 'téléphone : la fiche d’un membre se peint');
+      check((await texteDe(page, '[data-admin-page-title]')) === MEMBRE.displayName, `téléphone : le titre est le NOM du membre (« ${await texteDe(page, '[data-admin-page-title]')} »)`);
+      check((await texteDe(page, '[data-admin-page-kind]')).includes('Membre'), 'téléphone : son genre passe en surtitre');
+      check((await texteDe(page, '[data-admin-back-label]')) === 'Comptes' && (await visible('[data-admin-back]')), 'téléphone : la barre du haut nomme le parent, « ‹ Comptes »');
+      check(!(await visible('[data-admin-trail]')), 'téléphone : le fil d’Ariane ne se répète pas dans la page');
+      await cliche(page, 'nav-telephone-fiche');
+
+      await page.goto(`${base}/adm/users`, { waitUntil: 'load' });
+      await attendre(() => present(page, '[data-admin-users-panel]'));
+      check(await attendre(async () => (await deborde()) === 0), `téléphone : la liste des comptes tient dans l’écran (débord ${await deborde()} px)`);
+      check((await texteDe(page, '[data-admin-back-label]')) === 'Tableau de bord', 'téléphone : depuis une liste, le retour se nomme « Tableau de bord », comme au menu');
+      await cliche(page, 'nav-telephone-liste');
+
+      // BUREAU (1280 px) : le fil dans la page, plus de barre de retour en double.
+      await page.setViewportSize({ width: 1280, height: 860 });
+      await page.goto(`${base}/adm/users/${MEMBRE_ID}`, { waitUntil: 'load' });
+      await attendre(() => present(page, '[data-admin-trail]'));
+      check(await visible('[data-admin-trail]'), 'bureau : le fil d’Ariane est à l’écran');
+      const fil = await page.evaluate(() => [...document.querySelectorAll('[data-admin-trail] li')].map((li) => li.textContent?.trim()));
+      check(JSON.stringify(fil) === JSON.stringify(['Personnes', 'Comptes', MEMBRE.displayName]), `bureau : « Personnes › Comptes › ${MEMBRE.displayName} » (${fil.join(' › ')})`);
+      check(!(await visible('[data-admin-header]')), 'bureau : aucune barre de retour en double du fil et du menu');
+      await cliche(page, 'nav-bureau-fiche');
+
+      await page.click('[data-admin-trail-step="group"] a');
+      check(await attendre(async () => new URL(page.url()).searchParams.get('group') === 'people'), 'le maillon « Personnes » mène au tableau de bord, sur ce groupe');
+      check(await attendre(() => page.evaluate(() => document.activeElement?.id === 'admin-group-people')), '… et le titre du groupe reçoit le focus');
+      check((await texteDe(page, '[data-admin-page-title]')) === 'Tableau de bord', 'le tableau de bord s’appelle comme son entrée de menu');
+
+      await page.keyboard.press('Control+k');
+      check(
+        await attendre(() => page.evaluate(() => document.activeElement?.matches('[data-admin-sidebar] [data-admin-nav-filter]') === true)),
+        'Ctrl+K met le focus dans « Aller à… »',
+      );
+      await page.keyboard.type('comptes');
+      await page.keyboard.press('ArrowDown');
+      check(await page.evaluate(() => document.activeElement?.getAttribute('data-admin-nav') === 'users'), '↓ depuis le champ va à la première entrée trouvée');
+      await page.keyboard.press('Enter');
+      check(await attendre(async () => new URL(page.url()).pathname === '/adm/users'), 'Entrée sur l’entrée l’ouvre');
+      await cliche(page, 'nav-bureau-liste');
+      await ctx.close();
+    }
   } finally {
     await browser.close();
     server.close();

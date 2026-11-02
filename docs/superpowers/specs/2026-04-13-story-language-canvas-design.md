@@ -82,8 +82,8 @@ Pas de changement fonctionnel. `.scaledToFill()` + `.clipped()` dans le cadre 9:
 ### App (apps/ios/Meeshy/)
 | Fichier | Changement |
 |---|---|
-| `Features/Main/Views/StoryViewerView.swift` | Canvas 9:16 centre dans ZStack noir |
-| `Features/Main/Views/StoryViewerContainer.swift` | Passer canvasSize constraint |
+| `Features/Stories/Views/StoryViewerView.swift` | Canvas 9:16 centre dans ZStack noir |
+| `Features/Stories/Views/StoryViewerContainer.swift` | Passer canvasSize constraint |
 
 ### UI listing elements (SDK)
 | Fichier | Changement |

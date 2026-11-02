@@ -67,7 +67,7 @@ describe('le relais TURN de staging (#11278)', () => {
 
   it('route le 443 par un routeur TCP qui ne capte que turn.staging, TLS terminé par Traefik, vers le TURN en clair', () => {
     expect(coturn).toContain('- "traefik.enable=true"');
-    expect(coturn).toContain('- "traefik.docker.network=meeshy_meeshy-network"');
+    expect(coturn).toContain('- "traefik.docker.network=meeshy-staging-edge"');
     expect(coturn).toContain('traefik.tcp.routers.turn-staging.rule=HostSNI(`turn.staging.${DOMAIN:-meeshy.me}`)');
     expect(coturn).toContain('traefik.tcp.routers.turn-staging.entrypoints=websecure');
     expect(coturn).toContain('traefik.tcp.routers.turn-staging.tls.certresolver=letsencrypt');

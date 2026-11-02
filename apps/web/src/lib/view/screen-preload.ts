@@ -10,7 +10,9 @@ import { browserConnection } from '../device/capability-tier';
  * Un écran par moment d'inactivité, l'un après l'autre : le préchargement ne
  * dispute jamais le fil principal ni le réseau à ce que l'utilisateur fait.
  * Rien ne part sur un réseau économe (`saveData`) ou très lent (2G) : les
- * écrans s'y chargent à l'intention, au toucher d'un lien.
+ * écrans s'y chargent à l'intention, au toucher d'un lien. Sauf quand ils
+ * sont LIVRÉS avec l'application (`bundled`, la coque Android les lit dans
+ * l'APK) : les précharger n'y coûte aucun octet de réseau (#13021).
  */
 export const PRELOADED_SCREENS = ['list', 'thread', 'feed', 'settings', 'profile', 'notifications', 'progression'] as const;
 
@@ -27,12 +29,14 @@ export function preloadScreensWhenIdle({
   preload,
   idle,
   network,
+  bundled = false,
 }: {
   readonly preload: (key: PreloadedScreen) => Promise<unknown>;
   readonly idle: IdleScheduler;
   readonly network: NetworkHints;
+  readonly bundled?: boolean;
 }): void {
-  if (network.saveData === true || SLOW_NETWORKS.has(network.effectiveType ?? '')) return;
+  if (!bundled && (network.saveData === true || SLOW_NETWORKS.has(network.effectiveType ?? ''))) return;
   const next = (index: number): void => {
     const key = PRELOADED_SCREENS[index];
     if (key === undefined) return;

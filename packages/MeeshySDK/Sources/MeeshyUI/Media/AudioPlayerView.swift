@@ -526,6 +526,7 @@ public struct AudioPlayerView: View {
         }
         .disabled(isDownloading)
         .accessibilityLabel(String(localized: "media.audio.play", defaultValue: "Lire l'audio", bundle: .module))
+        .mediaPlayControlAnchor(attachmentId: attachment.id)
     }
 
     private var isDownloading: Bool {
@@ -534,10 +535,9 @@ public struct AudioPlayerView: View {
     }
 
     /// Pure routing decision used by `handlePlayTap`. Extracted as a
-    /// `nonisolated static` helper so it can be unit-tested without a
-    /// SwiftUI render lifecycle. Returns `true` iff the play tap should be
-    /// delegated to `onPlayRequest` instead of touching the locally
-    /// resolved `player`.
+    /// `nonisolated static` helper so it can be unit-tested without a SwiftUI
+    /// render lifecycle. Returns `true` iff the play tap should be delegated
+    /// to `onPlayRequest` instead of touching the locally resolved `player`.
     nonisolated internal static func shouldDelegateToParent(
         usesExternalPlayer: Bool,
         playerAttachmentId: String?,
@@ -861,11 +861,11 @@ public struct AudioPlayerView: View {
     /// `rightChipsColumn` (capsules empilées à droite du widget).
     private var timeRow: some View {
         HStack(spacing: 0) {
-            Text(formatMediaDuration(displayedProgress.elapsed))
+            Text(MediaFormat.duration(displayedProgress.elapsed))
                 .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(isDark ? .white.opacity(0.5) : .black.opacity(0.4))
             Spacer()
-            Text(formatMediaDuration(estimatedDuration))
+            Text(MediaFormat.duration(estimatedDuration))
                 .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(isDark ? .white.opacity(0.3) : .black.opacity(0.25))
         }

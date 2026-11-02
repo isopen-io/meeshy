@@ -3,7 +3,7 @@
 **Date:** 2026-07-20
 **Scope:** iOS only
 **Area:** Accessibility (VoiceOver, WCAG 1.4.1) + Localization (i18n)
-**File touched:** `apps/ios/Meeshy/Features/Main/Views/ShareLinksView.swift` (1 file, 0 logic, 0 new test)
+**File touched:** `apps/ios/Meeshy/Features/Links/Views/ShareLinksView.swift` (1 file, 0 logic, 0 new test)
 
 ## Component
 

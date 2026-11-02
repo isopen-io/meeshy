@@ -377,7 +377,7 @@ struct ContentCaptureTests {
     func apiMessageAndCacheColumnCarryTheNotice() throws {
         let metadata = String(decoding: Self.noticeJSON(), as: UTF8.self)
         let json = #"{"id":"\#(Self.plainId)","conversationId":"conv-1","senderId":"p-actor","content":"Alice a capturé l’éphémère du 07/10/2026 à 12:05 (UTC)","messageType":"system","messageSource":"system","createdAt":"2026-10-07T12:06:00.000Z","metadata":\#(metadata)}"#
-        let api = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
+        let api = try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data(json.utf8))
         #expect(api.captureNotice?.nature == .timedFlame)
         #expect(api.joinNotice == nil)
 

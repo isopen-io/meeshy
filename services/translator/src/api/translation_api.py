@@ -16,6 +16,7 @@ from config.message_limits import can_translate_message, MessageLimits
 from config.settings import get_settings
 from services.language_capabilities import LanguageCapabilitiesService
 from utils.audio_pipeline_metrics import metrics_router
+from services.task_privacy import shown
 
 # Import du audio router (lazy loading)
 try:
@@ -176,7 +177,7 @@ class TranslationAPI:
                 import time
                 start_time = time.time()
                 
-                logger.info(f"🌐 [TRANSLATOR-API] Requête REST reçue: texte='{request.text[:50]}...', source={request.source_language}, target={request.target_language}, modèle={request.model_type}")
+                logger.info(f"🌐 [TRANSLATOR-API] Requête REST reçue: texte='{shown(request.text, 50)}...', source={request.source_language}, target={request.target_language}, modèle={request.model_type}")
                 
                 # Validation des paramètres
                 if not request.text.strip():
@@ -224,7 +225,7 @@ class TranslationAPI:
                 
                 processing_time = int((time.time() - start_time) * 1000)
                 
-                logger.info(f"✅ [TRANSLATOR-API] Traduction REST terminée: '{request.text[:30]}...' → '{result.get('translated_text', '')[:30]}...' ({processing_time}ms)")
+                logger.info(f"✅ [TRANSLATOR-API] Traduction REST terminée: '{shown(request.text, 30)}...' → '{shown(result.get('translated_text', ''), 30)}...' ({processing_time}ms)")
                 
                 return TranslationResponse(
                     original_text=request.text,

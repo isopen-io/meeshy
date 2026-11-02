@@ -53,7 +53,7 @@ final class ConversationViewModelWriteRestrictionTests: XCTestCase {
             reactionService: MockReactionService(),
             reportService: MockReportService(),
             messageSocket: messageSocket,
-            dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)),
+            dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)),
             networkMonitor: FakeNetworkMonitor(isOnline: true),
             offlineQueue: offlineQueue
         )
@@ -199,7 +199,7 @@ final class ConversationViewModelWriteRestrictionTests: XCTestCase {
         let outgoing = makeOutgoing(protection: intent)
         let context = makeContext(clientMessageId, intent: intent)
         await fx.sut.stageOptimistic(outgoing, context: context)
-        let payload = await fx.sut.prepareUpload(outgoing, context: context)
+        let payload = fx.sut.prepareUpload(outgoing, context: context)
         return await fx.sut.reconcile(.failure(error), outgoing: outgoing, payload: payload, context: context)
     }
 

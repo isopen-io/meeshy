@@ -15,6 +15,9 @@ public struct DailyGestureLimit: Error, Sendable, Equatable {
     public enum Gesture: String, Sendable, Equatable {
         case comment = "DAILY_COMMENT_LIMIT"
         case reaction = "DAILY_REACTION_LIMIT"
+        /// Trop de personnes choisies sans aucun lien avec l'auteur aujourd'hui,
+        /// à la création ou à la modification d'un post (#14105, #14169).
+        case unlinkedRecipients = "ONLY_UNLINKED_RECIPIENTS_LIMIT"
     }
 
     public let gesture: Gesture

@@ -44,6 +44,7 @@ final class OptimisticMessageStagerTests: XCTestCase {
     }
 
     private let author = OptimisticAuthor(senderId: "p-me", sender: nil)
+    private let sealedAuthor = OptimisticAuthor(senderId: "p-me", sender: nil, writesEndToEnd: true)
 
     private func makeSUT(cache: ThreadCacheSpy = ThreadCacheSpy()) -> (sut: OptimisticMessageStager, persistence: PersistenceSpy, engine: MockConversationSyncEngine, cache: ThreadCacheSpy) {
         let persistence = PersistenceSpy()
@@ -166,5 +167,53 @@ final class OptimisticMessageStagerTests: XCTestCase {
         await waitUntil { persistence.records.count == 1 }
         XCTAssertNotNil(persistence.records.first?.replyToJson)
         XCTAssertNil(persistence.records.first?.attachmentsJson)
+    }
+
+    // MARK: - Le clair d'un envoi chiffré de bout en bout ne s'écrit pas (#12999)
+
+    func test_stageOnline_sealed_writesTheLiteralOnly_andASealedListFacet() async {
+        let (sut, persistence, engine, _) = makeSUT()
+
+        await sut.stageOnline(
+            makeOutgoing(text: "secret en ligne"), context: makeContext(), author: sealedAuthor,
+            conversationId: "conv-1", replyReference: nil, effectFlags: 0
+        )
+
+        let record = persistence.records.first
+        XCTAssertEqual(record?.content, E2EEWire.contentPlaceholder)
+        XCTAssertEqual(record?.isEncrypted, true)
+        XCTAssertEqual(record?.encryptionMode, E2EEWire.mode)
+        XCTAssertNil(engine.lastSentFacet?.preview, "l'aperçu de liste se lit dans le coffre, jamais dans le cache")
+        XCTAssertEqual(engine.lastSentFacet?.nature?.isEncrypted, true)
+        XCTAssertEqual(engine.lastSentFacet?.id, "temp_1")
+    }
+
+    func test_stageOffline_sealed_writesTheLiteralInTheRowTheThreadCacheAndTheList() async {
+        let (sut, persistence, engine, cache) = makeSUT()
+
+        _ = await sut.stageOffline(
+            makeOutgoing(text: "secret hors ligne"), clientMessageId: MessageID("offline_1"), intent: .none,
+            author: sealedAuthor, conversationId: "conv-1", language: "fr", effectFlags: 0
+        )
+
+        await waitUntil { cache.merges == 1 && engine.updateConversationAfterSendCallCount == 1 }
+        XCTAssertEqual(persistence.records.first?.content, E2EEWire.contentPlaceholder)
+        XCTAssertEqual(cache.cache.map(\.content), [E2EEWire.contentPlaceholder])
+        XCTAssertEqual(cache.cache.first?.isEncrypted, true)
+        XCTAssertNil(engine.lastSentFacet?.preview)
+    }
+
+    func test_stageMedia_sealed_dropsTheCaption() async {
+        let (sut, persistence, engine, _) = makeSUT()
+        let draft = OptimisticMediaDraft(
+            conversationId: "conv-1", tempId: "temp_media", content: "légende secrète", attachments: [], messageType: .image,
+            replyToId: nil, storyReplyToId: nil, replyReference: nil, originalLanguage: "fr", sticker: nil, protection: .none
+        )
+
+        sut.stageMedia(draft, author: sealedAuthor)
+
+        await waitUntil { persistence.records.count == 1 && engine.updateConversationAfterSendCallCount == 1 }
+        XCTAssertNil(persistence.records.first?.content)
+        XCTAssertNotEqual(engine.lastSentFacet?.preview, "légende secrète")
     }
 }

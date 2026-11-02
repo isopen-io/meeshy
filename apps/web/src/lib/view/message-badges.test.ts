@@ -4,7 +4,7 @@ import type { Message } from '@/lib/api/types';
 
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
-import { badgesOf, forwardAttributionOf, forwardLabelOf, isSystemMessage, systemRowOf, systemRowText } from './message-badges';
+import { badgesOf, editedByModeratorOf, editedOf, forwardAttributionOf, forwardLabelOf, isSystemMessage, systemRowOf, systemRowText } from './message-badges';
 
 /* Les trois libellés de transfert viennent du catalogue (#7337) ; `translate()`
    LÈVE sur un catalogue non chargé, par contrat (`i18n-catalog.ts`). */
@@ -47,8 +47,28 @@ describe('badgesOf — l’ordre iOS et rien d’autre', () => {
     expect(badges).toEqual([
       { kind: 'pinned' },
       { kind: 'forwarded', attribution: { kind: 'group', name: 'Salon' } },
-      { kind: 'edited' },
+      { kind: 'edited', byModerator: false },
     ]);
+  });
+
+  /**
+   * #11375 — un modérateur de plateforme modifie le message d'un autre À VISAGE
+   * DÉCOUVERT : la passerelle sert `editedById`, et « modifié » devient
+   * « modifié par un modérateur ». L'auteur qui réécrit efface la mention.
+   */
+  test('modifié par un modérateur : le badge le dit, `editedByModeratorOf` le lit', () => {
+    const badges = badgesOf(message({ isEdited: true, editedById: 'u-mod', editedByRole: 'MODERATOR' }));
+
+    expect(badges).toEqual([{ kind: 'edited', byModerator: true }]);
+    expect(editedOf(badges)).toBe(true);
+    expect(editedByModeratorOf(badges)).toBe(true);
+  });
+
+  test('modifié par son auteur : aucune mention de modérateur', () => {
+    const badges = badgesOf(message({ isEdited: true }));
+
+    expect(editedOf(badges)).toBe(true);
+    expect(editedByModeratorOf(badges)).toBe(false);
   });
 
   test('un message nu ne porte aucun badge', () => {

@@ -48,21 +48,25 @@ public nonisolated enum StoryBackgroundLook {
     /// passage (`StoryLookBake`). L'image elle-même, à l'identique, quand il
     /// n'y a ni filtre ni réglage.
     public static func image(_ image: UIImage, filter: StoryFilter?, intensity: Float,
-                             adjustments: ImageAdjustments?, imageId: String?) -> UIImage {
-        StoryLookBake.image(image, filter: filter, intensity: intensity, adjustments: adjustments, imageId: imageId)
+                             adjustments: ImageAdjustments?, imageId: String?,
+                             look: StoryMediaLook? = nil) -> UIImage {
+        StoryLookBake.image(image, filter: filter, intensity: intensity, adjustments: adjustments, imageId: imageId,
+                            look: look)
     }
 
     /// Le bitmap du fond de ces effets — la vignette composite et l'export.
     public static func image(_ image: UIImage, effects: StoryEffects, imageId: String? = nil) -> UIImage {
         let intensity = Float(max(0.0, min(1.0, effects.filterIntensity ?? 1.0)))
         return Self.image(image, filter: effects.filter.flatMap(StoryFilter.init(rawValue:)), intensity: intensity,
-                          adjustments: adjustments(for: effects), imageId: imageId)
+                          adjustments: adjustments(for: effects), imageId: imageId,
+                          look: effects.resolvedBackgroundMedia?.look)
     }
 
     /// Une trame DÉCODÉE du fond vidéo (export), réglée par la chaîne vidéo ;
     /// la trame telle quelle quand le fond ne peint rien.
     public static func videoFrame(_ frame: CIImage, effects: StoryEffects) -> CIImage {
-        guard let reglages = adjustments(for: effects) else { return frame }
-        return StoryVideoAdjustmentsProcessor.frame(frame, reglages)
+        let peinte = StoryMediaLookPainterRegistry.painted(frame, look: effects.resolvedBackgroundMedia?.look, still: false)
+        guard let reglages = adjustments(for: effects) else { return peinte }
+        return StoryVideoAdjustmentsProcessor.frame(peinte, reglages)
     }
 }

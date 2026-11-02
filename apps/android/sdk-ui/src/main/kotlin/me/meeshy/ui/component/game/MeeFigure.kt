@@ -1,12 +1,19 @@
 package me.meeshy.ui.component.game
 
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.semantics.semantics
@@ -16,6 +23,7 @@ import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.LottieConstants
 import com.airbnb.lottie.compose.rememberLottieComposition
 import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.sticker.MeeStickerStill
 
 /** Ce qu'une figure montre : rien (film inconnu), la première image, ou le film qui boucle. */
 internal enum class MeeFigureMode { EMPTY, STILL, ANIMATED }
@@ -53,10 +61,27 @@ public fun MeeFigure(
         Box(frame)
         return
     }
+    if (mode == MeeFigureMode.STILL) {
+        MeeFigureStill(filmId, side, frame)
+        return
+    }
     val composition by rememberLottieComposition(LottieCompositionSpec.Asset(path))
-    if (mode == MeeFigureMode.ANIMATED) {
-        LottieAnimation(composition, frame, iterations = LottieConstants.IterateForever)
-    } else {
-        LottieAnimation(composition, progress = { 0f }, modifier = frame)
+    LottieAnimation(composition, frame, iterations = LottieConstants.IterateForever)
+}
+
+/**
+ * La première image du film, rendue hors du fil principal par [MeeStickerStill] puis gardée en mémoire bornée — comme
+ * iOS `MeeStickerFilmView` peint la case d'une image fixe décodée hors du geste. Une feuille de cinquante cases ne monte
+ * ainsi aucun lecteur Lottie ; une case déjà vue se peint dès sa première image.
+ */
+@Composable
+private fun MeeFigureStill(filmId: String, side: Dp, frame: Modifier) {
+    val context = LocalContext.current
+    val pixels = with(LocalDensity.current) { side.roundToPx() }.coerceIn(1, MeeStickerStill.DEFAULT_SIDE)
+    val still by produceState<ImageBitmap?>(MeeStickerStill.cached(filmId, pixels)?.asImageBitmap(), filmId, pixels) {
+        if (value == null) value = MeeStickerStill.bitmap(context, filmId, pixels)?.asImageBitmap()
+    }
+    Box(frame) {
+        still?.let { Image(bitmap = it, contentDescription = null, modifier = Modifier.fillMaxSize()) }
     }
 }

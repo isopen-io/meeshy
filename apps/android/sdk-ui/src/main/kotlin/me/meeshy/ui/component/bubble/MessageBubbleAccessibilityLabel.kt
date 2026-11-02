@@ -33,6 +33,8 @@ public data class BubbleAccessibilityStrings(
     val ephemeral: String,
     val reactions: String,
     val delivery: BubbleDeliveryA11yStrings,
+    /** What an end-to-end message this device cannot open says (#13110); blank ⇒ nothing of it is read. */
+    val endToEndSealed: String = "",
 )
 
 /** The six spoken delivery phrasings, one per [DeliveryStatus] arm. */
@@ -72,6 +74,12 @@ public object MessageBubbleAccessibilityLabel {
 
         if (!content.isOutgoing) {
             parts += content.senderName?.takeIf { it.isNotBlank() } ?: strings.unknownSender
+        }
+
+        if (content.isEndToEndSealed) {
+            strings.endToEndSealed.takeIf { it.isNotBlank() }?.let { parts += it }
+            timeText?.takeIf { it.isNotBlank() }?.let { parts += it }
+            return parts.joinToString(", ")
         }
 
         if (!content.isDeleted && content.isSealedViewOnce) {

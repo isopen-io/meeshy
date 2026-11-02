@@ -7,7 +7,8 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 import { translate } from '@/lib/i18n-catalog';
 import { translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { projectMessagePreview } from '@/lib/view/message-preview';
-import { previewSurfaceOf, readingModeOfRow } from '@/lib/view/message-preview-surface';
+import { armPreviewPlayback, previewTabTarget, type PreviewPlayback } from '@/lib/view/message-preview-playback';
+import { bubbleSpanOfRow, previewSurfaceOf, readingModeOfRow } from '@/lib/view/message-preview-surface';
 import { liftMotion, liftOffset, playLift, playReturn, type ReturnFlight } from '@/lib/view/message-menu-lift';
 import { veilRow } from '@/lib/view/row-veil';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
@@ -211,6 +212,10 @@ export function MessageMenu({
      fondu : un `mask-image` posé sur l'hôte s'appliquerait APRÈS son `filter`
      et emporterait le halo et l'ombre de l'aperçu. */
   const previewClipRef = useRef<HTMLDivElement | null>(null);
+  /* L'APERÇU LIT VOCAUX ET VIDÉOS (#11339, option B) — armé sur le clone, il
+     relaie au lecteur de la rangée vivante ; `null` : le clone reste une image. */
+  const previewPlaybackRef = useRef<PreviewPlayback | null>(null);
+  const [previewPlayable, setPreviewPlayable] = useState(false);
   const shownItems: readonly ListItem[] = piece !== undefined ? piece.data.items : panel === 'forward' ? forwardItems : items;
   const listItems = shownItems.filter((item) => !isNotice(item));
   const notice = panel === 'actions' && piece === undefined ? items.find(isNotice) : undefined;
@@ -251,8 +256,12 @@ export function MessageMenu({
         : ((height: number) => ({ top: rect.top, bottom: rect.top + height, left: rect.left, right: rect.right, width: rect.width, height }))(
             height ?? rect.height,
           );
+    /* EN BULLES, L'ANCRE EST LA BULLE (#12635) — jamais en mode pièce, où
+       l'aperçu est la tuile centrée ; absente en rangée plate. */
+    const bubble = pieceBox === null ? bubbleSpanOfRow(target.element) : undefined;
     return placeMessageMenuCluster({
       anchor,
+      ...(bubble === undefined ? {} : { bubble }),
       viewport: { width: window.innerWidth, height: window.innerHeight },
       safe,
       menuHeight,
@@ -469,7 +478,12 @@ export function MessageMenu({
     const measured = clip.scrollHeight > 0 ? clip.scrollHeight + 2 * padding : null;
     setCloneHeight(measured);
     liftOnce(host, measured);
+    const playback = armPreviewPlayback(clone, { source });
+    previewPlaybackRef.current = playback;
+    setPreviewPlayable(playback !== null);
     return () => {
+      playback?.dispose();
+      previewPlaybackRef.current = null;
       clip.replaceChildren();
       settle();
     };
@@ -557,6 +571,26 @@ export function MessageMenu({
       return;
     }
     if (event.key === 'Tab') {
+      const controls = previewPlaybackRef.current?.controls ?? [];
+      const focused = controls.findIndex((control) => control === document.activeElement);
+      const next = previewTabTarget({
+        controlCount: controls.length,
+        focusedControl: focused < 0 ? null : focused,
+        rovingIndex: roving.activeIndex,
+        itemCount: railCount + listRows,
+        backwards: event.shiftKey,
+      });
+      if (next.kind === 'control') {
+        event.preventDefault();
+        controls[next.index]?.focus();
+        return;
+      }
+      if (next.kind === 'roving') {
+        event.preventDefault();
+        roving.setActiveIndex(next.index);
+        roving.itemRefs.current[next.index]?.focus();
+        return;
+      }
       if (roving.handleKey(event.shiftKey ? 'ArrowUp' : 'ArrowDown')) event.preventDefault();
       return;
     }
@@ -728,7 +762,6 @@ export function MessageMenu({
         ) : (
         <div
           ref={previewHostRef}
-          aria-hidden
           /* `inert` (revue #5814, défaut majeur 13), PAS SEULEMENT
              `aria-hidden` — le clone conserve des `<button>` natifs (les
              drapeaux du pied) : `stripPreviewIdentity` retire `tabindex`,
@@ -739,7 +772,13 @@ export function MessageMenu({
              neutralise la focalisabilité de TOUT ce que le clone porte, y
              compris un futur `<a>`/`<video controls>`/`<input>` — pas
              seulement les deux boutons trouvés en revue. */
-          inert
+          /* SAUF LA LECTURE (#11339) — quand le clone porte un vocal ou une
+             vidéo lisible, l'hôte n'est plus inerte : `armPreviewPlayback`
+             rend inerte tout le clone SAUF ses boutons de lecture, que le
+             lecteur d'écran trouve dans un groupe nommé. */
+          {...(previewPlayable
+            ? { role: 'group', 'aria-label': translate(language, 'message.menu.preview') }
+            : { 'aria-hidden': true, inert: true })}
           data-message-menu-preview-host
           className={surface.glass ? 'glass' : undefined}
           style={{
@@ -756,7 +795,8 @@ export function MessageMenu({
             width: placement.previewWidth,
             boxSizing: 'border-box',
             transform: previewTransform(committed),
-            transformOrigin: target.isMine ? 'top right' : 'top left',
+            /* Réduit depuis le bord que l'aperçu TIENT (#12635) — celui de la bulle en RTL. */
+            transformOrigin: `top ${placement.previewEdge}`,
             pointerEvents: 'none',
             /* L'ÉLÉVATION (revue #5814, défaut majeur 11) — posée sur
                l'HÔTE du clone, JAMAIS sur le clone lui-même (qui doit rester

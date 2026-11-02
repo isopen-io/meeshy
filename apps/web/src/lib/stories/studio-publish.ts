@@ -9,6 +9,7 @@ import { PUBLICATION_CHANNEL } from './publication-kind';
 import type { PublishChoice } from './publication-layout';
 import { buildStoryCanvasEffectsPages, studioMediaIds, type StudioReadyAsset } from './story-document';
 import { studioFailureKey, type StudioDoor, type StudioPage, type StudioUploadState } from './studio-page';
+import { pagesWithinStoryDuration } from './studio-timeline';
 
 /**
  * **CE QU'UN ENVOI PORTE, CALCULÉ HORS DE L'ÉCRAN** (#7684, revue-correction) —
@@ -107,7 +108,7 @@ type ResolvedPage = {
  * première requête : jamais une story partie puis une story qui manque son
  * média. */
 function resolvePages(pages: readonly StudioPage[], settled: ReadonlyMap<string, SettledPage>): readonly ResolvedPage[] | null {
-  const resolved = pages.map((page) => {
+  const resolved = pagesWithinStoryDuration(pages).map((page) => {
     const [background, overlay, sound] = settled.get(page.id) ?? UNSETTLED;
     return {
       page,

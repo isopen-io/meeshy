@@ -28,6 +28,9 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// alors du cadre visible, et leur remplissage ne se peint plus. `true` par
     /// défaut : toute autre surface garde ses bandes.
     public internal(set) var servesLetterboxFill: Bool = true
+    /// La couleur d'auteur sur laquelle une scène sans fond se lit (#14258) —
+    /// `nil` garde le sol noir (réel, aperçu, conversation).
+    public internal(set) var sceneFloorHex: String?
     /// Drives `StoryCanvasUIView.setPaused(_:)` — gels la timeline canvas
     /// (displayLink + AVPlayer + audioMixer) en phase avec la progress bar
     /// du viewer parent. Sans ça, ouvrir un sheet pendant la lecture laissait
@@ -49,6 +52,10 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// suffisant pour un cross-fade d'animation : le canvas sort en opacity 0
     /// avant qu'on perçoive l'absence de mouvement vidéo.
     public internal(set) var isOutgoing: Bool
+    /// L'identifiant de la story dont la QoE se mesure (#11287) : celui de
+    /// l'item par défaut, celui du PORTEUR quand le lecteur de scènes compose
+    /// l'identité, `nil` pour un repost ou un post synthétisés.
+    public internal(set) var playbackQoEStoryId: String?
     /// Stored as `@Sendable` so it can be forwarded into `StoryReaderContext`
     /// which requires `@Sendable () -> Void`. Call-sites supply a plain `() -> Void`
     /// which Swift coerces automatically when the closure itself has no captures
@@ -170,6 +177,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     // MARK: - Primary init
 
     public init(story: StoryItem,
+                sceneFloorHex: String? = nil,
                 preferredLanguage: String? = nil,
                 preferredLanguages: [String] = [],
                 preferredContentLanguages: [String]? = nil,
@@ -192,6 +200,8 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 onPlaybackTime: ((Double) -> Void)? = nil,
                 onPlaybackProgressing: ((Bool) -> Void)? = nil) {
         self.storyItem = story
+        self.sceneFloorHex = sceneFloorHex
+        self.playbackQoEStoryId = story.id
         // `preferredContentLanguages` is the legacy label; it takes priority over
         // `preferredLanguages` when provided so existing call-sites compile unchanged.
         let effective = preferredContentLanguages ?? preferredLanguages
@@ -219,10 +229,18 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.imageCache = imageCache
     }
 
+    /// La slide que le canvas peint : celle du porteur, posée sur le dégradé
+    /// de l'auteur quand elle ne déclare aucun fond.
+    var renderableSlide: StorySlide {
+        var slide = storyItem.toRenderableSlide(preferredLanguages: preferredLanguages)
+        slide.effects = slide.effects.flooredOnAuthorGradient(sceneFloorHex)
+        return slide
+    }
+
     // MARK: - UIViewRepresentable
 
     public func makeUIView(context: Context) -> StoryCanvasUIView {
-        let slide = storyItem.toRenderableSlide(preferredLanguages: preferredLanguages)
+        let slide = renderableSlide
         // Outgoing canvas (cross-fade sortant) doit naître en `.edit` pour ne
         // jamais démarrer ses médias — sinon les bg/FG AVPlayer + audio mixer
         // jouent en double avec le canvas visible 350-400 ms le temps de
@@ -295,25 +313,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         view.onContentReady = { contentReady?() }
         let progress = onContentProgress
         view.onContentProgress = { value in progress?(value) }
-        let playback = onPlaybackTime
-        // La MÉMOIRE s'écrit sur l'émission qui existe déjà — aucun rappel de
-        // plus, et une écriture de dictionnaire n'invalide aucune vue SwiftUI.
-        // C'est ce qui permet à la carte de léguer sa position sans payer le
-        // fil de chrome que son mode lui refuse (`config.showsChrome`).
-        let memoire = positionKey
-        // Personne n'écoute ⇒ aucun relais : le canvas lit `onPlaybackTime`
-        // pour savoir si une barre d'hôte suit son tick, et garde alors son
-        // lien à 60–120 Hz. Le lecteur de stories n'en pose pas — sa barre a
-        // sa propre horloge — et une slide immobile y descend au palier bas
-        // (#9864).
-        if memoire != nil || playback != nil {
-            view.onPlaybackTime = { t in
-                if let memoire { ScenePlaybackPositions.shared.publish(t, for: memoire) }
-                playback?(t)
-            }
-        } else {
-            view.onPlaybackTime = nil
-        }
+        view.onPlaybackTime = playbackTimeRelay()
         let progressing = onPlaybackProgressing
         view.onPlaybackProgressing = { p in progressing?(p) }
         // Le canvas naît TOUJOURS en pause, et c'est `updateUIView` — appelé par
@@ -325,6 +325,10 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // ce canvas). L'audio démarrait alors dans `setReaderContext` et on
         // entendait la story PENDANT l'interlude (bug user 2026-07-25). Naître
         // en pause supprime la course au lieu de tenter de la gagner.
+        // La QoE ne mesure que la story PUBLIÉE que l'hôte déclare lire : ni
+        // l'aperçu du composer (médias préchargés, id local), ni le calque
+        // sortant d'un fondu, ni une carte de fil, un repost ou une galerie.
+        view.backgroundLayer.declarePlaybackQoETarget(playbackQoETarget(in: context))
         view.setPaused(true)
         // La position SÈME avant `setReaderContext`, le premier site qui
         // démarre quoi que ce soit (audio compris) : semée après, la vidéo
@@ -353,7 +357,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // choisir une langue dans le strip du viewer laissait le canvas afficher
         // les textes dans l'ancienne langue (bug 2026-07-25).
         let languagesChanged = view.readerContext.preferredLanguages != preferredLanguages
-        let newSlide = storyItem.toRenderableSlide(preferredLanguages: preferredLanguages)
+        let newSlide = renderableSlide
         let identityChanged = newSlide.id != view.slide.id
         if identityChanged || languagesChanged || newSlide.content != view.slide.content {
             view.slide = newSlide
@@ -377,6 +381,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
             // Skip pour outgoing : le canvas reste en `.edit` et son média
             // reste figé jusqu'à ce que SwiftUI détruise la vue.
             view.setMode(.play, time: .zero)
+            view.backgroundLayer.declarePlaybackQoETarget(playbackQoETarget(in: context))
         }
         // **La position d'ouverture peut arriver APRÈS le montage** (#6580).
         // Elle vient de la carte : un hôte qui monte avant de la connaître
@@ -398,6 +403,43 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
             return
         }
         view.setPaused(isPaused || isOutgoing)
+    }
+}
+
+@MainActor
+extension StoryReaderRepresentable {
+    /// La MÉMOIRE s'écrit sur l'émission qui existe déjà — aucun rappel de
+    /// plus, et une écriture de dictionnaire n'invalide aucune vue SwiftUI.
+    /// C'est ce qui permet à la carte de léguer sa position sans payer le fil
+    /// de chrome que son mode lui refuse (`config.showsChrome`).
+    ///
+    /// Personne n'écoute ⇒ aucun relais : le canvas lit `onPlaybackTime` pour
+    /// savoir si une barre d'hôte suit son tick, et garde alors son lien à
+    /// 60–120 Hz. Le lecteur de stories n'en pose pas — sa barre a sa propre
+    /// horloge — et une slide immobile y descend au palier bas (#9864).
+    func playbackTimeRelay() -> (@MainActor (Double) -> Void)? {
+        let playback = onPlaybackTime
+        let memoire = positionKey
+        guard memoire != nil || playback != nil else { return nil }
+        return { t in
+            if let memoire { ScenePlaybackPositions.shared.publish(t, for: memoire) }
+            playback?(t)
+        }
+    }
+
+    /// La SESSION se ferme quand SwiftUI retire le canvas (#11287) : une scène
+    /// allée au bout se ferme `completed`, toute autre sortie `swiped`.
+    public static func dismantleUIView(_ view: StoryCanvasUIView, coordinator: Coordinator) {
+        view.backgroundLayer.playbackQoE.finish(reason: view.completionFired ? .completed : .swiped)
+    }
+
+    func playbackQoETarget(in context: Context) -> SocialTarget? {
+        StoryPlaybackQoETarget.resolve(
+            readsPublishedStories: context.environment.readsPublishedStories,
+            isOutgoing: isOutgoing,
+            playsPreloadedMedia: !(preloadedImages.isEmpty && preloadedVideoURLs.isEmpty && preloadedAudioURLs.isEmpty),
+            storyId: playbackQoEStoryId
+        )
     }
 }
 
@@ -431,6 +473,7 @@ extension StoryReaderRepresentable {
                   onCompletion: onCompletion,
                   onContentReady: nil,
                   onContentProgress: nil)
+        self.playbackQoEStoryId = nil
     }
 
     /// Construct from an `APIPost` (used in feed contexts where stories arrive
@@ -472,6 +515,7 @@ extension StoryReaderRepresentable {
                   onCompletion: onCompletion,
                   onContentReady: nil,
                   onContentProgress: nil)
+        self.playbackQoEStoryId = nil
     }
 
     // MARK: - Private helpers

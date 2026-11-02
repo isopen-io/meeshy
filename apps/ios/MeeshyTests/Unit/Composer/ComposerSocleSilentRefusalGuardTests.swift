@@ -34,7 +34,7 @@ final class ComposerSocleSilentRefusalGuardTests: XCTestCase {
     private func socle() throws -> String {
         MyStoriesSourceCorpus.strippingComments(
             try MyStoriesSourceCorpus.text(
-                of: "Meeshy/Features/Main/Composer/MeeshyComposerHost+Socle.swift"))
+                of: "Meeshy/Features/Composer/MeeshyComposerHost+Socle.swift"))
     }
 
     private func corps(de nom: String, dans source: String) -> String? {

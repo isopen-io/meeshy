@@ -45,7 +45,7 @@ class BlockedListRepositoryTest {
     fun `persist then cachedSnapshot returns the blocked users in the persisted order`() = runTest {
         val repo = repository()
 
-        repo.persist(listOf(user("u1"), user("u2")))
+        repo.persist(listOf(user("u1"), user("u2")), null)
 
         assertThat(repo.cachedSnapshot()?.map { it.id }).containsExactly("u1", "u2").inOrder()
     }
@@ -55,7 +55,7 @@ class BlockedListRepositoryTest {
         val repo = repository()
         val rich = user("u1", username = "u1_w", displayName = "U One")
 
-        repo.persist(listOf(rich))
+        repo.persist(listOf(rich), null)
 
         assertThat(repo.cachedSnapshot()).containsExactly(rich)
     }
@@ -64,8 +64,8 @@ class BlockedListRepositoryTest {
     fun `persist drops blocked users absent from the latest list`() = runTest {
         val repo = repository()
 
-        repo.persist(listOf(user("u1"), user("u2")))
-        repo.persist(listOf(user("u2")))
+        repo.persist(listOf(user("u1"), user("u2")), null)
+        repo.persist(listOf(user("u2")), null)
 
         assertThat(repo.cachedSnapshot()?.map { it.id }).containsExactly("u2")
     }
@@ -74,8 +74,8 @@ class BlockedListRepositoryTest {
     fun `persisting an empty list is a synced-empty cache, not a cold one`() = runTest {
         val repo = repository()
 
-        repo.persist(listOf(user("u1")))
-        repo.persist(emptyList())
+        repo.persist(listOf(user("u1")), null)
+        repo.persist(emptyList(), null)
 
         assertThat(repo.cachedSnapshot()).isEqualTo(emptyList<BlockedUser>())
     }
@@ -84,8 +84,8 @@ class BlockedListRepositoryTest {
     fun `cachedSnapshot reflects only the newest persisted roster after several writes`() = runTest {
         val repo = repository()
 
-        repo.persist(listOf(user("a"), user("b"), user("c")))
-        repo.persist(listOf(user("c"), user("a")))
+        repo.persist(listOf(user("a"), user("b"), user("c")), null)
+        repo.persist(listOf(user("c"), user("a")), null)
 
         assertThat(repo.cachedSnapshot()?.map { it.id }).containsExactly("c", "a").inOrder()
     }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="composer_shell_minimized_write">Nachricht schreiben</string>
-    <string name="composer_shell_minimized_mic">Sprachnachricht aufnehmen</string>
+    <string name="composer_fold">Nachrichtenleiste einklappen</string>
+    <string name="composer_unfold">Nachrichtenleiste anzeigen</string>
 </resources>

@@ -1,6 +1,6 @@
 # Plan — Itération 98i (iOS)
 
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/UserStatsView.swift`
+**Surface** : `apps/ios/Meeshy/Features/Profile/Views/UserStatsView.swift`
 **Branche** : `claude/upbeat-euler-rj79la` (base `main` HEAD `8aea0e4e`)
 **Type** : sweep Dynamic Type + traits VoiceOver (0 logique, 0 clé i18n, 0 test neuf)
 

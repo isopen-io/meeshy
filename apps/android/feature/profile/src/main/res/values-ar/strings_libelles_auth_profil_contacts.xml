@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="profile_edit_title">تعديل الملف الشخصي</string>
     <string name="profile_regional_language_label">اللغة الثانوية</string>
     <string name="profile_custom_language_label">لغة الترجمة المخصصة</string>
     <string name="profile_avatar">الصورة الرمزية</string>

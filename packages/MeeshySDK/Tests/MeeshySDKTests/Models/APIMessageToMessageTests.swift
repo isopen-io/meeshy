@@ -384,7 +384,7 @@ final class APIMessageToMessageTests: XCTestCase {
     /// envoie (`…:20.156Z`), et le test aurait rougi sur son propre outillage
     /// au lieu de mesurer le code.
     private func decodeRealJoinNotice() throws -> APIMessage {
-        try APIClient.makeAPIPayloadDecoder()
+        try MeeshyCoders.decoder(.api)
             .decode(APIMessage.self, from: Data(Self.realJoinNoticePayload.utf8))
     }
 

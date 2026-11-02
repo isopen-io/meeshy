@@ -294,17 +294,16 @@ public enum StoryExporter {
             resolver: audioResolver
         )
 
-        // Signatures sonores de la marque + atténuation de la story sous la
-        // carte de fin — l'équivalent audio de ce que `wrap` posait dans sa
-        // propre passe, désormais mixé ici.
+        // Signatures sonores de la marque et enveloppe de la story : la loi de
+        // `wrap` (`StoryExportJingleMix`), mixée ici.
         var brandVideoTracks: (intro: CMPersistentTrackID?, outro: CMPersistentTrackID?) = (nil, nil)
         if let plan = branding {
             brandVideoTracks = try await composeBrandVideo(
                 plan: plan, composition: composition, outroFade: outroFade)
-            mixParameters += try await composeBrandAudio(
+            mixParameters = try await composeBrandAudio(
                 plan: plan,
                 composition: composition,
-                outroFade: outroFade,
+                story: CMTimeRange(start: storyStart, end: storyEnd), outroFade: outroFade,
                 storyAudioTracks: composition.tracks(withMediaType: .audio),
                 storyParameters: mixParameters
             )
@@ -436,66 +435,59 @@ public enum StoryExporter {
         return (introID, outroID)
     }
 
-    /// Mixe les deux signatures sonores de la marque et atténue les pistes de
-    /// la story sous la carte de fin — l'équivalent audio de ce que la passe
-    /// `StoryExportBranding.wrap` posait auparavant.
+    /// Mixe les deux signatures sonores de la marque et pose sur chaque piste
+    /// de la story l'enveloppe de `StoryExportJingleMix` — la loi de
+    /// `StoryExportBranding.wrap`. Les jingles jouent tels qu'ils ont été
+    /// synthétisés ; la story monte sous la queue du jingle d'ouverture et
+    /// s'éteint avant celui de fermeture, depuis le volume de son auteur.
     /// - Parameter storyParameters: les paramètres DÉJÀ construits pour les
-    ///   pistes de la story. L'atténuation de fin est posée dessus plutôt que
-    ///   sur un second objet : `AVAudioMix` n'honore qu'une seule entrée par
-    ///   piste, un doublon effacerait silencieusement le volume de l'auteur.
+    ///   pistes de la story (volume auteur, automation, fondus). `AVAudioMix`
+    ///   n'honore qu'une entrée par piste : chacune est reconstruite, la marque
+    ///   par-dessus l'enveloppe de l'auteur, sans rampe qui en chevauche une autre.
+    /// - Returns: une entrée par piste de la story, qui remplace `storyParameters`.
     static func composeBrandAudio(
         plan: StoryExportBranding.Plan,
         composition: AVMutableComposition,
+        story: CMTimeRange,
         outroFade: CMTimeRange?,
         storyAudioTracks: [AVMutableCompositionTrack],
         storyParameters: [AVAudioMixInputParameters]
     ) async throws -> [AVMutableAudioMixInputParameters] {
-        var parameters: [AVMutableAudioMixInputParameters] = []
-
-        // Signature d'ouverture : elle s'estompe sur le fondu vers la story.
-        if let jingle = plan.introJingle, plan.introFade.duration > .zero {
-            let asset = AVURLAsset(url: jingle)
-            if let track = try await asset.loadTracks(withMediaType: .audio).first,
-               let composed = composition.addMutableTrack(
-                   withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
-                let duration = try await asset.load(.duration)
-                try composed.insertTimeRange(
-                    CMTimeRange(start: .zero, duration: duration), of: track, at: .zero)
-                let params = AVMutableAudioMixInputParameters(track: composed)
-                params.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0,
-                                     timeRange: plan.introFade)
-                parameters.append(params)
-            }
+        let introJingleEnd = try await insertJingle(plan.introJingle, into: composition, at: .zero)
+        let outroJingleStart = outroFade.map { $0.start + plan.outroJingleOffset }
+        if let outroJingleStart {
+            _ = try await insertJingle(plan.outroJingle, into: composition, at: outroJingleStart)
         }
-
-        guard let fade = outroFade else { return parameters }
-
-        // Signature de fermeture, décalée à la 2ᵉ phase quand une identité est
-        // peinte (le logo termine alors la vidéo en silence).
-        let asset = AVURLAsset(url: plan.outroJingle)
-        if let track = try await asset.loadTracks(withMediaType: .audio).first,
-           let composed = composition.addMutableTrack(
-               withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
-            let duration = try await asset.load(.duration)
-            try composed.insertTimeRange(
-                CMTimeRange(start: .zero, duration: duration),
-                of: track, at: fade.start + plan.outroJingleOffset)
-            parameters.append(AVMutableAudioMixInputParameters(track: composed))
+        let fade = StoryExportJingleMix.outroFade(authorCard: plan.outroCarriesAuthor,
+                                                  overlap: StoryExportBranding.outroOverlap)
+        let authored = Dictionary(storyParameters.map { ($0.trackID, $0) }, uniquingKeysWith: { first, _ in first })
+        return storyAudioTracks.map { track in
+            let parameters = AVMutableAudioMixInputParameters(track: track)
+            let ramps = StoryExportJingleMix.storyRamps(
+                over: authored[track.trackID].map(StoryExportBranding.volumeRamps(of:)) ?? [],
+                storyStart: story.start.seconds, storyEnd: story.end.seconds,
+                introJingleEnd: introJingleEnd?.seconds, outroJingleStart: outroJingleStart?.seconds,
+                outroFade: fade)
+            StoryExportBranding.setVolumeRamps(ramps, on: parameters)
+            return parameters
         }
+    }
 
-        // La story s'éteint pendant que la carte de fin entre. On complète les
-        // paramètres existants quand la piste en a déjà (volume auteur,
-        // automation, fades) et on n'en crée que pour les pistes nominales.
-        let existingIDs = Set(storyParameters.map(\.trackID))
-        for track in storyAudioTracks where !existingIDs.contains(track.trackID) {
-            let params = AVMutableAudioMixInputParameters(track: track)
-            params.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fade)
-            parameters.append(params)
+    /// Insère le jingle EN ENTIER à `time` et rend l'instant où il finit ;
+    /// `nil` sans jingle. Un fichier sans son fait échouer l'export plutôt que
+    /// de livrer une marque muette.
+    private static func insertJingle(_ url: URL?, into composition: AVMutableComposition,
+                                     at time: CMTime) async throws -> CMTime? {
+        guard let url else { return nil }
+        guard let jingle = await StoryExportBranding.loadJingle(at: url) else {
+            throw StoryExportBranding.BrandingError.jingleUnavailable
         }
-        for case let params as AVMutableAudioMixInputParameters in storyParameters {
-            params.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fade)
+        guard let track = composition.addMutableTrack(
+            withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw StoryExporterError.sessionCreationFailed
         }
-        return parameters
+        try track.insertTimeRange(CMTimeRange(start: .zero, duration: jingle.duration), of: jingle.track, at: time)
+        return time + jingle.duration
     }
 
     // MARK: - Audio composition

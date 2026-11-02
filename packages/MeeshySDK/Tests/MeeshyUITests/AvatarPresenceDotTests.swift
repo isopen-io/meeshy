@@ -33,6 +33,20 @@ final class AvatarPresenceDotTests: XCTestCase {
         XCTAssertEqual(AvatarPresenceDot.resolve(presence: .idle, isHere: false), .presence(.idle))
     }
 
+    /// presence-ami-binaire (#13928) : un Ami ne reçoit que « en ligne » ou rien.
+    /// « en ligne » sans `lastActiveAt` rend le point vert ; « rien » ne rend aucun point.
+    func test_friendServedOnlineWithoutLastActiveAt_rendersTheGreenDot() {
+        let presence = UserPresence(isOnline: true, lastActiveAt: nil).state
+        XCTAssertEqual(AvatarPresenceDot.resolve(presence: presence, isHere: false), .presence(.online))
+        XCTAssertEqual(AvatarPresenceDot.presence(presence).color, MeeshyColors.success)
+    }
+
+    func test_friendServedOfflineWithoutLastActiveAt_rendersNoDot() {
+        let presence = UserPresence(isOnline: false, lastActiveAt: nil).state
+        XCTAssertFalse(presence.showsIndicator)
+        XCTAssertNil(AvatarPresenceDot.resolve(presence: presence, isHere: false))
+    }
+
     func test_resolve_whenNotHereAndOfflineOrUnknown_rendersNothing() {
         XCTAssertNil(AvatarPresenceDot.resolve(presence: .offline, isHere: false))
         XCTAssertNil(AvatarPresenceDot.resolve(presence: nil, isHere: false))

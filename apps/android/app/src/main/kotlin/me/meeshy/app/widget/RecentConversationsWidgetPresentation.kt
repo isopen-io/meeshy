@@ -2,10 +2,13 @@ package me.meeshy.app.widget
 
 import me.meeshy.app.conversations.ConversationRowTime
 import me.meeshy.app.conversations.LastMessagePreviewLabels
-import me.meeshy.app.conversations.lastMessagePreview
+import me.meeshy.app.widget.kit.WidgetOutsidePreview
+import me.meeshy.app.widget.kit.WidgetPresence
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
+import me.meeshy.sdk.theme.otherParticipantUserId
 
 /** Shared with [FavoriteContactsWidgetPresentation] — the same "is this a 1:1 chat"
  * gate both widgets need (sender-prefix suppression here, favorite-contact
@@ -24,6 +27,7 @@ internal data class RecentConversationRow(
     val isUnread: Boolean,
     val isPinned: Boolean,
     val accentHex: String,
+    val presence: String? = null,
 )
 
 /**
@@ -31,7 +35,7 @@ internal data class RecentConversationRow(
  * `WidgetDataManager.publishConversations` (ordering: pinned first, then most
  * recently active) + `formatLastMessage` (a sender prefix only on non-direct
  * conversations). Reuses the existing `:sdk-core`/`:feature:conversations` SSOTs
- * ([ApiConversation.displayTitle], [ApiConversation.accentHex], [lastMessagePreview],
+ * ([ApiConversation.displayTitle], [ApiConversation.accentHex], [WidgetOutsidePreview],
  * [ConversationRowTime]) rather than re-implementing any of them.
  */
 internal data class RecentConversationsWidgetPresentation(
@@ -45,28 +49,42 @@ internal data class RecentConversationsWidgetPresentation(
          * widget's own cap is applied directly here. */
         private const val MAX_ROWS = 5
 
+        /** Les conversations que le widget montre, dans l'ordre affiché : épinglées d'abord, puis les plus récentes. */
+        fun selection(conversations: List<ApiConversation>): List<ApiConversation> =
+            conversations.sortedWith(
+                compareByDescending<ApiConversation> { it.resolvedPreferences?.isPinned == true }
+                    .thenByDescending { ConversationRowTime.epochMillis(it) ?: Long.MIN_VALUE },
+            ).take(MAX_ROWS)
+
+        /** [presence] : le palier servi de chaque pair (`userId`) ; seules les conversations directes ont un pair, un absent n'a pas de point. */
         fun from(
             conversations: List<ApiConversation>,
             currentUserId: String?,
             previewLabels: LastMessagePreviewLabels,
+            preferredLanguages: List<String> = emptyList(),
+            ephemeralLabel: String = "",
+            nowMillis: Long = System.currentTimeMillis(),
+            presence: Map<String, PresenceState> = emptyMap(),
         ): RecentConversationsWidgetPresentation {
-            val ordered = conversations.sortedWith(
-                compareByDescending<ApiConversation> { it.resolvedPreferences?.isPinned == true }
-                    .thenByDescending { ConversationRowTime.epochMillis(it) ?: Long.MIN_VALUE },
-            )
-            val rows = ordered.take(MAX_ROWS).map { conversation ->
+            val rows = selection(conversations).map { conversation ->
                 RecentConversationRow(
                     id = conversation.id,
                     title = conversation.displayTitle(currentUserId),
-                    preview = lastMessagePreview(
-                        message = conversation.lastMessage,
+                    preview = WidgetOutsidePreview.text(
+                        conversation = conversation,
                         currentUserId = currentUserId,
                         showSender = conversation.type.lowercase() !in directConversationTypes,
                         labels = previewLabels,
+                        ephemeralLabel = ephemeralLabel,
+                        preferredLanguages = preferredLanguages,
+                        nowMillis = nowMillis,
                     ),
                     isUnread = conversation.unreadCount > 0,
                     isPinned = conversation.resolvedPreferences?.isPinned == true,
                     accentHex = conversation.accentHex(),
+                    presence = conversation.takeIf { it.type.lowercase() in directConversationTypes }
+                        ?.otherParticipantUserId(currentUserId)
+                        ?.let { WidgetPresence.token(presence[it]) },
                 )
             }
             return RecentConversationsWidgetPresentation(rows)

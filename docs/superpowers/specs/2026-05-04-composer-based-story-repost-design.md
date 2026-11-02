@@ -338,9 +338,9 @@ Tap sur l'embed → ouvre `StoryViewerView` plein écran avec la story embed.
 
 | Fichier | Modification |
 |---------|--------------|
-| `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` | Bouton « Partager » droite (ligne 573-579) → ouvre `StoryComposerView(repostingFrom:currentSlide:)`. Suppression de l'appel direct à `reshareStory()`. |
-| `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` | Menu kebab (ligne 1252-1271) : retirer ancien "Republier", ajouter "Republier en post" (Flux 2) et "Éditer et republier en post" (Flux 3). |
-| `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` | Suppression de `reshareStory()` (remplacé). Ajout `repostAsPostDirect(currentStory)` qui appelle `PostService.repost(targetType: .post)`. |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` | Bouton « Partager » droite (ligne 573-579) → ouvre `StoryComposerView(repostingFrom:currentSlide:)`. Suppression de l'appel direct à `reshareStory()`. |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` | Menu kebab (ligne 1252-1271) : retirer ancien "Republier", ajouter "Republier en post" (Flux 2) et "Éditer et republier en post" (Flux 3). |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift` | Suppression de `reshareStory()` (remplacé). Ajout `repostAsPostDirect(currentStory)` qui appelle `PostService.repost(targetType: .post)`. |
 | `apps/ios/Meeshy/Features/Main/Views/PostDetailView.swift` (ou cellule feed équivalente) | Branchement de rendu : si `post.type == .post && post.repostOf?.type == .story` → `StoryCanvasReaderView` ; ajout du header double-attribution. |
 
 ### 5.4 Frontière fonctionnelle

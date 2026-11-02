@@ -95,6 +95,13 @@ export const worldParticipantCardSchema = z.object({
   /** `anonymous` : invité sans compte ; `user` : compte Meeshy ; `bot` : agent. */
   participantType: z.enum(['anonymous', 'user', 'bot']),
   displayName: z.string(),
+  /**
+   * Le visage que le fil montre déjà (#12571) : une référence de média
+   * (`resolveParticipantAvatar` — la photo locale, puis celle du compte), `null`
+   * sans photo. Ce n'est PAS un détail de compte retenu par la hiérarchie : il
+   * est public dans la conversation.
+   */
+  avatar: z.string().nullable(),
   username: z.string().nullable(),
   /** Le rang DANS la conversation : `creator` · `admin` · `moderator` · `member`. */
   conversationRole: z.string(),

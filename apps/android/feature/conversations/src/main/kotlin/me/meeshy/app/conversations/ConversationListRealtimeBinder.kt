@@ -10,6 +10,7 @@ import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationLivePatcher
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.collectArrived
 import me.meeshy.sdk.socket.PreferencesSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 
@@ -44,7 +45,7 @@ internal class ConversationListRealtimeBinder(
     fun start() {
         scope.launch {
             // Preferences changees sur un AUTRE appareil (#4127) : l'ecriture Room suffit a repeindre.
-            preferencesSocketManager.conversationPreferencesUpdated.collect { event ->
+            preferencesSocketManager.conversationPreferencesUpdated.collectArrived { event ->
                 repository.applyRemoteConversationPreferences(event)
             }
         }

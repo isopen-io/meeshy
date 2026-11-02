@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_failed_location_refused">Non inviato: non è stato possibile rimuovere la posizione di questo file. Tocca per rimuoverlo, poi scegli un altro file.</string>
+    <string name="bubble_failed_location_remove">Rimuovi questo messaggio non inviato</string>
+</resources>

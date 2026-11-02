@@ -198,16 +198,14 @@ describe('bannière d\'un vocal — la piste attachée suit la langue SERVIE', (
     expect(pushedData(sendToUser).attachmentLanguage).toBe('fr');
   });
 
-  it('le corps AFFICHÉ compose sa durée depuis la piste servie', async () => {
-    // 9400 ms → 0:09, jamais le 0:12 de l'original. Le corps est le seul texte
-    // que les trois plateformes rendent (cycle 122).
+  it('le corps AFFICHÉ décrit le vocal sans le montrer (#14309)', async () => {
     const { service, sendToUser } = makeService('fr');
 
     await runVoiceNote(service, { messagePreview: '' });
 
     const body = pushedPayload(sendToUser).body ?? '';
-    expect(body).toContain('0:09');
-    expect(body).not.toContain('0:12');
+    expect(body).toBe('Vocal haute définition');
+    expect(body).not.toContain(TRANSCRIPT_FR);
   });
 
   /**
@@ -255,7 +253,7 @@ describe('les trois cas où l\'ORIGINAL reste le bon fichier', () => {
     expect(data.attachmentUrl).toBe(SUR_LE_FIL(ORIGINAL_URL));
     expect(data.attachmentMimeType).toBe(ORIGINAL_MIME);
     expect(data.attachmentLanguage).toBe('');
-    expect(pushedPayload(sendToUser).body ?? '').toContain(TRANSCRIPT_FR);
+    expect(pushedPayload(sendToUser).body ?? '').not.toContain(TRANSCRIPT_FR);
   });
 
   it('aucune carte de pistes (le cas de l\'écrasante majorité) ⇒ rien ne change', async () => {
@@ -303,12 +301,12 @@ describe('la durée d\'un vocal est en MILLISECONDES de bout en bout', () => {
     expect(metadata?.attachments?.firstDurationMs).toBe(34000);
   });
 
-  it('le corps AFFICHÉ et le fil s\'accordent sur la même durée', async () => {
+  it('le fil porte la durée en millisecondes, le corps n\'en dit que la nature (#14309)', async () => {
     const { service, sendToUser } = makeService('en');
 
     await runVoiceNote(service, { firstAttachmentDuration: 34000, messagePreview: '' });
 
-    expect(pushedPayload(sendToUser).body ?? '').toContain('0:34');
+    expect(pushedPayload(sendToUser).body ?? '').toBe('High-definition voice message');
     expect(pushedData(sendToUser).attachmentDurationMs).toBe('34000');
   });
 });

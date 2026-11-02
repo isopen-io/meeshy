@@ -27,7 +27,7 @@ import XCTest
 final class P2PWebRTCClientDelegateIdentityGuardTests: XCTestCase {
 
     private static let source: String = {
-        (try? AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")) ?? ""
+        (try? AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")) ?? ""
     }()
 
     /// Loud by construction: a missing start OR end marker fails the test via

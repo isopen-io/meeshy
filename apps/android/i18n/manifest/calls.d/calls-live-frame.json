@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.liveFrame.accept",
+          "androidName": "call_live_frame_accept",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.liveFrame.answer.accepted.anonymous",
+          "androidName": "call_live_frame_answer_accepted_anonymous",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.liveFrame.answer.declined.anonymous",
+          "androidName": "call_live_frame_answer_declined_anonymous",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.liveFrame.caption",
+          "androidName": "call_live_frame_caption",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.liveFrame.decline",
+          "androidName": "call_live_frame_decline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.liveFrame.hold.hint",
+          "androidName": "call_live_frame_hold_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.liveFrame.label",
+          "androidName": "call_live_frame_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.liveFrame.none",
+          "androidName": "call_live_frame_none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.liveFrame.notProposed",
+          "androidName": "call_live_frame_not_proposed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.liveFrame.proposal",
+          "androidName": "call_live_frame_proposal",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.capture",
+          "androidName": "call_control_capture",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.capture.caption",
+          "androidName": "call_control_capture_caption",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.capture.hint",
+          "androidName": "call_control_capture_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.mood.corporate",
+          "androidName": "call_frames_mood_corporate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.mood.deconnecte",
+          "androidName": "call_frames_mood_deconnecte",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.mood.distingue",
+          "androidName": "call_frames_mood_distingue",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.mood.elegant",
+          "androidName": "call_frames_mood_elegant",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.mood.fantastique",
+          "androidName": "call_frames_mood_fantastique",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.mood.feerique",
+          "androidName": "call_frames_mood_feerique",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.mood.futuriste",
+          "androidName": "call_frames_mood_futuriste",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.mood.glauque",
+          "androidName": "call_frames_mood_glauque",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.mood.hors-norme",
+          "androidName": "call_frames_mood_hors_norme",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.mood.jovial",
+          "androidName": "call_frames_mood_jovial",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.mood.morbide",
+          "androidName": "call_frames_mood_morbide",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.mood.signature",
+          "androidName": "call_frames_mood_signature",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_live_frame_answer_accepted",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_live_frame_answer_declined",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_live_frame_proposal_anonymous",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_live_frame_surface",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_zoom_lens",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

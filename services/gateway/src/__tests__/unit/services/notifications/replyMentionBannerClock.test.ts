@@ -337,7 +337,8 @@ describe.each(runners)('%s — le VERROU de protection', (_name, run) => {
     await run(service, { notificationLocKey: 'notification.view_once_message', messagePreview: '👁️ 🖼️' });
 
     const data = servedPushData(sendToUser);
-    expect(data?.translatedContent).toBeUndefined();
+    expect(data).not.toHaveProperty('translatedContent');
+    expect(prisma.notification.create.mock.calls[0][0].data.context.translatedContent).toBeUndefined();
     expect(JSON.stringify(data)).not.toContain('análisis');
   });
 
@@ -371,7 +372,8 @@ describe.each(runners)('%s — le VERROU de protection', (_name, run) => {
     await run(service, {});
 
     const data = servedPushData(sendToUser);
-    expect(data?.translatedContent).toBe('Mira esto');
+    expect(data).not.toHaveProperty('translatedContent');
+    expect(prisma.notification.create.mock.calls[0][0].data.context.translatedContent).toBe('Mira esto');
     expect(data?.content).toBe('Regarde ça');
   });
 });

@@ -119,6 +119,8 @@ export type MessageMutationParams =
        * Ils reçoivent la citation SCELLÉE, et la room ne la leur sert pas.
        */
       sealedQuoteAudience?: ReadonlyMap<string, Date>;
+      /** #12822 — le message est chiffré au repos : sa nouvelle version part scellée dans la file hors ligne. */
+      atRest: boolean;
     })
   | (MessageMutationBase<MessageDeletedMutationPayload> & {
       eventType: 'deleted';
@@ -240,7 +242,7 @@ function queuedVariant(
 ): QueuedVariantFor<'edited' | 'deleted' | 'expired' | 'pinned' | 'unpinned'> {
   switch (params.eventType) {
     case 'edited':
-      return { eventType: 'edited', payload: params.payload };
+      return { eventType: 'edited', payload: params.payload, atRest: params.atRest };
     case 'deleted':
       return { eventType: 'deleted', payload: params.payload };
     case 'expired':

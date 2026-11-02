@@ -26,15 +26,15 @@
     },
     "animes": {
       "name": "Animated",
-      "description": "Wallpapers that breathe softly."
+      "description": "Mist that breathes, bubbles that rise, petals that fall."
     },
     "bannieres-animees": {
       "name": "Animated banners",
-      "description": "A subtle glint sweeps across the banner."
+      "description": "An aurora, a tide, embers: your banner comes alive."
     },
     "contours-animes": {
       "name": "Animated rings",
-      "description": "A golden arc travels around the avatar."
+      "description": "A golden halo, a turning prism, a pulsing ripple."
     },
     "contours-haussmannien": {
       "name": "Haussmann ring",
@@ -91,6 +91,46 @@
     "cadres-celte": {
       "name": "Celtic banner frame",
       "description": "Endless braid and spiral triskeles."
+    },
+    "cadres-illustres": {
+      "name": "Illustrated frames",
+      "description": "Six frames that spill past your avatar: a mask whose eyes turn red, a web and its spider, angel wings, a runic circle, bone claws and demon wings."
+    },
+    "cadres-asiatiques": {
+      "name": "Asian frames",
+      "description": "Three frames inspired by Asia: a jade dragon coiling around your avatar, drifting silk clouds and swaying paper lanterns."
+    },
+    "cadres-africains": {
+      "name": "African frames",
+      "description": "Three frames inspired by Africa: an ebony mask whose eyes light up before a savanna sun, rippling woven bands and a rolling bead necklace."
+    },
+    "cadres-celtes": {
+      "name": "Celtic frames",
+      "description": "Three frames inspired by Celtic interlace: a knot that fades and redraws itself, a turning triple spiral and an emerald ivy whose leaves quiver."
+    },
+    "cadres-nordiques": {
+      "name": "Nordic frames",
+      "description": "Four frames from the far North: circling ravens, a rippling northern aurora, a carved stone ring that lights up and a carved prow riding the waves."
+    },
+    "cadres-egyptiens": {
+      "name": "Egyptian frames",
+      "description": "Four frames of gold and lapis: a rising cobra, a scarab opening its wings, a desert sun with a broad collar and Nile lotuses that bloom."
+    },
+    "cadres-mayas": {
+      "name": "Maya frames",
+      "description": "Four frames of stone and jade: a jade serpent with a feathered crest, glyph cartouches that light up, a stepped frieze under a rising sun and a jaguar hiding in the jungle."
+    },
+    "cadres-indiens": {
+      "name": "Indian frames",
+      "description": "Three frames inspired by Indian motifs: a floral mandala that unfolds, a peacock fanning its tail, a swaying garland of marigolds and jasmine."
+    },
+    "cadres-amerindiens": {
+      "name": "Native American frames",
+      "description": "Three frames inspired by weaving and beadwork: a woven hoop with swaying stylised feathers, a turning band of beaded diamonds, a stepped sun over mountains and their river."
+    },
+    "cadres-australs": {
+      "name": "Southern frames",
+      "description": "Three frames inspired by dot painting and the southern sky: twinkling circles of dots, a sea turtle swimming around your avatar, and the shining Southern Cross."
     }
   },
   "designs": {
@@ -109,7 +149,11 @@
     "horizon": "Horizon",
     "baobab": "Baobab",
     "brume-vivante": "Living mist",
-    "aurore-vive": "Vivid aurora"
+    "aurore-vive": "Vivid aurora",
+    "bulles-legeres": "Light bubbles",
+    "pluie-de-petales": "Petal rain",
+    "maree": "Tide",
+    "braises": "Embers"
   },
   "rings": {
     "filet": "Hairline",
@@ -132,7 +176,45 @@
     "rituel": "African ritual",
     "rituel-anime": "African ritual, animated",
     "celte": "Celtic",
-    "celte-anime": "Celtic, animated"
+    "celte-anime": "Celtic, animated",
+    "prisme-vivant": "Living prism",
+    "onde": "Ripple",
+    "masque-felin": "Feline mask",
+    "toile-araignee": "Spider web",
+    "ailes-ange": "Angel wings",
+    "cercle-runique": "Runic circle",
+    "griffes-os": "Bone claws",
+    "ailes-demon": "Demon wings",
+    "dragon-jade": "Jade dragon",
+    "nuages-soie": "Silk clouds",
+    "lanternes-papier": "Paper lanterns",
+    "masque-ebene": "Ebony mask",
+    "bandes-tissees": "Woven bands",
+    "collier-perles": "Bead necklace",
+    "noeud-entrelace": "Interlaced knot",
+    "spirale-triple": "Triple spiral",
+    "lierre-emeraude": "Emerald ivy",
+    "corbeaux-tournoyants": "Circling ravens",
+    "aurore-boreale": "Northern lights",
+    "anneau-pierre-gravee": "Carved stone ring",
+    "proue-sculptee": "Carved prow",
+    "cobra-dore": "Golden cobra",
+    "scarabee-aile": "Winged scarab",
+    "soleil-du-desert": "Desert sun",
+    "lotus-du-nil": "Nile lotus",
+    "serpent-de-jade": "Jade serpent",
+    "cartouches-de-glyphes": "Glyph cartouches",
+    "frise-a-gradins": "Stepped frieze",
+    "jaguar-de-jungle": "Jungle jaguar",
+    "mandala-floral": "Floral mandala",
+    "paon-roue": "Fanning peacock",
+    "guirlande-soucis": "Marigold garland",
+    "cercle-tisse": "Feathered woven hoop",
+    "perlage-losanges": "Beaded diamonds",
+    "soleil-montagnes": "Sun over the mountains",
+    "cercles-points": "Dot circles",
+    "tortue-marine": "Sea turtle",
+    "croix-du-sud": "Southern Cross"
   },
   "gamut": {
     "indigo": "Meeshy Indigo",

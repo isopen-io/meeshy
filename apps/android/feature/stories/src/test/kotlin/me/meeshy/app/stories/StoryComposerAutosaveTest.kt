@@ -13,6 +13,8 @@ import me.meeshy.sdk.model.scene.StoryElementTiming
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.model.scene.StoryTextFade
+import me.meeshy.sdk.model.scene.StoryTextFrame
+import me.meeshy.sdk.model.scene.StoryTextFrameShape
 import me.meeshy.sdk.model.scene.StoryTextOutline
 import org.junit.Test
 
@@ -122,14 +124,26 @@ class StoryComposerAutosaveTest {
         assertThat(action).isEqualTo(StoryDraftPersist.Clear)
     }
 
-    // ---- resolve: a stroke-only deck must never purge a stored draft ----
+    @Test
+    fun `an emptied composer never purges a draft still awaiting its publication`() {
+        val awaiting = textDeck("published").toDraftSnapshot(StoryVisibility.PUBLIC, null, "earlier")
+            .copy(awaitingPublication = listOf("cmid_a"))
+
+        val action = StoryComposerAutosave.resolve(
+            deck = blankDeck(),
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = awaiting,
+        )
+
+        assertThat(action).isEqualTo(StoryDraftPersist.None)
+    }
+
+    // ---- resolve: a drawing is content the draft keeps (#13863) ----
 
     @Test
-    fun `a deck whose only content is a drawn stroke resolves to None, not Clear, over a stored draft`() {
-        // The snapshot cannot represent strokes yet (see the class doc), so it comes back
-        // not-worth-restoring even though the deck plainly has content. Resolving that to
-        // Clear would erase yesterday's stored draft to make room for a snapshot with
-        // nothing to save — losing content the drawing didn't even replace.
+    fun `a deck whose only content is a drawn stroke is saved, and its stroke comes back on reopening`() {
         val previous = textDeck("was here").toDraftSnapshot(StoryVisibility.PUBLIC, null, "earlier")
         val stroke = me.meeshy.sdk.model.StoryDrawingStroke(id = "st1", colorHex = "FFFFFF", width = 6.0)
         val deck = blankDeck().setSelectedStrokes(listOf(stroke))
@@ -142,11 +156,12 @@ class StoryComposerAutosaveTest {
             previous = previous,
         )
 
-        assertThat(action).isEqualTo(StoryDraftPersist.None)
+        val saved = (action as StoryDraftPersist.Save).snapshot
+        assertThat(saved.toDeck()?.slides?.single()?.strokes).containsExactly(stroke)
     }
 
     @Test
-    fun `a deck whose only content is a drawn stroke resolves to None when there was no stored draft either`() {
+    fun `a stroke-only deck is saved when there was no stored draft either`() {
         val stroke = me.meeshy.sdk.model.StoryDrawingStroke(id = "st1", colorHex = "FFFFFF", width = 6.0)
         val deck = blankDeck().setSelectedStrokes(listOf(stroke))
 
@@ -158,7 +173,7 @@ class StoryComposerAutosaveTest {
             previous = null,
         )
 
-        assertThat(action).isEqualTo(StoryDraftPersist.None)
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
     }
 
     // ---- resolve: rich-content fidelity gate ----
@@ -284,6 +299,17 @@ class StoryComposerAutosaveTest {
             selectedId = "s1",
         )
         assertThat(StoryComposerAutosave.restore(empty, deckIsPristine = true)).isNull()
+    }
+
+    @Test
+    fun `a draft awaiting its publication is never restored into a new composer`() {
+        val awaiting = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "on its way")),
+            selectedId = "s1",
+            awaitingPublication = listOf("cmid_a"),
+        )
+
+        assertThat(StoryComposerAutosave.restore(awaiting, deckIsPristine = true)).isNull()
     }
 
     // ---- toDraftSnapshot / toDeck round-trip ----
@@ -831,7 +857,7 @@ class StoryComposerAutosaveTest {
 
         val rebuilt = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).toDeck()
 
-        assertThat(rebuilt!!.slides.single().elements.single()).isEqualTo(styledElement().normalised())
+        assertThat(rebuilt!!.slides.single().elements.single()).isEqualTo(deck.slides.single().elements.single())
     }
 
     @Test
@@ -963,7 +989,7 @@ class StoryComposerAutosaveTest {
 
         val rebuilt = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).toDeck()
 
-        assertThat(rebuilt!!.slides.single().stickers.single()).isEqualTo(placedSticker().normalised())
+        assertThat(rebuilt!!.slides.single().stickers.single()).isEqualTo(deck.slides.single().stickers.single())
     }
 
     @Test
@@ -1027,5 +1053,71 @@ class StoryComposerAutosaveTest {
         )
 
         assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
+    }
+
+    @Test
+    fun `the named audience list survives the draft round trip and counts as a change`() {
+        val first = StoryComposerAutosave.resolve(
+            deck = textDeck("salut"),
+            visibility = StoryVisibility.ONLY,
+            repostOfId = null,
+            nowIso = now,
+            previous = null,
+            visibilityUserIds = listOf("a", "b"),
+        ) as StoryDraftPersist.Save
+        assertThat(first.snapshot.visibilityUserIds).containsExactly("a", "b").inOrder()
+
+        val unchanged = StoryComposerAutosave.resolve(
+            deck = textDeck("salut"),
+            visibility = StoryVisibility.ONLY,
+            repostOfId = null,
+            nowIso = now,
+            previous = first.snapshot,
+            visibilityUserIds = listOf("a", "b"),
+        )
+        assertThat(unchanged).isEqualTo(StoryDraftPersist.None)
+
+        val changed = StoryComposerAutosave.resolve(
+            deck = textDeck("salut"),
+            visibility = StoryVisibility.ONLY,
+            repostOfId = null,
+            nowIso = now,
+            previous = first.snapshot,
+            visibilityUserIds = listOf("a"),
+        )
+        assertThat(changed).isInstanceOf(StoryDraftPersist.Save::class.java)
+    }
+
+    @Test
+    fun `a legacy blob without the list decodes to an empty audience`() {
+        val legacy = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<StoryComposerDraftSnapshot>(
+            """{"slides":[{"id":"s1","text":"x"}],"selectedId":"s1","visibility":"FRIENDS"}""",
+        )
+        assertThat(legacy.visibilityUserIds).isEmpty()
+    }
+
+    @Test
+    fun `frame, border and language survive the draft snapshot round-trip`() {
+        val element = StoryTextElement(
+            id = "t1",
+            text = "Bonjour",
+            outline = StoryTextOutline(width = 6f, color = "FF3B30"),
+            frame = StoryTextFrame(StoryTextFrameShape.CLOUD, paddingScale = 2f, borderWidth = 3f, borderColor = "007AFF"),
+            sourceLanguage = "es",
+        )
+        val deck = StorySlideDeck.single("s1").addTextElementToSelected(element)
+        val rebuilt = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).toDeck()!!
+        assertThat(rebuilt.selectedSlide.elements.single()).isEqualTo(deck.selectedSlide.elements.single())
+    }
+
+    @Test
+    fun `a draft saved before frames existed restores to the neutral frame`() {
+        val legacy = StoryDraftTextElementSnapshot(id = "t1", text = "old")
+        val deck = StorySlideDeck.single("s1").addTextElementToSelected(StoryTextElement(id = "t1", text = "old"))
+        val snap = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now)
+        val withLegacy = snap.copy(slides = snap.slides.map { it.copy(elements = listOf(legacy)) })
+        val restored = withLegacy.toDeck()!!.selectedSlide.elements.single()
+        assertThat(restored.frame).isEqualTo(StoryTextFrame())
+        assertThat(restored.sourceLanguage).isNull()
     }
 }

@@ -16,7 +16,13 @@ public enum class SignupField { DISPLAY_NAME, EMAIL, PHONE, PASSWORD }
 public enum class SignupFieldIssue {
     /** Vide, ou sans une seule lettre — le miroir de `(?=.*\p{L})`. */
     DISPLAY_NAME_REQUIRED,
+
+    /** Une saisie de moins de [RegistrationIdentity.NAME_MIN] caractères rognés : « A » n'est pas un nom, « Al » en est un. */
+    DISPLAY_NAME_TOO_SHORT,
     DISPLAY_NAME_TOO_LONG,
+
+    /** Un caractère hors du jeu de la passerelle : lettres, marques, espaces, apostrophes, point, tiret. */
+    DISPLAY_NAME_INVALID_CHARACTERS,
     EMAIL_INVALID,
     PASSWORD_TOO_SHORT,
 
@@ -120,7 +126,9 @@ public data class SignupForm(
     /** Nom affiché ET pseudo existent et tiennent leurs bornes : c'est alors que paraît le mot de passe. */
     public val isIdentityDefined: Boolean
         get() = SignupFieldValidation.isEmailValidLocally(email.trim()) &&
-            effectiveDisplayName.let { it.isNotEmpty() && it.length <= DISPLAY_NAME_MAX_LENGTH && it.any(Char::isLetter) } &&
+            effectiveDisplayName.let {
+                RegistrationIdentity.isNameLongEnough(it) && it.length <= DISPLAY_NAME_MAX_LENGTH && it.any(Char::isLetter)
+            } &&
             effectiveUsername.isNotEmpty() && usernameRefusal == null
 
     /** Le numéro est REQUIS par l'écran (#9343) alors que la requête reste valide sans lui côté serveur. */
@@ -257,27 +265,26 @@ public data class SignupForm(
     }
 
     /**
-     * Miroir de la seule règle de `personNamePatternSource`
-     * (`^(?=.*\p{L})[\p{L}\p{M}\s'’ʼ.-]+$`, packages/shared/types/api-schemas/auth.ts)
-     * qui vaille comme garde d'écran : **au moins une lettre**.
-     *
-     * Le jeu de caractères, lui, n'est PAS miroité : il borne `firstName` /
-     * `lastName`, pas `displayName`, que les schémas partagés ne contraignent
-     * qu'en longueur (`api-schemas/user.ts`, `maxLength: 100`). Un miroir plus
-     * strict que le serveur refuserait ici des noms que la passerelle accepte —
-     * et un refus client n'a pas de recours, là où un refus serveur revient
-     * typé et se pose sous le champ.
+     * Miroir de `personNamePatternSource`
+     * (`^(?=.*\p{L})[\p{L}\p{M}\s'’ʼ.-]+$`, packages/shared/types/api-schemas/auth.ts) : au moins
+     * une lettre, et rien d'autre que lettres, marques, espaces, apostrophes, point et tiret.
+     * La passerelle dérive `firstName` / `lastName` du nom affiché et applique ce motif ; le dire
+     * ici avant l'envoi évite d'avoir à montrer son refus.
      */
     private fun displayNameIssue(): SignupFieldIssue? {
         val trimmed = displayName.trim()
         return when {
             trimmed.length > DISPLAY_NAME_MAX_LENGTH -> SignupFieldIssue.DISPLAY_NAME_TOO_LONG
             trimmed.none(Char::isLetter) -> SignupFieldIssue.DISPLAY_NAME_REQUIRED
+            !RegistrationIdentity.isNameLongEnough(trimmed) -> SignupFieldIssue.DISPLAY_NAME_TOO_SHORT
+            !PERSON_NAME_CHARACTERS.matches(trimmed) -> SignupFieldIssue.DISPLAY_NAME_INVALID_CHARACTERS
             else -> null
         }
     }
 
     public companion object {
+        private val PERSON_NAME_CHARACTERS: Regex = Regex("""[\p{L}\p{M}\s'’ʼ.-]+""")
+
         /**
          * `PASSWORD_MIN_LENGTH` (packages/shared/utils/validation.ts) et le
          * `minLength: 6` du schéma Ajv de `registerRequestSchema` — la même

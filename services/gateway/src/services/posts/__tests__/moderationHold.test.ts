@@ -16,9 +16,14 @@ const EARLIER = new Date('2026-10-11T08:00:00.000Z');
 type Row = Record<string, unknown>;
 
 /** Un double qui rend la ligne demandée PAR SON IDENTIFIANT — jamais une suite de réponses à l'aveugle. */
-function prismaWith(rows: Readonly<Record<string, Row>>) {
+function prismaWith(rows: Readonly<Record<string, Row>>, blockedPairs: ReadonlyArray<readonly [string, string]> = []) {
   const findFirst = jest.fn<any>(async (args: { where: { id: string } }) => rows[args.where.id] ?? null);
-  return { prisma: { post: { findFirst } } as any, findFirst };
+  const findMany = jest.fn<any>(async (args: { where: { id: { in: string[] } } }) => args.where.id.in.flatMap((id) => rows[id] ?? []));
+  const user = {
+    findFirst: jest.fn<any>(async (args: { where: { OR: Array<{ id: string; blockedUserIds: { has: string } }> } }) =>
+      args.where.OR.some((c) => blockedPairs.some(([a, b]) => a === c.id && b === c.blockedUserIds.has)) ? { id: 'blocked' } : null),
+  };
+  return { prisma: { post: { findFirst, findMany }, user } as any, findFirst };
 }
 
 const hold = (over: Row = {}): Row => ({
@@ -111,6 +116,16 @@ describe('mayRepostSource — on ne republie que ce qu’on peut lire, et jamais
       [SOURCE]: hold({ id: SOURCE, visibility: 'PUBLIC', originalRepostOfId: ROOT }),
       [ROOT]: hold({ id: ROOT, moderationHiddenAt: EARLIER }),
     });
+    expect(await mayRepostSource(prisma, SOURCE, OTHER)).toBe(false);
+  });
+
+  it("refuse la source d'un auteur qui a bloqué le republieur — ni republier ni citer (#14242)", async () => {
+    const { prisma } = prismaWith({ [SOURCE]: hold({ id: SOURCE, visibility: 'PUBLIC' }) }, [[AUTHOR, OTHER]]);
+    expect(await mayRepostSource(prisma, SOURCE, OTHER)).toBe(false);
+  });
+
+  it('refuse la source d’un auteur que le republieur a bloqué (#14242)', async () => {
+    const { prisma } = prismaWith({ [SOURCE]: hold({ id: SOURCE, visibility: 'PUBLIC' }) }, [[OTHER, AUTHOR]]);
     expect(await mayRepostSource(prisma, SOURCE, OTHER)).toBe(false);
   });
 

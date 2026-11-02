@@ -20,6 +20,8 @@
 
 import { ADMIN_METRICS_CLIENT_EVENTS, ADMIN_METRICS_SERVER_EVENTS } from './admin-metrics-event-names.js';
 import { CALL_RECORDING_CLIENT_EVENTS, CALL_RECORDING_SERVER_EVENTS } from './call-recording-event-names.js';
+import { E2EE_CLIENT_EVENTS, E2EE_SERVER_EVENTS } from './e2ee-event-names.js';
+import { RELATION_SERVER_EVENTS } from './relation-event-names.js';
 import { SESSION_SERVER_EVENTS } from './session-event-names.js';
 import { VIEWING_CLIENT_EVENTS, VIEWING_SERVER_EVENTS } from './viewing-event-names.js';
 
@@ -29,6 +31,12 @@ import { VIEWING_CLIENT_EVENTS, VIEWING_SERVER_EVENTS } from './viewing-event-na
 export const ROOMS = {
   conversation: (id: string) => `conversation:${id}`,
   user: (id: string) => `user:${id}`,
+  /**
+   * Un appareil E2EE enrôlé (#3706) : seule sa socket, liée à sa session, y entre.
+   * La room nomme la GÉNÉRATION (place + registrationId) : une place se reprend
+   * par une autre installation, qui ne partage jamais la room de l'ancienne (#12592).
+   */
+  device: (userId: string, deviceId: number, registrationId: number) => `device:${userId}:${deviceId}:${registrationId}`,
   feed: (id: string) => `feed:${id}`,
   call: (id: string) => `call:${id}`,
   post: (id: string) => `post:${id}`,
@@ -169,6 +177,8 @@ export const SERVER_EVENTS = {
    * cache entries. */
   CONVERSATION_JOIN_ERROR: 'conversation:join-error',
   ...SESSION_SERVER_EVENTS,
+  ...RELATION_SERVER_EVENTS,
+  ...E2EE_SERVER_EVENTS,
   ERROR: 'error',
   NOTIFICATION_NEW: 'notification:new',
   NOTIFICATION_READ: 'notification:read',
@@ -321,6 +331,15 @@ export const SERVER_EVENTS = {
   PARTICIPANT_RIGHTS_UPDATED: 'participant:rights-updated',
   CONVERSATION_UPDATED: 'conversation:updated',
   /**
+   * Le régime de chiffrement d'une conversation a basculé (#12522) : activé ou
+   * désactivé, avec sa nouvelle époque. Part vers la room PERSONNELLE de chaque
+   * membre actif, pour que ses appareils changent de régime sans recharger
+   * (composeur, scellement, features serveur). Charge :
+   * `ConversationEncryptionChangedEventData`. Un ancien client l'ignore et lit
+   * toujours l'avis système et `conversation:updated`.
+   */
+  CONVERSATION_ENCRYPTION_CHANGED: 'conversation:encryption-changed',
+  /**
    * Emitted to the user-rooms of EVERY participant of a freshly-created
    * conversation — INCLUDING the creator. Replaces the previous overload
    * of `NOTIFICATION_NEW` (which was only sent to invitees, leaving the
@@ -427,6 +446,12 @@ export const SERVER_EVENTS = {
    * à l'adresse de l'auteur de l'envoi. Voir `AttachmentReadyEventData`.
    */
   ATTACHMENT_READY: 'attachment:ready',
+  /**
+   * #13608 — une pièce a été supprimée seule d'un message. Adressé à la room de
+   * la conversation ; charge minimale, jamais le contenu de la pièce. Voir
+   * `AttachmentDeletedEventData`.
+   */
+  ATTACHMENT_DELETED: 'attachment:deleted',
   /**
    * UNE seule traduction quand une seule langue est demandée
    */
@@ -661,6 +686,7 @@ export const CLIENT_EVENTS = {
   TYPING_STOP: 'typing:stop',
   ...VIEWING_CLIENT_EVENTS,
   ...ADMIN_METRICS_CLIENT_EVENTS,
+  ...E2EE_CLIENT_EVENTS,
   // `USER_STATUS: 'user:status'` a été retiré d'ici (cycle 60) : c'est un
   // événement SERVEUR→client (`SERVER_EVENTS.USER_STATUS`, écouté par
   // `presence.service.ts`, `websocket.service.ts`, iOS `PresenceManager`), et

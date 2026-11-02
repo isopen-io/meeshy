@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: socle-pipeline-push-et-cycle-de-vie — canaux de notification par categorie. -->
+<resources>
+    <string name="push_channel_social_name">Social</string>
+    <string name="push_channel_social_description">J’aime, commentaires, stories et contacts</string>
+    <string name="push_channel_system_name">Compte et sécurité</string>
+    <string name="push_channel_system_description">Alertes de sécurité, signalements et messages du service</string>
+    <string name="push_channel_silent_name">Notifications silencieuses</string>
+    <string name="push_channel_silent_description">Livrées sans bruit pendant les heures calmes ou quand une catégorie est coupée</string>
+</resources>

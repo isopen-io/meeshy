@@ -85,8 +85,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "composer.object.editor.mute",
+          "catalog": "ui",
+          "iosKey": "media.video.mute",
           "androidName": "reels_mute",
           "status": "adopted"
         },
@@ -107,8 +107,14 @@
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "a11y.post.unlike",
+          "androidName": "reels_unlike",
+          "status": "adopted"
+        },
+        {
           "catalog": "ui",
-          "iosKey": "media.video.unmute",
+          "iosKey": "story.timeline.transport.unmute",
           "androidName": "reels_unmute",
           "status": "adopted"
         }

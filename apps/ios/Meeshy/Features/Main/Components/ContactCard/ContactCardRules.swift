@@ -183,3 +183,35 @@ enum ContactCardLabel {
         }
     }
 }
+
+// MARK: - Où une carte a le droit de résoudre ses identifiants (#13622)
+
+/// Ce que la carte sait de la conversation qui la porte. Seule une conversation
+/// SERVEUR-LISIBLE (`clear`) autorise `POST /contacts/resolve` : les numéros et
+/// e-mails d'une vCard reçue en `e2ee` ne partent jamais au serveur, et un mode
+/// non établi (`unknown`) ferme comme `endToEnd`.
+nonisolated enum ContactCardResolutionScope: Equatable, Sendable {
+    case clear
+    case endToEnd
+    case unknown
+
+    var mayResolveOnServer: Bool { self == .clear }
+
+    /// Le bout en bout se lit sur le message porteur : mode servi, drapeau
+    /// chiffré, ou clair que cet appareil a déchiffré.
+    static func of(message: MeeshyMessage) -> ContactCardResolutionScope {
+        let sealed = Self.isEndToEnd(message.encryptionMode)
+            || message.isEncrypted
+            || message.isContentDecryptedOnDevice
+        return sealed ? .endToEnd : .clear
+    }
+
+    private static func isEndToEnd(_ mode: String?) -> Bool {
+        (mode ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == E2EEWire.mode
+    }
+
+    /// Une pièce qui se dit chiffrée ferme, quoi que dise le reste.
+    func sealed(by attachment: MessageAttachment) -> ContactCardResolutionScope {
+        attachment.isEncrypted || Self.isEndToEnd(attachment.encryptionMode) ? .endToEnd : self
+    }
+}

@@ -68,7 +68,7 @@ internal fun CallAudioStage(
             fontWeight = FontWeight.SemiBold,
             color = CallPalette.Ink,
         )
-        state.durationLabel?.let { clock -> CallStageDuration(clock, state.durationSeconds) }
+        state.durationLabel?.let { clock -> CallStageDuration(clock, state.durationSeconds, live = state.hasLiveClock) }
         CallStagePills(state, signalingDegraded)
     }
 }
@@ -80,16 +80,18 @@ internal fun CallAvatarPair(name: String, peer: CallPeerVisual, size: Dp, modifi
     Box(modifier = modifier.clearAndSetSemantics { }) {
         CallAvatarDisc(name = name, size = size, avatarUrl = peer.avatarUrl, ring = peer.ring)
         CallAvatarDisc(
-            name = stringResource(R.string.call_avatar_you),
+            name = peer.localBadgeName(stringResource(R.string.call_avatar_you)),
             size = badge,
-            avatarUrl = null,
+            avatarUrl = peer.selfAvatarUrl,
             modifier = Modifier.align(Alignment.BottomEnd).offset(x = badge * 0.22f, y = badge * 0.12f),
         )
     }
 }
 
 @Composable
-private fun CallStageDuration(clock: String, seconds: Long) {
+private fun CallStageDuration(fixedClock: String, fixedSeconds: Long, live: Boolean) {
+    val seconds = liveOrFixedSeconds(live, LocalCallLiveSeconds.current, fixedSeconds)
+    val clock = if (live) clockLabel(seconds) else fixedClock
     val resources = LocalContext.current.resources
     val description = stringResource(R.string.call_duration_a11y)
     val spoken = remember(seconds, resources) { CallSpokenDuration.spoken(resources, seconds) }

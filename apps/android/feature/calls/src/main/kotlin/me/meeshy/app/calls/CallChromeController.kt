@@ -18,6 +18,8 @@ internal data class CallChromeState(
     val isRevealed: Boolean = true,
     val fingersDown: Int = 0,
     val hiddenAtMillis: Long? = null,
+    /** La vignette à la une d'un appel de groupe occupe tout l'écran : l'en-tête et la pilule s'effacent. */
+    val isStageFullScreen: Boolean = false,
 )
 
 /**
@@ -36,7 +38,7 @@ internal class CallChromeController(private val clock: () -> Long = System::curr
         val mayHide = CallChromeVisibility.mayToggleByTap(isVideoStage, isTouchExplorationOn)
         return CallChromeVisibility(
             isRevealed = current.isRevealed || !mayHide,
-            isStageFullScreen = false,
+            isStageFullScreen = current.isStageFullScreen,
             isModeActive = current.layer.freesTheScreen,
         )
     }
@@ -63,6 +65,10 @@ internal class CallChromeController(private val clock: () -> Long = System::curr
                 CallChromeInteraction.Tap -> it
             }
         }
+    }
+
+    fun setStageFullScreen(isFullScreen: Boolean) {
+        _state.update { if (it.isStageFullScreen == isFullScreen) it else it.copy(isStageFullScreen = isFullScreen) }
     }
 
     fun toggleMenu() = update { it.togglingMenu() }

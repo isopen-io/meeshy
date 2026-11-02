@@ -55,9 +55,9 @@ final class StoryViewerPositionTests: XCTestCase {
 
     /// Plus aucun `groups[currentGroupIndex]` après un `-= 1` dans le lecteur.
     func test_storyViewer_noLongerSubscriptsAfterDecrementingTheGroup() throws {
-        for path in ["Meeshy/Features/Main/Views/StoryViewerView.swift",
-                     "Meeshy/Features/Main/Views/StoryViewerView+Navigation.swift",
-                     "Meeshy/Features/Main/Views/StoryViewerView+Content.swift"] {
+        for path in ["Meeshy/Features/Stories/Views/StoryViewerView.swift",
+                     "Meeshy/Features/Stories/Views/StoryViewerView+Navigation.swift",
+                     "Meeshy/Features/Stories/Views/StoryViewerView+Content.swift"] {
             let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
             XCTAssertFalse(source.contains("currentGroupIndex -= 1"), path)
         }
@@ -78,9 +78,9 @@ final class StoryViewerPositionTests: XCTestCase {
     /// Plus aucun `groups[currentGroupIndex]` après un `+= 1` : les deux sites (tap / avance auto, fin de
     /// balayage) atterrissent par `landOnNextGroup()`, borné.
     func test_storyViewer_noLongerSubscriptsAfterIncrementingTheGroup() throws {
-        for path in ["Meeshy/Features/Main/Views/StoryViewerView.swift",
-                     "Meeshy/Features/Main/Views/StoryViewerView+Navigation.swift",
-                     "Meeshy/Features/Main/Views/StoryViewerView+Content.swift"] {
+        for path in ["Meeshy/Features/Stories/Views/StoryViewerView.swift",
+                     "Meeshy/Features/Stories/Views/StoryViewerView+Navigation.swift",
+                     "Meeshy/Features/Stories/Views/StoryViewerView+Content.swift"] {
             let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
             XCTAssertFalse(source.contains("currentGroupIndex += 1"), path)
         }
@@ -89,7 +89,7 @@ final class StoryViewerPositionTests: XCTestCase {
     /// Le groupe qui a ouvert le lecteur disparaît pendant qu'on regarde un
     /// autre auteur : le conteneur tombait sur un spinner que rien ne relançait.
     func test_container_closesWhenItsGroupVanishesAfterPresenting() throws {
-        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerContainer.swift"))
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerContainer.swift"))
         XCTAssertTrue(source.contains(".onAppear { hasPresentedViewer = true }"))
         XCTAssertTrue(source.contains("} else if hasPresentedViewer {"))
     }

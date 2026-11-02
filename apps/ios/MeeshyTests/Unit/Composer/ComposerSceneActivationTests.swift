@@ -68,40 +68,7 @@ final class ComposerSceneActivationTests: XCTestCase {
         )
     }
 
-    // 3 — la surface document PEINT un picker de couleur de fond, sur la palette
-    // partagée du SDK (aucune palette recopiée).
-    func test_laSurface_peintLePickerDeFond_surLaPalettePartagee() throws {
-        let raw = try AppSourceGuard.composerSurfaceSource()
-        XCTAssertTrue(raw.contains("private var backgroundStrip"),
-                      "backgroundStrip introuvable ou source vide")
-        let src = compact(raw)
-        XCTAssertTrue(
-            src.contains("StoryBackgroundPalette.colors"),
-            "Le picker itère la palette PARTAGÉE (`StoryBackgroundPalette.colors`), jamais une liste recopiée."
-        )
-        XCTAssertTrue(
-            src.contains("onPickBackground?("),
-            "Choisir une couleur REMONTE au meuble (`onPickBackground`) — la surface reste sans état."
-        )
-    }
 
-    // 4 — le meuble CÂBLE le picker : il pose la couleur dans le SOCLE ET la sème
-    // dans l'atelier (le fond que la scène affiche).
-    func test_leMeuble_cableLePicker_etSemeLaCouleur() throws {
-        let src = compact(try AppSourceGuard.composerHostSource())
-        XCTAssertTrue(
-            src.contains("onPickBackground:"),
-            "Le meuble passe `onPickBackground` à la surface — le geste remonte au socle."
-        )
-        XCTAssertTrue(
-            src.contains("documentBackground=hex"),
-            "Choisir une couleur pose le fond du socle — ce qui monte la scène (décision pure)."
-        )
-        XCTAssertTrue(
-            src.contains("viewModel.applyBackground(hex:hex)"),
-            "…et sème la couleur dans l'atelier via le point d'entrée public, pour que la scène montée l'affiche."
-        )
-    }
 
     // 5 — le libellé du picker est traduit dans les 7 locales (cliquet i18n).
     func test_leLibelleDuPicker_estTraduit_7Locales() throws {

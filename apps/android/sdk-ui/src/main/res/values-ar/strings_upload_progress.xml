@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sdk_upload_progress">%1$s / %2$s %3$s</string>
+    <string name="sdk_upload_unit_kb">ك.ب</string>
+    <string name="sdk_upload_unit_mb">م.ب</string>
+    <string name="sdk_upload_unit_gb">ج.ب</string>
+    <string name="sdk_upload_progress_a11y">جارٍ الإرسال، %1$d بالمئة</string>
+</resources>

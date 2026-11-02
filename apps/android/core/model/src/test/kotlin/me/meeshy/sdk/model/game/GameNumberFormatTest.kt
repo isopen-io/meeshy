@@ -26,33 +26,33 @@ class GameNumberFormatTest {
     }
 
     @Test
-    fun `compactCount garde le chiffre plein sous dix mille`() {
-        assertThat(GameNumberFormat.compactCount(9_999, en)).isEqualTo("9,999")
-        assertThat(GameNumberFormat.compactCount(0, fr)).isEqualTo("0")
+    fun `tightCount garde le chiffre plein sous dix mille`() {
+        assertThat(GameNumberFormat.tightCount(9_999, en)).isEqualTo("9,999")
+        assertThat(GameNumberFormat.tightCount(0, fr)).isEqualTo("0")
     }
 
     @Test
-    fun `compactCount ecrit 8,7 k des dix mille en francais`() {
-        assertThat(GameNumberFormat.compactCount(8_700, fr)).isEqualTo("8 700")
-        assertThat(GameNumberFormat.compactCount(10_000, fr)).isEqualTo("10 k")
-        assertThat(GameNumberFormat.compactCount(12_340, fr)).isEqualTo("12,3 k")
-        assertThat(GameNumberFormat.compactCount(987_000, fr)).isEqualTo("987 k")
+    fun `tightCount ecrit 8,7 k des dix mille en francais`() {
+        assertThat(GameNumberFormat.tightCount(8_700, fr)).isEqualTo("8 700")
+        assertThat(GameNumberFormat.tightCount(10_000, fr)).isEqualTo("10 k")
+        assertThat(GameNumberFormat.tightCount(12_340, fr)).isEqualTo("12,3 k")
+        assertThat(GameNumberFormat.tightCount(987_000, fr)).isEqualTo("987 k")
     }
 
     @Test
-    fun `compactCount suit la locale en anglais`() {
-        assertThat(GameNumberFormat.compactCount(12_340, en)).isEqualTo("12.3K")
-        assertThat(GameNumberFormat.compactCount(2_500_000, en)).isEqualTo("2.5M")
+    fun `tightCount suit la locale en anglais`() {
+        assertThat(GameNumberFormat.tightCount(12_340, en)).isEqualTo("12.3K")
+        assertThat(GameNumberFormat.tightCount(2_500_000, en)).isEqualTo("2.5M")
     }
 
     @Test
-    fun `compactCount passe au palier suivant quand l arrondi atteint mille`() {
-        assertThat(GameNumberFormat.compactCount(999_999, en)).isEqualTo("1M")
+    fun `tightCount passe au palier suivant quand l arrondi atteint mille`() {
+        assertThat(GameNumberFormat.tightCount(999_999, en)).isEqualTo("1M")
     }
 
     @Test
-    fun `compactCount ecrit des chiffres arabes en arabe`() {
-        val text = GameNumberFormat.compactCount(12_340, arabic)
+    fun `tightCount ecrit des chiffres arabes en arabe`() {
+        val text = GameNumberFormat.tightCount(12_340, arabic)
         assertThat(text.none { it in '0'..'9' }).isTrue()
     }
 }

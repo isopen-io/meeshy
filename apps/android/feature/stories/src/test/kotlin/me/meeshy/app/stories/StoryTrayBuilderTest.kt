@@ -171,4 +171,17 @@ class StoryTrayBuilderTest {
         assertThat(ring.displayedStoryId).isEqualTo("s1")
         assertThat(ring.style.emphasis).isEqualTo(StoryRingEmphasis.Unread)
     }
+
+    @Test
+    fun `a ring carries the served presence undigested so the live map can cover and decay it`() {
+        val served = me.meeshy.sdk.model.UserPresence(isOnline = true, lastActiveAt = isoAgo(0))
+        val tray = StoryTrayBuilder.build(
+            groups = listOf(group("u2", viewed = false).copy(authorPresence = served), group("u3", viewed = false)),
+            currentUserId = "me",
+            mediaBaseUrl = null,
+            nowMillis = now,
+        )
+        assertThat(tray.others[0].servedPresence).isEqualTo(served)
+        assertThat(tray.others[1].servedPresence).isNull()
+    }
 }

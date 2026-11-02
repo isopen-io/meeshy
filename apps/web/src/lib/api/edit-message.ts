@@ -1,6 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query';
 import * as messagesEndpoints from '@meeshy/shared/api/endpoints/messages';
 
+import { canSendPlaintext } from '@/lib/end-to-end-regime-ledger';
+
 import { findCachedConversation } from './conversations';
 import type { ApiResult, HttpRequest } from './http';
 import { editLastMessage } from './list-preview';
@@ -69,6 +71,8 @@ export async function performMessageEdit(params: {
   const { queryClient, conversationId, message, transport } = params;
   const content = params.content.trim();
   if (content === '' || content === message.content.trim()) return 'unchanged';
+  /* #12949 — un nouveau texte est un envoi en clair : une conversation vue e2ee le retient comme `sendMessage`. */
+  if (!canSendPlaintext({ conversationId })) return 'refused';
 
   const { applyMessageEdited } = await import('./realtime-message-mutations');
   const before = editedFieldsOf(findCachedThreadMessage(queryClient, conversationId, message.id) ?? message);

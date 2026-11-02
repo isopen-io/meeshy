@@ -292,7 +292,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Pure `:core:model` `SavedAccount` + `SavedAccounts` (faithful port of iOS `AuthManager`'s
       saved-account logic, `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift`, +
       `SavedAccount`, `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthModels.swift`, + `LoginView`'s
-      picker, `apps/ios/Meeshy/Features/Main/Views/LoginView.swift`). `SavedAccount` (id/username/
+      picker, `apps/ios/Meeshy/Features/Auth/Views/LoginView.swift`). `SavedAccount` (id/username/
       displayName?/avatarUrl?/lastActiveAtMillis) exposes `shortName` (iOS `displayName ?? username`,
       **hardened** so a blank display name also falls back to the username — a row never renders empty).
       `SavedAccounts` is a pure SSOT of immutable list→list transforms iOS scatters as mutating methods
@@ -440,7 +440,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **countdown state-machine + strict email gate core shipped** (slice
       `auth-magic-link-countdown`, 2026-07-21). Pure `:core:model` `MagicLinkCountdown`
       (immutable value + pure `start`/`tick` transitions) + `MagicLinkEmail` (faithful
-      port of iOS `MagicLinkView`, `apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift`:
+      port of iOS `MagicLinkView`, `apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift`:
       the `isValidEmail` regex, the `startCountdown` per-second loop that flips `linkExpired`
       at zero, `formattedCountdown` `"m:ss"`, and the resend `.disabled(countdownRemaining > 0
       || isLoading)` gate). `MagicLinkCountdown.start(expiresInSeconds)` seeds a fresh

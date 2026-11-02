@@ -122,4 +122,41 @@ class FloatingButtonDragTest {
         val moved = applyDragDelta(current, deltaXPx = 50f, deltaYPx = 50f, travelXPx = 0f, travelYPx = 0f)
         assertEquals(current, moved)
     }
+
+    // --- migration de l'ancien format (x,y) vers la place cote + hauteur ---------------
+
+    @Test
+    fun `a value written by the previous Android build is read as the legacy x,y form`() {
+        val stored = FloatingButtonStoredPosition.parse(encodePosition(FloatingButtonPosition(0f, 0.82f)))
+        assertEquals(FloatingButtonStoredPosition.Legacy(0f, 0.82f), stored)
+    }
+
+    @Test
+    fun `a legacy value keeps its side and lands where the old bands put it`() {
+        val geometry = FloatingButtonGeometry(400f, 800f, me.meeshy.sdk.model.layout.EdgeInsetsDp.Zero)
+        val left = geometry.centerForStorage("0.0,0.82", FloatingButtonGeometry.DEFAULT_FEED_STORAGE)
+        val right = geometry.centerForStorage("1.0,0.0", FloatingButtonGeometry.DEFAULT_MENU_STORAGE)
+        assertEquals(geometry.x(FloatingButtonSide.LEADING), left.x, 0.001f)
+        assertEquals(272f + (664f - 272f) * 0.82f, left.y, 0.01f)
+        assertEquals(geometry.x(FloatingButtonSide.TRAILING), right.x, 0.001f)
+        assertEquals(272f, right.y, 0.001f)
+    }
+
+    @Test
+    fun `an out of range legacy value is clamped, never rejected`() {
+        assertEquals(FloatingButtonStoredPosition.Legacy(1f, 0f), FloatingButtonStoredPosition.parse("1.5,-2"))
+    }
+
+    @Test
+    fun `a legacy value in scientific notation is still read`() {
+        assertEquals(FloatingButtonStoredPosition.Legacy(1.0E-4f, 1f), FloatingButtonStoredPosition.parse("1.0E-4,1.0"))
+    }
+
+    @Test
+    fun `a corrupt value is not a position`() {
+        assertEquals(null, FloatingButtonStoredPosition.parse("garbage"))
+        assertEquals(null, FloatingButtonStoredPosition.parse(null))
+        assertEquals(null, FloatingButtonStoredPosition.parse("NaN,0.5"))
+        assertEquals(null, FloatingButtonStoredPosition.parse("v3,Z,0.5"))
+    }
 }

@@ -45,7 +45,7 @@ case soundAuthorUsername
 
 B7 rend ce chemin OBLIGATOIRE (`StoryModels.swift:1830` : `try CanvasV3(migrating: self).encode(to: encoder)`), et `PostService.swift:479-480` encode `sanitizedEffects` par Codable. Les deux consommateurs de la provenance lisent précisément ces champs :
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/Controls/AudioForegroundChip.swift:185-188` : `AudioChipDisplay.resolve(soundId: audioObject.soundId, title: audioObject.name, authorUsername: audioObject.soundAuthorUsername)`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:1783-1787` : `if let bg, bg.soundId != nil { … resolve(soundId: bg.soundId, title: bg.name, authorUsername: bg.soundAuthorUsername) }`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift:1783-1787` : `if let bg, bg.soundId != nil { … resolve(soundId: bg.soundId, title: bg.name, authorUsername: bg.soundAuthorUsername) }`
 
 **Défaut** : une story publiée avec un son de bibliothèque revient du fil sans `soundId`, la chip retombe en `.waveform` (♫〰) et annonce « son original » pour un son emprunté — la violation exacte de B3.4 « `♫〰` si et seulement si son ORIGINAL ».
 
@@ -74,7 +74,7 @@ if let strokes = effects.drawingStrokes, !strokes.isEmpty,
 
 `CanvasV3` n'a aucun logement pour ce champ (`CanvasV3.swift:226-296`, `BackgroundSoundV3 { source, volume, bounds, transcriptions }`), et `CanvasV3(migrating:)` ne l'émet nulle part. Il était encodé avant B7 (`StoryModels.swift:1871`, aujourd'hui dans `RuntimeSnapshot` seulement). Consommateurs vivants :
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryAudioTranscript.swift:32` `for variant in effects?.backgroundAudioVariants ?? []` et `:56` `guard let variants = effects?.backgroundAudioVariants, !variants.isEmpty else { return nil }`
-- `apps/ios/Meeshy/Features/Main/Views/StoryContentPresence.swift:49` `if effects.backgroundAudioVariants?.isEmpty == false { return true }`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryContentPresence.swift:49` `if effects.backgroundAudioVariants?.isEmpty == false { return true }`
 
 La spec §E liste « **variantes TTS** » dans l'inventaire P2 dont chaque ligne doit rester verte, et qualifie une ligne perdue de « défaut bloquant, pas une note ».
 

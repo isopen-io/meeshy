@@ -22,6 +22,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { PackInstallationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { lensPacksRoutes } from '../../../routes/packs-lens';
 import { LensPacks } from '../../../services/packs/LensPacks';
 import { matches, type Row } from './sticker-packs.harness';
@@ -105,9 +106,9 @@ function lensTables() {
   };
 }
 
-type Harness = { app: FastifyInstance; tables: ReturnType<typeof lensTables>; normalizedAs: { assets: string[]; luts: string[] }; packs: LensPacks };
+type Harness = { app: FastifyInstance; tables: ReturnType<typeof lensTables>; normalizedAs: { assets: string[]; luts: string[] }; packs: LensPacks; broadcasts: Array<{ userId: string; event: PackInstallationUpdatedEventData }> };
 
-async function harness(options: { now?: string; communities?: readonly string[]; log?: { error: (message: string, context?: Record<string, unknown>) => void } } = {}): Promise<Harness> {
+async function harness(options: { now?: string; communities?: readonly string[]; log?: { error: (line: string) => void } } = {}): Promise<Harness> {
   const db = appearancePrisma();
   const tables = lensTables();
   const prisma = Object.assign(Object.create(db.prisma as object) as PrismaClient, {
@@ -118,9 +119,11 @@ async function harness(options: { now?: string; communities?: readonly string[];
   const now = () => new Date(options.now ?? '2026-11-10T00:00:00Z');
   const normalizedAs = { assets: [] as string[], luts: [] as string[] };
   const image = (bytes: Buffer) => ({ ok: true as const, image: { bytes, mimeType: 'image/png' as const, width: 64, height: 64, animated: false } });
+  const broadcasts: Harness['broadcasts'] = [];
   const packs = new LensPacks({
     prisma,
     now,
+    broadcast: (userId, event) => { broadcasts.push({ userId, event }); },
     ...(options.log === undefined ? {} : { log: options.log }),
     normalizeAsset: async (bytes) => {
       normalizedAs.assets.push(bytes.subarray(PNG.length).toString());
@@ -144,7 +147,7 @@ async function harness(options: { now?: string; communities?: readonly string[];
     audience: async () => ({ communityIds: new Set(options.communities ?? []), country: 'FR', languages: ['fr'] }),
   });
   await app.ready();
-  return { app, tables, normalizedAs, packs };
+  return { app, tables, normalizedAs, packs, broadcasts };
 }
 
 const submit = (h: Harness, body: object, user = ALICE) => h.app.inject({ method: 'POST', url: '/submissions', headers: { 'x-user': user }, payload: body });
@@ -414,8 +417,8 @@ describe('modération journalisée et retrait d’une lens publiée (audit de #1
   });
 
   it('si la ligne « non appliqué » ne s’écrit pas, le trou du journal se signale en erreur, nommé (#12329 R2)', async () => {
-    const errors: Array<{ message: string; context?: Record<string, unknown> }> = [];
-    const h = await harness({ log: { error: (message, context) => errors.push({ message, ...(context === undefined ? {} : { context }) }) } });
+    const errors: string[] = [];
+    const h = await harness({ log: { error: (line) => errors.push(String(line)) } });
     await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB);
     h.tables.lensPack.updateMany.mockImplementationOnce(async () => {
       h.tables.auditState.down = true;
@@ -424,9 +427,8 @@ describe('modération journalisée et retrait d’une lens publiée (audit de #1
 
     expect((await review(h, 'aurore-polaire', { decision: 'approve' })).statusCode).toBe(404);
     expect(h.tables.audit.map((entry) => entry.action)).toEqual(['LENS_PACK_APPROVE']);
-    expect(errors).toEqual([
-      expect.objectContaining({ context: expect.objectContaining({ action: 'LENS_PACK_APPROVE_NOT_APPLIED', slug: 'aurore-polaire', reason: 'concurrent-review' }) }),
-    ]);
+    expect(errors[0]).toBe('lens moderation journal incomplete: a gesture is journaled without its outcome');
+    expect(JSON.parse(errors[1]!)).toEqual({ action: 'LENS_PACK_APPROVE_NOT_APPLIED', slug: 'aurore-polaire', reason: 'concurrent-review' });
   });
 
   it('sans journal, rien n’est retiré', async () => {
@@ -543,6 +545,18 @@ describe('une lens retirée par erreur se rétablit par la modération (#12321)'
     expect(h.tables.packs[0]!.installCount).toBe(0);
     expect((await h.app.inject({ method: 'PUT', url: '/aurore-polaire/install' })).statusCode).toBe(200);
     expect(((await h.app.inject({ method: 'GET', url: '/installed' })).json().data as Array<{ slug: string }>).map((pack) => pack.slug)).toContain('aurore-polaire');
+  });
+
+  it('chaque compte dont l’installation est remise à zéro l’apprend sur ses appareils (pack:installation-updated)', async () => {
+    const h = await published();
+    expect((await h.app.inject({ method: 'PUT', url: '/aurore-polaire/install' })).statusCode).toBe(200);
+    await withdraw(h);
+
+    expect((await restore(h)).statusCode).toBe(200);
+
+    expect(h.broadcasts).toEqual([
+      { userId: ALICE, event: { domain: 'lens', slug: 'aurore-polaire', installed: false, at: '2026-11-10T00:00:00.000Z' } },
+    ]);
   });
 
   it('un rétablissement perdu dans une course, ou dont l’écriture lève, est journalisé comme non appliqué', async () => {

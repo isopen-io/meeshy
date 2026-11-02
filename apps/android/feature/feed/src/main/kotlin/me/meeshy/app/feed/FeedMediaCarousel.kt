@@ -120,7 +120,7 @@ internal fun FeedMediaCarousel(images: List<FeedPostImage>, onImageTap: ((Int) -
 }
 
 @Composable
-private fun PageCounter(position: Int, count: Int, modifier: Modifier = Modifier) {
+internal fun PageCounter(position: Int, count: Int, modifier: Modifier = Modifier) {
     Text(
         text = stringResource(R.string.feed_media_page_counter, position, count),
         style = MaterialTheme.typography.labelSmall,
@@ -135,7 +135,7 @@ private fun PageCounter(position: Int, count: Int, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun PageArrow(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
+internal fun PageArrow(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
     IconButton(onClick = onClick, modifier = modifier.padding(horizontal = 4.dp)) {
         Box(
             modifier = Modifier
@@ -151,7 +151,7 @@ private fun PageArrow(icon: ImageVector, label: String, modifier: Modifier, onCl
 
 /** Sous les pages, sur le fond de la carte : posées dedans, elles disputeraient le bas à la légende. */
 @Composable
-private fun PageDots(count: Int, current: Int) {
+internal fun PageDots(count: Int, current: Int) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         repeat(count) { position ->
             val active = position == current

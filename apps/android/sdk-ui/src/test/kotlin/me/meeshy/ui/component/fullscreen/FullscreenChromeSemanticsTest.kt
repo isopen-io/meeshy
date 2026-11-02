@@ -231,6 +231,28 @@ class FullscreenChromeSemanticsTest {
     }
 
     @Test
+    fun `une action a geste sequence est un noeud fusionnant, bouton, avec son etat et son compteur`() {
+        showAction {
+            FullscreenActionButton(
+                icon = FullscreenChromeSymbol.LikeActive.icon,
+                label = "Unlike",
+                onClick = {},
+                caption = "2",
+                accessibilityValue = "2",
+                isActive = true,
+                handlesTapViaGesture = true,
+            )
+        }
+
+        compose.onNodeWithContentDescription("Unlike", useUnmergedTree = true)
+            .assertHasClickAction()
+            .assertIsSelected()
+            .assert(SemanticsMatcher("fusionne ses descendants") { it.config.isMergingSemanticsOfDescendants })
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Button))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "2"))
+    }
+
+    @Test
     fun `la rangee d'emojis pose l'emoji touche`() {
         val reacted = mutableListOf<String>()
         val first = EmojiCatalog.defaultQuickReactions.first()

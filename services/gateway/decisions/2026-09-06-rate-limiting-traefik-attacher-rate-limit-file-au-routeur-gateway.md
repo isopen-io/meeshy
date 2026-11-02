@@ -18,8 +18,9 @@ quasi-totalité des fabriques de `middleware/rate-limiter.ts` posent
 **Décision** : Attacher `rate-limit@file` sur les routeurs `gateway` (prod) et
 `gateway-staging` — les deux partagent la même instance Traefik et le même
 provider `file`, `docker-compose.staging.yml` ne déclarant pas son propre
-service Traefik et rejoignant le réseau externe `meeshy-network` publié par la
-stack prod. Ordre `rate-limit@file,compress@file` : la limite de débit
+service Traefik et rejoignant un réseau externe que Traefik partage
+(`meeshy-network` à l'époque ; `meeshy-staging-edge` depuis #11451, le seul
+réseau commun aux deux stacks). Ordre `rate-limit@file,compress@file` : la limite de débit
 s'applique avant la compression, pour ne pas dépenser de CPU à compresser une
 réponse 429.
 
