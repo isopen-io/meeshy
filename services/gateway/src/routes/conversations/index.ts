@@ -9,6 +9,7 @@ import { registerSearchRoutes } from './search';
 import { registerGlobalMessageSearchRoute } from '../search/global-search';
 import { registerLeaveRoutes } from './leave';
 import { registerDeleteForMeRoutes } from './delete-for-me';
+import { registerObsoleteConversationRoute } from './obsolete';
 import { registerMessageRequestRoutes } from './message-request';
 import { registerBanRoutes } from './ban';
 import { registerStatsRoutes } from './stats';
@@ -47,6 +48,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   registerGlobalMessageSearchRoute(fastify, prisma, requiredAuth);
   registerLeaveRoutes(fastify, prisma, optionalAuth, requiredAuth);
   registerDeleteForMeRoutes(fastify, prisma, optionalAuth, requiredAuth);
+  registerObsoleteConversationRoute(fastify, prisma, requiredAuth);
   registerMessageRequestRoutes(fastify, prisma, requiredAuth);
   registerBanRoutes(fastify, prisma, optionalAuth, requiredAuth);
   registerStatsRoutes(fastify, prisma, requiredAuth);

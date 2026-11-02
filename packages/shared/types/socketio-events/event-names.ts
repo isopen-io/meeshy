@@ -407,6 +407,15 @@ export const SERVER_EVENTS = {
    */
   CONVERSATION_CLOSED: 'conversation:closed',
   /**
+   * #14643 — an admin made the conversation OBSOLETE
+   * (`DELETE /conversations/:id/obsolete`): its content is unreadable at once,
+   * it leaves every member's list, and its data is erased after `purgeAfter`.
+   * Emitted to each member's **user room** right AFTER `CONVERSATION_CLOSED`
+   * (which old clients keep handling — the conversation is also closed):
+   * a new client drops the conversation AND its cached messages.
+   */
+  CONVERSATION_OBSOLETED: 'conversation:obsoleted',
+  /**
    * PER-USER "delete for me" (`DELETE /conversations/:id/delete-for-me`):
    * removes the conversation from the caller's own device list only — the
    * conversation stays active for every other participant. Broadcast to the
