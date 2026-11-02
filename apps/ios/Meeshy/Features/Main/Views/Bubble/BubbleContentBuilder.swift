@@ -93,10 +93,9 @@ extension BubbleContent {
         // #8009 — ce que le toucher de la puce ouvrira, lu AVANT le sceau.
         self.viewOnceOpensFullscreen = isSealed && message.openableViewOnceMedia != nil
         let message = message.sealedForDisplay
-        let translations = withholdsContent ? [] : translations
-        let preferredTranslation = withholdsContent ? nil : preferredTranslation
-        let translatedAudios = withholdsContent ? [] : translatedAudios
-        let preferredAudioLangCode = withholdsContent ? nil : preferredAudioLangCode
+        let withholdsText = withholdsContent || message.deviceLayerIntegrity?.isMismatch == true
+        let (translations, preferredTranslation): ([MessageTranslation], MessageTranslation?) = withholdsText ? ([], nil) : (translations, preferredTranslation)
+        let (translatedAudios, preferredAudioLangCode): ([MessageTranslatedAudio], String?) = withholdsContent ? ([], nil) : (translatedAudios, preferredAudioLangCode)
 
         self.messageId = message.id
         self.contactCardScope = ContactCardResolutionScope.of(message: message)
@@ -309,7 +308,7 @@ extension BubbleContent {
         // déjà recueilli le geste, le contenu est là pour être lu.
         let protection = message.protection()
         self.protection = message.isViewOnceRevealed ? protection.withoutViewOnce : protection
-        self.isBurning = message.isBurning
+        (self.isBurning, self.deviceLayerIntegrity) = (message.isBurning, message.deviceLayerIntegrity)
         self.isViewOnceRevealed = message.isViewOnceRevealed && message.holdsViewOnce
         self.exitGate = message.exitGate
         self.captureVerdict = ContentCaptureVisibility.renderedVerdict(for: message)

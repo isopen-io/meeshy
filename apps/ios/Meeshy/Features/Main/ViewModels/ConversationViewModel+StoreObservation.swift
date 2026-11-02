@@ -89,7 +89,7 @@ extension ConversationViewModel {
                     // le clair vient de la base scellée de libsignal, posé en
                     // mémoire à chaque relecture (lecture locale, pas de
                     // déchiffrement : l'enveloppe a été ouverte une fois).
-                    let needsDecryption = mapped.contains(where: EndToEndThreadPlaintexts.awaitsPlaintext)
+                    let needsDecryption = mapped.contains(where: EndToEndThreadClear.awaitsVaultRead)
                     guard needsDecryption else {
                         // Même slice, aucun `await` entre les deux : les
                         // métadonnées suivent l'id que la bulle vient de prendre.
