@@ -23,7 +23,8 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import { withoutExpiredConnectionTraces } from '../../services/retention/retention-bounds';
 import { exportGame } from './export-game';
 import { exportReadingActivity } from './export-reading';
-import { exportRelations, relationsExportSchema } from './export-relations';
+import { relationsExportSchema } from './export-relations';
+import { exportRelations } from '../../services/relations/relationExport';
 import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
