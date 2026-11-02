@@ -48,12 +48,13 @@ describe('contre-audit #14107 — accepter une demande de GROUPE', () => {
     });
   });
 
-  it('une demande de groupe antérieure à la colonne de provenance ne relève aucun lien et ne touche aucun droit', async () => {
+  it('une demande de groupe antérieure à la colonne de provenance se lève sans relever aucun lien ni toucher aucun droit (audit 3, M-a)', async () => {
     const world = monde();
     const mineur = world.participant.rows.find((p) => p.id === 'p-mineur');
     if (mineur) delete mineur.messageRequestFromId;
     const verdict = await acceptMessageRequest(world.prisma as unknown as PrismaClient, { conversationId: GROUPE, userId: MINEUR, now: NOW });
-    expect(verdict).toEqual({ kind: 'not-pending' });
+    expect(verdict).toEqual({ kind: 'accepted', requesterId: null, requesterParticipantId: null, levelRaised: false });
+    expect(mineur?.messageRequestAt).toBeNull();
     expect(world.relations.relations()).toHaveLength(0);
     expect(world.participant.rows.find((p) => p.id === 'p-muet')?.permissions).toEqual({ canSendMessages: false, canSendImages: false });
   });

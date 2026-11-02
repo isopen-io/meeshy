@@ -593,6 +593,7 @@ const ar = {
   'discover.tab.discover': 'اكتشاف',
   'discover.tab.requests': 'الطلبات',
   'discover.tab.blocked': 'المحظورون',
+  'discover.tab.circles': 'الدوائر',
   'discover.tab.requests.count.one': 'الطلبات، {count} طلب وارد',
   'discover.tab.requests.count.other': 'الطلبات، {count} طلبات واردة',
   'discover.invite.title': 'دعوة عبر البريد الإلكتروني',

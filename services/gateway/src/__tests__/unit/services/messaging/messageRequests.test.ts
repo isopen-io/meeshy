@@ -11,6 +11,7 @@ import { FOUNDING_MEMBER_PERMISSIONS } from '../../../../services/participantRig
 import {
   MESSAGE_REQUEST_FILTER_THRESHOLD,
   acceptMessageRequest,
+  answerMessageRequest,
   decideDirectOpening,
   messageRequestRiskScore,
   requesterPermissionsFor,
@@ -59,7 +60,7 @@ const db = (world: ReturnType<typeof monde>) => world.prisma as unknown as Prism
 
 const demandeEnAttente = (overrides: Row = {}): Row[] => [
   { id: P_ALICE, conversationId: DM, userId: ALICE, role: 'creator', isActive: true, permissions: { ...FOUNDING_MEMBER_PERMISSIONS, canSendImages: false } },
-  { id: P_BOB, conversationId: DM, userId: BOB, role: 'member', isActive: true, messageRequestAt: new Date('2026-11-01T08:00:00.000Z'), messageRequestRisk: 10, ...overrides },
+  { id: P_BOB, conversationId: DM, userId: BOB, role: 'member', isActive: true, messageRequestAt: new Date('2026-11-01T08:00:00.000Z'), messageRequestRisk: 10, messageRequestFromId: ALICE, ...overrides },
 ];
 
 describe('decideDirectOpening — direct dès Connaissance, demande en dessous (MSG-01)', () => {
@@ -149,10 +150,11 @@ describe('messageRequestRiskScore — un score borné, renforcé pour un mineur 
 
 describe('servedMessageRequest — ce que le destinataire reçoit', () => {
   it('une demande se sert datée, filtrée selon son score, médias floutés', () => {
-    expect(servedMessageRequest({ messageRequestAt: new Date('2026-11-01T08:00:00.000Z'), messageRequestRisk: 80 })).toEqual({
+    expect(servedMessageRequest({ messageRequestAt: new Date('2026-11-01T08:00:00.000Z'), messageRequestRisk: 80, messageRequestFromId: ALICE })).toEqual({
       since: '2026-11-01T08:00:00.000Z',
       filtered: true,
       mediaBlurred: true,
+      answered: false,
     });
     expect(servedMessageRequest({ messageRequestAt: new Date('2026-11-01T08:00:00.000Z'), messageRequestRisk: null })?.filtered).toBe(false);
   });
@@ -160,6 +162,15 @@ describe('servedMessageRequest — ce que le destinataire reçoit', () => {
   it('une conversation ordinaire ne porte aucune demande', () => {
     expect(servedMessageRequest({})).toBeNull();
     expect(servedMessageRequest({ messageRequestAt: null })).toBeNull();
+  });
+
+  it('une demande à laquelle on a répondu reste à accepter : hors de la boîte, médias toujours floutés (audit 3, H1)', () => {
+    expect(servedMessageRequest({ messageRequestAt: null, messageRequestRisk: null, messageRequestFromId: ALICE })).toEqual({
+      since: null,
+      filtered: false,
+      mediaBlurred: true,
+      answered: true,
+    });
   });
 
 });
@@ -192,11 +203,41 @@ describe('acceptMessageRequest — accepter fait passer l\'expéditeur au moins 
     await expect(acceptMessageRequest(db(world), { conversationId: DM, userId: BOB, now: NOW })).resolves.toEqual({ kind: 'not-pending' });
   });
 
-  it('un blocage entre les deux interdit l\'acceptation', async () => {
+  it('un blocage entre les deux lève la demande sans relever de lien ni rouvrir de média (audit 3, M-a)', async () => {
     const world = monde({ participants: demandeEnAttente(), users: [] });
     world.users.rows.find((u) => u.id === ALICE)!.blockedUserIds = [BOB];
-    await expect(acceptMessageRequest(db(world), { conversationId: DM, userId: BOB, now: NOW })).resolves.toEqual({ kind: 'not-pending' });
-    expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestAt).toBeInstanceOf(Date);
+    await expect(acceptMessageRequest(db(world), { conversationId: DM, userId: BOB, now: NOW })).resolves.toEqual({ kind: 'accepted', requesterId: null, requesterParticipantId: null, levelRaised: false });
+    expect(world.participant.rows.find((p) => p.id === P_BOB)).toMatchObject({ messageRequestAt: null, messageRequestFromId: null });
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendImages: false });
+    expect(world.relations.relations()).toHaveLength(1);
+  });
+
+  it.each([['un majeur', BOB], ['un mineur', MINEUR]])('après une réponse de %s, « Accepter » reste possible et lui seul rouvre les médias (audit 3, H1)', async (_label, recipient) => {
+    const world = monde({ participants: demandeEnAttente({ userId: recipient }) });
+    await expect(answerMessageRequest(db(world), { conversationId: DM, userId: recipient, now: NOW })).resolves.toEqual({ answered: true });
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendImages: false });
+    await expect(acceptMessageRequest(db(world), { conversationId: DM, userId: recipient, now: NOW })).resolves.toMatchObject({ kind: 'accepted', requesterId: ALICE, levelRaised: true });
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toEqual(FOUNDING_MEMBER_PERMISSIONS);
+    expect(world.participant.rows.find((p) => p.id === P_BOB)).toMatchObject({ messageRequestAt: null, messageRequestFromId: null });
+  });
+
+  it('accepter puis répondre : la réponse ne défait rien, la demande reste acceptée', async () => {
+    const world = monde({ participants: demandeEnAttente() });
+    await acceptMessageRequest(db(world), { conversationId: DM, userId: BOB, now: NOW });
+    await expect(answerMessageRequest(db(world), { conversationId: DM, userId: BOB, now: NOW })).resolves.toEqual({ answered: false });
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toEqual(FOUNDING_MEMBER_PERMISSIONS);
+  });
+
+  it('la réouverture des médias relit la ligne de l\'expéditeur : un droit changé entre-temps survit (audit 3, F-c)', async () => {
+    const world = monde({ participants: demandeEnAttente() });
+    const create = world.relations.prisma.userRelation.create.bind(world.relations.prisma.userRelation);
+    world.relations.prisma.userRelation.create = (async (args: never) => {
+      const alice = world.participant.rows.find((p) => p.id === P_ALICE)!;
+      alice.permissions = { ...(alice.permissions as object), canSendMessages: false };
+      return create(args);
+    }) as never;
+    await acceptMessageRequest(db(world), { conversationId: DM, userId: BOB, now: NOW });
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendMessages: false, canSendImages: true });
   });
 
   it('un lien déjà plus haut ne baisse pas', async () => {
@@ -231,6 +272,7 @@ describe('noteMessageInteractions — répondre à une demande l\'accepte', () =
     expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestAt).toBeNull();
     expect(world.relations.relations().some((r) => [r.userLowId, r.userHighId].includes(BOB))).toBe(false);
     expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendImages: false });
+    expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestFromId).toBe(ALICE);
   });
 
   it('après une baisse volontaire, répondre efface la demande sans recréer le lien (RG-07)', async () => {

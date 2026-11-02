@@ -319,8 +319,8 @@ export const conversationListQuerySelect = (viewerId: string) => ({
     },
     // #14107 — la demande en attente se lit sur la ligne du LECTEUR (un tête-à-tête :
     // toujours dans les cinq), jamais une lecture de plus ; le schéma de membre ne
-    // déclare pas ces deux colonnes, elles ne partent pas sur le fil.
-    select: { ...conversationListParticipantSelect, messageRequestAt: true, messageRequestRisk: true }
+    // déclare pas ces colonnes, et la liste les retire avant l'ETag (audit 3, F-a).
+    select: { ...conversationListParticipantSelect, messageRequestAt: true, messageRequestRisk: true, messageRequestFromId: true }
   },
   // User preferences (pin/mute/archive/tags/catégorie/customName/reaction)
   userPreferences: {
