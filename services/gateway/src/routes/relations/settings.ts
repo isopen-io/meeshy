@@ -3,9 +3,35 @@ import { relationPersonSettingsUpdateSchema, type RelationPersonSettings } from 
 import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { stopBringsOnBlock } from '../../services/bring/bringService';
 import { logError } from '../../utils/logger';
-import { sendBadRequest, sendInternalError, sendSuccess } from '../../utils/response';
+import { sendBadRequest, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response';
+import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
+import { niveauEffectif } from '../../services/friendship';
 import { bringDepsOf, bringQuotaOf } from '../bring';
 import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './shared';
+
+/**
+ * Un réglage ne s'écrit que pour une personne qui EXISTE et avec qui un lien existe
+ * (Connaissance au moins, jugé par la loi) : aucune ligne pour un identifiant
+ * quelconque. Inconnu, désactivé, sans lien ou bloqué : le même 404.
+ */
+async function linkedPerson(prisma: FastifyInstance['prisma'], ownerId: string, otherId: string): Promise<boolean> {
+  const [other, level] = await Promise.all([
+    prisma.user.findUnique({ where: { id: otherId }, select: { id: true, deactivatedAt: true } }),
+    niveauEffectif(prisma, ownerId, otherId),
+  ]);
+  if (!other || other.deactivatedAt) return false;
+  return resolveRelationAccess({
+    viewerId: ownerId,
+    targetId: otherId,
+    grantedByViewer: level,
+    grantedByTarget: level,
+    sharesCommunity: false,
+    blockedEitherWay: false,
+    viewerMinor: 'unknown',
+    targetMinor: 'unknown',
+    feature: 'audience.acquaintances',
+  }).allowed;
+}
 
 const settingsSchema = {
   type: 'object',
@@ -76,6 +102,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
 
       const ownerId = request.user!.userId;
       const userId = otherId.toLowerCase();
+      if (!(await linkedPerson(fastify.prisma, ownerId, userId))) return sendNotFound(reply, 'Personne introuvable');
       const bringBlockedAt = parsed.data.bringBlocked ? new Date() : null;
       await fastify.prisma.relationFeatureSetting.upsert({
         where: { ownerId_otherId: { ownerId, otherId: userId } },

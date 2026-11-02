@@ -5,7 +5,7 @@ import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { getCacheStore } from '../../services/CacheStore';
 import { getPushNotificationService } from '../../services/PushNotificationService';
 import { bringAvailability, sendBring, stopBring, stopBringsOnBlock, type BringDeps, type BringOutcome, type BringQuota } from '../../services/bring/bringService';
-import { criticalAlertsGranted } from '../../services/bring/bringPush';
+import { bringServiceEnabled, criticalAlertsGranted } from '../../services/bring/bringPush';
 import { thresholdsNow } from '../../services/relations/relationRequestGate';
 import { relationIoOf } from '../../socketio/relationEvents';
 import { createCustomRateLimiter, type RateLimiter } from '../../utils/rate-limiter.js';
@@ -54,6 +54,7 @@ export function bringDepsOf(fastify: FastifyInstance, quota: BringQuota): BringD
     push: getPushNotificationService(fastify.prisma),
     now: () => new Date(),
     criticalAlerts: criticalAlertsGranted(),
+    enabled: bringServiceEnabled(),
     report: (message, error) => logError(fastify.log, message, error),
   };
 }

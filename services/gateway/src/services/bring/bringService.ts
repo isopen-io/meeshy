@@ -28,9 +28,10 @@
  *
  * ## Un Bring en vol
  *
- * Une entrée de cache à durée de vie = la fenêtre de sonnerie, plus un index par
- * paire posé en `SETNX` : un second envoi pendant que le premier sonne rend LE
- * MÊME (200), sans consommer ni resonner. L'arrêt (destinataire ou expéditeur)
+ * L'index de paire, posé en `SETNX`, PORTE l'état entier (durée de vie = la
+ * fenêtre de sonnerie), doublé d'une entrée par identifiant pour l'arrêt : un
+ * second appui, même concurrent, rend LE MÊME (200), sans consommer ni resonner.
+ * L'interrupteur du service (`BRING_ENABLED`) est vérifié avant tout. L'arrêt (destinataire ou expéditeur)
  * efface les deux, prévient les deux rooms `user:<id>` et pousse un arrêt
  * silencieux à TOUS les appareils du destinataire. À l'expiration, le serveur
  * n'émet rien : chaque client cesse à `expiresAt`.
@@ -85,6 +86,8 @@ export type BringDeps = {
   readonly push: Pick<PushNotificationService, 'sendToUser'>;
   readonly now: () => Date;
   readonly criticalAlerts: boolean;
+  /** L'interrupteur du SERVICE (`BRING_ENABLED`, éteint par défaut) : coupé, personne ne sonne personne. */
+  readonly enabled: boolean;
   readonly report: (message: string, error: unknown) => void;
 };
 
@@ -112,6 +115,7 @@ const BLOCKED = refuse(403, BRING_ERROR_CODES.BLOCKED, 'Bring indisponible');
 const QUOTA = refuse(429, BRING_ERROR_CODES.QUOTA_EXCEEDED, "Plus de Bring aujourd'hui vers cette personne");
 const UNAVAILABLE = refuse(503, BRING_ERROR_CODES.UNAVAILABLE, 'Bring momentanément indisponible');
 const NOT_FOUND = refuse(404, BRING_ERROR_CODES.NOT_FOUND, 'Bring introuvable');
+const DISABLED = refuse(403, BRING_ERROR_CODES.DISABLED, 'Bring indisponible');
 
 const USER_SELECT = {
   id: true,
@@ -143,6 +147,8 @@ type Judged =
       readonly recipient: Party;
       /** La langue de CADRAGE du destinataire (titre et corps du push). */
       readonly language: string;
+      /** `notification.showSenderName` du destinataire : faux ⇒ ni nom ni avatar sur l'écran verrouillé. */
+      readonly showSenderName: boolean;
     }
   | BringRefusal;
 
@@ -157,18 +163,21 @@ const perDayFor = (thresholds: RelationThresholds, level: RelationLevel): number
  * absent ⇒ reçu. Une lecture qui échoue FERME — un son qui passe Ne pas déranger ne
  * part pas sur un doute.
  */
-async function receivesBrings(prisma: Pick<PrismaClient, 'userPreferences'>, userId: string): Promise<boolean> {
+type ReceptionPrefs = { readonly receives: boolean; readonly showSenderName: boolean };
+
+async function receptionPrefs(prisma: Pick<PrismaClient, 'userPreferences'>, userId: string): Promise<ReceptionPrefs> {
   try {
     const row = await prisma.userPreferences.findUnique({ where: { userId }, select: { notification: true } });
     const notification = (row?.notification ?? {}) as Record<string, unknown>;
-    return notification.bringEnabled !== false;
+    return { receives: notification.bringEnabled !== false, showSenderName: notification.showSenderName !== false };
   } catch {
-    return false;
+    return { receives: false, showSenderName: false };
   }
 }
 
 async function judge(deps: BringDeps, fromUserId: string, toUserId: string): Promise<Judged> {
-  const [blocked, level, sender, recipient, setting, receives] = await Promise.all([
+  if (!deps.enabled) return DISABLED;
+  const [blocked, level, sender, recipient, setting, prefs] = await Promise.all([
     isBlockedBetween(deps.prisma, fromUserId, toUserId),
     niveauEffectif(deps.prisma, fromUserId, toUserId),
     deps.prisma.user.findUnique({ where: { id: fromUserId }, select: USER_SELECT }),
@@ -177,7 +186,7 @@ async function judge(deps: BringDeps, fromUserId: string, toUserId: string): Pro
       where: { ownerId_otherId: { ownerId: toUserId, otherId: fromUserId } },
       select: { bringBlockedAt: true },
     }),
-    receivesBrings(deps.prisma, toUserId),
+    receptionPrefs(deps.prisma, toUserId),
   ]);
   if (!sender || !recipient || sender.deactivatedAt || recipient.deactivatedAt) return NOT_ALLOWED;
 
@@ -192,13 +201,21 @@ async function judge(deps: BringDeps, fromUserId: string, toUserId: string): Pro
     viewerMinor: declaredAgeClass(sender.birthDate, now),
     targetMinor: declaredAgeClass(recipient.birthDate, now),
     feature: 'bring',
-    consent: receives && !setting?.bringBlockedAt ? 'granted' : 'refused',
+    consent: prefs.receives && !setting?.bringBlockedAt ? 'granted' : 'refused',
   });
   if (!verdict.allowed) return verdict.reason === 'consent' ? BLOCKED : NOT_ALLOWED;
 
   const perDay = perDayFor(deps.thresholds, verdict.effectiveLevel);
   if (perDay === 0) return NOT_ALLOWED;
-  return { ok: true, level: verdict.effectiveLevel, perDay, sender, recipient, language: recipientLanguage(recipient, 'fr') };
+  return {
+    ok: true,
+    level: verdict.effectiveLevel,
+    perDay,
+    sender,
+    recipient,
+    language: recipientLanguage(recipient, 'fr'),
+    showSenderName: prefs.showSenderName,
+  };
 }
 
 const quotaKeyOf = (fromUserId: string, toUserId: string, day: string) => `${fromUserId}:${toUserId}:${day}`;
@@ -234,9 +251,9 @@ const parseState = (raw: string | null): BringState | null => {
   }
 };
 
+/** Le Bring EN VOL d'une paire orientée : l'index de paire PORTE l'état entier (posé d'un seul `SETNX`). */
 async function inFlight(deps: BringDeps, fromUserId: string, toUserId: string): Promise<BringState | null> {
-  const bringId = await deps.cache.get(pairKey(fromUserId, toUserId));
-  return bringId ? parseState(await deps.cache.get(stateKey(bringId))) : null;
+  return parseState(await deps.cache.get(pairKey(fromUserId, toUserId)));
 }
 
 const sentView = (state: BringState, remaining: number | null): BringSent => ({
@@ -262,51 +279,83 @@ function dispatch(deps: BringDeps, pushes: ReturnType<typeof buildBringRingPushe
   }
 }
 
+async function sameBring(deps: BringDeps, state: BringState): Promise<BringOutcome<BringSent>> {
+  const left = await remainingToday(deps, state.perDay, state.quotaKey);
+  return { ok: true, status: 200, data: sentView(state, left === undefined ? 0 : left) };
+}
+
+/** Efface un Bring qui n'a pas sonné — index de paire (s'il est encore le sien) et état — et rend son décompte. */
+async function withdraw(deps: BringDeps, state: BringState, counted: boolean): Promise<void> {
+  await deps.cache.del(stateKey(state.bringId));
+  if (parseState(await deps.cache.get(pairKey(state.fromUserId, state.toUserId)))?.bringId === state.bringId) {
+    await deps.cache.del(pairKey(state.fromUserId, state.toUserId));
+  }
+  if (counted && state.perDay !== null) await deps.quota.release(state.perDay, state.quotaKey);
+}
+
+/**
+ * Envoyer. L'ordre est la garantie :
+ *
+ * 1. juger ;
+ * 2. poser l'index de paire AVEC l'état entier, d'un seul `SETNX` : un second appui
+ *    concurrent lit le Bring complet et rend LE MÊME (200), jamais un 503 ;
+ * 3. décompter (un refus ou un compteur injoignable efface l'index) ;
+ * 4. écrire l'état par identifiant (un échec rend le décompte et efface tout) ;
+ * 5. REJUGER : un blocage acquitté pendant les étapes 2 à 4 — que `stopBringsOnBlock`
+ *    a pu manquer ou effacer — empêche la sonnerie, et le décompte est rendu ;
+ * 6. sonner : socket puis push.
+ */
 export async function sendBring(deps: BringDeps, fromUserId: string, toUserId: string): Promise<BringOutcome<BringSent>> {
   const judged = await judge(deps, fromUserId, toUserId);
   if (judged.ok === false) return judged;
 
   const now = deps.now();
   const { day } = bringDayOf(now, judged.recipient.timezone);
-  const quotaKey = quotaKeyOf(fromUserId, toUserId, day);
+  const state: BringState = {
+    bringId: randomBytes(12).toString('hex'),
+    fromUserId,
+    toUserId,
+    sentAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + BRING_RING_WINDOW_MS).toISOString(),
+    quotaKey: quotaKeyOf(fromUserId, toUserId, day),
+    perDay: judged.perDay,
+  };
 
-  const ringing = await inFlight(deps, fromUserId, toUserId);
-  if (ringing) {
-    const remaining = await remainingToday(deps, ringing.perDay, ringing.quotaKey);
-    return { ok: true, status: 200, data: sentView(ringing, remaining === undefined ? 0 : remaining) };
+  if (!(await deps.cache.setnx(pairKey(fromUserId, toUserId), JSON.stringify(state), WINDOW_SECONDS))) {
+    const ringing = await inFlight(deps, fromUserId, toUserId);
+    return ringing ? sameBring(deps, ringing) : UNAVAILABLE;
   }
 
-  const bringId = randomBytes(12).toString('hex');
-  if (!(await deps.cache.setnx(pairKey(fromUserId, toUserId), bringId, WINDOW_SECONDS))) {
-    const other = await inFlight(deps, fromUserId, toUserId);
-    if (!other) return UNAVAILABLE;
-    const left = await remainingToday(deps, other.perDay, other.quotaKey);
-    return { ok: true, status: 200, data: sentView(other, left === undefined ? 0 : left) };
-  }
-
-  const counted = judged.perDay === null ? { remaining: null, exceeded: false } : await deps.quota.consume(judged.perDay, quotaKey, 1);
+  const counted = judged.perDay === null ? { remaining: null, exceeded: false } : await deps.quota.consume(judged.perDay, state.quotaKey, 1);
   if (counted === null || counted.exceeded) {
-    await deps.cache.del(pairKey(fromUserId, toUserId));
-    if (counted !== null && judged.perDay !== null) await deps.quota.release(judged.perDay, quotaKey);
+    await withdraw(deps, state, counted !== null);
     return counted === null ? UNAVAILABLE : QUOTA;
   }
 
-  const expiresAt = new Date(now.getTime() + BRING_RING_WINDOW_MS);
-  const state: BringState = {
-    bringId, fromUserId, toUserId, sentAt: now.toISOString(), expiresAt: expiresAt.toISOString(), quotaKey, perDay: judged.perDay,
-  };
-  await deps.cache.set(stateKey(bringId), JSON.stringify(state), WINDOW_SECONDS);
+  try {
+    await deps.cache.set(stateKey(state.bringId), JSON.stringify(state), WINDOW_SECONDS);
+  } catch (error) {
+    await withdraw(deps, state, true).catch(() => undefined);
+    throw error;
+  }
 
-  const ring: BringRingEventData = { bringId, fromUserId, toUserId, sentAt: state.sentAt, expiresAt: state.expiresAt };
+  const still = await judge(deps, fromUserId, toUserId);
+  const live = (await inFlight(deps, fromUserId, toUserId))?.bringId === state.bringId;
+  if (still.ok === false || !live) {
+    await withdraw(deps, state, true);
+    return still.ok === false ? still : NOT_FOUND;
+  }
+
+  const ring: BringRingEventData = { bringId: state.bringId, fromUserId, toUserId, sentAt: state.sentAt, expiresAt: state.expiresAt };
   safely(() => deps.io?.to(ROOMS.user(toUserId)).emit(SERVER_EVENTS.BRING_RING, ring));
   dispatch(deps, buildBringRingPushes({
-    bringId,
+    bringId: state.bringId,
     toUserId,
     fromUserId,
-    fromName: judged.sender.displayName || judged.sender.username,
-    fromAvatar: judged.sender.avatar,
+    fromName: judged.showSenderName ? judged.sender.displayName || judged.sender.username : null,
+    fromAvatar: judged.showSenderName ? judged.sender.avatar : null,
     sentAt: now,
-    expiresAt,
+    expiresAt: new Date(state.expiresAt),
     language: judged.language,
     criticalAlerts: deps.criticalAlerts,
   }));
@@ -314,10 +363,20 @@ export async function sendBring(deps: BringDeps, fromUserId: string, toUserId: s
   return { ok: true, status: 201, data: sentView(state, counted.remaining) };
 }
 
-/** `both` : un arrêt ordinaire ; sinon l'identifiant de celui qui BLOQUE — le bloqué n'est jamais prévenu. */
+/** La langue du libellé « Bring arrêté » ; une lecture en panne ne retient jamais l'arrêt. */
+async function stopLanguage(deps: BringDeps, userId: string): Promise<string | undefined> {
+  try {
+    const recipient = await deps.prisma.user.findUnique({ where: { id: userId }, select: { ...RECIPIENT_LANG_SELECT } });
+    return recipient ? recipientLanguage(recipient, 'fr') : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** `both` : un arrêt ordinaire, aux deux ; sinon l'identifiant de celui qui BLOQUE — le bloqué n'est jamais prévenu. */
 async function settle(deps: BringDeps, state: BringState, reason: BringStopReason, audience: 'both' | { readonly blockerId: string }): Promise<void> {
   await deps.cache.del(stateKey(state.bringId));
-  if ((await deps.cache.get(pairKey(state.fromUserId, state.toUserId))) === state.bringId) {
+  if ((await inFlight(deps, state.fromUserId, state.toUserId))?.bringId === state.bringId) {
     await deps.cache.del(pairKey(state.fromUserId, state.toUserId));
   }
 
@@ -326,7 +385,7 @@ async function settle(deps: BringDeps, state: BringState, reason: BringStopReaso
   };
   const rooms = audience === 'both' ? [state.toUserId, state.fromUserId] : [...new Set([state.toUserId, audience.blockerId])];
   rooms.forEach((userId) => safely(() => deps.io?.to(ROOMS.user(userId)).emit(SERVER_EVENTS.BRING_STOPPED, stopped)));
-  dispatch(deps, buildBringStoppedPushes({ bringId: state.bringId, toUserId: state.toUserId, reason }));
+  dispatch(deps, buildBringStoppedPushes({ bringId: state.bringId, toUserId: state.toUserId, reason, language: await stopLanguage(deps, state.toUserId) }));
 }
 
 /** Arrêter : le destinataire (un geste) ou l'expéditeur (une annulation). Tout autre ⇒ 404, comme un id inconnu. */

@@ -46,6 +46,8 @@ export const BRING_ERROR_CODES = {
   NOT_FOUND: 'BRING_NOT_FOUND',
   /** Le compteur du quota est injoignable : on ne sonne pas sans compter — 503. */
   UNAVAILABLE: 'BRING_UNAVAILABLE',
+  /** Le service est coupé sur cette passerelle (`BRING_ENABLED`) — 403, le même pour tous. */
+  DISABLED: 'BRING_DISABLED',
 } as const;
 export type BringErrorCode = (typeof BRING_ERROR_CODES)[keyof typeof BRING_ERROR_CODES];
 
@@ -121,8 +123,9 @@ export type RelationPersonSettingsUpdate = z.infer<typeof relationPersonSettings
  *   à `expiresAt`. Android : DATA-ONLY haute priorité, TTL = la fenêtre — le client
  *   lève son service au premier plan sur le flux `USAGE_ALARM` ; `title`, `body` et
  *   `stopLabel` voyagent dans `data`, localisés à la langue du destinataire.
- * - `bring_stopped` — silencieux (background iOS, data-only FCM) : chaque appareil du
- *   destinataire cesse de sonner et retire la bannière `bringId`.
+ * - `bring_stopped` — iOS : alerte `passive` (ni son ni écran) qui REMPLACE la bannière par
+ *   son `apns-collapse-id: bring-<id>`, même app tuée ; Android : data-only. Chaque appareil
+ *   du destinataire cesse de sonner et retire la bannière `bringId`.
  */
 export const bringPushDataSchema = z.object({
   type: z.literal(BRING_PUSH_TYPES.RING),

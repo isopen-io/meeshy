@@ -53,10 +53,10 @@ export const relationLimiter = (fastify: { redis?: unknown }, keyPrefix: string,
     (fastify.redis ?? undefined) as never,
   );
 
-/** L'autre personne de la route : un identifiant lisible, qui n'est pas soi. */
+/** L'autre personne de la route : un identifiant lisible, en minuscules (casse libre d'un ObjectId), qui n'est pas soi. */
 export function otherUserOf(request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply): string | null {
-  const otherId = request.params.userId;
-  if (!OBJECT_ID.test(otherId) || otherId === request.user!.userId) {
+  const otherId = request.params.userId.toLowerCase();
+  if (!OBJECT_ID.test(otherId) || otherId === request.user!.userId.toLowerCase()) {
     sendBadRequest(reply, 'Identifiant invalide');
     return null;
   }

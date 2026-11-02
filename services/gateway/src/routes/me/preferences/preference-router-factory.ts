@@ -30,6 +30,7 @@ import {
   applyCategoryWriteEffects,
   readJsonPreferenceColumn,
   resolveComplete,
+  keepUnnamedKeys,
   submittedFrom,
   type CategoryStorage,
   type PreferenceCategory,
@@ -207,7 +208,9 @@ export function createPreferenceRouter(
         try {
           // Validation Zod, STRICTE (#4589) : une clé non déclarée LÈVE ici
           // plutôt que d'être retirée en silence par le mode *strip*.
-          const validated = schema.strict().parse(request.body);
+          const parsed = schema.strict().parse(request.body);
+          // #13936 — un remplacement ne rouvre pas une coupure de réception qu'il ne nomme pas.
+          const validated = await keepUnnamedKeys(fastify.prisma, userId, category, submittedFrom(schema, request.body), parsed);
 
           // #4578 — la garde lit les clés que le corps NOMME, pas celles que
           // `schema.parse` vient d'injecter depuis les `default()`. Sur ce

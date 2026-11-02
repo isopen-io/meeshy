@@ -19,8 +19,8 @@
  * `soundEnabled`, ni les heures calmes ne la gouvernent — seul le blocage par
  * personne le fait, en amont.
  *
- * L'arrêt est SILENCIEUX (background iOS, data-only FCM) : chaque appareil du
- * destinataire cesse de sonner et retire la bannière.
+ * L'arrêt REMPLACE la bannière sur iOS (alerte `passive`, même `collapse-id`) et
+ * part en data-only sur Android : chaque appareil du destinataire cesse de sonner.
  */
 import {
   BRING_IOS_SOUND,
@@ -38,7 +38,8 @@ export type BringRingPushInput = {
   readonly bringId: string;
   readonly toUserId: string;
   readonly fromUserId: string;
-  readonly fromName: string;
+  /** `null` quand le destinataire masque le nom de l'expéditeur (`showSenderName: false`) : titre neutre, ni nom ni avatar. */
+  readonly fromName: string | null;
   readonly fromAvatar: string | null;
   readonly sentAt: Date;
   readonly expiresAt: Date;
@@ -47,15 +48,17 @@ export type BringRingPushInput = {
 };
 
 export function buildBringRingPushes(input: BringRingPushInput): SendPushOptions[] {
-  const title = notificationString(input.language, 'bring.ring.title', { actor: input.fromName });
+  const title = input.fromName === null
+    ? notificationString(input.language, 'bring.ring.titleHidden')
+    : notificationString(input.language, 'bring.ring.title', { actor: input.fromName });
   const body = notificationString(input.language, 'bring.ring.body');
   const ttlMs = Math.max(0, input.expiresAt.getTime() - input.sentAt.getTime());
   const data: BringPushData = {
     type: BRING_PUSH_TYPES.RING,
     bringId: input.bringId,
     fromUserId: input.fromUserId,
-    fromName: input.fromName,
-    fromAvatar: input.fromAvatar ?? '',
+    fromName: input.fromName ?? '',
+    fromAvatar: input.fromName === null ? '' : (input.fromAvatar ?? ''),
     sentAt: input.sentAt.toISOString(),
     expiresAt: input.expiresAt.toISOString(),
     title,
@@ -94,14 +97,37 @@ export function buildBringStoppedPushes(params: {
   readonly bringId: string;
   readonly toUserId: string;
   readonly reason: BringStopReason;
+  readonly language?: string | undefined;
 }): SendPushOptions[] {
   const data: BringStoppedPushData = { type: BRING_PUSH_TYPES.STOPPED, bringId: params.bringId, reason: params.reason };
-  const payload = { title: '', body: '', silent: true, data };
   return [
-    { userId: params.toUserId, bypassDnd: true, types: ['apns'], platforms: ['ios'], payload },
-    { userId: params.toUserId, bypassDnd: true, types: ['fcm'], platforms: ['android'], payload },
+    // iOS : une ALERTE `passive` (ni son, ni écran allumé) qui REMPLACE la bannière de la
+    // sonnerie par son `apns-collapse-id`. Un push d'arrière-plan n'atteint pas une app
+    // tuée par l'utilisateur et ne remplace rien : la bannière « X fait sonner » resterait.
+    // Elle réveille aussi l'app vivante (`content-available`), qui cesse de jouer.
+    {
+      userId: params.toUserId,
+      bypassDnd: true,
+      types: ['apns'],
+      platforms: ['ios'],
+      payload: {
+        title: notificationString(params.language, 'bring.stopped.title'),
+        body: '',
+        interruptionLevel: 'passive',
+        collapseId: `bring-${params.bringId}`,
+        data,
+      },
+    },
+    { userId: params.toUserId, bypassDnd: true, types: ['fcm'], platforms: ['android'], payload: { title: '', body: '', silent: true, data } },
   ];
 }
+
+/**
+ * L'interrupteur du SERVICE (#14441, B2) : éteint par défaut, allumé sur staging seulement
+ * (`infrastructure/docker/compose/docker-compose.staging.yml`). Il se lève en production quand
+ * les sous-lots clients, #14421 (mineurs de nuit) et #14409 (« pas un service d'urgence ») sont livrés.
+ */
+export const bringServiceEnabled = (): boolean => process.env.BRING_ENABLED === 'true';
 
 /** Vrai quand Apple a accordé l'entitlement Critical Alerts et que l'app le porte (D-3). */
 export const criticalAlertsGranted = (): boolean => process.env.APNS_CRITICAL_ALERTS_ENABLED === 'true';

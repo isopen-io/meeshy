@@ -581,6 +581,11 @@ const PENDING_CLIENT_ENTRIES = {
   'RelationsEndpoint.config': { issue: 13938, reason: 'GET /relations/config — la table des cercles, écran iOS « Mes cercles »' },
   'RelationsEndpoint.byUserIdLevel': { issue: 13938, reason: 'POST /relations/:userId/level — la baisse silencieuse d’un lien' },
   'RelationsEndpoint.byUserIdRitual': { issue: 13938, reason: 'POST /relations/:userId/ritual — le rituel du Sang' },
+  // Le Bring et les réglages par personne (#13936, servis par la PR #14441) : le sous-lot iOS
+  // `proche-bring@ios` les appellera ; les réglages par personne, l'écran de #14229.
+  'BringEndpoint.byUserId': { issue: 13936, reason: 'GET|POST /bring/:userId — disponibilité et envoi du Bring, sous-lot iOS' },
+  'BringEndpoint.byBringId': { issue: 13936, reason: 'DELETE /bring/:bringId — arrêter un Bring d’un geste, sous-lot iOS' },
+  'RelationsEndpoint.byUserIdSettings': { issue: 14229, reason: 'GET|PUT /relations/:userId/settings — les réglages par personne sur iOS' },
 };
 
 const BASELINE_DEAD_ENTRIES = 329;
