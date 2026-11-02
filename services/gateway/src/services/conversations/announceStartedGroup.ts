@@ -123,3 +123,21 @@ export async function announceStartedGroup(deps: AnnounceStartedGroupDeps, conve
       ),
   );
 }
+
+/**
+ * #14644 — un APPEL dans un groupe silencieux le démarre d'abord, par la même
+ * bascule gardée qu'un premier message et la même annonce : les invités
+ * reçoivent `conversation:new` (et l'invitation) AVANT que l'appel ne sonne,
+ * donc ne sont jamais appelés depuis un groupe qu'ils ne voient pas. Un groupe
+ * déjà démarré, un groupe d'avant #14644 (champ absent) et un tête-à-tête ne
+ * sont pas touchés. Rend `true` si la bascule a été gagnée ici.
+ */
+export async function startSilentGroup(deps: AnnounceStartedGroupDeps, conversationId: string): Promise<boolean> {
+  const flipped = await deps.prisma.conversation.updateMany({
+    where: { id: conversationId, type: 'group', firstMessageSentAt: null },
+    data: { firstMessageSentAt: new Date() },
+  });
+  if (flipped.count !== 1) return false;
+  await announceStartedGroup(deps, conversationId);
+  return true;
+}

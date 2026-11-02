@@ -9,7 +9,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import { announceStartedGroup } from '../../../../services/conversations/announceStartedGroup';
+import { announceStartedGroup, startSilentGroup } from '../../../../services/conversations/announceStartedGroup';
 
 const CONV = '507f1f77bcf86cd799439011';
 const CREATOR = '507f1f77bcf86cd799439022';
@@ -97,5 +97,39 @@ describe('#14644 — un groupe démarré s\'annonce', () => {
   it('une conversation introuvable n\'annonce rien', async () => {
     const { emitted } = await annoncer(null);
     expect(emitted).toEqual([]);
+  });
+});
+
+describe('#14644 — un groupe silencieux se démarre AVANT un appel', () => {
+  async function demarrer(flippedCount: number) {
+    const prisma = {
+      conversation: {
+        updateMany: jest.fn<any>().mockResolvedValue({ count: flippedCount }),
+        findUnique: jest.fn<any>().mockResolvedValue(conversation('group')),
+      },
+    };
+    const emitted: Array<{ room: string; event: string }> = [];
+    const io = { to: (room: string) => ({ emit: (event: string) => emitted.push({ room, event }) }) };
+    const notificationService = { createConversationInviteNotification: jest.fn<any>().mockResolvedValue(null) };
+    const started = await startSilentGroup({ prisma: prisma as never, io, notificationService }, CONV);
+    return { prisma, emitted, notificationService, started };
+  }
+
+  it('bascule firstMessageSentAt sur un GROUPE silencieux seulement, puis l\'annonce exactement comme un premier message', async () => {
+    const { prisma, emitted, notificationService, started } = await demarrer(1);
+    const flip = prisma.conversation.updateMany.mock.calls[0][0] as any;
+    expect(flip.where).toEqual({ id: CONV, type: 'group', firstMessageSentAt: null });
+    expect(flip.data.firstMessageSentAt).toBeInstanceOf(Date);
+    expect(started).toBe(true);
+    expect(emitted.map((e) => e.room).sort()).toEqual([`user:${ALICE}`, `user:${BOB}`].sort());
+    expect(notificationService.createConversationInviteNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it('un groupe déjà démarré (ou un tête-à-tête) ne s\'annonce pas une seconde fois', async () => {
+    const { prisma, emitted, notificationService, started } = await demarrer(0);
+    expect(started).toBe(false);
+    expect(prisma.conversation.findUnique).not.toHaveBeenCalled();
+    expect(emitted).toEqual([]);
+    expect(notificationService.createConversationInviteNotification).not.toHaveBeenCalled();
   });
 });
