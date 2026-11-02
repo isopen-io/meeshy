@@ -125,7 +125,7 @@ import {
   SocketMessageEditSchema,
   SocketMessageDeleteSchema,
 } from '../../validation/socket-event-schemas.js';
-import { toEncryptedPayload } from '../../validation/encryption-envelope.js';
+import { toDeviceLayer, toEncryptedPayload } from '../../validation/encryption-envelope.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import type { QueuedVariantFor } from '../queuedEventContract';
@@ -378,6 +378,8 @@ export class MessageHandler {
         // la garde sans transmettre le champ laisserait la copie muette.
         copyAttachmentsFromMessageId: validated.copyAttachmentsFromMessageId,
         encryptedPayload,
+        // #14369 — la couche appareil d'un envoi hybride, à côté du clair (même unité que REST).
+        deviceLayer: toDeviceLayer(validated, { sessionId: (socket.data as { sessionId?: string } | undefined)?.sessionId ?? null }),
         // Effets de protection déclarés par le client — parité avec
         // POST /messages, déclarés UNE fois (`messageProtectionInput.ts`) pour
         // les deux chemins socket. Sans cette propagation, une photo view-once
