@@ -535,7 +535,7 @@ final class NotificationActionHandler: NotificationActionHandling {
             replyToId: payload.messageId
         )
 
-        if await refusesEndToEndReply(item, senderId: userId, in: conversationId) { return }
+        if await refusesEndToEndReply(item, senderId: userId, in: conversationId, userInfo: userInfo) { return }
         await insertReplyBubble(item, senderId: userId, replyToId: payload.messageId)
 
         await prepareReplyQueue()
@@ -594,9 +594,18 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// dans la file, et la garde se lit AVANT toute ligne. Le clair va au
     /// coffre sous une bulle scellée en échec, d'où le fil le renvoie chiffré ;
     /// faute de coffre, rien ne s'écrit. Les deux se disent.
-    private func refusesEndToEndReply(_ item: OfflineQueueItem, senderId: String, in conversationId: String) async -> Bool {
-        guard await destinationGuard.seals(conversationId) else { return false }
-        logger.warning("notification reply refused before transport: end-to-end conversation")
+    /// #13165 — le régime se CONFIRME (mode du push, puis passerelle relue) :
+    /// seul un régime relu où le serveur lit le message laisse partir le clair.
+    private func refusesEndToEndReply(
+        _ item: OfflineQueueItem, senderId: String, in conversationId: String, userInfo: [AnyHashable: Any]
+    ) async -> Bool {
+        let service = conversationService
+        let regime = NotificationReplyRegime(
+            destinationGuard: destinationGuard,
+            servedMode: { try await service.getById($0).encryptionMode }
+        )
+        guard await regime.destination(of: conversationId, userInfo: userInfo) != .readableByServer else { return false }
+        logger.warning("notification reply refused before transport: end-to-end or unconfirmed regime")
         let refusal = await EndToEndOffThreadReply(endToEnd: endToEnd, persistence: messagePersistence)
             .keep(item, senderId: senderId)
         removeDeliveredForConversation(conversationId)
