@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { E2EEEngineVerdict, PRE_KEY_MESSAGE_TYPE, SIGNAL_MESSAGE_TYPE, type EngineBundle, type EngineLocalDevice } from './engine';
 import { memoryRecords, testDevice, testEngine } from './test-support/engine';
+import { thrown } from './test-support/errors';
 
 const engine = testEngine();
 const text = (value: string) => new TextEncoder().encode(value);
@@ -75,7 +76,7 @@ describe('libsignal en WASM — PQXDH puis Double Ratchet, sans primitive maison
     });
     expect(received).toEqual(['trois', 'un', 'deux']);
     const replayed = sent[1]!;
-    expect(() => engine.decrypt(bob, bobSide.records.read, alice, replayed.type, replayed.body)).toThrow(E2EEEngineVerdict);
+    expect(thrown(() => engine.decrypt(bob, bobSide.records.read, alice, replayed.type, replayed.body))).toBeInstanceOf(E2EEEngineVerdict);
   });
 
   test('une pré-clé signée dont la signature ne vient pas de l\'identité est refusée par libsignal', () => {
@@ -85,7 +86,7 @@ describe('libsignal en WASM — PQXDH puis Double Ratchet, sans primitive maison
     const forged = publishing(bob);
     const substituted: EngineBundle = { ...forged.bundle, identityKey: engine.identityPublicKey(mallory.identity) };
     const records = memoryRecords();
-    expect(() => engine.startSession(alice, records.read, substituted, Date.now())).toThrow(E2EEEngineVerdict);
+    expect(thrown(() => engine.startSession(alice, records.read, substituted, Date.now()))).toBeInstanceOf(E2EEEngineVerdict);
     expect(records.map.size).toBe(0);
   });
 
@@ -94,7 +95,7 @@ describe('libsignal en WASM — PQXDH puis Double Ratchet, sans primitive maison
     const aliceMac = testDevice('a'.repeat(24), 2);
     const records = memoryRecords();
     const mac = publishing(aliceMac);
-    expect(() => engine.startSession(alice, records.read, mac.bundle, Date.now())).toThrow(E2EEEngineVerdict);
+    expect(thrown(() => engine.startSession(alice, records.read, mac.bundle, Date.now()))).toBeInstanceOf(E2EEEngineVerdict);
     records.apply([{ kind: 'ownDevicePin', key: '2', value: mac.bundle.identityKey }]);
     records.apply(engine.startSession(alice, records.read, mac.bundle, Date.now()));
     expect(engine.sessionRegistrationId(records.read('session', `${'a'.repeat(24)}.2`)!)).toBe(aliceMac.registrationId);
