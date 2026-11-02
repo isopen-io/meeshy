@@ -218,4 +218,83 @@ class RecentConversationsWidgetPresentationTest {
 
         assertThat(presentation.rows.single().preview).isEqualTo("Aucun message")
     }
+
+    @Test
+    fun `the preview is served in the reader language, at a rank other than the first`() {
+        val english = conversation(id = "c1").copy(
+            lastMessageTranslations = mapOf("fr" to "Bonjour"),
+            lastMessageOriginalLanguage = "en",
+        )
+
+        val presentation = RecentConversationsWidgetPresentation.from(
+            conversations = listOf(english),
+            currentUserId = "me",
+            previewLabels = labels,
+            preferredLanguages = listOf("fr", "en"),
+        )
+
+        assertThat(presentation.rows.single().preview).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `without a reader prism the original text is served`() {
+        val english = conversation(id = "c1").copy(
+            lastMessageTranslations = mapOf("fr" to "Bonjour"),
+            lastMessageOriginalLanguage = "en",
+        )
+
+        val presentation = RecentConversationsWidgetPresentation.from(
+            conversations = listOf(english),
+            currentUserId = "me",
+            previewLabels = labels,
+        )
+
+        assertThat(presentation.rows.single().preview).isEqualTo("Hello from c1")
+    }
+
+    @Test
+    fun `a translation in a language the reader does not read is never served`() {
+        val english = conversation(id = "c1").copy(
+            lastMessageTranslations = mapOf("es" to "Hola"),
+            lastMessageOriginalLanguage = "en",
+        )
+
+        val presentation = RecentConversationsWidgetPresentation.from(
+            conversations = listOf(english),
+            currentUserId = "me",
+            previewLabels = labels,
+            preferredLanguages = listOf("fr"),
+        )
+
+        assertThat(presentation.rows.single().preview).isEqualTo("Hello from c1")
+    }
+
+    @Test
+    fun `a direct row carries the presence token of its peer, a group row never does`() {
+        val presentation = RecentConversationsWidgetPresentation.from(
+            conversations = listOf(
+                conversation(id = "d1"),
+                conversation(id = "g1", type = "group", title = "Team"),
+            ),
+            currentUserId = "me",
+            previewLabels = labels,
+            presence = mapOf(
+                "other-d1" to me.meeshy.sdk.model.PresenceState.ONLINE,
+                "other-g1" to me.meeshy.sdk.model.PresenceState.ONLINE,
+            ),
+        )
+
+        assertThat(presentation.rows.associate { it.id to it.presence }).containsExactly("d1", "online", "g1", null)
+    }
+
+    @Test
+    fun `a peer nobody served has no presence token`() {
+        val presentation = RecentConversationsWidgetPresentation.from(
+            conversations = listOf(conversation(id = "d1")),
+            currentUserId = "me",
+            previewLabels = labels,
+        )
+
+        assertThat(presentation.rows.single().presence).isNull()
+    }
 }

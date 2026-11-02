@@ -37,6 +37,7 @@ const TARGET_USER_ID  = '507f1f77bcf86cd799439022';
 async function buildApp(prismaOverrides: Record<string, any> = {}): Promise<FastifyInstance> {
   const prisma = {
     user: {
+      findMany: jest.fn(async () => []),
       findFirst: jest.fn<any>().mockResolvedValue({
         id: TARGET_USER_ID,
         createdAt: new Date('2020-01-01'),
@@ -148,6 +149,7 @@ describe('GET /users/:userId/stats — achievements unlocked when counts exceed 
     const oldDate = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
     const app = await buildApp({
       user: {
+        findMany: jest.fn(async () => []),
         findFirst: jest.fn<any>().mockResolvedValue({
           id: TARGET_USER_ID,
           createdAt: oldDate,

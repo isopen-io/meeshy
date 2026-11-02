@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, asdict
 from datetime import datetime
+from services.task_privacy import shown
 
 logger = logging.getLogger(__name__)
 
@@ -617,7 +618,7 @@ class VoiceProfileHandler:
                     continue
 
                 # Generate TTS with cloned voice
-                logger.info(f"[VOICE_PREVIEW] Generating TTS for {target_lang}: '{preview_text[:50]}...'")
+                logger.info(f"[VOICE_PREVIEW] Generating TTS for {target_lang}: '{shown(preview_text, 50)}...'")
 
                 # Try to use the TTS service with voice cloning
                 audio_result = None

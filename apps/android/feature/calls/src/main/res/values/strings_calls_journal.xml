@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_history_error">Loading error</string>
+    <string name="call_history_loading_more">Loading older calls</string>
+    <string name="call_history_redial">Call back</string>
+    <string name="call_history_redial_hint">Opens the choice between a voice and a video call</string>
+    <string name="call_detail_type">Type</string>
+    <string name="call_detail_date">Date</string>
+    <string name="call_detail_duration">Duration</string>
+    <string name="call_detail_data">Data</string>
+    <string name="call_detail_phone">Number</string>
+    <string name="call_detail_type_audio">Voice call</string>
+    <string name="call_detail_type_video">Video call</string>
+</resources>

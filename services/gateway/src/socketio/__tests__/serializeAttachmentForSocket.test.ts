@@ -110,7 +110,8 @@ describe('serializeAttachmentForSocket — la garde d’INVENTAIRE (#7014)', () 
     };
     const charge = serializeAttachmentForSocket(ligneComplete) as unknown as Record<string, unknown>;
 
-    const attendus = Object.keys(attachmentSocketSelect).filter((champ) => champ !== 'reactions');
+    // `message` : la protection du porteur, CHARGÉE pour `servedDescription`, jamais servie.
+    const attendus = Object.keys(attachmentSocketSelect).filter((champ) => champ !== 'reactions' && champ !== 'message');
     expect(attendus.length).toBeGreaterThan(0);
     expect(attendus.filter((champ) => !(champ in charge))).toEqual([]);
   });
@@ -139,7 +140,7 @@ describe('serializeAttachmentForSocket — la garde d’INVENTAIRE (#7014)', () 
     const charge = serializeAttachmentForSocket(ligneAvecSecrets) as unknown as Record<string, unknown>;
 
     const inventaire = new Set([
-      ...Object.keys(attachmentSocketSelect).filter((champ) => champ !== 'reactions'),
+      ...Object.keys(attachmentSocketSelect).filter((champ) => champ !== 'reactions' && champ !== 'message'),
       'reactionSummary',
       'currentUserReactions',
     ]);
@@ -302,6 +303,13 @@ describe('serializeAttachmentForSocket', () => {
     const result = serializeAttachmentForSocket(attachment as Record<string, unknown>);
 
     expect(result.capturedInApp).toBe(false);
+  });
+
+  it('sert la lens du média (#11327) — le crédit voyage avec lui, par le socket comme par REST', () => {
+    const base = { id: 'att-lens', messageId: 'msg-lens', mimeType: 'image/jpeg', fileSize: 10, fileUrl: 'https://cdn.meeshy.me/x.jpg', transcription: null, translations: null, createdAt: new Date() };
+
+    expect(serializeAttachmentForSocket({ ...base, lensSlug: 'aurore' } as Record<string, unknown>).lensSlug).toBe('aurore');
+    expect(serializeAttachmentForSocket(base as Record<string, unknown>).lensSlug).toBeNull();
   });
 
   it('aggregates reactions into reactionSummary and currentUserReactions', () => {

@@ -3,6 +3,8 @@
  * Délègue à UploadProcessor et MetadataManager
  */
 
+import { forgetAtTranslator } from '../translatorForget';
+import { forgetSealing, processAtRestFileAccess, type AtRestFileRecord } from './atRest/atRestFiles';
 import { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -11,6 +13,7 @@ import type {
   AttachmentType
 } from '@meeshy/shared/types/attachment';
 import type { EncryptionMode } from '@meeshy/shared/types/encryption';
+import type { UploaderRole } from '@meeshy/shared/types/upload-limits';
 import {
   AttachmentEncryptionService,
   getAttachmentEncryptionService,
@@ -26,7 +29,16 @@ import { attachmentServiceRowSelect } from './attachmentIncludes';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { carrierMessageStillServesWhere } from './carrierMessageLifecycle';
-import { derivedFileCandidates, resolveInsideUploadRoot } from './derivedAttachmentFiles';
+import { conventionalDerivedPaths, derivedFileCandidates, resolveInsideUploadRoot } from './derivedAttachmentFiles';
+import { eraseMirroredCopy } from '../storage/objects/mirroredErasure';
+import { AttachmentBytesSurvivedError, eraseBytesOnlyThisRowCites } from './eraseBytesBeforeRow';
+
+/**
+ * `requireBytesGone` (#11269) : les octets que cette ligne est seule à citer
+ * partent AVANT elle, et elle ne part que s'ils ont vraiment disparu — sinon
+ * `AttachmentBytesSurvivedError`, la ligne gardant la clé pour la reprise.
+ */
+export type DeleteAttachmentOptions = { readonly requireBytesGone?: boolean };
 
 const logger = enhancedLogger.child({ module: 'AttachmentService' });
 
@@ -50,8 +62,8 @@ export class AttachmentService {
 
   // ==================== DÉLÉGATION UPLOAD ====================
 
-  validateFile(file: FileToUpload): AttachmentValidationVerdict {
-    return this.uploadProcessor.validateFile(file);
+  validateFile(file: FileToUpload, role: UploaderRole = 'registered'): AttachmentValidationVerdict {
+    return this.uploadProcessor.validateFile(file, role);
   }
 
   async uploadFile(
@@ -210,6 +222,7 @@ export class AttachmentService {
     createdAt: Date;
     isForwarded: boolean | null;
     capturedInApp?: boolean | null;
+    lensSlug?: string | null;
     isViewOnce: boolean | null;
     viewOnceCount: number | null;
     isBlurred: boolean | null;
@@ -239,6 +252,7 @@ export class AttachmentService {
       createdAt: attachment.createdAt.toISOString(),
       isForwarded: attachment.isForwarded ?? false,
       capturedInApp: attachment.capturedInApp ?? false,
+      lensSlug: attachment.lensSlug ?? null,
       isViewOnce: attachment.isViewOnce ?? false,
       viewOnceCount: attachment.viewOnceCount ?? 0,
       isBlurred: attachment.isBlurred ?? false,
@@ -372,7 +386,7 @@ export class AttachmentService {
    * éternel que rien ne ramasse — `MaintenanceService` ne balaie que les LIGNES
    * sans message, jamais les fichiers.
    */
-  async deleteAttachment(attachmentId: string): Promise<void> {
+  async deleteAttachment(attachmentId: string, options: DeleteAttachmentOptions = {}): Promise<void> {
     const attachment = await this.prisma.messageAttachment.findUnique({
       where: { id: attachmentId },
     });
@@ -380,10 +394,19 @@ export class AttachmentService {
     if (!attachment) {
       throw new Error('Attachment not found');
     }
+    // #13100 — lues AVANT les effacements, qui retirent les lignes de scellement.
+    const replacing = await this.replacingRecordsOf(attachmentId);
+
+    if (options.requireBytesGone === true) {
+      const survivors = await eraseBytesOnlyThisRowCites(this.prisma, this.uploadBasePath, attachment);
+      if (survivors.length > 0) throw new AttachmentBytesSurvivedError(survivors);
+    }
 
     await this.prisma.messageAttachment.delete({
       where: { id: attachmentId },
     });
+    // #13102 — la transcription et les pistes que le translator en avait tirées.
+    await forgetAtTranslator({ attachmentIds: [attachmentId] });
 
     await this.unlinkIfUnreferenced('filePath', attachment.filePath);
 
@@ -392,6 +415,58 @@ export class AttachmentService {
     }
 
     await this.unlinkDerivedFiles(attachment);
+    await this.unlinkConventionalDerivedFiles(attachment.filePath);
+    await this.unlinkReplacedClears(replacing);
+  }
+
+  private async replacingRecordsOf(attachmentId: string): Promise<readonly AtRestFileRecord[]> {
+    const access = processAtRestFileAccess();
+    if (!access) return [];
+    const records = await access.store.ofAttachment(attachmentId).catch(() => [] as readonly AtRestFileRecord[]);
+    return records.filter((record) => record.replacedKey !== null);
+  }
+
+  /**
+   * #13100 — les clairs qu'un scellement de cette pièce a remplacés et qui
+   * attendaient leur effacement (une ligne retardataire les désignait, ou la
+   * pièce est brûlée avant la fin du scellement) partent avec elle, sauf si
+   * une ligne désigne encore l'ancien original.
+   */
+  private async unlinkReplacedClears(replacing: readonly AtRestFileRecord[]): Promise<void> {
+    const oldOriginal = replacing.find((record) => record.role === 'original')?.replacedKey;
+    if (!oldOriginal) return;
+    try {
+      if ((await this.prisma.messageAttachment.count({ where: { filePath: oldOriginal } })) > 0) return;
+    } catch (error) {
+      logger.error('Erreur suppression fichiers', error as Error);
+      return;
+    }
+    const clears = [...new Set(replacing.map((record) => record.replacedKey as string))]
+      .map((key) => resolveInsideUploadRoot(this.uploadBasePath, key))
+      .filter((fullPath): fullPath is string => fullPath !== null);
+    await Promise.all(clears.map((fullPath) => fs.unlink(fullPath).catch(() => undefined).then(() => eraseMirroredCopy(fullPath, this.uploadBasePath))));
+  }
+
+  /**
+   * #11264 (contre-audit S9, N2) — les rendus que le worker de médias écrivait
+   * PENDANT cette suppression n'étaient pas encore sur la ligne lue plus haut.
+   * Une fois qu'aucune ligne ne partage plus les octets, leurs chemins
+   * conventionnels partent aussi. Un comptage qui échoue garde tout.
+   */
+  private async unlinkConventionalDerivedFiles(filePath: string): Promise<void> {
+    try {
+      if ((await this.prisma.messageAttachment.count({ where: { filePath } })) > 0) return;
+    } catch (error) {
+      logger.error('Erreur suppression fichiers', error as Error);
+      return;
+    }
+    const files = conventionalDerivedPaths(filePath)
+      .map((candidate) => resolveInsideUploadRoot(this.uploadBasePath, candidate))
+      .filter((fullPath): fullPath is string => fullPath !== null);
+    // Seuls les fichiers PRÉSENTS : la plupart de ces chemins n'existent pas
+    // (une image n'a pas de rendu H.264), et leur absence n'est pas une erreur.
+    const present = await Promise.all(files.map((fullPath) => Promise.resolve().then(() => fs.stat(fullPath)).then(() => fullPath, () => null)));
+    await Promise.all(present.filter((fullPath): fullPath is string => fullPath !== null).map((fullPath) => this.unlinkQuietly(fullPath)));
   }
 
   /**
@@ -407,6 +482,8 @@ export class AttachmentService {
     thumbnailPath: string | null;
     translations?: unknown;
     imageVariants?: unknown;
+    avifVariants?: unknown;
+    renditions?: unknown;
   }): Promise<void> {
     const candidates = derivedFileCandidates(attachment);
     if (candidates.length === 0) {
@@ -418,11 +495,13 @@ export class AttachmentService {
       thumbnailPath: string | null;
       translations: unknown;
       imageVariants: unknown;
+      avifVariants: unknown;
+      renditions: unknown;
     }>;
     try {
       survivors = await this.prisma.messageAttachment.findMany({
         where: { filePath: attachment.filePath },
-        select: { filePath: true, thumbnailPath: true, translations: true, imageVariants: true },
+        select: { filePath: true, thumbnailPath: true, translations: true, imageVariants: true, avifVariants: true, renditions: true },
       });
     } catch (error) {
       logger.error('Erreur suppression fichiers', error as Error);
@@ -477,8 +556,10 @@ export class AttachmentService {
     try {
       await fs.unlink(fullPath);
     } catch (error) {
-      logger.error('Erreur suppression fichiers', error as Error);
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') logger.error('Erreur suppression fichiers', error as Error);
     }
+    await eraseMirroredCopy(fullPath, this.uploadBasePath);
+    await forgetSealing(fullPath, this.uploadBasePath);
   }
 
   /**

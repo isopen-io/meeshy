@@ -5,16 +5,19 @@ import type { MentionCandidate } from '@/lib/api/mention-suggestions';
 
 import type { FriendRequestRecord } from '@/lib/api/friend-requests';
 
+import { mentionReachOf } from '@meeshy/shared/utils/mention-lookup';
+
 import {
   activeMentionQuery,
   composeMentionList,
   contactMentionCandidates,
+  conversationMentionReach,
   filterMentionCandidates,
   insertMention,
   localMentionCandidates,
+  localMentionMatches,
   mergeMentionCandidates,
   peopleMentionCandidates,
-  queriesRemote,
   rankMentionCandidates,
 } from './mention-query';
 
@@ -114,11 +117,17 @@ describe('insertMention — `@username ` à la place de la requête', () => {
   });
 });
 
-describe('queriesRemote — la passerelle n’est interrogée qu’à partir de deux caractères', () => {
-  test('seuil', () => {
-    expect(queriesRemote('')).toBe(false);
-    expect(queriesRemote('a')).toBe(false);
-    expect(queriesRemote('al')).toBe(true);
+describe('localMentionMatches — les correspondances LOCALES que compte la loi de déclenchement (#14053)', () => {
+  const contacts = [candidate({ id: 'c1', username: 'claire', badge: 'friend' }), candidate({ id: 'p1', username: 'paula', badge: 'friend' })];
+  const participants = [candidate({ id: 'p1', username: 'paula' }), candidate({ id: 'p2', username: 'pierre' }), candidate({ id: 'me', username: 'moi' })];
+
+  test('contacts puis participants, filtrés et triés par la saisie, sans doublon ni soi', () => {
+    expect(localMentionMatches({ contacts, participants, query: 'p', selfId: 'me' }).map((c) => c.id)).toEqual(['p1', 'p2']);
+    expect(localMentionMatches({ contacts, participants, query: '', selfId: 'me' }).map((c) => c.id)).toEqual(['c1', 'p1', 'p2']);
+  });
+
+  test('deux lettres sans personne en local : aucune correspondance', () => {
+    expect(localMentionMatches({ contacts, participants, query: 'zz', selfId: 'me' })).toEqual([]);
   });
 });
 
@@ -202,10 +211,103 @@ describe('composeMentionList — contacts, puis participants, puis autres, sans 
     expect(list.map((c) => c.id)).toEqual(['c1', 'p1', 'p2', 'o1']);
   });
 
+  test('le serveur suit les locaux dans SON ordre, privé de ce qu’ils ont déjà rendu', () => {
+    const served = [candidate({ id: 'o2', username: 'oscar' }), candidate({ id: 'c1', username: 'claire' }), candidate({ id: 'o1', username: 'olga' })];
+    const list = composeMentionList({ contacts, participants, remote: served, query: '', selfId: 'me' });
+    expect(list.map((c) => c.id)).toEqual(['c1', 'p1', 'p2', 'o2', 'o1']);
+    expect(list[0]?.badge).toBe('friend');
+  });
+
   test('un contact qui parle dans le fil reste dans le groupe des contacts', () => {
     const list = composeMentionList({ contacts, participants, remote: [], query: 'p', selfId: 'me' });
     expect(list.map((c) => c.id)).toEqual(['p1', 'p2']);
     expect(list[0]?.badge).toBe('friend');
+  });
+});
+
+describe('une suggestion sans effet ne s’affiche pas (#14071)', () => {
+  const contacts = [candidate({ id: 'c1', username: 'claire', badge: 'friend' }), candidate({ id: 'p1', username: 'paula', badge: 'friend' })];
+  const participants = [candidate({ id: 'p1', username: 'paula' }), candidate({ id: 'p2', username: 'pierre' })];
+  const groupReach = mentionReachOf({ type: 'group', memberIds: ['me', 'p1', 'p2'] });
+
+  test('dans un groupe, le contact qui n’en est pas membre est retiré — et ne compte pas pour la loi de déclenchement', () => {
+    expect(localMentionMatches({ contacts, participants, query: 'c', selfId: 'me', reach: groupReach })).toEqual([]);
+    const list = composeMentionList({ contacts, participants, remote: [], query: '', selfId: 'me', reach: groupReach });
+    expect(list.map((c) => c.id)).toEqual(['p1', 'p2']);
+  });
+
+  test('dans une conversation directe, seul l’interlocuteur reste', () => {
+    const reach = mentionReachOf({ type: 'direct', memberIds: ['me', 'p1'] });
+    const list = composeMentionList({ contacts, participants, remote: [], query: '', selfId: 'me', reach });
+    expect(list.map((c) => c.id)).toEqual(['p1']);
+  });
+
+  test('un non-membre, ou un type inconnu, ne voit rien', () => {
+    const remote = [candidate({ id: 'o1', username: 'olga' })];
+    const outsider = mentionReachOf({ type: 'public', isMember: false, memberIds: [] });
+    expect(composeMentionList({ contacts, participants, remote, query: '', selfId: 'me', reach: outsider })).toEqual([]);
+    const unknown = mentionReachOf({ type: 'channel', memberIds: ['p1'] });
+    expect(composeMentionList({ contacts, participants, remote, query: '', selfId: 'me', reach: unknown })).toEqual([]);
+  });
+
+  test('une conversation ouverte garde tout le monde', () => {
+    const reach = mentionReachOf({ type: 'public', memberIds: ['me'] });
+    const list = composeMentionList({ contacts, participants, remote: [], query: '', selfId: 'me', reach });
+    expect(list.map((c) => c.id)).toEqual(['c1', 'p1', 'p2']);
+  });
+});
+
+describe('conversationMentionReach — la portée projetée depuis la conversation ouverte (#14071)', () => {
+  const viewer = { viewerId: 'me', isGuest: false };
+
+  test('les membres connus sont les seuls participants servis — jamais un auteur de l’historique (parti peut-être)', () => {
+    const reach = conversationMentionReach({
+      conversation: { type: 'group', currentUserRole: 'member', participants: [{ userId: 'p1' }, { userId: null }] },
+      ...viewer,
+    });
+    expect(reach).toEqual({ scope: 'members', memberIds: ['p1'] });
+  });
+
+  test('sans conversation chargée, aucune portée — rien n’est proposé', () => {
+    expect(conversationMentionReach({ conversation: undefined, ...viewer }).scope).toBeNull();
+  });
+
+  test('un non-membre d’une conversation publique ne cite personne (#14066)', () => {
+    const served = (over: { readonly isMember?: boolean; readonly currentUserRole?: string | null }) =>
+      conversationMentionReach({ conversation: { type: 'public', participants: [{ userId: 'p1' }], ...over }, ...viewer }).scope;
+    expect(served({ isMember: false, currentUserRole: 'member' })).toBeNull();
+    expect(served({ currentUserRole: null })).toBeNull();
+    expect(served({})).toBeNull();
+    expect(served({ currentUserRole: 'member' })).toBe('directory');
+    expect(served({ isMember: true })).toBe('directory');
+  });
+
+  test('un INVITÉ de lien dans un groupe cite les auteurs du fil que la passerelle lui a servis', () => {
+    const author = candidate({ id: 'u-author', username: 'alice' });
+    const reach = conversationMentionReach({
+      conversation: { type: 'group', participants: [] },
+      viewerId: null,
+      isGuest: true,
+      threadAuthorIds: [author.id],
+    });
+    const list = composeMentionList({ contacts: [], participants: [author], remote: [], query: '', selfId: null, reach });
+    expect(list.map((c) => c.id)).toEqual(['u-author']);
+  });
+
+  test('pour un membre inscrit, les auteurs du fil ne sont PAS des membres connus (partis peut-être)', () => {
+    const reach = conversationMentionReach({
+      conversation: { type: 'group', currentUserRole: 'member', participants: [{ userId: 'p1' }] },
+      ...viewer,
+      threadAuthorIds: ['u-gone'],
+    });
+    expect(reach.memberIds).toEqual(['p1']);
+  });
+
+  test('l’appartenance se lit aussi dans le roster servi, et un invité est membre par sa session', () => {
+    const roster = { type: 'public', participants: [{ userId: 'me' }] };
+    expect(conversationMentionReach({ conversation: roster, ...viewer }).scope).toBe('directory');
+    const guest = { type: 'public', participants: [] };
+    expect(conversationMentionReach({ conversation: guest, viewerId: null, isGuest: true }).scope).toBe('directory');
   });
 });
 

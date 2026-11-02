@@ -10,7 +10,8 @@ enum SessionOpeningStep: Equatable {
     case promptPushPermission
     case refreshUnreadCount
     case reRegisterPushTokens
-    case uploadE2EEBundle
+    /// #3707 — l'installation s'enrôle auprès de l'annuaire libsignal et ouvre ses enveloppes.
+    case startEndToEnd(userId: String?)
     case migrateKeychain
 }
 
@@ -19,6 +20,7 @@ enum SessionClosingStep: Equatable {
     case resetNotifications
     case clearFriendships
     case clearE2EESessions
+    case stopEndToEnd
     case unbindCache
     case unregisterVoIP
     case endActiveCall
@@ -42,14 +44,14 @@ enum SessionTransitionPlan {
             friendships,
             [.reconnectSockets, .activateConversationStoreBridge],
             [.promptPushPermission, .refreshUnreadCount, .reRegisterPushTokens],
-            [.uploadE2EEBundle, .migrateKeychain],
+            [.startEndToEnd(userId: context.userId), .migrateKeychain],
         ].flatMap { $0 }
     }
 
     static func closing(_ context: SessionTransitionContext) -> [SessionClosingStep] {
         let endCall: [SessionClosingStep] = context.hasActiveCall ? [.endActiveCall] : []
         return [
-            [.untagCrashReports, .resetNotifications, .clearFriendships, .clearE2EESessions, .unbindCache, .unregisterVoIP],
+            [.untagCrashReports, .resetNotifications, .clearFriendships, .clearE2EESessions, .stopEndToEnd, .unbindCache, .unregisterVoIP],
             endCall,
             [.disconnectSockets, .stopSocketRelays, .cancelBackgroundTasks],
         ].flatMap { $0 }

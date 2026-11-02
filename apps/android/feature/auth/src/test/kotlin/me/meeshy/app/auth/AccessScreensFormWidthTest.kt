@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
+import me.meeshy.ui.component.auth.AUTH_TEXT_FIELD_FRAME_TAG
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -80,7 +82,7 @@ class AccessScreensFormWidthTest {
         val viewModel = authViewModel()
         show { LoginScreen(viewModel = viewModel, onAuthenticated = {}) }
 
-        compose.assertInCenteredFormColumn(hasSetTextAction())
+        compose.assertInCenteredFormColumn(authFieldFrameOrInput())
     }
 
     @Test
@@ -89,7 +91,7 @@ class AccessScreensFormWidthTest {
         val viewModel = authViewModel()
         show { LoginScreen(viewModel = viewModel, onAuthenticated = {}) }
 
-        compose.assertSpansPhoneWidth(hasSetTextAction(), horizontalPadding = MeeshySpacing.xl)
+        compose.assertSpansPhoneWidth(authFieldFrameOrInput(), horizontalPadding = MeeshySpacing.xl)
     }
 
     @Test
@@ -116,7 +118,7 @@ class AccessScreensFormWidthTest {
         val viewModel = ForgotPasswordViewModel(authRepository())
         show { ForgotPasswordScreen(onBack = {}, viewModel = viewModel) }
 
-        compose.assertInCenteredFormColumn(hasSetTextAction())
+        compose.assertInCenteredFormColumn(authFieldFrameOrInput())
     }
 
     @Test
@@ -125,7 +127,7 @@ class AccessScreensFormWidthTest {
         val viewModel = ForgotPasswordViewModel(authRepository())
         show { ForgotPasswordScreen(onBack = {}, viewModel = viewModel) }
 
-        compose.assertSpansPhoneWidth(hasSetTextAction(), horizontalPadding = MeeshySpacing.xl)
+        compose.assertSpansPhoneWidth(authFieldFrameOrInput(), horizontalPadding = MeeshySpacing.xl)
     }
 
     @Test
@@ -134,7 +136,7 @@ class AccessScreensFormWidthTest {
         val viewModel = MagicLinkViewModel(authRepository())
         show { MagicLinkScreen(onBack = {}, viewModel = viewModel) }
 
-        compose.assertInCenteredFormColumn(hasSetTextAction())
+        compose.assertInCenteredFormColumn(authFieldFrameOrInput())
     }
 
     @Test
@@ -143,7 +145,7 @@ class AccessScreensFormWidthTest {
         val viewModel = MagicLinkViewModel(authRepository())
         show { MagicLinkScreen(onBack = {}, viewModel = viewModel) }
 
-        compose.assertSpansPhoneWidth(hasSetTextAction(), horizontalPadding = MeeshySpacing.xl)
+        compose.assertSpansPhoneWidth(authFieldFrameOrInput(), horizontalPadding = MeeshySpacing.xl)
     }
 
     @Test
@@ -205,7 +207,9 @@ class AccessScreensFormWidthTest {
         compose.waitForIdle()
     }
 
-    private fun authRepository(): AuthRepository = mockk(relaxed = true)
+    private fun authRepository(): AuthRepository = mockk<AuthRepository>(relaxed = true).also {
+        coEvery { it.restoreBackedUpSession() } returns null
+    }
 
     private fun authViewModel(): AuthViewModel = AuthViewModel(
         authRepository(),
@@ -229,10 +233,13 @@ class AccessScreensFormWidthTest {
 
     private fun refusedLinkViewModel(): MagicLinkValidateViewModel {
         val repository = authRepository()
-        coEvery { repository.loginWithMagicLink(any()) } returns
+        coEvery { repository.verifyMagicLink(any()) } returns
             NetworkResult.Failure(ApiError(message = EXPIRED_LINK_MESSAGE))
         return MagicLinkValidateViewModel(
             repository,
+            mockk(relaxed = true),
+            SessionOpeningGate(),
+            mockk(relaxed = true),
             SavedStateHandle(mapOf(MagicLinkValidateViewModel.TOKEN_ARG to "expired-token")),
         )
     }
@@ -315,3 +322,7 @@ private fun ComposeContentTestRule.assertSpansPhoneWidth(matcher: SemanticsMatch
     assertWithMessage("$widest no longer starts at the phone gutter")
         .that(widest.left.value).isWithin(TOLERANCE_DP).of(horizontalPadding.value)
 }
+
+/** Le cadre iOS d'un champ d'accès (icône + saisie) ; à défaut, la saisie elle-même. */
+private fun authFieldFrameOrInput(): SemanticsMatcher =
+    hasTestTag(AUTH_TEXT_FIELD_FRAME_TAG).or(hasSetTextAction())

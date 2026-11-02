@@ -137,18 +137,30 @@ class PhoneRecoveryTest {
     // --- PhoneRecoveryInput.canLookup ---
 
     @Test
-    fun canLookup_trueForEightOrMoreDigits() {
+    fun canLookup_trueForNineOrMoreDigits() {
         assertThat(PhoneRecoveryInput.canLookup("612345678")).isTrue()
     }
 
     @Test
     fun canLookup_countsDigitsIgnoringFormatting() {
-        assertThat(PhoneRecoveryInput.canLookup("06 12 34 56")).isTrue()
+        assertThat(PhoneRecoveryInput.canLookup("06 12 34 56 78")).isTrue()
     }
 
     @Test
     fun canLookup_falseForTooFewDigits() {
         assertThat(PhoneRecoveryInput.canLookup("12 34")).isFalse()
+    }
+
+    @Test
+    fun canLookup_falseForEightDigitsSinceTheBoundIsNine() {
+        assertThat(PhoneRecoveryInput.canLookup("06 12 34 56")).isFalse()
+    }
+
+    @Test
+    fun canLookup_falseForFillerNumbers() {
+        assertThat(PhoneRecoveryInput.canLookup("1111100000")).isFalse()
+        assertThat(PhoneRecoveryInput.canLookup("123123123")).isFalse()
+        assertThat(PhoneRecoveryInput.canLookup("0642424242")).isTrue()
     }
 
     @Test

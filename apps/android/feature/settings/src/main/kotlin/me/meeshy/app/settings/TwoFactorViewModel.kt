@@ -3,13 +3,18 @@ package me.meeshy.app.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.model.TwoFactorCode
+import me.meeshy.sdk.model.TwoFactorSetupFlow
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.TwoFactorSetupInfo
 import javax.inject.Inject
@@ -24,8 +29,19 @@ enum class TwoFactorStage { STATUS, SETUP, BACKUP_CODES, DISABLE, REGENERATE_COD
  */
 enum class TwoFactorErrorKind { STATUS, SETUP, INVALID_CODE, DISABLE, BACKUP_CODES }
 
+/** Effets ponctuels : le presse-papiers et les haptiques sont du ressort de l'écran. */
+sealed interface TwoFactorEffect {
+    data class CopySecret(val text: String) : TwoFactorEffect
+    data class CopyBackupCodes(val text: String) : TwoFactorEffect
+    data object HapticSuccess : TwoFactorEffect
+    data object HapticError : TwoFactorEffect
+}
+
 data class TwoFactorUiState(
     val stage: TwoFactorStage = TwoFactorStage.STATUS,
+    val flow: TwoFactorSetupFlow = TwoFactorSetupFlow(),
+    val copiedKey: Boolean = false,
+    val copiedCodes: Boolean = false,
     val isEnabled: Boolean = false,
     val backupCodesCount: Int = 0,
     val isLoading: Boolean = false,
@@ -61,6 +77,9 @@ class TwoFactorViewModel @Inject constructor(
     private val _state = MutableStateFlow(TwoFactorUiState())
     val state: StateFlow<TwoFactorUiState> = _state.asStateFlow()
 
+    private val _effects = Channel<TwoFactorEffect>(Channel.BUFFERED)
+    val effects: Flow<TwoFactorEffect> = _effects.receiveAsFlow()
+
     init {
         loadStatus()
     }
@@ -84,23 +103,72 @@ class TwoFactorViewModel @Inject constructor(
     }
 
     fun beginSetup() {
+        val snapshot = _state.value
+        if (snapshot.stage == TwoFactorStage.SETUP && snapshot.isSubmitting) return
         _state.update {
-            it.copy(stage = TwoFactorStage.SETUP, isSubmitting = true, error = null, codeInput = "")
+            it.copy(
+                stage = TwoFactorStage.SETUP,
+                flow = it.flow.started(),
+                isSubmitting = true,
+                error = null,
+                codeInput = "",
+                setupData = null,
+            )
         }
         viewModelScope.launch {
             when (val result = authRepository.beginTwoFactorSetup()) {
                 is NetworkResult.Success -> _state.update {
-                    it.copy(isSubmitting = false, setupData = result.data)
+                    it.copy(isSubmitting = false, setupData = result.data, flow = it.flow.setupLoaded())
                 }
                 is NetworkResult.Failure -> _state.update {
-                    it.copy(isSubmitting = false, stage = TwoFactorStage.STATUS, error = TwoFactorErrorKind.SETUP)
+                    it.copy(isSubmitting = false, flow = it.flow.setupFailed(), error = TwoFactorErrorKind.SETUP)
                 }
             }
         }
     }
 
     fun onCodeChange(value: String) {
-        _state.update { it.copy(codeInput = value, error = null) }
+        _state.update {
+            it.copy(
+                codeInput = value.filter(Char::isDigit).take(TOTP_LENGTH),
+                flow = it.flow.codeEdited(),
+                error = null,
+            )
+        }
+    }
+
+    /** « Suivant » : du QR vers la saisie du code. */
+    fun onNext() {
+        _state.update { it.copy(flow = it.flow.next(), error = null) }
+    }
+
+    /** « Retour au QR code ». */
+    fun onBackToQr() {
+        _state.update { it.copy(flow = it.flow.backToQr(), error = null) }
+    }
+
+    /** Copie la clé secrète : un seul effet par fenêtre de 2 s (la coche verte). */
+    fun copySecret() {
+        val secret = _state.value.setupData?.secret ?: return
+        if (_state.value.copiedKey) return
+        _state.update { it.copy(copiedKey = true) }
+        _effects.trySend(TwoFactorEffect.CopySecret(secret))
+        viewModelScope.launch {
+            delay(COPIED_FEEDBACK_MS)
+            _state.update { it.copy(copiedKey = false) }
+        }
+    }
+
+    /** Copie tous les codes de secours, un par ligne. */
+    fun copyBackupCodes() {
+        val codes = _state.value.backupCodes
+        if (codes.isEmpty() || _state.value.copiedCodes) return
+        _state.update { it.copy(copiedCodes = true) }
+        _effects.trySend(TwoFactorEffect.CopyBackupCodes(codes.joinToString("\n")))
+        viewModelScope.launch {
+            delay(COPIED_FEEDBACK_MS)
+            _state.update { it.copy(copiedCodes = false) }
+        }
     }
 
     fun confirmSetup() {
@@ -109,18 +177,22 @@ class TwoFactorViewModel @Inject constructor(
         _state.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             when (val result = authRepository.enableTwoFactor(snapshot.codeInput)) {
-                is NetworkResult.Success -> _state.update {
+                is NetworkResult.Success -> updateAndCue(TwoFactorEffect.HapticSuccess) {
                     it.copy(
                         isSubmitting = false,
                         isEnabled = true,
                         stage = TwoFactorStage.BACKUP_CODES,
+                        flow = it.flow.verified(),
                         backupCodes = result.data.backupCodes,
                         setupData = null,
                         codeInput = "",
                     )
                 }
-                is NetworkResult.Failure -> _state.update {
-                    it.copy(isSubmitting = false, error = TwoFactorErrorKind.INVALID_CODE)
+                is NetworkResult.Failure -> {
+                    _state.update {
+                        it.copy(isSubmitting = false, flow = it.flow.codeInvalid(), error = TwoFactorErrorKind.INVALID_CODE)
+                    }
+                    _effects.trySend(TwoFactorEffect.HapticError)
                 }
             }
         }
@@ -136,7 +208,7 @@ class TwoFactorViewModel @Inject constructor(
         _state.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             when (val result = authRepository.regenerateTwoFactorBackupCodes(snapshot.codeInput)) {
-                is NetworkResult.Success -> _state.update {
+                is NetworkResult.Success -> updateAndCue(TwoFactorEffect.HapticSuccess) {
                     it.copy(
                         isSubmitting = false,
                         stage = TwoFactorStage.BACKUP_CODES,
@@ -144,8 +216,9 @@ class TwoFactorViewModel @Inject constructor(
                         codeInput = "",
                     )
                 }
-                is NetworkResult.Failure -> _state.update {
-                    it.copy(isSubmitting = false, error = TwoFactorErrorKind.BACKUP_CODES)
+                is NetworkResult.Failure -> {
+                    _state.update { it.copy(isSubmitting = false, error = TwoFactorErrorKind.BACKUP_CODES) }
+                    _effects.trySend(TwoFactorEffect.HapticError)
                 }
             }
         }
@@ -153,7 +226,14 @@ class TwoFactorViewModel @Inject constructor(
 
     fun acknowledgeBackupCodes() {
         _state.update {
-            it.copy(stage = TwoFactorStage.STATUS, backupCodes = emptyList(), codeInput = "", setupData = null)
+            it.copy(
+                stage = TwoFactorStage.STATUS,
+                flow = TwoFactorSetupFlow(),
+                backupCodes = emptyList(),
+                codeInput = "",
+                setupData = null,
+                copiedCodes = false,
+            )
         }
     }
 
@@ -177,7 +257,7 @@ class TwoFactorViewModel @Inject constructor(
         _state.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             when (authRepository.disableTwoFactor(snapshot.disablePassword, snapshot.disableCode)) {
-                is NetworkResult.Success -> _state.update {
+                is NetworkResult.Success -> updateAndCue(TwoFactorEffect.HapticSuccess) {
                     it.copy(
                         isSubmitting = false,
                         isEnabled = false,
@@ -186,8 +266,9 @@ class TwoFactorViewModel @Inject constructor(
                         disableCode = "",
                     )
                 }
-                is NetworkResult.Failure -> _state.update {
-                    it.copy(isSubmitting = false, error = TwoFactorErrorKind.DISABLE)
+                is NetworkResult.Failure -> {
+                    _state.update { it.copy(isSubmitting = false, error = TwoFactorErrorKind.DISABLE) }
+                    _effects.trySend(TwoFactorEffect.HapticError)
                 }
             }
         }
@@ -215,6 +296,7 @@ class TwoFactorViewModel @Inject constructor(
         _state.update {
             it.copy(
                 stage = TwoFactorStage.STATUS,
+                flow = TwoFactorSetupFlow(),
                 setupData = null,
                 codeInput = "",
                 disablePassword = "",
@@ -222,5 +304,18 @@ class TwoFactorViewModel @Inject constructor(
                 error = null,
             )
         }
+    }
+
+    private inline fun updateAndCue(
+        effect: TwoFactorEffect,
+        crossinline transform: (TwoFactorUiState) -> TwoFactorUiState,
+    ) {
+        _state.update { transform(it) }
+        _effects.trySend(effect)
+    }
+
+    private companion object {
+        const val TOTP_LENGTH = 6
+        const val COPIED_FEEDBACK_MS = 2_000L
     }
 }

@@ -35,7 +35,6 @@
     <string name="settings_account_contact">E-Mail &amp; Telefon</string>
     <string name="settings_clear_media_cache">Medien-Cache leeren</string>
     <string name="settings_storage_used">Belegter Speicher</string>
-    <string name="settings_version">Version 1.0.0</string>
     <!-- Two-factor authentication (§L) -->
     <string name="twofactor_status_enabled">Aktiviert</string>
     <string name="twofactor_enable_button">Zwei-Faktor-Authentifizierung einrichten</string>
@@ -67,11 +66,6 @@
     <!-- Privacy & visibility (§L) -->
     <string name="settings_privacy">Privatsphäre &amp; Sichtbarkeit</string>
     <string name="privacy_title">Privatsphäre &amp; Sichtbarkeit</string>
-    <string name="privacy_last_seen">Zuletzt online</string>
-    <string name="privacy_hide_from_search">In der Suche ausblenden</string>
-    <string name="privacy_group_invites">Gruppeneinladungen</string>
-    <string name="privacy_save_media">Medien in der Galerie speichern</string>
-    <string name="privacy_share_data">Nutzungsdaten teilen</string>
     <!-- Account deletion (§L) -->
     <string name="delete_account_warning_title">Das lässt sich nicht rückgängig machen</string>
     <string name="delete_account_warning_intro">Beim Löschen deines Kontos wird dauerhaft entfernt:</string>

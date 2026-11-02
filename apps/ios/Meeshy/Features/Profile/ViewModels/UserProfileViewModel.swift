@@ -1,0 +1,278 @@
+import SwiftUI
+import Combine
+import os
+import MeeshySDK
+import MeeshyUI
+
+@MainActor
+final class UserProfileViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+    @Published var profileUser: ProfileSheetUser
+    @Published var fullUser: MeeshyUser?
+    @Published var sharedConversations: [Conversation] = []
+    @Published var isLoading = false
+    @Published var isBlocked = false
+    @Published var isBlockedByTarget = false
+    @Published var userStats: UserStats?
+    @Published var isLoadingStats = false
+    @Published var statsError: String?
+
+    /// Motif du dernier échec de chargement du PROFIL, `nil` quand le dernier
+    /// aller-retour a abouti. `statsError` couvrait déjà les statistiques ; le
+    /// profil lui-même n'avait que son journal, donc une panne y ressemblait à
+    /// un profil vide.
+    ///
+    /// ⚠️ Aucune vue de production ne monte ce ViewModel à ce jour (mesuré au
+    /// #7007 : le seul `UserProfileViewModel(...)` du dépôt est dans ses
+    /// témoins ; l'écran de profil est `UserProfileSheet`, qui charge par
+    /// lui-même). L'état est donc juste et testé, mais il n'atteint encore
+    /// aucun lecteur — c'est un suivi, pas une correction livrée.
+    @Published private(set) var profileError: String?
+
+    private static let logger = MeeshyLog.logger(.profile)
+
+    // MARK: - Dependencies
+
+    private let authManager: AuthManaging
+    private let blockService: BlockServiceProviding
+    private let userService: UserServiceProviding
+    private let profileLoading: any ProfileLoading
+
+    var isCurrentUser: Bool {
+        guard let currentId = authManager.currentUser?.id else { return false }
+        if profileUser.userId == currentId { return true }
+        if let currentUsername = authManager.currentUser?.username {
+            return profileUser.username == currentUsername
+        }
+        return false
+    }
+
+    init(
+        user: ProfileSheetUser,
+        authManager: AuthManaging = AuthManager.shared,
+        blockService: BlockServiceProviding = BlockService.shared,
+        userService: UserServiceProviding = UserService.shared,
+        profileLoading: (any ProfileLoading)? = nil
+    ) {
+        self.authManager = authManager
+        self.blockService = blockService
+        self.userService = userService
+        self.profileLoading = profileLoading ?? LiveProfileLoading()
+        self.profileUser = user
+        self.isBlocked = Self.checkIsBlocked(userId: user.userId, authManager: authManager, blockService: blockService)
+    }
+
+    private var resolvedIdentifier: String? {
+        profileUser.userId ?? (profileUser.username.isEmpty ? nil : profileUser.username)
+    }
+
+    func loadFullProfile() async {
+        guard let identifier = resolvedIdentifier, !isCurrentUser else { return }
+
+        let cached = await profileLoading.cachedProfile(for: identifier)
+        switch cached {
+        case .fresh(let data, _):
+            fullUser = data.first
+            hydrateProfileUserIfNeeded(from: data.first)
+            return
+        case .stale(let data, _):
+            fullUser = data.first
+            hydrateProfileUserIfNeeded(from: data.first)
+            await refreshProfile(idOrUsername: identifier)
+        case .expired, .empty:
+            isLoading = fullUser == nil
+            await refreshProfile(idOrUsername: identifier)
+        }
+    }
+
+    private func refreshProfile(idOrUsername: String) async {
+        defer { isLoading = false }
+        do {
+            // UN aller-retour, pas deux (#4161). Cet écran demandait
+            // systématiquement le profil PUIS les statistiques, à deux
+            // adresses. `?expand=stats` les sert ensemble, pour le même coût
+            // serveur, et la garde des compteurs intimes reste celle de la
+            // route dédiée — soi et l'administration. `presence` POSE la
+            // question de la présence (#9063) : la passerelle ne la sert qu'à
+            // un ami accepté, sous les réglages de la personne regardée.
+            let profil = try await userService.getProfile(handle: idOrUsername, expand: [.stats, .presence])
+            let user = profil.user
+            if let stats = profil.stats {
+                userStats = stats
+                await bestEffort("userProfileViewModel.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([stats], for: user.id) }
+            }
+            await profileLoading.storeProfile(user, lookupKey: idOrUsername)
+            fullUser = user
+            hydrateProfileUserIfNeeded(from: user)
+            if profileError != nil { profileError = nil }
+        } catch MeeshyError.forbidden {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`, and 403 arrives as its own `.forbidden`
+            // case, never `.server`); this catch was dead code, so
+            // `isBlockedByTarget` was never set and the profile UI never
+            // reflected being blocked by the viewed user.
+            isBlockedByTarget = true
+        } catch {
+            profileError = String(localized: "common.error.generic")
+            UserProfileViewModel.logger.error("profile refresh failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Rejoue le chargement du profil après une panne — ce que doit appeler le
+    /// bouton « Réessayer » de l'écran qui montrera `profileError`.
+    func retryLoadFullProfile() async {
+        profileError = nil
+        await loadFullProfile()
+    }
+
+    private func hydrateProfileUserIfNeeded(from user: MeeshyUser?) {
+        guard let user else { return }
+        UserDisplayNameCache.shared.trackFromUser(user)
+        guard profileUser.userId == nil else { return }
+        profileUser = ProfileSheetUser.from(user: user, accentColor: profileUser.accentColor)
+    }
+
+    func loadUserStats() async {
+        guard let userId = profileUser.userId ?? fullUser?.id else { return }
+        statsError = nil
+
+        let cached = await CacheCoordinator.shared.stats.load(for: userId)
+        switch cached {
+        case .fresh(let data, _):
+            userStats = data.first
+            return
+        case .stale(let data, _):
+            userStats = data.first
+            await refreshStats(userId: userId)
+        case .expired, .empty:
+            isLoadingStats = userStats == nil
+            await refreshStats(userId: userId)
+        }
+    }
+
+    private func refreshStats(userId: String) async {
+        defer { isLoadingStats = false }
+        do {
+            let stats = try await userService.getUserStats(userId: userId)
+            userStats = stats
+            await bestEffort("userProfileViewModel.stats.save.2", category: .cache) { try await CacheCoordinator.shared.stats.save([stats], for: userId) }
+        } catch {
+            statsError = "Impossible de charger les statistiques"
+        }
+    }
+
+    func findSharedConversations(from allConversations: [Conversation]) {
+        guard let targetId = profileUser.userId ?? fullUser?.id else { return }
+        sharedConversations = allConversations.filter { conv in
+            conv.type == .direct && conv.participantUserId == targetId
+        }
+    }
+
+    /// Wave 1 Phase B — block flows through the offline outbox so the
+    /// gateway's `MutationLog` can dedup retries, the UI flips optimistically
+    /// regardless of network state, and a queued block survives an app
+    /// kill before the request reaches the wire. The local BlockService
+    /// cache is updated synchronously so `isBlocked(userId:)` reads stay
+    /// consistent with the optimistic UI.
+    ///
+    /// Phase 4 Task 4.9 — wraps the optimistic write in a snapshot/rollback
+    /// pair driven by `OfflineQueue.outcomeStream(for:)`. If the OutboxFlusher
+    /// escalates the row to `.exhausted` (`maxAttempts` retries failed), the
+    /// observer fires `.exhausted` exactly once, the local `isBlocked` flag
+    /// is reset to its pre-mutation value, and a user-facing toast surfaces.
+    func blockUser() async {
+        guard let userId = profileUser.userId ?? fullUser?.id else { return }
+        let cmid = ClientMutationId.generate()
+        let snapshot = isBlocked
+        isBlocked = true
+        // R6-4 — flip the CANONICAL blocklist too, not just this VM's local
+        // `isBlocked`. The swipe labels / row affordances read
+        // `BlockService.isBlocked(userId:)`, so without this the list stayed
+        // stale until the next network refresh. Rolled back on `.exhausted`.
+        blockService.setBlockedOptimistic(userId: userId, blocked: true)
+        observeOutcome(
+            cmid: cmid,
+            rollback: { [weak self] in
+                self?.isBlocked = snapshot
+                self?.blockService.setBlockedOptimistic(userId: userId, blocked: snapshot)
+            },
+            toast: String(localized: "profile.block.error", defaultValue: "Impossible de bloquer cet utilisateur", bundle: .main)
+        )
+        let payload = BlockUserPayload(clientMutationId: cmid, targetUserId: userId)
+        do {
+            try await OfflineQueue.shared.enqueue(.blockUser, payload: payload)
+        } catch {
+            isBlocked = snapshot
+            blockService.setBlockedOptimistic(userId: userId, blocked: snapshot)
+        }
+    }
+
+    func unblockUser() async {
+        guard let userId = profileUser.userId ?? fullUser?.id else { return }
+        let cmid = ClientMutationId.generate()
+        let snapshot = isBlocked
+        isBlocked = false
+        blockService.setBlockedOptimistic(userId: userId, blocked: false)
+        observeOutcome(
+            cmid: cmid,
+            rollback: { [weak self] in
+                self?.isBlocked = snapshot
+                self?.blockService.setBlockedOptimistic(userId: userId, blocked: snapshot)
+            },
+            toast: String(localized: "profile.unblock.error", defaultValue: "Impossible de débloquer cet utilisateur", bundle: .main)
+        )
+        let payload = UnblockUserPayload(clientMutationId: cmid, targetUserId: userId)
+        do {
+            try await OfflineQueue.shared.enqueue(.unblockUser, payload: payload)
+        } catch {
+            isBlocked = snapshot
+            blockService.setBlockedOptimistic(userId: userId, blocked: snapshot)
+        }
+    }
+
+    /// Subscribes to `OfflineQueue.outcomeStream(for: cmid)` and rolls back
+    /// the optimistic mutation when the stream emits `.exhausted`. The
+    /// closure is `@MainActor` so direct `@Published` writes are safe.
+    /// `.applied` outcomes are a no-op — the optimistic write is already
+    /// the final state. The stream completes after a single event, so the
+    /// `for await` loop returns and the Task terminates.
+    private func observeOutcome(
+        cmid: String,
+        rollback: @escaping @MainActor () -> Void,
+        toast: String
+    ) {
+        Task { @MainActor in
+            let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
+            for await event in stream {
+                if case .exhausted = event {
+                    rollback()
+                    FeedbackToastManager.shared.showError(toast)
+                    HapticFeedback.error()
+                }
+            }
+        }
+    }
+
+    /// P1 — `blockService` (the canonical, live-updated blocklist source,
+    /// injected but previously unused here) is now consulted FIRST. The
+    /// login-time snapshot (`currentUser.blockedUserIds`) is kept only as a
+    /// fallback for the brief window right after login before
+    /// `AuthManager.warmSessionScopedCaches` → `BlockService.refreshCache()`
+    /// has finished hydrating. Without this, a block/unblock performed
+    /// elsewhere during the session (or in a PRIOR session on this device)
+    /// showed as "not blocked" the next time this profile sheet opened for
+    /// the same user, because the snapshot never changes after init.
+    private static func checkIsBlocked(
+        userId: String?,
+        authManager: AuthManaging,
+        blockService: BlockServiceProviding
+    ) -> Bool {
+        guard let userId else { return false }
+        if blockService.isBlocked(userId: userId) { return true }
+        return authManager.currentUser?.blockedUserIds?.contains(userId) ?? false
+    }
+}

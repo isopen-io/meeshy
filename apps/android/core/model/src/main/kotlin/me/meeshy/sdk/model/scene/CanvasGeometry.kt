@@ -6,6 +6,9 @@ data class CanvasSize(val width: Double, val height: Double) {
     /** Vrai quand les deux côtés sont finis et strictement positifs. */
     val isRenderable: Boolean
         get() = width > 0.0 && height > 0.0 && width.isFinite() && height.isFinite()
+
+    /** Le plus petit des deux côtés : celui que borne le plancher d'échelle d'un objet ([SceneObjectScalePolicy]). */
+    val smallestSide: Double get() = minOf(width, height)
 }
 
 /**

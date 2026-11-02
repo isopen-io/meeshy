@@ -3,9 +3,12 @@ package me.meeshy.app.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.export.DataExportRepository
@@ -33,7 +36,21 @@ data class DataExportUiState(
     /** The delete/export button may fire only when no request is already in flight. */
     val canSubmit: Boolean
         get() = !isExporting
+
+    /** The green "Export terminé" button state: a ready artifact matching the selection. */
+    val isComplete: Boolean
+        get() = artifact != null
 }
+
+/** One-shot effects the screen performs once (never replayed on recomposition or rotation). */
+sealed interface DataExportEffect {
+    data class Haptic(val kind: DataExportHaptic) : DataExportEffect
+
+    /** Opens the system share sheet automatically when the export finishes. */
+    data class Share(val artifact: ExportArtifact) : DataExportEffect
+}
+
+enum class DataExportHaptic { MEDIUM, SUCCESS, ERROR }
 
 /**
  * Drives the data-export screen (feature-parity §L, port of iOS `DataExportView`). Holds the scope
@@ -54,6 +71,9 @@ class DataExportViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(DataExportUiState())
     val state: StateFlow<DataExportUiState> = _state.asStateFlow()
+
+    private val _effects = Channel<DataExportEffect>(Channel.BUFFERED)
+    val effects: Flow<DataExportEffect> = _effects.receiveAsFlow()
 
     fun setFormat(format: ExportFormat) {
         if (_state.value.format == format) return
@@ -76,7 +96,8 @@ class DataExportViewModel @Inject constructor(
     fun submit() {
         val snapshot = _state.value
         if (!snapshot.canSubmit) return
-        _state.update { it.copy(isExporting = true, error = null) }
+        _state.update { it.copy(isExporting = true).invalidatingExport() }
+        _effects.trySend(DataExportEffect.Haptic(DataExportHaptic.MEDIUM))
         val selection = DataExportSelection(
             format = snapshot.format,
             includeMessages = snapshot.includeMessages,
@@ -84,11 +105,18 @@ class DataExportViewModel @Inject constructor(
         )
         viewModelScope.launch {
             val result = repository.export(selection)
+            val built = (result as? NetworkResult.Success)?.let { DataExportFileBuilder.build(it.data) }
+            if (built != null) {
+                _effects.trySend(DataExportEffect.Haptic(DataExportHaptic.SUCCESS))
+                _effects.trySend(DataExportEffect.Share(built))
+            } else {
+                _effects.trySend(DataExportEffect.Haptic(DataExportHaptic.ERROR))
+            }
             _state.update { current ->
                 when (result) {
                     is NetworkResult.Success -> current.copy(
                         isExporting = false,
-                        artifact = DataExportFileBuilder.build(result.data),
+                        artifact = built,
                         messagesCount = result.data.messagesCount,
                         contactsCount = result.data.contactsCount,
                         error = null,

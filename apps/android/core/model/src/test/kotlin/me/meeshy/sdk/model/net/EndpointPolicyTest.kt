@@ -21,6 +21,14 @@ class EndpointPolicyTest {
     }
 
     @Test
+    fun `les quatre routes publiques du parrainage n'ont pas de bearer, les autres l'exigent`() {
+        listOf("/affiliate/click/tok", "/affiliate/track-visit", "/affiliate/validate/tok", "/affiliate/tok/og")
+            .forEach { assertThat(auth(it)).isEqualTo(EndpointAuthKind.NONE) }
+        listOf("/affiliate/tokens", "/affiliate/tokens/42", "/affiliate/stats", "/affiliate/register")
+            .forEach { assertThat(auth(it)).isEqualTo(EndpointAuthKind.BEARER) }
+    }
+
+    @Test
     fun `le reste est bearer`() {
         listOf("/conversations", "/auth/logout", "/auth/verification/status/x", "/auth/me")
             .forEach { assertThat(auth(it)).isEqualTo(EndpointAuthKind.BEARER) }

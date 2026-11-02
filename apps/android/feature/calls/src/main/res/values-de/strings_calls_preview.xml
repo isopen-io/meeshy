@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_preview_sound_on">Ton einschalten</string>
+    <string name="call_preview_sound_off">Ton ausschalten</string>
+    <string name="call_preview_sound_hint">Den Anrufer vor dem Annehmen hören</string>
+    <string name="call_preview_seen_by">%1$s sieht dich vor dem Annehmen</string>
+    <string name="call_preview_heard_by">%1$s hört dich vor dem Annehmen</string>
+    <string name="call_preview_heard_and_seen_by">%1$s hört und sieht dich vor dem Annehmen</string>
+    <string name="call_preview_mic_a11y">Mikrofon vor dem Annehmen</string>
+    <string name="call_preview_mic_hint">Legt fest, ob %1$s dich vor dem Annehmen hört</string>
+    <string name="call_preview_camera_a11y">Kamera vor dem Annehmen</string>
+    <string name="call_preview_camera_hint">Legt fest, ob %1$s dich vor dem Annehmen sieht</string>
+</resources>

@@ -35,6 +35,9 @@ final class ReelFeedAutoplayCoordinator: ObservableObject {
     @Published private(set) var prewarmReelId: String?
 
     private let isCallActive: () -> Bool
+    /// La politique média autorise-t-elle à préparer le réel SUIVANT ? Non en
+    /// économie d'énergie ni sous une chaleur sérieuse (#9880).
+    private let prewarmsNeighbours: () -> Bool
     /// Debounce des recalculs d'élection : annulé+reprogrammé à chaque `update()`
     /// pour coalescer le churn de frames au scroll (I2).
     private var debounceTask: Task<Void, Never>?
@@ -46,9 +49,11 @@ final class ReelFeedAutoplayCoordinator: ObservableObject {
     /// publisher déterministe (ou `nil`) pour ne pas toucher le singleton.
     init(
         isCallActive: @escaping () -> Bool = { MediaSessionCoordinator.shared.isCallActive },
-        callStatePublisher: AnyPublisher<Bool, Never>? = ReelFeedAutoplayCoordinator.defaultCallStatePublisher
+        callStatePublisher: AnyPublisher<Bool, Never>? = ReelFeedAutoplayCoordinator.defaultCallStatePublisher,
+        prewarmsNeighbours: @escaping () -> Bool = { MediaPolicyMonitor.shared.policy.autoplaysNeighbors }
     ) {
         self.isCallActive = isCallActive
+        self.prewarmsNeighbours = prewarmsNeighbours
         if let callStatePublisher {
             callStateCancellable = callStatePublisher
                 .receive(on: DispatchQueue.main)
@@ -88,7 +93,7 @@ final class ReelFeedAutoplayCoordinator: ObservableObject {
             // publie sur `willSet`, valeur changée ou non, et ce bloc court
             // pendant le défilement. Republier à l'identique fait « Publishing
             // changes from within view updates » et vide le fil (#6977).
-            let neighbour = ReelPrewarmWindow.next(after: next, in: frames)
+            let neighbour = self.prewarmsNeighbours() ? ReelPrewarmWindow.next(after: next, in: frames) : nil
             if neighbour != self.prewarmReelId { self.prewarmReelId = neighbour }
         }
     }

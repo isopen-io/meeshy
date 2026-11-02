@@ -251,6 +251,7 @@ public enum ConversationPreviewComposer {
             return ArrivalsNoticeMetadata.lineKey(count: rendered.map { Double($0) ?? .nan } ?? 1)
         case "system.encryption-enabled":
             return event.params["mode"]?.rendered == "e2ee" ? .systemEncryptionE2EE : .systemEncryptionEnabled
+        case "system.encryption-disabled": return .systemEncryptionDisabled
         case "system.member-added": return .systemMemberAdded
         case "system.member-removed": return .systemMemberRemoved
         case "system.member-left": return .systemMemberLeft

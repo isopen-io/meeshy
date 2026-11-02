@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { messageAttachmentSchema, sharedPlaceResponseSchema } from '@meeshy/shared/types/api-schemas';
 
@@ -58,7 +59,7 @@ export const createLinkSchema = z.object({
   newConversation: z.object({
     title: z.string().min(1, 'Le titre de la conversation est requis'),
     description: z.string().optional(),
-    memberIds: z.array(z.string()).optional()
+    memberIds: z.array(z.string().regex(OBJECT_ID_REGEX)).optional()
   }).optional()
 });
 
@@ -84,6 +85,7 @@ export const updateLinkSchema = z.object({
 });
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
+import { clientMessageTypeSchema } from '../../validation/client-message-type';
 
 
 
@@ -109,7 +111,7 @@ export const sendMessageSchema = z.object({
     .string()
     .default('fr')
     .transform((v) => normalizeLanguageCode(v) ?? v),
-  messageType: z.string().default('text'),
+  messageType: clientMessageTypeSchema.default('text'),
   // Accepté puis IGNORÉ, et c'est délibéré : aucune des deux routes d'envoi par
   // lien ne lit ce champ — ni `message.create`, ni la diffusion, ni la
   // notification. Il reste déclaré pour qu'un client qui l'envoie à côté d'un

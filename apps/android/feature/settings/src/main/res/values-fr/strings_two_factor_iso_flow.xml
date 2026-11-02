@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="twofactor_regenerate_warning">Les nouveaux codes remplacent les anciens : les codes précédents cesseront de fonctionner.</string>
+</resources>

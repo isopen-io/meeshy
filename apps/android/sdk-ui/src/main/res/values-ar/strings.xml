@@ -2,6 +2,9 @@
 <resources>
     <string name="bubble_message_deleted">تم حذف الرسالة</string>
     <string name="bubble_edited">معدّلة</string>
+    <string name="bubble_view_profile">عرض الملف الشخصي</string>
+    <string name="bubble_add_reaction">إضافة تفاعل</string>
+    <string name="bubble_failed_retry">لم يُرسل — اضغط لإعادة المحاولة</string>
     <string name="bubble_forwarded">محوّلة</string>
     <string name="bubble_forwarded_from">محوّلة من %1$s</string>
     <string name="bubble_starred">مميّزة بنجمة</string>
@@ -37,8 +40,6 @@
     <string name="bubble_file_size_bytes">%1$s بايت</string>
     <string name="bubble_file_size_kb">%1$s ك.ب</string>
     <string name="bubble_file_size_mb">%1$s م.ب</string>
-    <string name="image_viewer_close">إغلاق</string>
-    <string name="image_viewer_save">حفظ في المعرض</string>
     <string name="bubble_blur_tap_to_reveal">انقر للإظهار</string>
     <string name="bubble_blur_view_once">عرض مرة واحدة</string>
     <string name="bubble_blur_reveal_action">إظهار الرسالة المخفية</string>

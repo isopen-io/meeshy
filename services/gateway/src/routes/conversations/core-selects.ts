@@ -118,6 +118,12 @@ export const conversationLastMessagePreviewSelect = {
   // #7545 — la protection (chiffré) et la NATURE du message (système, appel,
   // transfert) que `resolveLastMessageNature` lit.
   isEncrypted: true,
+  // #11381 — de quoi ouvrir un dernier message `server`/`hybrid` (`revealAtRestRows`) ;
+  // `messageMinimalSchema` ne déclare ni le chiffré ni ses métadonnées : ils ne sortent pas.
+  conversationId: true,
+  encryptionMode: true,
+  encryptedContent: true,
+  encryptionMetadata: true,
   messageSource: true,
   forwardedFromId: true,
   // Prisme Linguistique de l'aperçu. Les deux champs vivent dans le
@@ -297,6 +303,9 @@ export const conversationListQuerySelect = (viewerId: string) => ({
   autoTranslateEnabled: true,
   // #10720 — le chiffrement est optionnel par conversation : la fiche le lit ici.
   encryptionMode: true,
+  // #11380 — depuis quand : un message en clair ANTÉRIEUR est de l'historique,
+  // un message en clair postérieur se signale chez le lecteur.
+  encryptionEnabledAt: true,
   // #7545 — ce qui s'est passé DEPUIS le dernier message, résolu en une
   // lecture batchée par page (`loadConversationListActivity`).
   lastReactionId: true,

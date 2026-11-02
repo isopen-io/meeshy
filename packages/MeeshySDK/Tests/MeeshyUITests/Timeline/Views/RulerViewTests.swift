@@ -85,4 +85,55 @@ final class RulerViewTests: XCTestCase {
     func test_format_minutesFormatting_above60s() {
         XCTAssertEqual(RulerView.formatTick(125), "2:05")
     }
+
+    // MARK: - Fenêtre visible (scène de deux heures)
+
+    func test_tickIndices_withoutWindow_coversEveryTickOfAShortTimeline() {
+        let range = RulerView.tickIndices(totalDuration: 60, interval: 1, pixelsPerSecond: 50, window: nil)
+        XCTAssertEqual(range, 0..<61)
+    }
+
+    func test_tickIndices_twoHourScene_zoom1_drawsOnlyTheWindow() {
+        let window = RulerView.visibleWindow(scrollX: 100_000, viewportWidth: 400)
+        let range = RulerView.tickIndices(totalDuration: 7_200, interval: 1, pixelsPerSecond: 50, window: window)
+        XCTAssertLessThan(range.count, 100, "7 201 graduations montées avant le fenêtrage")
+        XCTAssertTrue(range.contains(2_000), "la graduation sous le doigt (100 000 pt = 2 000 s) doit exister")
+    }
+
+    func test_tickIndices_twoHourScene_neverExceedsAFewHundredTicksAtAnyZoom() {
+        for zoom in stride(from: CGFloat(0.05), through: 8, by: 0.25) {
+            let geometry = TimelineGeometry(zoomScale: zoom)
+            let interval = RulerView.tickInterval(for: zoom)
+            let width = geometry.pixelsPerSecond * 7_200
+            for scrollX in [0, width / 3, width - 400] {
+                let window = RulerView.visibleWindow(scrollX: scrollX, viewportWidth: 400)
+                let range = RulerView.tickIndices(totalDuration: 7_200, interval: interval,
+                                                  pixelsPerSecond: geometry.pixelsPerSecond, window: window)
+                XCTAssertLessThan(range.count, 300, "zoom \(zoom) scrollX \(scrollX)")
+            }
+        }
+    }
+
+    func test_tickIndices_windowBeyondTheEnd_isEmptyNotCrashing() {
+        let range = RulerView.tickIndices(totalDuration: 10, interval: 1, pixelsPerSecond: 50,
+                                          window: 100_000...101_000)
+        XCTAssertTrue(range.isEmpty)
+    }
+
+    func test_tickIndices_windowKeepsTheTickJustLeftOfTheViewport() {
+        let window = RulerView.visibleWindow(scrollX: 5_000, viewportWidth: 400)
+        let range = RulerView.tickIndices(totalDuration: 7_200, interval: 1, pixelsPerSecond: 50, window: window)
+        XCTAssertTrue(range.contains(99), "5 000 pt = 100 s : la graduation 99 s reste dessinée en marge")
+    }
+
+    func test_visibleWindow_isStableWhileScrollingInsideAChunk() {
+        XCTAssertEqual(RulerView.visibleWindow(scrollX: 410, viewportWidth: 400),
+                       RulerView.visibleWindow(scrollX: 790, viewportWidth: 400),
+                       "le corps de la règle ne doit pas être recalculé à chaque image de défilement")
+    }
+
+    func test_visibleWindow_beforeTheViewportIsMeasured_isStillBounded() {
+        let window = RulerView.visibleWindow(scrollX: 0, viewportWidth: 0)
+        XCTAssertLessThan(window.upperBound - window.lowerBound, 5_000)
+    }
 }

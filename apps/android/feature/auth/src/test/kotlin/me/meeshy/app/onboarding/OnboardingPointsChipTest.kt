@@ -3,6 +3,7 @@ package me.meeshy.app.onboarding
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -54,6 +55,7 @@ class OnboardingPointsChipTest {
         }
 
         reward = OnboardingReward(id = 1, points = 5)
+        Snapshot.sendApplyNotifications()
         compose.mainClock.advanceTimeBy(100)
 
         assertThat(spy.announcements).containsExactly(plural(R.plurals.onboarding_reward_announce, 5))
@@ -73,6 +75,7 @@ class OnboardingPointsChipTest {
         compose.onNodeWithTag(ONBOARDING_REWARD_FLIGHT_TAG, useUnmergedTree = true).assertDoesNotExist()
 
         reward = OnboardingReward(id = 1, points = 5)
+        Snapshot.sendApplyNotifications()
         compose.mainClock.advanceTimeBy(100)
         compose.onNodeWithTag(ONBOARDING_REWARD_FLIGHT_TAG, useUnmergedTree = true).assertExists()
 
@@ -93,6 +96,7 @@ class OnboardingPointsChipTest {
         }
 
         reward = OnboardingReward(id = 1, points = 5)
+        Snapshot.sendApplyNotifications()
         compose.mainClock.advanceTimeBy(1_500)
         compose.onNodeWithTag(ONBOARDING_REWARD_FLIGHT_TAG, useUnmergedTree = true).assertExists()
 
@@ -114,8 +118,10 @@ class OnboardingPointsChipTest {
         }
 
         reward = OnboardingReward(id = 1, points = 5)
+        Snapshot.sendApplyNotifications()
         compose.mainClock.advanceTimeBy(3_000)
         reward = OnboardingReward(id = 2, points = 5)
+        Snapshot.sendApplyNotifications()
         compose.mainClock.advanceTimeBy(100)
 
         assertThat(spy.announcements).hasSize(2)

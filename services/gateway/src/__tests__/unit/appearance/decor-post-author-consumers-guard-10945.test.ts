@@ -26,6 +26,8 @@ const REVIEWED = [
   'services/PostCommentService.ts',
   'services/PostFeedService.ts',
   'services/PostService.ts',
+  // #11264 — `notifyPostReaders` relit le post par `postInclude` et le sert par `withMentions(post, WIRE_BROADCAST)`.
+  'services/attachments/media-processing/ready-listener.ts',
   'services/posts/PostAudioService.ts',
   'services/posts/postIncludes.ts',
 ];

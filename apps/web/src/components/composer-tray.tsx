@@ -272,6 +272,9 @@ function RecordingBar({
   );
 }
 
+const pendingKindGlyph = (kind: PendingAttachment['kind']): 'microphone' | 'image' | 'file' =>
+  kind === 'audio' ? 'microphone' : kind === 'image' ? 'image' : 'file';
+
 function PreviewTile({
   attachment,
   onRemove,
@@ -301,8 +304,13 @@ function PreviewTile({
     () => (attachment.kind === 'image' || attachment.kind === 'video' ? previewUrlFor(attachment.localId, attachment.file) : undefined),
     [attachment.localId, attachment.file, attachment.kind],
   );
+  /* W9 (#11315) — un HEIC que ce navigateur ne décode pas : l'aperçu lève
+     `error`. La vignette montre alors le glyphe d'image, et ne propose plus
+     « Éditer », que l'éditeur ne saurait pas ouvrir. */
+  const [undecodable, setUndecodable] = useState(false);
+  const shownUrl = undecodable ? undefined : previewUrl;
   const mounting = progress !== undefined;
-  const glyph = onEdit === undefined || mounting ? null : pendingTileGlyph({ kind: attachment.kind, mimeType: attachment.file.type });
+  const glyph = onEdit === undefined || mounting || undecodable ? null : pendingTileGlyph({ kind: attachment.kind, mimeType: attachment.file.type });
   const language = currentInterfaceLanguage();
 
   const face = (
@@ -310,22 +318,24 @@ function PreviewTile({
       className="relative grid size-14 place-items-center overflow-hidden rounded-[10px]"
       style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 12%, transparent)' }}
     >
-      {previewUrl !== undefined && attachment.kind === 'image' ? <img src={previewUrl} alt="" className="size-full object-cover" /> : null}
-      {previewUrl !== undefined && attachment.kind === 'video' ? (
+      {shownUrl !== undefined && attachment.kind === 'image' ? (
+        <img src={shownUrl} alt="" className="size-full object-cover" onError={() => setUndecodable(true)} />
+      ) : null}
+      {shownUrl !== undefined && attachment.kind === 'video' ? (
         /* `#t` — sans lui, Safari et la WebView ne peignent AUCUNE image d'une
            vidéo qui n'a pas joué : la vignette restait un carré vide (#9736). */
         <video src={`${previewUrl}#t=0.001`} muted playsInline preload="metadata" className="size-full object-cover" aria-hidden />
       ) : null}
       {/* UN SON OU UN FICHIER SE RECONNAÎT (#9736) — son glyphe reste quand la
           vignette s'édite : au centre sans crayon, au coin avec lui. */}
-      {previewUrl === undefined ? (
+      {shownUrl === undefined ? (
         <span
           data-pending-kind={attachment.kind}
           className={glyph === null ? 'grid' : 'absolute grid'}
           style={glyph === null ? undefined : { insetInlineStart: 4, bottom: 4 }}
           aria-hidden
         >
-          <Glyph name={attachment.kind === 'audio' ? 'microphone' : 'file'} size={glyph === null ? 22 : 14} style={{ color: 'var(--accent)' }} />
+          <Glyph name={pendingKindGlyph(attachment.kind)} size={glyph === null ? 22 : 14} style={{ color: 'var(--accent)' }} />
         </span>
       ) : null}
       {mounting ? (

@@ -6,13 +6,14 @@ import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline'
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
-import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
+import { badgesOf, editedByModeratorOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { usePresence } from '@/lib/view/use-presence';
 import { prismFor, served } from '@/lib/api/prism';
 import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
+import { endToEndSealed } from '@/lib/view/end-to-end-sealed';
 import { time } from '@/lib/grouping';
 import type { FlatRowMode } from '@/lib/reading-mode/decision';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
@@ -51,21 +52,14 @@ import { ConversationLinkCards } from './conversation-link-cards';
 import { SystemNotice } from './system-notice';
 import { linkRenderingOf } from '@/lib/view/sender-links';
 import { callNoticeTarget } from '@/lib/calls/call-notice';
-import {
-  Badges,
-  Check,
-  EditedMark,
-  FailedSendBand,
-  Quote,
-  reactionEntries,
-  RowQuote,
-} from './message-blocks';
+import { Badges, Check, EditedMark, Quote, reactionEntries, RowQuote } from './message-blocks';
+import { FailedSendBand } from './failed-send-band';
 
 const defaultNow = (): number => Date.now();
 
 /**
  * LA RANGÉE PLATE DU FIL (Focal / Script) — miroir de `FocalRow.swift`
- * (`apps/ios/Meeshy/Features/Main/Focal/Row/`, §1.5 de la spécification #5566).
+ * (`apps/ios/Meeshy/Features/Focal/Row/`, §1.5 de la spécification #5566).
  * « Pastille 22, "Pseudo · HH:mm" en tête de groupe, texte 15 pleine largeur
  * au retrait 41, méta discrète, AUCUNE bulle. »
  *
@@ -130,6 +124,7 @@ export const FocalRow = memo(function FocalRow({
   sendStartedAt,
   sendFailureReason,
   onRetry,
+  onDiscard,
   revealable = true,
   onJumpToMessage,
   onOpenStory,
@@ -202,6 +197,7 @@ export const FocalRow = memo(function FocalRow({
    * bande elle-même : `lastError` était capturé et lu par PERSONNE. */
   sendFailureReason?: string;
   onRetry?: () => void;
+  onDiscard?: () => void;
   /**
    * LE CONTENU EST-IL SEULEMENT LA ? (#6862) — `false` quand la charge ne
    * PORTE PAS le texte : la lecture souveraine de l'administration retient
@@ -470,7 +466,8 @@ export const FocalRow = memo(function FocalRow({
 
   // `kind === 'veiled' | 'burned'` toutes deux passent par `ProtectedContent`
   // (voir le commentaire ci-dessus sur le tombstone plat).
-  const isProtected = kind !== 'standard' || !revealable;
+  const sealedEndToEnd = endToEndSealed(message);
+  const isProtected = kind !== 'standard' || !revealable || sealedEndToEnd;
 
   /**
    * LA LIGNE BASSE — miroir de `FocalMetaColumn.mountsBottomLine` (défaut 7) :
@@ -841,6 +838,7 @@ export const FocalRow = memo(function FocalRow({
               <FailedSendBand
                 {...(sendFailureReason === undefined ? {} : { reason: sendFailureReason })}
                 {...(onRetry === undefined ? {} : { onRetry })}
+                {...(onDiscard === undefined ? {} : { onDiscard })}
                 textColor="var(--color-error)"
               />
             ) : null}
@@ -859,6 +857,7 @@ export const FocalRow = memo(function FocalRow({
                   attachments={message.attachments}
                   surface="row"
                   revealable={revealable}
+                  endToEnd={sealedEndToEnd}
                   onConsumeViewOnce={onConsumeViewOnce}
                   media={{
                     frame: 'tiles',
@@ -909,7 +908,7 @@ export const FocalRow = memo(function FocalRow({
               `aria-hidden` : `composeMessageLabel` porte déjà « modifié ». */}
           {isEdited ? (
             <div data-loupe-follow className="flex shrink-0 items-center pb-0.5" aria-hidden>
-              <EditedMark onBrandBubble={false} />
+              <EditedMark onBrandBubble={false} byModerator={editedByModeratorOf(badges)} />
             </div>
           ) : null}
 

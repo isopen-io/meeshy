@@ -108,6 +108,28 @@ final class ConversationCardServiceTests: XCTestCase {
         }
     }
 
+    func test_storeAndCached_concurrentAccess_staysConsistent() async {
+        let service = makeService(MockAPIClient())
+        let card = Self.card
+        await withTaskGroup(of: Void.self) { group in
+            for index in 0..<100 {
+                let target = ConversationCardTarget.shareLink(identifier: "id\(index)")
+                group.addTask {
+                    service.store(.card(card), for: target)
+                    _ = service.cached(target)
+                    if index % 2 == 0 { service.invalidate(target) }
+                }
+            }
+        }
+        for index in 0..<100 {
+            let cached = service.cached(.shareLink(identifier: "id\(index)"))
+            switch (index % 2 == 0, cached) {
+            case (true, .empty), (false, .fresh): continue
+            default: XCTFail("entrée \(index) incohérente")
+            }
+        }
+    }
+
     // MARK: - #8138 — une conversation, toutes ses cartes
 
     private static func memberCard(kind: ConversationCardKind, conversationId: String) -> ConversationCard {

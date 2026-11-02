@@ -81,4 +81,63 @@ final class ReconcileBatchProtectionTests: XCTestCase {
         XCTAssertNil(row.ephemeralDuration)
         XCTAssertNil(row.expiresAt)
     }
+
+    /// #12916 — un message chiffré rattrapé depuis le cache naît CHIFFRÉ, et
+    /// jamais avec le clair que le cache scellé de l'appareil peut tenir : le
+    /// clair vit dans la base libsignal, pas dans la base des messages.
+    func test_reconcileBatch_encryptedFromCache_staysEncrypted_withoutItsPlaintext() async throws {
+        await actor.bufferIncoming([
+            MessagePersistenceActor.IncomingMessageData(
+                id: "6ab37099918d1dc340012916",
+                conversationId: Self.conversationId,
+                senderId: "6a9e11d7c2b84f0193ac55e1",
+                content: "le clair déchiffré sur l'appareil",
+                createdAt: Date(timeIntervalSince1970: 1_790_000_000),
+                computedState: .delivered,
+                isEncrypted: true,
+                encryptionMode: E2EEWire.mode
+            )
+        ])
+
+        let row = try await persistedRow("6ab37099918d1dc340012916")
+
+        XCTAssertTrue(row.isEncrypted)
+        XCTAssertEqual(row.encryptionMode, E2EEWire.mode)
+        XCTAssertEqual(row.content, E2EEWire.contentPlaceholder)
+    }
+
+    /// #12916 — l'écho d'un message chiffré que J'AI envoyé ne remplace pas mon
+    /// clair par le littéral servi : c'est ainsi que l'iPad perdait son texte.
+    func test_reconcileBatch_encryptedEchoOfMyMessage_keepsMyPlaintext() async throws {
+        var written = MessageRecordFactory.make(localId: "cid_12916", conversationId: Self.conversationId, content: "mon texte", state: .sent)
+        written.serverId = "6ab37099918d1dc340012917"
+        let mine = written
+        try await dbQueue.write { db in
+            try mine.insert(db)
+            try PendingIdRecord(localId: "cid_12916", serverId: "6ab37099918d1dc340012917", conversationId: Self.conversationId, reconciledAt: nil).insert(db)
+        }
+
+        await actor.bufferIncoming([
+            MessagePersistenceActor.IncomingMessageData(
+                id: "6ab37099918d1dc340012917",
+                conversationId: Self.conversationId,
+                senderId: "user_me",
+                content: E2EEWire.contentPlaceholder,
+                createdAt: Date(timeIntervalSince1970: 1_790_000_000),
+                computedState: .delivered,
+                isEncrypted: true,
+                encryptionMode: E2EEWire.mode
+            )
+        ])
+
+        let limit = Date().addingTimeInterval(3)
+        var row = try await persistedRow("cid_12916")
+        while row.state != .delivered, Date() < limit {
+            try await Task.sleep(nanoseconds: 20_000_000)
+            row = try await persistedRow("cid_12916")
+        }
+        XCTAssertEqual(row.state, .delivered, "l'écho a bien été réconcilié")
+        XCTAssertEqual(row.content, "mon texte")
+    }
+
 }

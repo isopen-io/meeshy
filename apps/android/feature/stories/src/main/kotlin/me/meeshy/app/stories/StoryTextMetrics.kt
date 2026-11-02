@@ -1,0 +1,26 @@
+package me.meeshy.app.stories
+
+/**
+ * The one size law of story text, shared by the composer scene and the reader (loi 6 :
+ * le player est l'aperçu, #12296). A text's wire `fontSize` is a design unit in the
+ * 1080-wide referential, multiplied by its `scale`; on screen it maps onto the REAL width
+ * of the scene, exactly as iOS `StoryTextFontResolver` does. A non-positive width yields
+ * the 1 px floor, never a zero or negative font.
+ */
+object StoryTextMetrics {
+    const val DESIGN_CANVAS_WIDTH: Float = 1080f
+
+    fun fontPx(fontSize: Double, scale: Double, canvasWidthPx: Float): Float =
+        designPx(fontSize, scale, canvasWidthPx).takeIf { it.isFinite() }?.coerceAtLeast(1f) ?: 1f
+
+    /**
+     * Any other design-pixel length of a text — its glyph outline (`borderWidth`, iOS
+     * `StoryTextLayer`: design px, scaled with the font) — mapped by the same law, with no
+     * floor: a zero stays zero (#12324).
+     */
+    fun designPx(value: Double, scale: Double, canvasWidthPx: Float): Float =
+        (value * scale).toFloat().times(canvasWidthPx / DESIGN_CANVAS_WIDTH).takeIf { it.isFinite() }?.coerceAtLeast(0f) ?: 0f
+
+    /** La taille d'un design-pixel à l'écran : la largeur de la scène sur 1080, fois l'échelle de l'objet quand c'est lui qui la porte. */
+    fun pxPerDesign(scale: Double, canvasWidthPx: Float): Float = designPx(1.0, scale, canvasWidthPx)
+}

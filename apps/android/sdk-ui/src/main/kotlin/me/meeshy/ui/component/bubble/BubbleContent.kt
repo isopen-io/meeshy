@@ -3,6 +3,8 @@ package me.meeshy.ui.component.bubble
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.MessageExitOffer
+import me.meeshy.sdk.model.profile.ProfileSheetUser
 
 @Immutable
 sealed class DeliveryStatus {
@@ -16,142 +18,12 @@ sealed class DeliveryStatus {
     @Immutable data object Failed : DeliveryStatus()
 }
 
-/** The kind of media a quoted-reply target carries, for previewing a media-only reply. */
-@Immutable
-public enum class ReplyMediaKind { None, Image, File }
-
-/**
- * Frozen preview of the post/story a message replies to — port of the
- * story/mood branch of iOS `BubbleQuotedReply`. A non-null [moodEmoji] means the
- * quoted target is a mood/status (emoji + preview text render); otherwise it is
- * a story reply (thumbnail + reaction/comment/share metrics).
- */
-@Immutable
-public data class BubbleStoryReply(
-    val previewText: String = "",
-    val reactionCount: Int = 0,
-    val commentCount: Int = 0,
-    val shareCount: Int = 0,
-    val thumbnailUrl: String? = null,
-    val moodEmoji: String? = null,
-) {
-    /** True when the quoted target is a mood/status rather than a story. */
-    val isMood: Boolean get() = moodEmoji != null
-
-    /** True when at least one engagement metric is worth surfacing. */
-    val hasMetrics: Boolean get() = reactionCount > 0 || commentCount > 0 || shareCount > 0
-}
-
 @Immutable
 data class ReactionEntry(
     val emoji: String,
     val count: Int,
     val includesMe: Boolean = false,
 )
-
-@Immutable
-public data class BubbleImage(
-    val attachmentId: String,
-    val url: String,
-    val thumbnailUrl: String? = null,
-    val width: Int? = null,
-    val height: Int? = null,
-    /** Author-authored accessibility description (`MessageAttachment.alt`, #6813). Read by TalkBack as `contentDescription`. */
-    val alt: String? = null,
-)
-
-@Immutable
-public data class BubbleFile(
-    val attachmentId: String,
-    val name: String?,
-    val sizeBytes: Int? = null,
-    val url: String? = null,
-    val isVideo: Boolean = false,
-    val isContactCard: Boolean = false,
-)
-
-/**
- * A shared contact card (vCard attachment). [name] is the card's display name when known, else
- * the attachment's file name without extension; [accountUsername] is the resolved Meeshy account
- * handle (without `@`) when the contact is registered.
- */
-@Immutable
-public data class BubbleContactCard(
-    val attachmentId: String,
-    val name: String? = null,
-    val accountUsername: String? = null,
-)
-
-/**
- * A shared-location attachment (mime `application/x-location`) — port of the
- * `.location` branch of iOS `BubbleAttachmentView`. Coordinates are nullable so a
- * malformed location still renders a "position shared" placeholder rather than
- * collapsing into a generic file row.
- */
-@Immutable
-public data class BubbleLocation(
-    val attachmentId: String,
-    val latitude: Double? = null,
-    val longitude: Double? = null,
-    val placeName: String? = null,
-) {
-    /** True when both coordinates are present and the point can be shown/opened. */
-    val hasCoordinates: Boolean get() = latitude != null && longitude != null
-
-    /**
-     * A `geo:` URI to hand to an external maps app, or null when coordinates are
-     * absent. `Double.toString()` is locale-independent (always a `.` separator),
-     * so the URI is safe to build in any locale. A non-blank [placeName] is added
-     * as the standard `(label)` suffix.
-     */
-    val geoUri: String? get() {
-        val lat = latitude ?: return null
-        val lon = longitude ?: return null
-        val base = "geo:$lat,$lon?q=$lat,$lon"
-        val label = placeName?.trim()?.ifBlank { null }
-        return if (label != null) "$base($label)" else base
-    }
-}
-
-/**
- * An audio-message attachment (an `audio/…` mime) — port of the `.audio` branch of
- * iOS `BubbleAttachmentView` / `AudioPlayerView`. The transcription is resolved
- * through the Prisme Linguistique at build time: [transcriptionText] already holds
- * the text in the viewer's preferred language when a matching translation exists,
- * otherwise the original transcription. [url] is null until the audio is available
- * locally, in which case [sizeBytes] drives a "needs download" affordance instead.
- */
-@Immutable
-public data class BubbleAudio(
-    val attachmentId: String,
-    val url: String? = null,
-    val durationSeconds: Int? = null,
-    val sizeBytes: Int? = null,
-    val transcriptionText: String? = null,
-    val transcriptionLanguage: String? = null,
-    val isTranscriptionTranslated: Boolean = false,
-    val isAudioTranslated: Boolean = false,
-    val audioLanguage: String? = null,
-) {
-    /** True when the audio has a playable URL (already downloaded / remote-ready). */
-    val isPlayable: Boolean get() = !url.isNullOrBlank()
-
-    /** True when a non-blank transcription line is worth surfacing under the player. */
-    val hasTranscription: Boolean get() = !transcriptionText.isNullOrBlank()
-
-    /**
-     * Human-readable `m:ss` duration (unpadded minutes, zero-padded seconds — the
-     * same shape as iOS `String(format: "%d:%02d", …)`), or null when the duration
-     * is unknown or negative (a malformed value never renders a nonsense label).
-     */
-    val formattedDuration: String? get() {
-        val total = durationSeconds ?: return null
-        if (total < 0) return null
-        val minutes = total / 60
-        val seconds = total % 60
-        return "$minutes:${seconds.toString().padStart(2, '0')}"
-    }
-}
 
 @Immutable
 public data class BubbleContent(
@@ -163,7 +35,27 @@ public data class BubbleContent(
     val originalText: String?,
     val languageStrip: List<LanguageChip> = emptyList(),
     val senderName: String?,
+    /**
+     * Vrai sur la bulle qui porte l'IDENTITÉ de l'auteur dans son pied (avatar, nom, @pseudo) :
+     * la DERNIÈRE d'une suite reçue, en groupe seulement (iOS `showIdentityBar =
+     * !isDirect && isLastInGroup && !isMe`).
+     */
     val showSenderName: Boolean,
+    /** Identifiant de participant de l'auteur (`senderId`). */
+    val senderId: String? = null,
+    /** La fiche de l'auteur ouverte depuis l'avatar du pied d'identité (iOS `ProfileSheetUser.from(message)`). */
+    val senderProfile: ProfileSheetUser? = null,
+    /** La conversation du message : « ici » (`viewing:*`) ne vaut que pour elle. */
+    val viewingConversationId: String? = null,
+    /** Pseudo de l'auteur, lu « @pseudo » sous son nom dans le pied d'identité. */
+    val senderUsername: String? = null,
+    /** Photo de l'auteur, telle que servie (résolue par `MeeshyAvatar`). */
+    val senderAvatarUrl: String? = null,
+    /**
+     * Couleur déterministe de l'auteur (`DynamicColorGenerator.colorForName(senderName)`) : elle
+     * teinte le fond et le contour de la bulle reçue, et l'avatar de repli (iOS `senderColor`).
+     */
+    val senderColorHex: String? = null,
     val isEdited: Boolean,
     val isDeleted: Boolean,
     val createdAtIso: String?,
@@ -194,6 +86,8 @@ public data class BubbleContent(
      */
     val forwardedFromName: String? = null,
     val isStarred: Boolean = false,
+    /** Le DERNIER message reçu du fil : lui seul porte le smiley d'ajout de réaction (iOS). */
+    val isLastReceivedMessage: Boolean = false,
     val isFirstInGroup: Boolean = true,
     val isLastInGroup: Boolean = true,
     val blurReveal: BubbleBlurRevealSpec? = null,
@@ -206,12 +100,14 @@ public data class BubbleContent(
     val effects: MessageEffects = MessageEffects(),
     /** True when this message is a view-once ("open once, then burn") message. */
     val isViewOnce: Boolean = false,
+    /** #13995 — la flamme-œil : le message disparaît chez le lecteur quand il l'a vu puis a quitté. */
+    val isAfterRead: Boolean = false,
     /**
-     * How many times the view-once message has been consumed on the server. Once
-     * this is > 0 on a [isViewOnce] message the bubble renders the "Seen and
-     * deleted" burned tombstone (see [me.meeshy.sdk.model.BubbleRenderKind]).
+     * True once THIS reader has opened the view-once message (`consumedByMe`). A view-once
+     * is consumed per person (iOS #7579): what other members open never burns it for me.
+     * Drives the "Seen and deleted" tombstone (see [me.meeshy.sdk.model.BubbleRenderKind]).
      */
-    val viewOnceCount: Int = 0,
+    val isViewOnceOpenedByMe: Boolean = false,
     /**
      * True for a conversation notice about itself (someone joined / left, a legacy
      * call/event summary) rather than a turn at talk. Drives the
@@ -229,6 +125,32 @@ public data class BubbleContent(
     val replyToIsMe: Boolean = false,
     /** True when an outgoing message has been in flight long enough to be called slow. */
     val isSlowSend: Boolean = false,
+    /** True when a failed send was refused because a file's location cannot be removed (#13550): told, and removed on tap. */
+    val isLocationRefused: Boolean = false,
+    /** True when a failed send lost its media on the device (#13554): told, and removed on tap so the author picks it again. */
+    val isMediaLost: Boolean = false,
+    /** What this message lets out of Meeshy (forward, copy, save, share…) — read by every exit instead of a raw flag. */
+    val exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
+    /**
+     * End-to-end encrypted, and this device cannot open it (#13110): the bubble says
+     * where it reads — never the gateway's `[Encrypted]` literal, never a piece.
+     */
+    val isEndToEndSealed: Boolean = false,
+    /**
+     * The server already reads this row — written in clear (or server-encrypted) before end-to-end was turned on (#13804):
+     * deleting it for everyone keeps its clear route, as the gateway judges the erasure on the row. Closed by default.
+     */
+    val isReadByServer: Boolean = false,
+    /**
+     * Les pièces d'un message scellé (#13493) : une rangée « chiffrée » par pièce, sans nom ni adresse — la bulle ne
+     * dit pas ce qu'elle ne peut pas lire, mais ne se présente jamais comme un document téléchargeable.
+     */
+    val sealedPieceIds: List<String> = emptyList(),
+    /**
+     * Shown, this message holds the send of its thread (#13099): end-to-end encrypted, or
+     * encrypted with no mode or an unknown one — `EndToEndRegimeMemory.messageHoldsSend`.
+     */
+    val holdsEndToEndSend: Boolean = false,
 )
 
 /**

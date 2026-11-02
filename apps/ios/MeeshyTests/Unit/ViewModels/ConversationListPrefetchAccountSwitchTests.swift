@@ -322,6 +322,62 @@ final class ConversationListMessagePrefetcherTests: XCTestCase {
         XCTAssertEqual(Set(store.probedConversationIds), Set((0..<ConversationListMessagePrefetcher.maxConversations).map { "c\($0)" }))
     }
 
+    // MARK: #11387 — une conversation verrouillée par PIN ne se précharge pas
+
+    @MainActor
+    private final class LockReads {
+        nonisolated deinit {}
+        var reads = 0
+    }
+
+    func test_schedule_aLockedConversationAtTheTopOfTheList_isNeverRequested() async {
+        let store = MockConversationListPrefetchStore()
+        let service = MockMessageService()
+        let sut = ConversationListMessagePrefetcher(
+            messageService: service, store: store, contentLocks: { ["coffre"] }
+        )
+
+        sut.schedule(request(["coffre", "ouverte"]))
+        await sut.waitUntilIdle()
+
+        XCTAssertEqual(store.probedConversationIds, ["ouverte"], "la conversation verrouillée n'entre pas dans la passe")
+        XCTAssertEqual(service.listCallCount, 1)
+        XCTAssertEqual(service.lastListConversationId, "ouverte")
+        XCTAssertNil(store.persistedPageSizes["coffre"])
+    }
+
+    /// Verrouillée APRÈS l'entrée dans la passe : la question se repose avant
+    /// la requête — ni réseau, ni écriture GRDB.
+    func test_schedule_aConversationLockedDuringThePass_isNeitherRequestedNorWritten() async {
+        let store = MockConversationListPrefetchStore()
+        let service = MockMessageService()
+        let reads = LockReads()
+        let sut = ConversationListMessagePrefetcher(
+            messageService: service, store: store,
+            contentLocks: {
+                reads.reads += 1
+                return reads.reads > 1 ? ["coffre"] : []
+            }
+        )
+
+        sut.schedule(request(["coffre"]))
+        await sut.waitUntilIdle()
+
+        XCTAssertEqual(service.listCallCount, 0, "aucun appel réseau pour une conversation verrouillée en vol")
+        XCTAssertTrue(store.persistedPageSizes.isEmpty, "rien n'est gravé dans GRDB")
+    }
+
+    func test_schedule_withoutAnyLock_prefetchesAsBefore() async {
+        let store = MockConversationListPrefetchStore()
+        let service = MockMessageService()
+        let sut = ConversationListMessagePrefetcher(messageService: service, store: store, contentLocks: { [] })
+
+        sut.schedule(request(["a"]))
+        await sut.waitUntilIdle()
+
+        XCTAssertEqual(service.listCallCount, 1)
+    }
+
     // MARK: La base locale — GRDB, la table que le fil peint
 
     func test_store_persist_gravesThePageInGRDB_andTheWindowThenHoldsIt() async throws {

@@ -20,10 +20,12 @@ import { prismaCommunityAppearanceStore } from '../services/packs/CommunityAppea
 import { startupPackIndex, type PackIndex } from '../services/packs/PackIndex';
 import { appearancePackSpec, APPEARANCE_PACK_DOMAINS } from '../services/packs/appearancePackSpec';
 import { gloryFramePackSpec } from '../services/packs/gloryFramePackSpec';
+import { captureFramePackSpec } from '../services/packs/captureFramePackSpec';
 import { stickerPackSpec } from '../services/packs/stickerPackSpec';
 import { builtinStickerPackNames } from '../services/packs/stickerPackNames';
 import { sendSuccess } from '../utils/response.js';
 import { packEnvelope, packRouteGuard } from './pack-routes';
+import { lensPackCatalog } from './packs-lens';
 
 export type ShopCatalog = { catalogue(userId: string): Promise<readonly object[]> };
 
@@ -68,12 +70,14 @@ export async function packsShopRoutes(fastify: FastifyInstance, options: PacksSh
   const defaults = (): Readonly<Partial<Record<PackDomain, ShopCatalog>>> => ({
     sticker: new PackCatalog({ prisma: fastify.prisma, spec: stickerPackSpec(fastify.prisma) }),
     'glory-frame': new PackCatalog({ prisma: fastify.prisma, spec: gloryFramePackSpec({ index }) }),
+    'capture-frame': new PackCatalog({ prisma: fastify.prisma, spec: captureFramePackSpec({ index }) }),
     ...Object.fromEntries(
       APPEARANCE_PACK_DOMAINS.map((domain) => [
         domain,
         new PackCatalog({ prisma: fastify.prisma, spec: appearancePackSpec({ index, domain, ...(isCommunityAppearanceDomain(domain) ? { community: prismaCommunityAppearanceStore(fastify.prisma, domain) } : {}) }) }),
       ]),
     ),
+    lens: lensPackCatalog(fastify).catalog,
   });
   const catalogs = options.catalogs ?? defaults();
   const balance = options.balance ?? ((userId: string) => new MeeshSpend(fastify.prisma).balance(userId));

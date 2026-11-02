@@ -103,4 +103,18 @@ class StoryStickerWireTest {
         assertThat(sticker.stickerAnimation).isNull()
         assertThat(sticker.animation).isEqualTo("levitate")
     }
+
+    @Test
+    fun `l echelle de pose vaut 2,2 comme sur iOS`() {
+        assertThat(StorySticker.POSED_SCALE).isEqualTo(2.2)
+    }
+
+    @Test
+    fun `l emoji de fil suit le rang emoji puis gabarit puis image`() {
+        assertThat(StorySticker(id = "a", emoji = "😀").wireEmoji()).isEqualTo("😀")
+        val template = StorySticker(id = "b", templateId = "place.pin")
+        assertThat(template.wireEmoji { "📍" }).isEqualTo("📍")
+        assertThat(template.wireEmoji()).isEqualTo("🖼️")
+        assertThat(StorySticker(id = "c", postMediaId = "m").wireEmoji()).isEqualTo("🖼️")
+    }
 }

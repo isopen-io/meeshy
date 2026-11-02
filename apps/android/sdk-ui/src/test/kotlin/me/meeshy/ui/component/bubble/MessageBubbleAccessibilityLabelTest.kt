@@ -66,7 +66,7 @@ class MessageBubbleAccessibilityLabelTest {
         contactCards: List<BubbleContactCard> = emptyList(),
         isBlurred: Boolean = false,
         isViewOnce: Boolean = false,
-        viewOnceCount: Int = 0,
+        isViewOnceOpenedByMe: Boolean = false,
         replyToIsMe: Boolean = false,
         isSlowSend: Boolean = false,
     ) = BubbleContent(
@@ -96,7 +96,7 @@ class MessageBubbleAccessibilityLabelTest {
         contactCards = contactCards,
         isBlurred = isBlurred,
         isViewOnce = isViewOnce,
-        viewOnceCount = viewOnceCount,
+        isViewOnceOpenedByMe = isViewOnceOpenedByMe,
         replyToIsMe = replyToIsMe,
         isSlowSend = isSlowSend,
     )
@@ -336,7 +336,7 @@ class MessageBubbleAccessibilityLabelTest {
 
     @Test
     fun `an opened view-once message reads normally then says view once`() {
-        val label = compose(content(text = "hi", senderName = "A", isViewOnce = true, viewOnceCount = 1))
+        val label = compose(content(text = "hi", senderName = "A", isViewOnce = true, isViewOnceOpenedByMe = true))
         assertThat(label).isEqualTo("A, hi, view once")
     }
 

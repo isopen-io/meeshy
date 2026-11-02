@@ -42,4 +42,15 @@ class ConversationOpenerHostTest {
             assertThat(awaitItem()).isEqualTo(ConversationOpenEvent.Navigate("chat/c1?messageId=m2"))
         }
     }
+
+    @Test
+    fun `reportOpenFailure emits the same error toast as a failed opening`() = runTest {
+        val host = host(NetworkResult.Success(ApiConversation(id = "c1")))
+        host.events.test {
+            host.reportOpenFailure()
+            assertThat(awaitItem()).isEqualTo(
+                ConversationOpenEvent.ShowError("Impossible d'ouvrir la conversation"),
+            )
+        }
+    }
 }

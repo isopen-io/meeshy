@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sticker_library_title">My stickers</string>
+    <string name="sticker_library_empty">Paste an image to start your library</string>
+    <string name="sticker_library_lift">Cut out</string>
+    <string name="sticker_library_lift_a11y">Cut out the subject of a photo</string>
+    <string name="sticker_library_item_a11y">Sticker from your library</string>
+    <string name="sticker_library_paste">Paste</string>
+    <string name="sticker_pack_by">by %1$s</string>
+    <string name="sticker_text_example">Hey there!</string>
+    <string name="sticker_text_placeholder">Write your words…</string>
+    <string name="sticker_text_field_a11y">Decoration text</string>
+    <string name="sticker_custom_text">Text</string>
+    <string name="sticker_custom_time">Time</string>
+    <string name="sticker_shop_install">Install</string>
+    <string name="sticker_shop_remove">Remove</string>
+    <string name="sticker_shop_failed">The pack couldn\'t be updated. Try again.</string>
+    <string name="sticker_template_text_speech_bubble">Speech bubble</string>
+    <string name="sticker_template_text_thought_bubble">Thought bubble</string>
+    <string name="sticker_template_text_sticky_note">Sticky note</string>
+    <string name="sticker_template_text_ribbon">Ribbon</string>
+    <string name="sticker_template_text_badge">Badge</string>
+    <string name="sticker_template_text_neon">Neon</string>
+    <string name="sticker_template_text_tag">Tag</string>
+    <string name="sticker_template_text_signboard">Signboard</string>
+    <string name="sticker_template_text_tape">Tape</string>
+    <string name="sticker_template_text_stamp">Stamp</string>
+    <string name="sticker_template_time_digital">Digital clock</string>
+    <string name="sticker_template_time_analog">Clock face</string>
+    <string name="sticker_template_time_ribbon">Ribbon</string>
+    <string name="sticker_template_time_calendar_day">Calendar page</string>
+    <string name="sticker_template_time_a11y">%1$s, %2$s</string>
+</resources>

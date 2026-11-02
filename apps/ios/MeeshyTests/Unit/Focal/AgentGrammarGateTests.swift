@@ -82,7 +82,7 @@ final class AgentGrammarGateTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Focal/Agent/\(fileName)")
+            .appendingPathComponent("Meeshy/Features/Focal/Agent/\(fileName)")
         return try AppSourceGuard.text(at: url)
     }
 

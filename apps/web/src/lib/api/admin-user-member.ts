@@ -43,9 +43,13 @@ export type AdminPreferenceValue = boolean | number | string | readonly unknown[
 export type AdminPreferenceDocument = Readonly<Record<string, AdminPreferenceValue>>;
 export type AdminUserPreferences = Readonly<Record<AdminPreferenceCategory, AdminPreferenceDocument>>;
 
-/** Lisibles, jamais écrites par un administrateur : baisser le chiffrement d'autrui est refusé par la passerelle. */
+/**
+ * Lisibles, jamais écrites par un administrateur — miroir de `ADMIN_READ_ONLY_PREFERENCE_KEYS`
+ * (passerelle) : baisser le chiffrement d'autrui, ou rouvrir son « Recevoir des Bring » (#13936).
+ */
 export const ADMIN_READ_ONLY_PREFERENCES: Readonly<Partial<Record<AdminPreferenceCategory, readonly string[]>>> = {
   privacy: ['encryptionPreference', 'autoEncryptNewConversations', 'warnOnUnencrypted'],
+  notification: ['bringEnabled'],
 };
 
 export const adminUserStatsQueryKey = (userId: string) => ['admin', 'user', userId, 'stats'] as const;

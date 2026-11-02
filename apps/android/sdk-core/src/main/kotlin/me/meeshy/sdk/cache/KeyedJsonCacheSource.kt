@@ -22,12 +22,19 @@ class KeyedJsonCacheSource<T>(
     override fun lastSyncedAt(): Flow<Long?> = cache.observeFetchedAt(namespace, key)
 
     override suspend fun revalidate() {
-        cache.put(namespace, key, fetch(), serializer)
+        val ticket = cache.ticket()
+        cache.put(namespace, key, fetch(), serializer, ticket)
     }
 
     fun results(
         policy: CachePolicy,
         clock: CacheClock = SystemCacheClock,
         onRevalidateError: (Throwable) -> Unit = {},
-    ): Flow<CacheResult<T>> = cacheFirstFlow(policy, this, clock, onRevalidateError)
+    ): Flow<CacheResult<T>> = cacheFirstFlowOf(
+        policy = policy,
+        snapshots = cache.observeSnapshot(namespace, key, serializer),
+        revalidate = ::revalidate,
+        clock = clock,
+        onRevalidateError = onRevalidateError,
+    )
 }

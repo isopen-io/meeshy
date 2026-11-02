@@ -3,6 +3,7 @@ package me.meeshy.app.feed
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,15 +19,25 @@ import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.sdk.model.EngagementSessions
 import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PublicationViewersAccess
 import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.toContentFetchFailure
+import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
+import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import me.meeshy.sdk.model.EmojiCatalog
+import me.meeshy.sdk.model.PostReactionPick
+import me.meeshy.sdk.reaction.EmojiUsageStore
+import me.meeshy.sdk.reaction.InMemoryEmojiUsageStore
 import javax.inject.Inject
 
 /**
@@ -35,8 +46,10 @@ import javax.inject.Inject
  * language resolution matches the feed exactly, and lets the reader switch the displayed
  * language via the same per-post flag-tap rule the feed uses (SSOT with the chat bubble).
  *
- * There is no per-post cache yet, so a cold open shows a skeleton until the fetch answers;
- * a blank id (a malformed route) is surfaced as not-found rather than an endless spinner.
+ * Cache-first (#14467): the detail paints at once from what the device already knows of the post
+ * ([PostRepository.knownPost] — the feed card, the last detail read, the feed kept on disk), then
+ * revalidates in silence; only an empty cache shows a skeleton, then the absence screen on failure.
+ * A blank id (a malformed route) is surfaced as not-found rather than an endless spinner.
  *
  * The comment thread itself lives in [PostCommentsViewModel]; this VM only owns the header,
  * whose comment-count badge is kept honest by the same realtime room — a live
@@ -53,6 +66,8 @@ data class PostDetailUiState(
     /** Cause typee de l'echec du chargement (null = aucun echec) ; pilote [PostAbsenceReason]. */
     val loadFailure: ContentFetchFailure? = null,
     val translatingLanguages: Set<String> = emptySet(),
+    /** Le lecteur peut ouvrir la liste de qui a vu ce contenu (iOS `PublicationViewersAccess`). */
+    val canListViewers: Boolean = false,
     /**
      * The quote-repost composer currently open (the reader chose "Quote"), or `null` when
      * dismissed. Shares the [QuoteComposerState] value model with the feed so the sheet renders
@@ -61,10 +76,16 @@ data class PostDetailUiState(
      */
     val quoteComposer: QuoteComposerState? = null,
     /**
-     * Optimistic "this post is reposted" flag — set the instant the reader taps repost/quote so
-     * the action reflects instantly, reverted on failure. Mirror of iOS `isPostReposted`.
+     * "This post is reposted": served by the gateway, or set the instant the reader taps repost/quote
+     * so the action reflects instantly, reverted on failure. Mirror of iOS `isPostReposted`.
      */
     val isReposted: Boolean = false,
+    /** A one-shot localized feedback of a repost (« Repartage » / « Erreur lors du repost »), cleared by [PostDetailViewModel.consumeNotice]. */
+    val notice: FeedNotice? = null,
+    /** The inline secondary translation under the post text (iOS `PostDetailSecondaryTranslationPanel`). */
+    val secondaryTranslation: PostSecondaryTranslation? = null,
+    /** The detail's flag strip (iOS `buildAvailableFlags`): without the language read, marking the secondary one. */
+    val detailLanguageStrip: List<LanguageChip> = emptyList(),
 )
 
 @HiltViewModel
@@ -75,10 +96,18 @@ class PostDetailViewModel @Inject constructor(
     private val config: MeeshyConfig,
     private val clock: CacheClock,
     private val privacyPreferencesStore: PrivacyPreferencesStore,
+    private val workManager: WorkManager,
     savedStateHandle: SavedStateHandle,
+    private val emojiUsageStore: EmojiUsageStore = InMemoryEmojiUsageStore(),
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
+
+    /** Les émojis de la palette : les mêmes, dans le même ordre que messages et stories (récents d'abord). */
+    val quickEmojis: StateFlow<List<String>> = emojiUsageStore.usage
+        .map { emojiUsageStore.top(EmojiCatalog.defaultQuickReactions.size) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emojiUsageStore.top(EmojiCatalog.defaultQuickReactions.size))
+
 
     /**
      * Dwell bookkeeping for the post-detail surface. Held outside [_state] because it is an
@@ -111,6 +140,8 @@ class PostDetailViewModel @Inject constructor(
         val commentCount: Int? = null,
         val likeCount: Int? = null,
         val isLiked: Boolean? = null,
+        val bookmarkCount: Int? = null,
+        val isBookmarked: Boolean? = null,
     )
     private val liveOverlay = MutableStateFlow(LiveOverlay())
 
@@ -257,6 +288,9 @@ class PostDetailViewModel @Inject constructor(
      * First load. Guarded so a re-entrant call while a fetch is in flight or after the post
      * has already loaded is a no-op — [refresh] forces a reload. A blank [postId] (a malformed
      * route) is surfaced as not-found and never hits the network.
+     *
+     * The post the device already knows is shown before the network answers, and that
+     * revalidation stays silent: offline, the reader keeps the known post with no error.
      */
     fun loadInitial() {
         if (postId.isBlank()) {
@@ -265,7 +299,17 @@ class PostDetailViewModel @Inject constructor(
         }
         if (status.value.isLoading || status.value.hasLoaded) return
         status.update { it.copy(isLoading = true, error = null, failure = null) }
-        fetch()
+        viewModelScope.launch {
+            val known = try {
+                postRepository.knownPost(postId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            if (known != null && rawPost.value == null) rawPost.value = known
+            load(silentWhenShown = true)
+        }
     }
 
     /** « Reessayer » de l'ecran d'echec : rejoue le chargement initial sans quitter le detail. */
@@ -283,30 +327,36 @@ class PostDetailViewModel @Inject constructor(
     }
 
     private fun fetch() {
-        viewModelScope.launch {
-            try {
-                when (val result = postRepository.getPost(postId)) {
-                    is NetworkResult.Success -> {
-                        rawPost.value = result.data
-                        liveOverlay.value = LiveOverlay()
-                        status.update {
-                            it.copy(isLoading = false, isRefreshing = false, hasLoaded = true, error = null, failure = null)
-                        }
-                    }
-                    is NetworkResult.Failure ->
-                        status.update {
-                            it.copy(
-                                isLoading = false,
-                                isRefreshing = false,
-                                error = result.error.message,
-                                failure = result.error.toContentFetchFailure(),
-                            )
-                        }
+        viewModelScope.launch { load(silentWhenShown = false) }
+    }
+
+    /**
+     * Reads the post from the gateway. With [silentWhenShown], a failure while a post is already
+     * on screen keeps it there and reports nothing — the background revalidation of a cache-first
+     * open; the absence screen stays reserved for an empty cache.
+     */
+    private suspend fun load(silentWhenShown: Boolean) {
+        val outcome: Pair<String?, ContentFetchFailure>? = try {
+            when (val result = postRepository.getPost(postId)) {
+                is NetworkResult.Success -> {
+                    rawPost.value = result.data
+                    liveOverlay.value = LiveOverlay()
+                    null
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                status.update { it.copy(isLoading = false, isRefreshing = false, error = e.message, failure = e.toContentFetchFailure()) }
+                is NetworkResult.Failure -> result.error.message to result.error.toContentFetchFailure()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            e.message to e.toContentFetchFailure()
+        }
+        val silenced = outcome != null && silentWhenShown && rawPost.value != null
+        status.update {
+            when {
+                outcome == null ->
+                    it.copy(isLoading = false, isRefreshing = false, hasLoaded = true, error = null, failure = null)
+                silenced -> it.copy(isLoading = false, isRefreshing = false)
+                else -> it.copy(isLoading = false, isRefreshing = false, error = outcome.first, failure = outcome.second)
             }
         }
     }
@@ -328,11 +378,116 @@ class PostDetailViewModel @Inject constructor(
             translations = post.translations.toTranslationRows(),
         )
         when (result) {
-            is LanguageFlagTapResolver.Result.Activate -> activeCode.value = result.code
-            LanguageFlagTapResolver.Result.Revert -> activeCode.value = null
+            is LanguageFlagTapResolver.Result.Activate -> activateFromFlag(post, result.code)
+            LanguageFlagTapResolver.Result.Revert -> {
+                activeCode.value = null
+                status.update { it.copy(secondaryCode = null) }
+            }
             is LanguageFlagTapResolver.Result.RequestTranslation ->
                 requestOnDemandTranslation(result.targetLanguage)
             LanguageFlagTapResolver.Result.None -> Unit
+        }
+    }
+
+    /**
+     * iOS `PostDetailView.handleFlagTap`: the original language becomes the displayed text; any
+     * other translation opens (or closes, on a second tap) the inline secondary panel under the
+     * unchanged text, so two languages can be read side by side.
+     */
+    private fun activateFromFlag(post: ApiPost, code: String) {
+        val original = post.originalLanguage?.trim()?.lowercase()
+        if (code == original) {
+            activeCode.value = code
+            status.update { it.copy(secondaryCode = null) }
+            return
+        }
+        status.update { it.copy(secondaryCode = if (it.secondaryCode == code) null else code) }
+    }
+
+    /**
+     * Pick in the language explorer sheet (iOS `PostTranslationSheet.onSelectLanguage`): the chosen
+     * language becomes the displayed text and closes the secondary panel — a pick never toggles
+     * back to the default, unlike a flag chip. A language the post has no content for is
+     * translated on demand and displayed once it lands.
+     */
+    fun onLanguageSelected(code: String) {
+        val post = rawPost.value ?: return
+        val preferences: LanguageResolver.ContentLanguagePreferences =
+            sessionRepository.currentUser.value ?: EmptyContentPreferences
+        val result = LanguageFlagTapResolver.resolve(
+            tappedCode = code,
+            activeCode = FeedPostBuilder.resolveActiveCode(post, preferences, activeCode.value),
+            originalLanguage = post.originalLanguage,
+            translations = post.translations.toTranslationRows(),
+        )
+        when (result) {
+            is LanguageFlagTapResolver.Result.Activate -> {
+                activeCode.value = result.code
+                status.update { it.copy(secondaryCode = null) }
+            }
+            is LanguageFlagTapResolver.Result.RequestTranslation ->
+                requestOnDemandTranslation(result.targetLanguage)
+            LanguageFlagTapResolver.Result.Revert, LanguageFlagTapResolver.Result.None -> Unit
+        }
+    }
+
+    /**
+     * Tap on the detail's heart (iOS `PostDetailView+Heart`): flips the like and its count
+     * instantly through the live overlay, then hands the mutation to the durable outbox via
+     * [PostRepository.setLiked] — which works even when the post is absent from the feed cache
+     * (opened from a link or a notification) — and schedules the flush. A failed enqueue
+     * reverts the flip. Inert until the post has loaded.
+     */
+    fun toggleLike() {
+        val shown = _state.value.post ?: return
+        val liked = !shown.isLiked
+        val previous = liveOverlay.value
+        liveOverlay.update {
+            it.copy(isLiked = liked, likeCount = (shown.likeCount + if (liked) 1 else -1).coerceAtLeast(0))
+        }
+        sendEngagement(revertTo = previous) { postRepository.setLiked(shown.id, liked) }
+    }
+
+    /**
+     * Le choix d'un émoji dans la palette du cœur. Le cœur garde [toggleLike] — lui seul porte
+     * « aimé » et le compteur. Tout autre émoji est ADDITIF : envoyé tel quel, sans état local à
+     * réconcilier (iso `sendDetailReaction`), échec silencieux comme `try?` côté iOS.
+     */
+    fun react(pick: PostReactionPick) {
+        val postId = _state.value.post?.id ?: return
+        when (pick) {
+            PostReactionPick.Heart -> toggleLike()
+            is PostReactionPick.Other -> viewModelScope.launch {
+                emojiUsageStore.record(pick.emoji)
+                postRepository.react(postId, pick.emoji)
+            }
+        }
+    }
+
+    /** The bookmark analogue of [toggleLike]. */
+    fun toggleBookmark() {
+        val shown = _state.value.post ?: return
+        val bookmarked = !shown.isBookmarked
+        val previous = liveOverlay.value
+        liveOverlay.update {
+            it.copy(
+                isBookmarked = bookmarked,
+                bookmarkCount = (shown.bookmarkCount + if (bookmarked) 1 else -1).coerceAtLeast(0),
+            )
+        }
+        sendEngagement(revertTo = previous) { postRepository.setBookmarked(shown.id, bookmarked) }
+    }
+
+    private fun sendEngagement(revertTo: LiveOverlay, enqueue: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                enqueue()
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                liveOverlay.value = revertTo
+            }
         }
     }
 
@@ -345,7 +500,12 @@ class PostDetailViewModel @Inject constructor(
      */
     fun repost() {
         val post = rawPost.value ?: return
-        sendRepost(RepostCommand.of(post.id, post.repostOf, quote = false, commentary = null))
+        sendRepost(RepostCommand.of(post.id, post.repostOf, quote = false, commentary = null, cardType = post.type))
+    }
+
+    /** The toast for [PostDetailUiState.notice] has been shown. */
+    fun consumeNotice() {
+        status.update { it.copy(notice = null) }
     }
 
     /**
@@ -384,28 +544,40 @@ class PostDetailViewModel @Inject constructor(
     fun submitQuote() {
         val composer = status.value.quoteComposer ?: return
         val post = rawPost.value ?: return
-        val command = RepostCommand.of(composer.postId, post.repostOf, quote = true, commentary = composer.text)
+        val command = RepostCommand.of(composer.postId, post.repostOf, quote = true, commentary = composer.text, cardType = post.type)
         status.update { it.copy(quoteComposer = null) }
         sendRepost(command)
     }
 
+    /**
+     * The open post counts the repost and marks itself at the gesture; the server confirms (« Repartage ») or refuses,
+     * and the post takes back its state from before the gesture with « Erreur lors du repost » — never the raw
+     * technical message. A second gesture while the first is in flight sends nothing (iOS `toggleDetailRepost`).
+     */
     private fun sendRepost(command: RepostCommand) {
-        if (status.value.isRepostInFlight) return
-        status.update { it.copy(isRepostInFlight = true, isReposted = true, error = null) }
+        val post = rawPost.value ?: return
+        val before = status.value.reposts
+        val begun = before.begun(post.id, post.repostCount ?: 0) ?: return
+        status.update { it.copy(reposts = begun) }
         viewModelScope.launch {
-            try {
-                when (val result = postRepository.repost(command.targetId, content = command.content, isQuote = command.isQuote)) {
-                    is NetworkResult.Success ->
-                        status.update { it.copy(isRepostInFlight = false) }
-                    is NetworkResult.Failure ->
-                        status.update {
-                            it.copy(isRepostInFlight = false, isReposted = false, error = result.error.message)
-                        }
-                }
+            val confirmed = try {
+                postRepository.repost(
+                    command.targetId,
+                    targetType = command.targetType,
+                    content = command.content,
+                    isQuote = command.isQuote,
+                ) is NetworkResult.Success
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
-                status.update { it.copy(isRepostInFlight = false, isReposted = false, error = e.message) }
+            } catch (_: Exception) {
+                false
+            }
+            status.update {
+                if (confirmed) {
+                    it.copy(reposts = it.reposts.confirmed(post.id), notice = FeedNotice.REPOSTED)
+                } else {
+                    it.copy(reposts = it.reposts.refused(post.id, before), notice = FeedNotice.REPOST_FAILED)
+                }
             }
         }
     }
@@ -447,16 +619,19 @@ class PostDetailViewModel @Inject constructor(
         overlay: LiveOverlay,
     ): PostDetailUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
-        val projected = post?.let {
-            FeedPostBuilder.build(it, prefs, config.socketUrl, activeLanguageCode = active, currentUserId = user?.id)
+        val projected = post?.let(st.reposts::applyTo)?.let {
+            FeedPostBuilder.build(it, prefs, config.apiBaseUrl, activeLanguageCode = active, currentUserId = user?.id)
         }?.let { presentation ->
             presentation.copy(
                 commentCount = overlay.commentCount?.coerceAtLeast(0) ?: presentation.commentCount,
                 likeCount = overlay.likeCount?.coerceAtLeast(0) ?: presentation.likeCount,
                 isLiked = overlay.isLiked ?: presentation.isLiked,
+                bookmarkCount = overlay.bookmarkCount?.coerceAtLeast(0) ?: presentation.bookmarkCount,
+                isBookmarked = overlay.isBookmarked ?: presentation.isBookmarked,
             )
         }
         val showSkeleton = st.isLoading && post == null && !st.notFound && st.error == null
+        val displayedCode = post?.let { FeedPostBuilder.resolveActiveCode(it, prefs, active) }
         return PostDetailUiState(
             post = projected,
             isLoading = st.isLoading,
@@ -466,8 +641,15 @@ class PostDetailViewModel @Inject constructor(
             errorMessage = st.error,
             loadFailure = st.failure ?: if (st.notFound) ContentFetchFailure.NOT_FOUND else null,
             translatingLanguages = st.translating,
+            canListViewers = post != null &&
+                PublicationViewersAccess.mayList(post.type, projected?.isAuthor == true, user?.role),
             quoteComposer = st.quoteComposer,
-            isReposted = st.isReposted,
+            isReposted = projected?.isReposted == true,
+            notice = st.notice,
+            secondaryTranslation = post?.let { PostSecondaryTranslation.of(it, st.secondaryCode, displayedCode) },
+            detailLanguageStrip = projected?.let {
+                PostDetailLanguageStrip.of(it.languageStrip, displayedCode, post?.originalLanguage, st.secondaryCode)
+            }.orEmpty(),
         )
     }
 
@@ -485,6 +667,7 @@ private data class PostDetailStatus(
     val failure: ContentFetchFailure? = null,
     val translating: Set<String> = emptySet(),
     val quoteComposer: QuoteComposerState? = null,
-    val isReposted: Boolean = false,
-    val isRepostInFlight: Boolean = false,
+    val reposts: RepostMarks = RepostMarks(),
+    val notice: FeedNotice? = null,
+    val secondaryCode: String? = null,
 )

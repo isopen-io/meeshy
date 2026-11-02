@@ -19,7 +19,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  * Transparent container so the [MeeshyBackground] gradient shows through, with a
  * prominent rounded violet title. Defaults to `displaySmall` (28sp rounded bold);
  * screens with a large iOS-style title pass a bigger [titleStyle] (e.g.
- * `displayLarge` 46sp).
+ * `displayLarge` 46sp). [onBack] pose la flèche « < » partagée ([MeeshyBackButton]) en navigation.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,7 +27,8 @@ fun MeeshyTopBar(
     title: String,
     modifier: Modifier = Modifier,
     titleStyle: TextStyle = MaterialTheme.typography.displaySmall,
-    navigationIcon: @Composable () -> Unit = {},
+    onBack: (() -> Unit)? = null,
+    navigationIcon: @Composable () -> Unit = { onBack?.let { MeeshyBackButton(onClick = it) } },
     actions: @Composable RowScope.() -> Unit = {},
     scrollBehavior: TopAppBarScrollBehavior? = null,
 ) {

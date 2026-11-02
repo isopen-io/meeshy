@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:reels": {
+      "resDir": "feature/reels/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "userIdentity.translation.available",
+          "androidName": "reels_caption_translated",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

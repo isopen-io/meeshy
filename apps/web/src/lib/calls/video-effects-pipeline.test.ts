@@ -6,6 +6,8 @@ import { NO_EFFECTS, frameSettings, type FrameSettings, type VideoEffects } from
 import type { LocalFrameEnv } from './video-effects-browser';
 import type { HostMessage, HostReply } from './video-effects-host';
 import { createEffectsPipeline, type PipelineEnv, type WorkerPort } from './video-effects-pipeline';
+import type { LensFiles } from '@/lib/meeshy-lens/lens-files';
+import type { LensSettings } from '@/lib/meeshy-lens/lens-stage';
 
 /**
  * LE TRAITEMENT DES IMAGES ENVOYÉES, VU DU FIL PRINCIPAL (#8442, #9099) —
@@ -247,6 +249,33 @@ describe('le repli : les images traitables sur le fil principal (pas de worker)'
     pipeline.update(settings({ brightness: 0.2 }));
     await f.send(2);
     expect(local.draws[1]).toBe(`${lookFilter()} brightness(1.2)`);
+    pipeline.stop();
+  });
+});
+
+describe('les fichiers d’une lens ne partent au worker qu’une fois (#11994)', () => {
+  const lensWith = (files: LensFiles): LensSettings => ({
+    lens: { schema: 1, id: 'aurore', name: 'Aurore', credits: { author: 'Studio', createdAt: '2026-10-01' }, surfaces: ['live'], cost: 'light', window: { startsAt: '2026-10-01T00:00:00Z', endsAt: '2026-12-31T00:00:00Z' }, layers: [], triggers: [] },
+    languages: ['fr'],
+    level: 'full',
+    files,
+  });
+  const withLens = (effects: Partial<VideoEffects>, lens: LensSettings): FrameSettings => frameSettings({ ...NO_EFFECTS, ...effects }, { nativeBlur: false, zoom: 1 }, lens);
+  const sentFiles = (entry: { readonly message: HostMessage } | undefined) => (entry !== undefined && 'settings' in entry.message ? entry.message.settings.lens?.files : null);
+
+  test('un réglage qui garde la même lens (un zoom, une couleur) ne recopie ni son cube ni ses images ; d’autres fichiers repartent', async () => {
+    const worker = fakeWorker();
+    const f = framesEnv();
+    const files: LensFiles = { cubes: {}, images: {} };
+    const lens = lensWith(files);
+    const pipeline = await createEffectsPipeline(camera(), withLens({}, lens), { worker: () => worker.port, frames: f.frames, canvas: null, local: async () => localEnv().env });
+    pipeline.update(withLens({ preset: 'cool' }, lens));
+    const other: LensFiles = { cubes: {}, images: {} };
+    pipeline.update(withLens({ preset: 'cool' }, lensWith(other)));
+    expect(sentFiles(worker.posted[0])).toBe(files);
+    expect(sentFiles(worker.posted[1])).toBeUndefined();
+    expect(worker.posted[1]?.message).toMatchObject({ settings: { lens: { languages: ['fr'], level: 'full' } } });
+    expect(sentFiles(worker.posted[2])).toBe(other);
     pipeline.stop();
   });
 });

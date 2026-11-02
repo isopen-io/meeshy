@@ -3,12 +3,16 @@ package me.meeshy.app.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.AccountDeletionConfirmation
+import me.meeshy.sdk.model.AccountDeletionPhase
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AccountDeletionApi
@@ -23,6 +27,12 @@ data class AccountDeletionUiState(
     val isDeleting: Boolean = false,
     val isEmailSent: Boolean = false,
     val error: AccountDeletionError? = null,
+    /** The iOS "Confirmation finale" alert is up — the network call waits for its answer. */
+    val showFinalConfirmation: Boolean = false,
+    /** L'etat de la demande lu sur la passerelle ; `null` tant qu'il n'a pas ete lu (rien n'est affirme). */
+    val deletion: AccountDeletionPhase? = null,
+    /** ISO-8601 : « le lien expire le … », connu juste apres l'ouverture d'une demande. */
+    val tokenExpiresAt: String? = null,
 ) {
     /** Whether the typed phrase matches the gateway literal verbatim. */
     val isConfirmed: Boolean
@@ -33,6 +43,9 @@ data class AccountDeletionUiState(
     val canSubmit: Boolean
         get() = isConfirmed && currentPassword.isNotEmpty() && !isDeleting
 }
+
+/** One-shot haptics the screen performs (iOS `HapticFeedback.heavy/success/error`). */
+enum class AccountDeletionEffect { HAPTIC_HEAVY, HAPTIC_SUCCESS, HAPTIC_ERROR }
 
 /**
  * Drives the account-deletion screen (feature-parity §L, port of iOS `DeleteAccountView`).
@@ -61,6 +74,23 @@ class AccountDeletionViewModel @Inject constructor(
     private val _state = MutableStateFlow(AccountDeletionUiState())
     val state: StateFlow<AccountDeletionUiState> = _state.asStateFlow()
 
+    private val _effects = Channel<AccountDeletionEffect>(Channel.BUFFERED)
+    val effects: Flow<AccountDeletionEffect> = _effects.receiveAsFlow()
+
+    init {
+        refreshStatus()
+    }
+
+    /** Relit `GET me/account/deletion` ; un echec garde l'etat precedent (jamais d'ecran d'erreur). */
+    fun refreshStatus() {
+        viewModelScope.launch {
+            val result = accountDeletionApi.status()
+            if (result is NetworkResult.Success) {
+                _state.update { it.copy(deletion = AccountDeletionPhase.from(result.data)) }
+            }
+        }
+    }
+
     fun onConfirmationTextChange(value: String) {
         _state.update { it.copy(confirmationText = value, error = null) }
     }
@@ -70,19 +100,40 @@ class AccountDeletionViewModel @Inject constructor(
     }
 
     /**
-     * Requests deletion. Inert unless the phrase is confirmed, a password was typed, and
-     * no request is already in flight (double-tap safe — [AccountDeletionUiState.isDeleting]
-     * is set synchronously before the coroutine launches). Always sends the canonical
-     * [AccountDeletionConfirmation.REQUIRED_PHRASE], never the raw buffer.
+     * Taps the destructive button: heavy haptic, then the "Confirmation finale" alert. Inert
+     * unless the phrase is confirmed, a password was typed and no request is in flight; no
+     * network call happens before [confirmDeletion].
      */
-    fun submit() {
+    fun requestDeletion() {
         val snapshot = _state.value
-        if (!snapshot.canSubmit) return
-        _state.update { it.copy(isDeleting = true, error = null) }
+        if (!snapshot.canSubmit || snapshot.showFinalConfirmation) return
+        _state.update { it.copy(showFinalConfirmation = true) }
+        _effects.trySend(AccountDeletionEffect.HAPTIC_HEAVY)
+    }
+
+    /** Cancels the final alert — nothing was sent. */
+    fun dismissFinalConfirmation() {
+        _state.update { it.copy(showFinalConfirmation = false) }
+    }
+
+    /**
+     * Answers the final alert with "Delete": the only path to the single online call. A second
+     * confirmation while the request is in flight (or without the alert up) is ignored
+     * ([AccountDeletionUiState.isDeleting] is set synchronously before the coroutine launches).
+     * Always sends the canonical [AccountDeletionConfirmation.REQUIRED_PHRASE], never the raw buffer.
+     */
+    fun confirmDeletion() {
+        val snapshot = _state.value
+        if (!snapshot.showFinalConfirmation || !snapshot.canSubmit) return
+        _state.update { it.copy(showFinalConfirmation = false, isDeleting = true, error = null) }
         viewModelScope.launch {
             val result = accountDeletionApi.open(
                 confirmationPhrase = AccountDeletionConfirmation.REQUIRED_PHRASE,
                 currentPassword = snapshot.currentPassword,
+            )
+            _effects.trySend(
+                if (result is NetworkResult.Success) AccountDeletionEffect.HAPTIC_SUCCESS
+                else AccountDeletionEffect.HAPTIC_ERROR,
             )
             _state.update { current ->
                 when (result) {
@@ -94,6 +145,8 @@ class AccountDeletionViewModel @Inject constructor(
                             isEmailSent = true,
                             error = null,
                             currentPassword = "",
+                            tokenExpiresAt = result.data.tokenExpiresAt,
+                            deletion = AccountDeletionPhase.PendingConfirmation,
                         )
                     is NetworkResult.Failure -> {
                         val error = result.error.toAccountDeletionError()
@@ -106,6 +159,10 @@ class AccountDeletionViewModel @Inject constructor(
                         )
                     }
                 }
+            }
+            // A 409 "already pending" is a state, not a dead end: re-read where the request stands.
+            if (result is NetworkResult.Failure && result.error.toAccountDeletionError() == AccountDeletionError.ALREADY_PENDING) {
+                refreshStatus()
             }
         }
     }

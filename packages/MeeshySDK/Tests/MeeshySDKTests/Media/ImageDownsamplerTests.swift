@@ -25,6 +25,22 @@ final class ImageDownsamplerTests: XCTestCase {
         XCTAssertEqual(deferred[kCGImageSourceThumbnailMaxPixelSize] as? CGFloat, 2_048)
     }
 
+    /// L'exception déclarée (#11847) : un encodeur qui garde l'orientation EXIF
+    /// à côté des pixels les reçoit tels qu'ils sont stockés.
+    func test_thumbnail_keepingTheStoredOrientation_doesNotRotate() throws {
+        let data = try Self.jpeg(width: 400, height: 200, orientation: 6)
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
+
+        let image = try XCTUnwrap(ImageDownsampler.thumbnail(source: source, maxPixelSize: 100, decodeImmediately: true,
+                                                             keepsStoredOrientation: true))
+
+        XCTAssertEqual(image.width, 100)
+        XCTAssertEqual(image.height, 50)
+        let options = ImageDownsampler.options(maxPixelSize: 100, decodeImmediately: true,
+                                               keepsStoredOrientation: true) as NSDictionary
+        XCTAssertEqual(options[kCGImageSourceCreateThumbnailWithTransform] as? Bool, false)
+    }
+
     /// Une photo prise téléphone tourné (EXIF 6) sort DEBOUT, bornée sur son
     /// plus grand côté.
     func test_thumbnail_appliesTheExifOrientation_andBoundsTheLongestSide() throws {

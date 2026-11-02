@@ -1,5 +1,10 @@
 package me.meeshy.app.contacts
 
+import androidx.compose.foundation.clickable
+import kotlinx.coroutines.flow.map
+import me.meeshy.ui.component.FeedbackKind
+import me.meeshy.ui.component.FeedbackToastHost
+import me.meeshy.ui.component.FeedbackToastRequest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,7 +20,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,40 +52,59 @@ import me.meeshy.ui.theme.MeeshyTheme
  * load; a populated list paints immediately. Unblocking pops a confirm dialog,
  * then removes the row optimistically (the VM restores it on failure).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BlockedTab(
+    onOpenProfile: (String) -> Unit = {},
     viewModel: BlockedListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var confirmTarget by remember { mutableStateOf<BlockedUser?>(null) }
 
     LaunchedEffect(Unit) { viewModel.load() }
+    val toasts = remember(viewModel) {
+        viewModel.feedback.map {
+            when (it) {
+                BlockedFeedback.Unblocked -> FeedbackToastRequest(R.string.contacts_blocked_unblock_success, FeedbackKind.Success)
+                BlockedFeedback.UnblockFailed -> FeedbackToastRequest(R.string.contacts_blocked_unblock_error, FeedbackKind.Error)
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        when {
-            state.showSkeleton -> Centered { CircularProgressIndicator() }
-            state.errorMessage != null -> BlockedErrorState(onRetry = viewModel::load)
-            state.isEmpty -> Centered {
-                Text(
-                    text = stringResource(R.string.contacts_blocked_empty),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MeeshyTheme.tokens.textSecondary,
-                    modifier = Modifier.padding(32.dp),
-                )
-            }
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(vertical = 8.dp),
-            ) {
-                items(state.blocked, key = { it.id }) { user ->
-                    BlockedRow(
-                        user = user,
-                        pending = user.id in state.pendingIds,
-                        onUnblock = { confirmTarget = user },
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = viewModel::refresh,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            when {
+                state.showSkeleton -> Centered { CircularProgressIndicator() }
+                state.errorMessage != null -> BlockedErrorState(onRetry = viewModel::load)
+                state.isEmpty -> Centered {
+                    Text(
+                        text = stringResource(R.string.contacts_blocked_empty),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MeeshyTheme.tokens.textSecondary,
+                        modifier = Modifier.padding(32.dp),
                     )
+                }
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                ) {
+                    items(state.blocked, key = { it.id }) { user ->
+                        BlockedRow(
+                            user = user,
+                            pending = user.id in state.pendingIds,
+                            onUnblock = { confirmTarget = user },
+                            onOpenProfile = { onOpenProfile(user.id) },
+                            modifier = Modifier.animateItem(),
+                        )
+                    }
                 }
             }
         }
+        FeedbackToastHost(toasts = toasts)
     }
 
     confirmTarget?.let { target ->
@@ -109,11 +135,14 @@ private fun BlockedRow(
     user: BlockedUser,
     pending: Boolean,
     onUnblock: () -> Unit,
+    onOpenProfile: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val name = user.blockedDisplayName()
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
+            .clickable(enabled = user.id.isNotBlank(), onClick = onOpenProfile)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -121,6 +150,7 @@ private fun BlockedRow(
             name = name,
             size = 44.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(user.id.ifBlank { name })),
+            imageUrl = user.avatar,
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {

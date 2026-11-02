@@ -1,5 +1,9 @@
 package me.meeshy.sdk.conversation
 
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
+
 import androidx.room.withTransaction
 import java.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -39,9 +43,20 @@ internal class MessageCacheSource(
     private val messageApi: MessageApi,
     private val clock: CacheClock,
     private val historyWindow: Flow<Int>,
+    /** #13558 — a revalidation lands only while the account that asked for it is still the one signed in. */
+    private val fence: AccountFence? = null,
+    /** #13792 — chaque page servie nourrit le registre des régimes. */
+    private val regime: EndToEndRegimeKeeper? = null,
 ) : SwrCacheSource<List<LocalMessage>> {
 
     private val resourceKey = "messages:$conversationId"
+
+    /**
+     * Every snapshot write goes through the field-level merge: local columns kept, nothing
+     * regresses, pending outbox mutations protected, unchanged rows left unwritten — and the
+     * echoed `cid_` bridged to its server id, the optimistic bubble replaced in place.
+     */
+    private val ingestion = MessageIngestPipeline(database, regime = regime)
 
     /**
      * #5189 — bounded to [historyWindow] rather than the conversation's whole
@@ -101,15 +116,16 @@ internal class MessageCacheSource(
      * exactly where it was — there is nothing to "advance" separately.
      */
     override suspend fun revalidate() {
+        val ticket = fence?.currentTicket()
         val gapAfterMillis = messageDao.newestSyncedCreatedAt(conversationId)
         if (gapAfterMillis != null) {
             val backfilled = tryAfterSweep(Instant.ofEpochMilli(gapAfterMillis).toString())
             if (backfilled != null) {
-                if (backfilled.isNotEmpty()) persistAfterBackfill(backfilled)
+                if (backfilled.isNotEmpty()) fence.commitOrWrite(ticket) { persistAfterBackfill(backfilled) }
                 return
             }
         }
-        revalidateFullWindow()
+        revalidateFullWindow(ticket)
     }
 
     /**
@@ -159,7 +175,7 @@ internal class MessageCacheSource(
      * a conditional request) and throws, rather than being silently read as
      * "unchanged" or as an empty success.
      */
-    private suspend fun revalidateFullWindow() {
+    private suspend fun revalidateFullWindow(ticket: AccountTicket?) {
         val currentEtag = syncMetaDao.etag(resourceKey)
         when (
             val result = messageApi.listConditionalResult(
@@ -173,9 +189,11 @@ internal class MessageCacheSource(
                         "Unexpected 304 for messages:$conversationId without If-None-Match sent",
                     )
                 }
-                syncMetaDao.upsert(SyncMetaEntity(resourceKey, clock.nowMillis(), null, currentEtag, null))
+                fence.commitOrWrite(ticket) {
+                    syncMetaDao.upsert(SyncMetaEntity(resourceKey, clock.nowMillis(), null, currentEtag, null))
+                }
             }
-            is ConditionalResult.Fresh -> persist(result.data, newEtag = result.etag)
+            is ConditionalResult.Fresh -> fence.commitOrWrite(ticket) { persist(result.data, newEtag = result.etag) }
             is ConditionalResult.Failure -> throw MessageSyncException(result.error.message)
         }
     }
@@ -183,10 +201,8 @@ internal class MessageCacheSource(
     private suspend fun persist(messages: List<ApiMessage>, newEtag: String?) {
         val now = clock.nowMillis()
         val rows = messages.map { MessageEntityFactory.cached(it, cachedAt = now, conversationId = conversationId) }
-        val ackedLocalIds = messages.mapNotNull { it.clientMessageId }
         database.withTransaction {
-            messageDao.upsertAll(rows)
-            if (ackedLocalIds.isNotEmpty()) messageDao.deleteByIds(ackedLocalIds)
+            ingestion.mergeInTransaction(messages, now, conversationId)
             if (rows.isEmpty()) {
                 messageDao.deleteMissing(conversationId, emptyList())
             } else {
@@ -209,12 +225,9 @@ internal class MessageCacheSource(
      */
     private suspend fun persistAfterBackfill(messages: List<ApiMessage>) {
         val now = clock.nowMillis()
-        val rows = messages.map { MessageEntityFactory.cached(it, cachedAt = now, conversationId = conversationId) }
-        val ackedLocalIds = messages.mapNotNull { it.clientMessageId }
         val currentEtag = syncMetaDao.etag(resourceKey)
         database.withTransaction {
-            messageDao.upsertAll(rows)
-            if (ackedLocalIds.isNotEmpty()) messageDao.deleteByIds(ackedLocalIds)
+            ingestion.mergeInTransaction(messages, now, conversationId)
             syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, currentEtag, null))
         }
     }

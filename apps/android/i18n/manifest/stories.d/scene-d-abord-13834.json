@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_scene_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_scene_more_animation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_scene_more_timing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_scene_done",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -5,6 +5,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.net.TokenStore
+import me.meeshy.sdk.socket.PresenceStore
 
 /**
  * Every `GlanceAppWidget` in `apps/android` is a `Hilt`-unsupported entry point
@@ -25,4 +26,7 @@ internal interface WidgetEntryPoint {
      * unpopulated in a cold widget-update process).
      */
     fun tokenStore(): TokenStore
+
+    /** La carte de présence vivante : l'état SERVI des pairs affichés, rien d'autre (#13747). */
+    fun presenceStore(): PresenceStore
 }

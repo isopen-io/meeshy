@@ -42,14 +42,21 @@ export const GLASS_INVENTORY = {
     blur: {
       count: 1,
       reason:
-        "le VOILE du menu du message : un scrim qui floute le fil ENTIER derrière le menu ouvert, sans texte ni contrôle — pas une surface de verre",
+        "le VOILE du menu du message : un scrim qui floute le fil ENTIER derrière le menu ouvert, sans texte ni contrôle — pas une surface de verre ; sa valeur est le jeton `--longpress-veil-backdrop` (`longpress-veil.css`, #11222)",
     },
   },
   'src/styles/conversation-peek.css': {
     blur: {
       count: 1,
       reason:
-        "le VOILE de l'aperçu d'une conversation tenue (#11211) : un scrim qui floute la liste ENTIÈRE derrière la grappe, sans texte ni contrôle — pas une surface de verre, le même que celui du menu du message",
+        "le VOILE de l'aperçu d'une conversation tenue (#11211) : un scrim qui floute la liste ENTIÈRE derrière la grappe, sans texte ni contrôle — pas une surface de verre, le même que celui du menu du message (jeton `--longpress-veil-backdrop`, #11222)",
+    },
+  },
+  'src/styles/longpress-veil.css': {
+    blur: {
+      count: 2,
+      reason:
+        "la LOI du voile de l'appui long (#11222) : aucune déclaration, seulement la requête `@supports not` qui détecte l'absence de flou d'arrière-plan pour densifier la teinte — ses deux formes, préfixée et non préfixée, comptent chacune",
     },
   },
   'src/components/conversation-preview-sheet.tsx': {

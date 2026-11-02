@@ -73,14 +73,15 @@ class SharedPrefsServerEnvironmentStore(context: Context) : ServerEnvironmentSto
         get() = prefs.getString(KEY_CUSTOM_HOST, null) ?: ""
 
     override fun select(env: ServerEnvironment) {
-        prefs.edit().putString(KEY_ENVIRONMENT, env.id).apply()
+        // commit et non apply : l'app redémarre aussitôt pour appliquer le serveur (restartToApplyServer).
+        prefs.edit().putString(KEY_ENVIRONMENT, env.id).commit()
     }
 
     override fun applyCustomHost(host: String) {
         prefs.edit()
             .putString(KEY_CUSTOM_HOST, host)
             .putString(KEY_ENVIRONMENT, ServerEnvironment.CUSTOM.id)
-            .apply()
+            .commit()
     }
 
     private companion object {

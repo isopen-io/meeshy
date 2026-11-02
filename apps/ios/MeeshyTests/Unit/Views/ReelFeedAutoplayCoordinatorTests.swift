@@ -21,9 +21,14 @@ final class ReelFeedAutoplayCoordinatorTests: XCTestCase {
     /// not touch the singleton). Pass an explicit publisher where needed.
     private func makeSUT(
         isCallActive: @escaping () -> Bool = { false },
-        callStatePublisher: AnyPublisher<Bool, Never>? = nil
+        callStatePublisher: AnyPublisher<Bool, Never>? = nil,
+        prewarmsNeighbours: @escaping () -> Bool = { true }
     ) -> ReelFeedAutoplayCoordinator {
-        ReelFeedAutoplayCoordinator(isCallActive: isCallActive, callStatePublisher: callStatePublisher)
+        ReelFeedAutoplayCoordinator(
+            isCallActive: isCallActive,
+            callStatePublisher: callStatePublisher,
+            prewarmsNeighbours: prewarmsNeighbours
+        )
     }
 
     /// `update()` coalesces via a ~100 ms debounce (I2), so settling requires
@@ -240,6 +245,24 @@ final class ReelFeedAutoplayCoordinatorTests: XCTestCase {
         await waitForActiveReel(sut, toEqual: "b")
 
         XCTAssertEqual(sut.activeReelId, "b")
+        XCTAssertNil(sut.prewarmReelId)
+    }
+
+    /// #9880 — l'économie d'énergie (ou une chaleur sérieuse) coupe l'autoplay
+    /// voisin : le réel affiché joue, le suivant n'est plus préparé d'avance.
+    func test_update_quandLaPolitiqueCoupeLesVoisins_neDesigneAucunVoisin() async {
+        var neighbours = true
+        let sut = makeSUT(prewarmsNeighbours: { neighbours })
+        let frames = [frame("a", midY: 100), frame("b", midY: 400), frame("c", midY: 800)]
+        sut.update(frames: frames, viewportMinY: 0, viewportMaxY: 800)
+        await waitForActiveReel(sut, toEqual: "b")
+        XCTAssertEqual(sut.prewarmReelId, "c")
+
+        neighbours = false
+        sut.update(frames: frames, viewportMinY: 0, viewportMaxY: 800)
+        await waitForDebounce()
+
+        XCTAssertEqual(sut.activeReelId, "b", "le réel affiché joue toujours")
         XCTAssertNil(sut.prewarmReelId)
     }
 

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import me.meeshy.sdk.model.UserNotificationPreferences
@@ -30,6 +31,13 @@ public interface NotificationPreferencesStore {
 
     /** Persists the whole notification-preference block. */
     public suspend fun setPreferences(preferences: UserNotificationPreferences)
+
+    /**
+     * The PERSISTED preferences, waiting for the first disk read when needed. A process cold-
+     * started by a push (app killed) would otherwise read [preferences]' initial defaults and
+     * ignore every toggle the user turned off. A store without disk returns [preferences].
+     */
+    public suspend fun awaitHydrated(): UserNotificationPreferences = preferences.value
 }
 
 /** Volatile [NotificationPreferencesStore] — for tests and previews. */
@@ -63,6 +71,9 @@ public class DataStoreNotificationPreferencesStore(
     override suspend fun setPreferences(preferences: UserNotificationPreferences) {
         dataStore.edit { prefs -> prefs[KEY] = preferences.storageValue }
     }
+
+    override suspend fun awaitHydrated(): UserNotificationPreferences =
+        notificationPreferencesFromStorage(dataStore.data.first()[KEY])
 
     private companion object {
         private val KEY = stringPreferencesKey("notification_preferences")

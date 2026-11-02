@@ -26,7 +26,7 @@ La commande de release refuse de construire tant qu'il manque la clé, `google-s
 ## À chaque version
 
 1. Monter `version` dans `apps/web/package.json`. `build-shells.mjs` en dérive `versionName` ; `versionCode` est le compte de commits (D-45).
-2. GitHub, onglet *Actions*, ouvrir **Android Release (coque apps/web)**, cliquer *Run workflow* sur `main` et choisir la piste (`internal` par défaut).
+2. GitHub, onglet *Actions*, ouvrir **Android coque · publication Play**, cliquer *Run workflow* sur `main` et choisir la piste (`internal` par défaut).
 3. Le workflow rend deux artefacts signés : `app-release.aab`, pour la Play Console, et `app-release.apk`, à installer directement avec `adb install -r`. Si `MEESHY_PLAY_SERVICE_ACCOUNT_JSON` est posé, il pousse aussi l'`.aab` sur la piste choisie. **La toute première version se téléverse à la main**, parce que l'API refuse une application qui n'a encore aucun bundle.
 4. Tester la version interne sur un vrai téléphone : connexion, envoi d'un message, puis réception d'une notification **application fermée** depuis un autre compte. Toucher la notification doit ouvrir la bonne conversation.
 5. Promouvoir la version en production depuis la Play Console. Poser ensuite `SHELL_LATEST_VERSION=<version>` dans l'environnement du gateway pour que les anciennes installations voient la bannière de mise à jour (#6937).

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La carte d'une conversation Meeshy dans une bulle (#13672) : clés propres à Android, jamais au catalogue iOS. -->
+<resources>
+    <string name="conversation_card_invites_you">يدعوك للانضمام إلى هذه المحادثة</string>
+    <string name="conversation_card_join_prompt">هل تنضم؟</string>
+    <string name="conversation_card_join_choice_anonymous">مجهول</string>
+    <string name="conversation_card_join_choice_account">حسابي</string>
+    <string name="conversation_card_a11y_join_anonymously">الانضمام بشكل مجهول</string>
+    <string name="conversation_card_a11y_join_with_account">الانضمام بحسابي</string>
+    <string name="conversation_card_a11y_join_with_named_account">الانضمام بالحساب %1$s</string>
+    <string name="conversation_card_leave">مغادرة</string>
+    <string name="conversation_card_open">فتح</string>
+    <string name="conversation_card_in_progress">جارٍ التنفيذ…</string>
+    <string name="conversation_card_expired">انتهت صلاحية الرابط</string>
+    <string name="conversation_card_private_title">محادثة خاصة</string>
+    <string name="conversation_card_private_hint">لا يراها إلا أعضاؤها.</string>
+    <string name="conversation_card_loading">جارٍ تحميل المحادثة</string>
+    <string name="conversation_card_leave_confirm_title">مغادرة هذه المحادثة؟</string>
+    <string name="conversation_card_leave_confirm_message">لن تتلقى رسائلها بعد الآن.</string>
+    <string name="conversation_card_a11y_members">الأعضاء: %1$d</string>
+    <string name="conversation_card_a11y_messages">الرسائل: %1$d</string>
+    <string name="conversation_card_a11y_languages">اللغات: %1$s</string>
+    <string name="conversation_card_a11y_label">المحادثة: %1$s</string>
+    <string name="conversation_card_error_leave">تعذّرت مغادرة المحادثة.</string>
+    <string name="conversation_card_error_join">تعذّر الانضمام إلى المحادثة</string>
+    <string name="conversation_card_error_not_found">الرابط غير موجود</string>
+    <string name="conversation_card_error_inactive">لم يعد هذا الرابط نشطًا</string>
+    <string name="conversation_card_error_forbidden">تم رفض الوصول إلى هذه المحادثة</string>
+</resources>

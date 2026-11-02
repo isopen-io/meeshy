@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { MemberRole } from '@meeshy/shared/types/role-types'
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events'
-import { actorHasMinimumRole } from '../../utils/conversation-authority'
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { enhancedLogger } from '../../utils/logger-enhanced.js'

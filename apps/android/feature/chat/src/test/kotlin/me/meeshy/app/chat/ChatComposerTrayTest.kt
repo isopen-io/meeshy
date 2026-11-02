@@ -20,6 +20,7 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.composer.AttachmentIngesting
 import me.meeshy.sdk.composer.AttachmentSourceInfo
+import me.meeshy.sdk.composer.AttachmentThumbnail
 import me.meeshy.sdk.composer.IngestedFile
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
@@ -46,13 +47,16 @@ class ChatComposerTrayTest {
 
     private class Ingestor : AttachmentIngesting {
         var gate: CompletableDeferred<Unit> = CompletableDeferred<Unit>().apply { complete(Unit) }
+        var thumbnail: AttachmentThumbnail? = null
         override suspend fun describe(uri: Uri) = AttachmentSourceInfo("x", "image/jpeg", 1L)
         override suspend fun ingest(uri: Uri, id: String, info: AttachmentSourceInfo): IngestedFile? = null
         override suspend fun ingestBytes(bytes: ByteArray, id: String, fileName: String?, mimeType: String): IngestedFile? {
             gate.await()
-            return IngestedFile("/work/$id", bytes.size.toLong())
+            return IngestedFile("/work/$id", bytes.size.toLong(), thumbnail)
         }
         override suspend fun readBytes(path: String): ByteArray? = "bytes-of-$path".toByteArray()
+        override suspend fun uploadItem(path: String, fileName: String, mimeType: String): MediaUploadItem? =
+            MediaUploadItem(bytes = "bytes-of-$path".toByteArray(), fileName = fileName, mimeType = mimeType)
         override suspend fun delete(paths: Collection<String>) = Unit
     }
 
@@ -84,7 +88,7 @@ class ChatComposerTrayTest {
         justRun { socket.emitTypingStop(any()) }
         val uploads = mockk<MediaUploadQueue>(relaxed = true)
         var count = 0
-        coEvery { uploads.enqueue(any()) } answers { "upload-${count++}" }
+        coEvery { uploads.enqueue(any(), any(), any()) } answers { "upload-${count++}" }
         val ingestor = Ingestor().also { if (!open) it.gate = CompletableDeferred() }
         val tray = ComposerTrayController(RuntimeEnvironment.getApplication(), ingestor)
         tray.attach(Host(this))
@@ -117,7 +121,7 @@ class ChatComposerTrayTest {
         r.tray.stageBytes(byteArrayOf(2), "b.jpg", "image/jpeg")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { r.uploads.enqueue(any()) }
+        coVerify(exactly = 0) { r.uploads.enqueue(any(), any(), any()) }
         coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
         assertThat(r.tray.state.value.items).hasSize(2)
     }
@@ -134,7 +138,7 @@ class ChatComposerTrayTest {
         advanceUntilIdle()
 
         val items = mutableListOf<MediaUploadItem>()
-        coVerify(exactly = 2) { r.uploads.enqueue(capture(items)) }
+        coVerify(exactly = 2) { r.uploads.enqueue(capture(items), any(), any()) }
         assertThat(items.map { it.fileName }).containsExactly("a.jpg", "b.jpg").inOrder()
         val attachments = slot<List<ApiMessageAttachment>>()
         coVerify(exactly = 1) {
@@ -152,6 +156,61 @@ class ChatComposerTrayTest {
         }
         assertThat(attachments.captured.map { it.id }).containsExactly("upload-0", "upload-1").inOrder()
         assertThat(r.tray.state.value.items).isEmpty()
+    }
+
+    @Test
+    fun `a staged voice note leaves with its duration so the optimistic bubble shows it`() = runTest {
+        val r = rig()
+        r.ingestor.thumbnail = AttachmentThumbnail(durationMs = 4_200L)
+        r.tray.stageBytes(byteArrayOf(1, 2), "voice_1.m4a", "audio/mp4")
+        advanceUntilIdle()
+
+        r.composer.send()
+        advanceUntilIdle()
+
+        val attachments = slot<List<ApiMessageAttachment>>()
+        coVerify(exactly = 1) {
+            r.repo.sendOptimistic(
+                conversationId = "c1",
+                content = any(),
+                originalLanguage = any(),
+                sender = me,
+                replyToId = any(),
+                effects = any(),
+                messageType = "audio",
+                attachmentUploadCmids = any(),
+                attachments = capture(attachments),
+            )
+        }
+        assertThat(attachments.captured.single().duration).isEqualTo(4_200)
+    }
+
+    @Test
+    fun `a staged photo leaves with its dimensions`() = runTest {
+        val r = rig()
+        r.ingestor.thumbnail = AttachmentThumbnail(width = 1024, height = 768)
+        r.tray.stageBytes(byteArrayOf(1), "a.jpg", "image/jpeg")
+        advanceUntilIdle()
+
+        r.composer.send()
+        advanceUntilIdle()
+
+        val attachments = slot<List<ApiMessageAttachment>>()
+        coVerify(exactly = 1) {
+            r.repo.sendOptimistic(
+                conversationId = "c1",
+                content = any(),
+                originalLanguage = any(),
+                sender = me,
+                replyToId = any(),
+                effects = any(),
+                messageType = "image",
+                attachmentUploadCmids = any(),
+                attachments = capture(attachments),
+            )
+        }
+        assertThat(attachments.captured.single().width).isEqualTo(1024)
+        assertThat(attachments.captured.single().height).isEqualTo(768)
     }
 
     @Test
@@ -212,7 +271,7 @@ class ChatComposerTrayTest {
         r.composer.send()
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { r.uploads.enqueue(any()) }
+        coVerify(exactly = 0) { r.uploads.enqueue(any(), any(), any()) }
         assertThat(r.tray.state.value.items).hasSize(1)
 
         r.ingestor.gate.complete(Unit)
@@ -220,7 +279,7 @@ class ChatComposerTrayTest {
         r.composer.send()
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { r.uploads.enqueue(any()) }
+        coVerify(exactly = 1) { r.uploads.enqueue(any(), any(), any()) }
     }
 
     @Test

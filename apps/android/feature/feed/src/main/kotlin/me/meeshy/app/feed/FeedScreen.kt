@@ -1,26 +1,21 @@
 package me.meeshy.app.feed
 
-import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,15 +29,22 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.share.ShareCard
+import me.meeshy.sdk.model.share.ShareCards
+import me.meeshy.sdk.model.share.ShareSubject
+import me.meeshy.ui.share.LocalShareLauncher
+import me.meeshy.ui.share.open
+import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.ui.component.chrome.MeeshyBackground
-import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
-import me.meeshy.ui.theme.MeeshyTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,6 +53,13 @@ fun FeedScreen(
     onOpenPost: (String) -> Unit = {},
     onOpenReels: () -> Unit = {},
     onOpenNearby: () -> Unit = {},
+    onOpenProfile: ((String) -> Unit)? = null,
+    onOpenHashtag: (String) -> Unit = {},
+    onResumeStoryDraft: () -> Unit = {},
+    /** Every door of the composer (#13863): the placeholder, a draft to resume, a failed post reopened — one host, one scene. */
+    onOpenComposer: (ComposerOrigin) -> Unit,
+    onRefreshRail: () -> Unit = {},
+    storyRail: @Composable () -> Unit = {},
     viewModel: FeedViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -58,13 +67,24 @@ fun FeedScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     FeedMediaPrefetchEffect(listState = listState, posts = state.posts)
-    var composerDraft by remember { mutableStateOf<FeedComposerDraft?>(null) }
-
-    LaunchedEffect(state.errorMessage) {
-        state.errorMessage?.let { snackbar.showSnackbar(it) }
+    // Une seule scène joue dans le fil, la plus visible ; les autres sont une image fixe sans lecteur (#13663).
+    val sceneCoordinator = remember { FeedSceneCoordinator() }
+    val sceneIds = remember(state.posts) { feedSceneIds(state.posts) }
+    FeedSceneElectionEffect(coordinator = sceneCoordinator, listState = listState, sceneIds = sceneIds)
+    val context = LocalContext.current
+    // Each notice shows once, in the reader's language. Collected (not keyed) so consuming
+    // it never cancels the toast that is on screen.
+    LaunchedEffect(viewModel) {
+        viewModel.state.map { it.notice }.distinctUntilChanged().filterNotNull().collect { notice ->
+            viewModel.consumeNotice()
+            // The author's own post lands at the head: bring it into view (iOS scrolls to it).
+            if (notice == FeedNotice.PUBLISHED) launch { listState.animateScrollToItem(0) }
+            snackbar.showSnackbar(message = context.getString(notice.messageRes()))
+        }
     }
 
     MeeshyBackground {
+    CompositionLocalProvider(LocalFeedSceneCoordinator provides sceneCoordinator) {
     Scaffold(
         topBar = {
             FeedHeader(
@@ -81,16 +101,19 @@ fun FeedScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            // The mood-statuses rail sits pinned above the feed (iOS parity: StatusBarView
-            // at the top of FeedView), with a Friends/Discover feed toggle above it. Its own
-            // StatusesViewModel drives both feeds (one VM vs iOS's two instances).
-            StatusBarView()
-            // Composer placeholder (iOS parity: FeedView.composerPlaceholder, positioned
-            // above the post list). Text-only first sub-slice (feature-parity §F) — tapping
-            // it opens FeedComposerSheet; the pure FeedComposerDraft owns the publish rules.
-            FeedComposerPlaceholder(onClick = { composerDraft = FeedComposerDraft() })
+            // La porte du composeur (iOS `FeedView.composerPlaceholder`) SOUS le rail de stories, dans le contenu qui
+            // défile (#13653) — it opens the ONE composer on its scene (#13863). Then « Reprendre votre brouillon » (#13430)
+            // and « Publications non envoyées » (#13417), whose reopened post opens the same host.
+            val composerHead: @Composable () -> Unit = {
+                FeedComposerHead(
+                    onCompose = { onOpenComposer(ComposerOrigin.FeedComposer) },
+                    onResumeStory = onResumeStoryDraft,
+                )
+            }
             val clipboard = LocalClipboardManager.current
-            val shareContext = LocalContext.current
+            val linkCopied = stringResource(R.string.feed_link_copied)
+            val shareLauncher = LocalShareLauncher.current
+            val shareOut = rememberContentShareOut()
             var reportPostId by remember { mutableStateOf<String?>(null) }
             var deletePostId by remember { mutableStateOf<String?>(null) }
             reportPostId?.let { targetId ->
@@ -111,28 +134,36 @@ fun FeedScreen(
                     },
                 )
             }
+            FeedOfflineBand(visible = state.showsOfflineBand)
             PullToRefreshBox(
                 isRefreshing = state.isSyncing,
-                onRefresh = viewModel::refresh,
+                onRefresh = {
+                    viewModel.refresh()
+                    onRefreshRail()
+                },
                 modifier = Modifier
                     .fillMaxSize()
                     .weight(1f),
             ) {
-            when {
-                state.showSkeleton -> FeedSkeleton()
-                state.posts.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        stringResource(R.string.feed_empty),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MeeshyTheme.tokens.textSecondary,
-                    )
-                }
-                else -> LazyColumn(
+            when (state.body) {
+                FeedBody.SKELETON -> FeedHeadColumn(storyRail, composerHead) { FeedSkeleton() }
+                FeedBody.OFFLINE_EMPTY -> FeedHeadColumn(storyRail, composerHead) { FeedOfflineEmptyState(onRetry = viewModel::refresh) }
+                FeedBody.LOAD_ERROR -> FeedHeadColumn(storyRail, composerHead) { FeedErrorState(onRetry = viewModel::refresh) }
+                FeedBody.EMPTY -> FeedHeadColumn(storyRail, composerHead) { FeedEmptyState() }
+                FeedBody.POSTS -> LazyColumn(
                     state = listState,
-                    contentPadding = PaddingValues(MeeshySpacing.lg),
+                    modifier = Modifier.sceneViewport(),
+                    // Aucune marge horizontale de contenu : le rail court d'un bord à l'autre, comme en tête des
+                    // conversations ; chaque carte porte sa propre marge.
+                    contentPadding = PaddingValues(bottom = MeeshySpacing.lg),
                     verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
                 ) {
-                    items(state.posts, key = { it.id }, contentType = { FEED_POST_CONTENT_TYPE }) { post ->
+                    // Le rail de stories d'iOS (`StoryTrayView`, `FeedView` : dans le contenu défilant), le MÊME composable que
+                    // la liste des conversations (#13653) : il défile avec le fil et porte aussi l'humeur. La tête compte
+                    // `FeedListLayout.HEAD_ITEMS` lignes.
+                    item(key = FEED_STORY_RAIL_KEY, contentType = FEED_STORY_RAIL_KEY) { storyRail() }
+                    item(key = FEED_COMPOSER_HEAD_KEY, contentType = FEED_COMPOSER_HEAD_KEY) { composerHead() }
+                    items(state.posts, key = FeedPostPresentation::listKey, contentType = { FEED_POST_CONTENT_TYPE }) { post ->
                         LaunchedEffect(post.id, state.posts.size) {
                             viewModel.loadMoreIfNeeded(post.id)
                         }
@@ -144,46 +175,43 @@ fun FeedScreen(
                             onLike = { viewModel.toggleLike(post.id) },
                             onBookmark = { viewModel.toggleBookmark(post.id) },
                             onFlagTap = { code -> viewModel.onPostFlagTap(post.id, code) },
+                            onSelectLanguage = { code -> viewModel.onPostLanguageSelected(post.id, code) },
+                            translatingCodes = state.translatingCodesOf(post.id),
                             // Only reels open the full-screen reel overlay; regular
                             // posts have no detail screen yet, so tapping is inert.
                             onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
                             // A tap on the embedded repost opens the ORIGINAL post's detail,
                             // never the outer reposter card.
                             onOpenPost = onOpenPost,
+                            onOpenReel = onPostClick,
                             // Tapping an image tile opens the fullscreen media gallery on it.
                             onImageTap = { index -> viewModel.openImageViewer(post.id, index) },
                             isOwn = post.authorId != null && post.authorId == state.currentUserId,
-                            onShare = {
-                                viewModel.recordShare(post.id)
-                                val send = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(Intent.EXTRA_TEXT, postShareUrl(post.id))
-                                }
-                                shareContext.startActivity(Intent.createChooser(send, null))
+                            // « Envoyer » (#14315) : la feuille Meeshy, qui frappe le lien de l'utilisateur ; « Partager »
+                            // (menu « ⋯ ») : la feuille du système, avec ce même lien.
+                            onSend = {
+                                val card = post.shareCard(context)
+                                shareLauncher?.open(ShareSubject.Card(card)) ?: shareOut(card)
                             },
-                            onCopyLink = { clipboard.setText(AnnotatedString(postShareUrl(post.id))) },
+                            onShare = { shareOut(post.shareCard(context)) },
+                            onCopyLink = {
+                                clipboard.setText(AnnotatedString(PostShareLink.webLink(post.id)))
+                                scope.launch { snackbar.showSnackbar(linkCopied) }
+                            },
+                            onCopyText = { clipboard.setText(AnnotatedString(post.content)) },
+                            onOpenProfile = onOpenProfile,
+                            onOpenHashtag = onOpenHashtag,
                             onRepost = { viewModel.repost(post.id) },
                             onQuote = { viewModel.beginQuote(post.id) },
                             onPin = { viewModel.pinPost(post.id) },
                             onReport = { reportPostId = post.id },
                             onDelete = { deletePostId = post.id },
+                            onComments = { onOpenPost(post.id) },
+                            modifier = Modifier.animateItem().padding(horizontal = MeeshySpacing.lg),
                         )
                     }
                     if (state.isLoadingMore) {
-                        item(key = "feed_load_more") {
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(MeeshySpacing.md),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator(
-                                    strokeWidth = 2.dp,
-                                    modifier = Modifier.size(24.dp),
-                                    color = MeeshyPalette.Indigo500,
-                                )
-                            }
-                        }
+                        item(key = "feed_load_more") { Box(Modifier.padding(horizontal = MeeshySpacing.lg)) { FeedLoadingMoreCards() } }
                     }
                 }
             }
@@ -202,29 +230,9 @@ fun FeedScreen(
         }
     }
     }
+    }
     state.imageViewer?.let { gallery ->
         FeedImageViewerHost(gallery = gallery, onDismiss = viewModel::dismissImageViewer)
-    }
-
-    composerDraft?.let { seed ->
-        FeedComposerSheet(
-            initialDraft = seed,
-            onPublish = { request ->
-                viewModel.publishPost(
-                    content = request.content,
-                    visibility = request.visibility,
-                    mediaIds = request.mediaIds,
-                    type = request.type,
-                    location = request.location,
-                    language = request.language,
-                    mediaAlt = request.mediaAlt,
-                )
-                composerDraft = null
-            },
-            onDismiss = { composerDraft = null },
-            onUploadMedia = viewModel::uploadMedia,
-            onMediaError = { message -> scope.launch { snackbar.showSnackbar(message) } },
-        )
     }
 
     state.quoteComposer?.let { composer ->
@@ -237,4 +245,32 @@ fun FeedScreen(
     }
 }
 
+@Composable
+private fun FeedComposerHead(onCompose: () -> Unit, onResumeStory: () -> Unit) {
+    Column {
+        FeedComposerPlaceholder(onClick = onCompose)
+        DraftResumeSection(onResumePost = onCompose, onResumeStory = onResumeStory)
+        UnsentPublicationsEntry(onReopen = onCompose, onReopenStory = onResumeStory)
+    }
+}
+
+/** La tête du fil hors liste peuplée (squelette, erreur, vide) : le rail puis la porte du composeur, au même pas que la liste. */
+@Composable
+private fun FeedHeadColumn(storyRail: @Composable () -> Unit, composerHead: @Composable () -> Unit, body: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+        storyRail()
+        composerHead()
+        body()
+    }
+}
+
 private const val FEED_POST_CONTENT_TYPE = "feed_post"
+private const val FEED_STORY_RAIL_KEY = "feed_story_rail"
+private const val FEED_COMPOSER_HEAD_KEY = "feed_composer_head"
+
+/** La carte d'un post pour ses deux gestes de partage : « 🔗 Publication de X : lien », la forme de la story. */
+private fun FeedPostPresentation.shareCard(context: android.content.Context): ShareCard {
+    val link = PostShareLink.webLink(id)
+    val sentence = authorName?.takeIf { it.isNotBlank() }?.let { context.getString(R.string.share_post_text, it, link) } ?: link
+    return ShareCards.post(id, title = content, authorId = authorId, messageText = sentence)
+}

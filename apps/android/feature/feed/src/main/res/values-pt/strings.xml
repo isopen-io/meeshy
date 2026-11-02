@@ -34,26 +34,13 @@
         <item quantity="other">Ver as %1$d respostas</item>
     </plurals>
     <!-- Mood status bar (Prisme: PT) -->
-    <string name="status_bar_add_label">Adicionar um status</string>
-    <string name="status_bar_my_status_label">Meu status %1$s</string>
-    <string name="status_bar_load_error">Erro ao carregar</string>
-    <string name="status_bar_retry">Tentar carregar os status novamente</string>
-    <string name="status_bar_react">Reagir com %1$s</string>
-    <string name="status_feed_toggle_label">Feed de status</string>
     <string name="status_composer_republishing">Republicando @%1$s</string>
     <string name="status_composer_placeholder">Como você está?</string>
     <string name="status_composer_mood_label">Humor %1$s</string>
     <string name="feed_composer_open_placeholder">Compartilhe algo com o mundo…</string>
     <string name="feed_composer_attach_media">Adicionar foto ou vídeo</string>
-    <string name="feed_composer_take_video">Gravar um vídeo</string>
     <string name="feed_composer_remove_media">Remover mídia</string>
-    <string name="feed_composer_add_location">Adicionar minha localização</string>
-    <string name="feed_composer_remove_location">Remover localização</string>
-    <string name="feed_composer_location_unavailable">Localização indisponível — verifique suas configurações de localização e tente novamente</string>
     <string name="feed_composer_media_unusable">Não foi possível anexar essa mídia</string>
-    <string name="feed_composer_media_alt_label">Descreva esta foto ou vídeo para leitores de tela (%1$d)</string>
-    <string name="feed_composer_media_alt_placeholder">ex. Uma bicicleta vermelha encostada em uma parede de tijolos</string>
-    <string name="feed_composer_language_button">Idioma da publicação: %1$s</string>
 
     <!-- Post options menu -->
     <string name="feed_post_options">Opções da publicação</string>
@@ -75,4 +62,5 @@
     <string name="nearby_location_unavailable">Localização indisponível — verifique suas configurações de localização e tente novamente</string>
     <string name="nearby_distance_meters">a %1$d m</string>
     <string name="nearby_distance_km">a %1$.1f km</string>
+    <string name="status_composer_emoji_too_long">Este emoji é longo demais para um status — escolha outro.</string>
 </resources>

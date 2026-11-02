@@ -103,10 +103,9 @@ def test_the_double_bracket_block_stays_whole() -> None:
 
 
 def test_an_email_is_not_read_as_a_mention() -> None:
-    masked, entities = protect_entities("Écris à contact@meeshy.me demain")
+    _, entities = protect_entities("Écris à contact@meeshy.me demain")
 
-    assert all(not value.startswith("@") for value in entities.values())
-    assert "contact" in masked
+    assert list(entities.values()) == ["contact@meeshy.me"]
 
 
 def test_emojis_and_links_share_one_placeholder_sequence() -> None:

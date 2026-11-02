@@ -96,9 +96,12 @@ final class CallLiveFrameRuleTests: XCTestCase {
     }
 
     /// Mesuré avant #10195 sous l'ancienne règle (duo + coût léger ou absent) : 45 cadres.
-    /// Le catalogue déclare désormais ses surfaces, et le direct en garde exactement autant.
-    func test_frames_catalogue_offersTheSameFortyFiveDuoFramesLive() {
-        XCTAssertEqual(CallLiveFrameRule.frames().count, 45)
+    /// Le catalogue déclare désormais ses surfaces, et le direct en garde exactement autant —
+    /// plus les deux motifs neufs de #12683, `glauque.prison.duo` et `morbide.tombe.duo`, qui
+    /// déclarent `[.capture, .live]` : 47 — puis les deux cadres animés de #13950, `elegant.premiere-neige.duo`
+    /// et `deconnecte.lagon.duo` : 49.
+    func test_frames_catalogue_offersTheFortyNineDuoFramesLive() {
+        XCTAssertEqual(CallLiveFrameRule.frames().count, 49)
         XCTAssertTrue(CallLiveFrameRule.frames().allSatisfy { $0.isOffered(on: .live) })
     }
 
@@ -168,13 +171,35 @@ final class CallLiveFrameRuleTests: XCTestCase {
         XCTAssertEqual(display(design, constrained: true), .suspended(design, .deviceConstrained))
     }
 
-    func test_display_reduceMotion_suspendsAnAnimatedFrame() {
-        let design = makeDesign(motion: .loop)
+    func test_display_reduceMotion_suspendsAFrameWhoseSceneMoves() {
+        let layer = CallFrameSceneLayer(id: "glow", kind: .light, depth: .back, src: nil, preset: nil, color: "#FFFFFF", amount: 0.5, maxParticles: nil)
+        let design = makeDesign(scene: [layer])
         XCTAssertEqual(display(design, reduceMotion: true), .suspended(design, .reduceMotion))
+    }
+
+    func test_display_reduceMotion_keepsAFrameWithMovingOrnamentsStill() {
+        let design = makeDesign(motion: .loop)
+        XCTAssertEqual(display(design, reduceMotion: true), .frame(design))
+        XCTAssertFalse(CallLiveFrameRule.playsMotion(design, reduceMotion: true, isDeviceConstrained: false))
+    }
+
+    func test_playsMotion_animatedFrame_playsUnlessTheDeviceProtectsItself() {
+        let design = makeDesign(motion: .loop)
+        XCTAssertTrue(CallLiveFrameRule.playsMotion(design, reduceMotion: false, isDeviceConstrained: false))
+        XCTAssertFalse(CallLiveFrameRule.playsMotion(design, reduceMotion: false, isDeviceConstrained: true))
+        XCTAssertFalse(CallLiveFrameRule.playsMotion(makeDesign(), reduceMotion: false, isDeviceConstrained: false))
     }
 
     func test_display_reduceMotion_keepsAStaticFrame() {
         let design = makeDesign()
+        XCTAssertEqual(display(design, reduceMotion: true), .frame(design))
+    }
+
+    func test_animates_illustrationOnly_isStillAndKeepsItsStillState() {
+        let image = CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/test_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil)
+        let design = makeDesign(scene: [image])
+        XCTAssertFalse(CallLiveFrameRule.animates(design))
+        XCTAssertTrue(CallLiveFrameRule.hasStillState(design))
         XCTAssertEqual(display(design, reduceMotion: true), .frame(design))
     }
 

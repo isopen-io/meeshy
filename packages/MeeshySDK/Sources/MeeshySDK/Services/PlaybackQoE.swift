@@ -8,6 +8,24 @@ import Foundation
 // lecture : l'accumulateur ne fait que des additions, et `finish` rend
 // l'unique résumé.
 
+/// Le rang de l'appareil qui lit, dans le vocabulaire du serveur
+/// (`DEVICE_TIERS`, `packages/shared/types/social-events-v2.ts`) : trois
+/// rangs. Le serveur agrège le temps-à-première-image par surface × rang.
+public enum PlaybackDeviceTier: String, Encodable, Sendable, CaseIterable {
+    case low, mid, high
+}
+
+extension DeviceMediaTier {
+    /// `pro` n'existe pas côté serveur : il rejoint `high`, le rang le plus haut qu'il connaisse.
+    public var playbackTier: PlaybackDeviceTier {
+        switch self {
+        case .low: return .low
+        case .mid: return .mid
+        case .high, .pro: return .high
+        }
+    }
+}
+
 public struct PlaybackSummary: Encodable, Sendable, Equatable {
     public enum ExitReason: String, Encodable, Sendable, CaseIterable {
         case completed, swiped, closed, backgrounded, error, other
@@ -34,6 +52,8 @@ public struct PlaybackSummary: Encodable, Sendable, Equatable {
     /// Bitmask : 1 = 25 %, 2 = 50 %, 4 = 75 %, 8 = 100 %.
     public let quartiles: Int
     public let exitReason: ExitReason
+    /// Le rang de l'appareil à l'ouverture de la session ; absent quand la surface ne le dit pas.
+    public let deviceTier: PlaybackDeviceTier?
 }
 
 /// Les quartiles atteints d'une durée, en bitmask cumulatif.
@@ -72,6 +92,7 @@ public struct PlaybackQoEAccumulator: PlaybackQoEProviding, Equatable {
     public private(set) var mediaDurationMs: Int?
     public let mutedAtStart: Bool
     public let captionsOn: Bool
+    public let deviceTier: PlaybackDeviceTier?
 
     private var firstFrameMs: Int?
     private var playingSinceMs: Int?
@@ -91,12 +112,13 @@ public struct PlaybackQoEAccumulator: PlaybackQoEProviding, Equatable {
     private var furthestMs = 0
     private var completedLoopMask = 0
 
-    public init(playbackId: String = UUID().uuidString.lowercased(), mediaId: String, mediaDurationMs: Int?, mutedAtStart: Bool, captionsOn: Bool = false) {
+    public init(playbackId: String = UUID().uuidString.lowercased(), mediaId: String, mediaDurationMs: Int?, mutedAtStart: Bool, captionsOn: Bool = false, deviceTier: PlaybackDeviceTier? = nil) {
         self.playbackId = playbackId
         self.mediaId = mediaId
         self.mediaDurationMs = mediaDurationMs
         self.mutedAtStart = mutedAtStart
         self.captionsOn = captionsOn
+        self.deviceTier = deviceTier
     }
 
     public mutating func noteFirstFrame(atMs: Int) {
@@ -187,7 +209,8 @@ public struct PlaybackQoEAccumulator: PlaybackQoEProviding, Equatable {
             muteToggles: muteToggles,
             captionsOn: captionsOn,
             quartiles: reachedMask | completedLoopMask,
-            exitReason: errorCode != nil && reason == .other ? .error : reason
+            exitReason: errorCode != nil && reason == .other ? .error : reason,
+            deviceTier: deviceTier
         )
     }
 }

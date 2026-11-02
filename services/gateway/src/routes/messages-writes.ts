@@ -6,20 +6,21 @@
  */
 import { FastifyInstance } from 'fastify';
 import { UnifiedAuthRequest } from '../middleware/auth.js';
-import { attachmentMediaSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
+import { attachmentMediaSelect, attachmentProtectionSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
-import {
-  reconcileEditedLinks,
-  mergeTrackingLinksIntoMetadata,
-} from '../services/messaging/messageLinks';
+import { mergeTrackingLinksIntoMetadata } from '../services/messaging/messageLinks';
 import {
   admitMessageEdit,
   isEditRefused,
   describeEditRefusalForSocket,
   editRefusalCode,
+  isContentEditRefusal,
+  editAttributionOf,
   CONVERSATION_CLOSED_EDIT_MESSAGE,
 } from '../services/messaging/messageEditAdmission';
+import { editAttributionReaderOf } from '../services/messaging/editAttributionReader';
+import { withServedEditAttribution } from '@meeshy/shared/utils/message-edit-attribution';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../services/messaging/conversationWriteAdmission';
 import { admitMessageDelete } from '../services/messaging/messageDeleteAdmission';
 import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../services/moderation/contentRemoval';
@@ -33,6 +34,8 @@ import {
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { loadPrivacyPreferencesCached } from '../services/preferences/privacy-cache';
 import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
+import { isServerAtRestUnavailable, queuedEventSealsAtRest } from '../services/messaging/serverAtRest';
+import { editedLinksFor, editSealsAtRest, gatewayEditCrypto, prepareEditedText, servedEditedRow } from '../services/messaging/atRestEdit';
 import { buildMessageEditedCore } from '../socketio/messageEditedPayload';
 import type { Message } from '@meeshy/shared/types/index';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
@@ -54,6 +57,7 @@ import {
 import { logger, type MessageParams, type MessagesRouteDeps } from './messages-shared';
 import { callerParticipantWhere } from './conversations/utils/access-control';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
+import { messageRefusesPlainErasure, SIGNAL_CHANNEL_REFUSAL } from '../services/e2ee/e2ee-signal-channel';
 
 interface UpdateMessageBody {
   content?: string;
@@ -160,8 +164,10 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
               sender: { select: { userId: true } },
               // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
               // colonnes sur une lecture déjà là : aucun aller-retour de plus.
-              conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true } },
-              attachments: { select: attachmentMediaSelect, orderBy: MESSAGE_ATTACHMENT_ORDER }
+              conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true, serverEncryptionKeyId: true } },
+              // #12792 — la protection PROPRE de chaque pièce : une pièce à vue
+              // unique refuse l'édition de son message (`admitMessageEdit`).
+              attachments: { select: { ...attachmentMediaSelect, ...attachmentProtectionSelect }, orderBy: MESSAGE_ATTACHMENT_ORDER }
             }
           })
       );
@@ -190,6 +196,11 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
           createdAt: message.createdAt,
           messageType: message.messageType,
           metadata: message.metadata,
+          isViewOnce: message.isViewOnce,
+          effectFlags: message.effectFlags,
+          isEncrypted: message.isEncrypted,
+          encryptionMode: message.encryptionMode,
+          attachments: message.attachments,
         },
         onError: (err) => logger.error('Edit - admission lookup failed', err as Error),
       });
@@ -203,8 +214,11 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
         }
-        if (admission.reason === 'end-to-end-encrypted') {
+        if (editRefusalCode(admission.reason) !== undefined) {
           return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
+        }
+        if (isContentEditRefusal(admission.reason)) {
+          return sendForbidden(reply, describeEditRefusalForSocket(admission.reason));
         }
         if (admission.reason === 'minor-global') {
           return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
@@ -239,7 +253,12 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       // l'écriture, exactement comme à l'envoi et comme sur les deux autres
       // transports d'édition. Le contenu traité est ensuite le SEUL en
       // circulation : base, mentions, retraduction, payload diffusé.
-      const reconciledLinks = await reconcileEditedLinks({
+      //
+      // Décision 2026-11-01 — au repos (`server`/`hybrid`), aucune adresse ne se
+      // range en clair à côté du chiffré (`editedLinksFor`), et le texte modifié
+      // se SCELLE avant l'écriture (`prepareEditedText`) : une clé absente
+      // échoue ici, sans qu'aucune colonne n'ait été touchée.
+      const reconciledLinks = await editedLinksFor(editSealsAtRest(message), {
         linkService: trackingLinkService,
         message: { id: messageId, conversationId: message.conversationId, sender: message.sender },
         content: trimmedContent,
@@ -247,6 +266,8 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         onError: (err) => logger.error('Error processing tracking links in edit', err as Error),
       });
       const editedContent = reconciledLinks.processedContent;
+      const editCrypto = gatewayEditCrypto(prisma);
+      const preparedText = await prepareEditedText({ crypto: editCrypto, row: message, text: editedContent });
 
       // Le mapping des URLs BRUTES n'était recomposé par aucun transport
       // d'édition : il n'existait qu'à la création. Écrit seulement s'il a été
@@ -278,9 +299,11 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       const editResult = await prisma.message.updateMany({
         where: { id: messageId, deletedAt: null },
         data: {
-          content: editedContent,
+          ...preparedText.columns,
           isEdited: true,
           editedAt,
+          // #11375 — le tiers modérateur est enregistré ; l'auteur efface la mention.
+          ...editAttributionOf(admission, userId),
           translations: null,
           ...nextMetadata
         }
@@ -299,7 +322,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         conversationId: message.conversationId,
         senderId: message.senderId,
         senderUserId: message.sender?.userId ?? null,
-        previousContent: message.content,
+        previousContent: preparedText.previousContent,
         content: editedContent,
         editedAt,
       });
@@ -344,7 +367,9 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         onError: (err) => logger.error('Edit - mention:created fanout failed', err as Error),
       });
 
-      const updatedMessage = await prisma.message.findUniqueOrThrow({
+      // La ligne relue porte le chiffré au repos : elle part avec le texte
+      // modifié en clair, et sans chiffré sur le fil (`servedEditedRow`).
+      const updatedMessage = await servedEditedRow(await prisma.message.findUniqueOrThrow({
         where: { id: messageId },
         include: {
           sender: {
@@ -357,7 +382,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
             }
           }
         }
-      });
+      }), { prepared: preparedText, text: editedContent }, editCrypto);
 
       // Déclencher la retraduction automatique du message modifié.
       // L'invalidation de `translations` n'est plus faite ici : elle appartient
@@ -398,7 +423,10 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       // l'invalidation qui vivait dans le bloc de retraduction — placée APRÈS
       // la relecture, elle arrivait trop tard pour la charge déjà composée.
       const transformedMessage = {
-        ...updatedMessage,
+        // #11375 — les colonnes de l'éditeur tiers ne partent jamais brutes : ce
+        // lecteur reçoit ce que `servedEditAttribution` lui accorde, et la
+        // diffusion (le noyau, étalé après) la mention seule.
+        ...withServedEditAttribution(updatedMessage, editAttributionReaderOf(authRequest.authContext)),
         translations: transformTranslationsToArray(
           messageId,
           (updatedMessage as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations
@@ -414,6 +442,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         actorUserId: userId,
         eventType: 'edited',
         messageId,
+        atRest: queuedEventSealsAtRest(message),
         // Le NOYAU du contrat vient de `buildMessageEditedCore`, source unique
         // partagée avec les deux producteurs socket. Étalé APRÈS la ligne
         // relue, il n'ajoute rien qui ne soit déjà servi — il corrige la seule
@@ -438,6 +467,10 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       });
 
     } catch (error) {
+      // Décision 2026-11-01 — sans clé maîtresse, un texte au repos ne se rescelle pas : refusé, jamais écrit en clair.
+      if (isServerAtRestUnavailable(error)) {
+        return sendError(reply, 503, error.message, { code: error.code });
+      }
       logger.error('Error updating message', error as Error);
       return sendInternalError(reply, 'Erreur lors de la modification du message');
     }
@@ -521,6 +554,11 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
 
       if (!canDelete) {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à supprimer ce message');
+      }
+      // #13142 — un message scellé au serveur se supprime pour tous par signal
+      // chiffré signé de l'auteur ; un message d'avant l'activation, en clair, ici.
+      if (await messageRefusesPlainErasure(prisma, message)) {
+        return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
       }
       const moderationReason = byModeration ? moderationReasonOf(request.body) : null;
       if (byModeration && moderationReason === null) {

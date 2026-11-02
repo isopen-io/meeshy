@@ -35,6 +35,7 @@ const AUTHOR = 'u-author';
  */
 function makePrisma(friends: string[] = [], overrides: Record<string, any> = {}) {
   return {
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findMany: jest.fn<any>().mockResolvedValue(
         friends.map((id) => ({ senderId: AUTHOR, receiverId: id }))

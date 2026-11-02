@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { editAttributionReaderOf } from '../../services/messaging/editAttributionReader';
 import { z } from 'zod';
 import { createUnifiedAuthMiddleware, type UnifiedAuthRequest } from '../../middleware/auth';
 import { SequenceService } from '../../services/SequenceService';
@@ -372,7 +373,10 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
     if (requested.includes('messages')) {
       collectionsResult.messages = hasGap
         ? emptyOnGap
-        : await syncMessages({ prisma, identity, sinceDate, cap, scope, cursor: syncCursor, fields: champsDe('messages') });
+        : await syncMessages({
+            prisma, identity, sinceDate, cap, scope, cursor: syncCursor, fields: champsDe('messages'),
+            editAttributionReader: editAttributionReaderOf(authContext),
+          });
     }
     if (requested.includes('reactions')) {
       collectionsResult.reactions = hasGap

@@ -13,7 +13,7 @@ import me.meeshy.sdk.model.playedEffects
 import me.meeshy.sdk.model.republicationHasOwnContent
 import me.meeshy.sdk.model.servedTrackingLinks
 import me.meeshy.sdk.model.isoToEpochMillis
-import me.meeshy.sdk.theme.DynamicColorGenerator
+import me.meeshy.sdk.theme.storyAccentHex
 import java.time.Instant
 
 /**
@@ -109,6 +109,7 @@ public fun ApiPost.toStoryItem(): StoryItem {
         updatedAt = updatedAt,
         contentEditedAt = contentEditedAt,
         translations = translations,
+        originalLanguage = originalLanguage,
         reactionCount = totalReactions,
         commentCount = commentCount ?: 0,
         shareCount = shareCount,
@@ -168,7 +169,7 @@ public fun List<ApiPost>.toStoryGroups(
             StoryGroup(
                 id = authorId,
                 username = name,
-                avatarColor = DynamicColorGenerator.colorForName(name),
+                avatarColor = posts.first().author.storyAccentHex(),
                 avatarURL = posts.first().author?.avatar,
                 authorPresence = posts.first().author?.isOnline?.let {
                     UserPresence(isOnline = it, lastActiveAt = posts.first().author?.lastActiveAt)

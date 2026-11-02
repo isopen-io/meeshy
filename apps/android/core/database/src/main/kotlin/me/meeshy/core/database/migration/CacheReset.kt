@@ -2,6 +2,7 @@ package me.meeshy.core.database.migration
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import me.meeshy.core.database.search.SearchIndexSchema
 
 /**
  * The only destructive path: drops and recreates CACHE tables, which the SWR layer repopulates
@@ -9,8 +10,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 internal object CacheReset {
     fun run(db: SupportSQLiteDatabase) {
+        SearchIndexSchema.drop(db)
         CacheTables.all.forEach { db.execSQL("DROP TABLE IF EXISTS `${it.name}`") }
         CacheTables.all.forEach(db::createCacheTable)
+        SearchIndexSchema.create(db)
     }
 }
 

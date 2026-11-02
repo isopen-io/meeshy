@@ -1,5 +1,6 @@
 import XCTest
 @testable import MeeshyUI
+import MeeshySDK
 
 /// La géométrie du rognage (#4657) — tout ce que le composant décide, décidé
 /// hors de la vue et prouvé sans en monter une seule.
@@ -130,15 +131,15 @@ final class AudioTrimGeometryTests: XCTestCase {
     }
 
     func test_laDureeParleeSeDIT_elleNeSeLitPas() {
-        let dite = MeeshyAudioTrimmer.spokenDuration(72, locale: Locale(identifier: "fr_FR"))
+        let dite = MediaFormat.duration(72, style: .spelledOut, locale: Locale(identifier: "fr_FR"))
         XCTAssertFalse(dite.contains(":"), "une horloge ne s'annonce pas — VoiceOver lirait « deux-points »")
         XCTAssertFalse(dite.isEmpty)
     }
 
     func test_laDureeParlee_suitLaLocaleDemandee_memeApresUnePremiereLocale() {
-        let francais = MeeshyAudioTrimmer.spokenDuration(72, locale: Locale(identifier: "fr_FR"))
-        let anglais = MeeshyAudioTrimmer.spokenDuration(72, locale: Locale(identifier: "en_US"))
+        let francais = MediaFormat.duration(72, style: .spelledOut, locale: Locale(identifier: "fr_FR"))
+        let anglais = MediaFormat.duration(72, style: .spelledOut, locale: Locale(identifier: "en_US"))
         XCTAssertNotEqual(francais, anglais, "le formateur mis en cache ne doit pas servir la locale d'un autre appel")
-        XCTAssertEqual(francais, MeeshyAudioTrimmer.spokenDuration(72, locale: Locale(identifier: "fr_FR")))
+        XCTAssertEqual(francais, MediaFormat.duration(72, style: .spelledOut, locale: Locale(identifier: "fr_FR")))
     }
 }

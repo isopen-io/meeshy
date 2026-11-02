@@ -142,7 +142,7 @@ final class PhotoKitCallbackIsolationGuardTests: XCTestCase {
     /// Le correctif jumeau déjà en place côté transcription : s'il régresse, le
     /// même crash revient sur la queue TCC.
     func test_callTranscription_requestPermission_keepsItsSendableCompletion() throws {
-        let src = try source("Meeshy/Features/Main/Services/CallTranscriptionService.swift")
+        let src = try source("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
         XCTAssertTrue(
             src.contains("let completion: @Sendable (SFSpeechRecognizerAuthorizationStatus) -> Void"),
             "SFSpeechRecognizer.requestAuthorization rappelle hors MainActor — le handler doit rester `@Sendable`"

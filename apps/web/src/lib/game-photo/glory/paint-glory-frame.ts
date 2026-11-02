@@ -15,9 +15,12 @@ import { anchorsOf, birdLayoutOf, boxArgs, plateVariantOf, rectOf, type GloryFra
  * d'affichage, image vidéo courante) et l'image finale (still développé).
  *
  *  - `photo` : la photo couvre la BOÎTE de la fenêtre, décalée et zoomée par le
- *    recadrage, découpée par son masque sur une surface de travail puis posée
- *    sous un `clip` borné par `save`/`restore` ; sans photo, `windowFill` et
- *    l'emblème du moment en grand ;
+ *    recadrage, découpée par le CHEMIN de la fenêtre (#10254, un `clip` sur le
+ *    `Path2D` que le chargeur a construit UNE fois, sans image à décoder) ; sans
+ *    chemin construit (contrat d'avant le chemin, moteur sans `Path2D`), le
+ *    chargeur fournit le masque, qui la découpe sur une surface de travail
+ *    posée sous un `clip` au rectangle ; toujours bornée par `save`/`restore` ;
+ *    sans photo, `windowFill` et l'emblème du moment en grand ;
  *  - `grade:n` : sur la photo, avec son mode de fusion, borné à la passe ;
  *  - `crest` : l'emblème du moment (le blason, la pièce…) dans son ancre — la
  *    frappe de la chorégraphie s'y rejoue ;
@@ -32,6 +35,8 @@ import { anchorsOf, birdLayoutOf, boxArgs, plateVariantOf, rectOf, type GloryFra
 
 export type GloryLayerImages = {
   readonly mask: CanvasImageSource | null;
+  /** Le chemin de la fenêtre, construit au chargement (#10254) ; `null` : la découpe passe par `mask`. */
+  readonly windowPath: Path2D | null;
   readonly decor: CanvasImageSource;
   readonly windowFill: CanvasImageSource;
   readonly grade: readonly CanvasImageSource[];
@@ -95,6 +100,14 @@ function paintWindow(ctx: PaintContext, input: GloryPaintInput): void {
     ctx.drawImage(layers.windowFill, ...boxArgs(format.layers.windowFill.box));
     const inset = Math.min(window.w, window.h) * 0.22;
     drawContained(ctx, input.art.emblem, { x: window.x + inset, y: window.y + inset, w: window.w - inset * 2, h: window.h - inset * 2 });
+    return;
+  }
+  const path = layers.windowPath;
+  if (path !== null && ctx.clip !== undefined) {
+    ctx.save();
+    ctx.clip(path);
+    drawPhotoInto(ctx, photo, window, recipe.crop, window);
+    ctx.restore();
     return;
   }
   const surface = layers.mask === null ? null : input.scratch(window.w, window.h);

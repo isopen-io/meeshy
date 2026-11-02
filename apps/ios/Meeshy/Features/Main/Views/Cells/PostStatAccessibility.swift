@@ -72,4 +72,17 @@ enum PostStatAccessibility {
             locale: locale
         )
     }
+
+    /// Le lien sous l'aperçu des commentaires d'un post (#14324) : « Voir le
+    /// commentaire » pour un seul, « Voir les N commentaires » au-delà.
+    static func viewCommentsLabel(_ count: Int,
+                                  bundle: Bundle = .main,
+                                  locale: Locale = .current) -> String {
+        String(
+            localized: "feed.post.view_comments",
+            defaultValue: "Voir les \(count) commentaires",
+            bundle: bundle,
+            locale: locale
+        )
+    }
 }

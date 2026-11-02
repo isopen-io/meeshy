@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 
+import type { StoryPlaybackStory } from '@/lib/stories/playback';
 import type { CommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
 
 /**
@@ -31,10 +32,25 @@ export const LazyPublicationCommentsSheet = lazy(() =>
  * `LazyPublicationCommentsSheet`. Un site UNIQUE, ici, à côté de l'appel
  * `lazy()` qu'il ferme.
  */
-export function CommentsSheetPortal({ host, risesWithComposer = false }: { readonly host: CommentsSheetHost; readonly risesWithComposer?: boolean }) {
+export function CommentsSheetPortal({
+  host,
+  risesWithComposer = false,
+  story,
+}: {
+  readonly host: CommentsSheetHost;
+  readonly risesWithComposer?: boolean;
+  /** La story que le lecteur joue (#13922) — remise au fil seulement si c'est la sienne. */
+  readonly story?: StoryPlaybackStory;
+}) {
   return host.postId !== null ? (
     <Suspense fallback={null}>
-      <LazyPublicationCommentsSheet postId={host.postId} onClose={host.close} onWritingBar={host.reportWriting} risesWithComposer={risesWithComposer} />
+      <LazyPublicationCommentsSheet
+        postId={host.postId}
+        onClose={host.close}
+        onWritingBar={host.reportWriting}
+        risesWithComposer={risesWithComposer}
+        {...(story !== undefined && story.id === host.postId ? { story } : {})}
+      />
     </Suspense>
   ) : null;
 }

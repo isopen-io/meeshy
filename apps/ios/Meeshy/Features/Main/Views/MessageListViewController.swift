@@ -31,11 +31,8 @@ final class MessageListViewController: UIViewController {
     /// Tracks the item count from the last snapshot so we can detect that the
     /// snapshot grew at all.
     var previousSnapshotCount: Int = 0
-    /// The newest item (index 0 in the inverted layout) from the last snapshot.
-    /// A genuinely-new message changes item 0; older-message pagination
-    /// prepends to the tail and leaves item 0 untouched. Comparing against
-    /// this is deterministic — unlike the `isLoadingOlder` flag, which the
-    /// ViewModel's anticipatory prefetch bypasses entirely.
+    /// Newest item (index 0, inverted) of the last snapshot: a new message changes it, older pagination does not —
+    /// deterministic, unlike `isLoadingOlder`, which the ViewModel's anticipatory prefetch bypasses.
     var previousNewestItem: MessageListItem?
     /// Running counter of messages that arrived while the user was scrolled
     /// away from the bottom. Reset to 0 when the user returns to near-bottom.
@@ -46,6 +43,7 @@ final class MessageListViewController: UIViewController {
     /// Whether the previous snapshot included the typing-indicator cell — lets
     /// the list scroll the indicator into view the moment it first appears.
     var previouslyShowedTyping: Bool = false
+    var arrivalMotion = MessageArrivalAnimator()  // #11223 — seul le dernier message arrivé s'anime.
 
     // MARK: - Slow scroll for quoted message search
 
@@ -247,8 +245,8 @@ final class MessageListViewController: UIViewController {
     /// « Plus… » ouvre `MessageMoreSheet` — la feuille COMPLÈTE — et non
     /// l'overlay d'appui long. Les deux sont des menus distincts.
     var onOpenMoreSheet: ((String) -> Void)?
-    /// Remis par `ConversationView`, jamais recalculé ici.
-    var canEditMessage: ((String) -> Bool)?
+    /// Éditer, répondre, transférer hors du menu (#12626) — remis par `ConversationView`, jamais recalculé ici.
+    var rowOffer: ((MeeshyMessage) -> MessageRowOffer)?
     /// Add reaction. Carries the message id and the tapped bubble cell's
     /// on-screen frame (window coords; `nil` when the cell is not realized)
     /// so the quick-reaction bar can anchor to the bubble.

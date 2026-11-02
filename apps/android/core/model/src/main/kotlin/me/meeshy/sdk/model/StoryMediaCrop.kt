@@ -39,6 +39,24 @@ data class StoryMediaCrop(
     /** The whole source — the absence of a crop, expressed. */
     val isFull: Boolean get() = x == 0.0 && y == 0.0 && width == 1.0 && height == 1.0
 
+    /** The same bounds in the brackets' vocabulary (`CropOverlayView`, #13849). */
+    val normalized: me.meeshy.sdk.model.imageedit.NormalizedCrop
+        get() = me.meeshy.sdk.model.imageedit.NormalizedCrop(x.toFloat(), y.toFloat(), width.toFloat(), height.toFloat())
+
+    /**
+     * Where the WHOLE source lies behind a frame of [frameWidth] × [frameHeight] showing only this crop (#13849): the
+     * source is painted larger than the frame and clipped by it — nothing is rewritten, the crop stays a reading.
+     */
+    fun layoutIn(frameWidth: Double, frameHeight: Double): Layout {
+        val bounded = clamped(this)
+        val sourceWidth = frameWidth / bounded.width
+        val sourceHeight = frameHeight / bounded.height
+        return Layout(sourceWidth, sourceHeight, offsetX = 0.0 - bounded.x * sourceWidth, offsetY = 0.0 - bounded.y * sourceHeight)
+    }
+
+    /** The whole source's size and its origin relative to the frame, in the frame's units. */
+    data class Layout(val sourceWidth: Double, val sourceHeight: Double, val offsetX: Double, val offsetY: Double)
+
     companion object {
         /**
          * One per cent of the source. Below that the author no longer sees what they
@@ -49,6 +67,12 @@ data class StoryMediaCrop(
         const val MINIMUM_SIDE: Double = 0.01
 
         val FULL: StoryMediaCrop = StoryMediaCrop()
+
+        /** The brackets' crop as the one that persists: `null` (no crop) for none or for the whole source, bounded otherwise. */
+        fun ofNormalized(crop: me.meeshy.sdk.model.imageedit.NormalizedCrop?): StoryMediaCrop? {
+            crop ?: return null
+            return fromPayloadBounds(crop.x.toDouble(), crop.y.toDouble(), crop.width.toDouble(), crop.height.toDouble())
+        }
 
         /**
          * Brings a rectangle back INSIDE the source.

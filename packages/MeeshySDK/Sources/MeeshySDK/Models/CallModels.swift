@@ -223,11 +223,7 @@ public extension APICallRecord {
     /// `"M:SS"` (or `"H:MM:SS"` past an hour). Empty for zero-duration calls.
     var durationLabel: String {
         guard durationSec > 0 else { return "" }
-        let h = durationSec / 3600
-        let m = (durationSec % 3600) / 60
-        let s = durationSec % 60
-        if h > 0 { return String(format: "%d:%02d:%02d", h, m, s) }
-        return String(format: "%d:%02d", m, s)
+        return MediaFormat.duration(durationSec, style: .clockPromotingHours)
     }
 
     /// Total data transferred, human-readable (e.g. `"1,2 Mo"`); `nil` when no
@@ -235,7 +231,7 @@ public extension APICallRecord {
     var dataLabel: String? {
         let total = (bytesSent ?? 0) + (bytesReceived ?? 0)
         guard bytesSent != nil || bytesReceived != nil, total > 0 else { return nil }
-        return Int64(total).formatted(.byteCount(style: .file))
+        return MediaFormat.bytes(Int64(total))
     }
 }
 

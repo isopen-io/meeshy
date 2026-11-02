@@ -39,10 +39,10 @@ function tempAssets(files: Record<string, string>) {
   return dir;
 }
 
-async function buildApp(options: { index: PackIndex; assetsDir: string; globalMax?: number; community?: { approvedContract: (src: string) => Promise<string | null> } }): Promise<FastifyInstance> {
+async function buildApp(options: { index: PackIndex; assetsDir: string; globalMax?: number; community?: { approvedContract: (src: string) => Promise<string | null> }; lens?: { approvedFile: (src: string) => Promise<{ bytes: Buffer; contentType: string } | null> } }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   await app.register(rateLimit, { global: true, max: options.globalMax ?? 300, timeWindow: '1 minute' });
-  await app.register(packAssetsRoutes, { prefix: '/api/v1/pack-assets', index: options.index, assetsDir: options.assetsDir, community: options.community ?? { approvedContract: async () => null } });
+  await app.register(packAssetsRoutes, { prefix: '/api/v1/pack-assets', index: options.index, assetsDir: options.assetsDir, community: options.community ?? { approvedContract: async () => null }, lens: options.lens ?? { approvedFile: async () => null }, stickers: { approvedFile: async () => null, isApproved: async () => false } });
   app.get('/api/v1/autre', async () => ({ ok: true }));
   await app.ready();
   return app;
@@ -268,3 +268,71 @@ describe('le registre RÉEL des cadres de gloire (#10154, L3) — servi partout,
   });
 });
 
+describe('les fichiers d’une lens publiée (#11271)', () => {
+  it('sert le fichier d’une lens publiée hors liste blanche, immuable, à son type ; 404 sinon, et jamais une autre extension', async () => {
+    const png = Buffer.from('89504e470d0a1a0a', 'hex');
+    const asked: string[] = [];
+    const app = await buildApp({
+      index: RETAINED_ONLY,
+      assetsDir: tempAssets({}),
+      lens: { approvedFile: async (src) => { asked.push(src); return src === 'abcdefabcdefabcd.png' ? { bytes: png, contentType: 'image/png' } : null; } },
+    });
+    try {
+      const served = await app.inject({ method: 'GET', url: '/api/v1/pack-assets/abcdefabcdefabcd.png' });
+      expect(served.statusCode).toBe(200);
+      expect(served.headers['content-type']).toBe('image/png');
+      expect(served.headers['cache-control']).toBe(PACK_ASSETS_CACHE_CONTROL);
+      expect(served.rawPayload.equals(png)).toBe(true);
+      expect((await app.inject({ method: 'GET', url: '/api/v1/pack-assets/0000000000000000.png' })).statusCode).toBe(404);
+      expect((await app.inject({ method: 'GET', url: '/api/v1/pack-assets/abcdefabcdefabcd.woff2' })).statusCode).toBe(404);
+      expect(asked).not.toContain('abcdefabcdefabcd.woff2');
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('l’atlas de chaque pack de cadres — le pack se montre sans s’installer (#10275)', () => {
+  it('l’atlas de chaque pack du registre réel est servi en WebP, immuable, aux octets déclarés', async () => {
+    const index = realIndex();
+    const app = await buildApp({ index, assetsDir: ASSETS });
+    try {
+      const entries = index.entries('glory-frame');
+      expect(entries.length).toBeGreaterThan(0);
+      for (const entry of entries) {
+        expect({ slug: entry.slug, preview: entry.preview === null ? null : 'atlas' }).toEqual({ slug: entry.slug, preview: 'atlas' });
+        if (entry.preview === null) continue;
+        const res = await app.inject({ method: 'GET', url: `/api/v1/pack-assets/${entry.preview.src}` });
+        expect({ slug: entry.slug, status: res.statusCode, type: res.headers['content-type'], cache: res.headers['cache-control'] }).toEqual({
+          slug: entry.slug,
+          status: 200,
+          type: 'image/webp',
+          cache: PACK_ASSETS_CACHE_CONTROL,
+        });
+        expect(createHash('sha256').update(res.rawPayload).digest('hex')).toBe(entry.preview.sha256);
+      }
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('un aperçu au-delà de la borne n’entre pas dans la liste blanche : 404, même présent sur le disque', async () => {
+    const real = realIndex().entries('glory-frame')[0];
+    if (real === undefined) throw new Error('registre réel vide');
+    const oversized = { src: 'abcdefabcdefabcd.webp', bytes: 262_145, sha256: 'abcdefabcdefabcd'.padEnd(64, '0') };
+    const bounded = { src: 'bcdefabcdefabcde.webp', bytes: 262_144, sha256: 'bcdefabcdefabcde'.padEnd(64, '0') };
+    const index = buildPackIndex({
+      registries: [[{ ...real, slug: 'trop-lourd', preview: oversized }, { ...real, slug: 'a-la-borne', preview: bounded }]],
+      retained: [],
+    });
+    const dir = tempAssets({ [oversized.src]: 'x', [bounded.src]: 'y' });
+    const app = await buildApp({ index, assetsDir: dir });
+    try {
+      expect((await app.inject({ method: 'GET', url: `/api/v1/pack-assets/${oversized.src}` })).statusCode).toBe(404);
+      expect((await app.inject({ method: 'GET', url: `/api/v1/pack-assets/${bounded.src}` })).statusCode).toBe(200);
+    } finally {
+      await app.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

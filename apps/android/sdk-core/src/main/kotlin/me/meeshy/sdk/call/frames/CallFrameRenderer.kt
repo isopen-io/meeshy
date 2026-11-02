@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.call.frames.CallFramePerson
 import me.meeshy.sdk.model.call.frames.CallFrameRect
 import me.meeshy.sdk.model.call.frames.CallFrameRenderKit
 import me.meeshy.sdk.model.call.frames.CallFrameSlotBox
+import me.meeshy.sdk.model.call.frames.CallFrameTextScene
 import me.meeshy.sdk.model.call.frames.CallFrameTexts
 
 /**
@@ -38,6 +39,9 @@ class CallFrameStage(
 
     /** L'encombrement de chaque case une fois tournée — ce qu'un ornement de premier plan évite. */
     val footprints: List<CallFrameRect> get() = boxes.map { CallFrameRenderKit.footprint(it) }
+
+    /** Ce que le plan des textes sait de cette scène (#13694). */
+    val textScene: CallFrameTextScene by lazy { CallFrameTextScene(frame.look, people, texts, areas, boxes) }
 }
 
 /**
@@ -69,7 +73,11 @@ object CallFrameRenderer {
 
     private val layerCache = CallFrameLayerCache<CallFrameLayers>(LAYER_COST_LIMIT) { it.cost }
 
-    /** Le cadre complet à la taille donnée : couches + visages ; `null` si la taille est nulle ou le rendu échoue. */
+    /**
+     * Le cadre complet à la taille donnée : couches + visages ; `null` si la taille est nulle ou le rendu échoue.
+     * Par défaut il peint TOUT le cadre, comme iOS : ornements et textes ([CallFrameFramePainter]) — la vignette,
+     * la photo et le film d'une capture écrivent les mêmes noms, le même titre et la même signature.
+     */
     fun render(
         frame: CallFrameDesign,
         portraits: List<CallFramePortrait>,
@@ -77,7 +85,7 @@ object CallFrameRenderer {
         width: Int,
         height: Int,
         reserve: CallFrameChromeReserve = CallFrameChromeReserve.NONE,
-        extras: CallFrameExtraPainter = CallFrameExtraPainter.None,
+        extras: CallFrameExtraPainter = CallFrameFramePainter(frame.look.ornaments),
     ): Bitmap? {
         if (width < 1 || height < 1) return null
         val stage = CallFrameStage(frame, portraits.map { it.person }, texts, width, height, reserve)

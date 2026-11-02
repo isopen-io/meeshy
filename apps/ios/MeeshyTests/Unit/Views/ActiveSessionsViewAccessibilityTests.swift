@@ -18,7 +18,7 @@ final class ActiveSessionsViewAccessibilityTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/ActiveSessionsView.swift")
+            .appendingPathComponent("Meeshy/Features/Settings/Views/ActiveSessionsView.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

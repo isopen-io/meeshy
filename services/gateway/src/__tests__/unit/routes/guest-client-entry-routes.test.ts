@@ -119,7 +119,7 @@ describe('les portes invitées transmettent le User-Agent de la requête au rele
     const res = await app.inject({
       method: 'POST',
       url: `/anonymous/join/${LINK_KEY}`,
-      payload: { firstName: 'Ama', lastName: 'K', language: 'fr' },
+      payload: { firstName: 'Ama', lastName: 'Ko', language: 'fr' },
       headers: { 'user-agent': IPHONE_UA },
     });
     await app.close();
@@ -127,5 +127,38 @@ describe('les portes invitées transmettent le User-Agent de la requête au rele
     expect(res.statusCode).toBeLessThan(300);
     expect(sessionClientOf(created)).toEqual(REDUCED_IPHONE);
     expect(JSON.stringify(created)).not.toContain('AppleWebKit');
+  });
+});
+
+describe('#13825 — un refus de longueur nomme son champ et son minimum, sans changer la forme du 400', () => {
+  it('POST /links/:key/members — un pseudo saisi de 2 caractères', async () => {
+    const created: Record<string, unknown>[] = [];
+    const app = await linkMembersApp(created);
+    const res = await app.inject({ method: 'POST', url: `/links/${LINK_KEY}/members`, payload: { nickname: ' Al ', language: 'fr' } });
+    await app.close();
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ success: false, error: 'Données invalides' });
+    expect(res.json().message).toContain('nickname');
+    expect(res.json().message).toContain('3');
+    expect(res.json().violations).toEqual([{ path: 'nickname', message: expect.stringContaining('3'), minimum: 3 }]);
+    expect(created).toEqual([]);
+  });
+
+  it('POST /anonymous/join/:linkId — un prénom « A » suivi d’un invisible passe Ajv mais pas la borne visible', async () => {
+    const created: Record<string, unknown>[] = [];
+    const app = await anonymousJoinApp(created);
+    const res = await app.inject({
+      method: 'POST',
+      url: `/anonymous/join/${LINK_KEY}`,
+      payload: { firstName: 'A​', lastName: 'Ko', language: 'fr' },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ success: false, error: 'Donnees invalides' });
+    expect(res.json().message).toContain('firstName');
+    expect(res.json().message).toContain('2');
+    expect(created).toEqual([]);
   });
 });

@@ -30,4 +30,19 @@ class ConversationConnectionBannerStripTest {
 
         compose.onNodeWithText("Offline", substring = true, ignoreCase = true).assertDoesNotExist()
     }
+
+    @Test
+    fun `a first connection that lingers says connecting, never reconnecting`() {
+        compose.setContent { MeeshyTheme { ConnectionBannerStrip(ConnectionBanner.CONNECTING) } }
+
+        compose.onNodeWithText("Connecting").assertIsDisplayed()
+        compose.onNodeWithText("Reconnecting", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `the return online is confirmed`() {
+        compose.setContent { MeeshyTheme { ConnectionBannerStrip(ConnectionBanner.BACK_ONLINE) } }
+
+        compose.onNodeWithText("Online").assertIsDisplayed()
+    }
 }

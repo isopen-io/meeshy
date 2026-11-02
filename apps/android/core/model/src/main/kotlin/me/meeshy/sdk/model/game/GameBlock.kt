@@ -20,9 +20,9 @@ import kotlinx.serialization.Serializable
  * Chaque extension optionnelle (mission personnelle, contenu du jour, fragments
  * d'étoile, échelle des étapes…) tombe SEULE quand elle est illisible.
  *
- * Les extensions de la vague 2 (ligue, duo, saison, trophées, Atlas, Prestige,
- * visibilité) ne sont pas lues ici : un champ inconnu est ignoré, les lots de ces
- * surfaces les ajoutent à côté de ce bloc.
+ * Les neuf extensions de la vague 2 (ligue, duo, saison, saison à venir, trophées,
+ * Atlas, Prestige, visibilités, raretés) se lisent chacune SEULE et valent `null`
+ * quand le serveur ne les sert pas ou qu'elles sont illisibles ([wave2] les groupe).
  *
  * Les clés optionnelles s'encodent en `null` : la copie de cache relue hors
  * ligne est la réponse serveur clé pour clé.
@@ -41,7 +41,22 @@ public data class GameBlock(
     val guideSeen: List<String>,
     /** Les fragments d'étoile collectés (#10011) — `null` d'un serveur antérieur ou si illisible. */
     @EncodeDefault val starFragments: StarFragmentsTotal? = null,
-)
+    @EncodeDefault val league: GameLeagueBlock? = null,
+    @EncodeDefault val duo: GameDuoBlock? = null,
+    @EncodeDefault val season: GameSeasonBlock? = null,
+    /** La saison à venir tant qu'aucune n'est ouverte (#10014). */
+    @EncodeDefault val seasonUpcoming: GameUpcomingSeasonBlock? = null,
+    @EncodeDefault val trophies: GameTrophiesBlock? = null,
+    @EncodeDefault val atlas: GameAtlasBlock? = null,
+    @EncodeDefault val prestige: GamePrestigeBlock? = null,
+    @EncodeDefault val visibility: GameVisibility? = null,
+    /** La rareté mesurée de chaque succès, par clé de succès. */
+    @EncodeDefault val achievementRarities: Map<String, GameRarityEntry>? = null,
+) {
+    /** Les extensions de la vague 2, groupées. */
+    val wave2: GameWave2
+        get() = GameWave2(league, duo, season, seasonUpcoming, trophies, atlas, prestige, visibility, achievementRarities)
+}
 
 /** Une étape des niveaux (#9706) : ce qu'elle demande, où en est le compte, et si elle est faite. */
 @Serializable

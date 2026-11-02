@@ -20,7 +20,7 @@ import javax.inject.Inject
  * screen. Cache-first: the cached journal paints immediately from
  * [CallHistoryRepository.historyStream] (SWR), older pages are appended via
  * [CallHistoryRepository.fetchPage], and the missed-only filter is applied
- * client-side (instant, no network). All list algebra lives in the pure
+ * client-side (instant, with the video filter, the typed name and the erased lines), paging on by itself when the loaded pages hold too few. All list algebra lives in the pure
  * [CallHistoryList]; this class only orchestrates intents and side-effects.
  */
 @HiltViewModel
@@ -40,6 +40,9 @@ class CallHistoryViewModel @Inject constructor(
     /** Cursor for the next [CallHistoryRepository.fetchPage]; `null` starts at the head. */
     private var nextCursor: String? = null
 
+    /** Lines erased by the reader that the gateway has not confirmed yet — they stay off the list. */
+    private var hiddenIds: Set<String> = emptySet()
+
     init {
         viewModelScope.launch {
             repository.historyStream(
@@ -55,9 +58,69 @@ class CallHistoryViewModel @Inject constructor(
         }
     }
 
-    /** Toggles the missed-only filter and re-derives the visible list (no network). */
+    /**
+     * Toggles the missed-only filter and re-derives the visible list. The filter is
+     * client-side, so a head page without missed calls would leave the list empty
+     * and nothing on screen to trigger the next page: [fillFilteredList] pages on by
+     * itself until it finds enough missed calls, runs out of pages, or fails.
+     */
     fun setMissedOnly(value: Boolean) {
         _state.update { it.copy(missedOnly = value).withVisible() }
+        fillFilteredList()
+    }
+
+    /** Le filtre « Vidéo » (iOS `setType(.video)`) : local et immédiat, la liste se remplit en paginant. */
+    fun setVideoOnly(value: Boolean) {
+        _state.update { it.copy(videoOnly = value).withVisible() }
+        fillFilteredList()
+    }
+
+    /** Le nom tapé : la liste répond à chaque frappe sur les lignes déjà chargées, puis pagine si besoin. */
+    fun setSearchQuery(value: String) {
+        _state.update { it.copy(searchQuery = value).withVisible() }
+        fillFilteredList()
+    }
+
+    /**
+     * Efface UNE ligne de MON journal (les autres participants gardent le leur). Optimiste : la
+     * ligne part tout de suite ; si la passerelle refuse, elle revient à sa place et la bannière
+     * d'échec se lève.
+     */
+    fun hide(callId: String) = erase(listOf(callId)) { repository.hide(callId) }
+
+    /** Efface TOUT mon journal, avec le même retour arrière que [hide]. */
+    fun clearAll() {
+        val ids = (streamRecords + pagedRecords).map { it.callId }
+        if (ids.isEmpty()) return
+        erase(ids) { repository.clearAll() }
+    }
+
+    fun dismissEraseFailure() {
+        _state.update { it.copy(eraseFailed = false) }
+    }
+
+    private fun erase(callIds: List<String>, remote: suspend () -> NetworkResult<*>) {
+        val gone = callIds.toSet()
+        hiddenIds = hiddenIds + gone
+        _state.update { it.copy(eraseFailed = false).withVisible() }
+        viewModelScope.launch {
+            val applied = try {
+                remote() is NetworkResult.Success
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                false
+            }
+            if (applied) return@launch
+            hiddenIds = hiddenIds - gone
+            _state.update { it.copy(eraseFailed = true).withVisible() }
+        }
+    }
+
+    /** « Réessayer » : revalidates an empty journal, else refetches the page that failed. */
+    fun retry() {
+        _state.update { it.copy(errorMessage = null) }
+        if (streamRecords.isEmpty() && pagedRecords.isEmpty()) refresh() else loadMore()
     }
 
     /**
@@ -71,16 +134,29 @@ class CallHistoryViewModel @Inject constructor(
         val current = _state.value
         val index = current.records.indexOfFirst { it.callId == callId }
         if (index < 0 || index < current.records.size - LOAD_MORE_THRESHOLD) return
+        loadMore()
+    }
+
+    /**
+     * Fetches the next older page when more remain and none is in flight — the
+     * list footer's trigger, also used by [retry] and the missed-filter fill.
+     */
+    fun loadMore() = fetchNextPage(fillBudget = 0)
+
+    private fun fetchNextPage(fillBudget: Int) {
+        val current = _state.value
         if (!current.hasMore || current.isLoadingMore) return
 
         _state.update { it.copy(isLoadingMore = true) }
         viewModelScope.launch {
+            var succeeded = false
             try {
                 when (val result = repository.fetchPage(cursor = nextCursor)) {
                     is NetworkResult.Success -> {
                         nextCursor = result.data.nextCursor
                         pagedRecords = pagedRecords + result.data.records
-                        _state.update { it.copy(hasMore = result.data.hasMore).withVisible() }
+                        _state.update { it.copy(hasMore = result.data.hasMore, errorMessage = null).withVisible() }
+                        succeeded = true
                     }
                     is NetworkResult.Failure ->
                         _state.update { it.copy(errorMessage = result.error.message) }
@@ -92,7 +168,14 @@ class CallHistoryViewModel @Inject constructor(
             } finally {
                 _state.update { it.copy(isLoadingMore = false) }
             }
+            if (succeeded && fillBudget > 0) fillFilteredList(fillBudget)
         }
+    }
+
+    private fun fillFilteredList(budget: Int = MAX_FILL_PAGES) {
+        val current = _state.value
+        if (!current.isFiltered || current.records.size >= FILL_TARGET) return
+        fetchNextPage(fillBudget = budget - 1)
     }
 
     /**
@@ -126,7 +209,14 @@ class CallHistoryViewModel @Inject constructor(
     }
 
     private fun CallHistoryUiState.withVisible(): CallHistoryUiState =
-        copy(records = CallHistoryList.filter(CallHistoryList.combine(streamRecords, pagedRecords), missedOnly))
+        copy(
+            records = CallHistoryList.visible(
+                records = CallHistoryList.combine(streamRecords, pagedRecords),
+                query = query,
+                hidden = hiddenIds,
+                fallbackName = UNKNOWN_PEER,
+            ),
+        )
 
     /**
      * Maps a [CacheResult]'s SWR flags onto the screen state — skeleton only on a
@@ -148,6 +238,15 @@ class CallHistoryViewModel @Inject constructor(
 
     private companion object {
         const val LOAD_MORE_THRESHOLD = 5
+
+        /** Le repli de nom de `CallRecord.displayName` — ce que la recherche compare quand un appel n'a pas de nom. */
+        const val UNKNOWN_PEER = "Inconnu"
+
+        /** Missed calls the filter tries to show before it stops paging on its own. */
+        const val FILL_TARGET = 10
+
+        /** Upper bound of pages one filter toggle may fetch by itself. */
+        const val MAX_FILL_PAGES = 10
     }
 }
 

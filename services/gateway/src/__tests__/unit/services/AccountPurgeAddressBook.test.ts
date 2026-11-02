@@ -81,6 +81,10 @@ function base() {
   const prisma = {
     userSession: table([]),
     userVoiceModel: table([]),
+    userRelation: table([]),
+    pairInteractionDay: table([]),
+    relationFeatureSetting: table([]),
+    friendRequest: table([]),
     conversationShareLink: table([]),
     userContact,
     contactJoinNotice,
@@ -92,13 +96,19 @@ function base() {
     postEngagement: table([]),
     postView: table([]),
     contentEvent: table([]),
+    // L'annuaire E2EE (#12543) : aucun appareil chiffré.
+    e2EEDevice: table([]),
+    e2EEOneTimePreKey: table([]),
+    messageEnvelope: table([]),
+    e2EERevokedIdentity: table([]),
+    e2EEBindingProof: table([]),
     // Le jeu (#9384) : des collections vides.
     ...Object.fromEntries(
       [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession', 'mythicSeat', 'mythicEdition'].map((model) => [model, table([])]),
     ),
     user: { updateMany: async () => ({ count: 1 }) },
     // Les packs (#10151) : des collections vides.
-    ...(({ userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack }) => ({ userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack }))(fakePackDb({})),
+    ...(({ userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack, lensPack, lensPackAsset, partnerProfile, lensUsageDaily }) => ({ userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack, lensPack, lensPackAsset, partnerProfile, lensUsageDaily }))(fakePackDb({})),
   };
   return { prisma, userContact, contactJoinNotice, notification };
 }

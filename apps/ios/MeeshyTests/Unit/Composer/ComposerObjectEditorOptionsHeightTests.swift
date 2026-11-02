@@ -57,7 +57,7 @@ final class ComposerObjectEditorOptionsHeightTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerObjectEditorView.swift")
         let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(code.contains("safeAreaInset(edge:.bottom,spacing:0){options"),
@@ -113,7 +113,7 @@ final class ComposerObjectEditorOptionsHeightTests: XCTestCase {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerObjectEditorView.swift")
     }
 
     private func occurrences(of aiguille: String, in botte: String) -> Int {

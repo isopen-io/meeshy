@@ -39,6 +39,7 @@ android {
 dependencies {
     api(project(":core:model"))
     implementation(project(":core:common"))
+    implementation(project(":core:datastore"))
 
     implementation(libs.kotlinx.coroutines.core)
     api(libs.kotlinx.serialization.json)
@@ -46,8 +47,9 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     implementation(libs.socketio)
-    implementation(libs.security.crypto)
     implementation(libs.hilt.android)
+    // Réinstaller l'app garde la connexion (#14058) : la session d'un compte survit dans le Block Store.
+    implementation(libs.play.services.auth.blockstore)
     ksp(libs.hilt.compiler)
 
     testImplementation(libs.junit)
@@ -58,4 +60,5 @@ dependencies {
     testImplementation(libs.truth)
     testImplementation(libs.mockk)
     testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.okhttp.tls)
 }

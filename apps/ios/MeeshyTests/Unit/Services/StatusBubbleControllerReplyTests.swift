@@ -14,30 +14,32 @@ final class StatusBubbleControllerReplyTests: XCTestCase {
         let c = StatusBubbleController.shared
         c.currentEntry = nil
         c.replyConfirmationEntry = nil
-        c.repliesInline = false
         c.onConfirmedReply = nil
+        c.onOpenSpotlight = nil
         return c
     }
 
-    func test_requestReply_inDirectConversation_repliesImmediately_noPopup() {
+    func test_openSpotlight_opensTheMoodPage_withoutBubbleNorPopup() {
         let c = resetController()
+        var opened: StatusEntry?
         var replied: StatusEntry?
+        c.onOpenSpotlight = { opened = $0 }
         c.onConfirmedReply = { replied = $0 }
-        c.repliesInline = true
-        c.currentEntry = makeEntry(userId: "u1")
+        c.currentEntry = makeEntry(userId: "u2")
+        c.replyConfirmationEntry = makeEntry(userId: "u2")
 
-        c.requestReply()
+        c.openSpotlight(entry: makeEntry(userId: "u1"))
 
-        XCTAssertEqual(replied?.userId, "u1")
-        XCTAssertNil(c.replyConfirmationEntry)
+        XCTAssertEqual(opened?.userId, "u1")
+        XCTAssertNil(replied)
         XCTAssertNil(c.currentEntry)
+        XCTAssertNil(c.replyConfirmationEntry)
     }
 
     func test_requestReply_elsewhere_showsConfirmationPopup() {
         let c = resetController()
         var replied: StatusEntry?
         c.onConfirmedReply = { replied = $0 }
-        c.repliesInline = false // story tray / groupe / ailleurs
         c.currentEntry = makeEntry(userId: "u1")
 
         c.requestReply()

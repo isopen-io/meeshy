@@ -1,5 +1,6 @@
 package me.meeshy.sdk.net.api
 
+import me.meeshy.sdk.model.AccountDeletionStatus
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.apiCall
 import javax.inject.Inject
@@ -29,5 +30,10 @@ class AccountDeletionApi @Inject constructor(
                 currentPassword = currentPassword,
             ),
         )
+    }
+
+    /** `GET me/account/deletion` — l'etat de la demande ; « aucune demande » est une REPONSE. */
+    suspend fun status(): NetworkResult<AccountDeletionStatus> = apiCall {
+        userApi.getAccountDeletionStatus()
     }
 }

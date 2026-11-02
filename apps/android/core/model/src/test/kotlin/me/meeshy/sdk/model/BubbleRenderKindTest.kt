@@ -22,14 +22,14 @@ class BubbleRenderKindTest {
         isDeleted: Boolean,
         ephemeral: EphemeralLifecycle.State = EphemeralLifecycle.State.None,
         isViewOnce: Boolean = false,
-        viewOnceCount: Int = 0,
+        isViewOnceOpenedByMe: Boolean = false,
         isSystem: Boolean = false,
     ) = BubbleRenderKind.resolve(
         isSystem = isSystem,
         isDeleted = isDeleted,
         ephemeral = ephemeral,
         isViewOnce = isViewOnce,
-        viewOnceCount = viewOnceCount,
+        isViewOnceOpenedByMe = isViewOnceOpenedByMe,
     )
 
     // MARK: - Standard (the message renders its content)
@@ -86,29 +86,22 @@ class BubbleRenderKindTest {
 
     @Test
     fun resolve_viewOnceConsumedOnce_isBurned() {
-        // iOS gate: `message.isViewOnce && message.viewOnceCount > 0`.
-        assertThat(resolve(isDeleted = false, isViewOnce = true, viewOnceCount = 1))
-            .isEqualTo(BubbleRenderKind.Kind.Burned)
-    }
-
-    @Test
-    fun resolve_viewOnceConsumedMultipleTimes_isBurned() {
-        // Boundary above the > 0 threshold — a multi-view-once already opened stays burned.
-        assertThat(resolve(isDeleted = false, isViewOnce = true, viewOnceCount = 2))
+        // iOS gate: `isViewOnceOpened` — consumed by THIS reader (#7579).
+        assertThat(resolve(isDeleted = false, isViewOnce = true, isViewOnceOpenedByMe = true))
             .isEqualTo(BubbleRenderKind.Kind.Burned)
     }
 
     @Test
     fun resolve_viewOnceNotYetConsumed_isStandard() {
-        // A view-once message nobody has opened yet (count == 0) still shows its content.
-        assertThat(resolve(isDeleted = false, isViewOnce = true, viewOnceCount = 0))
+        // A view-once message this reader has not opened still shows its content.
+        assertThat(resolve(isDeleted = false, isViewOnce = true, isViewOnceOpenedByMe = false))
             .isEqualTo(BubbleRenderKind.Kind.Standard)
     }
 
     @Test
     fun resolve_positiveCountButNotViewOnce_isStandard() {
-        // Guard: a stray positive count on a non-view-once message must NOT burn it.
-        assertThat(resolve(isDeleted = false, isViewOnce = false, viewOnceCount = 3))
+        // Guard: an opened flag on a non-view-once message must NOT burn it.
+        assertThat(resolve(isDeleted = false, isViewOnce = false, isViewOnceOpenedByMe = true))
             .isEqualTo(BubbleRenderKind.Kind.Standard)
     }
 
@@ -118,7 +111,7 @@ class BubbleRenderKindTest {
     fun resolve_deletedAndViewOnceConsumed_staysDeleted() {
         // Server deletion wins over the burned tombstone (iOS checks `.deleted` first).
         assertThat(
-            resolve(isDeleted = true, isViewOnce = true, viewOnceCount = 1),
+            resolve(isDeleted = true, isViewOnce = true, isViewOnceOpenedByMe = true),
         ).isEqualTo(BubbleRenderKind.Kind.Deleted)
     }
 
@@ -131,7 +124,7 @@ class BubbleRenderKindTest {
                 isDeleted = false,
                 ephemeral = EphemeralLifecycle.State.Expired,
                 isViewOnce = true,
-                viewOnceCount = 1,
+                isViewOnceOpenedByMe = true,
             ),
         ).isEqualTo(BubbleRenderKind.Kind.Burned)
     }
@@ -144,7 +137,7 @@ class BubbleRenderKindTest {
                 isDeleted = false,
                 ephemeral = EphemeralLifecycle.State.Running(30.0),
                 isViewOnce = true,
-                viewOnceCount = 1,
+                isViewOnceOpenedByMe = true,
             ),
         ).isEqualTo(BubbleRenderKind.Kind.Burned)
     }
@@ -171,7 +164,7 @@ class BubbleRenderKindTest {
     fun resolve_systemWinsOverBurned() {
         // System precedence sits above the burned tombstone too — a stray view-once
         // count on a system row must not turn it into "Seen and deleted".
-        assertThat(resolve(isDeleted = false, isSystem = true, isViewOnce = true, viewOnceCount = 1))
+        assertThat(resolve(isDeleted = false, isSystem = true, isViewOnce = true, isViewOnceOpenedByMe = true))
             .isEqualTo(BubbleRenderKind.Kind.System)
     }
 

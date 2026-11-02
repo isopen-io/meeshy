@@ -78,4 +78,43 @@ class CallHistoryDaoTest {
 
         assertThat(dao.observeAll().first()).isEmpty()
     }
+
+    @Test
+    fun `deleteById removes only that line`() = runTest {
+        dao.upsertAll(listOf(call("a", 1), call("b", 2), call("c", 3)))
+
+        dao.deleteById("b")
+
+        assertThat(dao.observeAll().first().map { it.callId }).containsExactly("c", "a").inOrder()
+        assertThat(dao.get("b")).isNull()
+    }
+
+    @Test
+    fun `a restored line takes back its place by startedAt`() = runTest {
+        dao.upsertAll(listOf(call("a", 100), call("b", 300), call("c", 200)))
+        val b = dao.get("b")!!
+        dao.deleteById("b")
+
+        dao.upsertAll(listOf(b))
+
+        assertThat(dao.all().map { it.callId }).containsExactly("b", "c", "a").inOrder()
+    }
+
+    @Test
+    fun `idsSince keeps the window and idsBeyond the overflow`() = runTest {
+        dao.upsertAll(listOf(call("a", 100), call("b", 300), call("c", 200)))
+
+        assertThat(dao.idsSince(200)).containsExactly("b", "c")
+        assertThat(dao.idsBeyond(2)).containsExactly("a")
+        assertThat(dao.idsBeyond(5)).isEmpty()
+    }
+
+    @Test
+    fun `deleteOlderThan drops what left the window`() = runTest {
+        dao.upsertAll(listOf(call("a", 100), call("b", 300)))
+
+        dao.deleteOlderThan(200)
+
+        assertThat(dao.all().map { it.callId }).containsExactly("b")
+    }
 }

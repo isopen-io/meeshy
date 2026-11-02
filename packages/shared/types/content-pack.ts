@@ -21,7 +21,8 @@ import type { GloryAtmosphere } from './glory-atmospheres.js';
 import type { PackEligibilityRule } from './pack-ownership.js';
 
 /** `banner` : le FOND de bannière (un dessin qui s'affiche sans photo) ; `banner-frame` : le CADRE posé sur la photo, centre transparent (#10932). */
-export const PACK_DOMAINS = ['sticker', 'glory-frame', 'capture-frame', 'wallpaper', 'avatar-ring', 'banner', 'banner-frame'] as const;
+/** `lens` : une lens MeeshyLens v1 proposée par un partenaire (#11271) ; un ancien client la lit comme un domaine inconnu et l'ignore. */
+export const PACK_DOMAINS = ['sticker', 'glory-frame', 'capture-frame', 'wallpaper', 'avatar-ring', 'banner', 'banner-frame', 'lens'] as const;
 export type PackDomain = (typeof PACK_DOMAINS)[number];
 
 /** `builtin` : dessiné ou embarqué par le client ; `official` : publié par Meeshy ; `community` : proposé par un tiers (stickers seuls). */

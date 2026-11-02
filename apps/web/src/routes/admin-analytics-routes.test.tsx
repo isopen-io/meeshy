@@ -32,11 +32,11 @@ const nav = (host: Element, href: string) => host.querySelector(`[data-admin-sid
 
 describe('Statistiques — /admin/analytics et /adm/analytics', () => {
   for (const space of ['admin', 'adm'] as const) {
-    test(`sous /${space}, l’écran s’ouvre pour le créateur, avec son titre et ses trois onglets`, async () => {
+    test(`sous /${space}, l’écran s’ouvre pour le créateur, avec son titre et ses quatre onglets`, async () => {
       const host = await mountAdminAt(mounter, `/${space}/analytics`, BIGBOSS, '[data-admin-analytics]');
 
       expect(host.querySelector('h1')?.textContent).toBe('Statistiques');
-      expect([...host.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual(['Activité', 'Messages', 'Appels']);
+      expect([...host.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual(['Activité', 'Messages', 'Appels', 'Lecture']);
       resetAdminRouter(mounter);
     });
 

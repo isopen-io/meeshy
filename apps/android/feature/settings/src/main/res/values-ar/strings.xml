@@ -35,7 +35,6 @@
     <string name="settings_account_contact">البريد الإلكتروني والهاتف</string>
     <string name="settings_clear_media_cache">مسح ذاكرة الوسائط المؤقتة</string>
     <string name="settings_storage_used">المساحة المستخدمة</string>
-    <string name="settings_version">الإصدار 1.0.0</string>
     <!-- Two-factor authentication (§L) -->
     <string name="twofactor_status_enabled">مفعّلة</string>
     <string name="twofactor_enable_button">إعداد المصادقة الثنائية</string>
@@ -67,11 +66,6 @@
     <!-- Privacy & visibility (§L) -->
     <string name="settings_privacy">الخصوصية والظهور</string>
     <string name="privacy_title">الخصوصية والظهور</string>
-    <string name="privacy_last_seen">آخر ظهور</string>
-    <string name="privacy_hide_from_search">الإخفاء من البحث</string>
-    <string name="privacy_group_invites">دعوات المجموعات</string>
-    <string name="privacy_save_media">حفظ الوسائط في المعرض</string>
-    <string name="privacy_share_data">مشاركة بيانات الاستخدام</string>
     <!-- Account deletion (§L) -->
     <string name="delete_account_warning_title">لا يمكن التراجع عن هذا الإجراء</string>
     <string name="delete_account_warning_intro">يؤدي حذف حسابك إلى إزالة ما يلي نهائيًا:</string>

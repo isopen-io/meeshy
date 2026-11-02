@@ -63,4 +63,7 @@ data class StoryAudioPlayerObject(
     val soundId: String? = null,
     val soundAuthorUsername: String? = null,
     val soundCreatedAt: String? = null,
+    /** Pose de la pastille de premier plan (défauts du fil : 1 et 0). */
+    val scale: Double? = null,
+    val rotation: Double? = null,
 ) : me.meeshy.sdk.model.scene.StoryVolumeCarrying

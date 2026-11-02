@@ -3,7 +3,11 @@ package me.meeshy.ui.component
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -22,12 +26,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.theme.MeeshyPalette
@@ -39,6 +51,8 @@ import me.meeshy.ui.theme.MeeshyTheme
  * A collapsible list section (parity plan §4.4) — the port of the iOS conversation-list
  * groups (Épingles / dossiers / Mes conversations). The header shows a coloured rounded
  * icon chip, the title, a count pill, and a chevron that rotates as the section opens;
+ * folded, it also shows [foldedUnread] — the unread messages its hidden rows carry (iOS
+ * `SectionFoldedUnread`, #8694) — in the section's colour;
  * the body reveals its child rows with a size animation.
  *
  * SDK-pure: the icon and the rows are opaque slots, the accent is a plain [Color], and
@@ -51,6 +65,8 @@ public fun CollapsibleSection(
     modifier: Modifier = Modifier,
     iconContainerColor: Color = MeeshyPalette.Indigo500,
     count: Int = 0,
+    foldedUnread: Int = 0,
+    foldedUnreadDescription: String? = null,
     initiallyExpanded: Boolean = true,
     icon: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
@@ -67,7 +83,7 @@ public fun CollapsibleSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(MeeshyRadius.md))
-                .clickable { expanded = !expanded }
+                .foldsOnShortTap { expanded = !expanded }
                 .padding(vertical = MeeshySpacing.sm, horizontal = MeeshySpacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -88,6 +104,22 @@ public fun CollapsibleSection(
                 color = tokens.textPrimary,
                 modifier = Modifier.weight(1f),
             )
+            if (!expanded && foldedUnread > 0) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(MeeshyRadius.pill))
+                        .background(iconContainerColor)
+                        .padding(horizontal = MeeshySpacing.sm, vertical = 2.dp)
+                        .semantics { foldedUnreadDescription?.let { contentDescription = it } },
+                ) {
+                    Text(
+                        text = foldedUnread.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MeeshyPalette.White,
+                    )
+                }
+                Spacer(Modifier.width(MeeshySpacing.sm))
+            }
             if (count > 0) {
                 Box(
                     modifier = Modifier
@@ -114,4 +146,34 @@ public fun CollapsibleSection(
             Column(content = content)
         }
     }
+}
+
+/**
+ * Replie ou déplie sur un TOUCHER bref seulement : un appui long sur l'en-tête ne replie pas la section
+ * (critère de #12497 — recette S8 : « Personal tests » se repliait sous le doigt qui cherchait un menu). Le
+ * geste long est consommé sans effet ; TalkBack garde l'action « activer » par la sémantique. Le doigt posé
+ * garde le retour visuel d'un bouton (indication du thème), que `clickable` donnait.
+ */
+@Composable
+private fun Modifier.foldsOnShortTap(onFold: () -> Unit): Modifier {
+    val fold by rememberUpdatedState(onFold)
+    val interaction = remember { MutableInteractionSource() }
+    return this
+        .semantics(mergeDescendants = true) {
+            role = Role.Button
+            onClick { fold(); true }
+        }
+        .indication(interaction, LocalIndication.current)
+        .pointerInput(interaction) {
+            detectTapGestures(
+                onPress = { offset ->
+                    val press = PressInteraction.Press(offset)
+                    interaction.emit(press)
+                    val released = tryAwaitRelease()
+                    interaction.emit(if (released) PressInteraction.Release(press) else PressInteraction.Cancel(press))
+                },
+                onLongPress = {},
+                onTap = { fold() },
+            )
+        }
 }

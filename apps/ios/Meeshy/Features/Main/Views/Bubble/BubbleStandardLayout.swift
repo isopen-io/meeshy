@@ -562,7 +562,6 @@ struct BubbleStandardLayout: View {
                                 accentColor: contactColor,
                                 frame: .flat,
                                 availability: availability,
-                                performance: .fullscreen,
                                 author: makeFullscreenVideoAuthor(),
                                 caption: caption,
                                 fileName: attachment.originalName,

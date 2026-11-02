@@ -22,7 +22,7 @@ import { createReceiptWriteRateLimitConfig, type ReceiptHandlers } from './recei
 import { depreciee } from '../../utils/deprecation';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation, resolveCallerParticipant } from './utils/access-control';
+import { canAccessConversation, resolveCallerParticipant, refuserCommeIntrouvable } from './utils/access-control';
 import type { ConversationParams } from './types';
 import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { logger } from './messages-shared';
@@ -182,7 +182,7 @@ export function registerMarkUnreadRoute(
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       // Vérifier les permissions d'accès

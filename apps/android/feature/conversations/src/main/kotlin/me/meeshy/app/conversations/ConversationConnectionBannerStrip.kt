@@ -18,23 +18,17 @@ import me.meeshy.ui.theme.MeeshyTheme
 @Composable
 internal fun ConnectionBannerStrip(banner: ConnectionBanner, modifier: Modifier = Modifier) {
     AnimatedVisibility(visible = banner != ConnectionBanner.HIDDEN, modifier = modifier) {
-        val (label, background, foreground) = when (banner) {
-            ConnectionBanner.SYNCING -> Triple(
-                stringResource(R.string.conversations_banner_syncing),
-                MeeshyTheme.tokens.backgroundTertiary,
-                MeeshyTheme.tokens.textSecondary,
-            )
-            ConnectionBanner.RECONNECTING -> Triple(
-                stringResource(R.string.conversations_banner_reconnecting),
-                MeeshyPalette.Warning.copy(alpha = 0.18f),
-                MeeshyPalette.Warning,
-            )
-            else -> Triple(
-                stringResource(R.string.conversations_banner_offline),
-                MeeshyTheme.tokens.backgroundTertiary,
-                MeeshyTheme.tokens.textSecondary,
-            )
+        val warning = MeeshyPalette.Warning.copy(alpha = 0.18f) to MeeshyPalette.Warning
+        val (label, colors) = when (banner) {
+            ConnectionBanner.SYNCING -> stringResource(R.string.conversations_banner_syncing) to
+                (MeeshyTheme.tokens.backgroundTertiary to MeeshyTheme.tokens.textSecondary)
+            ConnectionBanner.CONNECTING -> stringResource(R.string.conversations_banner_connecting) to warning
+            ConnectionBanner.RECONNECTING -> stringResource(R.string.conversations_banner_reconnecting) to warning
+            ConnectionBanner.BACK_ONLINE -> stringResource(R.string.conversations_banner_online) to
+                (MeeshyPalette.Success.copy(alpha = 0.18f) to MeeshyPalette.Success)
+            else -> stringResource(R.string.conversations_banner_offline) to warning
         }
+        val (background, foreground) = colors
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,

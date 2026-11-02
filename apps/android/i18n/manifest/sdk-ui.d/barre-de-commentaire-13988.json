@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "comment_composer_send",
+          "status": "android-only"
+        },
+        {
+          "androidName": "comment_composer_emoji",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

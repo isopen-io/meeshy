@@ -48,7 +48,11 @@ data class ActiveCallMetadata(
 data class ActiveCallParticipant(
     val userId: String,
     val user: ActiveCallParticipantUser? = null,
-)
+    /** Set once the participant left the call (iOS `hasLeft`); a present member has none. */
+    val leftAt: String? = null,
+) {
+    val hasLeft: Boolean get() = leftAt != null
+}
 
 /** The `userMinimalSchema` slice populated on call participants. */
 @Serializable

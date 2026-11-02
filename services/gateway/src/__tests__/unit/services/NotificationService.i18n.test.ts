@@ -1,4 +1,5 @@
 import { NotificationService } from '../../../services/notifications/NotificationService';
+import { aliveAndUnblocked, userRelationRows } from '../../helpers/linked-to-everyone';
 import {
   formatSingleAttachmentLabelI18n,
   buildMessageNotificationBodyI18n,
@@ -7,6 +8,7 @@ import {
 function makeService(users: Record<string, any>) {
   const prisma: any = {
     user: {
+      findFirst: async () => null,
       findUnique: async ({ where }: any) =>
         users[where.id] ? { ...users[where.id] } : null,
       findMany: async ({ where }: any) =>
@@ -86,6 +88,7 @@ function makeContentHarness(usersById: Record<string, any>) {
   const created: any[] = [];
   const prisma: any = {
     user: {
+      findFirst: async () => null,
       findUnique: async ({ where }: any) => ({
         id: where.id, username: 'u_' + where.id, displayName: 'User ' + where.id,
         avatar: null, ...(usersById[where.id] ?? {}),
@@ -103,7 +106,7 @@ function makeContentHarness(usersById: Record<string, any>) {
     },
     message: { findUnique: async () => null },
   };
-  return { svc: new NotificationService(prisma as any), created };
+  return { svc: new NotificationService(prisma as any), created, prisma };
 }
 
 describe('contenu localisé par destinataire', () => {
@@ -144,13 +147,13 @@ describe('contenu localisé par destinataire', () => {
     expect(created[0].content).toBe('Sur l’humeur de Bob');
     expect(created[0].metadata.postType).toBe('STATUS');
   });
-  it('comment_reaction : le corps est l’extrait du commentaire, jamais la phrase d’action répétée (#9049)', async () => {
+  it('comment_reaction : le corps est la synthèse du commentaire, jamais la phrase d’action répétée (#9049, #14318)', async () => {
     const { svc, created } = makeContentHarness({ r: { systemLanguage: 'fr' } });
     await svc.createCommentReactionNotification({
       commentAuthorId: 'r', reactorUserId: 'a', commentId: 'c', postId: 'p',
       reactionEmoji: '❤️', postAuthorName: 'Bob', postType: 'POST', commentPreview: 'Superbe features',
     });
-    expect(created[0].content).toBe('« Superbe features »');
+    expect(created[0].content).toBe('Petit message texte');
     expect(created[0].content).not.toContain('a réagi');
   });
   it('comment_reaction sans postType retombe sur POST (rétro-compat)', async () => {
@@ -166,9 +169,13 @@ describe('contenu localisé par destinataire', () => {
 
 describe('batch — langue par destinataire', () => {
   it('mentions : chaque destinataire reçoit son contenu localisé', async () => {
-    const { svc, created } = makeContentHarness({
+    const { svc, created, prisma } = makeContentHarness({
       a: { systemLanguage: 'en' }, b: { systemLanguage: 'de' }, x: { displayName: 'X' },
     });
+    // Tous liés (#14168) : ce cas porte sur la LANGUE, la règle de lien est tenue ailleurs.
+    prisma.userRelation = { findMany: userRelationRows() };
+    prisma.participant = { findMany: async () => [] };
+    prisma.user.findMany = aliveAndUnblocked(prisma.user.findMany);
     // Audience PUBLIC : ce cas porte sur la LANGUE du contenu, pas sur le droit
     // de voir. Un post public admet tout le monde, la garde est un no-op ici.
     await svc.createPostMentionNotificationsBatch({ postId: 'p', posterId: 'x', mentionedUserIds: ['a', 'b'], visibility: 'PUBLIC' });
@@ -182,7 +189,7 @@ describe('login new device', () => {
   it('titre localisé selon systemLanguage (de)', async () => {
     const pushed: any[] = [];
     const prisma: any = {
-      user: { findUnique: async () => ({ systemLanguage: 'de' }), findMany: async () => [] },
+      user: { findUnique: async () => ({ systemLanguage: 'de' }), findMany: async () => [], findFirst: async () => null },
       post: { findFirst: async () => ({ authorId: 'post-author', visibility: 'PUBLIC', visibilityUserIds: [] }) },
       userPreferences: { findUnique: async () => null },
       notification: { create: async (a: any) => ({ id: 'n', ...a.data, createdAt: new Date() }), count: async () => 0 },

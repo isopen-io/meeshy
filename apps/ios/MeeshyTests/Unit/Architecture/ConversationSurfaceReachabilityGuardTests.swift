@@ -62,6 +62,8 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
     private static let surfaceDirectories = [
         "apps/ios/Meeshy/Features/Main/Views",
         "apps/ios/Meeshy/Features/Main/ViewModels",
+        "apps/ios/Meeshy/Features/Stories/Views",
+        "apps/ios/Meeshy/Features/Stories/ViewModels",
     ]
 
     /// Les exceptions, chacune avec la raison qui la rend légitime.
@@ -607,9 +609,9 @@ final class ReadingModeProtectionChromeGuardTests: XCTestCase {
         let watched = [
             "Features/Main/Views/Bubble/BubbleStandardLayout.swift",
             "Features/Main/Views/ThemedMessageBubble.swift",
-            "Features/Main/Focal/Row/FocalRow.swift",
-            "Features/Main/Riviere/View/RiverBubbleView.swift",
-            "Features/Main/Focal/Summary/SummaryProtectionsView.swift",
+            "Features/Focal/Row/FocalRow.swift",
+            "Features/River/View/RiverBubbleView.swift",
+            "Features/Focal/Summary/SummaryProtectionsView.swift",
         ]
         for path in watched {
             let code = try source(at: path)

@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "guestAttach.title",
+          "androidName": "guest_attach_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guestAttach.kind.text",
+          "androidName": "guest_attach_kind_text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guestAttach.kind.audio",
+          "androidName": "guest_attach_kind_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guestAttach.kind.image",
+          "androidName": "guest_attach_kind_image",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guestAttach.kind.pdf",
+          "androidName": "guest_attach_kind_pdf",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guestAttach.inline.text",
+          "androidName": "guest_attach_inline_text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guestAttach.inline.audio",
+          "androidName": "guest_attach_inline_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guestAttach.inline.image",
+          "androidName": "guest_attach_inline_image",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guestAttach.inline.pdf",
+          "androidName": "guest_attach_inline_pdf",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guestAttach.note",
+          "androidName": "guest_attach_note",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guestAttach.createAccount",
+          "androidName": "guest_attach_create_account",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guestAttach.cancel",
+          "androidName": "guest_attach_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guestAttach.refused.kind",
+          "androidName": "guest_attach_refused_kind",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "guestAttach.refused.size",
+          "androidName": "guest_attach_refused_size",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

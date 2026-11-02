@@ -180,10 +180,10 @@ final class ProfileDecorTests: XCTestCase {
         XCTAssertEqual(manager.currentUser?.profileDecor, decor, "l'événement d'un autre compte ne touche rien")
     }
 
-    func test_catalog_embedsTheSevenRingsAndTheSevenBanners() {
+    func test_catalog_embedsTheNineRingsAndTheNineBanners() {
         let firstPacks = AvatarRingCatalog.shared.packs.filter { ["contours-essentiels", "contours-animes"].contains($0.slug) }
-        XCTAssertEqual(firstPacks.flatMap(\.rings).map(\.key), ["filet", "double-filet", "perle", "aurore", "deco", "laurier", "halo-or"])
-        XCTAssertEqual(AppearanceCatalog.shared.bannerPacks.flatMap(\.designs).count, 7)
+        XCTAssertEqual(firstPacks.flatMap(\.rings).map(\.key), ["filet", "double-filet", "perle", "aurore", "deco", "laurier", "halo-or", "prisme-vivant", "onde"])
+        XCTAssertEqual(AppearanceCatalog.shared.bannerPacks.flatMap(\.designs).count, 9)
         XCTAssertEqual(AvatarRingCatalog.shared.ringName("filet", language: "en") != nil, true)
     }
 

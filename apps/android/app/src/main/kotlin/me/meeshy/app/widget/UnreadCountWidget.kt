@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.first
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
 import me.meeshy.app.widget.kit.WidgetTheme
+import me.meeshy.app.widget.kit.widgetSurface
 
 /**
  * Home-screen widget scaffold — first slice of `feature-parity.md`'s "Home-screen
@@ -70,7 +71,7 @@ private fun UnreadCountWidgetContent(presentation: UnreadWidgetPresentation) {
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(WidgetTheme.brandSurface)
+            .widgetSurface(brand = true)
             .padding(12.dp)
             .clickable(actionStartActivity<MainActivity>()),
         horizontalAlignment = Alignment.Horizontal.CenterHorizontally,

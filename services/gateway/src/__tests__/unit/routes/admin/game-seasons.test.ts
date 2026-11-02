@@ -395,3 +395,38 @@ describe('une validation interrompue se reprend', () => {
     await app.close();
   });
 });
+
+describe('une saison nomme son pack récompense (#11274)', () => {
+  it('l’admin nomme le pack, il est écrit, servi à l’admin et au calendrier', async () => {
+    const db = fakeDb();
+    const app = await build(db);
+    const res = await call(app, 'PUT', '/admin/game/seasons/2', { expectedRevision: 0, rewardPack: 'avatar-ring.contour-saison-2' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.season).toMatchObject({ number: 2, rewardPack: 'avatar-ring.contour-saison-2' });
+    expect(db.definitions).toEqual([expect.objectContaining({ number: 2, rewardPackKey: 'avatar-ring.contour-saison-2' })]);
+    const served = (await call(app, 'GET', '/me/game/seasons/calendar')).json().data;
+    expect(served.seasons[0]).toMatchObject({ number: 2, rewardPack: 'avatar-ring.contour-saison-2' });
+    await app.close();
+  });
+
+  it('une clé de pack illisible est refusée (422), rien ne s’écrit', async () => {
+    const db = fakeDb();
+    const app = await build(db);
+    const res = await call(app, 'PUT', '/admin/game/seasons/2', { expectedRevision: 0, rewardPack: 'inconnu.pas-un-domaine' });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error).toBe('invalid-reward-pack');
+    expect(db.definitions).toEqual([]);
+    await app.close();
+  });
+
+  it('`null` retire le pack récompense, et une saison sans pack n’en sert aucun', async () => {
+    const db = fakeDb();
+    const app = await build(db);
+    await call(app, 'PUT', '/admin/game/seasons/2', { expectedRevision: 0, rewardPack: 'avatar-ring.contour-saison-2' });
+    const res = await call(app, 'PUT', '/admin/game/seasons/2', { expectedRevision: 1, rewardPack: null });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.season.rewardPack).toBeNull();
+    expect(db.definitions).toEqual([expect.objectContaining({ number: 2, rewardPackKey: null })]);
+    await app.close();
+  });
+});

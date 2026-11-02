@@ -1,0 +1,442 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tab.styles",
+          "androidName": "export_card_tab_styles",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tab.format",
+          "androidName": "export_card_tab_format",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tab.frame",
+          "androidName": "export_card_tab_frame",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tab.palette",
+          "androidName": "export_card_tab_palette",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tab.typeface",
+          "androidName": "export_card_tab_typeface",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tab.link",
+          "androidName": "export_card_tab_link",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tab.details",
+          "androidName": "export_card_tab_details",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tab.language",
+          "androidName": "export_card_tab_language",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.aspect.auto",
+          "androidName": "export_card_aspect_auto",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.aspect.story",
+          "androidName": "export_card_aspect_story",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.aspect.portrait",
+          "androidName": "export_card_aspect_portrait",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.aspect.square",
+          "androidName": "export_card_aspect_square",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.aspect.landscape",
+          "androidName": "export_card_aspect_landscape",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.names.above",
+          "androidName": "export_card_names_above",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.names.after",
+          "androidName": "export_card_names_after",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tilt.none",
+          "androidName": "export_card_tilt_none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tilt.left",
+          "androidName": "export_card_tilt_left",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tilt.right",
+          "androidName": "export_card_tilt_right",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.option.title",
+          "androidName": "export_card_option_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.option.authors",
+          "androidName": "export_card_option_authors",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.option.date",
+          "androidName": "export_card_option_date",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.option.anonymizeQuoted",
+          "androidName": "export_card_option_anonymizeQuoted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.option.anonymizeReply",
+          "androidName": "export_card_option_anonymizeReply",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.option.times",
+          "androidName": "export_card_option_times",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.option.handles",
+          "androidName": "export_card_option_handles",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.typeface.rond",
+          "androidName": "export_card_typeface_rond",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.typeface.didone",
+          "androidName": "export_card_typeface_didone",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.typeface.plume",
+          "androidName": "export_card_typeface_plume",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.typeface.affiche",
+          "androidName": "export_card_typeface_affiche",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.typeface.futur",
+          "androidName": "export_card_typeface_futur",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.typeface.machine",
+          "androidName": "export_card_typeface_machine",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.typeface.marqueur",
+          "androidName": "export_card_typeface_marqueur",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.typeface.systeme",
+          "androidName": "export_card_typeface_systeme",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.typeface.pairs",
+          "androidName": "export_card_typeface_pairs",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.link.orbite",
+          "androidName": "export_card_link_orbite",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.link.filet",
+          "androidName": "export_card_link_filet",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.link.guillemets",
+          "androidName": "export_card_link_guillemets",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.link.fleche",
+          "androidName": "export_card_link_fleche",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.link.bulles",
+          "androidName": "export_card_link_bulles",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.link.fil",
+          "androidName": "export_card_link_fil",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.link.silence",
+          "androidName": "export_card_link_silence",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.gallery.close",
+          "androidName": "export_card_gallery_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.gallery.count",
+          "androidName": "export_card_gallery_count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.gallery.empty",
+          "androidName": "export_card_gallery_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.gallery.open",
+          "androidName": "export_card_gallery_open",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.gallery.placeholder",
+          "androidName": "export_card_gallery_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.gallery.title",
+          "androidName": "export_card_gallery_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tone.all",
+          "androidName": "export_card_tone_all",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tone.dark",
+          "androidName": "export_card_tone_dark",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tone.light",
+          "androidName": "export_card_tone_light",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.part.header",
+          "androidName": "export_card_part_header",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.part.quote",
+          "androidName": "export_card_part_quote",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.part.link",
+          "androidName": "export_card_part_link",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.part.reply",
+          "androidName": "export_card_part_reply",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.part.background",
+          "androidName": "export_card_part_background",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.title",
+          "androidName": "export_card_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.random",
+          "androidName": "export_card_random",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.default.current",
+          "androidName": "export_card_default_current",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.default.save",
+          "androidName": "export_card_default_save",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.announce.defaultSaved",
+          "androidName": "export_announce_defaultSaved",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.rendering",
+          "androidName": "export_card_rendering",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.hint",
+          "androidName": "export_card_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.truncated",
+          "androidName": "export_card_truncated",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.announce.failed",
+          "androidName": "export_announce_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.announce.gallery",
+          "androidName": "export_announce_gallery",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.announce.shared",
+          "androidName": "export_announce_shared",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.announce.photosDenied",
+          "androidName": "export_announce_photosDenied",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.save",
+          "androidName": "export_card_save",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.share",
+          "androidName": "export_card_share",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.language.asRead",
+          "androidName": "export_card_language_asRead",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.anonymous",
+          "androidName": "export_card_anonymous",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.cancel",
+          "androidName": "export_card_cancel",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

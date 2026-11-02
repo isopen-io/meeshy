@@ -489,16 +489,6 @@
           "status": "candidate"
         },
         {
-          "catalog": "app",
-          "iosKey": "2fa_close",
-          "androidName": "image_viewer_close",
-          "status": "candidate"
-        },
-        {
-          "androidName": "image_viewer_save",
-          "status": "android-only"
-        },
-        {
           "androidName": "language_strip_select",
           "status": "android-only"
         },

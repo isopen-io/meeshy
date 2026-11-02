@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.link.LinkPreviewCache
+import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -49,13 +50,25 @@ internal fun ChatListRow(
     linkPreviewStore: LinkPreviewStore,
     linkPreviewCache: LinkPreviewCache,
     actions: ChatMessageRowActions,
+    audioPlayer: ChatAudioPlayer? = null,
+    isGroup: Boolean = true,
+    canWrite: Boolean = true,
+    /** Script / Focal : la rangée plate au lieu de la bulle. */
+    flat: Boolean = false,
+    metaAlpha: () -> Float = { 0f },
+    /** Focal : cette rangée est l'élue de la scène, sa loupe vaut [focalScale]. */
+    focalElected: Boolean = false,
+    focalScale: Float = 1f,
+    /** Le mode sélection est ouvert (#13294) ; [selectedIds] est lu pour CETTE rangée seule. */
+    selecting: Boolean = false,
+    selectedIds: Set<String> = emptySet(),
 ) {
     when (item) {
         is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
-        is ChatListItem.UnreadSeparator -> UnreadSeparatorRow(accentColor)
+        is ChatListItem.UnreadSeparator -> UnreadSeparatorRow(item.count)
         is ChatListItem.EncryptionNotice -> EncryptionNoticeRow(accentColor)
         is ChatListItem.Message -> ChatMessageRow(
-            bubble = item.bubble,
+            bubble = item.bubble.inConversation(isGroup),
             accentColor = accentColor,
             mentionDisplayNames = mentionDisplayNames,
             highlightTerm = highlightTerm,
@@ -63,9 +76,26 @@ internal fun ChatListRow(
             linkPreviewStore = linkPreviewStore,
             linkPreviewCache = linkPreviewCache,
             actions = actions,
+            audioPlayer = audioPlayer,
+            canWrite = canWrite,
+            flat = flat,
+            metaAlpha = metaAlpha,
+            focalElected = focalElected,
+            focalScale = focalScale,
+            selecting = selecting,
+            selected = selecting && item.bubble.messageId in selectedIds,
         )
     }
 }
+
+/**
+ * The sender name above a series only identifies someone in a GROUP: in a one-to-one
+ * conversation the peer is the conversation itself, so iOS never repeats it
+ * (`showIdentityBar = !isDirect && …`). Returns the same instance when nothing changes, so
+ * the bubble's equality — and the row's skipping — is preserved.
+ */
+internal fun BubbleContent.inConversation(isGroup: Boolean): BubbleContent =
+    if (isGroup || !showSenderName) this else copy(showSenderName = false)
 
 /** The « loading older history » spinner drawn above the oldest loaded message. */
 @Composable

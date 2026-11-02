@@ -31,7 +31,7 @@ final class StatusBubbleHostPlacementTests: XCTestCase {
     private func strippedSource(of fileName: String) throws -> String {
         // L'UNITÉ du fichier (`Foo.swift` + `Foo+*.swift`) : les gardes négatives de cette suite
         // doivent balayer les types extraits d'une surface, pas seulement son fichier-tête.
-        let raw = try AppSourceGuard.unit("Meeshy/Features/Main/Views/\(fileName)")
+        let raw = try AppSourceGuard.unit(AppSourceGuard.featureViewPath(fileName))
         return raw
             .split(separator: "\n", omittingEmptySubsequences: false)
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }

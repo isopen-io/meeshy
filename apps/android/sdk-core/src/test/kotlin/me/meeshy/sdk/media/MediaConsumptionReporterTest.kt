@@ -1,5 +1,6 @@
 package me.meeshy.sdk.media
 
+import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -7,7 +8,6 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
@@ -71,16 +71,13 @@ class MediaConsumptionReporterTest {
     @Test fun `la consommation envoyee met a jour listenedComplete`() = runTest {
         val outbox: OutboxRepository = mockk(relaxed = true)
         val reporter = MediaConsumptionReporter(outbox, json, StandardTestDispatcher(testScheduler))
-        val seen = mutableListOf<ConsumptionUpdate>()
-        backgroundScope.launch(StandardTestDispatcher(testScheduler)) {
-            reporter.consumptionUpdates.collect { seen += it }
+
+        reporter.consumptionUpdates.test {
+            reporter.report("att1", body)
+            testScheduler.advanceUntilIdle()
+
+            assertThat(awaitItem().consumption.listenedComplete).isTrue()
         }
-        testScheduler.advanceUntilIdle()
-
-        reporter.report("att1", body)
-        testScheduler.advanceUntilIdle()
-
-        assertThat(seen.single().consumption.listenedComplete).isTrue()
     }
 
     private fun row(payload: String) = OutboxEntity(

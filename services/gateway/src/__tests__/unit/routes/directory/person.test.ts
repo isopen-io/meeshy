@@ -111,6 +111,7 @@ const projete = (ligne: LigneDemande, select: unknown): Partial<LigneDemande> =>
 function prismaDouble(bloquesParLeLecteur: readonly string[] = [], demandes: readonly LigneDemande[] = []) {
   return {
     user: {
+      findMany: jest.fn(async () => []),
       // La ligne rend PLUS que la projection publique — c'est le point : si le
       // `select` venait à recharger les six champs, ils seraient là, et seule
       // la déclaration du schéma déciderait. Le témoin mesure donc la sortie.
@@ -517,6 +518,13 @@ describe('`relationRequestId` — l’identifiant de la demande en cours (#7122)
 
   it('une demande ENVOYÉE sert l’identifiant de sa ligne', async () => {
     const data = await relationDe(TIERS, [ENVOYEE]);
+
+    expect(data.relation).toBe('pending_sent');
+    expect(data.relationRequestId).toBe(ENVOYEE.id);
+  });
+
+  it('une demande ENVOYÉE puis REFUSÉE se lit encore « en attente » chez son émetteur : le refus ne se voit pas sur la fiche (RG-07, #13933)', async () => {
+    const data = await relationDe(TIERS, [{ ...ENVOYEE, status: 'rejected' }]);
 
     expect(data.relation).toBe('pending_sent');
     expect(data.relationRequestId).toBe(ENVOYEE.id);

@@ -1,4 +1,4 @@
-name: iOS App Store publishability
+name: iOS · publiable sur l'App Store
 
 # On every commit to main that touches the iOS app, prove `me.meeshy.app` can
 # still be published to App Store Connect — ANDP's honest preflight: the API

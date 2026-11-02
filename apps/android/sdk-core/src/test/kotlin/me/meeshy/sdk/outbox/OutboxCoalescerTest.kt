@@ -464,4 +464,21 @@ class OutboxCoalescerTest {
         assertThat(OutboxCoalescer.decide(privacy, listOf(notification)))
             .isEqualTo(CoalesceDecision.Enqueue(privacy))
     }
+
+    @Test
+    fun `a repeated audio settings update keeps only the latest snapshot`() {
+        val first = row("a1", OutboxKind.UPDATE_AUDIO_SETTINGS, "me")
+        val second = row("a2", OutboxKind.UPDATE_AUDIO_SETTINGS, "me")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("a1"), second))
+    }
+
+    @Test
+    fun `an audio settings update never coalesces with a pending privacy settings update`() {
+        val privacy = row("v1", OutboxKind.UPDATE_PRIVACY_SETTINGS, "me")
+        val audio = row("a1", OutboxKind.UPDATE_AUDIO_SETTINGS, "me")
+
+        assertThat(OutboxCoalescer.decide(audio, listOf(privacy))).isEqualTo(CoalesceDecision.Enqueue(audio))
+    }
 }

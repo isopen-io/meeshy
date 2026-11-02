@@ -1,5 +1,6 @@
 package me.meeshy.app.settings
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,7 +17,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoFilter
@@ -53,6 +53,7 @@ import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.AutoDownloadPolicy
 import me.meeshy.sdk.model.MediaKind
 import me.meeshy.sdk.model.composer.capture.CaptureRenderedSaveMode
+import me.meeshy.ui.component.chrome.CollapsibleHeaderPage
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -75,33 +76,16 @@ fun MediaDownloadScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     MeeshyBackground {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
-                TopAppBar(
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = Color.Transparent,
-                        titleContentColor = MeeshyTheme.tokens.textPrimary,
-                        navigationIconContentColor = MeeshyTheme.tokens.textPrimary,
-                    ),
-                    title = { Text(stringResource(R.string.media_download_title)) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.settings_back),
-                            )
-                        }
-                    },
-                )
-            },
-        ) { padding ->
+        CollapsibleHeaderPage(
+            title = stringResource(R.string.media_download_title),
+            onBack = onBack,
+            titleColor = MeeshyTheme.tokens.textPrimary,
+            backArrowColor = MeeshyPalette.Indigo500,
+            backgroundColor = MeeshyTheme.tokens.backgroundPrimary,
+        ) {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState()),
+                    .fillMaxWidth(),
             ) {
                 InfoBanner()
                 MediaKindSection(
@@ -137,6 +121,10 @@ fun MediaDownloadScreen(
                     renderedAutomatic = state.capturePolicy.renderedMode == CaptureRenderedSaveMode.AUTOMATIC,
                     onSavesOriginal = viewModel::setSavesOriginal,
                     onRenderedAutomatic = viewModel::setRenderedAutomatic,
+                )
+                OutgoingSection(
+                    keepsLocation = state.keepsPhotoLocation,
+                    onKeepsLocation = viewModel::setKeepsPhotoLocation,
                 )
                 Spacer(Modifier.height(MeeshySpacing.xl))
             }
@@ -326,5 +314,36 @@ private fun CaptureToggleRow(
             )
         }
         Switch(checked = checked, onCheckedChange = null)
+    }
+}
+
+@Composable
+private fun OutgoingSection(keepsLocation: Boolean, onKeepsLocation: (Boolean) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        ) {
+            Icon(
+                imageVector = MeeshyIcons.Send,
+                contentDescription = null,
+                tint = MeeshyPalette.Indigo500,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(MeeshySpacing.sm))
+            Text(
+                text = stringResource(R.string.settings_media_outgoing_header),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MeeshyPalette.Indigo500,
+            )
+        }
+        CaptureToggleRow(
+            icon = MeeshyIcons.Location,
+            title = stringResource(R.string.settings_media_outgoing_location_title),
+            subtitle = stringResource(R.string.settings_media_outgoing_location_subtitle),
+            checked = keepsLocation,
+            onCheckedChange = onKeepsLocation,
+        )
     }
 }

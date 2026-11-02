@@ -122,6 +122,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
+jest.mock('../../../services/EncryptionService', () => jest.requireActual<typeof import('../../helpers/server-key-stub')>('../../helpers/server-key-stub').serverKeyStub());
 jest.mock('../../../services/MessageReadStatusService', () => ({
   MessageReadStatusService: jest.fn().mockImplementation(() => ({
     getUnreadCountsForUser: jest.fn().mockResolvedValue(new Map()),
@@ -345,7 +346,7 @@ const makeReply = () => {
 const PRESENCE_HIDDEN = { showOnline: false, showLastSeenTimestamp: false } as const;
 
 const lawFaithfulResolver =
-  (friendsOfViewer: ReadonlySet<string> = new Set()) =>
+  (friendsOfViewer: ReadonlySet<string> = new Set(), level: 'FRIEND' | 'CLOSE' = 'CLOSE') =>
   async (viewer: PresenceViewer, ids: readonly string[]) =>
     new Map(
       ids.map((id) => [
@@ -354,7 +355,7 @@ const lawFaithfulResolver =
           ? resolvePresenceVisibility({
               isSelf: viewer.userId === id,
               viewerRole: viewer.role,
-              areConnected: friendsOfViewer.has(id),
+              relationLevel: friendsOfViewer.has(id) ? level : 'PUBLIC',
               targetShowOnlineStatus: true,
               targetShowLastSeen: true,
               targetIsDeactivated: false,
@@ -1708,7 +1709,7 @@ describe('registerCoreRoutes', () => {
         expect(row.participants[0].isOnline).toBe(true);
       });
 
-      it('ami accepté ⇒ présence du participant ET de l\'expéditeur servie', async () => {
+      it('Proche ⇒ présence du participant ET de l\'expéditeur servie', async () => {
         mockResolveForTargets.mockImplementation(lawFaithfulResolver(new Set([OTHER_USER_ID])));
 
         const row = await list(makeViewerRequest({ role: 'USER' }));
@@ -1889,7 +1890,7 @@ describe('registerCoreRoutes', () => {
       await getDetailHandler(fastify)(req, reply);
 
       expect(mockSendForbidden).not.toHaveBeenCalled();
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns sendNotFound when conversation not found after access check', async () => {
@@ -2096,7 +2097,7 @@ describe('registerCoreRoutes', () => {
         expect(mockResolveForTargets).toHaveBeenCalledWith({ userId: USER_ID, role: 'USER' }, [OTHER_USER_ID]);
       });
 
-      it('ami accepté ⇒ présence servie', async () => {
+      it('Proche ⇒ présence détaillée servie', async () => {
         mockResolveForTargets.mockImplementation(lawFaithfulResolver(new Set([OTHER_USER_ID])));
 
         const served = await detail(makeViewerRequest({ role: 'USER' }, { params: { id: CONV_ID } }));
@@ -2485,7 +2486,9 @@ describe('registerCoreRoutes', () => {
 
       await getCreateHandler(fastify)(makeRequest({ body: {} }), makeReply());
 
-      expect(prisma.conversation.updateMany).not.toHaveBeenCalled();
+      const flips = (prisma.conversation.updateMany.mock.calls as Array<[{ data: Record<string, unknown> }]>)
+        .filter(([args]) => 'firstMessageSentAt' in args.data);
+      expect(flips).toEqual([]);
     });
 
     it('happy path: creates conversation and broadcasts CONVERSATION_NEW', async () => {
@@ -2923,7 +2926,7 @@ describe('registerCoreRoutes', () => {
 
       await getAnalysisHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('answers a non-member with the same 404 as a missing conversation (#8099)', async () => {
@@ -2934,7 +2937,7 @@ describe('registerCoreRoutes', () => {
       await getAnalysisHandler(fastify)(req, reply);
 
       expect(mockSendForbidden).not.toHaveBeenCalled();
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('happy path: returns analysis with null summary', async () => {

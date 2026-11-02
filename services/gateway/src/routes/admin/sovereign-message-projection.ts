@@ -72,7 +72,7 @@
  * modale ne rend ces accusés. Un champ calculé que personne n'affiche est le
  * défaut « une LOI qui calcule une valeur que personne ne lit » ; le jour où
  * une surface les demande, l'ajout est d'une ligne (`loadMessageReadStatusMap`,
- * exporté par `messages-list-query.ts`) — et il devra venir avec son lecteur.
+ * exporté par `messages-list-reader-state.ts`) — et il devra venir avec son lecteur.
  */
 import { Prisma } from '@meeshy/shared/prisma/client';
 import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
@@ -157,6 +157,9 @@ export const sovereignAttachmentSelect = {
   thumbnailUrl: true,
   thumbHash: true,
   imageVariants: true,
+  avifVariants: true,
+  renditions: true,
+  processingState: true,
   width: true,
   height: true,
   duration: true,
@@ -164,6 +167,7 @@ export const sovereignAttachmentSelect = {
   sampleRate: true,
   codec: true,
   channels: true,
+  loudnessLufs: true,
   fps: true,
   videoCodec: true,
   pageCount: true,
@@ -172,6 +176,7 @@ export const sovereignAttachmentSelect = {
   uploadedBy: true,
   isAnonymous: true,
   capturedInApp: true,
+  lensSlug: true,
   createdAt: true,
   transcription: true,
   translations: true,
@@ -400,6 +405,7 @@ export function servedAttachment(piece: SovereignAttachmentRow, messageProtege: 
     sampleRate: piece.sampleRate,
     codec: piece.codec,
     channels: piece.channels,
+    loudnessLufs: piece.loudnessLufs,
     fps: piece.fps,
     videoCodec: piece.videoCodec,
     pageCount: piece.pageCount,
@@ -411,6 +417,9 @@ export function servedAttachment(piece: SovereignAttachmentRow, messageProtege: 
     // elle, désarme la confirmation de publication chez tout hôte qui rend la
     // vraie vue conversation (`attachmentIncludes.ts` le dit sur place).
     capturedInApp: piece.capturedInApp,
+    // La lens qui a produit le média (#11327) : provenance, en clair même en
+    // E2EE (#11251) — elle ne restitue rien du contenu.
+    lensSlug: piece.lensSlug ?? null,
     createdAt: piece.createdAt,
     isViewOnce: piece.isViewOnce,
     isBlurred: piece.isBlurred,
@@ -420,6 +429,9 @@ export function servedAttachment(piece: SovereignAttachmentRow, messageProtege: 
     thumbnailUrl: protegee ? null : piece.thumbnailUrl,
     thumbHash: protegee ? null : piece.thumbHash,
     imageVariants: protegee ? [] : piece.imageVariants,
+    avifVariants: protegee ? [] : piece.avifVariants,
+    renditions: protegee ? [] : piece.renditions,
+    processingState: piece.processingState,
     // ABSENTS plutôt que `null` : ces trois-là sont OPTIONNELS au contrat des
     // clients — leur absence dit « rien à restituer », là où le tableau vide
     // des traductions de MESSAGE dit « résolu, rien à servir » sur un champ que
@@ -557,6 +569,7 @@ export const sovereignAttachmentSchema = {
     sampleRate: { type: 'number', nullable: true },
     codec: { type: 'string', nullable: true },
     channels: { type: 'number', nullable: true },
+    loudnessLufs: { type: 'number', nullable: true },
     fps: { type: 'number', nullable: true },
     videoCodec: { type: 'string', nullable: true },
     pageCount: { type: 'number', nullable: true },
@@ -564,6 +577,7 @@ export const sovereignAttachmentSchema = {
     uploadedBy: { type: 'string', nullable: true },
     isAnonymous: { type: 'boolean', nullable: true },
     capturedInApp: { type: 'boolean', nullable: true },
+    lensSlug: { type: 'string', nullable: true },
     createdAt: { type: 'string', format: 'date-time', nullable: true },
     isViewOnce: { type: 'boolean', nullable: true },
     isBlurred: { type: 'boolean', nullable: true },
@@ -576,6 +590,9 @@ export const sovereignAttachmentSchema = {
     // sans `properties` efface. Les variantes ont deux producteurs dont les
     // formes divergent : ne rien déclarer est plus honnête que d'en choisir un.
     imageVariants: { type: 'array' },
+    avifVariants: { type: 'array' },
+    renditions: { type: 'array' },
+    processingState: { type: 'string', nullable: true },
     transcription: objetLibre,
     translations: objetLibre,
     metadata: objetLibre,

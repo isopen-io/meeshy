@@ -1,6 +1,7 @@
 package me.meeshy.sdk.outbox
 
 import me.meeshy.core.database.entity.OutboxEntity
+import timber.log.Timber
 
 /** Mutation kinds the outbox can carry (ARCHITECTURE.md §5). */
 public enum class OutboxKind {
@@ -28,6 +29,11 @@ public enum class OutboxKind {
     UNBOOKMARK_POST,
     RESPOND_FRIEND_REQUEST,
     REPORT_ATTACHMENT_STATUS,
+    UPDATE_AUDIO_SETTINGS,
+    CREATE_POST,
+    CREATE_COMMENT,
+    CONSUME_AFTER_READ,
+    CONSUME_VIEW_ONCE,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -37,9 +43,15 @@ public enum class OutboxState {
     EXHAUSTED,
 }
 
-/** Drain lane for a mutation — see [OutboxLanes]. */
-public val OutboxEntity.kindEnum: OutboxKind
-    get() = OutboxKind.valueOf(kind)
+/**
+ * The row's kind, or `null` when a NEWER build wrote a kind this one does not know. Never
+ * `OutboxKind.valueOf`, which throws: an unknown row is ignored (and logged), not a crash.
+ */
+public val OutboxEntity.kindEnum: OutboxKind?
+    get() = OutboxKindCatalog.fromDiskValue(kind) ?: run {
+        Timber.w("Outbox row %s has unknown kind %s: ignored", cmid, kind)
+        null
+    }
 
 public val OutboxEntity.stateEnum: OutboxState
     get() = OutboxState.valueOf(state)
@@ -64,6 +76,15 @@ public object OutboxLanes {
     public const val FRIEND: String = "friend"
     public const val PIN: String = "pin"
     public const val MEDIA_STATUS: String = "mediaStatus"
+    public const val POST: String = "post"
+    public const val COMMENT: String = "comment"
+    public const val CONSUMPTION: String = "consumption"
+
+    /**
+     * #13820 — une lane dont les lignes ne s'ordonnent pas entre elles : chaque téléversement est indépendant (l'ordre d'un
+     * message se tient par son `dependsOn`, jamais par la lane média), donc une pièce qui attend ne retient pas les suivantes.
+     */
+    public fun isIndependent(lane: String): Boolean = lane == MEDIA
 }
 
 /**
@@ -109,6 +130,7 @@ public object OutboxLaneMap {
         OutboxKind.UPDATE_PROFILE -> OutboxLaneAssignment.Shared(OutboxLanes.PROFILE)
         OutboxKind.UPDATE_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
         OutboxKind.UPDATE_PRIVACY_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
+        OutboxKind.UPDATE_AUDIO_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
         OutboxKind.PUBLISH_STORY -> OutboxLaneAssignment.Shared(OutboxLanes.STORY)
         OutboxKind.UPLOAD_MEDIA -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA)
 
@@ -131,6 +153,11 @@ public object OutboxLaneMap {
         -> OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL)
 
         OutboxKind.REPORT_ATTACHMENT_STATUS -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA_STATUS)
+        OutboxKind.CREATE_POST -> OutboxLaneAssignment.Shared(OutboxLanes.POST)
+        OutboxKind.CREATE_COMMENT -> OutboxLaneAssignment.Shared(OutboxLanes.COMMENT)
+        OutboxKind.CONSUME_AFTER_READ,
+        OutboxKind.CONSUME_VIEW_ONCE,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.CONSUMPTION)
     }
 
     /**
@@ -202,9 +229,12 @@ public object OutboxDependencies {
     }
 }
 
-/** Payload of an `ADD_REACTION` / `REMOVE_REACTION` outbox row. */
+/**
+ * Payload of an `ADD_REACTION` / `REMOVE_REACTION` outbox row. [conversationId] (#13790) lets the plaintext guard judge the
+ * row even once its message left Room; a row queued by an older build carries none and is judged by its cached message.
+ */
 @kotlinx.serialization.Serializable
-public data class ReactionPayload(val emoji: String)
+public data class ReactionPayload(val emoji: String, val conversationId: String? = null)
 
 /**
  * Payload of an `UPLOAD_MEDIA` outbox row. [uploadContext] is the TUS
@@ -218,9 +248,26 @@ public data class ReactionPayload(val emoji: String)
  * crash. An empty/blank row payload (every row enqueued before this field
  * existed) also decodes as "no context" — see `OutboxFlushWorker`'s `UPLOAD_MEDIA`
  * sender.
+ *
+ * [conversationId] is the chat conversation the upload is destined for (#12956), read by
+ * `EndToEndOutboxAdmission` before the bytes leave: an upload drained before its message
+ * row exists is still withheld from an end-to-end encrypted conversation. `null` for a
+ * story/post/profile upload, and for every row enqueued before this field existed.
  */
 @kotlinx.serialization.Serializable
-public data class MediaUploadPayload(val uploadContext: String? = null)
+public data class MediaUploadPayload(val uploadContext: String? = null, val conversationId: String? = null)
+
+/**
+ * Payload of a `CREATE_COMMENT` outbox row. The row's `targetId` is the post commented (a server id: the route
+ * `POST /posts/:id/comments`), its `cmid` the idempotency key sent as `X-Client-Mutation-Id`. [parentId] is the comment
+ * answered (`null` = root comment); [originalLanguage] is `null` when the author declared none (the gateway detects it).
+ */
+@kotlinx.serialization.Serializable
+public data class CommentPayload(
+    val content: String,
+    val parentId: String? = null,
+    val originalLanguage: String? = null,
+)
 
 /**
  * Payload of a `PIN_MESSAGE` / `UNPIN_MESSAGE` outbox row. The row's `targetId`
@@ -233,12 +280,28 @@ public data class MediaUploadPayload(val uploadContext: String? = null)
 public data class PinPayload(val conversationId: String)
 
 /**
- * Payload of a `SEND_FRIEND_REQUEST` outbox row. The receiver is the row's
- * `targetId` (so a repeated send to the same receiver coalesces per-target); the
- * optional greeting travels here.
+ * Payload of a `CONSUME_AFTER_READ` outbox row (#13995, iOS `ConsumeAfterReadPayload`). The row's
+ * `targetId` is the conversation; the flamme-œil messages the reader saw before leaving travel here.
  */
 @kotlinx.serialization.Serializable
-public data class FriendRequestPayload(val message: String? = null)
+public data class ConsumeAfterReadPayload(val messageIds: List<String>)
+
+/**
+ * Payload of a `CONSUME_VIEW_ONCE` outbox row (#13995). The row's `targetId` is the message; the
+ * route also needs its conversation.
+ */
+@kotlinx.serialization.Serializable
+public data class ConsumeViewOncePayload(val conversationId: String)
+
+/**
+ * Payload of a `SEND_FRIEND_REQUEST` outbox row. The receiver is the row's
+ * `targetId` (so a repeated send to the same receiver coalesces per-target); the
+ * optional greeting travels here, and so does the level a circles raise aims at
+ * ([targetLevel], #13938) — a row written before that field reads back without it
+ * (`null` = Friend, the historical meaning).
+ */
+@kotlinx.serialization.Serializable
+public data class FriendRequestPayload(val message: String? = null, val targetLevel: String? = null)
 
 /**
  * Payload of a `RESPOND_FRIEND_REQUEST` outbox row. The row's `targetId` is the request id
@@ -297,6 +360,21 @@ public data class ConversationPrefsPayload(
      * array the `explicitNulls = false` encoder never drops.
      */
     val tags: List<String>? = null,
+    /**
+     * The reader's personal background + accent (`ConversationAppearance.toWire`); `null` leaves it untouched
+     * server-side. Unlike the other fields it is NOT part of every snapshot: it rides only the snapshot that
+     * changed it (the gateway re-validates a background — pack owned, photo still readable — and a stale one
+     * would refuse an unrelated pin), and [OutboxCoalescer] carries it onto any snapshot that supersedes it.
+     */
+    val appearance: kotlinx.serialization.json.JsonElement? = null,
+    /**
+     * This snapshot takes the conversation OUT of its category (#13784, iOS `category.remove`). A `null`
+     * [categoryId] alone means "leave it untouched" (the encoder drops it), so a removal needs this flag,
+     * which the sender turns into an explicit `"categoryId": null`. Like [appearance] it rides only the
+     * snapshot that made the change, and [OutboxCoalescer] carries it onto an uncategorized snapshot that
+     * supersedes it.
+     */
+    val clearCategory: Boolean = false,
 )
 
 /**
@@ -315,7 +393,7 @@ public data class OutboxMutation(
     val cmid: String = OutboxIds.cmid(),
 )
 
-internal fun OutboxMutation.toEntity(now: Long): OutboxEntity = OutboxEntity(
+internal fun OutboxMutation.toEntity(now: Long, ownerId: String? = null): OutboxEntity = OutboxEntity(
     cmid = cmid,
     lane = lane,
     kind = kind.name,
@@ -326,6 +404,7 @@ internal fun OutboxMutation.toEntity(now: Long): OutboxEntity = OutboxEntity(
     state = OutboxState.PENDING.name,
     createdAt = now,
     updatedAt = now,
+    ownerId = ownerId,
 )
 
 /** Terminal (or near-terminal) signal for a queued mutation, keyed by [cmid]. */

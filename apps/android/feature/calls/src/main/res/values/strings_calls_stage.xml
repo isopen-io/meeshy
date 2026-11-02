@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_stage_remote_off">Camera off</string>
+    <string name="call_stage_remote_connecting">Connecting video…</string>
+    <string name="call_stage_remote_live">Live video</string>
+    <string name="call_stage_peer_muted">Contact muted</string>
+    <string name="call_stage_peer_network">Poor network (contact)</string>
+    <string name="call_stage_signaling">Server disconnected</string>
+    <string name="call_stage_tile_swap">Swap videos</string>
+    <string name="call_stage_tile_swap_hint">Tap to swap the small and large video; drag to move</string>
+    <string name="call_stage_tile_small">Small thumbnail</string>
+    <string name="call_stage_tile_medium">Medium thumbnail</string>
+    <string name="call_stage_tile_large">Large thumbnail</string>
+    <string name="call_stage_video_paused">Video paused</string>
+    <string name="call_stage_video_paused_hint">Weak connection, video will resume automatically</string>
+    <string name="call_stage_video_paused_short">Auto-resume</string>
+    <string name="call_stage_tile_larger">Enlarge thumbnail</string>
+    <string name="call_stage_tile_smaller">Shrink thumbnail</string>
+</resources>

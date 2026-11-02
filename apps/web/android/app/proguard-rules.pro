@@ -1,21 +1,13 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# #12447 — regles de la coque sous R8. Les plugins Capacitor (annotations,
+# @PluginMethod) sont gardes par les regles de capacitor-android.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# MeeshyMessagingService.forward joint le plugin de notifications par
+# reflexion : son nom et ses deux methodes statiques doivent survivre.
+-keep class com.capacitorjs.plugins.pushnotifications.PushNotificationsPlugin {
+    public static void onNewToken(java.lang.String);
+    public static void sendRemoteMessage(com.google.firebase.messaging.RemoteMessage);
+}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Les traces de plantage restent lisibles une fois desobscurcies par le mapping.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

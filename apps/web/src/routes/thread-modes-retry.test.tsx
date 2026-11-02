@@ -8,6 +8,7 @@ import type { ThreadScene } from '@/lib/reading-mode/scene';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 
 import { ThreadModes } from './thread-modes';
 
@@ -24,7 +25,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await loadInterfaceCatalog('fr');
+  await Promise.all([loadInterfaceCatalog('fr'), loadMessagePiecesCatalog('fr')]);
 });
 
 afterAll(async () => {
@@ -108,15 +109,20 @@ const PLACED = [placeOf(messageOf('m-1', 1))];
 const monte = async (options: {
   readonly retry: (messageId: string) => void;
   readonly retryableOf?: (messageId: string) => boolean;
+  readonly permanent?: boolean;
+  readonly discard?: (messageId: string) => void;
+  readonly discardableOf?: (messageId: string) => boolean;
   readonly mode?: 'bubbles' | 'focal';
 }) =>
   mounter.mount(
     <ThreadModes
       mode={options.mode ?? 'bubbles'}
       deliveryOf={() => 'failed'}
-      permanentOf={() => false}
+      permanentOf={() => options.permanent === true}
       retry={options.retry}
       {...(options.retryableOf === undefined ? {} : { retryableOf: options.retryableOf })}
+      {...(options.discard === undefined ? {} : { discard: options.discard })}
+      {...(options.discardableOf === undefined ? {} : { discardableOf: options.discardableOf })}
       viewer={VIEWER}
       placed={PLACED}
       virtualizer={virtualizerOf(PLACED.length)}
@@ -153,6 +159,23 @@ describe('« Réessayer » en ligne, monté sur ThreadModes', () => {
       const host = await monte({ mode, retry: (id) => retried.push(id), retryableOf: (id) => id === 'm-1' });
       host.querySelector<HTMLButtonElement>(RETRY_BUTTON)?.click();
       expect(retried).toEqual(['m-1']);
+    });
+  }
+});
+
+describe('« Abandonner » sur la bande, monté sur ThreadModes (#12632)', () => {
+  for (const mode of ['bubbles', 'focal'] as const) {
+    test(`${mode} — un refus permanent s’abandonne : le geste retire CE message`, async () => {
+      const discarded: string[] = [];
+      const host = await monte({ mode, permanent: true, retry: () => {}, discard: (id) => discarded.push(id), discardableOf: (id) => id === 'm-1' });
+      expect(host.querySelector(RETRY_BUTTON)).toBe(null);
+      host.querySelector<HTMLButtonElement>('[data-send-failed="permanent"] [data-send-discard]')?.click();
+      expect(discarded).toEqual(['m-1']);
+    });
+
+    test(`${mode} — sans verdict de l’hôte, la bande n’offre pas l’abandon`, async () => {
+      const host = await monte({ mode, permanent: true, retry: () => {}, discard: () => {} });
+      expect(host.querySelector('[data-send-discard]')).toBe(null);
     });
   }
 });

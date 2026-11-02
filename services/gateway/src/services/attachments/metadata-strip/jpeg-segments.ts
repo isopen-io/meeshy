@@ -61,30 +61,43 @@ function entropyEnd(buffer: Buffer, from: number): number {
   return buffer.length;
 }
 
-export function stripJpegMetadataSegments(buffer: Buffer): Buffer | null {
-  if (buffer.length < 4 || buffer[0] !== MARKER || buffer[1] !== SOI) return null;
-  const kept: Buffer[] = [buffer.subarray(0, 2)];
+/** Un segment d'en-tête que la liste blanche n'a PAS gardé, avec ses octets. */
+export type DroppedSegment = { readonly marker: number; readonly bytes: Buffer };
+
+/**
+ * Une image JPEG lue à partir de `start` : ce que la liste blanche garde (SOI
+ * et EOI compris), les segments qu'elle écarte, et l'offset qui suit sa fin
+ * d'image dans `buffer` (`end`), là où commence ce que l'appareil a annexé.
+ */
+export type JpegImage = { readonly kept: readonly Buffer[]; readonly dropped: readonly DroppedSegment[]; readonly end: number };
+
+export function readJpegImage(buffer: Buffer, start: number): JpegImage | null {
+  if (buffer.length < start + 4 || buffer[start] !== MARKER || buffer[start + 1] !== SOI) return null;
+  const kept: Buffer[] = [buffer.subarray(start, start + 2)];
+  const dropped: DroppedSegment[] = [];
   let scanned = false;
-  const closed = (): Buffer | null => (scanned ? Buffer.concat([...kept, END_OF_IMAGE]) : null);
-  let offset = 2;
+  const closed = (end: number): JpegImage | null => (scanned ? { kept: [...kept, END_OF_IMAGE], dropped, end } : null);
+  let offset = start + 2;
   while (offset + 1 < buffer.length) {
-    if (buffer[offset] !== MARKER) return closed();
+    if (buffer[offset] !== MARKER) return closed(offset);
     const marker = buffer[offset + 1];
     if (marker === MARKER) {
       offset += 1;
     } else if (marker === EOI) {
       kept.push(buffer.subarray(offset, offset + 2));
-      return Buffer.concat(kept);
+      return { kept, dropped, end: offset + 2 };
     } else if (isStandalone(marker)) {
       kept.push(buffer.subarray(offset, offset + 2));
       offset += 2;
     } else {
-      if (offset + SEGMENT_HEADER_LENGTH > buffer.length) return closed();
+      if (offset + SEGMENT_HEADER_LENGTH > buffer.length) return closed(buffer.length);
       const length = buffer.readUInt16BE(offset + 2);
       const end = offset + 2 + length;
-      if (length < 2 || end > buffer.length) return closed();
-      const segment = keptSegment(marker, buffer.subarray(offset, end));
+      if (length < 2 || end > buffer.length) return closed(buffer.length);
+      const bytes = buffer.subarray(offset, end);
+      const segment = keptSegment(marker, bytes);
       if (segment !== null) kept.push(segment);
+      else dropped.push({ marker, bytes });
       offset = marker === SOS ? entropyEnd(buffer, end) : end;
       if (marker === SOS) {
         kept.push(buffer.subarray(end, offset));
@@ -92,5 +105,10 @@ export function stripJpegMetadataSegments(buffer: Buffer): Buffer | null {
       }
     }
   }
-  return closed();
+  return closed(buffer.length);
+}
+
+export function stripJpegMetadataSegments(buffer: Buffer): Buffer | null {
+  const image = readJpegImage(buffer, 0);
+  return image === null ? null : Buffer.concat(image.kept);
 }

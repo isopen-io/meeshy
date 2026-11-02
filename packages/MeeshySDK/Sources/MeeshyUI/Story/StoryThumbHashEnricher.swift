@@ -23,17 +23,9 @@ public enum StoryThumbHashEnricher {
     /// `@MainActor` et rapatrierait chaque extraction sur le thread principal :
     /// seule la VALEUR de la borne est partagée (`storyThumbHashTimeout`).
     public nonisolated static func videoThumbHash(url: URL) async -> String? {
-        let asset = AVURLAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 100, height: 100)
-        let time = CMTime(seconds: 0.1, preferredTimescale: 600)
-        do {
-            let (cgImage, _) = try await generator.image(at: time)
-            return UIImage(cgImage: cgImage).toThumbHash()
-        } catch {
-            return nil
-        }
+        await VideoThumbnailGenerator.shared.image(for: VideoThumbnailRequest(
+            url: url, instants: .start(atMost: 0.1), maximumSize: CGSize(width: 100, height: 100)))?
+            .toThumbHash()
     }
 
     /// Enrichit une COPIE des slides. Ne lit aucun état extérieur.

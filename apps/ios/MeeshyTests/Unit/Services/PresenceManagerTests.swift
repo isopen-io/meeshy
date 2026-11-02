@@ -73,7 +73,7 @@ final class PresenceManagerTests: XCTestCase {
             "Meeshy/Features/Main/Views/ConversationView+Header.swift",
             "Meeshy/Features/Main/Views/ConversationView.swift",
             "Meeshy/Features/Main/Views/MessageListViewController+Rows.swift",
-            "Meeshy/Features/Main/Focal/Summary/LivingSummaryAssembly.swift",
+            "Meeshy/Features/Focal/Summary/LivingSummaryAssembly.swift",
             "Meeshy/Features/Main/Components/ConversationInfoSheet.swift",
             "Meeshy/Features/Main/Views/ParticipantsView.swift",
         ]
@@ -94,24 +94,23 @@ final class PresenceManagerTests: XCTestCase {
     private static let avatarsWithoutPresence: [String: String] = [
         "Auth/LinkSignInConfirmationSheet.swift": "soi — l'avatar du compte connecté",
         "Auth/Signup/SignupView+Card.swift": "soi — l'avatar du compte connecté",
-        "Main/Composer/ComposerDocumentSurface.swift": "soi — l'avatar du compte connecté",
-        "Main/Views/AccountSwitcherSheet.swift": "soi — l'avatar du compte connecté",
-        "Main/Views/FeedView+Composer.swift": "soi — l'avatar du compte connecté",
-        "Main/Views/LoginView.swift": "soi — l'avatar du compte connecté",
-        "Main/Views/ProfileDecorSheet.swift": "soi — l'avatar du compte connecté",
-        "Main/Views/ProfileOwnAvatar.swift": "soi — l'avatar du compte connecté",
+        "Auth/Views/AccountSwitcherSheet.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/FeedComposerPlaceholder.swift": "soi — l'avatar du compte connecté",
+        "Auth/Views/LoginView.swift": "soi — l'avatar du compte connecté",
+        "Profile/Views/ProfileDecorSheet.swift": "soi — l'avatar du compte connecté",
+        "Profile/Views/ProfileOwnAvatar.swift": "soi — l'avatar du compte connecté",
         "Main/Views/RootFloatingChrome.swift": "soi — l'avatar du compte connecté",
         "Main/Views/RootViewComponents.swift": "soi — l'avatar du compte connecté",
-        "Main/Views/SettingsView.swift": "soi — l'avatar du compte connecté",
+        "Settings/Views/SettingsView.swift": "soi — l'avatar du compte connecté",
         "Main/Views/FeedComposerSheet.swift": "soi — l'avatar du compte connecté",
-        "Main/Views/StoryTrayView.swift": "soi — l'avatar du compte connecté",
+        "Stories/Views/StoryTrayView.swift": "soi — l'avatar du compte connecté",
         "Main/Views/GlobalSearchView.swift": "entité — groupe, communauté, conversation, message sans compte",
         "MeeshyUI/Profile/UserProfileSheet+ConversationsTab.swift": "entité — groupe, communauté, conversation, message sans compte",
         "Main/Components/ContactCard/ContactCardDetailSheet.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
-        "Main/Views/StoryAuthorIdentityCard.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
+        "Stories/Views/StoryAuthorIdentityCard.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
         "Contacts/BlockedTab.swift": "bloqué — aucune présence ne se montre",
-        "Main/Views/BlockedUsersView.swift": "bloqué — aucune présence ne se montre",
-        "Main/Game/Photo/GameAuthorPlateView.swift": "décor, illustration ou son — aucune personne",
+        "Settings/Views/BlockedUsersView.swift": "bloqué — aucune présence ne se montre",
+        "Game/Photo/GameAuthorPlateView.swift": "décor, illustration ou son — aucune personne",
         "Main/Views/WidgetPreviewView.swift": "décor, illustration ou son — aucune personne",
         "Onboarding/OnboardingCards.swift": "décor, illustration ou son — aucune personne",
         "Onboarding/OnboardingIllustrations.swift": "décor, illustration ou son — aucune personne",
@@ -124,7 +123,7 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Views/FriendRequestListView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Components/ContactCardView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Components/ConversationCard/ConversationLinkCardBody.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
-        "Main/Views/ShareLinkArrivalsSection.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "Links/Views/ShareLinkArrivalsSection.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Views/VisitorContentView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "MeeshyUI/JoinFlow/InviteLanding/InviteInviterHeader.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Stories/Notifications/StoryExpiredContent.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
@@ -132,7 +131,7 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Views/AudioFullscreenPage.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Components/ForwardPickerSheet.swift": "remplacés par l'écran de partage unique (#10947/#10948)",
         "Main/Views/SharePickerView.swift": "remplacés par l'écran de partage unique (#10947/#10948)",
-        "Main/Share/ShareSheetView.swift": "écran de partage unique en cours (#10947/#10948) — sa présence est l'affaire de son lot",
+        "Share/ShareSheetView.swift": "écran de partage unique en cours (#10947/#10948) — sa présence est l'affaire de son lot",
     ]
 
     func test_everyPeerAvatar_passesTheServedPresence_orIsNamedWithItsReason() throws {
@@ -303,14 +302,30 @@ final class PresenceManagerTests: XCTestCase {
         XCTAssertEqual(entry.state(now: now.addingTimeInterval(400)), .offline)
     }
 
-    func test_noteActivity_userTheServerSaysOnline_keepsIsOnline() throws {
-        sut.presenceMap["typer-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+    func test_noteActivity_userTheServerSaysOnlineWithADate_keepsIsOnlineAndRefreshesTheDate() throws {
+        sut.presenceMap["typer-1"] = AppUserPresence(isOnline: true, lastActiveAt: Date().addingTimeInterval(-240))
 
         sut.noteActivity(userId: "typer-1")
 
         let entry = try XCTUnwrap(sut.presenceMap["typer-1"])
         XCTAssertTrue(entry.isOnline)
-        XCTAssertNotNil(entry.lastActiveAt)
+        let lastActiveAt = try XCTUnwrap(entry.lastActiveAt)
+        XCTAssertLessThan(Date().timeIntervalSince(lastActiveAt), 5)
+    }
+
+    /// presence-ami-binaire (#13928) : un Ami servi « en ligne » n'a pas de
+    /// `lastActiveAt`, et le serveur le tient tant qu'il est connecté. La frappe
+    /// lui datait une activité, la garde anti-stale l'éteignait cinq minutes
+    /// plus tard alors que le serveur le servait toujours en ligne.
+    func test_noteActivity_friendServedOnlineWithoutLastActiveAt_staysGreenWhileServedOnline() throws {
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+
+        sut.noteActivity(userId: "friend-1")
+
+        let entry = try XCTUnwrap(sut.presenceMap["friend-1"])
+        XCTAssertTrue(entry.isOnline)
+        XCTAssertNil(entry.lastActiveAt)
+        XCTAssertEqual(entry.state(now: Date().addingTimeInterval(600)), .online)
     }
 
     func test_noteActivity_currentUser_neverWritesTheMap() {
@@ -353,7 +368,7 @@ final class PresenceManagerTests: XCTestCase {
     }
 
     func test_settingsAvatar_neverHardcodesItsOwnPresence() throws {
-        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/SettingsView.swift"))
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Settings/Views/SettingsView.swift"))
         XCTAssertFalse(source.contains("presenceState: .online"), "les Réglages ne peignent pas la pastille du compte connecté")
     }
 
@@ -398,6 +413,33 @@ final class PresenceManagerTests: XCTestCase {
         sut.ingestSnapshot([UserStatusEvent(userId: "friend-1", username: "friend", isOnline: true, lastActiveAt: nil)])
 
         XCTAssertEqual(sut.presenceState(for: "friend-1"), .online)
+    }
+
+    /// presence-ami-binaire (#13928) : un Ami n'a pas de `lastActiveAt` servi.
+    /// Une entrée `(online, date)` reçue quand il était Proche est REMPLACÉE par
+    /// le snapshot, jamais prolongée par la date locale.
+    func test_ingestSnapshot_friendWithoutLastActiveAt_replacesAProcheEntry() {
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: Date())
+
+        sut.ingestSnapshot([UserStatusEvent(userId: "friend-1", username: "friend", isOnline: true, lastActiveAt: nil)])
+
+        XCTAssertNil(sut.presenceMap["friend-1"]?.lastActiveAt)
+        XCTAssertEqual(sut.presenceState(for: "friend-1"), .online)
+    }
+
+    func test_ingestSnapshot_friendOffline_replacesAProcheEntry_andRendersNothing() {
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: Date())
+
+        sut.ingestSnapshot([UserStatusEvent(userId: "friend-1", username: "friend", isOnline: false, lastActiveAt: nil)])
+
+        XCTAssertNil(sut.presenceMap["friend-1"]?.lastActiveAt)
+        XCTAssertEqual(sut.presenceState(for: "friend-1"), .offline)
+    }
+
+    func test_resolvedState_friendServedOnlineWithoutLastActiveAt_isOnline() {
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+
+        XCTAssertEqual(sut.resolvedState(userId: "friend-1", isOnline: false, lastActiveAt: Date().addingTimeInterval(-120)), .online)
     }
 
     func test_disconnect_isWiredToNoteSocketDisconnected() throws {
@@ -460,9 +502,21 @@ final class PresenceManagerTests: XCTestCase {
         try await Task.sleep(nanoseconds: UInt64((PresenceManager.versionBumpDebounce + 0.3) * 1_000_000_000))
     }
 
+    /// Attend le battement que la dernière écriture a programmé : c'est lui qui
+    /// pose `publishedStates`. Une attente fixe ne le garantit pas sur un
+    /// simulateur chargé — ces tests rougissaient en CI et dans la suite
+    /// complète, jamais lancés seuls.
+    private func awaitBeat(after version: Int) async throws {
+        let deadline = Date().addingTimeInterval(5)
+        while sut.refreshSignal.presenceVersion == version, Date() < deadline {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+    }
+
     func test_recalculateStates_nothingChangedSinceTheLastBeat_doesNotRepaint() async throws {
+        let initial = sut.refreshSignal.presenceVersion
         sut.presenceMap["user-1"] = AppUserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-10))
-        try await settle()
+        try await awaitBeat(after: initial)
         let before = sut.refreshSignal.presenceVersion
 
         XCTAssertFalse(sut.recalculateStates(now: Date()))
@@ -472,11 +526,13 @@ final class PresenceManagerTests: XCTestCase {
     }
 
     func test_recalculateStates_thresholdCrossed_repaintsOnce() async throws {
+        let initial = sut.refreshSignal.presenceVersion
         sut.presenceMap["user-1"] = AppUserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-50))
-        try await settle()
+        try await awaitBeat(after: initial)
         let before = sut.refreshSignal.presenceVersion
 
         XCTAssertTrue(sut.recalculateStates(now: Date().addingTimeInterval(20)))
+        try await awaitBeat(after: before)
         try await settle()
 
         XCTAssertEqual(sut.refreshSignal.presenceVersion, before + 1)
@@ -485,8 +541,9 @@ final class PresenceManagerTests: XCTestCase {
     /// Un tick manqué ne saute plus un seuil : à 250 s, aucune des anciennes
     /// fenêtres ne contenait l'instant, l'état avait pourtant changé deux fois.
     func test_recalculateStates_tickMissedAcrossTwoThresholds_stillRepaints() async throws {
+        let initial = sut.refreshSignal.presenceVersion
         sut.presenceMap["user-1"] = AppUserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-50))
-        try await settle()
+        try await awaitBeat(after: initial)
 
         XCTAssertTrue(sut.recalculateStates(now: Date().addingTimeInterval(200)))
         try await settle()
@@ -545,7 +602,7 @@ final class PresenceManagerTests: XCTestCase {
 
         sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
 
-        try await Task.sleep(nanoseconds: UInt64((PresenceManager.versionBumpDebounce + 0.3) * 1_000_000_000))
+        try await awaitBeat(after: before)
 
         XCTAssertGreaterThan(
             sut.refreshSignal.presenceVersion, before,
@@ -563,7 +620,8 @@ final class PresenceManagerTests: XCTestCase {
         sut.presenceMap["user-2"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
         sut.presenceMap["user-3"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
 
-        try await Task.sleep(nanoseconds: UInt64((PresenceManager.versionBumpDebounce + 0.3) * 1_000_000_000))
+        try await awaitBeat(after: before)
+        try await settle()
 
         XCTAssertEqual(
             sut.refreshSignal.presenceVersion, before + 1,
@@ -579,7 +637,7 @@ final class PresenceManagerTests: XCTestCase {
 
         sut.noteActivity(userId: "typer-1")
 
-        try await Task.sleep(nanoseconds: UInt64((PresenceManager.versionBumpDebounce + 0.3) * 1_000_000_000))
+        try await awaitBeat(after: before)
 
         XCTAssertGreaterThan(sut.refreshSignal.presenceVersion, before)
     }

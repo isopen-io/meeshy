@@ -16,6 +16,7 @@ import path from 'path';
 import jwt from 'jsonwebtoken';
 import sharp from 'sharp';
 import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
+import { MP4_VIDEO_SIGNATURE_BYTES } from '../../../services/attachments/__tests__/signature-fixtures';
 
 type CapturedTusOptions = {
   onUploadCreate: (req: any, upload: any) => Promise<{ metadata?: Record<string, string> }>;
@@ -207,8 +208,8 @@ describe('tus-handler — mêmes rendus que le chemin multipart (#11260)', () =>
   });
 
   describe('vidéo', () => {
-    const clip = Buffer.alloc(5 * 1024 * 1024, 7);
-    const heavy = { width: 3840, height: 2160, bitrate: 20_000_000, videoCodec: 'hevc', duration: 4000 };
+    const clip = Buffer.concat([MP4_VIDEO_SIGNATURE_BYTES, Buffer.alloc(5 * 1024 * 1024, 7)]);
+    const heavy = { width: 3840, height: 2160, bitrate: 20_000_000, videoCodec: 'vp9', duration: 4000 };
     const light = { width: 1280, height: 720, bitrate: 2_000_000, videoCodec: 'h264', duration: 4000 };
 
     it('PostMedia : persiste le codec vidéo (la ligne ne le portait pas)', async () => {
@@ -216,7 +217,7 @@ describe('tus-handler — mêmes rendus que le chemin multipart (#11260)', () =>
       await runFullUpload({ prisma, filename: 'clip.mp4', filetype: 'video/mp4', bytes: clip, uploadContext: 'post', stubVideoProbe: [heavy] });
 
       const data = (prisma.postMedia.create as jest.Mock<any>).mock.calls[0][0].data;
-      expect(data.videoCodec).toBe('hevc');
+      expect(data.videoCodec).toBe('vp9');
       expect(transcodeCalls()).toEqual([]);
     });
 
@@ -253,7 +254,7 @@ describe('tus-handler — mêmes rendus que le chemin multipart (#11260)', () =>
       expect(transcodeCalls()).toEqual([]);
       const data = (prisma.messageAttachment.create as jest.Mock<any>).mock.calls[0][0].data;
       expect(data.fileSize).toBe(clip.length);
-      expect(data.videoCodec).toBe('hevc');
+      expect(data.videoCodec).toBe('vp9');
     });
   });
 });

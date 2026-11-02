@@ -254,7 +254,7 @@ extension StoryComposerView {
                 }
             }
         } label: {
-            let current = PostVisibility(rawValue: visibility) ?? .public
+            let current = PostVisibility(served: visibility)
             let showCount = current.requiresUserSelection && !visibilityUserIds.isEmpty
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: current.icon)

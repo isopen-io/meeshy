@@ -15,7 +15,7 @@ import org.robolectric.RobolectricTestRunner
 class MessageReceiptWriterTest {
 
     private fun writer(harness: MessageCollaboratorHarness) =
-        MessageReceiptWriter(harness.database, harness.database.messageDao())
+        MessageReceiptWriter(harness.database, harness.database.messageDao(), null)
 
     private fun message(id: String, createdAt: String, senderId: String = "me") =
         ApiMessage(id = id, conversationId = "c1", content = "salut", createdAt = createdAt, senderId = senderId)

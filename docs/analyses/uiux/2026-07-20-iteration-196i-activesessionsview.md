@@ -1,7 +1,7 @@
 # Iteration 196i — `ActiveSessionsView` empty-state design-system dedup
 
 ## Surface
-`apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift` — screen "Sessions actives"
+`apps/ios/Meeshy/Features/Settings/Views/ActiveSessionsView.swift` — screen "Sessions actives"
 (list of active login sessions, security-sensitive). Reached from Settings → security.
 
 ## Findings

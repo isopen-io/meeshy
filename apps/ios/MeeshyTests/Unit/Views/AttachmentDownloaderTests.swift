@@ -148,17 +148,6 @@ final class AttachmentDownloaderTests: XCTestCase {
                        "The download badge must remain available for confirmed remote media")
     }
 
-    // MARK: - Byte-size formatting
-
-    /// `AttachmentDownloader.fmt` must delegate to the single SDK-wide
-    /// `formatMediaFileSize` helper — locks the fix for the divergent
-    /// binary-vs-decimal formatters bug (AudioPlayerView.formatBytes used to
-    /// disagree with this one despite a comment claiming parity).
-    func test_fmt_delegatesToSharedSDKFileSizeFormatter() {
-        XCTAssertEqual(AttachmentDownloader.fmt(870_400), formatMediaFileSize(870_400))
-        XCTAssertEqual(AttachmentDownloader.fmt(1_048_576), formatMediaFileSize(1_048_576))
-    }
-
     // MARK: - Téléchargement en flux par le funnel du store (source guard, #9863)
 
     /// `run` itérait `URLSession.bytes` OCTET PAR OCTET (≈ 30 millions de

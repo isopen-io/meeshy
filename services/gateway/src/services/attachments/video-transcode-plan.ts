@@ -75,6 +75,10 @@ export function planVideoTranscode(
   const targetKbps = targetVideoBitrateKbps(cappedLongSide);
 
   const codec = (meta.videoCodec ?? '').toLowerCase();
+  // #11261 — un HEVC n'est JAMAIS remplacé : iOS lit l'original (HDR compris),
+  // les autres lecteurs reçoivent un rendu H.264 ADDITIONNEL
+  // (`video-compat-rendition.ts`).
+  if (codec === 'hevc' || codec === 'h265' || codec === 'hvc1') return null;
   const isEfficientCodec = codec === 'h264' || codec === 'avc1';
   const oversized = longSide !== undefined && longSide > o.maxLongSide;
   const overBitrate =

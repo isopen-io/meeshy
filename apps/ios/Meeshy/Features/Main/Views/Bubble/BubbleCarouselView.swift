@@ -282,7 +282,6 @@ struct BubbleCarouselView: View {
                 accentColor: contactColor,
                 frame: .bubble,
                 availability: availability,
-                performance: .carousel,
                 surfaceTapExpands: true,
                 onDownload: onDownload,
                 onExpand: { fullscreenAttachment = attachment }

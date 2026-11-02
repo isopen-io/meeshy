@@ -9,15 +9,12 @@ import me.meeshy.sdk.model.ActiveLiveLocation
 import me.meeshy.sdk.model.ComposerLanguage
 import me.meeshy.sdk.model.ComposerLanguageState
 import me.meeshy.sdk.model.EmojiCatalog
+import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.model.LiveLocationEventFold
 import me.meeshy.sdk.model.LiveLocationSessions
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.ParticipantPermissions
-import me.meeshy.sdk.model.PresenceState
-import me.meeshy.sdk.model.SentimentAnalyzer
-import me.meeshy.sdk.model.SentimentLevel
-import me.meeshy.sdk.model.UserPresence
-import me.meeshy.sdk.model.UserStatusEvent
+import me.meeshy.sdk.model.guest.GuestAttachmentAllowance
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.MessageLanguageExplorer
@@ -40,8 +37,6 @@ data class ChatUiState(
      * b69509366 / bulle call-live web) après un crash/relaunch mid-call. Null
      * quand aucun appel n'est en cours ou que la sonde échoue. */
     val activeCall: ActiveCallSession? = null,
-    val draft: String = "",
-    val draftRevision: Int = 0,
     val isSyncing: Boolean = false,
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
@@ -110,18 +105,17 @@ data class ChatUiState(
      * or `null` if not this session. Advances the slow-mode cooldown. */
     val lastSelfSentAtMillis: Long? = null,
     /** The other participant's userId in a direct conversation (`null` for a group,
-     * or before the conversation has loaded) — the key [headerPresence] resolves
-     * against [presenceByUserId]. Port of iOS `ConversationView.headerPresenceState`'s
+     * or before the conversation has loaded) — the key the header resolves
+     * its presence dot from (`rememberPresence`). Port of iOS `ConversationView.headerPresenceState`'s
      * `conversation?.participantUserId` guard. */
     val directPeerUserId: String? = null,
-    /** Live `user:status`/`presence:snapshot` frames, keyed by userId — mirrors
-     * `ConversationListUiState.presenceByUserId`. */
-    val presenceByUserId: Map<String, UserStatusEvent> = emptyMap(),
     /** Mirrors the same `networkConditionMonitor` reading already threaded into
      * `toBubbles` (the per-message hourglass) — feeds the scroll-to-bottom control's
      * offline indicator ([ScrollControlContent.of]'s `isOffline`), port of iOS
      * `ConversationScrollControlsView.isOffline`. */
     val isOffline: Boolean = false,
+    /** Réciprocité des accusés (`privacy.showReadReceipts`) : qui cache les siens n'ouvre pas « Vu par ». */
+    val showReadReceipts: Boolean = true,
     /** The composer's live source-language state — the "smart context zone" pill.
      * Follows on-device detection as the viewer types, freezes at the 10-word lock,
      * and honours a manual pick from the language picker ([ComposerLanguageState]). */
@@ -135,8 +129,6 @@ data class ChatUiState(
      * `null` when nothing is downloading and nothing needs surfacing. */
     val fileDownload: FileAttachmentDownloadUiState? = null,
 ) {
-    val canSend: Boolean get() = draft.isNotBlank() || clipboardContent != null
-
     /** The composer's live slow-mode posture at [nowMillis] — whether the send
      * action is allowed and, if not, how many seconds remain. Pure derivation over
      * [SlowModePolicy]; the Compose screen ticks [nowMillis] to animate the
@@ -153,8 +145,32 @@ data class ChatUiState(
      * [composerPermissions] via the pure [ComposerAttachmentPolicy]. A registered
      * member (null permissions) gets every affordance; a share-link guest is gated
      * to the capabilities the join hardened. */
+    /** Les familles que le lien d'un invité ouvre ; sans restriction pour un membre (elles voyagent avec [composerPermissions]). */
+    val guestAttachmentAllowance: GuestAttachmentAllowance
+        get() = composerPermissions?.attachmentAllowance ?: GuestAttachmentAllowance.UNRESTRICTED
+
     val composerAffordances: ComposerAffordances
-        get() = ComposerAttachmentPolicy.affordances(composerPermissions)
+        get() = if (isEndToEnd) ComposerAffordances.CLOSED else ComposerAttachmentPolicy.affordances(composerPermissions, guestAttachmentAllowance)
+
+    /**
+     * La conversation est servie chiffrée de bout en bout (#13110). L'Android natif ne
+     * sait ni chiffrer ni lire l'e2ee (#13015) : rien n'en part du fil — chaque porte
+     * d'envoi du composeur lit [composerAffordances] fermé, AVANT tout octet émis
+     * (texte, pièce, vocal, édition) —, et le composeur dit où elle s'écrit. Le
+     * transfert, le partage et les stories l'excluent par `mayCurrentUserWrite`.
+     *
+     * #12956 — le mode vient de la ligne Room, que `ConversationCacheSource` ne rétrograde
+     * jamais pour une conversation vue e2ee et que `conversation:encryption-changed` ferme à
+     * l'instant (`EndToEndRegimeKeeper`). Et un fil qui MONTRE un message scellé (e2ee, chiffré
+     * sans mode, pièce chiffrée) retient l'envoi tant qu'il le montre, même servi sans mode
+     * (#13099) : `EndToEndRegimeController` n'en apprend que ce qui prouve le régime.
+     */
+    val isEndToEnd: Boolean
+        get() = EndToEndRegime.isEndToEnd(encryptionMode) || messages.any { it.isEndToEndSealed || it.holdsEndToEndSend }
+
+    /** Whether the reader may write here — what the message law reads before offering « Répondre ». */
+    val viewerMayWrite: Boolean
+        get() = !isEndToEnd && composerPermissions?.canSendMessages != false
     val isEditing: Boolean get() = editingMessageId != null
 
     /** Whether the end-to-end-encryption notice sits at the top of the list — the
@@ -175,15 +191,6 @@ data class ChatUiState(
     /** True when at least one effect is armed — drives the composer's active-effects accent. */
     val hasPendingEffects: Boolean get() = pendingEffects.hasAnyEffect
 
-    /** The composer's live sentiment glyph, derived from the current [draft] via the
-     * pure [SentimentAnalyzer] (parity iOS `TextAnalyzer`/`SmartContextZone`, the
-     * dictionary scorer). Null when the composer is empty — no glyph is shown for a
-     * blank field; a non-blank draft with no sentiment words resolves to
-     * [SentimentLevel.NEUTRAL]. */
-    val composerSentiment: SentimentLevel?
-        get() = draft.takeIf { it.isNotBlank() }
-            ?.let { SentimentLevel.from(SentimentAnalyzer.score(it)) }
-
     /** The language code the composer pill shows — the live detection/override
      * resolved against [composerLanguageSeed]. Drives the pill glyph and the picker's
      * current selection; the same value (resolved per-user) stamps `originalLanguage`. */
@@ -203,35 +210,37 @@ data class ChatUiState(
      */
     val replyThreadOverlay: ReplyThreadOverlayModel? get() =
         replyThreadParentId?.let { ReplyThreadOverlay.of(it, messages.map { m -> m.toThreadMessage() }) }
-
-    /**
-     * The chat header's live presence dot, or `null` for a group conversation or before any
-     * presence data has arrived for the peer — mirrors
-     * `ConversationListUiState.presenceStateFor`. Port of iOS
-     * `ConversationView.headerPresenceState`; unlike iOS the Android header has no avatar to
-     * dot, so this drives a small standalone indicator instead (see `ChatScreen`).
-     */
-    fun headerPresence(nowEpochMillis: Long): PresenceState? {
-        val id = directPeerUserId ?: return null
-        val event = presenceByUserId[id] ?: return null
-        return UserPresence(isOnline = event.isOnline, lastActiveAt = event.lastActiveAt).state(nowEpochMillis)
-    }
 }
 
 /**
- * State of the forward-picker sheet. `null` in [ChatUiState.forward] means the
- * sheet is closed. [sendingConversationId] gates the picker to one in-flight
- * forward at a time (parity with iOS, which disables every row while sending);
- * [sentConversationIds] keeps a checkmark on rows already forwarded to so the
- * user can forward one message to several conversations in one sitting.
+ * State of the single share sheet (#13469). `null` in [ChatUiState.forward] means the sheet is
+ * closed. [deliveries] carries each recipient's row state (sending, sent, failed), so one message
+ * reaches several conversations in one sitting without a row ever being served twice.
  */
 data class ForwardUiState(
     val sourceMessageId: String,
+    /** Set when the sheet shares ONE piece of [sourceMessageId] (#13596): only that piece leaves, without the message text. */
+    val pieceAttachmentId: String? = null,
+    /** The rest of a multi-selection forward (#13294), in thread order; they travel with the source. */
+    val additionalSourceMessageIds: List<String> = emptyList(),
     val query: String = "",
     val targets: List<ForwardTarget> = emptyList(),
-    val sendingConversationId: String? = null,
-    val sentConversationIds: Set<String> = emptySet(),
-)
+    /** Why this message cannot leave Meeshy; non-null shows the refusal card instead of recipients. */
+    val refusal: me.meeshy.sdk.model.ForwardRefusalReason? = null,
+    /** The conversations ticked as recipients, in tap order (#13469): « toucher un récent, puis Envoyer ». */
+    val selectedConversationIds: List<String> = emptyList(),
+    /** The optional message sent with the copies (a separate message after them, D4). */
+    val caption: String = "",
+    /** What the exit law lets leave, what can be done with it, and whether Send is armed. */
+    val plan: me.meeshy.sdk.model.share.SharePlan? = null,
+    /** The flame duration chosen for the copies; never above the source's own. */
+    val chosenDurationSeconds: Int? = null,
+    /** Per recipient: sending, sent, queued or failed — the optimistic row state. */
+    val deliveries: Map<String, me.meeshy.sdk.model.share.ShareDelivery> = emptyMap(),
+) {
+    /** The identity of what leaves: the message, or the one piece of it — two pieces of a message are two shares. */
+    val shareId: String get() = pieceAttachmentId?.let { "$sourceMessageId#$it" } ?: sourceMessageId
+}
 
 internal fun BubbleContent.toPinnable(): PinnableMessage = object : PinnableMessage {
     override val id: String = messageId

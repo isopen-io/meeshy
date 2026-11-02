@@ -125,9 +125,9 @@ Transposition Android : AVAudioSession / PlaybackCoordinator -> AudioManager foc
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas+Layers.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryVideoAudioProbe.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryPostMediaResolver.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas+Layers.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryVideoAudioProbe.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryPostMediaResolver.swift`
 
 </details>
 
@@ -151,7 +151,7 @@ Transposition Android : CommentMoreMenu -> DropdownMenu / bottom sheet d'actions
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CommentMenu.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CommentMenu.swift`
 
 </details>
 
@@ -176,9 +176,9 @@ Transposition Android : focus du champ -> WindowInsets.isImeVisible + état de c
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryComposerFold.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerLayer.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryComposingFocus.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryComposerFold.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CanvasComposerLayer.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryComposingFocus.swift`
 
 </details>
 
@@ -196,7 +196,7 @@ Deux habillages coexistent. STORY : interlude d'identité, signature sonore Mees
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/StoryExportDressing.swift`
+- `apps/ios/Meeshy/Features/Stories/Services/StoryExportDressing.swift`
 
 </details>
 
@@ -220,7 +220,7 @@ Transposition Android : PHPhotoLibrary.performChanges devient MediaStore.Video.M
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/StoryPhotoSaveService.swift`
+- `apps/ios/Meeshy/Features/Stories/Services/StoryPhotoSaveService.swift`
 
 </details>
 
@@ -245,8 +245,8 @@ Transposition Android : UIActivityViewController devient Intent.createChooser(AC
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift`
-- `apps/ios/Meeshy/Features/Main/Services/StoryExportPreflight.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryExportShareViewModel.swift`
+- `apps/ios/Meeshy/Features/Stories/Services/StoryExportPreflight.swift`
 
 </details>
 
@@ -268,7 +268,7 @@ Transposition Android : AVAssetWriter / AVAssetExportSession devient Media3 Tran
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/StoryVideoExportService.swift`
+- `apps/ios/Meeshy/Features/Stories/Services/StoryVideoExportService.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/StorySlide+ExportTrigger.swift`
 
 </details>
@@ -294,8 +294,8 @@ Transposition Android : CATransform3D / rotation3DEffect -> graphicsLayer(rotati
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CubeFace.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerCardTransform.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CubeFace.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerCardTransform.swift`
 
 </details>
 
@@ -321,10 +321,10 @@ Transposition Android : PresenceManager / FriendshipCache -> repositories de pr�
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryGroupIntroOverlay.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryGroupIntroPolicy.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryAuthorIdentityCard.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+GroupIntro.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryGroupIntroOverlay.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryGroupIntroPolicy.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryAuthorIdentityCard.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+GroupIntro.swift`
 
 </details>
 
@@ -468,7 +468,7 @@ Depuis « Mes stories », le composer se rouvre sur une story publiée : contenu
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+PublicationUpload.swift`
 
 </details>
 
@@ -492,7 +492,7 @@ Transposition Android : StoryReaderRepresentable -> même composable de scène q
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift`
 
 </details>
 
@@ -516,8 +516,8 @@ Transposition Android : Fonctions pures Kotlin (testables JVM), injection de l'h
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryPlaybackSkipResolver.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryContentPresence.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryPlaybackSkipResolver.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryContentPresence.swift`
 
 </details>
 
@@ -542,8 +542,8 @@ Transposition Android : withAnimation -> Animatable + spring/tween ; clipShape(R
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryOpeningEntrance.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryOpeningEntrance.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift`
 
 </details>
 
@@ -589,8 +589,8 @@ Rendu : Carte plein cadre brève entre deux groupes : avatar, nom, @handle, bann
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModelRules.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+Viewing.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModelRules.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+Viewing.swift`
 
 </details>
 
@@ -611,7 +611,7 @@ Transposition Android : MapKit plein écran -> Intent ACTION_VIEW geo: ou carte 
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryLocationReaderTapOverlay.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryLocationReaderTapOverlay.swift`
 
 </details>
 
@@ -744,8 +744,8 @@ Transposition Android : Ouverture de la mise à jour -> Intent ACTION_VIEW marke
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StorySentinelView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sentinel.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StorySentinelView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sentinel.swift`
 
 </details>
 
@@ -811,8 +811,8 @@ La vignette de tray serveur est construite depuis le média brut et ne peut jama
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryCoverRenderSignal.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+MediaPreload.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryCoverRenderSignal.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+MediaPreload.swift`
 
 </details>
 
@@ -836,7 +836,7 @@ Transposition Android : CollapsibleHeader -> TopAppBar avec scrollBehavior + slo
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`
 
 </details>
 
@@ -858,7 +858,7 @@ Transposition Android : Menu SwiftUI avec checkmark -> DropdownMenuItem avec lea
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryVisibilityMenuResolver.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryVisibilityMenuResolver.swift`
 
 </details>
 
@@ -884,9 +884,9 @@ Transposition Android : AVAudioSession interruption -> AudioManager.OnAudioFocus
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+PlaybackHold.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StorySessionInterruption.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryPlaybackStallIndicator.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+PlaybackHold.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StorySessionInterruption.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryPlaybackStallIndicator.swift`
 
 </details>
 
@@ -911,8 +911,8 @@ Transposition Android : AvatarContextMenuItem -> DropdownMenu ancré à l'avatar
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryTrayActions.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`
 
 </details>
 
@@ -938,7 +938,7 @@ Transposition Android : MediaCaptionOverlay (SDK) -> composable sdk-ui partagé 
 <details><summary>Sources iOS (2)</summary>
 
 - `apps/ios/Meeshy/Features/Main/Views/SceneCaption.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasCaption.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CanvasCaption.swift`
 
 </details>
 
@@ -959,7 +959,7 @@ StoryInteractionService centralise les appels du lecteur. requestTranslation(sto
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/StoryInteractionService.swift`
+- `apps/ios/Meeshy/Features/Stories/Services/StoryInteractionService.swift`
 
 </details>
 
@@ -985,9 +985,9 @@ Transposition Android : FullscreenActionButton + ViewThatFits -> Column avec Sub
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+ActionButton.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerParticipation.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+ActionButton.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerParticipation.swift`
 
 </details>
 
@@ -1014,12 +1014,12 @@ Transposition Android : SceneShape.layout + UIViewRepresentable CALayer -> Canva
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryReaderBackground.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+ReaderCard.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasScrims.swift`
-- `apps/ios/Meeshy/Features/Main/Views/View+StoryOverlayLegible.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryReaderBackground.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryReaderCanvasLayout.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+ReaderCard.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CanvasScrims.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/View+StoryOverlayLegible.swift`
 
 </details>
 
@@ -1047,12 +1047,12 @@ Transposition Android : Overlay SwiftUI -> Box superposé à la scène avec Lazy
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryCommentRowView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryCommentThread.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryCommentsOverlayHost.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryCommentsOverlayView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryCommentsZone.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content+Comments.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryCommentRowView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryCommentThread.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryCommentsOverlayHost.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryCommentsOverlayView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryCommentsZone.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content+Comments.swift`
 
 </details>
 
@@ -1078,11 +1078,11 @@ Transposition Android : DragGesture simultané -> Modifier.pointerInput avec awa
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryVerticalGestureDecisions.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryReaderDragOwnership.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content+Gestures.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryReaderSurfaceRules.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+ReaderState.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryVerticalGestureDecisions.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryReaderDragOwnership.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content+Gestures.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryReaderSurfaceRules.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+ReaderState.swift`
 
 </details>
 
@@ -1108,7 +1108,7 @@ Transposition Android : Menu SwiftUI -> DropdownMenu / ModalBottomSheet à secti
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Header.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Header.swift`
 
 </details>
 
@@ -1235,9 +1235,9 @@ Transposition Android : SpatialTapGesture / DragGesture(minimumDistance 0) -> po
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryGestureDecisions.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryGestureOverlayView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Navigation.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryGestureDecisions.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryGestureOverlayView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Navigation.swift`
 
 </details>
 
@@ -1264,10 +1264,10 @@ Transposition Android : MeeshyAvatar(storyState: .unread/.read) -> MeeshyAvatar 
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryTrayView+RingCell.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryEntryMetrics.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryCoverURLMemo.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView+RingCell.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryEntryMetrics.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryCoverURLMemo.swift`
 
 </details>
 
@@ -1290,8 +1290,8 @@ Rendu : L'anneau d'avatar passe d'un dégradé coloré à gris dès l'ouverture 
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+Viewing.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModelRules.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+Viewing.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModelRules.swift`
 
 </details>
 
@@ -1319,10 +1319,10 @@ Transposition Android : fullScreenCover + StoryViewerCoordinator -> destination 
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerRequestOrigin.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryIndexResolver.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerScope.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerRequestOrigin.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryIndexResolver.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerScope.swift`
 
 </details>
 
@@ -1347,10 +1347,10 @@ Transposition Android : scenePhase .background -> LifecycleEventObserver ON_STOP
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerContentView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Lifecycle.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerCardTransform.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerContentView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Lifecycle.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerCardTransform.swift`
 
 </details>
 
@@ -1374,7 +1374,7 @@ Transposition Android : UIAccessibility.post(.announcement) -> View.announceForA
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryCanvasAccessibility.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryCanvasAccessibility.swift`
 
 </details>
 
@@ -1401,9 +1401,9 @@ Transposition Android : UniversalComposerBar -> composeur de chat Android exista
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerBar.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryDraft.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+RefusedComment.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CanvasComposerBar.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryDraft.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+RefusedComment.swift`
 
 </details>
 
@@ -1428,7 +1428,7 @@ Transposition Android : fullScreenCover/sheet -> destinations Navigation Compose
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryTrayActions.swift`
 
 </details>
 
@@ -1453,7 +1453,7 @@ Transposition Android : RepostPublisher + OfflineQueue -> Outbox lane repost ; F
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift`
 
 </details>
 
@@ -1476,8 +1476,8 @@ Rendu : Grille de cartes miniature 9:16 avec date relative et pastille du nombre
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryDraftsViewModel.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+Publication.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryDraftsViewModel.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+Publication.swift`
 
 </details>
 
@@ -1503,10 +1503,10 @@ Transposition Android : AVAssetExportSession / StoryExportIntro/Outro -> Media3 
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StorySaveProgressRing.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerSheets.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerSheetItems.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryExportShareSheet.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StorySaveProgressRing.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerSheets.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerSheetItems.swift`
 
 </details>
 
@@ -1532,9 +1532,9 @@ Transposition Android : LanguagePickerSheet iOS (liste complète) -> ModalBottom
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryLanguageQuickBar.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryLanguageDetailView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryReaderContentRules.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryLanguageQuickBar.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryLanguageDetailView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryReaderContentRules.swift`
 
 </details>
 
@@ -1555,9 +1555,9 @@ Après le chargement du tray, les médias des 8 premiers groupes sont précharg�
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+MediaPreload.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+MediaPreload.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryMediaStoreRouter.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModelRules.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModelRules.swift`
 
 </details>
 
@@ -1775,9 +1775,9 @@ Transposition Android : Même logique pure en Kotlin (StoryPlayback.removingSlid
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerPosition.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryPostRoomLedger.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerEngagement.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerPosition.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryPostRoomLedger.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerEngagement.swift`
 
 </details>
 
@@ -1803,7 +1803,7 @@ Transposition Android : Task + CachedAsyncImage -> coroutines + Coil ImageLoader
 <details><summary>Sources iOS (2)</summary>
 
 - `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Prefetch.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+PrefetchPipeline.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+PrefetchPipeline.swift`
 
 </details>
 
@@ -1828,9 +1828,9 @@ Transposition Android : ScenePlaybackScrubber -> contrat du moteur de rendu de s
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryProgressBarsView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryLiveProgressBars.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryPlaybackProgressClock.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryProgressBarsView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryLiveProgressBars.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryPlaybackProgressClock.swift`
 - `apps/ios/Meeshy/Features/Main/Views/SceneScrubTrack.swift`
 
 </details>
@@ -1852,9 +1852,9 @@ La publication déclare au serveur ce que l'auteur a choisi : le format ciblé (
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModelRules.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModelRules.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/Story/StorySlidePublishMatter.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+PublicationUpload.swift`
 
 </details>
 
@@ -1876,10 +1876,10 @@ Hors connexion, le brouillon médias est copié sur disque (images en JPEG 0,85,
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryOfflineMediaWriter.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublishCopy.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+Publication.swift`
+- `apps/ios/Meeshy/Features/Stories/Services/StoryPublishService.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryOfflineMediaWriter.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+PublishCopy.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+Publication.swift`
 
 </details>
 
@@ -1901,8 +1901,8 @@ Pour chaque slide, la publication envoie par TUS (contexte story) l'image de fon
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift`
-- `apps/ios/Meeshy/Features/Main/Services/StoryVideoUploadFile.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+PublicationUpload.swift`
+- `apps/ios/Meeshy/Features/Stories/Services/StoryVideoUploadFile.swift`
 
 </details>
 
@@ -1925,9 +1925,9 @@ Rendu : L'avatar du propriétaire dans le tray porte un anneau de progression qu
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+UploadState.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryUploadProgressStore.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+Publication.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+UploadState.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryUploadProgressStore.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+Publication.swift`
 
 </details>
 
@@ -1952,10 +1952,10 @@ Transposition Android : OfflineQueue iOS -> OutboxRepository / OutboxFlushWorker
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content+Reactions.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryReactionFlightView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryReactionRecovery.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryScrubSelectionResolver.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content+Reactions.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryReactionFlightView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryReactionRecovery.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryScrubSelectionResolver.swift`
 
 </details>
 
@@ -1979,9 +1979,9 @@ Rendu : Aucun spinner si le cache contient des stories ; squelette seulement au 
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryTrayProjection.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+TrayRules.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryTrayProjection.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+TrayRules.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryTrayPurge.swift`
 
 </details>
@@ -2003,8 +2003,8 @@ Le tray s'abonne au socket social une seule fois (une seconde souscription compt
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+TrayRules.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+TrayRules.swift`
 
 </details>
 
@@ -2029,8 +2029,8 @@ Transposition Android : StoryUploadProgressStore -> flux de progression de l'Out
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryUploadPresentation.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryUploadPresentation.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`
 
 </details>
 
@@ -2050,8 +2050,8 @@ Le composer s'ouvre sur le dernier mode d'audience retenu (défaut PUBLIC, la pu
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/StoryVisibilityPreferenceStore.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+Viewing.swift`
+- `apps/ios/Meeshy/Features/Stories/Services/StoryVisibilityPreferenceStore.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+Viewing.swift`
 
 </details>
 
@@ -2095,8 +2095,8 @@ Transposition Android : SocialEventsV2Reporter -> reporter Android (WorkManager 
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Navigation.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerEngagement.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Navigation.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerEngagement.swift`
 
 </details>
 

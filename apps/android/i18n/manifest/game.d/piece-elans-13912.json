@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "progression.elans.title",
+          "androidName": "progression_elans_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.elan.factor",
+          "androidName": "progression_elan_factor",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.elans.empty",
+          "androidName": "progression_elans_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.elans.hint",
+          "androidName": "progression_elans_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.elan.family.one",
+          "androidName": "progression_elan_family_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.elan.family.many",
+          "androidName": "progression_elan_family_many",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.elan.base",
+          "androidName": "progression_elan_base",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.elan.standing",
+          "androidName": "progression_elan_standing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.elan.effect",
+          "androidName": "progression_elan_effect",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.elan.what",
+          "androidName": "game_detail_elan_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.elan.how",
+          "androidName": "game_detail_elan_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.elan.active",
+          "androidName": "game_detail_elan_active",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.elan.idle",
+          "androidName": "game_detail_elan_idle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.elan.points",
+          "androidName": "game_detail_elan_points",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.window",
+          "androidName": "game_concept_fact_window",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.gives_label",
+          "androidName": "game_detail_gives_label",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

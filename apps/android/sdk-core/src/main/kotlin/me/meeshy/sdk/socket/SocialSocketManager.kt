@@ -1,8 +1,8 @@
 package me.meeshy.sdk.socket
 
+import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.SocketPostCreatedData
 import me.meeshy.sdk.model.SocketPostRepostedData
@@ -32,7 +32,7 @@ import me.meeshy.sdk.model.SocketStatusDeletedData
 import me.meeshy.sdk.model.SocketStatusReactedData
 import me.meeshy.sdk.model.SocketStatusUnreactedData
 import org.json.JSONObject
-import timber.log.Timber
+import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,38 +44,47 @@ import javax.inject.Singleton
 class SocialSocketManager @Inject constructor(
     private val socketManager: SocketManager,
     private val json: Json,
+    private val router: SocketEventRouter,
 ) {
-    private val _postCreated = buf<SocketPostCreatedData>()
-    private val _postUpdated = buf<SocketPostUpdatedData>()
-    private val _postReposted = buf<SocketPostRepostedData>()
-    private val _postLiked = buf<SocketPostLikedData>()
-    private val _postUnliked = buf<SocketPostUnlikedData>()
-    private val _postBookmarked = buf<SocketPostBookmarkedData>()
-    private val _postDeleted = buf<SocketPostDeletedData>()
-    private val _postTranslationUpdated = buf<SocketPostTranslationUpdatedData>()
-    private val _commentAdded = buf<SocketCommentAddedData>()
-    private val _commentUpdated = buf<SocketCommentUpdatedData>()
-    private val _commentLiked = buf<SocketCommentLikedData>()
-    private val _commentUnliked = buf<SocketCommentLikedData>()
-    private val _commentDeleted = buf<SocketCommentDeletedData>()
-    private val _commentReactionAdded = buf<SocketCommentReactionUpdateData>()
-    private val _commentReactionRemoved = buf<SocketCommentReactionUpdateData>()
-    private val _commentTranslationUpdated = buf<SocketCommentTranslationUpdatedData>()
-    private val _mediaCaptionTranslationUpdated = buf<SocketMediaCaptionTranslationUpdatedData>()
-    private val _storyCreated = buf<SocketStoryCreatedData>()
-    private val _storyUpdated = buf<SocketStoryUpdatedData>()
-    private val _storyViewed = buf<SocketStoryViewedData>()
-    private val _storyReacted = buf<SocketStoryReactedData>()
-    private val _storyUnreacted = buf<SocketStoryUnreactedData>()
-    private val _storyDeleted = buf<SocketStoryDeletedData>()
-    private val _storyTranslationUpdated = buf<SocketStoryTranslationUpdatedData>()
-    private val _statusCreated = buf<SocketStatusCreatedData>()
-    private val _statusUpdated = buf<SocketStatusUpdatedData>()
-    private val _statusDeleted = buf<SocketStatusDeletedData>()
-    private val _statusReacted = buf<SocketStatusReactedData>()
-    private val _statusUnreacted = buf<SocketStatusUnreactedData>()
+    internal constructor(
+        socketManager: SocketManager,
+        json: Json,
+    ) : this(
+        socketManager, json,
+        SocketEventRouter(SocketEventRegistrar { event, callback -> socketManager.on(event, callback) }, Dispatchers.Default),
+    )
 
-    val postCreated: SharedFlow<SocketPostCreatedData> = _postCreated.asSharedFlow()
+    private val _postCreated = SocketInboundRoute.subject<SocketPostCreatedData>()
+    private val _postUpdated = SocketInboundRoute.subject<SocketPostUpdatedData>()
+    private val _postReposted = SocketInboundRoute.subject<SocketPostRepostedData>()
+    private val _postLiked = SocketInboundRoute.subject<SocketPostLikedData>()
+    private val _postUnliked = SocketInboundRoute.subject<SocketPostUnlikedData>()
+    private val _postBookmarked = SocketInboundRoute.subject<SocketPostBookmarkedData>()
+    private val _postDeleted = SocketInboundRoute.subject<SocketPostDeletedData>()
+    private val _postTranslationUpdated = SocketInboundRoute.subject<SocketPostTranslationUpdatedData>()
+    private val _commentAdded = SocketInboundRoute.subject<SocketCommentAddedData>()
+    private val _commentUpdated = SocketInboundRoute.subject<SocketCommentUpdatedData>()
+    private val _commentLiked = SocketInboundRoute.subject<SocketCommentLikedData>()
+    private val _commentUnliked = SocketInboundRoute.subject<SocketCommentLikedData>()
+    private val _commentDeleted = SocketInboundRoute.subject<SocketCommentDeletedData>()
+    private val _commentReactionAdded = SocketInboundRoute.subject<SocketCommentReactionUpdateData>()
+    private val _commentReactionRemoved = SocketInboundRoute.subject<SocketCommentReactionUpdateData>()
+    private val _commentTranslationUpdated = SocketInboundRoute.subject<SocketCommentTranslationUpdatedData>()
+    private val _mediaCaptionTranslationUpdated = SocketInboundRoute.subject<SocketMediaCaptionTranslationUpdatedData>()
+    private val _storyCreated = SocketInboundRoute.subject<SocketStoryCreatedData>()
+    private val _storyUpdated = SocketInboundRoute.subject<SocketStoryUpdatedData>()
+    private val _storyViewed = SocketInboundRoute.subject<SocketStoryViewedData>()
+    private val _storyReacted = SocketInboundRoute.subject<SocketStoryReactedData>()
+    private val _storyUnreacted = SocketInboundRoute.subject<SocketStoryUnreactedData>()
+    private val _storyDeleted = SocketInboundRoute.subject<SocketStoryDeletedData>()
+    private val _storyTranslationUpdated = SocketInboundRoute.subject<SocketStoryTranslationUpdatedData>()
+    private val _statusCreated = SocketInboundRoute.subject<SocketStatusCreatedData>()
+    private val _statusUpdated = SocketInboundRoute.subject<SocketStatusUpdatedData>()
+    private val _statusDeleted = SocketInboundRoute.subject<SocketStatusDeletedData>()
+    private val _statusReacted = SocketInboundRoute.subject<SocketStatusReactedData>()
+    private val _statusUnreacted = SocketInboundRoute.subject<SocketStatusUnreactedData>()
+
+    val postCreated: SharedFlow<SocketPostCreatedData> = _postCreated.exposed()
 
     /**
      * `post:updated` — the author edited a post; carries the COMPLETE new post. The feed
@@ -83,18 +92,18 @@ class SocialSocketManager @Inject constructor(
      * reader's own like/bookmark/view/reaction state (the broadcast is unpersonalized).
      * The content-edit sibling of [postCreated] / [postTranslationUpdated].
      */
-    val postUpdated: SharedFlow<SocketPostUpdatedData> = _postUpdated.asSharedFlow()
+    val postUpdated: SharedFlow<SocketPostUpdatedData> = _postUpdated.exposed()
 
     /**
      * `post:reposted` — a user reposted a post; carries the COMPLETE repost as a new post.
      * The feed folds it onto the head exactly like a [postCreated] arrival (a repost is
      * itself a new feed post). The arrival sibling of [postCreated].
      */
-    val postReposted: SharedFlow<SocketPostRepostedData> = _postReposted.asSharedFlow()
-    val postLiked: SharedFlow<SocketPostLikedData> = _postLiked.asSharedFlow()
-    val postUnliked: SharedFlow<SocketPostUnlikedData> = _postUnliked.asSharedFlow()
-    val postBookmarked: SharedFlow<SocketPostBookmarkedData> = _postBookmarked.asSharedFlow()
-    val postDeleted: SharedFlow<SocketPostDeletedData> = _postDeleted.asSharedFlow()
+    val postReposted: SharedFlow<SocketPostRepostedData> = _postReposted.exposed()
+    val postLiked: SharedFlow<SocketPostLikedData> = _postLiked.exposed()
+    val postUnliked: SharedFlow<SocketPostUnlikedData> = _postUnliked.exposed()
+    val postBookmarked: SharedFlow<SocketPostBookmarkedData> = _postBookmarked.exposed()
+    val postDeleted: SharedFlow<SocketPostDeletedData> = _postDeleted.exposed()
 
     /**
      * `post:translation-updated` — the gateway translated a post server-side and pushed
@@ -103,16 +112,16 @@ class SocialSocketManager @Inject constructor(
      * sibling of [storyTranslationUpdated]).
      */
     val postTranslationUpdated: SharedFlow<SocketPostTranslationUpdatedData> =
-        _postTranslationUpdated.asSharedFlow()
-    val commentAdded: SharedFlow<SocketCommentAddedData> = _commentAdded.asSharedFlow()
+        _postTranslationUpdated.exposed()
+    val commentAdded: SharedFlow<SocketCommentAddedData> = _commentAdded.exposed()
 
     /**
      * `comment:updated` — a comment was edited server-side; carries the COMPLETE new comment.
      * The open thread replaces the matched row in place (content/effects/regenerated
      * translations), idempotent by id — the edit sibling of [commentAdded].
      */
-    val commentUpdated: SharedFlow<SocketCommentUpdatedData> = _commentUpdated.asSharedFlow()
-    val commentLiked: SharedFlow<SocketCommentLikedData> = _commentLiked.asSharedFlow()
+    val commentUpdated: SharedFlow<SocketCommentUpdatedData> = _commentUpdated.exposed()
+    val commentLiked: SharedFlow<SocketCommentLikedData> = _commentLiked.exposed()
 
     /**
      * Jumelle DESCENDANTE de [commentLiked]. Même forme de charge : `likeCount`
@@ -121,10 +130,10 @@ class SocialSocketManager @Inject constructor(
      * champs (comme [commentReactionAdded] / [commentReactionRemoved], qui
      * partagent déjà un seul type).
      */
-    val commentUnliked: SharedFlow<SocketCommentLikedData> = _commentUnliked.asSharedFlow()
-    val commentDeleted: SharedFlow<SocketCommentDeletedData> = _commentDeleted.asSharedFlow()
-    val commentReactionAdded: SharedFlow<SocketCommentReactionUpdateData> = _commentReactionAdded.asSharedFlow()
-    val commentReactionRemoved: SharedFlow<SocketCommentReactionUpdateData> = _commentReactionRemoved.asSharedFlow()
+    val commentUnliked: SharedFlow<SocketCommentLikedData> = _commentUnliked.exposed()
+    val commentDeleted: SharedFlow<SocketCommentDeletedData> = _commentDeleted.exposed()
+    val commentReactionAdded: SharedFlow<SocketCommentReactionUpdateData> = _commentReactionAdded.exposed()
+    val commentReactionRemoved: SharedFlow<SocketCommentReactionUpdateData> = _commentReactionRemoved.exposed()
 
     /**
      * `comment:translation-updated` — the gateway translated a comment server-side and pushed
@@ -133,7 +142,7 @@ class SocialSocketManager @Inject constructor(
      * sibling of [postTranslationUpdated]).
      */
     val commentTranslationUpdated: SharedFlow<SocketCommentTranslationUpdatedData> =
-        _commentTranslationUpdated.asSharedFlow()
+        _commentTranslationUpdated.exposed()
 
     /**
      * `media:caption-translation-updated` — the gateway translated a `PostMedia.caption`
@@ -143,8 +152,8 @@ class SocialSocketManager @Inject constructor(
      * instant it lands — the media-caption sibling of [postTranslationUpdated].
      */
     val mediaCaptionTranslationUpdated: SharedFlow<SocketMediaCaptionTranslationUpdatedData> =
-        _mediaCaptionTranslationUpdated.asSharedFlow()
-    val storyCreated: SharedFlow<SocketStoryCreatedData> = _storyCreated.asSharedFlow()
+        _mediaCaptionTranslationUpdated.exposed()
+    val storyCreated: SharedFlow<SocketStoryCreatedData> = _storyCreated.exposed()
 
     /**
      * `story:updated` — an author edited a story; carries the COMPLETE new story. The
@@ -152,55 +161,59 @@ class SocialSocketManager @Inject constructor(
      * and re-seeds its reaction count when `engagementReset` is set — the edit sibling
      * of [storyCreated]. Mirror of iOS `SocialSocketManager.storyUpdated`.
      */
-    val storyUpdated: SharedFlow<SocketStoryUpdatedData> = _storyUpdated.asSharedFlow()
-    val storyViewed: SharedFlow<SocketStoryViewedData> = _storyViewed.asSharedFlow()
-    val storyReacted: SharedFlow<SocketStoryReactedData> = _storyReacted.asSharedFlow()
-    val storyUnreacted: SharedFlow<SocketStoryUnreactedData> = _storyUnreacted.asSharedFlow()
+    val storyUpdated: SharedFlow<SocketStoryUpdatedData> = _storyUpdated.exposed()
+    val storyViewed: SharedFlow<SocketStoryViewedData> = _storyViewed.exposed()
+    val storyReacted: SharedFlow<SocketStoryReactedData> = _storyReacted.exposed()
+    val storyUnreacted: SharedFlow<SocketStoryUnreactedData> = _storyUnreacted.exposed()
 
     /**
      * `story:deleted` — an author removed a story. The open viewer drops the matched
      * slide, dropping an emptied author group and re-anchoring the cursor (the removal
      * sibling of [storyCreated]). Mirror of iOS `SocialSocketManager.storyDeleted`.
      */
-    val storyDeleted: SharedFlow<SocketStoryDeletedData> = _storyDeleted.asSharedFlow()
+    val storyDeleted: SharedFlow<SocketStoryDeletedData> = _storyDeleted.exposed()
     val storyTranslationUpdated: SharedFlow<SocketStoryTranslationUpdatedData> =
-        _storyTranslationUpdated.asSharedFlow()
-    val statusCreated: SharedFlow<SocketStatusCreatedData> = _statusCreated.asSharedFlow()
-    val statusUpdated: SharedFlow<SocketStatusUpdatedData> = _statusUpdated.asSharedFlow()
-    val statusDeleted: SharedFlow<SocketStatusDeletedData> = _statusDeleted.asSharedFlow()
-    val statusReacted: SharedFlow<SocketStatusReactedData> = _statusReacted.asSharedFlow()
-    val statusUnreacted: SharedFlow<SocketStatusUnreactedData> = _statusUnreacted.asSharedFlow()
+        _storyTranslationUpdated.exposed()
+    val statusCreated: SharedFlow<SocketStatusCreatedData> = _statusCreated.exposed()
+    val statusUpdated: SharedFlow<SocketStatusUpdatedData> = _statusUpdated.exposed()
+    val statusDeleted: SharedFlow<SocketStatusDeletedData> = _statusDeleted.exposed()
+    val statusReacted: SharedFlow<SocketStatusReactedData> = _statusReacted.exposed()
+    val statusUnreacted: SharedFlow<SocketStatusUnreactedData> = _statusUnreacted.exposed()
 
     fun attach() {
-        listen("post:created", _postCreated)
-        listen("post:updated", _postUpdated)
-        listen("post:reposted", _postReposted)
-        listen("post:liked", _postLiked)
-        listen("post:unliked", _postUnliked)
-        listen("post:bookmarked", _postBookmarked)
-        listen("post:deleted", _postDeleted)
-        listen("post:translation-updated", _postTranslationUpdated)
-        listen("comment:added", _commentAdded)
-        listen("comment:updated", _commentUpdated)
-        listen("comment:liked", _commentLiked)
-        listen("comment:unliked", _commentUnliked)
-        listen("comment:deleted", _commentDeleted)
-        listen("comment:reaction-added", _commentReactionAdded)
-        listen("comment:reaction-removed", _commentReactionRemoved)
-        listen("comment:translation-updated", _commentTranslationUpdated)
-        listen("media:caption-translation-updated", _mediaCaptionTranslationUpdated)
-        listen("story:created", _storyCreated)
-        listen("story:updated", _storyUpdated)
-        listen("story:viewed", _storyViewed)
-        listen("story:reacted", _storyReacted)
-        listen("story:unreacted", _storyUnreacted)
-        listen("story:deleted", _storyDeleted)
-        listen("story:translation-updated", _storyTranslationUpdated)
-        listen("status:created", _statusCreated)
-        listen("status:updated", _statusUpdated)
-        listen("status:deleted", _statusDeleted)
-        listen("status:reacted", _statusReacted)
-        listen("status:unreacted", _statusUnreacted)
+        router.install(routes())
+    }
+
+    private fun routes(): List<SocketInboundRoute> = buildList {
+        route(SocketEventNames.POST_CREATED, _postCreated)
+        route(SocketEventNames.POST_UPDATED, _postUpdated)
+        route(SocketEventNames.POST_REPOSTED, _postReposted)
+        route(SocketEventNames.POST_LIKED, _postLiked)
+        route(SocketEventNames.POST_UNLIKED, _postUnliked)
+        route(SocketEventNames.POST_BOOKMARKED, _postBookmarked)
+        route(SocketEventNames.POST_DELETED, _postDeleted)
+        route(SocketEventNames.POST_TRANSLATION_UPDATED, _postTranslationUpdated)
+        route(SocketEventNames.COMMENT_ADDED, _commentAdded)
+        route(SocketEventNames.COMMENT_UPDATED, _commentUpdated)
+        route(SocketEventNames.COMMENT_LIKED, _commentLiked)
+        route(SocketEventNames.COMMENT_UNLIKED, _commentUnliked)
+        route(SocketEventNames.COMMENT_DELETED, _commentDeleted)
+        route(SocketEventNames.COMMENT_REACTION_ADDED, _commentReactionAdded)
+        route(SocketEventNames.COMMENT_REACTION_REMOVED, _commentReactionRemoved)
+        route(SocketEventNames.COMMENT_TRANSLATION_UPDATED, _commentTranslationUpdated)
+        route(SocketEventNames.MEDIA_CAPTION_TRANSLATION_UPDATED, _mediaCaptionTranslationUpdated)
+        route(SocketEventNames.STORY_CREATED, _storyCreated)
+        route(SocketEventNames.STORY_UPDATED, _storyUpdated)
+        route(SocketEventNames.STORY_VIEWED, _storyViewed)
+        route(SocketEventNames.STORY_REACTED, _storyReacted)
+        route(SocketEventNames.STORY_UNREACTED, _storyUnreacted)
+        route(SocketEventNames.STORY_DELETED, _storyDeleted)
+        route(SocketEventNames.STORY_TRANSLATION_UPDATED, _storyTranslationUpdated)
+        route(SocketEventNames.STATUS_CREATED, _statusCreated)
+        route(SocketEventNames.STATUS_UPDATED, _statusUpdated)
+        route(SocketEventNames.STATUS_DELETED, _statusDeleted)
+        route(SocketEventNames.STATUS_REACTED, _statusReacted)
+        route(SocketEventNames.STATUS_UNREACTED, _statusUnreacted)
     }
 
     /**
@@ -209,23 +222,15 @@ class SocialSocketManager @Inject constructor(
      * post the viewer isn't otherwise implicitly subscribed to via a friend's feed room.
      */
     fun joinPostRoom(postId: String) {
-        socketManager.emit("post:join", JSONObject().put("postId", postId))
+        socketManager.emit(SocketEventNames.POST_JOIN, JSONObject().put("postId", postId))
     }
 
     /** Leaves the post-detail realtime room — pairs with [joinPostRoom]. */
     fun leavePostRoom(postId: String) {
-        socketManager.emit("post:leave", JSONObject().put("postId", postId))
+        socketManager.emit(SocketEventNames.POST_LEAVE, JSONObject().put("postId", postId))
     }
 
-    private inline fun <reified T> listen(event: String, flow: MutableSharedFlow<T>) {
-        socketManager.on(event) { args ->
-            runCatching {
-                val raw = (args.firstOrNull() as? JSONObject)?.toString() ?: return@on
-                flow.tryEmit(json.decodeFromString<T>(raw))
-            }.onFailure { Timber.e(it, "Socket decode error [$event]: ${T::class.simpleName}") }
-        }
+    private inline fun <reified T> MutableList<SocketInboundRoute>.route(event: String, subject: RouteSubject<T>) {
+        add(SocketInboundRoute.decoding(event, json, subject))
     }
-
-    private fun <T> buf(): MutableSharedFlow<T> =
-        MutableSharedFlow(replay = 0, extraBufferCapacity = 64)
 }

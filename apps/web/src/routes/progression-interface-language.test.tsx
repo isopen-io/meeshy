@@ -54,7 +54,7 @@ const noop = (): void => undefined;
 /** Ce que l'écran rend, en texte : les balises tombent, les attributs lus (aria-label, title) restent. */
 const rendered = (node: React.ReactElement): string => renderToStaticMarkup(node);
 
-const FRENCH = /Premier succès|Dernier succès|Décroché|Envoyez|Niveau|Comment gagner|jusqu’à|se convertissent|Aucune Meesh|frappée|Aucune frappe|Première frappe|Convertir|Encore|Débloqué|Obtenu|Échelle complète|avant le palier|pas pu être chargée|Hors ligne|reconnexion|en cours de chargement|Retour|Cercles|Défis|Succès| sur /u;
+const FRENCH = /Premier succès|Dernier succès|Décroché|Envoyez|Niveau|Comment gagner|jusqu’à|se convertissent|Aucune Meesh|frappée|Aucune frappe|Première frappe|Convertir|Encore|Débloqué|Obtenu|Échelle complète|avant le palier|pas pu être chargée|Hors ligne|reconnexion|en cours de chargement|Retour|Cercles|Défis|Succès| sur |Paliers de|atteint|à atteindre/u;
 
 describe('Progression, interface en', () => {
   test('les héros : dernier succès, niveau, Meeshes', () => {

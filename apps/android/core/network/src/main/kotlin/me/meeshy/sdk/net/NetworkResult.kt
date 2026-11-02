@@ -39,4 +39,7 @@ data class ApiError(
     val fieldName: String? = null,
     val suggestions: List<String> = emptyList(),
     val violations: List<ApiViolation> = emptyList(),
+    /** Plafond et dépassement d'un refus de quota, quand la passerelle les donne (#14169). */
+    val limit: Int? = null,
+    val unlinked: Int? = null,
 )

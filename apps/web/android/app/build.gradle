@@ -29,14 +29,14 @@ android {
     namespace = "me.meeshy.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "me.meeshy.app"
+        applicationId "me.meeshy.webapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Numéro de build LU à la construction (D-45) : `-PmeeshyBuildNumber=<n>`,
         // posé par scripts/build-shells.mjs. Sans lui, 1 — la marque d'un build
         // fait HORS du site unique.
         versionCode = (project.findProperty('meeshyBuildNumber') ?: '1').toString().toInteger()
-        versionName "2.22.0"
+        versionName "2.27.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -61,8 +61,11 @@ android {
             if (meeshyReleaseSigningProperties() != null) {
                 signingConfig signingConfigs.release
             }
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // #12447 — R8 reduit, optimise et obscurcit le code : la Play Console
+            // exige 25 % d'obscurcissement. Le mapping part avec le bundle.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }

@@ -49,7 +49,7 @@ object StorySnapResolver {
      * Magnetic radius: a centre within this normalised distance of a guide snaps to it.
      * Small enough that deliberate placement away from a guide is never hijacked.
      */
-    const val SNAP_THRESHOLD: Float = 0.025f
+    const val SNAP_THRESHOLD: Float = 0.015f
 
     /**
      * Edge margin: a centre nearer than this to any canvas edge is out of the safe

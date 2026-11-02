@@ -1,8 +1,24 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.serializer
 import me.meeshy.sdk.lang.resolveLastMessagePreview
+import me.meeshy.sdk.model.preview.ConversationActiveCall
+import me.meeshy.sdk.model.preview.ConversationLastReaction
+import me.meeshy.sdk.model.preview.ConversationPreviewSticker
+import me.meeshy.sdk.model.preview.LastMessageAttachmentSummary
+import me.meeshy.sdk.model.preview.LastMessageCallSummary
+import me.meeshy.sdk.model.preview.LastMessageSystemEvent
+import me.meeshy.sdk.model.preview.TolerantActiveCallSerializer
+import me.meeshy.sdk.model.preview.TolerantAttachmentSummarySerializer
+import me.meeshy.sdk.model.preview.TolerantCallSummarySerializer
+import me.meeshy.sdk.model.preview.TolerantLastReactionSerializer
+import me.meeshy.sdk.model.preview.TolerantPreviewStickerSerializer
+import me.meeshy.sdk.model.preview.TolerantSystemEventSerializer
+import me.meeshy.sdk.model.serialization.LossyListSerializer
+import me.meeshy.sdk.model.serialization.TolerantSerializer
 
 /** Conversation — port of APIConversation (ConversationModels.swift). */
 @Serializable
@@ -35,6 +51,12 @@ data class ApiConversation(
     val lastMessageTranslations: Map<String, String>? = null,
     val lastMessageOriginalLanguage: String? = null,
     val unreadCount: Int = 0,
+    /**
+     * Ce que cette conversation a rapporté au LECTEUR (« N (M) 🔥 », #8906) : servi par la passerelle sur
+     * chaque ligne de la liste et du détail. Alimente la Flamme de l'en-tête du fil ; jamais recalculé ici.
+     */
+    @Serializable(with = TolerantEngagementSerializer::class)
+    val viewerEngagement: ConversationEngagementSnapshot? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
     val defaultWriteRole: String? = null,
@@ -66,7 +88,34 @@ data class ApiConversation(
      */
     @SerialName("memberCount")
     val serverMemberCount: Int? = null,
+    /** Vrai quand [serverMemberCount] arrive plafonné à 199 (lecteur non admin) : afficher « 199+ ». */
+    val memberCountCapped: Boolean? = null,
+    val communityId: String? = null,
+    /** Vignette (ThumbHash) de la bannière, pour le flou d'attente. `null` sur une ligne plus ancienne. */
+    val bannerThumbHash: String? = null,
+    /** Étiquettes du lecteur posées à la racine ; les étiquettes de préférences restent dans [preferences]. */
+    @Serializable(with = LossyTagListSerializer::class)
+    val tags: List<String> = emptyList(),
+    /** Les derniers messages, du plus récent au plus ancien ; un élément illisible est écarté. */
+    @Serializable(with = LossyRecentMessagesSerializer::class)
+    val recentMessages: List<ApiConversationLastMessage> = emptyList(),
+    /** Ce qui s'est passé DEPUIS le dernier message (#7545) : sa dernière réaction et l'appel en cours. */
+    @Serializable(with = TolerantLastReactionSerializer::class)
+    val lastReaction: ConversationLastReaction? = null,
+    @Serializable(with = TolerantActiveCallSerializer::class)
+    val activeCall: ConversationActiveCall? = null,
+    /** Rang SERVI de la ligne (#9026), instant ISO 8601, le même pour tous les participants. */
+    val listRankAt: String? = null,
+    /** Pourquoi le lecteur ne peut pas écrire ici (#9927) ; une valeur illisible vaut « aucune ». */
+    @Serializable(with = ConversationWriteRestrictionSerializer::class)
+    val viewerWriteRestriction: ConversationWriteRestriction? = null,
+    /** Pont ✦ précalculé serveur ; absent quand il n'y a rien de non lu. */
+    @Serializable(with = TolerantConversationBridgeSerializer::class)
+    val bridge: ConversationBridge? = null,
 ) {
+    /** La conversation « World » : le salon global, reconnu à son identifiant. */
+    val isWorldWide: Boolean get() = identifier == "world"
+
     /** Prefers the server-computed count over [participants], which is truncated to 5. */
     val memberCount: Int get() = serverMemberCount ?: participants.size
 
@@ -110,6 +159,16 @@ fun ApiConversation.resolvedLastMessagePreview(preferredLanguages: List<String>)
 fun ApiConversation.currentUserRole(currentUserId: String?): MemberRole =
     MemberRole.from(participants.firstOrNull { it.userId == currentUserId }?.role)
 
+/**
+ * Le lecteur est-il un membre ACTIF de cette conversation ? La passerelle ne sert
+ * [ApiConversation.currentUserRole] qu'à un participant actif (`resolveCallerParticipant`) ;
+ * à défaut, sa présence dans le roster servi le prouve aussi. Rien de cela ⇒ `false` :
+ * une appartenance inconnue n'en est pas une (#14066, fail-closed).
+ */
+fun ApiConversation.isActiveMember(currentUserId: String?): Boolean =
+    currentUserRole != null ||
+        (currentUserId != null && participants.any { it.userId == currentUserId || it.id == currentUserId })
+
 @Serializable
 data class ApiParticipant(
     val id: String,
@@ -119,6 +178,13 @@ data class ApiParticipant(
     val avatar: String? = null,
     val role: String? = null,
     val joinedAt: String? = null,
+    /**
+     * La présence que la passerelle sert sur la ligne de liste (amis acceptés / soi / ADMIN, sinon
+     * masquée : `false` et `null`). Elle ne sert qu'à SEMER la carte de présence au démarrage à froid
+     * ([servedPresence]) : le cache Room n'en garde rien ([withoutServedPresence]).
+     */
+    val isOnline: Boolean? = null,
+    val lastActiveAt: String? = null,
 )
 
 /**
@@ -145,7 +211,55 @@ data class ApiConversationLastMessage(
     val isBlurred: Boolean = false,
     val isViewOnce: Boolean = false,
     val expiresAt: String? = null,
-)
+    /** Pièces du dernier message ; un élément illisible est écarté, l'absence reste `null`. */
+    @Serializable(with = LossyApiMessageAttachmentListOrNullSerializer::class)
+    val attachments: List<ApiMessageAttachment>? = null,
+    @SerialName("_count")
+    @Serializable(with = TolerantMessageCountSerializer::class)
+    val count: ApiMessageCount? = null,
+    /** Position hissée (message géolocalisé) : un message position-seule a un `content` vide. */
+    @Serializable(with = TolerantSharedPlaceSerializer::class)
+    val location: SharedPlace? = null,
+    /** Sous-groupe NATURE du contrat #7545 — mêmes noms de clés que la passerelle et iOS. */
+    val effectFlags: Int? = null,
+    val ephemeralDuration: Int? = null,
+    val isEncrypted: Boolean? = null,
+    val isForwarded: Boolean? = null,
+    @Serializable(with = TolerantSystemEventSerializer::class)
+    val systemEvent: LastMessageSystemEvent? = null,
+    @Serializable(with = TolerantCallSummarySerializer::class)
+    val callSummary: LastMessageCallSummary? = null,
+    @Serializable(with = TolerantAttachmentSummarySerializer::class)
+    val attachmentSummary: LastMessageAttachmentSummary? = null,
+    /** Sticker hissé de `metadata.sticker` (#10752) : sa présence fait du message un sticker. */
+    @Serializable(with = TolerantPreviewStickerSerializer::class)
+    val sticker: ConversationPreviewSticker? = null,
+) {
+    /** La nature telle que le serveur la sert ; `null` sur un serveur antérieur à #7545. */
+    val nature: LastMessageNature?
+        get() = LastMessageNature(
+            messageType = messageType,
+            effectFlags = effectFlags,
+            ephemeralDuration = ephemeralDuration,
+            isEncrypted = isEncrypted ?: false,
+            isForwarded = isForwarded ?: false,
+            systemEvent = systemEvent,
+            callSummary = callSummary,
+            attachmentSummary = attachmentSummary,
+            sticker = sticker,
+        ).takeUnless { it.isEmpty }
+}
+
+internal object LossyTagListSerializer : KSerializer<List<String>> by LossyListSerializer(String.serializer())
+
+internal object LossyRecentMessagesSerializer :
+    KSerializer<List<ApiConversationLastMessage>> by LossyListSerializer(ApiConversationLastMessage.serializer())
+
+internal object TolerantEngagementSerializer :
+    KSerializer<ConversationEngagementSnapshot?> by TolerantSerializer(ConversationEngagementSnapshot.serializer())
+
+internal object TolerantMessageCountSerializer :
+    KSerializer<ApiMessageCount?> by TolerantSerializer(ApiMessageCount.serializer())
 
 /** User-scoped conversation preferences. */
 @Serializable
@@ -159,6 +273,10 @@ data class ApiConversationPreferences(
     val mentionsOnly: Boolean = false,
     val reaction: String? = null,
     val tags: List<String> = emptyList(),
+    /** Position de la conversation dans sa catégorie ; `null` = aucun ordre manuel. */
+    val orderInCategory: Int? = null,
+    /** Le fond et l'accent PERSONNELS (`ConversationAppearance`), blob lu en tolérant — `null` = Signature. */
+    val appearance: kotlinx.serialization.json.JsonElement? = null,
     /**
      * Optimistic-vs-socket arbiter for `user:preferences-updated`
      * ([applyRemote]) — the port of iOS `ConversationUserState.version` and of
@@ -178,6 +296,13 @@ data class CreateConversationRequest(
     val type: String,
     val title: String? = null,
     val participantIds: List<String>,
+    /**
+     * Le mode de chiffrement choisi sur l'écran de création (`server` | `hybrid` | `e2ee`,
+     * [CreationEncryptionMode.wire]). `null` = aucun choix : le champ part absent (encodeur
+     * `explicitNulls = false`) et la passerelle pose Serveur — c'est le cas de toute création hors
+     * de l'écran de création (profil, partage, transfert, réponse à une story).
+     */
+    val encryptionMode: String? = null,
 )
 
 /**

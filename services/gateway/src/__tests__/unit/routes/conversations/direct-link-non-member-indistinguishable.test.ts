@@ -96,7 +96,7 @@ const utilisateur = () => ({
   customDestinationLanguage: null,
   isOnline: false,
   lastActiveAt: new Date('2026-09-01'),
-  emailVerifiedAt: null,
+  emailVerifiedAt: new Date('2026-01-02'),
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-09-01'),
   deviceLocale: null,
@@ -217,7 +217,7 @@ describe('non-membre sur lien direct ≡ conversation inexistante (#8099, #8116)
 
     expect(nonMembre.statut).toBe(404);
     expect(nonMembre.corps.error).toBe('Conversation not found');
-    expect(nonMembre.corps.code).toBeUndefined();
+    expect(nonMembre.corps.code).toBe('CONVERSATION_NOT_FOUND');
     expect(nonMembre).toEqual(inexistante);
   });
 

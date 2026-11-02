@@ -2,8 +2,8 @@ package me.meeshy.sdk.cache.store
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.dao.CacheEntryDao
@@ -61,10 +61,15 @@ class RoomCacheStore<V>(
 
     override suspend fun saveAsStale(items: List<V>, key: String) = write(items, key, FreshnessWriteMode.AsStale)
 
+    /**
+     * Les lignes et la ligne de métadonnées vivent dans la MÊME table : une seule observation,
+     * relue d'un bloc après chaque écriture. Deux flux combinés présentaient un instant la
+     * métadonnée neuve avec les lignes d'avant (une liste vide qui clignote).
+     */
     override fun observe(key: String): Flow<List<V>?> =
-        combine(dao.observeItems(namespace, key), dao.observeMeta(namespace, key)) { rows, meta ->
-            if (meta == null) null else decode(rows)
-        }.distinctUntilChanged()
+        dao.observeItems(namespace, key)
+            .map { rows -> if (dao.meta(namespace, key) == null) null else decode(rows) }
+            .distinctUntilChanged()
 
     override suspend fun cursor(key: String): PaginationCursor? =
         PaginationCursor.fromJson(dao.meta(namespace, key)?.payload)

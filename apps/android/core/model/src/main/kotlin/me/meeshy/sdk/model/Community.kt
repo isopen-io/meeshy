@@ -22,7 +22,10 @@ data class ApiCommunityMember(
     val role: String = "member",
     val joinedAt: String? = null,
     val user: ApiCommunityUser? = null,
-)
+) {
+    /** Le rôle lu sans tenir compte de la casse ; une valeur inconnue vaut membre (iOS `communityRole`). */
+    val communityRole: MemberRole get() = MemberRole.from(role)
+}
 
 @Serializable
 data class ApiCommunityCount(

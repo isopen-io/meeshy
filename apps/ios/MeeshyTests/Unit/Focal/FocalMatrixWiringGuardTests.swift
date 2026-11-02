@@ -29,13 +29,13 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
 
     private func stripped(_ relativePath: String) throws -> String {
         let chrome = relativePath == rowPath
-            ? "\n" + (try source("Meeshy/Features/Main/Focal/Row/FocalFocusChrome.swift"))
+            ? "\n" + (try source("Meeshy/Features/Focal/Row/FocalFocusChrome.swift"))
             : ""
         return AppSourceGuard.stripComments(try source(relativePath) + chrome)
     }
 
     private var hostPath: String { "Meeshy/Features/Main/Views/MessageListViewController.swift" }
-    private var rowPath: String { "Meeshy/Features/Main/Focal/Row/FocalRow.swift" }
+    private var rowPath: String { "Meeshy/Features/Focal/Row/FocalRow.swift" }
 
     // MARK: - Effets (matrice « Effets, mentions, appels »)
 
@@ -214,7 +214,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             row.contains("activeAudioLanguage: input.activeDisplayLangCode"),
             "FocalRow doit alimenter FocalAudioBlock avec la bascule de la rangée — sans ce fil, le drapeau change le texte mais jamais la piste"
         )
-        let block = try stripped("Meeshy/Features/Main/Focal/Row/FocalAudioBlock.swift")
+        let block = try stripped("Meeshy/Features/Focal/Row/FocalAudioBlock.swift")
         XCTAssertTrue(
             block.contains("activeAudioLanguageOverride: activeAudioLanguage"),
             "FocalAudioBlock doit forwarder la bascule au widget (AudioMediaView.activeAudioLanguageOverride)"
@@ -469,8 +469,8 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
     /// gestionnaire : elle prenait le toucher et n'ouvrait rien.
     func test_host_feedsTheMoodTapToTheRowActions() throws {
         XCTAssertTrue(
-            try stripped(hostPath).contains("FocalRowActions(onMoodTap: statuses.moodTapHandler(for: senderId))"),
-            "l'hôte doit remettre à la rangée le toucher de l'humeur de l'auteur — la bulle d'humeur (StatusBubbleController) s'ouvre par lui"
+            try stripped(hostPath).contains("FocalRowActions(onMoodTap: statuses.moodSpotlightHandler(for: senderId))"),
+            "l'hôte doit remettre à la rangée le toucher de l'humeur de l'auteur — il ouvre sa page plein écran (#13987)"
         )
     }
 
@@ -485,7 +485,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
     /// Dans la liste des messages, l'humeur ne s'anime pas : ni respiration
     /// (le contexte `.custom` n'en a pas), ni pulse.
     func test_identityHeader_keepsTheMoodStillAndTappable() throws {
-        let code = try stripped("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
+        let code = try stripped("Meeshy/Features/Focal/Row/FocalIdentityHeader.swift")
         XCTAssertTrue(code.contains("enablePulse: false"), "aucun pulse sur la pastille d'une rangée de message")
         XCTAssertTrue(code.contains("onMoodTap: onMoodTap"), "l'avatar de l'auteur reçoit le toucher de l'humeur")
     }

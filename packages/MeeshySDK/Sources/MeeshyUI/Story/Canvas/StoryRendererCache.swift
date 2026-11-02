@@ -143,9 +143,66 @@ public final class StoryRendererCache: @unchecked Sendable {
     /// Number of cache misses (layer rebuilt) since the last `invalidate()`.
     public private(set) var cacheMissCount: Int = 0
 
+    /// **Le canevas vivant laisse Core Animation jouer les keyframes** (#9865).
+    /// En `.play`, un texte dont la description est exprimable
+    /// (`StoryKeyframeAnimationPlan`) garde sa BASE dans la signature : son
+    /// calque se bâtit une fois, et `StoryRenderer.render` y pose les
+    /// animations et l'horloge. `false` pour l'export : `layer.render(in:)` ne
+    /// joue aucune `CAAnimation`, il garde l'évaluation image par image.
+    public let keyframesPlayedByCoreAnimation: Bool
+
+    /// La description de chaque texte, relue seulement quand ses keyframes changent.
+    private var keyframePlans: [String: (fingerprint: Int, plan: StoryKeyframeAnimationPlan?)] = [:]
+
+    /// Le calque de dessin de la slide et ce qui l'a produit (#9865).
+    private var drawing: CachedDrawing?
+
+    /// Nombre de rastérisations du dessin depuis le dernier `invalidate()`.
+    public private(set) var drawingBuildCount: Int = 0
+
     /// Only entry point usable from nonisolated context — every other member
     /// is MainActor by MeeshyUI's default isolation.
-    public nonisolated init() {}
+    public nonisolated init(keyframesPlayedByCoreAnimation: Bool = false) {
+        self.keyframesPlayedByCoreAnimation = keyframesPlayedByCoreAnimation
+    }
+
+    /// La description que Core Animation joue pour `item`, `nil` quand l'item
+    /// garde l'évaluation image par image : export, édition, média (sa vidéo
+    /// ne se pose pas sous une horloge figée sans mesure), texte vitré (le verre
+    /// découpe au cadre du MODÈLE), keyframes non exprimables.
+    public func coreAnimationPlan(for item: any RenderableItem) -> StoryKeyframeAnimationPlan? {
+        coreAnimationEntry(for: item)?.plan
+    }
+
+    private func coreAnimationEntry(for item: any RenderableItem) -> (fingerprint: Int, plan: StoryKeyframeAnimationPlan)? {
+        guard keyframesPlayedByCoreAnimation, lastMode == .play,
+              let text = item as? StoryTextObject, let keyframes = text.keyframes, !keyframes.isEmpty else { return nil }
+        if case .glass = text.resolvedBackgroundStyle { return nil }
+        let startTime = text.startTime ?? 0
+        let fingerprint = Self.fingerprint(of: keyframes, startTime: startTime)
+        let plan: StoryKeyframeAnimationPlan?
+        if let memo = keyframePlans[text.id], memo.fingerprint == fingerprint {
+            plan = memo.plan
+        } else {
+            plan = StoryKeyframeAnimationPlan.make(keyframes: keyframes, startTime: startTime)
+            keyframePlans[text.id] = (fingerprint: fingerprint, plan: plan)
+        }
+        return plan.map { (fingerprint: fingerprint, plan: $0) }
+    }
+
+    private static func fingerprint(of keyframes: [StoryKeyframe], startTime: Double) -> Int {
+        var hasher = Hasher()
+        hasher.combine(startTime)
+        keyframes.forEach { keyframe in
+            hasher.combine(keyframe.time)
+            hasher.combine(keyframe.x)
+            hasher.combine(keyframe.y)
+            hasher.combine(keyframe.scale)
+            hasher.combine(keyframe.opacity)
+            hasher.combine(keyframe.easing?.rawValue)
+        }
+        return hasher.finalize()
+    }
 
     // MARK: Public API
 
@@ -176,8 +233,10 @@ public final class StoryRendererCache: @unchecked Sendable {
                       contentHash: Int? = nil,
                       reconfigure: ((any RenderableItem, CALayer) -> CALayer?)? = nil,
                       build: (any RenderableItem) -> CALayer) -> CALayer {
+        let animated = coreAnimationEntry(for: item)
         let sig = Self.makeSignature(for: item, at: time, languages: languages,
-                                     contentHash: contentHash)
+                                     contentHash: contentHash ?? animated?.fingerprint,
+                                     keyframesPlayedByCoreAnimation: animated != nil)
         if let cached = layerCache[item.id], cached.signature == sig {
             cacheHitCount += 1
             return cached.layer
@@ -192,6 +251,29 @@ public final class StoryRendererCache: @unchecked Sendable {
         layerCache[item.id] = CachedLayer(signature: sig, layer: layer)
         cacheMissCount += 1
         return layer
+    }
+
+    /// Le calque de dessin de la slide : le MÊME tant que traits, données
+    /// legacy, échelle et taille sont inchangés (sur un modèle figé, l'égalité
+    /// des tableaux se tranche sur leur tampon partagé). `build` ne tourne
+    /// qu'au changement ; un `nil` (rien à peindre) se retient aussi.
+    public func drawingLayer(strokes: [StoryDrawingStroke]?, data: Data?,
+                             scale: CGFloat, renderSize: CGSize,
+                             build: () -> CALayer?) -> CALayer? {
+        if let drawing, drawing.strokes == strokes, drawing.data == data,
+           drawing.scale == scale, drawing.renderSize == renderSize {
+            return drawing.layer
+        }
+        let layer = build()
+        drawingBuildCount += 1
+        drawing = CachedDrawing(strokes: strokes, data: data, scale: scale, renderSize: renderSize, layer: layer)
+        return layer
+    }
+
+    /// Rend le calque de dessin et son bitmap : un dessin qui ne s'affiche pas
+    /// (masqué pendant que l'auteur dessine) ne reste pas retenu ici.
+    func releaseDrawing() {
+        drawing = nil
     }
 
     /// Retire toutes les entrées dont `id` n'apparaît pas dans `keepIds`.
@@ -223,6 +305,9 @@ public final class StoryRendererCache: @unchecked Sendable {
             }
         }
         layerCache.removeAll()
+        keyframePlans.removeAll()
+        drawing = nil
+        drawingBuildCount = 0
         lastSlideId = nil
         lastLanguages = []
         lastMode = nil
@@ -277,7 +362,9 @@ public final class StoryRendererCache: @unchecked Sendable {
     ///
     /// `position` / `scale` / `opacity` reflect keyframe interpolation when
     /// the item has keyframes; otherwise they fall back to the item's static
-    /// `x`/`y`/`scale` fields. `opacity` defaults to `1.0` when the item is
+    /// `x`/`y`/`scale` fields. A keyframe scale is a FACTOR of the item's
+    /// scale, as `StoryRenderer` paints it (#14316) : the signature carries
+    /// the rendered product. `opacity` defaults to `1.0` when the item is
     /// fully opaque (no keyframe opacity track). `visible` mirrors the
     /// `shouldRender` decision in `StoryRenderer` (timing window only — fade
     /// in/out is not yet animated, so it does not influence the signature).
@@ -287,16 +374,17 @@ public final class StoryRendererCache: @unchecked Sendable {
     static func makeSignature(for item: any RenderableItem,
                               at time: Double,
                               languages: [String],
-                              contentHash: Int? = nil) -> ItemSignature {
+                              contentHash: Int? = nil,
+                              keyframesPlayedByCoreAnimation: Bool = false) -> ItemSignature {
         let overrides = StoryRenderer.applyKeyframes(
-            keyframes: keyframes(of: item),
+            keyframes: keyframesPlayedByCoreAnimation ? [] : keyframes(of: item),
             at: time,
             startTime: item.startTime ?? 0
         )
 
         let posX: Double = overrides.position.map { Double($0.x) } ?? item.x
         let posY: Double = overrides.position.map { Double($0.y) } ?? item.y
-        let scl: Double = overrides.scale ?? item.scale
+        let scl: Double = item.scale * (overrides.scale ?? 1)
         let rot: Double = item.rotation
         let opacity: Double = overrides.opacity ?? 1.0
         let visible: Bool = isVisible(item: item, at: time)
@@ -358,6 +446,14 @@ public final class StoryRendererCache: @unchecked Sendable {
 fileprivate struct CachedLayer {
     let signature: StoryRendererCache.ItemSignature
     let layer: CALayer
+}
+
+fileprivate struct CachedDrawing {
+    let strokes: [StoryDrawingStroke]?
+    let data: Data?
+    let scale: CGFloat
+    let renderSize: CGSize
+    let layer: CALayer?
 }
 
 // MARK: - Hashable / Equatable (nonisolated)

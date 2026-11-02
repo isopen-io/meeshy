@@ -110,7 +110,7 @@ internal struct _InlineRenderer: View {
                         manager: manager,
                         accentColor: player.accentColor,
                         controls: player.controls,
-                        onExpand: player.onExpand
+                        onExpand: player.onExpand, attachmentId: player.attachment.id
                     )
                     .transition(.opacity)
                 }
@@ -248,6 +248,7 @@ internal struct _InlineRenderer: View {
         }
         .accessibilityLabel(playButtonAccessibilityLabel)
         .disabled(isDownloading)
+        .mediaPlayControlAnchor(attachmentId: player.attachment.id)
     }
 
     @ViewBuilder
@@ -264,14 +265,14 @@ internal struct _InlineRenderer: View {
                     .font(.system(size: 22 * playButtonScale, weight: .bold))
                     .foregroundStyle(Color.white)
                 if player.attachment.fileSize > 0 {
-                    Text(formatSize(Int64(player.attachment.fileSize)))
+                    Text(MediaFormat.bytes(Int64(player.attachment.fileSize)))
                         .font(.system(size: 9 * playButtonScale, weight: .semibold, design: .monospaced))
                         .foregroundStyle(Color.white.opacity(0.9))
                 }
             }
         case .downloading(let progress):
             VStack(spacing: MeeshySpacing.xxs) {
-                Image(systemName: "arrow.down.to.line")
+                Image(systemName: playsWhileDownloading ? "play.fill" : "arrow.down.to.line")
                     .font(.system(size: 16 * playButtonScale, weight: .bold))
                     .foregroundStyle(Color.white.opacity(0.6))
                 if progress > 0 {
@@ -306,15 +307,24 @@ internal struct _InlineRenderer: View {
         switch player.availability {
         case .ready:         return String(localized: "media.video.play", defaultValue: "Lire la vidéo", bundle: .module)
         case .needsDownload: return String(localized: "media.video.download", defaultValue: "Télécharger la vidéo", bundle: .module)
+        case .downloading where playsWhileDownloading:
+            return String(localized: "media.video.play", defaultValue: "Lire la vidéo", bundle: .module)
         case .downloading:   return String(localized: "media.video.downloading", defaultValue: "Téléchargement en cours", bundle: .module)
         }
     }
 
-    private func formatSize(_ bytes: Int64) -> String {
-        let kb = Double(bytes) / 1024
-        if kb < 1 { return "\(bytes)B" }
-        if kb < 1024 { return String(format: "%.0fKB", kb) }
-        return String(format: "%.1fMB", kb / 1024)
+    private var playsWhileDownloading: Bool {
+        Self.playsWhileDownloading(fileUrl: player.attachment.fileUrl)
+    }
+
+    /// Une vidéo en cours de téléchargement se joue dès la tête quand ce
+    /// téléchargement est lisible (#9881) : la bulle n'attend plus la fin du
+    /// fichier. Sans transfert lisible, le geste attend comme avant.
+    static func playsWhileDownloading(
+        fileUrl: String,
+        hasReadableTransfer: (String) -> Bool = { CacheCoordinator.videoHasReadableTransfer(for: $0) }
+    ) -> Bool {
+        VideoAvailability.playsWhileDownloading(fileUrl: fileUrl, hasReadableTransfer: hasReadableTransfer)
     }
 
     private func handlePlayTap() {
@@ -325,7 +335,7 @@ internal struct _InlineRenderer: View {
             player.onDownload?()
             HapticFeedback.light()
         case .downloading:
-            break
+            if playsWhileDownloading { startPlayback() }
         }
     }
 

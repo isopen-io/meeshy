@@ -110,7 +110,7 @@ nonisolated enum MediaKindLabel {
     static func voiceRecording(duration: TimeInterval,
                                bundle: Bundle = .main,
                                locale: Locale = .current) -> String {
-        let formatted = LocalizedNumber.duration(seconds: duration)
+        let formatted = MediaFormat.duration(duration)
         return String(localized: "composer.attachment.voice",
                       defaultValue: "Message vocal (\(formatted))",
                       bundle: bundle,

@@ -18,12 +18,16 @@ import okhttp3.Response
  * prendre l'identite du compte qui occupe le porte-jetons a cet instant, ni etre rejouee
  * avec un autre.
  *
+ * Sans compte ni invite, un lecteur presente sa cle visiteur ([VisitorReaderKeyProviding]) en
+ * `X-Session-Token` : la passerelle compte une vue par lecteur sans savoir qui il est.
+ *
  * Chaque requete est marquee du credential ET de la generation de session sous lesquels elle
  * part, pour que son 401 tardif se juge sur le bon proprietaire.
  */
 class AuthInterceptor(
     private val tokenStore: TokenStore,
     private val transition: SessionTransitionFlags = SessionTransitionFlags(),
+    private val visitorKey: VisitorReaderKeyProviding? = null,
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -38,6 +42,7 @@ class AuthInterceptor(
         }
         if (request.routePolicy().authKind != EndpointAuthKind.BEARER) return chain.proceed(request)
         val credential = RequestCredential.of(tokenStore)
+            ?: visitorKey?.let { RequestCredential.AnonymousSession(it.readerKey()) }
         val builder = request.newBuilder()
             .tag(SentCredential::class.java, SentCredential(credential, generation, false))
         credential?.applyTo(builder)

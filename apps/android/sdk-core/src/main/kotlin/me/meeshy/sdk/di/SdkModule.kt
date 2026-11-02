@@ -44,6 +44,10 @@ import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.privacy.DataStorePrivacyPreferencesStore
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.story.DataStoreStoryComposerDraftStore
+import me.meeshy.sdk.post.DataStorePostComposerDraftStore
+import me.meeshy.sdk.post.PostComposerDraftStore
+import me.meeshy.sdk.post.DataStoreStatusComposerDraftStore
+import me.meeshy.sdk.post.StatusComposerDraftStore
 import me.meeshy.sdk.story.StoryComposerDraftStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.SharedPrefsEmojiUsageStore
@@ -51,6 +55,10 @@ import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.lock.EncryptedConversationLockStore
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.DataStoreAnonymousSessionStore
+import me.meeshy.sdk.session.SecureAnonymousSessionStore
+import me.meeshy.core.datastore.ConversationLockVault
+import me.meeshy.core.datastore.SecretVault
+import me.meeshy.sdk.model.security.SecureStore
 import me.meeshy.sdk.session.DefaultSessionTeardown
 import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.SessionTeardown
@@ -86,6 +94,11 @@ object SdkModule {
 
     @Provides
     @Singleton
+    fun providesRecentEmojiStore(@ApplicationContext context: Context): me.meeshy.sdk.reaction.RecentEmojiStore =
+        me.meeshy.sdk.reaction.SharedPrefsRecentEmojiStore.shared(context)
+
+    @Provides
+    @Singleton
     fun providesRecentSearchesStore(
         @ApplicationContext context: Context,
         json: Json,
@@ -104,6 +117,13 @@ object SdkModule {
         @ApplicationContext context: Context,
         json: Json,
     ): StarredMessagesStore = SharedPrefsStarredMessagesStore(context, json)
+
+    @Provides
+    @Singleton
+    fun providesUnsentCommentStore(
+        @ApplicationContext context: Context,
+        json: Json,
+    ): me.meeshy.sdk.post.UnsentCommentStore = me.meeshy.sdk.post.SharedPrefsUnsentCommentStore(context, json)
 
     @Provides
     @Singleton
@@ -248,21 +268,52 @@ object SdkModule {
 
     @Provides
     @Singleton
-    fun providesAnonymousSessionStore(
+    fun providesPostComposerDraftStore(
         @ApplicationContext context: Context,
         json: Json,
+    ): PostComposerDraftStore {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
+            context.preferencesDataStoreFile("meeshy_post_composer_draft")
+        }
+        return DataStorePostComposerDraftStore(dataStore, json)
+    }
+
+    @Provides
+    @Singleton
+    fun providesStatusComposerDraftStore(
+        @ApplicationContext context: Context,
+        json: Json,
+    ): StatusComposerDraftStore {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
+            context.preferencesDataStoreFile("meeshy_status_composer_draft")
+        }
+        return DataStoreStatusComposerDraftStore(dataStore, json)
+    }
+
+    @Provides
+    @Singleton
+    fun providesAnonymousSessionStore(
+        @ApplicationContext context: Context,
+        @SecretVault secureStore: SecureStore,
+        json: Json,
+        tokenStore: me.meeshy.sdk.net.TokenStore,
     ): AnonymousSessionStore {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
             context.preferencesDataStoreFile("meeshy_anonymous_session")
         }
-        return DataStoreAnonymousSessionStore(dataStore, json)
+        return me.meeshy.sdk.session.AccountAwareAnonymousSessionStore(
+            SecureAnonymousSessionStore(secureStore, DataStoreAnonymousSessionStore(dataStore, json), json),
+            tokenStore,
+        )
     }
 
     @Provides
     @Singleton
-    fun providesConversationLockStore(@ApplicationContext context: Context): ConversationLockStore =
-        EncryptedConversationLockStore(context)
+    fun providesConversationLockStore(@ConversationLockVault store: SecureStore): ConversationLockStore =
+        EncryptedConversationLockStore(store)
 
     @Provides
     @Singleton
@@ -277,6 +328,8 @@ object SdkModule {
         blockCache: BlockCache,
         preferenceSnapshotStore: PreferenceSnapshotStore,
         perAccountCaches: Set<@JvmSuppressWildcards PerAccountCache>,
+        guestSessions: me.meeshy.sdk.session.AnonymousSessionStore,
+        fence: me.meeshy.sdk.session.AccountFence,
     ): SessionTeardown =
         DefaultSessionTeardown(
             database,
@@ -289,6 +342,8 @@ object SdkModule {
             blockCache,
             preferenceSnapshotStore,
             perAccountCaches,
+            guestSessions,
+            fence,
         )
 
     @Provides

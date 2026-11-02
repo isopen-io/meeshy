@@ -305,11 +305,8 @@ extension StoryComposerView {
     /// résolution est asynchrone, l'utilisateur peut changer de slide entre
     /// temps), même downsample 1080, même insertion ViewModel.
     ///
-    /// UN SEUL encodage JPEG : la caméra livre un `UIImage` déjà décodé, donc
-    /// on downsample l'image telle quelle et on n'écrit qu'un fichier — le
-    /// chemin picker, lui, part d'une `Data` brute et n'encode aussi qu'une
-    /// fois. Encoder → décoder → redimensionner → ré-encoder coûterait deux
-    /// générations de perte pour rien.
+    /// Une photo entre par les octets de la prise quand le viseur en remet,
+    /// sinon par UN SEUL encodage JPEG de l'image décodée (`StoryCapturedPhotoFile`).
     func addCapturedMedia(_ capture: StoryCameraCapture) {
         let targetSlideId = viewModel.currentSlide.id
         let objectId = UUID().uuidString
@@ -322,25 +319,17 @@ extension StoryComposerView {
                 mediaLoadLabel = ""
             }
             switch capture {
-            case .photo(let image):
+            case .photo(let image, let data):
                 mediaLoadLabel = String(localized: "story.composer.loadingImage",
                                         defaultValue: "Chargement de l'image...", bundle: .module)
                 mediaLoadProgress = 0.4
-                // Redimensionnement ET encodage hors MainActor, en un seul
-                // aller : sur une photo 12 Mpx, les faire ici gèlerait l'UI au
-                // retour de la caméra.
-                let tempURL = FileManager.default.temporaryDirectory
-                    .appendingPathComponent(objectId + ".jpg")
-                guard let encoded = await StoryMediaLoader.shared.downsampledJPEG(
-                        image: image, maxDimension: 1080, compressionQuality: 0.92),
-                      (try? encoded.data.write(to: tempURL)) != nil else {
+                guard let placed = await StoryCapturedPhotoFile.place(image, data: data, objectId: objectId) else {
                     mediaLoadFailed = true  // C16 — l'échec parle
                     return
                 }
                 mediaLoadProgress = 1.0
-                viewModel.insertForegroundImage(
-                    encoded.image, fileURL: tempURL,
-                    intoSlideId: targetSlideId, objectId: objectId)
+                viewModel.insertForegroundImage(placed.image, fileURL: placed.url,
+                                                intoSlideId: targetSlideId, objectId: objectId)
 
             case .video(let sourceURL):
                 mediaLoadLabel = String(localized: "story.composer.loadingVideo",

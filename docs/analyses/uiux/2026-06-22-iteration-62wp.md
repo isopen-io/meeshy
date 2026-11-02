@@ -76,3 +76,14 @@ absent dans le container de routine). NE PLUS re-flagger ces 9 `<img>` admin
 pour le lazy-loading, ni les faux positifs sélection/copie & `type=button`.
 </content>
 </invoke>
+
+---
+
+## ✅ Statut : CLOS — LEGACY (annoté iter-76w, 2026-10-25)
+
+Cette analyse visait le **legacy Next.js** (`apps/web` d'avant #7668, routes
+`app/`, surfaces admin/ranking/tracking-links) retiré du dépôt le 2026-09-24.
+Son périmètre pointe du code **supprimé** : elle **ne se rejoue pas** et ses
+pistes différées sont caduques. Conservée pour l'histoire. La routine UI/UX web
+repart d'une revue fraîche de l'`apps/web` actuel (Vite + Preact) — voir le
+pointeur `docs/plans/uiux/web-iteration-pointer.md`.

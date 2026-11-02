@@ -79,13 +79,14 @@ describe('ReelPage — un réel VIDÉO', () => {
     expect(far).toContain('data-reel-poster');
   });
 
-  test('N±1 décode sa première image avant le balayage (`preload="auto"`), N±2 reste monté sur ses métadonnées (#9702)', () => {
+  test('N±1 décode sa première image avant le balayage (`preload="auto"`), N±2 reste monté sans rien charger, sous son affiche (#9702, #11308)', () => {
     const near = page(REEL_STUDIO, { mode: 'near' });
     expect(near).toContain('<video');
     expect(near).toContain('preload="auto"');
     const warm = page(REEL_STUDIO, { mode: 'warm' });
     expect(warm).toContain('<video');
-    expect(warm).toContain('preload="metadata"');
+    expect(warm).toContain('preload="none"');
+    expect(warm).toMatch(/<video[^>]*poster="[^"]+"/);
   });
 
   test('le rail : j’aime et enregistrer sont des BASCULES qui disent leur état, partager un geste simple', () => {

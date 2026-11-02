@@ -50,4 +50,13 @@ data class StorySticker(
 
     /** Ce que le sticker EST, par le rang d'affichage ([StickerDisplayRank]). */
     val kind: StickerKind get() = StickerDisplayRank.kindOf(templateId = templateId, postMediaId = postMediaId)
+
+    /** L'emoji tel qu'il part au fil : le sien, sinon le repli de son gabarit, sinon l'image de repli. */
+    fun wireEmoji(templateFallback: (String) -> String? = { null }): String =
+        StickerDisplayRank.wireEmoji(emoji = emoji, templateId = templateId, templateFallback = templateFallback)
+
+    companion object {
+        /** L'échelle à laquelle un sticker se POSE (miroir de `StorySticker.posedScale`, iOS). */
+        const val POSED_SCALE: Double = 2.2
+    }
 }

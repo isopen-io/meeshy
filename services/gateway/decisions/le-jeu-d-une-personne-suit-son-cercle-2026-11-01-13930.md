@@ -1,0 +1,13 @@
+## 2026-11-01 : le jeu d'une personne n'est jamais plus visible que ce que son cercle permet
+
+**Statut** : Accepté (lot `jeu-suit-le-cercle`, #13930 — chantier « Cercles de proximité et mode Sang », milestone #215)
+
+**Contexte** : `GameProfileService.viewerKind` classait le lecteur par `amitieAcceptee` (booléen), et `GameStandingService` servait la Flamme, les points et la Gloire à tout ami. La spec (RG-25, RG-28, GAM-01, GAM-02) dit : Ami voit le niveau, la nomination (titres) et le rang ; Proche et au-dessus voient en plus les étincelles et la gloire ; visibilité servie = minimum(réglage du jeu, droits du cercle).
+
+**Décision** :
+1. **Le lecteur est classé par la loi** : `GameProfileService.viewerReach(viewer, targetId)` lit `niveauEffectif` (`friendship.ts`) puis `resolveRelationAccess` sur `game.basic` (Ami) et `game.sparksGlory` (Proche). `kind = 'friend'` ssi `game.basic` ouvre ; `sparksGlory` ssi `game.sparksGlory` ouvre. Soi et ADMIN/BIGBOSS voient tout, le blocage ferme. Aucune comparaison de niveaux hors de la loi.
+2. **Le minimum est l'effet de la classe** : un réglage `friends` s'ouvre à Ami+, `everyone` au public, `me` à personne ; le réglage ne fait que RESTREINDRE ce que le cercle accorde (`canViewShowcase` et `capShowcaseVisibility` ne changent pas). Sous Ami, le lecteur est public : il ne reçoit que ce que le membre a ouvert à tous.
+3. **Étincelles et gloire à Proche+** : `points`, `sparks`, `sparksLifetime`, `glory` sont ABSENTS (jamais nuls) pour un Ami. Soi et ADMIN les reçoivent.
+4. **La Flamme part avec les étincelles, à Proche+ ; le nombre de trophées reste à Ami+.** GAM-01 n'est pas muette : « c'est tout ce que voit un Ami du jeu » (niveau, nomination, rang). Les « titres » sont les trophées de la vitrine, qui suit son réglage : le nombre de trophées en est la projection et reste à Ami+ (#9541). La Flamme n'est ni un niveau, ni un titre, ni un rang : elle dit si le membre a joué aujourd'hui ou hier, un signal d'activité que la présence d'un Ami (« en ligne » ou rien, RG-25) ne lui donne pas. Elle suit donc `game.sparksGlory`. La décision du 2026-10-06 (#9541, « la Flamme aux amis ») précède la partition Ami / Proche / Sang ; la spec du 2026-10-31 la remplace. Un ancien client lit `flame: null` comme aujourd'hui pour un non-ami.
+5. **Aucun changement du wire** : valeurs `everyone|friends|me` et `UserGameProfileResponse` inchangées. Un ancien client lit des clés absentes comme aujourd'hui pour un non-ami.
+6. **Hors périmètre, dit** : la ligue Amis (`LeagueService.acceptedFriends`, toléré par la garde #13927) lit encore « demande acceptée » et montre aux amis les points de la semaine ; sa convergence et sa règle vis-à-vis de Proche sont une issue de suivi.

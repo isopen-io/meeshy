@@ -2,7 +2,10 @@ import * as z from 'zod/mini';
 
 import * as packsEndpoints from '@meeshy/shared/api/endpoints/packs';
 import * as stickerPacksEndpoints from '@meeshy/shared/api/endpoints/sticker-packs';
-import { PACK_DOMAINS, type PackDomain, type PackLanguage, type PackNames } from '@meeshy/shared/types/content-pack';
+import { PACK_DOMAINS, type PackAssetRef, type PackDomain, type PackLanguage, type PackNames } from '@meeshy/shared/types/content-pack';
+import { isStickerPackAssetRef } from '@meeshy/shared/types/sticker-pack-asset';
+import { GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
+import type { PackRequirementPreview } from '@meeshy/shared/types/pack-unlock';
 
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
@@ -25,6 +28,8 @@ export type ShopPack = {
   readonly description: string;
   readonly author: string;
   readonly coverUrl: string | null;
+  /** La couverture d'un pack de stickers de tiers dans le magasin adressé (#10188) ; absente ⇒ `coverUrl`. */
+  readonly cover?: PackAssetRef;
   readonly itemCount: number;
   readonly installed: boolean;
   /** En Meeshes ; `null` = gratuit. */
@@ -36,6 +41,12 @@ export type ShopPack = {
   readonly removable: boolean;
   /** Pack de stickers intégré (Mee, Meo, Mee & Meo) : dessiné par le client, servi sans image. */
   readonly builtin?: true;
+  /**
+   * Ce qui reste à débloquer, et comment (S21, #11276) : servi pour un pack du
+   * registre NON possédé qui se gagne ou qui a une fenêtre. Absent d'un ancien
+   * serveur, d'un pack possédé ou libre.
+   */
+  readonly requirementPreview?: PackRequirementPreview;
 };
 
 export type ShopResult = { readonly packs: readonly ShopPack[]; readonly balance: number | null };
@@ -55,7 +66,29 @@ const WirePack = z.object({
   removable: z.optional(z.boolean()),
   builtin: z.optional(z.boolean()),
   names: z.optional(z.record(z.string(), z.unknown())),
+  requirementPreview: z.optional(z.unknown()),
+  cover: z.optional(z.unknown()),
 });
+
+const RANK_KEYS = GLORY_RANKS.map((rank) => rank.key) as [string, ...string[]];
+
+const WireRequirement = z.object({ current: z.number(), required: z.number(), missing: z.number(), met: z.boolean() });
+
+const WireReward = z.union([
+  z.object({ kind: z.literal('rank'), rank: z.enum(RANK_KEYS), currentRank: z.string(), requirement: WireRequirement }),
+  z.object({ kind: z.literal('trophy'), key: z.string(), met: z.boolean() }),
+  z.object({ kind: z.literal('season'), number: z.number(), met: z.boolean() }),
+]);
+
+const WireWindow = z.object({ state: z.enum(['upcoming', 'open', 'closed']), startsAt: z.optional(z.string()), endsAt: z.optional(z.string()) });
+
+const WireRequirementPreview = z.object({ met: z.boolean(), reward: z.nullable(WireReward), window: z.nullable(WireWindow) });
+
+/** Une forme inattendue est ignorée : la rangée retombe sur celle d'avant, jamais sur une erreur. */
+const decodeRequirementPreview = (raw: unknown): PackRequirementPreview | undefined => {
+  const parsed = WireRequirementPreview.safeParse(raw);
+  return parsed.success ? (parsed.data as PackRequirementPreview) : undefined;
+};
 
 /** La langue du lecteur, puis le français, puis le nom servi à plat. */
 export const shopPackText = (pack: ShopPack, language: PackLanguage): { readonly name: string; readonly description: string } =>
@@ -70,6 +103,7 @@ export const decodeShopPack = (domain: PackDomain) => (raw: unknown): ShopPack |
   if (!parsed.success) return null;
   const wire = parsed.data;
   const price = wire.price ?? null;
+  const requirementPreview = decodeRequirementPreview(wire.requirementPreview);
   return {
     slug: wire.slug,
     domain,
@@ -77,13 +111,15 @@ export const decodeShopPack = (domain: PackDomain) => (raw: unknown): ShopPack |
     description: wire.description ?? '',
     author: wire.author ?? '',
     coverUrl: wire.coverUrl ?? null,
+    ...(domain === 'sticker' && isStickerPackAssetRef(wire.cover) ? { cover: wire.cover } : {}),
     itemCount: wire.itemCount ?? 0,
     installed: wire.installed,
     price,
-    owned: price === null ? true : (wire.owned ?? false),
+    owned: price === null && requirementPreview === undefined ? true : (wire.owned ?? false),
     names: decodePackNames(wire.names),
     removable: wire.removable ?? !(domain === 'sticker' && wire.builtin === true),
     ...(domain === 'sticker' && wire.builtin === true ? { builtin: true as const } : {}),
+    ...(requirementPreview !== undefined ? { requirementPreview } : {}),
   };
 };
 
@@ -113,6 +149,12 @@ const CATALOGUED_ROUTES: Partial<Record<PackDomain, DomainRoutes>> = {
     bySlug: packsEndpoints.gloryFrameBySlug,
     install: packsEndpoints.gloryFrameBySlugInstall,
   },
+  'capture-frame': {
+    catalogue: packsEndpoints.captureFrame,
+    installed: packsEndpoints.captureFrameInstalled,
+    bySlug: packsEndpoints.captureFrameBySlug,
+    install: packsEndpoints.captureFrameBySlugInstall,
+  },
   wallpaper: {
     catalogue: packsEndpoints.wallpaper,
     installed: packsEndpoints.wallpaperInstalled,
@@ -126,6 +168,12 @@ const CATALOGUED_ROUTES: Partial<Record<PackDomain, DomainRoutes>> = {
     bySlug: packsEndpoints.avatarRingBySlug,
     install: packsEndpoints.avatarRingBySlugInstall,
     purchase: packsEndpoints.avatarRingBySlugPurchase,
+  },
+  lens: {
+    catalogue: packsEndpoints.lens,
+    installed: packsEndpoints.lensInstalled,
+    bySlug: packsEndpoints.lensBySlug,
+    install: packsEndpoints.lensBySlugInstall,
   },
   banner: {
     catalogue: packsEndpoints.banner,
@@ -144,9 +192,9 @@ const CATALOGUED_ROUTES: Partial<Record<PackDomain, DomainRoutes>> = {
 };
 
 /**
- * Un domaine que la passerelle ne monte pas encore (`capture-frame`) garde la
- * forme `/packs/<domaine>` : il répond 404, que `absentMeansEmpty` lit comme
- * une vitrine vide. La racine se déduit du catalogue, jamais d'un littéral.
+ * Un domaine que le catalogue généré ne porte pas encore garde la forme
+ * `/packs/<domaine>` : un ancien serveur répond 404, que `absentMeansEmpty` lit
+ * comme une vitrine vide. La racine se déduit du catalogue, jamais d'un littéral.
  */
 const PACKS_ROOT = packsEndpoints.shop.slice(0, -'/shop'.length);
 

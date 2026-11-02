@@ -592,15 +592,23 @@ export class MaintenanceService {
     try {
       logger.info('🧹 [CLEANUP] Démarrage du nettoyage des messages vides...');
 
-      const staleThreshold = new Date();
-      staleThreshold.setHours(staleThreshold.getHours() - this.ORPHANED_ATTACHMENT_THRESHOLD_HOURS);
+      // Un âge se compte en heures RÉELLES : `setHours(getHours() - 24)` compte en
+      // heures d'horloge locale et vaut 25 h le jour du passage à l'heure d'hiver.
+      const staleThreshold = new Date(Date.now() - this.ORPHANED_ATTACHMENT_THRESHOLD_HOURS * 3_600_000);
 
       // Trouver les messages vides via MongoDB raw query :
       // content whitespace-only ($regex), pas de soft-delete, >24h,
-      // et pas d'attachements liés (lookup + match vide)
+      // et pas d'attachements liés (lookup + match vide).
+      //
+      // #13027 — un message CHIFFRÉ n'est jamais vide : `MessageProcessor`
+      // enregistre `content: ''` pour les modes `server` et `hybrid`, le texte
+      // vivant dans `encryptedContent`. Les deux marques l'excluent, chacune
+      // seule suffit : `encryptedContent: null` ne retient que l'absent ou le nul.
       const emptyMessages = await this.prisma.message.findRaw({
         filter: {
           content: { $regex: '^\\s*$' },
+          isEncrypted: { $ne: true },
+          encryptedContent: null,
           deletedAt: null,
           createdAt: { $lt: { $date: staleThreshold.toISOString() } },
         },

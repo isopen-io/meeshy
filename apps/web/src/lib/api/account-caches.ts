@@ -1,5 +1,5 @@
 import { forgetCallJournal } from '../calls/call-network-journal-keys';
-import { SW_RUNTIME_CACHE_NAMES } from '../sw-caches';
+import { SW_ACCOUNT_CACHE_NAMES } from '../sw-caches';
 import { safeLocalStorage, type SafeStorage } from '../storage';
 
 import type { SessionStoreApi } from './session';
@@ -149,7 +149,7 @@ export type CacheStorageLike = {
 
 /**
  * `purgeReaderCaches` — LES SEAUX DU SERVICE WORKER QUI PORTENT DE LA DONNÉE
- * DE LECTEUR (`api`, `medias`, `sw-caches.ts`) ; le précache (le shell, le même
+ * DE LECTEUR (`api`, `medias`, `recent-media`, `sw-caches.ts`) ; le précache (le shell, le même
  * pour tous) n'y est pas.
  *
  * Le seau `api` range désormais chaque réponse sous l'identité qui l'a
@@ -166,7 +166,7 @@ export function purgeReaderCaches(storage?: CacheStorageLike): void {
   void store
     .keys()
     .then((names) =>
-      Promise.all(names.filter((name) => SW_RUNTIME_CACHE_NAMES.includes(name)).map((name) => store.delete(name))),
+      Promise.all(names.filter((name) => SW_ACCOUNT_CACHE_NAMES.includes(name)).map((name) => store.delete(name))),
     )
     .catch(() => undefined);
 }
@@ -175,25 +175,42 @@ export function purgeReaderCaches(storage?: CacheStorageLike): void {
  * LA FIN D'UN COMPTE SUR L'APPAREIL (#8674) — déconnexion, session révoquée ou
  * expirée : son cache rangé part, son journal réseau d'appels (#8698) aussi,
  * les seaux du service worker et les points de reprise de ses envois de
- * médias (IndexedDB `meeshy-tus`, #11311) avec eux.
+ * médias (IndexedDB `meeshy-tus`, #11311) avec eux, et ses publications non
+ * envoyées (médias et intention du studio, #13416) : une déconnexion explicite
+ * vaut suppression par l'utilisateur — la règle « rien ne s'efface avant la
+ * confirmation du serveur » ne vaut que pour le compte connecté.
  * Changer de compte n'appelle jamais ceci.
  */
+export type PublicationsEraser = { readonly clear: (userId: string) => Promise<unknown> };
+
+/* Chargé au geste : la fin d'un compte n'embarque pas le studio. */
+const studioPublications: PublicationsEraser = {
+  clear: (userId) => import('../stories/studio-outbox-records').then(({ eraseStudioOutbox }) => eraseStudioOutbox(userId)),
+};
+
 export function forgetAccountCaches({
   userId,
   storage,
   cacheStorage,
   indexedDb = typeof indexedDB === 'undefined' ? null : indexedDB,
+  publications = studioPublications,
 }: {
   readonly userId: string;
   readonly storage?: SafeStorage;
   readonly cacheStorage?: CacheStorageLike;
   readonly indexedDb?: IndexedDbEraser | null;
+  readonly publications?: PublicationsEraser;
 }): void {
   const local = storage ?? safeLocalStorage();
   createAccountCacheShelf(local).forget(userId);
   forgetCallJournal(local, userId);
   purgeReaderCaches(cacheStorage);
   forgetTusCheckpoints(indexedDb);
+  try {
+    void publications.clear(userId).catch(() => undefined);
+  } catch {
+    /* La déconnexion aboutit même si l'appareil refuse. */
+  }
 }
 
 /**
@@ -204,7 +221,7 @@ export function forgetAccountCaches({
  */
 export function endRevokedSession(
   store: SessionStoreApi,
-  deps: { readonly storage?: SafeStorage; readonly cacheStorage?: CacheStorageLike } = {},
+  deps: { readonly storage?: SafeStorage; readonly cacheStorage?: CacheStorageLike; readonly publications?: PublicationsEraser } = {},
 ): void {
   const current = store.getState().session;
   /* Sous une identité anonyme TENUE par un compte (#8816), le 401 a refusé

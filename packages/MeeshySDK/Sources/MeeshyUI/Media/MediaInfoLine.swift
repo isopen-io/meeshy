@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// **La ligne d'informations d'un média plein écran :
 /// `largeur × hauteur · poids · durée`** (#9577, directive porteur 2026-10-07).
@@ -83,7 +84,7 @@ public struct MediaPlaybackDurationText: View {
     }
 
     public var body: some View {
-        Text(formatMediaDuration(seconds))
+        Text(MediaFormat.duration(seconds))
             .monospacedDigit()
             .lineLimit(1)
             .fixedSize()

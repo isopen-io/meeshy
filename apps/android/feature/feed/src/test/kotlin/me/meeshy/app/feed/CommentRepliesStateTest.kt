@@ -435,4 +435,15 @@ class CommentRepliesStateTest {
         assertThat(base.replacedReply(ApiPostComment(id = "zzz", content = "edited")))
             .isSameInstanceAs(base)
     }
+
+    @Test
+    fun `confirmedReply after the socket echo already landed never shows the reply twice`() {
+        val s = CommentRepliesState()
+            .optimisticReply("c1", reply("temp"))
+            .receivedReply("c1", reply("real"))
+            .confirmedReply("c1", "temp", reply("real"))
+
+        assertThat(s.repliesByParent.getValue("c1").map { it.id }).containsExactly("real")
+        assertThat(s.pendingReplyIds).isEmpty()
+    }
 }

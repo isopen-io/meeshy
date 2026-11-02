@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guest_join_error_sign_in">Inicia sesión para unirte a esta conversación</string>
+    <string name="guest_join_email_invalid">Introduce una dirección de correo válida</string>
+</resources>

@@ -31,7 +31,7 @@ final class StoryViewerCommentReactionTests: XCTestCase {
         """)
     }
 
-    // MARK: - StoryViewerView.computeLikedIds tests
+    // MARK: - CommentHeartLedger.likedIds tests
 
     func test_computeLikedIds_withHeartReaction_includesCommentId() {
         let comments = [
@@ -40,7 +40,7 @@ final class StoryViewerCommentReactionTests: XCTestCase {
             makeComment(id: "c3", currentUserReactions: nil)
         ]
 
-        let result = StoryViewerView.computeLikedIds(from: comments)
+        let result = CommentHeartLedger.likedIds(in: comments.map { FeedComment(api: $0, preferredLanguages: ["fr"]) })
 
         XCTAssertEqual(result, ["c1"])
     }
@@ -51,7 +51,7 @@ final class StoryViewerCommentReactionTests: XCTestCase {
             makeComment(id: "c2", currentUserReactions: [])
         ]
 
-        let result = StoryViewerView.computeLikedIds(from: comments)
+        let result = CommentHeartLedger.likedIds(in: comments.map { FeedComment(api: $0, preferredLanguages: ["fr"]) })
 
         XCTAssertTrue(result.isEmpty)
     }
@@ -63,13 +63,13 @@ final class StoryViewerCommentReactionTests: XCTestCase {
             makeComment(id: "c3", currentUserReactions: ["\u{1F525}"])
         ]
 
-        let result = StoryViewerView.computeLikedIds(from: comments)
+        let result = CommentHeartLedger.likedIds(in: comments.map { FeedComment(api: $0, preferredLanguages: ["fr"]) })
 
         XCTAssertEqual(result, ["c1", "c2"])
     }
 
     func test_computeLikedIds_withEmptyList_returnsEmptySet() {
-        let result = StoryViewerView.computeLikedIds(from: [])
+        let result = CommentHeartLedger.likedIds(in: [])
 
         XCTAssertTrue(result.isEmpty)
     }
@@ -172,12 +172,12 @@ final class StoryViewerCommentReactionTests: XCTestCase {
             makeCachedComment(id: "c3", currentUserReactions: nil),
             makeCachedComment(id: "c4", currentUserReactions: ["\u{2764}\u{FE0F}", "\u{1F525}"]),
         ]
-        let result = StoryViewerView.computeLikedIds(fromCachedComments: comments)
+        let result = CommentHeartLedger.likedIds(in: comments)
         XCTAssertEqual(result, ["c1", "c4"])
     }
 
     func test_computeLikedIds_fromCachedComments_emptyInput_returnsEmptySet() {
-        let result = StoryViewerView.computeLikedIds(fromCachedComments: [])
+        let result = CommentHeartLedger.likedIds(in: [])
         XCTAssertEqual(result, Set<String>())
     }
 
@@ -185,7 +185,7 @@ final class StoryViewerCommentReactionTests: XCTestCase {
         let comments: [FeedComment] = [
             makeCachedComment(id: "c1", currentUserReactions: [])
         ]
-        let result = StoryViewerView.computeLikedIds(fromCachedComments: comments)
+        let result = CommentHeartLedger.likedIds(in: comments)
         XCTAssertTrue(result.isEmpty)
     }
 

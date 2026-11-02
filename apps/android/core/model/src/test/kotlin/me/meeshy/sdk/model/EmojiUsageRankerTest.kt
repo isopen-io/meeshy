@@ -150,4 +150,18 @@ class EmojiUsageRankerTest {
         EmojiUsageRanker.recordRecent(history, "b")
         assertThat(history).containsExactly("a")
     }
+
+    @Test
+    fun `empty history falls back to the fifteen default quick reactions`() {
+        val result = EmojiUsageRanker.topEmojis(emptyMap(), EmojiCatalog.defaultQuickReactions, count = 15)
+        assertThat(result).containsExactlyElementsIn(EmojiCatalog.defaultQuickReactions).inOrder()
+    }
+
+    @Test
+    fun `a used emoji leads and the fifteen defaults pad the rest`() {
+        val result = EmojiUsageRanker.topEmojis(mapOf("🦄" to 3), EmojiCatalog.defaultQuickReactions, count = 15)
+        assertThat(result).hasSize(15)
+        assertThat(result.first()).isEqualTo("🦄")
+        assertThat(result.drop(1)).containsExactlyElementsIn(EmojiCatalog.defaultQuickReactions.take(14)).inOrder()
+    }
 }

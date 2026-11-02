@@ -86,7 +86,7 @@ class CallFrameRendererGoldenTest {
     fun `les quatorze motifs marquent le fond`() {
         val plain = render(testFrame(shape = CallFrameSlotShape.ROUND), 540, 960)
         CallFramePatternKind.entries.forEach { kind ->
-            val withPattern = render(testFrame(shape = CallFrameSlotShape.ROUND, pattern = kind), 540, 960)
+            val withPattern = render(testFrame(shape = CallFrameSlotShape.ROUND, pattern = kind, id = "test.frame.pattern.${kind.raw}"), 540, 960)
             assertWithMessage(kind.raw, changedPixels(plain, withPattern) > 50)
         }
     }
@@ -95,7 +95,7 @@ class CallFrameRendererGoldenTest {
     fun `les quatorze bordures marquent la toile`() {
         val plain = render(testFrame(shape = CallFrameSlotShape.ROUND), 540, 960)
         CallFrameBorderKind.entries.forEach { kind ->
-            val withBorder = render(testFrame(shape = CallFrameSlotShape.ROUND, border = kind), 540, 960)
+            val withBorder = render(testFrame(shape = CallFrameSlotShape.ROUND, border = kind, id = "test.frame.border.${kind.raw}"), 540, 960)
             assertWithMessage(kind.raw, changedPixels(plain, withBorder) > 50)
         }
     }

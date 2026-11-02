@@ -1,5 +1,6 @@
 package me.meeshy.app.contacts
 
+import androidx.compose.foundation.clickable
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -48,6 +49,7 @@ import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.ConnectionActionChip
 import me.meeshy.ui.component.ConnectionFeedbackHost
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.MeeshyPalette
@@ -60,6 +62,7 @@ import me.meeshy.ui.theme.MeeshyPalette
  */
 @Composable
 fun DiscoverTab(
+    onOpenProfile: (String) -> Unit = {},
     viewModel: DiscoverViewModel = hiltViewModel(),
     connectionViewModel: ConnectionActionViewModel = hiltViewModel(),
 ) {
@@ -107,6 +110,7 @@ fun DiscoverTab(
                 onAccept = connectionViewModel::accept,
                 onDecline = connectionViewModel::decline,
                 onCancel = connectionViewModel::cancel,
+                onOpenProfile = onOpenProfile,
             )
         }
     }
@@ -245,6 +249,7 @@ private fun ResultList(
     onAccept: (String) -> Unit,
     onDecline: (String) -> Unit,
     onCancel: (String) -> Unit,
+    onOpenProfile: (String) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -267,24 +272,27 @@ private fun ResultList(
                 onAccept = { onAccept(row.user.id) },
                 onDecline = { onDecline(row.user.id) },
                 onCancel = { onCancel(row.user.id) },
+                onOpenProfile = { onOpenProfile(row.user.id) },
             )
         }
     }
 }
 
 @Composable
-private fun ResultRow(
+internal fun ResultRow(
     row: DiscoverRow,
     onAdd: () -> Unit,
     onAccept: () -> Unit,
     onDecline: () -> Unit,
     onCancel: () -> Unit,
+    onOpenProfile: () -> Unit,
 ) {
     val user = row.user
     val name = user.displayName?.takeIf { it.isNotBlank() } ?: user.username.ifBlank { "?" }
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(enabled = user.id.isNotBlank(), onClick = onOpenProfile)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -292,6 +300,8 @@ private fun ResultRow(
             name = name,
             size = 44.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(user.id.ifBlank { name })),
+            imageUrl = user.avatar,
+            presence = rememberPresence(user.id, user.servedPresence()),
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {

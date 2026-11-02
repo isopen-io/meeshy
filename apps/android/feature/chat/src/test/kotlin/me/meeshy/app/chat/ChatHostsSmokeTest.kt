@@ -2,8 +2,13 @@ package me.meeshy.app.chat
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.composer.PendingAttachmentsState
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
@@ -41,6 +46,14 @@ class ChatHostsSmokeTest {
         openReactionDetails = { _ -> },
         openImageViewer = { _, _ -> },
         onFileAttachmentOpen = { _, _ -> },
+        onFileAttachmentTap = { _, _ -> },
+        onPieceSave = { _, _ -> },
+        pieceOverlayFor = { _, _ -> null },
+        onPieceReact = { _, _, _ -> },
+        onPieceDelete = { _, _ -> },
+        openForwardPiece = { _, _ -> },
+        pieceFailures = kotlinx.coroutines.flow.emptyFlow(),
+        onHubFileOpen = { _, _ -> },
         onFileAttachmentShare = { _, _ -> },
         onReplyPreviewTap = { _ -> },
         onFlagTap = { _, _ -> },
@@ -57,7 +70,10 @@ class ChatHostsSmokeTest {
         cancelEdit = { },
         cancelReply = { },
         removeClipboardContent = { },
+        setPendingPlace = { },
+        clearPendingPlace = { },
         pickFile = { _, _, _ -> },
+        sendSticker = {},
         removePendingAttachment = { _ -> },
         stagePendingUris = { _ -> },
         dismissImageViewer = { },
@@ -73,9 +89,13 @@ class ChatHostsSmokeTest {
         openReport = { _ -> },
         dismissMessageActions = { },
         dismissFileDownload = { },
+        retryFileDownload = { },
         selectReportReason = { _ -> },
         onReportDetailsChange = { _ -> },
         submitReport = { },
+        confirmReportSubmit = { },
+        cancelReportConfirmation = { },
+        addReactionFromDetails = { _, _ -> },
         dismissReport = { },
         onExplorerRetranslate = { _, _ -> },
         dismissLanguageExplorer = { },
@@ -92,11 +112,11 @@ class ChatHostsSmokeTest {
         onReplyThreadReplyTap = { _ -> },
         closeForward = { },
         onForwardQueryChange = { _ -> },
-        forwardTo = { _ -> },
     )
 
     private fun host(state: ChatUiState = ChatUiState(conversationTitle = "Équipe")) = ChatHostContext(
         state = state,
+        composerText = kotlinx.coroutines.flow.MutableStateFlow(ComposerTextState()),
         pending = PendingAttachmentsState(),
         accentColor = MeeshyPalette.Indigo500,
         actions = noopActions(),
@@ -112,9 +132,10 @@ class ChatHostsSmokeTest {
     )
 
     @Test
-    fun `the header host shows the conversation title`() {
+    fun `the header host names the conversation on its avatar, as iOS's collapsed band`() {
         compose.setContent { MeeshyTheme(darkTheme = false) { ChatHeaderHost(host()) } }
-        compose.onNodeWithText("Équipe").assertExists()
+        // Replié (par défaut, comme iOS), l'en-tête ne montre pas le nom : l'avatar le porte.
+        compose.onNodeWithContentDescription("Équipe", substring = true).assertExists()
     }
 
     @Test
@@ -134,20 +155,74 @@ class ChatHostsSmokeTest {
     }
 
     @Test
-    fun `the composer reply row shows who is being answered`() {
+    fun `the composer reply row names the author and announces the quoted preview`() {
         compose.setContent {
             MeeshyTheme(darkTheme = false) {
-                ComposerReplyRow(label = "Awa", accentColor = Color.Blue, onCancel = {})
+                ComposerReplyRow(
+                    banner = ComposerReplyBanner(ReplyBannerAuthor.Named("Awa"), "On se voit ?", ReplyBannerKind.Text),
+                    accentColor = Color.Blue,
+                    onCancel = {},
+                )
             }
         }
-        compose.onNodeWithText("Replying to Awa").assertExists()
+        compose.onNodeWithContentDescription("Replying to Awa: On se voit ?").assertExists()
     }
 
     @Test
-    fun `the composer edit row announces the edit`() {
+    fun `replying to my own voice note reads You and the kind of the piece`() {
         compose.setContent {
-            MeeshyTheme(darkTheme = false) { ComposerEditRow(accentColor = Color.Blue, onCancel = {}) }
+            MeeshyTheme(darkTheme = false) {
+                ComposerReplyRow(
+                    banner = ComposerReplyBanner(ReplyBannerAuthor.Me, null, ReplyBannerKind.Voice),
+                    accentColor = Color.Blue,
+                    onCancel = {},
+                )
+            }
         }
-        compose.onNodeWithText("Editing message").assertExists()
+        compose.onNodeWithContentDescription("Replying to You: Voice message").assertExists()
+    }
+
+    @Test
+    fun `a reply whose quoted message is not loaded reads Replying to a message`() {
+        compose.setContent {
+            MeeshyTheme(darkTheme = false) {
+                ComposerReplyRow(banner = ComposerReplyBanner.of(null), accentColor = Color.Blue, onCancel = {})
+            }
+        }
+        compose.onNodeWithContentDescription("Replying to a message").assertExists()
+    }
+
+    @Test
+    fun `the composer edit row shows the title and the original text`() {
+        compose.setContent {
+            MeeshyTheme(darkTheme = false) { ComposerEditRow(originalText = "typo", onCancel = {}) }
+        }
+        compose.onNodeWithText("Edit the message").assertExists()
+        compose.onNodeWithText("typo").assertExists()
+    }
+
+    @Test
+    fun `the keyboard send key sends the message`() {
+        var sent = 0
+        compose.setContent {
+            MeeshyTheme(darkTheme = false) {
+                ComposerInputRow(
+                    isEditing = false,
+                    hasAttachmentTiles = false,
+                    attachmentTrayOpen = false,
+                    fieldValue = TextFieldValue("Bonjour"),
+                    showMic = false,
+                    hasSomethingToSend = true,
+                    sendEnabled = true,
+                    accentColor = Color.Blue,
+                    onToggleTray = {},
+                    onFieldChange = {},
+                    onRequestVoice = {},
+                    onSend = { sent += 1 },
+                )
+            }
+        }
+        compose.onNode(hasSetTextAction()).performImeAction()
+        assertThat(sent).isEqualTo(1)
     }
 }

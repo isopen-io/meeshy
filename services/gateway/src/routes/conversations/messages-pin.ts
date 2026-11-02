@@ -33,7 +33,7 @@ import {
   messageSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation } from './utils/access-control';
+import { canAccessConversation, refuserCommeIntrouvable } from './utils/access-control';
 import { readerShareLinkHasExpired, refuseExpiredShareLink } from '../../services/shareLinkReadGate';
 import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response.js';
@@ -42,6 +42,8 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
+import { AT_REST_MESSAGE_SELECT, revealAtRestRows } from '../../services/messaging/serverAtRest';
+import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
@@ -55,6 +57,7 @@ import {
   PIN_CONVERSATION_SELECT,
   type MessagePinAdmission
 } from '../../services/messaging/messagePinAdmission';
+import { conversationRefusesPlainSignal, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
 
 /**
  * #9927 — épingler ou dépingler dans Meeshy Global met un message en avant pour
@@ -157,6 +160,7 @@ export function registerMessagePinRoutes(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        409: errorResponseSchema,
         410: errorResponseSchema,
         500: errorResponseSchema
       }
@@ -170,7 +174,7 @@ export function registerMessagePinRoutes(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
@@ -199,10 +203,14 @@ export function registerMessagePinRoutes(
       // `tool.pin` (#8959) — ré-épingler n'est pas un geste nouveau.
       const message = await prisma.message.findFirst({
         where: { id: messageId, conversationId, deletedAt: null },
-        select: { id: true, pinnedAt: true, messageType: true, metadata: true, conversation: { select: PIN_CONVERSATION_SELECT } }
+        select: { id: true, pinnedAt: true, messageType: true, metadata: true, conversation: { select: { ...PIN_CONVERSATION_SELECT, encryptionMode: true } } }
       });
       if (!message) {
         return sendNotFound(reply, 'Message not found');
+      }
+      // #13142 — dans une conversation chiffrée, l'épingle part en signal chiffré.
+      if (conversationRefusesPlainSignal(message.conversation)) {
+        return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
       }
       const admission = await admitPinGesture(prisma, authRequest, conversationId, message.conversation);
       if (isMessagePinRefused(admission)) {
@@ -289,6 +297,7 @@ export function registerMessagePinRoutes(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        409: errorResponseSchema,
         410: errorResponseSchema,
         500: errorResponseSchema
       }
@@ -302,7 +311,7 @@ export function registerMessagePinRoutes(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
@@ -328,10 +337,14 @@ export function registerMessagePinRoutes(
       // `deletedAt: null`) et le tombstone lui-même part au balayage.
       const message = await prisma.message.findFirst({
         where: { id: messageId, conversationId, deletedAt: null },
-        select: { id: true, conversation: { select: PIN_CONVERSATION_SELECT } }
+        select: { id: true, conversation: { select: { ...PIN_CONVERSATION_SELECT, encryptionMode: true } } }
       });
       if (!message) {
         return sendNotFound(reply, 'Message not found');
+      }
+      // #13142 — dans une conversation chiffrée, l'épingle part en signal chiffré.
+      if (conversationRefusesPlainSignal(message.conversation)) {
+        return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
       }
       const admission = await admitPinGesture(prisma, authRequest, conversationId, message.conversation);
       if (isMessagePinRefused(admission)) {
@@ -524,6 +537,8 @@ export function registerMessagePinRoutes(
           translations: true,
           createdAt: true,
           updatedAt: true,
+          // #12822 — de quoi ouvrir une épingle `server`/`hybrid` ; la projection ci-dessous n'en sert rien.
+          ...AT_REST_MESSAGE_SELECT,
           // Lot 1 : un message épinglé est une bulle complète — sans
           // `metadata`, un message géolocalisé épinglé n'affiche jamais sa
           // position alors que la liste complète la restitue déjà.
@@ -604,7 +619,8 @@ export function registerMessagePinRoutes(
           .filter((uid: string | null | undefined): uid is string => !!uid)
       );
 
-      const formattedMessages = pinnedMessages.map((message: any) => {
+      const openedPins = await revealAtRestRows(pinnedMessages, gatewayKeyring(prisma));
+      const formattedMessages = openedPins.map((message: any) => {
         const sender = message.sender;
         const place = sharedPlaceFromMetadata(message.metadata);
         const sticker = stickerFromMetadata(message.metadata);
@@ -619,6 +635,10 @@ export function registerMessagePinRoutes(
           // décider « est-ce moi qui l'ai envoyé ? »). Même résolution ici.
           senderId: sender?.userId ?? sender?.user?.id ?? message.senderId,
           content: message.content,
+          // #12822 — une épingle qu'aucune clé n'ouvre sort scellée (`content: ''`) :
+          // sans ce drapeau, le client rendait une bulle VIDE au lieu de « Message chiffré ».
+          isEncrypted: message.isEncrypted === true,
+          encryptionMode: message.encryptionMode ?? null,
           originalLanguage: message.originalLanguage,
           messageType: message.messageType,
           isEdited: !!message.editedAt,

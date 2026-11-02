@@ -284,6 +284,27 @@ describe('la barre haute de la story est la barre commune des plein écrans', ()
     expect(el.querySelector('[role="menu"]')).toBeNull();
   });
 
+  test('le menu « … » offre « Partager » (le fichier composé) et « Imager » à tout lecteur, entre Enregistrer et Retirer (#13881)', () => {
+    const calls: string[] = [];
+    const el = mount(topBar({
+      onSave: () => calls.push('save'),
+      onShare: () => calls.push('share'),
+      onImager: () => calls.push('imager'),
+      onRemove: () => calls.push('remove'),
+    }));
+    click(el.querySelector('[data-story-options]'));
+    const keys = Array.from(el.querySelectorAll('[role="menuitem"]')).map((item) => item.getAttribute('data-viewer-menu-item'));
+    expect(keys).toEqual(['save', 'share', 'imager', 'remove']);
+    const share = el.querySelector('[role="menuitem"][data-viewer-menu-item="share"]');
+    expect(share?.textContent).toContain('Partager');
+    click(share);
+    click(el.querySelector('[data-story-options]'));
+    const imager = el.querySelector('[role="menuitem"][data-viewer-menu-item="imager"]');
+    expect(imager?.textContent).toContain('Imager');
+    click(imager);
+    expect(calls).toEqual(['share', 'imager']);
+  });
+
   test('loi 4 — sans sauvegarde à offrir (story sans média exportable) il n’y a pas de menu', () => {
     const el = mount(topBar());
     expect(el.querySelector('[data-story-options]')).toBeNull();

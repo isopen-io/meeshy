@@ -96,4 +96,15 @@ object MeeshyGradients {
             start = topLeading, end = bottomTrailing,
         )
     }
+
+    /** Dégradé accent -> secondaire d'une conversation (bouton d'envoi du composeur, iOS `sendButton`). */
+    public fun conversationAccent(accent: Color, secondary: Color): Brush =
+        Brush.linearGradient(listOf(accent, secondary), start = topLeading, end = bottomTrailing)
+
+    /** Bordure de focus de la capsule de saisie : accent puis indigo 600, aux opacités de [ComposerFocusBorderPolicy]. */
+    public fun composerFocusBorder(accent: Color, startAlpha: Float, endAlpha: Float): Brush =
+        Brush.linearGradient(
+            colors = listOf(accent.copy(alpha = startAlpha), MeeshyPalette.Indigo600.copy(alpha = endAlpha)),
+            start = topLeading, end = bottomTrailing,
+        )
 }

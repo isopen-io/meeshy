@@ -13,7 +13,6 @@ enum PlaybackLoopQueue {
         if queue.items().count > 1 { return (true, nil) }
         let successor = AVPlayerItem(asset: current.asset)
         successor.preferredForwardBufferDuration = current.preferredForwardBufferDuration
-        successor.preferredPeakBitRate = current.preferredPeakBitRate
         guard queue.canInsert(successor, after: current) else { return (false, nil) }
         queue.insert(successor, after: current)
         return (true, successor)

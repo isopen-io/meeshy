@@ -47,7 +47,7 @@ explicit scope decision — see spec) gets a targeted font-resolution fix.
 
 The draft-autosave hook (Task 4) lives in the SDK (`MeeshyUI` target) but needs the same
 disk-cache key scheme the app's `StoryCoverThumbnail` enum already owns
-(`apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:18-24`). The SDK cannot
+(`apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift:18-24`). The SDK cannot
 import the app target, so the key scheme (a pure naming/sizing convention — no product
 decision) moves down into the SDK; the app's `StoryCoverThumbnail` becomes a thin delegator
 so `StoryCoverThumbnail.cacheKey`/`.renderSize` keep their exact current values (verified by
@@ -56,7 +56,7 @@ the existing test `test_storyCoverThumbnail_cacheKey_isSyntheticAndStoryScoped`)
 **Files:**
 - Create: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCoverCacheKey.swift`
 - Test: `packages/MeeshySDK/Tests/MeeshyUITests/Story/Canvas/StoryCoverCacheKeyTests.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:18-24`
+- Modify: `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift:18-24`
 
 **Interfaces:**
 - Produces: `StoryCoverCacheKey.renderSize: CGSize`, `StoryCoverCacheKey.key(for id: String) -> String`
@@ -116,7 +116,7 @@ Expected: PASS
 
 - [x] **Step 5: Delegate the app's `StoryCoverThumbnail` to the new SDK primitive**
 
-In `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`, replace:
+In `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift`, replace:
 ```swift
 enum StoryCoverThumbnail {
     /// Pixel size of the cached cover — 9:16, crisp enough for the tray ring avatar.
@@ -146,7 +146,7 @@ Expected: PASS (unchanged observable behavior — `"story-cover:abc123"`).
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCoverCacheKey.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Story/Canvas/StoryCoverCacheKeyTests.swift \
-        apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift
+        apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift
 git commit -m "feat(sdk): extract StoryCoverCacheKey — shared cover cache-key scheme"
 ```
 
@@ -546,7 +546,7 @@ polling/sleeping, which `apps/ios/CLAUDE.md` explicitly disallows ("Fire-and-for
 use XCTestExpectation with callbacks, not Task.sleep").
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` — 3 of the 4
+- Modify: `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` — 3 of the 4
   `StorySlideRenderer.renderComposite` call sites (lines ~1545, ~2030, ~2249 as of this
   writing; NOT line ~647, which is `renderMissingReceiverCovers()`).
 
@@ -555,7 +555,7 @@ use XCTestExpectation with callbacks, not Task.sleep").
 
 - [x] **Step 1: Re-locate the 4 call sites and confirm which one to skip**
 
-Run: `grep -n "StorySlideRenderer.renderComposite" -B 20 apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift | grep -E "renderComposite|^func |^    func "`
+Run: `grep -n "StorySlideRenderer.renderComposite" -B 20 apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift | grep -E "renderComposite|^func |^    func "`
 Expected: 4 matches for `renderComposite`; the nearest preceding `func` for the FIRST match
 must be `renderMissingReceiverCovers` — leave that one untouched. The other 3 are inside
 `insertOptimisticOfflineStories`, the online publish loop, and the published-story edit
@@ -628,7 +628,7 @@ StoryCoverThumbnail.cacheKey(storyId:))` lines are unchanged.
 
 - [x] **Step 5: Confirm exactly 1 remaining call to the old renderer in this file**
 
-Run: `grep -c "StorySlideRenderer.renderComposite" apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`
+Run: `grep -c "StorySlideRenderer.renderComposite" apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift`
 Expected: `1` (only `renderMissingReceiverCovers()`, left untouched by design).
 
 - [x] **Step 6: Run the existing StoryViewModel test suite to confirm no regression**
@@ -639,7 +639,7 @@ Expected: PASS
 - [x] **Step 7: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift
+git add apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift
 git commit -m "feat(ios): publish-time optimistic cover uses the pixel-perfect renderer"
 ```
 
@@ -648,8 +648,8 @@ git commit -m "feat(ios): publish-time optimistic cover uses the pixel-perfect r
 ### Task 6: My Stories grid reads the local-first composite cache
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/MyStoryThumbnailResolver.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift:358-374, 485-497`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/MyStoryThumbnailResolver.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift:358-374, 485-497`
 - Test: `apps/ios/MeeshyTests/Unit/Views/MyStoryThumbnailResolverTests.swift`
 
 **Interfaces:**
@@ -685,7 +685,7 @@ Expected: FAIL — `MyStoryThumbnailResolver.localCoverPath` does not exist.
 
 - [x] **Step 3: Write minimal implementation**
 
-In `apps/ios/Meeshy/Features/Main/Views/MyStoryThumbnailResolver.swift`, add:
+In `apps/ios/Meeshy/Features/Stories/Views/MyStoryThumbnailResolver.swift`, add:
 ```swift
     /// Le composite local-first (même pipeline pixel-parfait que la publication et
     /// l'autosave de brouillon) gagne toujours sur l'ancien repli — thumbHash serveur
@@ -702,7 +702,7 @@ Expected: PASS
 
 - [x] **Step 5: Wire it into `publishedCardModel`/`draftCardModel`**
 
-In `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`, replace
+In `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift`, replace
 `publishedCardModel` (line ~358-374):
 ```swift
     private func publishedCardModel(for story: StoryItem) -> MyStoryCardModel {
@@ -766,8 +766,8 @@ Expected: PASS
 - [x] **Step 7: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/MyStoryThumbnailResolver.swift \
-        apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift \
+git add apps/ios/Meeshy/Features/Stories/Views/MyStoryThumbnailResolver.swift \
+        apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift \
         apps/ios/MeeshyTests/Unit/Views/MyStoryThumbnailResolverTests.swift
 git commit -m "fix(ios): My Stories grid prefers the local-first pixel-perfect cover"
 ```

@@ -191,18 +191,24 @@ function fakePrisma(world: World) {
           .slice(0, take ?? Infinity)
           .map(publicUser)
       ),
+      findUnique: jest.fn(async () => ({ blockedUserIds: [] })),
     },
     conversationMessageStats: {
       findUnique: jest.fn(async () => null),
     },
+    // #14052 — la tranche ACL du post (loadPostAcl), lue avant toute suggestion.
     post: {
-      findUnique: jest.fn(async ({ where }: { where: { id: string } }) =>
-        where.id === POST ? { id: POST, authorId: AUTHOR.id, deletedAt: null, author: publicUser(AUTHOR) } : null
+      findFirst: jest.fn(async ({ where }: { where: { id: string } }) =>
+        where.id === POST ? { id: POST, authorId: AUTHOR.id, visibility: 'PUBLIC', visibilityUserIds: [], expiresAt: null } : null
       ),
     },
     postComment: {
       findMany: jest.fn(async () => []),
     },
+    postReaction: { findMany: jest.fn(async () => []) },
+    // #14052 — les niveaux de relation passent par friendship.ts ; ce monde n'a que des demandes acceptées.
+    userRelation: { findMany: jest.fn(async () => []) },
+    userContact: { findMany: jest.fn(async () => []) },
   };
 }
 
@@ -342,7 +348,8 @@ describe('recherche de mention — la portée des suggestions est celle de la va
 
       await service.getUserSuggestionsForConversation(PUBLIC, ME.id, 'm');
 
-      expect(prisma.user.findMany).not.toHaveBeenCalled();
+      const directoryReads = prisma.user.findMany.mock.calls.filter(call => JSON.stringify(call).includes('searchTokens'));
+      expect(directoryReads).toEqual([]);
     });
   });
 

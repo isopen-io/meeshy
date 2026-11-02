@@ -30,6 +30,9 @@ export const byAttachmentIdStatus = (attachmentId: string): string => `/api/v1/a
 /** GET /api/v1/attachments/:attachmentId/status-details */
 export const byAttachmentIdStatusDetails = (attachmentId: string): string => `/api/v1/attachments/${encodeURIComponent(attachmentId)}/status-details`;
 
+/** GET /api/v1/attachments/:attachmentId/subtitles/:lang */
+export const byAttachmentIdSubtitlesByLang = (attachmentId: string, lang: string): string => `/api/v1/attachments/${encodeURIComponent(attachmentId)}/subtitles/${encodeURIComponent(lang)}`;
+
 /** GET /api/v1/attachments/:attachmentId/thumbnail */
 export const byAttachmentIdThumbnail = (attachmentId: string): string => `/api/v1/attachments/${encodeURIComponent(attachmentId)}/thumbnail`;
 

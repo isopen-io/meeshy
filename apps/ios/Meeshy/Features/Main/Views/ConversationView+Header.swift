@@ -26,8 +26,8 @@ extension ConversationView {
             knownAttachment: { id in model.messages.lazy.flatMap(\.attachments).first { $0.id == id } },
             viewModel: model,
             deviceTranslationEnabled: !previewMode && anonymousSession == nil,
-            encryptionMode: liveConversation?.encryptionMode,
-            onPeerUpdate: { admitPeerUpdate($0) },
+            encryptionMode: model.startupDependencies.encryptedEra.encryptionMode(liveConversation?.encryptionMode, in: model),
+            onRepaint: { admitRepainted($0(liveConversation)) },
             onAppearanceChange: { admitAppearance($0) }
         )
     }
@@ -50,8 +50,7 @@ extension ConversationView {
             // `name`, avatar → `avatarURL`). Elle reçoit donc la conversation
             // VIVANTE : l'override serveur remonté par la feuille d'info après
             // un enregistrement, sinon la valeur figée de la navigation. Tous
-            // ses autres champs (`type`, `participantUserId`,
-            // `participantAvatarURL`) sortent inchangés de la fusion serveur
+            // ses autres champs (`type`, `participantUserId`, `participantAvatarURL`) sortent inchangés de la fusion serveur
             // (`MeeshyConversation.mergingMetadata` ne reporte QUE les
             // métadonnées du conteneur), donc une seule source ici suffit.
             conversation: liveConversation,
@@ -75,7 +74,8 @@ extension ConversationView {
             },
             onViewMemberProfile: { user in
                 router.openProfile(user, inConversation: conversation?.id)
-            }
+            },
+            presencePulse: PresenceManager.shared.refreshSignal
         )
     }
 
@@ -266,9 +266,7 @@ extension ConversationView {
 
     func navigateToDM(with userId: String, name: String) async {
         // Check if a DM already exists in the loaded conversation list
-        if let existing = conversationListViewModel?.conversations.first(where: {
-            $0.type == .direct && $0.participantUserId == userId
-        }) {
+        if let existing = conversationListViewModel.flatMap({ DirectConversationResolver.loaded(with: userId, in: $0.conversations) }) {
             router.navigateToConversation(existing)
             return
         }
@@ -369,7 +367,7 @@ struct ConversationHeaderAvatarView: View {
     @EnvironmentObject private var statusViewModel: StatusViewModel
     /// Signal débouncé de `PresenceManager` (jamais le manager lui-même) :
     /// l'arrivée ou le départ d'un pair (#8892) repeint les points de l'en-tête.
-    @ObservedObject private var presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal
+    @ObservedObject var presencePulse: PresenceRefreshSignal
 
     private var isDirect: Bool { conversation?.type == .direct }
 
@@ -544,7 +542,7 @@ struct ConversationHeaderAvatarView: View {
                         headerState.storyUserIdForHeader = userId
                         headerState.showStoryViewerFromHeader = true
                     },
-                    onMoodTap: statusViewModel.moodTapHandler(for: userId),
+                    onMoodTap: statusViewModel.moodSpotlightHandler(for: userId),
                     contextMenuItems: directContextMenu
                 )
                 .modifier(doorAccessibility(menu: directAccessibilityMenu))
@@ -566,7 +564,7 @@ struct ConversationHeaderAvatarView: View {
                                     isHere: isHere(member.viewingKey),
                                     ring: member.ring,
                                     onTap: { openMember(member, storyState: storyState) },
-                                    onMoodTap: statusViewModel.moodTapHandler(for: member.viewingKey),
+                                    onMoodTap: statusViewModel.moodSpotlightHandler(for: member.viewingKey),
                                     contextMenuItems: memberContextMenu(for: member, storyState: storyState)
                                 )
                             }
@@ -607,7 +605,7 @@ struct ConversationHeaderAvatarView: View {
                         headerState.showStoryViewerFromHeader = true
                     }
                 } : nil,
-                onMoodTap: isDirect ? statusViewModel.moodTapHandler(for: conversation?.participantUserId ?? "", repliesInline: true) : nil,
+                onMoodTap: isDirect ? statusViewModel.moodSpotlightHandler(for: conversation?.participantUserId ?? "") : nil,
                 contextMenuItems: directContextMenu
             )
             .modifier(doorAccessibility(menu: isDirect ? directAccessibilityMenu : []))
@@ -642,7 +640,8 @@ struct HeaderOpenFullGlyph: View {
 // MARK: - Le fond de la conversation, en type NOMINAL
 
 /// Le fond vit toute la vie de l'écran : c'est là qu'il écoute le pair d'un
-/// direct (#9359) — seule une annonce qui CHANGE le pair affiché écrit l'état —
+/// direct (#9359) et la bascule du chiffrement (#12522) — seule une annonce qui
+/// CHANGE la conversation affichée écrit l'état —
 /// et l'accent personnel choisi ou rétabli (#10631), qui repeint le fil, ses
 /// bulles, son composeur et son en-tête sans relecture réseau. La traduction
 /// sur l'appareil (#9899) y vit aussi : la couche n'y peint rien.
@@ -654,7 +653,8 @@ struct ConversationBackgroundLayer: View {
     let viewModel: ConversationViewModel
     let deviceTranslationEnabled: Bool
     let encryptionMode: String?
-    let onPeerUpdate: (UserUpdatedEvent) -> Void
+    /// Repeint la conversation affichée par la loi donnée (`nil` : rien ne change).
+    let onRepaint: ((Conversation?) -> Conversation?) -> Void
     let onAppearanceChange: (Notification) -> Void
 
     var body: some View {
@@ -665,7 +665,14 @@ struct ConversationBackgroundLayer: View {
             knownAttachment: knownAttachment
         )
         .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
-            onPeerUpdate(event)
+            onRepaint { DirectPeerRepaint.repainted($0, by: event) }
+        }
+        .onReceive(ConversationEncryptionChannel.shared.changed.receive(on: DispatchQueue.main)) { event in
+            guard event.conversationId == conversationId else { return }
+            onRepaint { $0?.adoptingEncryption(event) }
+            if let announcement = EncryptionSwitchAnnouncement.text(for: event) {
+                FeedbackToastManager.shared.show(announcement, type: .info)
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification).receive(on: DispatchQueue.main)) { note in
             onAppearanceChange(note)

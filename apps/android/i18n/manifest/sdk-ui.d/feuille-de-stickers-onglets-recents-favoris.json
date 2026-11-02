@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.favorites.empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.pin",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.unpin",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.recents.empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.search.clear",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.search.empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.search.prompt",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.tab.custom",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.tab.favorites",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.tab.recents",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.tab.search",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.tab.smileys",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.tab.shop",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sticker.a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.sticker.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sticker.sheet.shopMore",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

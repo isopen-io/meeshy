@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { createCameraEffects, PASSTHROUGH_EFFECTS } from './camera-effects';
 import { cameraSourceOf, NO_EFFECTS, type FrameSettings, type VideoEffects } from './video-effects';
 import type { EffectsPipeline } from './video-effects-pipeline';
+import type { LensSettings } from '@/lib/meeshy-lens/lens-stage';
 
 /**
  * LA CAMÉRA ET SES EFFETS, VUS DU MOTEUR (#8442) — ce que le moteur envoie
@@ -23,13 +24,15 @@ const camera = (id = 'cam', blur = false): FakeTrack => {
   return self;
 };
 
-function harness(options: { readonly color?: boolean; readonly effects?: VideoEffects; readonly zoom?: number } = {}) {
+function harness(options: { readonly color?: boolean; readonly effects?: VideoEffects; readonly zoom?: number; readonly lens?: LensSettings } = {}) {
   let effects = options.effects ?? NO_EFFECTS;
   let zoom = options.zoom ?? 1;
+  let lens = options.lens;
   const built: Array<{ camera: MediaStreamTrack; pipeline: EffectsPipeline & { updates: FrameSettings[]; stopped: boolean } }> = [];
   const port = createCameraEffects({
     effects: () => effects,
     zoom: () => zoom,
+    lens: () => lens,
     colorSupported: () => options.color ?? true,
     loadPipeline: async () => async (source, initial) => {
       const output = camera(`out-${built.length}`) as unknown as MediaStreamTrack;
@@ -38,7 +41,7 @@ function harness(options: { readonly color?: boolean; readonly effects?: VideoEf
       return pipeline;
     },
   });
-  return { port, built, set: (next: VideoEffects) => void (effects = next), zoomTo: (next: number) => void (zoom = next) };
+  return { port, built, set: (next: VideoEffects) => void (effects = next), zoomTo: (next: number) => void (zoom = next), pose: (next: LensSettings | undefined) => void (lens = next) };
 }
 
 const asTrack = (track: FakeTrack) => track as unknown as MediaStreamTrack;
@@ -203,5 +206,40 @@ describe('ce que l’analytique retient', () => {
   test('les effets actifs, nommés', () => {
     const h = harness({ effects: { ...NO_EFFECTS, preset: 'cool', blur: true } });
     expect(h.port.used()).toEqual(['filter:cool', 'background-blur']);
+  });
+});
+
+describe('une lens posée sur ma vidéo (#11994)', () => {
+  const LENS: LensSettings = {
+    lens: { schema: 1, id: 'aurore', name: 'Aurore', credits: { author: 'Studio', createdAt: '2026-10-01' }, surfaces: ['live'], cost: 'light', window: { startsAt: '2026-10-01T00:00:00Z', endsAt: '2026-12-31T00:00:00Z' }, layers: [], triggers: [] },
+    languages: ['es', 'fr'],
+    level: 'full',
+    files: { cubes: {}, images: {} },
+  };
+
+  test('seule, elle bâtit le traitement, et ses réglages — fichiers et langues de l’émetteur compris — partent avec la première image', async () => {
+    const h = harness({ lens: LENS });
+    const sent = await h.port.wrap(asTrack(camera()));
+    expect(sent).toBe(h.built[0]?.pipeline.output as MediaStreamTrack);
+    expect(h.built[0]?.pipeline.updates[0]?.lens).toBe(LENS);
+  });
+
+  test('posée en cours d’appel, elle rejoint le traitement ; retirée, la caméra repart brute', async () => {
+    const h = harness({ effects: { ...NO_EFFECTS, preset: 'warm' } });
+    const sent = await h.port.wrap(asTrack(camera()));
+    h.pose(LENS);
+    expect(await h.port.refresh(sent)).toBe(sent);
+    expect(h.built[0]?.pipeline.updates.at(-1)?.lens).toBe(LENS);
+    h.pose(undefined);
+    h.set(NO_EFFECTS);
+    const raw = await h.port.refresh(sent);
+    expect(h.built[0]?.pipeline.stopped).toBe(true);
+    expect(raw).not.toBe(sent);
+  });
+
+  test('l’analytique ne compte pas la lens : son comptage d’usage attend sa décision (#11251)', async () => {
+    const h = harness({ lens: LENS });
+    await h.port.wrap(asTrack(camera()));
+    expect(h.port.used()).toEqual([]);
   });
 });

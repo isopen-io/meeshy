@@ -109,9 +109,10 @@ final class LongPressProtectedMessageTests: XCTestCase {
             case .actions(let items), .info(let items), .moderation(let items): return items
             }
         }
-        for leak in [MoreItem.copy, .forward, .share, .language, .sentiment, .transcription, .history] {
+        for leak in [MoreItem.copy, .share, .language, .sentiment, .transcription, .history] {
             XCTAssertFalse(items.contains(leak), "\(leak) ferait sortir un contenu flouté")
         }
+        XCTAssertTrue(items.contains(.forward), "D8 (#10949) : un flouté se transfère, son flou hérité par la copie")
         XCTAssertTrue(items.contains(.reply), "répondre reste possible : la citation masque un message protégé")
         XCTAssertTrue(items.contains(.report))
     }

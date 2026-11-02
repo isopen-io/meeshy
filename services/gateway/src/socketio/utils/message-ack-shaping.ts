@@ -16,6 +16,7 @@
  *      sender's optimistic-id space (the sender's own devices still receive the
  *      cid-aware payload).
  */
+import type { E2EEDevicesMismatch } from '@meeshy/shared/types/e2ee-directory';
 
 export type MessageAckSource = {
   readonly id: string;
@@ -58,6 +59,8 @@ export type MessageRefusalSource = {
   readonly error?: string;
   readonly code?: string;
   readonly retryAfter?: number;
+  /** L'écart Sesame d'un envoi libsignal refusé (#3706), étalé comme sur REST. */
+  readonly e2eeMismatch?: E2EEDevicesMismatch;
 };
 
 export type MessageFailureAck = {
@@ -65,7 +68,7 @@ export type MessageFailureAck = {
   readonly error: string;
   readonly code?: string;
   readonly retryAfter?: number;
-};
+} & Partial<E2EEDevicesMismatch>;
 
 /** Les refus TEMPORAIRES — ceux dont l'expéditeur doit être prévenu hors de l'ACK aussi. */
 const TEMPORARY_REFUSAL_CODES: ReadonlySet<string> = new Set(['NEWCOMER_SLOW_MODE']);
@@ -81,6 +84,7 @@ export function buildMessageFailureAck(source: MessageRefusalSource): MessageFai
     error: source.error || 'Failed to send message',
     ...(source.code ? { code: source.code } : {}),
     ...(source.retryAfter !== undefined ? { retryAfter: source.retryAfter } : {}),
+    ...(source.e2eeMismatch ?? {}),
   };
 }
 

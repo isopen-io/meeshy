@@ -138,6 +138,24 @@ class PublishMediaWriteBackTest {
         )
 
     @Test
+    fun `un fond encore en attente garde son cadrage, sa boucle et sa duree a la greffe de l identifiant`() {
+        val pending = StoryMediaObject(
+            id = "upload-cmid", postMediaId = "upload-cmid", mediaURL = null, mediaType = "video",
+            x = 0.7, y = 0.4, scale = 2.5, isBackground = true, loop = false,
+        )
+        val request = requestOf(StoryEffects(mediaObjects = listOf(pending)), listOf("upload-cmid"))
+
+        val adopted = graftedRequest(request).storyEffects?.mediaObjects?.single()
+
+        assertThat(adopted?.postMediaId).isEqualTo("real-99")
+        assertThat(adopted?.isBackground).isTrue()
+        assertThat(adopted?.loop).isFalse()
+        assertThat(adopted?.x).isEqualTo(0.7)
+        assertThat(adopted?.y).isEqualTo(0.4)
+        assertThat(adopted?.scale).isEqualTo(2.5)
+    }
+
+    @Test
     fun `grafting the id also makes the canvas designate the real media`() {
         val request = requestOf(StoryEffects(mediaObjects = listOf(background("upload-cmid"))), listOf("upload-cmid"))
 
@@ -320,5 +338,23 @@ class PublishMediaWriteBackTest {
         assertThat(PublishMediaWriteBack.coherenceOf(request)).isEqualTo(PublishCoherence.Coherent)
         assertThat(PublishMediaWriteBack.coherenceOf(CreateStoryRequest(content = "x")))
             .isEqualTo(PublishCoherence.Coherent)
+    }
+
+    @Test
+    fun `the alt text and caption follow their media from the placeholder to the real id`() {
+        val payload = MeeshyApi.json.encodeToString(
+            CreateStoryRequest(
+                content = "hi",
+                mediaIds = listOf("upload-cmid", "b"),
+                mediaAlt = mapOf("upload-cmid" to "un chat", "b" to "un chien"),
+                mediaCaption = mapOf("upload-cmid" to "Mon chat"),
+            ),
+        )
+
+        val rewritten = PublishMediaWriteBack.graft(payload, placeholder = "upload-cmid", realId = "real-99")!!
+        val decoded = MeeshyApi.json.decodeFromString<CreateStoryRequest>(rewritten)
+
+        assertThat(decoded.mediaAlt).containsExactly("real-99", "un chat", "b", "un chien")
+        assertThat(decoded.mediaCaption).containsExactly("real-99", "Mon chat")
     }
 }

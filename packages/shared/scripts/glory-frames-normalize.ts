@@ -12,6 +12,7 @@
  * la loi (D17 : la Flamme de la loi gagne).
  */
 import type { FrameUsage } from '../types/frame-usage.js';
+import { GLORY_FRAME_BIRD_LAYOUTS } from '../types/glory-frame-format.js';
 import type {
   GloryFrameBirdAnchor,
   GloryFrameBirdLayout,
@@ -19,6 +20,7 @@ import type {
   GloryFrameFilter,
   GloryFrameFormat,
   GloryFrameLayer,
+  GloryFrameLayoutVerdict,
   GloryFramePaint,
   GloryFrameStroke,
   GloryFrameTextEffect,
@@ -189,9 +191,23 @@ export function birdLayoutOf(prose: string, birdCount: number): GloryFrameBirdLa
   return known[word] ?? 'libre';
 }
 
-type RawBird = { readonly pose: string; readonly box: [number, number, number, number]; readonly rotate: number; readonly flip: boolean; readonly opacity: number };
+type RawBird = {
+  readonly pose: string;
+  readonly box: [number, number, number, number];
+  readonly rotate: number;
+  readonly flip: boolean;
+  readonly opacity: number;
+  readonly art?: [number, number, number, number];
+};
 
-const anchorOf = (bird: RawBird): GloryFrameBirdAnchor => ({ sticker: bird.pose, box: bird.box, rotate: bird.rotate, flip: bird.flip, opacity: bird.opacity });
+const anchorOf = (bird: RawBird): GloryFrameBirdAnchor => ({
+  sticker: bird.pose,
+  box: bird.box,
+  rotate: bird.rotate,
+  flip: bird.flip,
+  opacity: bird.opacity,
+  ...(bird.art === undefined ? {} : { art: bird.art }),
+});
 
 export function birdsOf(raw: readonly RawBird[]): GloryFrameBirds {
   const mee = raw.find((bird) => bird.pose.startsWith('mee-'));
@@ -203,14 +219,43 @@ export function birdsOf(raw: readonly RawBird[]): GloryFrameBirds {
   throw new Error(`oiseaux illisibles : ${raw.map((bird) => bird.pose).join(', ')}`);
 }
 
+/**
+ * Les mises en page DÉCLARÉES d'un cadre (#10277) : celles que le détecteur du générateur a validées
+ * (`docs/product/cadres-de-gloire/controle/mises-en-page-<collection>.json`, puis `birds` de l'export), chacune avec
+ * ses oiseaux et son verdict. Un export d'avant ne porte que le tableau des oiseaux dessinés.
+ */
+export type RawBirdTable = {
+  readonly default: GloryFrameBirdLayout;
+  readonly layouts: Readonly<Partial<Record<GloryFrameBirdLayout, { readonly birds: readonly RawBird[]; readonly validated: GloryFrameLayoutVerdict }>>>;
+};
+
+/** `birds` du contrat : la table déclarée, ou — export d'avant #10277 — la seule mise en page dessinée, sans verdict. */
+export function birdTableOf(raw: RawBirdTable | readonly RawBird[], drawn: GloryFrameBirdLayout = 'libre'): GloryFrameFormat['birds'] {
+  if (isRawBirdList(raw)) return { default: drawn, layouts: { [drawn]: birdsOf(raw) } };
+  const declared = GLORY_FRAME_BIRD_LAYOUTS.flatMap((layout) => {
+    const entry = raw.layouts[layout];
+    return entry === undefined ? [] : [[layout, entry] as const];
+  });
+  return {
+    default: raw.default,
+    layouts: Object.fromEntries(declared.map(([layout, entry]) => [layout, birdsOf(entry.birds)])),
+    validated: Object.fromEntries(declared.map(([layout, entry]) => [layout, { overlap: entry.validated.overlap, depth: entry.validated.depth, face: entry.validated.face }])),
+  };
+}
+
+const isRawBirdList = (raw: RawBirdTable | readonly RawBird[]): raw is readonly RawBird[] => Array.isArray(raw);
+
 export type RawRef = { readonly src: string; readonly bytes: number; readonly sha256: string; readonly box?: [number, number, number, number]; readonly blend?: string };
+
+/** La fenêtre de l'export : `path` manque à un export d'avant #10254, et vaut `null` pour un masque vide. */
+export type RawWindow = { readonly box: [number, number, number, number]; readonly path?: string | null; readonly mask: RawRef; readonly veilMaxAlpha: number };
 
 export type RawExportFrame = {
   readonly frame: string;
   readonly size: [number, number];
   readonly motifs: readonly string[];
   readonly stack: readonly string[];
-  readonly window: { readonly box: [number, number, number, number]; readonly mask: RawRef; readonly veilMaxAlpha: number };
+  readonly window: RawWindow;
   readonly banner: { readonly box: [number, number, number, number] } | null;
   readonly layers: {
     readonly decor: RawRef;
@@ -221,7 +266,7 @@ export type RawExportFrame = {
   };
   readonly thumb: RawRef;
   readonly crest: { readonly box: [number, number, number, number] } | null;
-  readonly birds: readonly RawBird[];
+  readonly birds: RawBirdTable | readonly RawBird[];
   readonly text: Readonly<Record<string, RawTextSlot>>;
 };
 
@@ -249,11 +294,17 @@ export function normalizeStack(raw: RawExportFrame): string[] {
   return raw.banner === null || stack.includes('banner') ? stack : [...stack, 'banner'];
 }
 
+/** La fenêtre du contrat : sa boîte, son chemin quand l'export le porte (#10254), son masque adressé par contenu. */
+export function normalizeWindow(raw: RawWindow): GloryFrameFormat['window'] {
+  const path = typeof raw.path === 'string' ? { path: raw.path } : {};
+  return { box: raw.box, ...path, mask: layerOf(raw.mask), veilMaxAlpha: raw.veilMaxAlpha };
+}
+
 export function normalizeFormat(raw: RawExportFrame, layout: GloryFrameBirdLayout): GloryFrameFormat {
   const grades = raw.layers.grade.filter((ref): ref is RawRef => ref !== null).map((ref) => ({ ...layerOf(ref), blend: (ref.blend ?? 'normal') as 'normal' | 'screen' | 'multiply' }));
   return {
     size: raw.size,
-    window: { box: raw.window.box, mask: layerOf(raw.window.mask), veilMaxAlpha: raw.window.veilMaxAlpha },
+    window: normalizeWindow(raw.window),
     stack: normalizeStack(raw),
     layers: {
       decor: layerOf(raw.layers.decor),
@@ -264,7 +315,7 @@ export function normalizeFormat(raw: RawExportFrame, layout: GloryFrameBirdLayou
     },
     crest: raw.crest === null ? null : { box: raw.crest.box },
     text: Object.fromEntries(Object.entries(raw.text).map(([key, slot]) => [key, normalizeTextSlot(slot)])),
-    birds: { default: layout, layouts: { [layout]: birdsOf(raw.birds) } },
+    birds: birdTableOf(raw.birds, layout),
     banner: raw.banner === null ? null : { box: raw.banner.box },
   };
 }
@@ -289,7 +340,7 @@ export function normalizeFrame(collection: string, raw: RawExportFrame, manifest
     option: target.option,
     motifs: [...raw.motifs],
     hidden: false,
-    formats: { story: normalizeFormat(raw, birdLayoutOf(manifest.layout, raw.birds.length)), square: null },
+    formats: { story: normalizeFormat(raw, birdLayoutOf(manifest.layout, isRawBirdList(raw.birds) ? raw.birds.length : 2)), square: null },
   };
 }
 

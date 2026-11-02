@@ -2,12 +2,6 @@
 
 import Foundation
 import Combine
-// `@preconcurrency` relaxes Swift 6 strict concurrency interop checks for the
-// GRDB module. Without it, the runtime injects `_swift_task_checkIsolatedSwift`
-// at the invocation of @Sendable closures we pass to GRDB observation APIs,
-// which then aborts because GRDB calls the closure from its own reader/writer
-// dispatch queue (not from any actor's executor).
-@preconcurrency import GRDB
 import MeeshySDK
 
 /// Sendable weak-reference box. Used to capture a weak reference to a
@@ -31,18 +25,6 @@ private final class FeedStoreWeakBox: @unchecked Sendable {
     init(_ value: FeedStore) { self.value = value }
 }
 
-/// Fetches the feed page. Declared at file scope AND `nonisolated` so the
-/// closure passed to `reader.read` inherits no actor isolation — under the
-/// app's default MainActor isolation a plain file-scope function is still
-/// MainActor, which both pinned the read to the main thread and is what
-/// tripped the Swift 6 runtime isolation check GRDB invocations used to hit.
-/// Same shape as `MessageStore`'s `fetchMessageWindow`, read detached.
-private nonisolated func fetchFeedPosts(reader: any DatabaseWriter, limit: Int) throws -> [PostRecord] {
-    try reader.read { db in
-        try PostRecord.order(Column("createdAt").desc).limit(limit).fetchAll(db)
-    }
-}
-
 @MainActor
 public final class FeedStore: ObservableObject {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
@@ -52,7 +34,7 @@ public final class FeedStore: ObservableObject {
     nonisolated deinit {}
     private(set) var posts: [PostRecord] = []
     private let persistence: FeedPersistenceActor
-    private var regionCancellable: AnyDatabaseCancellable?
+    private var regionCancellable: AnyCancellable?
 
     let postsDidChange = PassthroughSubject<Void, Never>()
 
@@ -90,7 +72,7 @@ public final class FeedStore: ObservableObject {
                 await store.refreshFromDB()
             }
         }
-        regionCancellable = AnyDatabaseCancellable {
+        regionCancellable = AnyCancellable {
             NotificationCenter.default.removeObserver(observer)
         }
     }
@@ -110,12 +92,12 @@ public final class FeedStore: ObservableObject {
     /// Generation guard: refreshes can now interleave across the await, and
     /// only the most recent request may publish.
     private func refreshFromDB() async {
-        let reader = persistence.reader
+        let persistence = persistence
         let limit = loadedCount
         refreshGeneration &+= 1
         let generation = refreshGeneration
         let fetched: Result<[PostRecord], any Error> = await Task.detached(priority: .userInitiated) {
-            Result { try fetchFeedPosts(reader: reader, limit: limit) }
+            Result { try persistence.posts(limit: limit) }
         }.value
         guard generation == refreshGeneration, case .success(let newPosts) = fetched else { return }
         guard newPosts != posts else { return }

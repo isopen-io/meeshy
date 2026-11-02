@@ -173,3 +173,32 @@ class MemberRosterTest {
         assertThat(MemberRoster.EMPTY.displayCount).isEqualTo(0)
     }
 }
+
+class MemberRosterRoleNameTest {
+    private fun roster() = MemberRoster(
+        members = listOf(
+            PaginatedParticipant(id = "p1", userId = "u1", conversationRole = "member"),
+            PaginatedParticipant(id = "p2", userId = "u2", conversationRole = "member"),
+        ),
+    )
+
+    @org.junit.Test
+    fun role_names_are_lowercased_and_match_user_or_participant_id() {
+        val updated = roster().withRoleName("u1", "ADMIN").withRoleName("p2", "Moderator")
+
+        com.google.common.truth.Truth.assertThat(updated.members.map { it.conversationRole })
+            .containsExactly("admin", "moderator").inOrder()
+    }
+
+    @org.junit.Test
+    fun a_roster_survives_a_json_round_trip_with_its_cursor_and_total() {
+        val original = roster().copy(nextCursor = "p2", hasMore = true, totalCount = 40)
+        val json = kotlinx.serialization.json.Json
+        val decoded = json.decodeFromString(
+            MemberRoster.serializer(),
+            json.encodeToString(MemberRoster.serializer(), original),
+        )
+
+        com.google.common.truth.Truth.assertThat(decoded).isEqualTo(original)
+    }
+}

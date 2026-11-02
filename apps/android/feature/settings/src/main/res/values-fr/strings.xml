@@ -35,7 +35,6 @@
     <string name="settings_account_contact">Email et téléphone</string>
     <string name="settings_clear_media_cache">Vider le cache média</string>
     <string name="settings_storage_used">Stockage utilisé</string>
-    <string name="settings_version">Version 1.0.0</string>
     <!-- Two-factor authentication (§L) -->
     <string name="twofactor_status_enabled">Activée</string>
     <string name="twofactor_enable_button">Configurer l\'authentification à deux facteurs</string>
@@ -67,11 +66,6 @@
     <!-- Confidentialité & visibilité (§L) -->
     <string name="settings_privacy">Confidentialité et visibilité</string>
     <string name="privacy_title">Confidentialité et visibilité</string>
-    <string name="privacy_last_seen">Dernière connexion</string>
-    <string name="privacy_hide_from_search">Masquer de la recherche</string>
-    <string name="privacy_group_invites">Invitations de groupe</string>
-    <string name="privacy_save_media">Enregistrer les médias dans la galerie</string>
-    <string name="privacy_share_data">Partage des données d\'usage</string>
     <!-- Account deletion (§L) -->
     <string name="delete_account_warning_title">Action irréversible</string>
     <string name="delete_account_warning_intro">La suppression de votre compte entraîne la perte définitive de :</string>

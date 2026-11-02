@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "call.actions", "androidName": "call_actions_label", "status": "candidate"},
+        {"catalog": "app", "iosKey": "call.actions.myImage", "androidName": "call_actions_my_image", "status": "candidate"},
+        {"catalog": "app", "iosKey": "call.actions.theCall", "androidName": "call_actions_the_call", "status": "candidate"},
+        {"androidName": "call_control_collapsed", "status": "android-only"},
+        {"androidName": "call_control_end_caption", "status": "android-only"},
+        {"catalog": "app", "iosKey": "call.end.hint", "androidName": "call_control_end_hint", "status": "candidate"},
+        {"androidName": "call_control_expanded", "status": "android-only"},
+        {"catalog": "app", "iosKey": "call.control.more", "androidName": "call_control_more", "status": "candidate"},
+        {"androidName": "call_control_more_caption", "status": "android-only"},
+        {"catalog": "app", "iosKey": "call.control.more.hint", "androidName": "call_control_more_hint", "status": "candidate"},
+        {"androidName": "call_control_mute_caption", "status": "android-only"},
+        {"catalog": "app", "iosKey": "call.control.mute.hint", "androidName": "call_control_mute_hint", "status": "candidate"},
+        {"androidName": "call_control_mute_label", "status": "android-only"},
+        {"androidName": "call_control_output_hint", "status": "android-only"},
+        {"androidName": "call_control_unmute_label", "status": "android-only"},
+        {"androidName": "call_control_video_caption", "status": "android-only"},
+        {"catalog": "app", "iosKey": "call.control.video.paused", "androidName": "call_control_video_paused", "status": "candidate"},
+        {"androidName": "call_control_video_paused_caption", "status": "android-only"},
+        {"androidName": "call_control_video_paused_hint", "status": "android-only"},
+        {"catalog": "app", "iosKey": "call.panel.back", "androidName": "call_panel_back", "status": "candidate"},
+        {"androidName": "call_panel_close", "status": "android-only"},
+        {"androidName": "call_projection_channel_name", "status": "android-only"},
+        {"androidName": "call_projection_denied", "status": "android-only"},
+        {"androidName": "call_projection_recording_text", "status": "android-only"},
+        {"androidName": "call_projection_recording_title", "status": "android-only"},
+        {"androidName": "call_projection_share_text", "status": "android-only"},
+        {"androidName": "call_projection_share_title", "status": "android-only"},
+        {"androidName": "call_projection_stop", "status": "android-only"}
+      ]
+    }
+  }
+}

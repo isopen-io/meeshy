@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { buildApiEndpointsCatalog, type ManifestRouteInput } from '../api/build-catalog.js';
 import { renderKotlinEndpoints } from '../api/build-kotlin-endpoints.js';
 import { filterOutOpsOnlyRoutes } from '../api/ops-only-routes.js';
+import { filterRoutesReadBy } from '../api/route-readers.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '../../..');
@@ -59,7 +60,7 @@ function generatedFilesOnDisk(): readonly string[] {
 
 function main(): void {
   const check = process.argv.includes('--check');
-  const { entries } = buildApiEndpointsCatalog(filterOutOpsOnlyRoutes(readManifest()));
+  const { entries } = buildApiEndpointsCatalog(filterRoutesReadBy(filterOutOpsOnlyRoutes(readManifest()), 'android'));
   const files = renderKotlinEndpoints(entries);
   const expected = new Set(files.map((file) => file.fileName));
 

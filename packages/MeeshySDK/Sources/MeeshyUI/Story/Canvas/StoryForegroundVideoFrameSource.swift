@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreGraphics
+import CoreVideo
 import MeeshySDK
 
 /// Decodes still frames from foreground overlay videos for the MP4 exporter.
@@ -39,11 +40,24 @@ public final class StoryForegroundVideoFrameSource: @unchecked Sendable {
     /// while the compositor holds `main.sync` deadlocks against AVFoundation's
     /// own callbacks (observed: the export hangs indefinitely).
     public nonisolated func decodeOverlayFrames(slide: StorySlide, at time: CMTime) -> [String: CGImage] {
+        decodeOverlayFrames(slide: slide, at: time, trackFrames: [:], tracks: [:])
+    }
+
+    /// Une vidéo qui a sa piste dans la composition (#9877) est servie par la
+    /// trame que celle-ci a décodée, en séquence — et par rien d'autre : sans
+    /// trame, elle est hors de sa fenêtre. Seule une vidéo sans piste (illisible
+    /// à la composition) retombe sur le générateur.
+    public nonisolated func decodeOverlayFrames(slide: StorySlide, at time: CMTime,
+                                                trackFrames: [String: CVPixelBuffer],
+                                                tracks: [String: StoryOverlayTrack]) -> [String: CGImage] {
         var frames: [String: CGImage] = [:]
         for media in slide.effects.mediaObjects ?? []
         where media.kind == .video && !media.isBackground {
-            if let frame = frame(for: media, at: time) {
-                frames[media.id] = frame
+            let decoded = tracks[media.id].map { track in
+                trackFrames[media.id].flatMap { StoryOverlayVideoTracks.frame(from: $0, track: track, media: media) }
+            } ?? frame(for: media, at: time)
+            if let decoded {
+                frames[media.id] = decoded
             }
         }
         return frames

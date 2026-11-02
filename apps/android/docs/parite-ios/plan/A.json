@@ -1706,7 +1706,7 @@
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+StoreObservation.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationListPreviewLoader.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/Conversation/QuotedReferenceFactory.swift",
-   "apps/ios/Meeshy/Features/Main/Share/ShareDispatcher.swift",
+   "apps/ios/Meeshy/Features/Share/ShareDispatcher.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+Send.swift"
   ],
   "feature_keys": [
@@ -3357,7 +3357,7 @@
    "apps/ios/Meeshy/Features/Main/Views/RootNotificationNavigator.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootView+NotificationNavContext.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootNotificationSource.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/NotificationContentRouter.swift"
+   "apps/ios/Meeshy/Features/Navigation/NotificationContentRouter.swift"
   ],
   "feature_keys": [
    "ntf-push-tap-routing",
@@ -3800,10 +3800,10 @@
    "apps/android/feature/calls/src/main/AndroidManifest.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManager.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManagerHost.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallView+Controls.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallManager.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManagerHost.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView+Controls.swift"
   ],
   "feature_keys": [
    "calls-core-state-machine",
@@ -3853,9 +3853,9 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_duration.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Duration.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallEndReasonMapper.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallRefusalMessage.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Duration.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallEndReasonMapper.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallRefusalMessage.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/CallRules.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/CallPermission.swift"
   ],
@@ -3933,10 +3933,10 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Services/CallManager+Signaling.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+RemoteEvents.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallControlsController.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallRecordingController.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallPreviewCoordinator.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+RemoteEvents.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallControlsController.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallRecordingController.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallPreviewCoordinator.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager+CallControls.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager+ScreenShare.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager+CallFeedback.swift",
@@ -4001,10 +4001,10 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_audio.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+AudioSession.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Speaker.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallAudioRouteService.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/CallAudioRouteViewModel.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+AudioSession.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Speaker.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallAudioRouteService.swift",
+   "apps/ios/Meeshy/Features/Call/ViewModels/CallAudioRouteViewModel.swift",
    "apps/ios/Meeshy/Features/Main/Services/CallManager+AudioInterruptions.swift"
   ],
   "feature_keys": [
@@ -4050,12 +4050,12 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/call/CallGroupStageSizing.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Models/CallControlsLayout.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallScreenLayer.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallChromeVisibility.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallChromeInteraction.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallCameraControls.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallGroupStageSizing.swift"
+   "apps/ios/Meeshy/Features/Call/Models/CallControlsLayout.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallScreenLayer.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallChromeVisibility.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallChromeInteraction.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallCameraControls.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallGroupStageSizing.swift"
   ],
   "feature_keys": [
    "call-controls-pill-actions",
@@ -4120,12 +4120,12 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/ongoing/call/CallOngoingController.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+CallKitProxy.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Teardown.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager.swift",
-   "apps/ios/Meeshy/Features/Main/LiveActivity/CallActivityLaw.swift",
-   "apps/ios/Meeshy/Features/Main/LiveActivity/CallLiveActivityCoordinator.swift",
-   "apps/ios/Meeshy/Features/Main/LiveActivity/CallActivityAvatarPublisher.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+CallKitProxy.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Teardown.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager.swift",
+   "apps/ios/Meeshy/Features/LiveActivity/CallActivityLaw.swift",
+   "apps/ios/Meeshy/Features/LiveActivity/CallLiveActivityCoordinator.swift",
+   "apps/ios/Meeshy/Features/LiveActivity/CallActivityAvatarPublisher.swift"
   ],
   "feature_keys": [
    "calls-telecom-foreground-service",
@@ -4192,13 +4192,13 @@
    "apps/android/feature/calls/src/main/kotlin/me/meeshy/app/calls/IncomingCallRings.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/CallView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallView+States.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallView+Copy.swift",
-   "apps/ios/Meeshy/Features/Main/Components/CallTypeBadgeView.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/CallEndReason.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/CallRetryPolicy.swift",
-   "apps/ios/Meeshy/Features/Main/Views/IncomingCallView.swift"
+   "apps/ios/Meeshy/Features/Call/Views/CallView.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView+States.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView+Copy.swift",
+   "apps/ios/Meeshy/Features/Call/Components/CallTypeBadgeView.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/CallEndReason.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/CallRetryPolicy.swift",
+   "apps/ios/Meeshy/Features/Call/Views/IncomingCallView.swift"
   ],
   "feature_keys": [
    "call-screen-shell-fullscreen",
@@ -4251,12 +4251,12 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_controls.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/CallView+Pill.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallPillRow.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallControlGlass.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallDeviceControls.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallView+Controls.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallView+Panels.swift"
+   "apps/ios/Meeshy/Features/Call/Views/CallView+Pill.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallPillRow.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallControlGlass.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallDeviceControls.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView+Controls.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView+Panels.swift"
   ],
   "feature_keys": [
    "call-controls-pill-actions",
@@ -4307,11 +4307,11 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_stage.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/CallView+Connected.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallRemoteVideoSurface.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallPeerMutedBadge.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallSelfTile.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallView+SelfView.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView+Connected.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallRemoteVideoSurface.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallPeerMutedBadge.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallSelfTile.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView+SelfView.swift",
    "apps/ios/Meeshy/Features/Main/Views/WebRTCVideoView.swift"
   ],
   "feature_keys": [
@@ -4382,12 +4382,12 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Services/CallManager+IncomingCall.swift",
-   "apps/ios/Meeshy/Features/Main/Services/VoIPPushManager.swift",
-   "apps/ios/Meeshy/Features/Main/Services/VoIPDedupRing.swift",
+   "apps/ios/Meeshy/Features/Call/Services/VoIPPushManager.swift",
+   "apps/ios/Meeshy/Features/Call/Services/VoIPDedupRing.swift",
    "apps/ios/Meeshy/Features/Main/Services/RingbackTonePlayer.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallDebugIncomingTrigger.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallDebugIncomingTrigger.swift",
    "apps/ios/Meeshy/Resources/RingbackTone.caf",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallManager.swift"
   ],
   "feature_keys": [
    "calls-incoming-ring-wake",
@@ -4436,10 +4436,10 @@
    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/SocketManager.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManagerHost.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/WebRTCSharedFactory.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/WebRTCClientProviding.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallManagerHost.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/WebRTCSharedFactory.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/WebRTCClientProviding.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift"
   ],
   "feature_keys": [
    "calls-core-state-machine",
@@ -4490,12 +4490,12 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/call/DataChannelProtocol.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+PeerConnectionAsync.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+PeerDelegates.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/DataChannelControlMessage.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/DataChannelInbound.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+DataChannel.swift"
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+PeerConnectionAsync.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+PeerDelegates.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/DataChannelControlMessage.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/DataChannelInbound.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+DataChannel.swift"
   ],
   "feature_keys": [
    "calls-webrtc-engine",
@@ -4553,12 +4553,12 @@
    "apps/android/feature/calls/src/main/kotlin/me/meeshy/app/calls/CallQualityController.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/QualityThresholds.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/CallStats.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/DegradedLinkTracker.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/JitterBitrateCapTracker.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallQualityStatsFeed.swift",
-   "apps/ios/Meeshy/Features/Main/Components/CallQualityRows.swift"
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/QualityThresholds.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/CallStats.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/DegradedLinkTracker.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/JitterBitrateCapTracker.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallQualityStatsFeed.swift",
+   "apps/ios/Meeshy/Features/Call/Components/CallQualityRows.swift"
   ],
   "feature_keys": [
    "calls-webrtc-engine",
@@ -4611,11 +4611,11 @@
    "apps/android/feature/calls/src/main/kotlin/me/meeshy/app/calls/CallViewModel.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Negotiation.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Negotiation.swift",
    "apps/ios/Meeshy/Features/Main/Services/CallManager+IncomingOffer.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+IncomingSignal.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Answer.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallErrorDisposition.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+IncomingSignal.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Answer.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallErrorDisposition.swift",
    "apps/ios/Meeshy/Features/Main/Services/CallManager+Signaling.swift"
   ],
   "feature_keys": [
@@ -4671,12 +4671,12 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/call/HalfOpenMonitorState.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Reconnection.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Connection.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+NetworkMonitoring.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/CallReliabilityPolicy.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/HalfOpenMonitorState.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/TurnCredentialRefreshPolicy.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Reconnection.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Connection.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+NetworkMonitoring.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/CallReliabilityPolicy.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/HalfOpenMonitorState.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/TurnCredentialRefreshPolicy.swift"
   ],
   "feature_keys": [
    "calls-reconnect-reliability",
@@ -4728,14 +4728,14 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_camera.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+Camera.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/CameraCatalog.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/CallCameraMirror.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+CaptureInterruption.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+MediaControls.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+VideoFallback.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+MuteSync.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+SystemMonitoring.swift"
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+Camera.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/CameraCatalog.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/CallCameraMirror.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+CaptureInterruption.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+MediaControls.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+VideoFallback.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+MuteSync.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+SystemMonitoring.swift"
   ],
   "feature_keys": [
    "calls-media-controls",
@@ -4786,9 +4786,9 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_preflight.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Outgoing.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+VideoFallback.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+RemoteEvents.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Outgoing.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+VideoFallback.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+RemoteEvents.swift"
   ],
   "feature_keys": [
    "calls-outgoing-call-flow",
@@ -5623,10 +5623,10 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Networking/AppVersionHeader.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Networking/Endpoints/AppEndpoint.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/UpgradeGateController.swift",
+   "apps/ios/Meeshy/Features/Composer/UpgradeGateController.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootView.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/UpgradeGateView.swift"
+   "apps/ios/Meeshy/Features/Composer/UpgradeGateView.swift"
   ],
   "feature_keys": [
    "nss-http-upgrade-gate",
@@ -6029,9 +6029,9 @@
    "packages/MeeshySDK/Sources/MeeshySDK/Store/StoryDraftSummary.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Store/StoryDraftStore.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Store/StoryDraftAccessibility.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryDraftsViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+Publication.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryDraft.swift"
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryDraftsViewModel.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+Publication.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryDraft.swift"
   ],
   "feature_keys": [
    "pco-story-drafts-multi",
@@ -6282,7 +6282,7 @@
    "apps/ios/Meeshy/Core/DependencyContainer.swift",
    "apps/ios/Meeshy/Core/MessageStoreRouter.swift",
    "apps/ios/Meeshy/Core/AccountDataRetention.swift",
-   "apps/ios/Meeshy/Features/Main/Views/AccountSwitcherSheet.swift"
+   "apps/ios/Meeshy/Features/Auth/Views/AccountSwitcherSheet.swift"
   ],
   "feature_keys": [
    "pco-cache-account-isolation",
@@ -6842,7 +6842,7 @@
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+StoreObservation.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+Send.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Diagnostics/CryptoSignposts.swift",
-   "apps/ios/Meeshy/Features/Main/Share/ShareDispatcher.swift"
+   "apps/ios/Meeshy/Features/Share/ShareDispatcher.swift"
   ],
   "feature_keys": [
    "crypto-e2ee-decryption-pipeline",
@@ -7411,7 +7411,7 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/SettingsViewModelNotificationTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/PreferenceModels.swift"
   ],
   "feature_keys": [
@@ -7515,7 +7515,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Services/CallManager+CallWaiting.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallWaitingBannerView.swift"
+   "apps/ios/Meeshy/Features/Call/Views/CallWaitingBannerView.swift"
   ],
   "feature_keys": [
    "calls-call-waiting",
@@ -7570,10 +7570,10 @@
    "apps/android/feature/calls/src/main/kotlin/me/meeshy/app/calls/telecom/MeeshyConnection.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+CallKitProxy.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+CallKitProxy.swift",
    "apps/ios/Meeshy/Features/Main/Services/CallManager+IncomingCall.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Answer.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallView.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Answer.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView.swift"
   ],
   "feature_keys": [
    "calls-telecom-foreground-service",
@@ -7669,8 +7669,8 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_projection.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/ScreenShare/ScreenShareService.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallScreenRecordingService.swift"
+   "apps/ios/Meeshy/Features/Call/Services/ScreenShare/ScreenShareService.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallScreenRecordingService.swift"
   ],
   "feature_keys": [
    "calls-screen-share",
@@ -7724,7 +7724,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/CallWindowPresenter.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/CallPresentationLayer.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManagerHost.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallManagerHost.swift"
   ],
   "feature_keys": [
    "call-presentation-host-layers",
@@ -7785,7 +7785,7 @@
    "apps/ios/Meeshy/Features/Contacts/CallBackDialer.swift",
    "apps/ios/Meeshy/Features/Contacts/CallBackRequest.swift",
    "apps/ios/Meeshy/Features/Contacts/CallDialReadiness.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallRefusalMessage.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallRefusalMessage.swift"
   ],
   "feature_keys": [
    "calls-dial-from-anywhere",
@@ -7836,10 +7836,10 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_recording.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallRecordingController.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Recording.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallRecordingControls.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallView+Recording.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallRecordingController.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Recording.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallRecordingControls.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView+Recording.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/CallRecordingRemoteService.swift"
   ],
   "feature_keys": [
@@ -7887,9 +7887,9 @@
    "apps/android/feature/calls/src/main/kotlin/me/meeshy/app/calls/CallRecordingCaptureController.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallRecordingService.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallScreenRecordingService.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallRecordingController.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallRecordingService.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallScreenRecordingService.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallRecordingController.swift"
   ],
   "feature_keys": [
    "calls-recording-with-consent",
@@ -7939,12 +7939,12 @@
    "apps/android/feature/calls/src/main/kotlin/me/meeshy/app/calls/CallDataProfileController.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/CallDataProfile.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/CallNetworkPathMonitor.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+DataProfile.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+SdpRules.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+CodecPreferences.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+SenderEncoding.swift"
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/CallDataProfile.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/CallNetworkPathMonitor.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+DataProfile.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+SdpRules.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+CodecPreferences.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+SenderEncoding.swift"
   ],
   "feature_keys": [
    "call-sdp-codec-sender-tuning",
@@ -8014,15 +8014,15 @@
    "apps/android/feature/calls/src/main/kotlin/me/meeshy/app/calls/CallScreen.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallTranscriptionService.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Transcription.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+TranscriptionSegments.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallTranscriptMergeRules.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallTranscriptJournal.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallCaptionLine.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CaptionsMode.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallTranscriptionService.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Transcription.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+TranscriptionSegments.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallTranscriptMergeRules.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallTranscriptJournal.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallCaptionLine.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CaptionsMode.swift",
    "apps/ios/Meeshy/Features/Main/Models/TranscriptionError.swift",
-   "apps/ios/Meeshy/Features/Main/Models/TranscriptionPermission.swift"
+   "apps/ios/Meeshy/Features/Call/Models/TranscriptionPermission.swift"
   ],
   "feature_keys": [
    "calls-live-captions-transcription",
@@ -8078,12 +8078,12 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_quality.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Components/CallSignalGlyph.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallView+Header.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallDurationClock.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallQualitySheet.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/CallQualityDetailViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallVideoBadgeAccessibility.swift"
+   "apps/ios/Meeshy/Features/Call/Components/CallSignalGlyph.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView+Header.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallDurationClock.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallQualitySheet.swift",
+   "apps/ios/Meeshy/Features/Call/ViewModels/CallQualityDetailViewModel.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallVideoBadgeAccessibility.swift"
   ],
   "feature_keys": [
    "calls-signal-quality-indicator",
@@ -8130,10 +8130,10 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_teardown.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Teardown.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Hangup.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+AnalyticsRecorder.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+QualitySummaryStore.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Teardown.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Hangup.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+AnalyticsRecorder.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+QualitySummaryStore.swift"
   ],
   "feature_keys": [
    "calls-teardown-hangup-analytics"
@@ -8203,13 +8203,13 @@
    "apps/android/feature/calls/src/main/res/values-fr/call_pill_strings.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/CallBubbleView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallBubbleGestureResolver.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/CallBubbleSizeTier.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/CallDisplayMode.swift",
-   "apps/ios/Meeshy/Features/Main/Components/CallBannerContrast.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallParticipantVisual.swift",
-   "apps/ios/Meeshy/Features/Main/Views/FloatingCallPillView.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallBubbleView.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallBubbleGestureResolver.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/CallBubbleSizeTier.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/CallDisplayMode.swift",
+   "apps/ios/Meeshy/Features/Call/Components/CallBannerContrast.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallParticipantVisual.swift",
+   "apps/ios/Meeshy/Features/Call/Views/FloatingCallPillView.swift",
    "apps/ios/Meeshy/Features/Main/Views/ThemedActionButton.swift"
   ],
   "feature_keys": [
@@ -8318,15 +8318,15 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/call/CallSignalMapper.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+GroupMesh.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/WebRTCGroupPeerLink.swift",
-   "apps/ios/Meeshy/Features/Main/Models/GroupCallSpotlight.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+GroupMesh.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/WebRTCGroupPeerLink.swift",
+   "apps/ios/Meeshy/Features/Call/Models/GroupCallSpotlight.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/CallRules.swift",
-   "apps/ios/Meeshy/Features/Main/Services/GroupCallRoster.swift",
-   "apps/ios/Meeshy/Features/Main/Services/GroupCallGridLayout.swift",
+   "apps/ios/Meeshy/Features/Call/Services/GroupCallRoster.swift",
+   "apps/ios/Meeshy/Features/Call/Services/GroupCallGridLayout.swift",
    "apps/ios/Meeshy/Features/Main/Services/GroupSignalRouting.swift",
-   "apps/ios/Meeshy/Features/Main/Services/GroupCallMeshContracts.swift",
-   "apps/ios/Meeshy/Features/Main/Services/GroupCallMeshCoordinator.swift"
+   "apps/ios/Meeshy/Features/Call/Services/GroupCallMeshContracts.swift",
+   "apps/ios/Meeshy/Features/Call/Services/GroupCallMeshCoordinator.swift"
   ],
   "feature_keys": [
    "calls-group-mesh-calls",
@@ -8383,10 +8383,10 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_decline.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallDeclineReply.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallDeclineMessenger.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+DeclineReply.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallDeclineSheet.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallDeclineReply.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallDeclineMessenger.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+DeclineReply.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallDeclineSheet.swift"
   ],
   "feature_keys": [
    "calls-decline-with-quick-reply",
@@ -8429,9 +8429,9 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_captions.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/CallCaptionsViews.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallView+Transcript.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallCaptionLine.swift"
+   "apps/ios/Meeshy/Features/Call/Views/CallCaptionsViews.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView+Transcript.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallCaptionLine.swift"
   ],
   "feature_keys": [
    "call-live-captions-journal",
@@ -8494,9 +8494,9 @@
    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/call/CallLaunchResumeTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Resume.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallResumePolicy.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallLaunchResume.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Resume.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallResumePolicy.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallLaunchResume.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/ActiveCallService.swift"
   ],
   "feature_keys": [
@@ -8558,11 +8558,11 @@
    "apps/android/feature/calls/src/main/res/values/strings.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+VideoSurvival.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/VideoSurvivalController.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Thermal.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+AudioQuality.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/VideoThermalProfile.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+VideoSurvival.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/VideoSurvivalController.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Thermal.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+AudioQuality.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/VideoThermalProfile.swift",
    "apps/ios/Meeshy/Features/Main/Services/ThermalStateMonitor.swift",
    "apps/ios/Meeshy/Features/Main/Services/DarkFrameDetector.swift"
   ],
@@ -8610,8 +8610,8 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_camera_rail.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/CallView+CameraRail.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallCameraControls.swift"
+   "apps/ios/Meeshy/Features/Call/Views/CallView+CameraRail.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallCameraControls.swift"
   ],
   "feature_keys": [
    "call-camera-rail-controls"
@@ -8657,8 +8657,8 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_hold.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Hold.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+CallKitProxy.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Hold.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+CallKitProxy.swift"
   ],
   "feature_keys": [
    "calls-hold-and-dtmf"
@@ -8712,7 +8712,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/ConversationLayers/CallHeaderSnapshot.swift",
-   "apps/ios/Meeshy/Features/Main/Services/LiveCallJoiner.swift",
+   "apps/ios/Meeshy/Features/Call/Services/LiveCallJoiner.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+CallLauncher.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/CallPermission.swift"
   ],
@@ -8774,11 +8774,11 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/call/ScreenShareCapturePolicy.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/ScreenShare/CallScreenShareController.swift",
-   "apps/ios/Meeshy/Features/Main/Services/ScreenShare/ScreenShareService.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+ScreenShare.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+ScreenShare.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallScreenShareControls.swift",
+   "apps/ios/Meeshy/Features/Call/Services/ScreenShare/CallScreenShareController.swift",
+   "apps/ios/Meeshy/Features/Call/Services/ScreenShare/ScreenShareService.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+ScreenShare.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+ScreenShare.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallScreenShareControls.swift",
    "apps/ios/MeeshyBroadcastExtension/SampleHandler.swift"
   ],
   "feature_keys": [
@@ -8831,9 +8831,9 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/MainActivity.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+SystemPiP.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/CallPiPPolicy.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/PiPCallController.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+SystemPiP.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/CallPiPPolicy.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/PiPCallController.swift",
    "apps/ios/Meeshy/Features/Main/Views/PiPSourceAnchor.swift"
   ],
   "feature_keys": [
@@ -8976,12 +8976,12 @@
    "apps/android/feature/calls/src/test/kotlin/me/meeshy/app/calls/CallViewModelActiveSpeakerTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+GroupMesh.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallGroupStageSizing.swift",
-   "apps/ios/Meeshy/Features/Main/Models/GroupCallSpotlight.swift",
-   "apps/ios/Meeshy/Features/Main/Services/LiveCallJoiner.swift",
-   "apps/ios/Meeshy/Features/Main/Views/GroupCallStageView.swift",
-   "apps/ios/Meeshy/Features/Main/Services/GroupCallGridLayout.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+GroupMesh.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallGroupStageSizing.swift",
+   "apps/ios/Meeshy/Features/Call/Models/GroupCallSpotlight.swift",
+   "apps/ios/Meeshy/Features/Call/Services/LiveCallJoiner.swift",
+   "apps/ios/Meeshy/Features/Call/Views/GroupCallStageView.swift",
+   "apps/ios/Meeshy/Features/Call/Services/GroupCallGridLayout.swift",
    "apps/ios/Meeshy/Features/Main/Services/ActiveSpeakerDetector.swift"
   ],
   "feature_keys": [
@@ -9068,7 +9068,7 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Models/CallSummaryMetadata.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallBubbleView.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallBubbleView.swift",
    "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleCallNoticeView.swift"
   ],
   "feature_keys": [
@@ -9151,12 +9151,12 @@
    "apps/android/feature/calls/src/main/res/values-pt/strings.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallControlsController.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+Controls.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallControlsViews.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallView+CallControls.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallControlsController.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+Controls.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallControlsViews.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView+CallControls.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/CallModerationRemoteService.swift",
-   "apps/ios/Meeshy/Features/Main/Views/GroupCallStageView+Moderation.swift",
+   "apps/ios/Meeshy/Features/Call/Views/GroupCallStageView+Moderation.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager+CallControls.swift"
   ],
   "feature_keys": [
@@ -9318,8 +9318,8 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Models/TrackingLinkModels.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/TrackingLinkService.swift",
-   "apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift"
+   "apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift"
   ],
   "feature_keys": [
    "analytics-trackinglink-sdk"
@@ -9364,7 +9364,7 @@
    "apps/android/feature/conversations/src/test/kotlin/me/meeshy/app/conversations/TrackingLinkCreateViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/TrackingLinkModels.swift"
   ],
   "feature_keys": [
@@ -9604,7 +9604,7 @@
    "apps/android/feature/conversations/src/test/kotlin/me/meeshy/app/conversations/TrackingLinksViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/TrackingLinksView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/TrackingLinksView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift"
   ],
   "feature_keys": [
@@ -9885,7 +9885,7 @@
    "apps/android/sdk-ui/src/test/kotlin/me/meeshy/ui/component/qr/QrCodeBitmapTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/TrackingLinkModels.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift"
   ],
@@ -10473,12 +10473,12 @@
    "apps/android/core/model/build/generated/CallFrameCatalogueGenerated.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Models/CallFrames/CallFrameSpec.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallFrames/CallFrameCatalogue.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallFrames/CallFrameLayoutGeometry.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallFrames/CallFrameText.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallFrames/CallFrameCallTexts.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallFrames/CallFrameFormatExtension.swift"
+   "apps/ios/Meeshy/Features/Call/Models/CallFrames/CallFrameSpec.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallFrames/CallFrameCatalogue.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallFrames/CallFrameLayoutGeometry.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallFrames/CallFrameText.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallFrames/CallFrameCallTexts.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallFrames/CallFrameFormatExtension.swift"
   ],
   "feature_keys": [
    "calls-capture-frames-catalogue"
@@ -10519,10 +10519,10 @@
    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/call/frames/CallFrameLayerCache.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Decor.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Kit.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Shapes.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Decor.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Kit.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Shapes.swift"
   ],
   "feature_keys": [
    "call-frame-renderer"
@@ -10560,8 +10560,8 @@
    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/call/frames/CallFrameOrnamentSeed.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Ornaments.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+OrnamentPieces.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Ornaments.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+OrnamentPieces.swift"
   ],
   "feature_keys": [
    "call-frame-renderer"
@@ -10660,8 +10660,8 @@
    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/video/ReelVideoSurface.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallRingPlayback.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallPlaybackInterruptionBinding.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallRingPlayback.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallPlaybackInterruptionBinding.swift"
   ],
   "feature_keys": [
    "calls-playback-ducking"
@@ -10702,10 +10702,10 @@
    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/call/frames/CallFrameThumbnailCache.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Names.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Text.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameTextsResolver.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameThumbnailCache.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Names.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Text.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameTextsResolver.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameThumbnailCache.swift"
   ],
   "feature_keys": [
    "call-frame-renderer",
@@ -10752,10 +10752,10 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_feedback.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallFeedbackPolicy.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallFeedbackService.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/CallFeedbackViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallFeedbackCard.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFeedbackPolicy.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFeedbackService.swift",
+   "apps/ios/Meeshy/Features/Call/ViewModels/CallFeedbackViewModel.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallFeedbackCard.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/CallFeedbackLayer.swift"
   ],
   "feature_keys": [
@@ -10807,10 +10807,10 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_preview.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallPreviewCoordinator.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallPreviewConsentStore.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+CallPreview.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallPreviewViews.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallPreviewCoordinator.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallPreviewConsentStore.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+CallPreview.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallPreviewViews.swift"
   ],
   "feature_keys": [
    "calls-preview-before-answer",
@@ -10864,13 +10864,13 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_liveframe.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Models/CallFrames/CallLiveFrameRule.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallLiveFrameSession.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallLiveFrameCompositor.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallLiveFrameBudget.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallLiveFrameSurface.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallLiveFrameProposal.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallView+LiveFrame.swift"
+   "apps/ios/Meeshy/Features/Call/Models/CallFrames/CallLiveFrameRule.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallLiveFrameSession.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallLiveFrameCompositor.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallLiveFrameBudget.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallLiveFrameSurface.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallLiveFrameProposal.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView+LiveFrame.swift"
   ],
   "feature_keys": [
    "calls-live-frame-duo",
@@ -10939,9 +10939,9 @@
    "apps/android/feature/calls/src/main/kotlin/me/meeshy/app/calls/CallScreen.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallBackgroundBlur.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallVisionWorker.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallEffectsOverlay.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallBackgroundBlur.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallVisionWorker.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallEffectsOverlay.swift",
    "apps/ios/Meeshy/Features/Main/Services/VideoFilterPipeline.swift",
    "apps/ios/Meeshy/Features/Main/Views/VideoFiltersPanel.swift",
    "apps/ios/Meeshy/Features/Main/Views/VideoFilterControlView.swift"
@@ -10994,12 +10994,12 @@
    "apps/android/feature/calls/src/main/kotlin/me/meeshy/app/calls/CallCameraZoomGesture.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/CameraZoomController.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/CameraZoomPolicy.swift",
-   "apps/ios/Meeshy/Features/Main/Services/WebRTC/CaptureDeviceZoomTarget.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallCameraZoomGesture.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallZoomIndicator.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallZoomLensControls.swift"
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/CameraZoomController.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/CameraZoomPolicy.swift",
+   "apps/ios/Meeshy/Features/Call/Services/WebRTC/CaptureDeviceZoomTarget.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallCameraZoomGesture.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallZoomIndicator.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallZoomLensControls.swift"
   ],
   "feature_keys": [
    "call-camera-zoom"
@@ -11044,10 +11044,10 @@
    "apps/android/gradle/libs.versions.toml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallFaceEffect.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallFaceEffectGeometry.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallFaceEffectsRenderer.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallFaceTracker.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallFaceEffect.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFaceEffectGeometry.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFaceEffectsRenderer.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFaceTracker.swift"
   ],
   "feature_keys": [
    "calls-face-effects-stylized"
@@ -11094,10 +11094,10 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_capture.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallCaptureController.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallCaptureController+Frames.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallFrameGrabber.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallCaptureIdentity.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallCaptureController.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallCaptureController+Frames.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallFrameGrabber.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallCaptureIdentity.swift"
   ],
   "feature_keys": [
    "calls-capture-montage",
@@ -11141,8 +11141,8 @@
    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/call/effects/CallLowLightEffect.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallColorLook.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallSkinRetouch.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallColorLook.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallSkinRetouch.swift"
   ],
   "feature_keys": [
    "calls-color-looks-and-skin"
@@ -11192,9 +11192,9 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Models/CallNetworkJournal.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/CallNetworkJournalStore.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallNetworkJournalRecorder.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallNetworkJournalBinding.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallNetworkJournalSection.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallNetworkJournalRecorder.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallNetworkJournalBinding.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallNetworkJournalSection.swift"
   ],
   "feature_keys": [
    "calls-network-journal",
@@ -11245,7 +11245,7 @@
    "packages/MeeshySDK/Sources/MeeshySDK/Models/CallTranscript.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/CallTranscriptStore.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/CallTranscriptRemoteService.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallTranscriptSection.swift"
+   "apps/ios/Meeshy/Features/Call/Views/CallTranscriptSection.swift"
   ],
   "feature_keys": [
    "call-transcript-history"
@@ -11295,14 +11295,14 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_effects.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/CallModeCarousel.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallModeControls.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallModeRules.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallEffectsCopy.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallEffectsOverlay.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallEffectsCompanions.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallEffectsCompanionStrip.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallView+Mode.swift"
+   "apps/ios/Meeshy/Features/Call/Views/CallModeCarousel.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallModeControls.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallModeRules.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallEffectsCopy.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallEffectsOverlay.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallEffectsCompanions.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallEffectsCompanionStrip.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView+Mode.swift"
   ],
   "feature_keys": [
    "call-effects-mode",
@@ -11350,12 +11350,12 @@
    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/call/capture/CallMontageRendererLayers.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Models/CallMontageLayout.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallMontageLayout+Glamour.swift",
-   "apps/ios/Meeshy/Features/Main/Models/CallFrames/CallMontageFrameRule.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallMontageRenderer.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallMontageRenderer+Glamour.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallMontageRenderer+Layers.swift"
+   "apps/ios/Meeshy/Features/Call/Models/CallMontageLayout.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallMontageLayout+Glamour.swift",
+   "apps/ios/Meeshy/Features/Call/Models/CallFrames/CallMontageFrameRule.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallMontageRenderer.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallMontageRenderer+Glamour.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallMontageRenderer+Layers.swift"
   ],
   "feature_keys": [
    "calls-capture-montage",
@@ -11396,7 +11396,7 @@
    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/call/capture/CallMontageClock.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallMontageRecorder.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallMontageRecorder.swift"
   ],
   "feature_keys": [
    "calls-capture-montage"
@@ -11441,10 +11441,10 @@
    "apps/android/feature/calls/src/main/res/values/strings_calls_montage.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Services/CallCaptureController.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallCaptureCopy.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallFrameMoodChips.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CallView+Mode.swift"
+   "apps/ios/Meeshy/Features/Call/Services/CallCaptureController.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallCaptureCopy.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallFrameMoodChips.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView+Mode.swift"
   ],
   "feature_keys": [
    "call-montage-capture",
@@ -11987,8 +11987,8 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Services/SocialEventsV2Families.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Navigation.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerEngagement.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Navigation.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerEngagement.swift"
   ],
   "feature_keys": [
    "analytics-interaction-events",

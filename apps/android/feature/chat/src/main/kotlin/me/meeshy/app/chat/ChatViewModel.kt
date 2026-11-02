@@ -1,5 +1,9 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
+import me.meeshy.sdk.model.composer.look.ComposerLookPerson
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -20,6 +24,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.call.ActiveCallRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
@@ -30,29 +35,43 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.media.NetworkConditionMonitor
+import me.meeshy.sdk.mention.MentionContacts
 import me.meeshy.sdk.mention.MentionSearch
+import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.LiveLocationEventFold
 import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.mention.MentionContext
+import me.meeshy.sdk.model.mention.MentionLookupLaw
 import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.PinAction
 import me.meeshy.sdk.model.StarredAttachmentKind
 import me.meeshy.sdk.model.StarredMessage
+import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.app.chat.piece.PieceCapabilities
+import me.meeshy.app.chat.piece.PieceOverlayModel
 import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
+import me.meeshy.sdk.outbox.OutOfThreadSendGate
+import me.meeshy.sdk.reaction.InMemoryRecentEmojiStore
+import me.meeshy.sdk.reaction.OwnReactionWithdrawals
 import me.meeshy.sdk.reaction.ReactionRepository
+import me.meeshy.sdk.reaction.RecentEmojiStore
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.AnonymousSessionStore
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
-import me.meeshy.sdk.socket.TypingPresenceRelay
+import me.meeshy.sdk.socket.collectArrived
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.sdk.theme.otherParticipantUserId
@@ -80,7 +99,6 @@ class ChatViewModel @Inject constructor(
     private val locallyHiddenStore: LocallyHiddenMessagesStore,
     private val starredStore: StarredMessagesStore,
     private val messageSocketManager: MessageSocketManager,
-    private val typingPresenceRelay: TypingPresenceRelay,
     private val workManager: WorkManager,
     private val config: MeeshyConfig,
     private val clock: CacheClock,
@@ -95,6 +113,12 @@ class ChatViewModel @Inject constructor(
     private val fileAttachmentDownloader: FileAttachmentDownloader,
     savedStateHandle: SavedStateHandle,
     contributedControllers: Set<@JvmSuppressWildcards ChatController> = emptySet(),
+    recentEmojiStore: RecentEmojiStore = InMemoryRecentEmojiStore(),
+    languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
+    private val blockCache: BlockCache = BlockCache(),
+    ownReactionWithdrawals: OwnReactionWithdrawals,
+    outOfThreadSendGate: OutOfThreadSendGate,
+    mentionContacts: MentionContacts = MentionContacts.None,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -114,8 +138,26 @@ class ChatViewModel @Inject constructor(
         ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
         ?.takeIf { it.isNotBlank() }
 
-    private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId, draft = initialDraft.orEmpty()))
+    private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId))
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
+
+    private val composerTextHolder = ComposerTextHolder(initialDraft.orEmpty())
+
+    /**
+     * The composer's text, apart from [state]: typing moves only this flow, so the message
+     * list (which reads [state]) is not recomposed per character.
+     */
+    val composerText: StateFlow<ComposerTextState> = composerTextHolder.flow
+    private val _callEntry = MutableStateFlow<HeaderCallEntry?>(null)
+
+    /** The header's call entry ([HeaderCallEntry.resolve], iOS parity): `null` hides every
+     * call button (guest, global, broadcast…), `canStart == false` keeps only « Rejoindre ». */
+    val callEntry: StateFlow<HeaderCallEntry?> = _callEntry.asStateFlow()
+
+    private val _mayInviteFriends = MutableStateFlow(false)
+
+    /** « Inviter mes amis » : le verdict de `ConversationActionPolicy.invite` (groupe modéré, publique, Global). */
+    val mayInviteFriends: StateFlow<Boolean> = _mayInviteFriends.asStateFlow()
 
     private val recipientCount = MutableStateFlow(0)
     private val typingCleanupJobs = mutableMapOf<String, Job>()
@@ -134,6 +176,9 @@ class ChatViewModel @Inject constructor(
      * (a translation landing → new content).
      */
     private val latestMessages = MutableStateFlow<List<LocalMessage>>(emptyList())
+
+    /** Latches once the first load of the window answered (cache, revalidation, or its failure) — #13793. */
+    private val windowAnswered = MutableStateFlow(false)
     private var avatarByUserId: Map<String, String?> = emptyMap()
 
     /**
@@ -160,6 +205,10 @@ class ChatViewModel @Inject constructor(
         workManager = workManager,
         clock = clock,
         pendingTray = { controllers.find<ComposerTrayController>() },
+        composerText = composerTextHolder,
+        recentEmojis = recentEmojiStore,
+        languageIdentifier = languageIdentifier,
+        mentionContacts = mentionContacts,
     )
 
     private val reactions = ChatReactionController(
@@ -172,6 +221,7 @@ class ChatViewModel @Inject constructor(
         emojiUsageStore = emojiUsageStore,
         messageSocketManager = messageSocketManager,
         workManager = workManager,
+        ownReactionWithdrawals = ownReactionWithdrawals,
     )
 
     private val translation = ChatTranslationController(
@@ -194,6 +244,8 @@ class ChatViewModel @Inject constructor(
         messageRepository = messageRepository,
         sessionRepository = sessionRepository,
         workManager = workManager,
+        outOfThread = outOfThreadSendGate,
+        blockedUserIds = { blockCache.currentBlockedIds },
     )
 
     private val fileDownload = ChatFileDownloadController(
@@ -212,9 +264,12 @@ class ChatViewModel @Inject constructor(
         // read (which zeroes it), then mark read. The first Room emission carries
         // the current cached value, so this never blocks beyond it.
         viewModelScope.launch {
-            initialUnreadCount.value =
-                conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
-            markConversationRead()
+            val unread = conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
+            initialUnreadCount.value = unread
+            if (unread > 0) {
+                withTimeoutOrNull(ReadAcknowledgement.WINDOW_WAIT_MILLIS) { windowAnswered.first { it } }
+            }
+            markConversationReadOnOpening(unreadAtOpening = unread)
         }
 
         // Latch the "new messages" boundary once, when both the initial unread
@@ -237,6 +292,26 @@ class ChatViewModel @Inject constructor(
 
         reactions.start()
 
+        // #14071, #14183 — la liste « @ » : le roster SERVI et la portée de la conversation ; pour un
+        // invité de lien, les auteurs du fil qui lui sont servis (son roster ne porte que sa ligne).
+        viewModelScope.launch {
+            combine(
+                conversationRepository.conversationStream(conversationId).filterNotNull(),
+                latestMessages,
+            ) { conversation, messages -> conversation to messages }.collect { (conversation, messages) ->
+                val currentUser = sessionRepository.currentUser.value
+                val isGuest = currentUser?.isAnonymous == true
+                composer.updateMentionRoster(
+                    roster = MentionLookupLaw.knownRoster(
+                        roster = MentionRoster.fromParticipants(conversation.participants, excludeUserId = currentUser?.id),
+                        threadAuthors = MentionRoster.fromMessageAuthors(messages.map { it.message }, excludeUserId = currentUser?.id),
+                        isGuest = isGuest,
+                    ),
+                    context = MentionContext.of(conversation, currentUser?.id, isGuest),
+                )
+            }
+        }
+
         viewModelScope.launch {
             conversationRepository.conversationStream(conversationId).collect { conversation ->
                 if (conversation == null) return@collect
@@ -245,7 +320,6 @@ class ChatViewModel @Inject constructor(
                     participants = conversation.participants,
                     excludeUserId = currentUserId,
                 )
-                composer.updateMentionRoster(roster)
                 avatarByUserId = conversation.participants
                     .associate { (it.userId ?: it.id) to it.avatar }
                 recipientCount.value = conversation.participants
@@ -256,6 +330,18 @@ class ChatViewModel @Inject constructor(
                 val viewerRole = conversation.participants
                     .firstOrNull { it.userId == currentUserId }
                     ?.role
+                _callEntry.value = HeaderCallEntry.resolve(
+                    conversationId = conversation.id,
+                    conversationType = conversation.type,
+                    viewerConversationRole = viewerRole,
+                    viewerPlatformRole = sessionRepository.currentUser.value?.role,
+                    viewerIsGuest = sessionRepository.currentUser.value?.isAnonymous == true,
+                    directPeerUserId = conversation.otherParticipantUserId(currentUserId),
+                )
+                _mayInviteFriends.value = ConversationRowMenuCapabilities.make(
+                    conversation.copy(currentUserRole = conversation.currentUserRole ?: viewerRole),
+                    sessionRepository.currentUser.value,
+                ).invite
                 _state.update {
                     it.copy(
                         conversationTitle = conversation.displayTitle(currentUserId = currentUserId),
@@ -275,7 +361,6 @@ class ChatViewModel @Inject constructor(
             }
         }
 
-        observePresence()
 
         viewModelScope.launch {
             conversationRepository.conversationsStream().collect { result ->
@@ -288,6 +373,7 @@ class ChatViewModel @Inject constructor(
                 messageRepository.messagesStream(
                     conversationId,
                     onSyncError = { error ->
+                        windowAnswered.value = true
                         _state.update {
                             it.copy(errorMessage = error.message, showSkeleton = false, isSyncing = false)
                         }
@@ -321,6 +407,7 @@ class ChatViewModel @Inject constructor(
                     val (inputs, hidden, starredIds) = triple
                     val (result, user, own, originals, recipients) = inputs
                     latestMessages.value = result.windowOrNull() ?: latestMessages.value
+                    if (ReadAcknowledgement.windowAnswered(result)) windowAnswered.value = true
                     _state.update { current ->
                         val next = current.applyResult(
                             result, user, own, originals, config.apiBaseUrl, recipients, hidden, starredIds,
@@ -329,6 +416,7 @@ class ChatViewModel @Inject constructor(
                         next.copy(
                             search = next.search.reconciled(next.messages.toSearchable()),
                             isOffline = isOffline,
+                            showReadReceipts = showReadReceipts,
                         )
                     }
                 }
@@ -338,53 +426,15 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             launch {
-                messageSocketManager.messageReceived.collect { event ->
+                messageSocketManager.messageReceived.collectArrived { event ->
                     if (event.conversationId == conversationId) {
-                        messageRepository.refresh(conversationId)
-                        markConversationRead()
+                        if (IncomingMessageCompletion.needsRest(event)) completeIncoming(event)
+                        markConversationRead(arrived = event)
                     }
                 }
             }
             launch {
-                messageSocketManager.messageDeleted.collect { event ->
-                    if (event.conversationId == conversationId) {
-                        messageRepository.refresh(conversationId)
-                    }
-                }
-            }
-            launch {
-                // Server-initiated twin of messageDeleted for a self-destructing
-                // message burned by ExpiredMessagesCleanupService — same local
-                // effect (refresh drops the burned message from the list).
-                messageSocketManager.messageExpired.collect { event ->
-                    if (event.conversationId == conversationId) {
-                        messageRepository.refresh(conversationId)
-                    }
-                }
-            }
-            launch {
-                messageSocketManager.messageEdited.collect { event ->
-                    if (event.conversationId == conversationId) {
-                        messageRepository.refresh(conversationId)
-                    }
-                }
-            }
-            launch {
-                messageSocketManager.messagePinned.collect { event ->
-                    if (event.conversationId == conversationId) {
-                        messageRepository.refresh(conversationId)
-                    }
-                }
-            }
-            launch {
-                messageSocketManager.messageUnpinned.collect { event ->
-                    if (event.conversationId == conversationId) {
-                        messageRepository.refresh(conversationId)
-                    }
-                }
-            }
-            launch {
-                messageSocketManager.transcriptionReady.collect { event ->
+                messageSocketManager.transcriptionReady.collectArrived { event ->
                     if (event.conversationId == conversationId) {
                         messageRepository.applyTranscription(
                             event.messageId,
@@ -398,7 +448,7 @@ class ChatViewModel @Inject constructor(
                 }
             }
             launch {
-                messageSocketManager.audioTranslationReady.collect { event ->
+                messageSocketManager.audioTranslationReady.collectArrived { event ->
                     if (event.conversationId == conversationId) {
                         val audio = event.translatedAudio
                         messageRepository.applyAudioTranslation(
@@ -418,9 +468,9 @@ class ChatViewModel @Inject constructor(
                 }
             }
             launch {
-                messageSocketManager.readStatusUpdated.collect { event ->
-                    if (event.conversationId != conversationId) return@collect
-                    val ownId = sessionRepository.currentUser.value?.id ?: return@collect
+                messageSocketManager.readStatusUpdated.collectArrived { event ->
+                    if (event.conversationId != conversationId) return@collectArrived
+                    val ownId = sessionRepository.currentUser.value?.id ?: return@collectArrived
                     messageRepository.applyReadReceipt(
                         conversationId = conversationId,
                         ownSenderId = ownId,
@@ -490,48 +540,56 @@ class ChatViewModel @Inject constructor(
             }
         }
 
-        controllers.attachAll(ChatScreenHost(conversationId, viewModelScope, screenState, latestMessages))
+        controllers.attachAll(ChatScreenHost(conversationId, viewModelScope, screenState, latestMessages, initialUnreadCount))
     }
 
     /**
      * Mark-as-read never surfaces an error: the badge is non-critical and the
-     * queued receipt retries with the outbox on reconnect.
+     * queued receipt retries with the outbox on reconnect. An unreadable sealed message is never
+     * acknowledged « read » ([ReadAcknowledgement], #13793) : the conversation is simply left unread.
      */
-    private suspend fun markConversationRead() {
-        try {
-            if (conversationRepository.markReadOptimistic(conversationId)) {
-                workManager.enqueue(OutboxFlushWorker.buildRequest())
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-        }
+    private suspend fun markConversationRead(arrived: ApiMessage? = null) = quietly {
+        val unread = conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
+        if (!mayAcknowledge(unread, arrived)) return@quietly
+        if (conversationRepository.markReadOptimistic(conversationId)) workManager.enqueue(OutboxFlushWorker.buildRequest())
     }
 
     /**
-     * Overlays live `user:status`/`presence:snapshot` frames into
-     * [ChatUiState.presenceByUserId] — feeds the chat header's presence dot
-     * ([ChatUiState.headerPresence]). Mirrors [ConversationListViewModel]'s identically-named
-     * function; started eagerly (not lazily on first header render) since
-     * [MessageSocketManager]'s flows are hot `SharedFlow`s with no replay.
+     * The opening decides on what it CAPTURED, not on what the cache says by the time the window has
+     * loaded : a list sync zeroes the badge of the open conversation without any receipt (#13793), so a
+     * later read of the counter would find 0 and queue nothing while the server keeps counting. An
+     * unread opening therefore sends its receipt whatever the badge reads now ; a conversation that was
+     * already read keeps the plain optimistic path (a no-op on a zero badge).
      */
-    private fun observePresence() {
-        viewModelScope.launch {
-            messageSocketManager.userStatus.collect { event ->
-                _state.update { it.copy(presenceByUserId = it.presenceByUserId + (event.userId to event)) }
-            }
+    private suspend fun markConversationReadOnOpening(unreadAtOpening: Int) = quietly {
+        if (!mayAcknowledge(unreadAtOpening, arrived = null)) return@quietly
+        val queued = if (unreadAtOpening > 0) {
+            conversationRepository.acknowledgeRead(conversationId)
+        } else {
+            conversationRepository.markReadOptimistic(conversationId)
         }
-        viewModelScope.launch {
-            typingPresenceRelay.forcedOnline.collect { event ->
-                _state.update { it.copy(presenceByUserId = it.presenceByUserId + (event.userId to event)) }
-            }
-        }
-        viewModelScope.launch {
-            messageSocketManager.presenceSnapshot.collect { snapshot ->
-                _state.update {
-                    it.copy(presenceByUserId = it.presenceByUserId + snapshot.users.associateBy { u -> u.userId })
-                }
-            }
+        if (queued) workManager.enqueue(OutboxFlushWorker.buildRequest())
+    }
+
+    private fun mayAcknowledge(unread: Int, arrived: ApiMessage?): Boolean =
+        ReadAcknowledgement.mayAcknowledge(
+            latestMessages.value.map { it.message },
+            sessionRepository.currentUser.value?.id,
+            unread,
+            arrived,
+        )
+
+    /** The one thing a received forward lacks (#13797) : its provenance. Best effort, one message. */
+    private suspend fun completeIncoming(message: ApiMessage) = quietly {
+        messageRepository.refreshMessage(conversationId, message.id)
+    }
+
+    private suspend inline fun quietly(block: () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
         }
     }
 
@@ -543,6 +601,10 @@ class ChatViewModel @Inject constructor(
      * the call is over. The probe never breaks the screen — a failure degrades
      * to `null` (see [ActiveCallRepository]).
      */
+    /** L'auteur que les cadres de la retouche écrivent (#12734), lu de la session à l'ouverture. */
+    fun selfAuthor(): ComposerLookPerson? =
+        sessionRepository.currentUser.value?.let { user -> ComposerLookPerson.author(user.id, user.displayName, user.username) }
+
     fun refreshActiveCall() {
         viewModelScope.launch {
             val active = activeCallRepository.activeCallFor(conversationId)
@@ -567,6 +629,13 @@ class ChatViewModel @Inject constructor(
     /** Discards a captured large-paste attachment (the preview chip's remove button). */
     fun removeClipboardContent() = composer.removeClipboardContent()
 
+    /** Le lieu choisi, en attente du prochain envoi (son propre flux : l'état de l'écran est gelé). */
+    val pendingPlace: StateFlow<me.meeshy.sdk.model.SharedPlace?> get() = composer.pendingPlace
+
+    fun setPendingPlace(place: me.meeshy.sdk.model.SharedPlace) = composer.setPendingPlace(place)
+
+    fun clearPendingPlace() = composer.clearPendingPlace()
+
     /** Overrides the composer's source language from the language picker. */
     fun onComposerLanguagePicked(code: String) = composer.onComposerLanguagePicked(code)
 
@@ -575,13 +644,13 @@ class ChatViewModel @Inject constructor(
 
     fun send() = composer.send()
 
-    /** Sends a file picked from the system document/photo picker through the durable upload chain. */
-    fun sendFileAttachment(bytes: ByteArray, fileName: String, declaredMimeType: String?) =
-        composer.sendFileAttachment(bytes, fileName, declaredMimeType)
-
     /** Un fichier choisi, une photo ou un vocal rejoint le plateau : rien ne part avant [send]. */
-    fun onPickFile(bytes: ByteArray, fileName: String, declaredMimeType: String?) =
-        controllers.find<ComposerTrayController>()?.stageBytes(bytes, fileName, declaredMimeType)
+    fun onPickFile(file: java.io.File, fileName: String, declaredMimeType: String?) =
+        controllers.find<ComposerTrayController>()?.stageFile(file, declaredMimeType, fileName)
+
+    /** Un sticker part d'un geste, bulle optimiste d'abord (#14334). */
+    fun sendSticker(pick: me.meeshy.ui.component.composer.ComposerStickerPick) =
+        composer.sendSticker(pick.file, pick.mimeType, pick.sticker, pick.width, pick.height)
 
     /** Present the composer's message-effects picker sheet. */
     fun openEffectsPicker() = composer.openEffectsPicker()
@@ -591,6 +660,9 @@ class ChatViewModel @Inject constructor(
 
     /** Flip an effect chip in the armed selection. */
     fun toggleEffect(flag: Long) = composer.toggleEffect(flag)
+
+    /** Arm (or disarm, with `null`) the ephemeral [choice] — iOS `ephemeralChoice` (#8303). */
+    fun selectEphemeralChoice(choice: EphemeralChoice?) = composer.selectEphemeralChoice(choice)
 
     /** Record the chosen ephemeral self-destruct [duration] on the armed selection. */
     fun selectEphemeralDuration(duration: EphemeralDuration) = composer.selectEphemeralDuration(duration)
@@ -629,6 +701,9 @@ class ChatViewModel @Inject constructor(
 
     /** Select a tab in the open who-reacted sheet; an out-of-range index is inert. */
     fun selectReactionTab(index: Int) = reactions.selectTab(index)
+
+    /** Adds [emoji] from the who-reacted sheet's quick strip (inert when the viewer already has it). */
+    fun addReactionFromDetails(messageId: String, emoji: String) = reactions.addFromDetails(messageId, emoji)
 
     /** Dismiss the who-reacted sheet. */
     fun closeReactionDetails() = reactions.closeDetails()
@@ -678,6 +753,9 @@ class ChatViewModel @Inject constructor(
     /** A row in the pinned-messages sheet was tapped: scroll to that message and close the sheet. */
     fun onPinnedMessageTap(messageId: String) = replyJump.onPinnedMessageTap(messageId)
 
+    /** The Living Summary asks to land on [messageId] in the thread; inert when it is not loaded. */
+    fun scrollToMessage(messageId: String) = replyJump.scrollToMessage(messageId)
+
     /** The pending reply-jump scroll has been performed by the screen. */
     fun onScrollHandled() = replyJump.onScrollHandled()
 
@@ -703,22 +781,92 @@ class ChatViewModel @Inject constructor(
 
     /** "Partager" on a FILE attachment — same download, but the caller hands the
      * completed file to a share sheet instead of opening it. */
+    /** Les pièces-fichiers reçues pendant la session (badge « prêt » des rangées, #13492). */
+    val downloadedFileIds: StateFlow<Set<String>> get() = fileDownload.downloadedIds
+
+    /** L'adresse locale d'une pièce déjà reçue pendant la session ; `null` si elle n'a pas été téléchargée. */
+    fun downloadedFileUri(attachmentId: String): String? = fileDownload.localUriOf(attachmentId)
+
+    /** Le toucher d'une rangée de fichier du fil : télécharger puis ouvrir, annuler, ou retenter (#13492). */
+    fun onFileAttachmentTap(messageId: String, attachmentId: String? = null) =
+        fileDownload.tap(messageId, attachmentId)
+
+    /** « Enregistrer » une pièce seule (#13494). */
+    fun onPieceSave(messageId: String, attachmentId: String) = fileDownload.save(messageId, attachmentId)
+
     fun onFileAttachmentShare(messageId: String, attachmentId: String? = null) =
         fileDownload.share(messageId, attachmentId)
 
+    /** « Ouvrir » une pièce du hub média : le circuit du fil, pour un porteur que le fil n'a pas chargé. */
+    fun onHubFileOpen(messageId: String, attachment: ApiMessageAttachment) =
+        fileDownload.openProvided(messageId, attachment)
+
     fun dismissFileDownload() = fileDownload.dismiss()
+
+    /** « Réessayer » le transfert en échec, dans le mode demandé (ouvrir, partager, enregistrer). */
+    fun retryFileDownload() = fileDownload.retry()
+
+    /** Les pièces d'un message chargé ; vide s'il a quitté la fenêtre du fil. */
+    internal fun attachmentsOf(messageId: String): List<ApiMessageAttachment> =
+        latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.attachments.orEmpty()
+
+    /** L'aperçu d'UNE pièce pour l'appui long sur une tuile ; `null` ⇒ le message est protégé, le geste vise le message entier. */
+    internal fun pieceOverlayFor(messageId: String, attachmentId: String): PieceOverlayModel? =
+        latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.let { message ->
+            val snapshot = _state.value
+            PieceOverlayModel.of(
+                message, attachmentId,
+                canReply = snapshot.viewerMayWrite,
+                conversationIsEndToEnd = snapshot.isEndToEnd,
+                capabilities = PieceCapabilities.of(
+                    message, sessionRepository.currentUser.value?.id, snapshot.viewerMayWrite, snapshot.isEndToEnd,
+                ),
+            ) { resolveMediaUrl(it, config.apiBaseUrl) }
+        }
+
+    /** Réagit à UNE pièce (#13596) : optimiste, confirmé par la socket, défait sur un refus. */
+    fun onPieceReact(messageId: String, attachmentId: String, emoji: String) {
+        controllers.find<ChatPieceController>()?.react(messageId, attachmentId, emoji)
+    }
+
+    /** Supprime UNE pièce (#13596) : la pièce seule, ou le message entier si c'était tout ce qu'il portait. */
+    fun onPieceDelete(messageId: String, attachmentId: String) {
+        controllers.find<ChatPieceController>()?.delete(messageId, attachmentId)
+    }
+
+    /** Les échecs d'un geste de pièce que l'écran doit dire. */
+    val pieceFailures: kotlinx.coroutines.flow.Flow<PieceFailure>
+        get() = controllers.find<ChatPieceController>()?.failures ?: kotlinx.coroutines.flow.emptyFlow()
+
+    /** Ouvre la feuille de partage sur UNE pièce (#13596) : seule elle part, sans le texte de son message. */
+    fun openForwardPiece(messageId: String, attachmentId: String) = forward.openPiece(messageId, attachmentId)
 
     // --- Forward --------------------------------------------------------------------------
 
     /** Open the forward-picker sheet for [messageId], closing the long-press action sheet. */
     fun openForward(messageId: String) = forward.open(messageId)
 
+    /** Opens the forward picker for a whole multi-selection ([messageIds] in thread order, #13294). */
+    fun openForwardSelection(messageIds: List<String>) {
+        if (messageIds.isNotEmpty()) forward.open(messageIds)
+    }
+
     fun onForwardQueryChange(query: String) = forward.onQueryChange(query)
 
     fun closeForward() = forward.close()
 
-    /** Optimistically forward the source message into [targetConversationId]; one at a time. */
-    fun forwardTo(targetConversationId: String) = forward.forwardTo(targetConversationId)
+    /** The single share sheet (#13469): tick or untick a recipient row. */
+    fun toggleForwardRecipient(targetConversationId: String) = forward.toggleRecipient(targetConversationId)
+
+    fun onForwardCaptionChange(text: String) = forward.onCaptionChange(text)
+
+    fun onForwardDurationChange(seconds: Int) = forward.onDurationChange(seconds)
+
+    /** Send to every ticked recipient: optimistic per row, durable through the outbox. */
+    fun sendForward() = forward.sendSelection()
+
+    /** The gateway refused the forward with [code] (`FORWARD_REFUSAL_CODES`): show the refusal card. */
+    fun onForwardGatewayRefusal(code: String?) = forward.onGatewayRefusal(code)
 
     // --- Search ---------------------------------------------------------------------------
 
@@ -762,17 +910,30 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * File the report. A submission in flight or already succeeded short-circuits a re-tap
-     * ([ReportMessageForm.canSubmit]), so a double tap never fires two reports. An inert repository
-     * result (no session) or a network failure both surface [ReportMessageForm.hasError] and clear
-     * the submitting flag, so the user can retry.
+     * "Envoyer le signalement" tapped: raises the mandatory confirmation dialog and sends nothing.
+     * Inert without a reason or while a send is in flight / done, so a double tap never stacks.
      */
     fun submitReport() {
+        _state.update { it.copy(reportForm = it.reportForm?.requestConfirmation()) }
+    }
+
+    fun cancelReportConfirmation() {
+        _state.update { it.copy(reportForm = it.reportForm?.cancelConfirmation()) }
+    }
+
+    /**
+     * File the report — only reachable from the confirmation dialog ([ReportMessageForm.isConfirming]),
+     * so no report ever reaches moderation unconfirmed, and a second confirm is inert. An inert
+     * repository result (no session) or a network failure both surface [ReportMessageForm.hasError]
+     * so the user can retry.
+     */
+    fun confirmReportSubmit() {
         val form = _state.value.reportForm ?: return
-        if (!form.canSubmit) return
+        val reason = form.selectedReason ?: return
+        if (!form.isConfirming) return
         _state.update { it.copy(reportForm = it.reportForm?.submitting()) }
         viewModelScope.launch {
-            val result = reportRepository.reportMessage(form.messageId, form.selectedReason, form.details)
+            val result = reportRepository.reportMessage(form.messageId, reason, form.details)
             _state.update { current ->
                 val open = current.reportForm ?: return@update current
                 current.copy(reportForm = if (result is NetworkResult.Success) open.submitted() else open.failed())
@@ -790,9 +951,16 @@ class ChatViewModel @Inject constructor(
      * "Delete for everyone" — a server round-trip that tombstones the message
      * for all participants. Only offered for an own message within the
      * [me.meeshy.sdk.model.MessageDeletability] window (gated in the UI).
+     *
+     * #13790 — reacting, pinning and deleting for everyone travel as encrypted signals in an
+     * end-to-end conversation, which this device cannot seal: there they have no effect at all —
+     * except deleting a message the server already reads (#13804, [erasesInClear])
+     * (no optimistic change, no outbox row), whichever path called. An unknown mode is queued —
+     * the outbox reads the mode before anything leaves (`EndToEndOutboxAdmission`).
      */
     fun deleteForEveryone(messageId: String) {
         _state.update { it.copy(actionMessageId = null) }
+        if (_state.value.isEndToEnd && !erasesInClear(messageId)) return
         viewModelScope.launch {
             try {
                 if (messageRepository.deleteOptimistic(messageId)) {
@@ -807,6 +975,13 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
+     * #13804 — in an end-to-end conversation, a message the server already reads (written in clear before the
+     * activation) keeps its clear deletion route, as the gateway judges the erasure on the row; a sealed or absent one does not.
+     */
+    private fun erasesInClear(messageId: String): Boolean =
+        _state.value.messages.firstOrNull { it.messageId == messageId }?.isReadByServer == true
+
+    /**
      * "Delete for me" — hides the message locally only (WhatsApp-style), never
      * reaching the server. The durable [locallyHiddenStore] emits the new hidden
      * set, which the message stream re-filters, so the bubble disappears at once.
@@ -816,6 +991,15 @@ class ChatViewModel @Inject constructor(
         locallyHiddenStore.hide(messageId)
     }
 
+    /** « Pour tous » sur toute une sélection (#13294) : une suppression optimiste par message. */
+    fun deleteSelectionForEveryone(messageIds: List<String>) = messageIds.forEach(::deleteForEveryone)
+
+    /** « Pour moi » sur toute une sélection (#13294) : chaque message est masqué localement. */
+    fun deleteSelectionForMe(messageIds: List<String>) = messageIds.forEach(::deleteForMe)
+
+    /** Étoile (ou désétoile) chaque message de [messageIds] (#13294) ; l'étoile est locale. */
+    fun toggleStars(messageIds: List<String>) = messageIds.forEach(::toggleStar)
+
     /**
      * Pin or unpin a message (iOS `ConversationViewModel.togglePin`): the pin
      * state flips optimistically in the cache and a durable pin/unpin mutation is
@@ -823,6 +1007,10 @@ class ChatViewModel @Inject constructor(
      * A deleted (or otherwise unresolvable) bubble is inert — see [MessagePinToggle].
      */
     fun togglePin(messageId: String) {
+        if (_state.value.isEndToEnd) {
+            _state.update { it.copy(actionMessageId = null) }
+            return
+        }
         val bubble = _state.value.messages.firstOrNull { it.messageId == messageId }
         val pin = when (MessagePinToggle.resolve(bubble?.isDeleted ?: true, bubble?.pinnedAtIso)) {
             PinAction.Pin -> true
@@ -867,6 +1055,7 @@ class ChatViewModel @Inject constructor(
         conversationName = _state.value.conversationTitle,
         conversationAccentColor = _state.value.accentColorHex,
         senderName = senderName,
+        senderAvatarUrl = latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.sender?.resolvedAvatar,
         contentPreview = text,
         attachmentKind = when {
             images.isNotEmpty() -> StarredAttachmentKind.IMAGE

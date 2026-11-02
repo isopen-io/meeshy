@@ -24,6 +24,7 @@ class CallAnalyticsController @Inject constructor(
     private val clock: CallClock,
 ) {
     private var host: CallSessionHost? = null
+    private val quality = CallQualityController(signals)
 
     /** `null` before the first call and after the terminal report. */
     private var analytics: CallAnalytics? = null
@@ -35,11 +36,13 @@ class CallAnalyticsController @Inject constructor(
     /** A call begins: open a fresh accumulator anchored at now. */
     fun begin() {
         analytics = CallAnalytics(startedAtMs = clock.nowMs())
+        quality.begin()
     }
 
     /** One live stats tick, folded into the averages and the quality distribution. */
     fun onSample(sample: CallQualitySample) {
         analytics = analytics?.plusSample(sample)
+        host?.let { quality.onSample(it, sample) }
     }
 
     /** Folds the FSM edge, and reports the call once it ends. */

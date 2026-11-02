@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.media.PlaybackReportSink
 import me.meeshy.sdk.model.media.PlaybackStatusReport
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.ui.component.media.MeeshyMediaCache
+import me.meeshy.ui.component.media.PlayerCensus
 
 /**
  * SDK-pure headless audio track: an [ExoPlayer] instance with no visual surface,
@@ -34,6 +35,11 @@ import me.meeshy.ui.component.media.MeeshyMediaCache
 fun AudioTrackSurface(
     mediaUrl: String,
     isActive: Boolean,
+    /**
+     * `false` : l'inactivité est une PAUSE qui garde la position (story retenue, app en
+     * arrière-plan) ; `true` (défaut) : rembobine, comme une page de réel quittée.
+     */
+    rewindWhenInactive: Boolean = true,
     loop: Boolean = true,
     volume: Float = 1f,
     /**
@@ -56,10 +62,17 @@ fun AudioTrackSurface(
     reportSink: PlaybackReportSink = PlaybackReportSink.Inert,
     reportAction: String = AttachmentStatusBody.ACTION_LISTENED,
     reportLanguage: String? = null,
+    /**
+     * `true` : la piste prend le FOCUS AUDIO — une autre lecture (vocal de conversation, musique d'une autre
+     * application) se met en pause tant qu'elle joue, et un appel la coupe. Le composeur le demande ; la lecture d'une
+     * story garde son propre arbitrage.
+     */
+    handleAudioFocus: Boolean = false,
 ) {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
     val player = remember(mediaUrl, sourceStartMs, sourceEndMs) {
+        PlayerCensus.record()
         // Lecture par le cache disque (clé canonique) : un média déjà vu se rouvre sans réseau.
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaCache.mediaSourceFactory(MediaCacheCategory.AUDIO, mediaUrl))
@@ -83,6 +96,15 @@ fun AudioTrackSurface(
                     }
                     .build(),
             )
+            if (handleAudioFocus) {
+                setAudioAttributes(
+                    androidx.media3.common.AudioAttributes.Builder()
+                        .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                        .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MUSIC)
+                        .build(),
+                    true,
+                )
+            }
             repeatMode = if (loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
             this.volume = volume
             playWhenReady = false
@@ -99,7 +121,7 @@ fun AudioTrackSurface(
 
     LaunchedEffect(player, isActive) {
         player.playWhenReady = isActive
-        if (!isActive) player.seekTo(0)
+        if (!isActive && rewindWhenInactive) player.seekTo(0)
     }
 
     // Bail de lecture : la ressource jouée est à l'abri de l'éviction LRU tant que le player vit.

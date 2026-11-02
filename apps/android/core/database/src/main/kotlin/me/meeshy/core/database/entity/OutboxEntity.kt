@@ -15,6 +15,11 @@ import androidx.room.PrimaryKey
  * @property kind the [me.meeshy.core.database] mutation kind name.
  * @property targetId coalescing key (a `cid`, `messageId:emoji`, conversationId…).
  * @property dependsOn `cmid` of a prerequisite (e.g. a media upload) or null.
+ * @property nextAttemptAt epoch ms before which the flusher must not retry the row (backoff); null = due now.
+ * @property lastError last failure reason, kept for the user-facing "failed" row; null = none yet.
+ * @property waitingSince epoch ms a deferred row first started waiting on an external condition; null = not waiting.
+ * @property cancelRequestedAt epoch ms the user asked to cancel while the row was in flight; null = not requested.
+ * @property ownerId account that enqueued the row; null = written before the column existed (never sent).
  */
 @Entity(
     tableName = "outbox",
@@ -31,4 +36,9 @@ public data class OutboxEntity(
     val state: String,
     val createdAt: Long,
     val updatedAt: Long,
+    val nextAttemptAt: Long? = null,
+    val lastError: String? = null,
+    val waitingSince: Long? = null,
+    val cancelRequestedAt: Long? = null,
+    val ownerId: String? = null,
 )

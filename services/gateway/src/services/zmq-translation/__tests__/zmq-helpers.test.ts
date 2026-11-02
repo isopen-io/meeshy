@@ -219,14 +219,12 @@ describe('zmq-helpers', () => {
       expect(result!.buffer).toEqual(fakeContent);
     });
 
-    it('reports size from statSync (not buffer.length)', async () => {
-      // statSync reports 512; readFile returns a buffer of different length
-      const statSize = 512;
+    it('reports the size of the bytes it sends, not the stored file size (#13100: a sealed file is larger than its plaintext)', async () => {
       mockExistsSync.mockReturnValue(true);
-      mockStatSync.mockReturnValue({ size: statSize });
-      mockReadFile.mockResolvedValue(Buffer.alloc(100)); // mismatch is irrelevant
+      mockStatSync.mockReturnValue({ size: 512 });
+      mockReadFile.mockResolvedValue(Buffer.alloc(100));
       const result = await loadAudioAsBinary('/tmp/size-check.wav');
-      expect(result!.size).toBe(statSize);
+      expect(result!.size).toBe(100);
     });
   });
 
@@ -300,7 +298,7 @@ describe('zmq-helpers', () => {
     });
 
     it('exposes the namespaces the social pipelines claim', () => {
-      expect([...TRANSLATION_TARGET_NAMESPACES]).toEqual(['post', 'comment', 'story', 'media-caption', 'media-alt', 'message-attachment-caption', 'direct-text']);
+      expect([...TRANSLATION_TARGET_NAMESPACES]).toEqual(['post', 'comment', 'story', 'media-caption', 'media-alt', 'message-attachment-caption', 'message-attachment-alt', 'direct-text']);
     });
 
     it('extracts the namespace of a social target, null for a bare message id', () => {

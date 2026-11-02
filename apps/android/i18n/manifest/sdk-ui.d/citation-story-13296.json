@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "bubble.reply.story.answer", "androidName": "bubble_story_citation_answer", "status": "adopted"},
+        {"catalog": "app", "iosKey": "bubble.reply.story.unavailable", "androidName": "bubble_story_citation_unavailable", "status": "adopted"},
+        {"catalog": "app", "iosKey": "bubble.reply.story.open_hint", "androidName": "bubble_story_citation_open_hint", "status": "adopted"}
+      ]
+    }
+  }
+}

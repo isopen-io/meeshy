@@ -208,6 +208,71 @@ final class OutgoingImagePreparerTests: XCTestCase {
         XCTAssertNil(try Self.properties(of: out.data)[kCGImagePropertyGPSDictionary])
     }
 
+    // MARK: - Lieu retiré d'un FICHIER (extension de partage, #11847)
+
+    func test_removeLocation_fileWithGPS_dropsIt_andKeepsThePixels() throws {
+        let data = try Self.photo(width: 800, height: 600, quality: 0.8, gps: true)
+        let url = try Self.written(data)
+        XCTAssertEqual(OutgoingImageLocationRemoval.removeLocation(fromFileAt: url), .removed)
+        let stripped = try Data(contentsOf: url)
+        XCTAssertNil(try Self.properties(of: stripped)[kCGImagePropertyGPSDictionary])
+        XCTAssertEqual(try Self.pixels(of: stripped), try Self.pixels(of: data), "retirer le lieu ne ré-encode pas les pixels")
+    }
+
+    func test_removeLocation_fileWithoutGPS_isUntouched() throws {
+        let data = try Self.photo(width: 400, height: 300, quality: 0.8)
+        let url = try Self.written(data)
+        XCTAssertEqual(OutgoingImageLocationRemoval.removeLocation(fromFileAt: url), .untouched)
+        XCTAssertEqual(try Data(contentsOf: url), data)
+    }
+
+    func test_removeLocation_notAnImage_isUntouched() throws {
+        let data = Data("pas une image".utf8)
+        let url = try Self.written(data)
+        XCTAssertEqual(OutgoingImageLocationRemoval.removeLocation(fromFileAt: url), .untouched)
+        XCTAssertEqual(try Data(contentsOf: url), data)
+    }
+
+    // MARK: - HDR (#11847)
+
+    /// Une source couchée dont la définition doit descendre : la carte de gain,
+    /// relative aux pixels STOCKÉS, ne survivrait pas à leur redressement. Les
+    /// pixels restent couchés, l'orientation voyage, la carte de gain aussi.
+    func test_prepare_rotatedHdrPhoto_keepsItsGainMap_andReportsTheUprightSize() throws {
+        try HDRPhotoFixture.requireHDREncoding()
+        guard #available(iOS 18.0, macOS 15.0, *) else { return }
+        let data = try HDRPhotoFixture.jpeg(width: 1200, height: 800, orientation: 6)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.strong(max: 600)))
+        XCTAssertEqual(out.encodedGenerations, 1)
+        XCTAssertTrue(HDRPhotoFixture.hasGainMap(out.data),
+                      HDRPhotoFixture.diagnosis(output: out.data, source: data, maxPixelSize: 600))
+        XCTAssertEqual(HDRPhotoFixture.orientation(of: out.data), 6)
+        XCTAssertEqual(out.pixelSize, CGSize(width: 400, height: 600))
+    }
+
+    func test_prepare_uprightHdrPhoto_keepsItsGainMap() throws {
+        try HDRPhotoFixture.requireHDREncoding()
+        guard #available(iOS 18.0, macOS 15.0, *) else { return }
+        let data = try HDRPhotoFixture.jpeg(width: 1200, height: 800)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.strong(max: 600)))
+        XCTAssertTrue(HDRPhotoFixture.hasGainMap(out.data),
+                      HDRPhotoFixture.diagnosis(output: out.data, source: data, maxPixelSize: 600))
+        XCTAssertEqual(HDRPhotoFixture.orientation(of: out.data), 1)
+        XCTAssertEqual(out.pixelSize, CGSize(width: 600, height: 400))
+    }
+
+    /// Une prise HDR de l'objectif garde sa carte de gain jusqu'au disque, en une génération.
+    func test_hdrCameraShot_keepsItsGainMapUntilUpload() throws {
+        try HDRPhotoFixture.requireHDREncoding()
+        guard #available(iOS 18.0, macOS 15.0, *) else { return }
+        let raw = try HDRPhotoFixture.jpeg(width: 1600, height: 1200, orientation: 6)
+        let shot = try XCTUnwrap(PhotoCaptureProcessor().process(encoded: raw, settings: .capture))
+        XCTAssertTrue(HDRPhotoFixture.hasGainMap(shot.data), "prise : \(HDRPhotoFixture.describe(shot.data))")
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(shot.data, policy: Self.hd()))
+        XCTAssertTrue(HDRPhotoFixture.hasGainMap(out.data),
+                      HDRPhotoFixture.diagnosis(output: out.data, source: shot.data, maxPixelSize: 1600))
+    }
+
     // MARK: - Fabriques
 
     /// Le défaut : HD, une génération perceptuelle, lieu retiré.
@@ -248,6 +313,12 @@ final class OutgoingImagePreparerTests: XCTestCase {
         CGImageDestinationAddImage(destination, image, properties as CFDictionary)
         XCTAssertTrue(CGImageDestinationFinalize(destination))
         return data as Data
+    }
+
+    private static func written(_ data: Data) throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("outgoing-\(UUID().uuidString).jpg")
+        try data.write(to: url)
+        return url
     }
 
     private static func location(_ gps: Bool) -> [CFString: Any] {

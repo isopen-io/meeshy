@@ -23,13 +23,13 @@ final class ComposerCaptureMotionTests: XCTestCase {
     }
 
     func test_theBottomRow_mountsTheMorphingBar_fedByTheSwitch() throws {
-        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("ComposerCaptureZoomBar("))
         XCTAssertTrue(bas.contains("switching: capture.switchingCamera"))
-        let session = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
+        let session = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureSession.swift")
         XCTAssertTrue(session.contains("switchingCamera: camera.isSwitchingCamera"),
                       "le morphe suit la bascule, pas la finalisation d'une prise")
-        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureMotion.swift")
+        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureMotion.swift")
         XCTAssertTrue(barre.contains("matchedGeometryEffect(id: \"zoom.bar\""), "une seule forme qui se transforme")
     }
 
@@ -97,9 +97,9 @@ final class ComposerCaptureMotionTests: XCTestCase {
                              "il bondit en se fermant")
         XCTAssertEqual(ComposerLockSeal.glyphScale(progress: 1, sealed: true, reduceMotion: true), 1, "sans rebond")
         XCTAssertLessThan(ComposerLockSeal.holdDuration(reduceMotion: true), ComposerLockSeal.holdDuration(reduceMotion: false))
-        let piste = try? ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureLockTrack.swift")
+        let piste = try? ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureLockTrack.swift")
         XCTAssertTrue(piste?.contains("ComposerLockSeal.animation(reduceMotion: reduceMotion), value: sealed") == true)
-        let bas = try? ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try? ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas?.contains("lockSeal.lockChanged(from: avant, to: apres") == true)
     }
 }

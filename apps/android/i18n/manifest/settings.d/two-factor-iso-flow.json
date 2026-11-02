@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "2fa_activated_title",
+          "androidName": "twofactor_activated_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_back_to_qr",
+          "androidName": "twofactor_back_to_qr",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_backup_codes_instruction",
+          "androidName": "twofactor_backup_codes_instruction",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_code_placeholder",
+          "androidName": "twofactor_code_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_copy_all_codes",
+          "androidName": "twofactor_copy_all_codes",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_disable_warning",
+          "androidName": "twofactor_disable_warning",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_done_button",
+          "androidName": "twofactor_done_button",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_enter_code_instruction",
+          "androidName": "twofactor_enter_code_instruction",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_manual_entry_label",
+          "androidName": "twofactor_manual_entry_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_next_button",
+          "androidName": "twofactor_next_button",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_retry",
+          "androidName": "twofactor_retry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_scan_instruction",
+          "androidName": "twofactor_scan_instruction",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_verify_button",
+          "androidName": "twofactor_verify_button",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y_2fa_secret_key",
+          "androidName": "twofactor_a11y_secret_key",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y_copied",
+          "androidName": "twofactor_a11y_copied",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y_copy_key",
+          "androidName": "twofactor_a11y_copy_key",
+          "status": "adopted"
+        },
+        {
+          "androidName": "twofactor_regenerate_warning",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

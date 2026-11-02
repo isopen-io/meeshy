@@ -1,19 +1,26 @@
 import { z } from 'zod';
-import { usernamePatternSource } from '../api-schemas.js';
+import { nameMinLength, usernameMinLength, usernamePatternSource } from '../api-schemas.js';
 import { PASSWORD_MIN_LENGTH } from '../../utils/validation.js';
+import { atLeastVisible, blankOrAtLeastVisible, nameTooShort } from '../../utils/validation-primitives.js';
 
 const USERNAME_PATTERN = new RegExp(usernamePatternSource);
+
+/** Un prénom ou un nom CRÉÉ par l'administration tient la même borne que l'inscription (#13825). */
+const personName = z.string().max(50).refine(atLeastVisible(nameMinLength), nameTooShort);
+
+/** Le nom affiché d'un compte CRÉÉ, absent ou d'au moins `nameMinLength` caractères visibles. */
+const createdDisplayName = z.string().max(50).refine(blankOrAtLeastVisible(nameMinLength), nameTooShort).nullable().optional();
 
 /**
  * Schéma pour créer un utilisateur
  */
 export const createUserValidationSchema = z.object({
-  username: z.string().min(3).max(30).regex(USERNAME_PATTERN),
-  firstName: z.string().min(1).max(50),
-  lastName: z.string().min(1).max(50),
+  username: z.string().min(usernameMinLength).max(30).regex(USERNAME_PATTERN),
+  firstName: personName,
+  lastName: personName,
   email: z.email(),
   password: z.string().min(PASSWORD_MIN_LENGTH),
-  displayName: z.string().max(50).nullable().optional(),
+  displayName: createdDisplayName,
   bio: z.string().max(500).optional(),
   phoneNumber: z.string().max(20).nullable().optional(),
   role: z.string().optional(),
@@ -72,7 +79,11 @@ export function formatZodErrors(errors: z.ZodError) {
  */
 export const updateUserProfileValidationSchema = z.object({
   // Informations personnelles
-  username: z.string().min(3).max(30).regex(USERNAME_PATTERN).optional(),
+  username: z.string().min(usernameMinLength).max(30).regex(USERNAME_PATTERN).optional(),
+  // Les noms gardent le minimum d'AVANT (#13825, rétrocompatibilité) : la
+  // console renvoie la fiche entière, et un compte hérité « A » doit rester
+  // modifiable sur ses autres champs. La borne s'applique aux seuls noms
+  // CHANGÉS, dans le handler (`routes/admin/users-write.ts`).
   firstName: z.string().min(1).max(50).optional(),
   lastName: z.string().min(1).max(50).optional(),
   displayName: z.string().max(50).nullable().optional(),

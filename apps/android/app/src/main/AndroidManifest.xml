@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Lecture d'un vocal en arrière-plan : service de premier plan « mediaPlayback » + CPU éveillé (#13393). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Audio/video calls (WebRTC media capture) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
@@ -51,6 +54,8 @@
             android:exported="true"
             android:label="@string/app_name"
             android:launchMode="singleTop"
+            android:supportsPictureInPicture="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.Meeshy.Starting">
             <intent-filter>
@@ -92,6 +97,26 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="meeshy" android:host="profile" />
             </intent-filter>
+            <!-- App Links : les liens des e-mails de reinitialisation du mot de passe et de verification de l'adresse
+                 (LaunchRouter.routeForDeepLink, EmailLinkSecret.exactForm). EXACTS (android:path) et jamais en prefixe :
+                 le prefixe `/auth/email-link` revendiquerait aussi les liens d'e-mail que l'app ne lit pas (revocation de
+                 sessions, suppression de compte…), qui seraient avales sans rien afficher au lieu d'aller au navigateur.
+                 Les alias `/auth/email-link/...` ne sont PAS revendiques ici (#10859, #10868) : aucune application
+                 publiee ne revendique un alias — seules les adresses CANONIQUES le sont, le web se chargeant de la
+                 redirection alias -> canonique quand le lien s'ouvre au navigateur. `EmailLinkSecret.exactForm` lit
+                 encore ces alias pour les URI transmises par un autre chemin (partage, navigateur "ouvrir avec"),
+                 mais le manifeste ne les declenche jamais directement. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/reset-password" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/reset-password" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/auth/reset-password" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/auth/reset-password" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/auth/verify-email" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/auth/verify-email" />
+            </intent-filter>
             <!-- App Link : le lien de partage de profil (https://meeshy.me/u/{username},
                  me.meeshy.sdk.model.ProfileShareLink) ouvre l'app directement. meeshy://u/{username}
                  n'a pas besoin de son propre filtre : le filtre scheme-only ci-dessus (sans host)
@@ -121,10 +146,54 @@
                 <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/join/" />
                 <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/join/" />
             </intent-filter>
+            <!-- App Link : le lien de partage d'un post (me.meeshy.sdk.model.PostShareLink,
+                 /feeds/post/{id}) et la forme /post/{id} des liens suivis de la passerelle
+                 ouvrent le detail du post dans l'app (Routes.POST_SHARE_DEEP_LINKS). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/feeds/post/" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/feeds/post/" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/post/" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/post/" />
+            </intent-filter>
+            <!-- App Link : un reel (/reel/{id}) et une story (/story/{id}) partages. Connecte, ils ouvrent les reels /
+                 le detail du post ; sans session, l'ecran visiteur montre leur contenu public (VisitorLinkGate). Jamais
+                 /stories/ : /stories/new et /stories/mine sont des pages du web, et iOS ne revendique que /story/*. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/reel/" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/reel/" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/story/" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/story/" />
+            </intent-filter>
+            <!-- App Link : le hub « Mes liens » (iOS LinksHubView, https://meeshy.me/links) ouvre
+                 LinksRoutes.HUB (LinksRoutes.HUB_DEEP_LINKS). meeshy://links passe par le filtre
+                 scheme-only plus haut. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/links" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/links" />
+            </intent-filter>
+            <!-- App Link : l'entree sans compte dans World Wide (https://meeshy.me/world, le QR de la landing)
+                 ouvre Routes.WORLD_ENTRY. meeshy://world passe par le filtre scheme-only plus haut. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/world" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/world" />
+            </intent-filter>
         </activity>
 
-        <!-- "Share to Meeshy" target (feature-parity §O — text/URL lot 1, image/video lot 2,
-             mirrors the iOS MeeshyShareExtension's own phased scope). android:excludeFromRecents
+        <!-- "Share to Meeshy" target (feature-parity §O, #13585) : texte, lien, images, vidéos et FICHIERS quelconques,
+             seul ou en sélection mêlée (SEND / SEND_MULTIPLE en type générique), comme l'extension iOS MeeshyShareExtension.
+             L'admission d'une source reste jugée dans l'activité (InboundMediaPolicy.admitsSource), pas par ce filtre. android:excludeFromRecents
              keeps it out of the task switcher — it is a single-purpose relay, not a real screen. -->
         <activity
             android:name=".ShareTargetActivity"
@@ -140,14 +209,26 @@
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="image/*" />
+                <data android:mimeType="*/*" />
             </intent-filter>
             <intent-filter>
-                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="video/*" />
+                <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+
+        <!-- Session média + notification de lecture d'un vocal écouté (#13393). -->
+        <service
+            android:name=".audio.VoicePlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- Garde le micro d'un vocal en cours quand l'app quitte l'écran (#13441) : « Arrêter » / « Annuler » dans la notification. -->
+        <service
+            android:name=".ongoing.VoiceRecordingService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <!-- FCM Push -->
         <service
@@ -157,6 +238,23 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- Boutons « Répondre » (saisie en ligne) et « Marquer comme lu » de la bannière d'un message -->
+        <receiver
+            android:name=".push.PushActionReceiver"
+            android:exported="false" />
+
+        <!-- Repli quand le système rend lui-même une bannière : le symbole Meeshy, pas le carré
+             de l'icône de lancement (MeeshyFcmService.handleIntent route d'ordinaire le push
+             vers le pipeline, qui pose sa propre icône). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_meeshy" />
+        <!-- Et le canal « Messages » v2 (NotificationChannelIds.CHANNEL_MESSAGES_V2) : le v1 que la
+             passerelle nomme encore n'est plus installé. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="meeshy_messages_v2" />
 
         <!-- Bouton « Refuser » de la notification d'appel (CallStyle) -->
         <receiver

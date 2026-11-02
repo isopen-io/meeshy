@@ -1,9 +1,11 @@
 package me.meeshy.sdk.conversation
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
@@ -39,11 +41,14 @@ class PrefetchAccountGuardTest {
     @Test
     fun `un changement de compte en cours de passe n ecrit rien`() = runTest {
         var active = true
-        val source = FakePrefetchSource()
+        val network = CompletableDeferred<Unit>()
+        val source = FakePrefetchSource(gate = network)
         val store = FakePrefetchStore()
         store.onPersist = { active = false }
         val prefetcher = prefetcher(source, store)
         prefetcher.schedule(request((1..8).map { "c$it" }, stillOwner = { active }))
+        runCurrent()
+        network.complete(Unit)
         prefetcher.waitUntilIdle()
         // The first batch of four was already in flight; the second batch never starts.
         assertThat(source.requested).hasSize(4)

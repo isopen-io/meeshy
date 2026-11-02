@@ -17,6 +17,8 @@ import me.meeshy.sdk.model.NotificationType
 import me.meeshy.sdk.model.NotificationTypeCatalog
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.UserNotificationPreferences
+import me.meeshy.sdk.model.relation.CircleNotify
+import me.meeshy.sdk.model.relation.RelationAudienceChoice
 import me.meeshy.sdk.model.next
 import me.meeshy.sdk.notification.NotificationPreferencesStore
 import me.meeshy.sdk.notification.NotificationPreferencesSyncRepository
@@ -24,11 +26,15 @@ import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.theme.ThemeStore
 import me.meeshy.sdk.user.UserRepository
+import java.time.OffsetDateTime
 import javax.inject.Inject
+
+private const val SECONDS_PER_MINUTE = 60
 
 data class SettingsUiState(
     val userId: String? = null,
     val username: String? = null,
+    val displayName: String? = null,
     val email: String? = null,
     val avatar: String? = null,
     val themeMode: AppThemeMode = AppThemeMode.AUTO,
@@ -39,7 +45,13 @@ data class SettingsUiState(
     val notifications: UserNotificationPreferences = UserNotificationPreferences(),
     val notificationTypeQuery: String = "",
     val isLoading: Boolean = false,
-)
+) {
+    /** iOS `SettingsView.profileCard` : le nom affiché en titre, le pseudo à défaut. */
+    val profileTitle: String get() = displayName?.trim()?.takeIf { it.isNotEmpty() } ?: username.orEmpty()
+
+    /** iOS `SettingsView.profileCard` : « @pseudo » sous le titre. */
+    val profileHandle: String? get() = username?.takeIf { it.isNotBlank() }?.let { "@$it" }
+}
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -62,6 +74,7 @@ class SettingsViewModel @Inject constructor(
                     it.copy(
                         userId = user?.id,
                         username = user?.username,
+                        displayName = user?.displayName,
                         email = user?.email,
                         avatar = user?.avatar,
                         systemLanguage = user?.systemLanguage,
@@ -176,22 +189,22 @@ class SettingsViewModel @Inject constructor(
 
     /** Toggles the Do-Not-Disturb (quiet-hours) schedule on/off. */
     fun setDndEnabled(enabled: Boolean) {
-        updateNotifications { it.copy(dndEnabled = enabled) }
+        updateDnd { it.copy(dndEnabled = enabled) }
     }
 
     /** Sets the quiet-hours start, formatting the picked time into the stored `HH:mm`. */
     fun setDndStart(hour: Int, minute: Int) {
-        updateNotifications { it.copy(dndStartTime = DndWindow.formatTimeOfDay(hour, minute)) }
+        updateDnd { it.copy(dndStartTime = DndWindow.formatTimeOfDay(hour, minute)) }
     }
 
     /** Sets the quiet-hours end, formatting the picked time into the stored `HH:mm`. */
     fun setDndEnd(hour: Int, minute: Int) {
-        updateNotifications { it.copy(dndEndTime = DndWindow.formatTimeOfDay(hour, minute)) }
+        updateDnd { it.copy(dndEndTime = DndWindow.formatTimeOfDay(hour, minute)) }
     }
 
     /** Adds/removes a day from the quiet-hours schedule (empty ⇒ every day). */
     fun toggleDndDay(day: DndDay) {
-        updateNotifications { it.copy(dndDays = DndWindow.toggleDay(it.dndDays, day)) }
+        updateDnd { it.copy(dndDays = DndWindow.toggleDay(it.dndDays, day)) }
     }
 
     /** Sets a single per-event notification type on/off, preserving every other toggle. */
@@ -199,10 +212,30 @@ class SettingsViewModel @Inject constructor(
         updateNotifications { NotificationTypeCatalog.toggle(it, type, enabled) }
     }
 
+    /**
+     * « Qui est prévenu » (#14064) : règle le cran d'entourage d'UNE action. Peint aussitôt (le bloc local est la
+     * source de l'écran) puis mis en file vers la passerelle, hors ligne compris ; un envoi refusé jusqu'au bout rend
+     * le bloc à la vérité du serveur (`UpdateSettingsHandler.onExhausted`). Une clé inconnue est ignorée.
+     */
+    fun setCircleAudience(key: String, choice: RelationAudienceChoice) {
+        if (key !in CircleNotify.KEYS) return
+        updateNotifications { it.copy(circleAudience = it.circleAudience + (key to choice)) }
+    }
+
     /** Updates the search query that filters the per-event notification-type list. */
     fun setNotificationTypeQuery(query: String) {
         _state.update { it.copy(notificationTypeQuery = query) }
     }
+
+    /**
+     * A quiet-hours edit also records the device's current UTC offset, so the gateway judges
+     * the 22:00-08:00 window in the user's LOCAL time, never in UTC (GW7).
+     */
+    private fun updateDnd(edit: (UserNotificationPreferences) -> UserNotificationPreferences) {
+        updateNotifications { DndWindow.withRecordedOffset(edit(it), deviceUtcOffsetMinutes()) }
+    }
+
+    private fun deviceUtcOffsetMinutes(): Int = OffsetDateTime.now().offset.totalSeconds / SECONDS_PER_MINUTE
 
     /**
      * The single funnel every persisted notification toggle flows through: it paints the

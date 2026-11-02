@@ -59,7 +59,17 @@ const synthetic: readonly GloryFrameOfferPack[] = [
   },
 ];
 
-const catalog: readonly GloryFrameOfferPack[] = [...real, ...synthetic];
+/*
+ * Le pack `succes` RÉEL tel qu'il sera le jour où son cadre mythique sortira des suggestions : un `id` publié ne se
+ * retire jamais, il se masque (`hidden`). C'est le seul cadre MASQUÉ du catalogue des vecteurs, et il tient des deux
+ * côtés la branche « rareté sans cadre proposable ⇒ le neutre » (`GameGloryFrames.swift`, `own.isEmpty`).
+ */
+const MASKED_FRAME = 'succes.mythic';
+const succesReal = real.find((pack) => pack.slug === 'succes');
+const masked: readonly GloryFrameOfferPack[] =
+  succesReal === undefined ? [] : [{ ...succesReal, slug: 'succes-retrait', frames: succesReal.frames.map((frame) => ({ ...frame, hidden: frame.hidden || frame.id === MASKED_FRAME })) }];
+
+const catalog: readonly GloryFrameOfferPack[] = [...real, ...synthetic, ...masked];
 
 type CaseInput = {
   readonly stepId: string;
@@ -70,8 +80,9 @@ type CaseInput = {
 };
 
 const DEFAULTS = ['afrique', 'moments', 'tresor', 'succes'];
-const WITH_SUCCES = [...DEFAULTS, 'succes', 'mythologies'];
 const WITHOUT_SUCCES = ['afrique', 'moments', 'tresor'];
+const WITH_SUCCES = [...DEFAULTS, 'mythologies'];
+const WITH_MASKED = [...WITHOUT_SUCCES, 'succes-retrait'];
 
 const at = (name: string, stepId: string, over: Partial<CaseInput> = {}) => ({
   name,
@@ -107,6 +118,8 @@ const PLAN = [
   at('haut fait sans rareté servie ⇒ le cadre neutre, jamais une rareté', 'achievement:messages.3', { installed: WITH_SUCCES }),
   at('haut fait composé, rareté servie ⇒ le cadre de cette rareté', 'achievement:defi.streak-3', { rarity: 'epic', installed: WITH_SUCCES }),
   at('haut fait composé, rareté non servie ⇒ le neutre', 'achievement:defi.streak-3', { installed: WITH_SUCCES }),
+  at('rareté dont le cadre est masqué ⇒ le neutre du même pack, jamais une autre rareté', 'achievement:messages.3', { rarity: 'mythic', installed: WITH_MASKED }),
+  at('un cadre masqué ne retire que sa rareté : les autres restent servies', 'achievement:messages.3', { rarity: 'legendary', installed: WITH_MASKED }),
   at('pack des hauts faits absent (ancien client) ⇒ carte simple', 'achievement:messages.3', { rarity: 'rare', installed: WITHOUT_SUCCES }),
   at('Murmure → les cadres de sa mythologie', 'rank:murmure:3', { installed: WITH_SUCCES }),
   at('cadre limité à une division : proposé à sa seule division', 'rank:echo:3', { installed: WITH_SUCCES }),
@@ -133,6 +146,19 @@ if (process.env.UPDATE_FRAME_OFFER_VECTORS === '1') writeFileSync(FILE, render()
 describe('frame-offer-vectors.json ne diverge pas de la loi', () => {
   it('est exactement ce que la loi produit', () => {
     expect(JSON.parse(readFileSync(FILE, 'utf8'))).toEqual(JSON.parse(render()));
+  });
+
+  it('rejoue un cadre MASQUÉ sur le chemin des hauts faits : sa rareté se compose dans le neutre du même pack, jamais dans un cadre d’une autre rareté', () => {
+    type Frame = { readonly id: string; readonly usage: { readonly kind: string; readonly rarity?: string }; readonly hidden: boolean };
+    type Vectors = { readonly catalog: readonly { readonly slug: string; readonly frames: readonly Frame[] }[]; readonly cases: readonly { readonly input: CaseInput; readonly expected: { readonly suggested: readonly { readonly pack: string; readonly frameId: string }[] } }[] };
+    const vectors = JSON.parse(readFileSync(FILE, 'utf8')) as Vectors;
+    const masked = vectors.catalog.flatMap((pack) => pack.frames.filter((frame) => frame.hidden && frame.usage.kind === 'achievement' && frame.usage.rarity !== undefined).map((frame) => ({ pack: pack.slug, rarity: frame.usage.rarity })));
+    expect(masked.length).toBeGreaterThan(0);
+    const neutral = (pack: string, frameId: string) => vectors.catalog.find((candidate) => candidate.slug === pack)?.frames.find((frame) => frame.id === frameId)?.usage.rarity === undefined;
+    const replayed = vectors.cases.filter(({ input, expected }) =>
+      masked.some(({ pack, rarity }) => input.rarity === rarity && input.installed.includes(pack) && expected.suggested.length > 0 && expected.suggested.every((ref) => ref.pack === pack && neutral(ref.pack, ref.frameId))),
+    );
+    expect(replayed.length).toBeGreaterThan(0);
   });
 
   it('porte au moins un cas par ligne du tableau du § 5.4', () => {

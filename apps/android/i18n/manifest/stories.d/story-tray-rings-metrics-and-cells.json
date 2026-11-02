@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "story.tray.menu.viewStories",
+          "androidName": "story_tray_menu_viewStories",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.tray.menu.profile",
+          "androidName": "story_tray_menu_profile",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

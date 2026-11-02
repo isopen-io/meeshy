@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 // **#9859 — la barre de progression n'invalide plus les commentaires.**
@@ -19,12 +20,16 @@ final class StoryCommentsOverlayRenderTests: XCTestCase {
         replies: [String: [FeedComment]] = [:],
         likedIds: Set<String> = []
     ) -> StoryCommentsRenderInputs {
-        StoryCommentsRenderInputs(
+        var hearts = CommentHeartLedger()
+        hearts.seed(from: comments.filter { likedIds.contains($0.id) }.map {
+            FeedComment(id: $0.id, author: $0.author, content: $0.content, currentUserReactions: [MeeshyQuickReactions.heart])
+        })
+        return StoryCommentsRenderInputs(
             comments: comments, commentCount: comments.count, replies: replies,
             expandedThreads: [], loadingReplies: [], repliesHasMore: [:],
             isLoading: false, readerLanguages: ["fr"], isStoryExpired: false,
             targetCommentId: nil, targetParentCommentId: nil, safeBottom: 34,
-            replyingToId: nil, likedIds: likedIds, likeDelta: [:], inFlightIds: []
+            replyingToId: nil, hearts: hearts
         )
     }
 
@@ -112,10 +117,10 @@ final class StoryCommentsOverlayRenderTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
         func read(_ name: String) throws -> String {
             AppSourceGuard.stripComments(try String(
-                contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Views/" + name), encoding: .utf8))
+                contentsOf: root.appendingPathComponent(AppSourceGuard.featureViewPath(name)), encoding: .utf8))
         }
         let canvas = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift"))
         XCTAssertTrue(canvas.contains("let makeCommentsOverlay: () -> StoryCommentsOverlayHost"))
         XCTAssertTrue(canvas.contains("makeCommentsOverlay().placed(commentsZoneReading(geometry: geometry)).equatable()"),
                       "la carte place la liste sur son composeur avant la comparaison (#9893)")

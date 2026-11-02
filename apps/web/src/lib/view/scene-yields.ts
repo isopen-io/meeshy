@@ -67,6 +67,19 @@ export const SCENE_READING_BLUR_PX = 6;
 
 export const SCENE_YIELD_TRANSITION = 'filter 220ms ease, transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1)';
 
+/** La scène qui ne porte pas le flou n'anime que sa réduction. */
+export const SCENE_SCALE_TRANSITION = 'transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1)';
+
+/**
+ * QUI PORTE LE FLOU DE LECTURE (#11307). `scene` : la scène elle-même — une
+ * story, dont le calque ne change pas d'image pendant qu'on lit. `poster` :
+ * l'AFFICHE du réel visible, une image fixe. Un `filter` posé sur un pager qui
+ * contient une `<video>` en lecture se recalcule à chaque image décodée ; le
+ * réel se met donc en pause sous son affiche floutée (parité iOS, défaut
+ * retenu de #11253), et la scène ne porte plus que sa réduction.
+ */
+export type SceneBlurCarrier = 'scene' | 'poster';
+
 export type YieldingSceneProps = {
   readonly 'data-scene-yields': SceneYield;
   readonly style: {
@@ -82,19 +95,37 @@ export function yieldingScene({
   scale,
   anchorTop,
   reducedMotion,
+  blurCarrier = 'scene',
 }: {
   readonly yieldTo: SceneYield;
   readonly scale: number;
   readonly anchorTop: number;
   readonly reducedMotion: boolean;
+  readonly blurCarrier?: SceneBlurCarrier;
 }): YieldingSceneProps {
+  const sceneBlurs = blurCarrier === 'scene';
   return {
     'data-scene-yields': yieldTo,
     style: {
-      filter: yieldTo === 'reading' ? `blur(${SCENE_READING_BLUR_PX}px)` : 'none',
+      filter: sceneBlurs && yieldTo === 'reading' ? `blur(${SCENE_READING_BLUR_PX}px)` : 'none',
       transform: yieldTo === 'writing' ? `scale(${scale})` : 'none',
       transformOrigin: `50% ${anchorTop}px`,
-      transition: reducedMotion ? 'none' : SCENE_YIELD_TRANSITION,
+      transition: reducedMotion ? 'none' : sceneBlurs ? SCENE_YIELD_TRANSITION : SCENE_SCALE_TRANSITION,
     },
   };
+}
+
+/**
+ * LE RÉEL VISIBLE SOUS LA FEUILLE (#11307) : `held` — sa lecture s'arrête, et
+ * reprend à la fermeture ; `veiled` — son affiche floutée le recouvre, le
+ * temps qu'on LISE. Écrire le rend net (la scène se réduit au-dessus de la
+ * barre), toujours en pause. Un voisin hors champ ne jouait pas et ne se voit
+ * pas : rien ne change pour lui, et sa page mémoïsée ne se re-rend pas.
+ */
+export function reelUnderSheet({ yieldTo, active }: { readonly yieldTo: SceneYield; readonly active: boolean }): {
+  readonly held: boolean;
+  readonly veiled: boolean;
+} {
+  if (!active || yieldTo === 'full') return { held: false, veiled: false };
+  return { held: true, veiled: yieldTo === 'reading' };
 }

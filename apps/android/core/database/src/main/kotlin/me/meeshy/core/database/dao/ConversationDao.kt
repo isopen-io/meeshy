@@ -25,6 +25,10 @@ public interface ConversationDao {
     @Query("SELECT * FROM conversations ORDER BY updatedAt DESC LIMIT :limit")
     public suspend fun recentByUpdatedAt(limit: Int): List<ConversationEntity>
 
+    /** Le même rang que [recentByUpdatedAt], ré-émis à chaque écriture de la table. */
+    @Query("SELECT * FROM conversations ORDER BY updatedAt DESC LIMIT :limit")
+    public fun observeRecentByUpdatedAt(limit: Int): Flow<List<ConversationEntity>>
+
     @Query("SELECT * FROM conversations WHERE id = :id")
     public fun observeById(id: String): Flow<ConversationEntity?>
 

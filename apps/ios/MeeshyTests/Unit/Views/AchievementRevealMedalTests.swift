@@ -94,7 +94,7 @@ final class AchievementRevealMedalTests: XCTestCase {
     }
 
     func test_theFullScreenCelebrationDrawsTheMedalAndWearsTheRim() throws {
-        let view = try source("Meeshy/Features/Main/Views/AchievementRevealView.swift")
+        let view = try source("Meeshy/Features/Profile/Views/AchievementRevealView.swift")
         XCTAssertTrue(view.contains("GameMedalView("), "la médaille remplace le symbole d'un badge")
         XCTAssertTrue(view.contains("gameRarityRim("), "la célébration porte le liseré de rareté")
         XCTAssertTrue(view.contains("GameRarityLine("), "le nom de la rareté se lit en toutes lettres")
@@ -103,8 +103,8 @@ final class AchievementRevealMedalTests: XCTestCase {
 
     func test_everyDoorToTheCelebrationPassesTheRarity() throws {
         for host in ["Meeshy/Features/Main/Views/EngagementRevealHost.swift",
-                     "Meeshy/Features/Main/Views/ProgressionHub.swift",
-                     "Meeshy/Features/Main/Game/ProgressionConceptPage.swift"] {
+                     "Meeshy/Features/Profile/Views/ProgressionHub.swift",
+                     "Meeshy/Features/Game/ProgressionConceptPage.swift"] {
             XCTAssertTrue(try source(host).contains("RevealRim.entry("), "\(host) doit passer la rareté mesurée à la célébration")
         }
     }
@@ -133,7 +133,7 @@ final class AchievementRevealMedalTests: XCTestCase {
     }
 
     func test_la_celebration_compose_le_titre_d_axe_par_la_loi() throws {
-        let view = try source("Meeshy/Features/Main/Views/AchievementRevealView.swift")
+        let view = try source("Meeshy/Features/Profile/Views/AchievementRevealView.swift")
         XCTAssertTrue(view.contains("ProgressionCopy.badgeTierTitle("))
         XCTAssertFalse(view.contains(".lowercased())\""), "le titre d'axe ne se met plus en minuscule en bloc")
     }
@@ -141,7 +141,7 @@ final class AchievementRevealMedalTests: XCTestCase {
     /// #10829 — sur la carte indigo, la ligne de rareté prend l'encre claire
     /// de l'explication : la couleur discrète du thème y tombe sous l'AA.
     func test_theRarityLine_onTheIndigoCard_wearsTheReadableInk() throws {
-        let view = try source("Meeshy/Features/Main/Views/AchievementRevealView.swift")
+        let view = try source("Meeshy/Features/Profile/Views/AchievementRevealView.swift")
         XCTAssertTrue(view.contains("GameRarityLine(entry: rarity, ink: MeeshyColors.indigo200)"))
     }
 }

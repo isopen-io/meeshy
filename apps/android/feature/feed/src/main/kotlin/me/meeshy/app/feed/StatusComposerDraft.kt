@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.StatusComposerDraftSnapshot
 import me.meeshy.sdk.model.StatusEntry
 
 /**
@@ -30,7 +31,16 @@ data class StatusPublishRequest(
 enum class StatusVisibility(val wire: String) {
     PUBLIC("PUBLIC"),
     COMMUNITY("COMMUNITY"),
+
+    /** Connaissances et au-dessus (#13939) — l'échelle des cercles, du plus large au plus étroit, comme le composeur. */
+    ACQUAINTANCES("ACQUAINTANCES"),
     FRIENDS("FRIENDS"),
+
+    /** Proches et au-dessus. */
+    CLOSE("CLOSE"),
+
+    /** Sang seul — jamais repartagé (RG-18). */
+    BLOOD("BLOOD"),
     PRIVATE("PRIVATE"),
 }
 
@@ -56,7 +66,11 @@ data class StatusComposerDraft(
     val repostOfId: String? = null,
     val viaUsername: String? = null,
     val repostAudioUrl: String? = null,
+    /** Audiences the author may pick; `null` = every one. A republication is capped by its source (#13667). */
+    val allowedVisibilities: List<StatusVisibility>? = null,
 ) {
+    /** The audiences the picker offers — the whole set, or the cap of a republication. */
+    val offeredVisibilities: List<StatusVisibility> get() = allowedVisibilities ?: StatusVisibility.entries
     /** The status body actually published — trimmed, `null` when nothing remains. */
     val trimmedContent: String? get() = text.trim().ifBlank { null }
 
@@ -71,6 +85,9 @@ data class StatusComposerDraft(
 
     /** A status may be published as soon as a mood emoji is picked (the text is optional). */
     val canPublish: Boolean get() = selectedEmoji != null
+
+    /** Whether Publish goes straight out or first asks for a word (iOS `ComposerMoodBarePublish.step`). */
+    val publishStep: StatusBarePublish.Step get() = StatusBarePublish.step(text, isRepublish)
 
     /** True when this draft republishes another status — drives the "via @…" line + repost header. */
     val isRepublish: Boolean get() = repostOfId != null
@@ -101,8 +118,13 @@ data class StatusComposerDraft(
     fun toggleEmoji(emoji: String): StatusComposerDraft =
         copy(selectedEmoji = if (selectedEmoji == emoji) null else emoji)
 
+    /** Select the emoji the full picker returned — always selects (never toggles); refused when the gateway would 400. */
+    fun withPickedEmoji(emoji: String): StatusComposerDraft =
+        if (StatusBarePublish.acceptsPicked(emoji)) copy(selectedEmoji = emoji) else this
+
     /** Choose the publish audience. */
-    fun withVisibility(value: StatusVisibility): StatusComposerDraft = copy(visibility = value)
+    fun withVisibility(value: StatusVisibility): StatusComposerDraft =
+        if (value in offeredVisibilities) copy(visibility = value) else this
 
     companion object {
         /**
@@ -112,14 +134,21 @@ data class StatusComposerDraft(
          * carried as the `via` attribution; a source with no mood emoji leaves nothing
          * selected (the user must pick one before it can publish). The body flows through
          * [withText] so the [MAX_CHARS] invariant always holds.
+         *
+         * The audience starts on the original's and may only narrow (#13667): the gateway answers a
+         * wider repost with 403 `REPOST_AUDIENCE_WIDENING`. See [StatusRepostAudience].
          */
-        fun republish(source: StatusEntry): StatusComposerDraft =
-            StatusComposerDraft(
+        fun republish(source: StatusEntry): StatusComposerDraft {
+            val allowed = StatusRepostAudience.allowed(source.visibility)
+            return StatusComposerDraft(
                 selectedEmoji = source.moodEmoji.ifBlank { null },
+                visibility = allowed.first(),
                 repostOfId = source.id,
                 viaUsername = source.username,
                 repostAudioUrl = source.audioUrl,
+                allowedVisibilities = allowed,
             ).withText(source.content.orEmpty())
+        }
 
         /** Gateway content cap for a mood status (iOS clamps the field to 122). */
         const val MAX_CHARS = 122
@@ -134,3 +163,16 @@ data class StatusComposerDraft(
         )
     }
 }
+
+/** The mood draft in its durable form (#13430). A republication carries its source: it is never kept. */
+internal fun StatusComposerDraft.toSnapshot(nowMillis: Long): StatusComposerDraftSnapshot = StatusComposerDraftSnapshot(
+    emoji = selectedEmoji,
+    text = text,
+    visibility = visibility.wire,
+    updatedAtMillis = nowMillis,
+)
+
+internal fun StatusComposerDraftSnapshot.toComposerDraft(): StatusComposerDraft = StatusComposerDraft(
+    selectedEmoji = emoji,
+    visibility = StatusVisibility.entries.firstOrNull { it.wire == visibility } ?: StatusVisibility.PRIVATE,
+).withText(text)

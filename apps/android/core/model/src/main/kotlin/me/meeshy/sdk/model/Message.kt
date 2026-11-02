@@ -3,6 +3,13 @@ package me.meeshy.sdk.model
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.nullable
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonObject
 import me.meeshy.sdk.lang.LanguageResolver
@@ -92,6 +99,12 @@ data class ApiPostReplyTarget(
     val thumbnailUrl: String? = null,
     val previewText: String = "",
     val moodEmoji: String? = null,
+    /**
+     * Le post cité a été retiré (`message:cited-post-withdrawn`, #7969) : la citation ne garde que son
+     * identifiant et se dit « Story indisponible ». Marqueur LOCAL, jamais servi — miroir de
+     * `ReplyReference.storyUnavailable` (iOS).
+     */
+    val unavailable: Boolean = false,
 )
 
 /** A pre-loaded text translation — port of APITextTranslation (MessageModels.swift). */
@@ -125,6 +138,9 @@ data class ApiMessageSender(
     val firstName: String? = null,
     val lastName: String? = null,
     val user: ApiMessageSenderUser? = null,
+    /** Le décor équipé servi avec l'auteur (#10713) : son contour d'avatar relu hors ligne. */
+    @Serializable(with = TolerantServedProfileDecorSerializer::class)
+    val profileDecor: ServedProfileDecor? = null,
 ) {
     /** Le nom affiché : surnom, puis nom du compte imbriqué, puis pseudo, puis identifiant. */
     val name: String
@@ -250,6 +266,9 @@ data class ApiMessage(
     /** Liens suivis, au PREMIER niveau (socket) ; voir [servedTrackingLinks] pour le repli sur `metadata`. */
     @Serializable(with = LossyTrackedLinkListOrNullSerializer::class)
     val trackingLinks: List<TrackedLink>? = null,
+    /** Le cryptogramme d'un message chiffré de bout en bout ; conservé tel quel, jamais déchiffré ici. */
+    @Serializable(with = TolerantEncryptedContentSerializer::class)
+    val encryptedContent: String? = null,
 ) {
     /**
      * Content to display under the Prisme Linguistique: the preferred translation,
@@ -275,6 +294,14 @@ data class ApiMessage(
 
     /** Le contenu est un cryptogramme : il ne se rend jamais en clair. */
     val isCiphertext: Boolean get() = isEncrypted == true
+
+    /**
+     * Un message chiffré de bout en bout que CET appareil ne sait pas lire (#13110) :
+     * l'Android natif n'a pas encore de pile libsignal (#13015), la passerelle ne sert
+     * que le littéral `[Encrypted]`. Il ne se rend ni en texte ni en pièce.
+     */
+    val isEndToEndSealed: Boolean
+        get() = isCiphertext && (EndToEndRegime.isEndToEnd(encryptionMode) || content == EndToEndRegime.CONTENT_PLACEHOLDER)
 
     /** `consumedByMe` nul est traité comme non ouvert. */
     val isViewOnceOpenedByMe: Boolean get() = consumedByMe == true
@@ -339,12 +366,24 @@ data class SendMessageRequest(
     val attachmentIds: List<String>? = null,
     val forwardedFromId: String? = null,
     val forwardedFromConversationId: String? = null,
+    /**
+     * Les seules pièces de `forwardedFromId` que la passerelle recopie (#9914, #13596) ; absent ⇒ tout le lot.
+     * Une pièce étrangère au message source est refusée (`forwarded-attachment-not-in-source`).
+     */
+    val forwardedAttachmentIds: List<String>? = null,
     val effectFlags: Int? = null,
     val isBlurred: Boolean? = null,
     val isViewOnce: Boolean? = null,
     val ephemeralDuration: Int? = null,
     val expiresAt: String? = null,
     val maxViewOnceCount: Int? = null,
+    /** Lieu partagé : champ dédié que la passerelle valide (`parseSharedPlace`) et écrit dans `metadata.location`. */
+    val location: SharedPlace? = null,
+    /**
+     * Le sticker du message (#14334) : champ dédié que la passerelle valide (`parseMessageSticker`) et écrit dans
+     * `metadata.sticker` ; l'image jointe en est le rendu de repli. Absent pour tout autre message.
+     */
+    val sticker: MessageSticker? = null,
 )
 
 internal object TolerantPostReplyTargetSerializer :
@@ -365,3 +404,20 @@ internal object TolerantSharedPlaceSerializer :
 internal object TolerantMetadataSerializer :
     KSerializer<JsonObject?> by TolerantSerializer(JsonObject.serializer())
 
+
+/** Le cryptogramme est une chaîne ; tout autre type vaut absent, sans coûter le message. */
+internal object TolerantEncryptedContentSerializer : KSerializer<String?> {
+    override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor.nullable
+
+    override fun deserialize(decoder: Decoder): String? {
+        val raw = (decoder as? JsonDecoder)?.decodeJsonElement() ?: return decoder.decodeString()
+        return (raw as? JsonPrimitive)?.takeIf { it.isString }?.content
+    }
+
+    override fun serialize(encoder: Encoder, value: String?) {
+        if (value == null) encoder.encodeNull() else encoder.encodeString(value)
+    }
+}
+
+internal object TolerantServedProfileDecorSerializer :
+    KSerializer<ServedProfileDecor?> by TolerantSerializer(ServedProfileDecor.serializer())

@@ -1,11 +1,14 @@
 package me.meeshy.app.chat
 
 import androidx.work.WorkManager
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.chat.ConversationDraftStore
@@ -15,29 +18,36 @@ import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.ComposeLanguageDetector
+import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
-import me.meeshy.sdk.mention.MentionComposer
+import me.meeshy.sdk.session.asCoroutineContext
+import me.meeshy.sdk.mention.MentionContacts
+import me.meeshy.sdk.mention.MentionLookupDriver
 import me.meeshy.sdk.mention.MentionSearch
-import me.meeshy.sdk.mention.applyRemote
-import me.meeshy.sdk.mention.onTextChange
 import me.meeshy.sdk.mention.reset
-import me.meeshy.sdk.mention.select
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.AttachmentMessageType
 import me.meeshy.sdk.model.ComposerLanguageState
 import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.MessageSticker
+import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.location.ComposerSendEligibility
 import me.meeshy.sdk.model.MessageEffectsEditor
 import me.meeshy.sdk.model.MimeTypeResolver
+import me.meeshy.sdk.model.TypedEmojis
 import me.meeshy.sdk.model.isWorthPersisting
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.reaction.RecentEmojiStore
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -67,19 +77,40 @@ internal class ChatComposerController(
     private val workManager: WorkManager,
     private val clock: CacheClock,
     private val pendingTray: () -> ComposerTrayController? = { null },
+    private val composerText: ComposerTextHolder = ComposerTextHolder(),
+    private val recentEmojis: RecentEmojiStore? = null,
+    private val languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
+    mentionContacts: MentionContacts = MentionContacts.None,
 ) {
 
-    private var mentionRoster: List<MentionCandidate> = emptyList()
+    private val mentions = MentionLookupDriver(
+        scope = scope,
+        search = mentionSearch,
+        contacts = mentionContacts,
+        selfId = { sessionRepository.currentUser.value?.id },
+        read = { state.value.mention },
+        write = { transform -> state.update { it.copy(mention = transform(it.mention)) } },
+    )
     private var isEmittingTyping = false
     private var typingReemitJob: Job? = null
     private var typingIdleJob: Job? = null
     private var lastPersistedDraft: ConversationDraft? = null
     private var draftPersistJob: Job? = null
-    private var mentionSearchJob: Job? = null
 
-    /** Replaces the roster the `@mention` panel suggests from (the conversation's participants). */
-    fun updateMentionRoster(roster: List<MentionCandidate>) {
-        mentionRoster = roster
+    /** The draft being written when « Modifier » was tapped, given back when the edit ends (iOS `draftBeforeEdit`). */
+    private var draftBeforeEdit: String? = null
+
+    /** The edited message's text, so an unchanged edit is dropped instead of sent (iOS `editingOriginalContent`). */
+    private var editingOriginal: String? = null
+
+    /**
+     * Replaces the people of the conversation the `@mention` panel serves locally (its
+     * participants) and the [context] the network is asked about from the third character
+     * (#14053). A direct or group conversation only offers its members.
+     */
+    fun updateMentionRoster(roster: List<MentionCandidate>, context: MentionContext? = null) {
+        mentions.updateRoster(roster)
+        mentions.bind(context ?: MentionContext.conversation(conversationId, conversationType = null, isMember = false))
     }
 
     /**
@@ -90,14 +121,14 @@ internal class ChatComposerController(
      * posture. A store failure degrades to the full posture (never a crash).
      */
     suspend fun loadComposerPermissions() {
-        val permissions = try {
-            anonymousSessionStore.load()?.permissions
+        val context = try {
+            anonymousSessionStore.load()
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             null
         } ?: return
-        state.update { it.copy(composerPermissions = permissions) }
+        state.update { it.copy(composerPermissions = context.permissions) }
     }
 
     /**
@@ -108,53 +139,41 @@ internal class ChatComposerController(
     suspend fun restoreStoredDraft() {
         val stored = draftStore.load(conversationId)
         lastPersistedDraft = stored?.takeIf { it.isWorthPersisting }
+        val restored = DraftAutosave.restore(stored, composerText.text, state.value.isEditing) ?: return
+        composerText.replace(restored.text)
         state.update { current ->
-            val restored = DraftAutosave.restore(stored, current.draft, current.isEditing)
-            if (restored != null) {
-                current.copy(
-                    draft = restored.text,
-                    draftRevision = current.draftRevision + 1,
-                    replyingToMessageId = restored.replyToId,
-                    pendingEffects = restored.effects,
-                    composerLanguage = restored.selectedLanguage
-                        ?.let { current.composerLanguage.withManualPick(it) }
-                        ?: current.composerLanguage,
-                )
-            } else {
-                current
-            }
+            current.copy(
+                replyingToMessageId = restored.replyToId,
+                pendingEffects = restored.effects,
+                composerLanguage = restored.selectedLanguage
+                    ?.let { current.composerLanguage.withManualPick(it) }
+                    ?: current.composerLanguage.onDraftReplaced(restored.text),
+            )
         }
     }
 
     fun onDraftChange(value: String) {
         val detection = LargePasteDetector.detect(
-            previous = state.value.draft,
+            previous = composerText.text,
             current = value,
             nowMillis = clock.nowMillis(),
         )
         if (detection is PasteDetection.Captured) {
+            composerText.clear()
             state.update {
                 it.copy(
-                    draft = "",
-                    draftRevision = it.draftRevision + 1,
                     clipboardContent = detection.content,
-                    mention = it.mention.onTextChange("", mentionRoster),
                     composerLanguage = it.composerLanguage.onDraftChanged(""),
                 )
             }
-            mentionSearchJob?.cancel()
+            mentions.onTextChange("")
             stopTypingEmission()
             persistDraft("", state.value.replyingToMessageId)
             return
         }
-        state.update {
-            it.copy(
-                draft = value,
-                mention = it.mention.onTextChange(value, mentionRoster),
-                composerLanguage = it.composerLanguage.onDraftChanged(value),
-            )
-        }
-        maybeSearchRemoteMentions(state.value.mention.activeQuery)
+        composerText.typed(value)
+        state.update { it.copy(composerLanguage = it.composerLanguage.onDraftChanged(value)) }
+        mentions.onTextChange(value)
         if (value.isBlank()) {
             stopTypingEmission()
         } else {
@@ -175,7 +194,7 @@ internal class ChatComposerController(
      */
     fun onComposerLanguagePicked(code: String) {
         state.update { it.copy(composerLanguage = it.composerLanguage.withManualPick(code)) }
-        persistDraft(state.value.draft, state.value.replyingToMessageId)
+        persistDraft(composerText.text, state.value.replyingToMessageId)
     }
 
     /**
@@ -231,37 +250,7 @@ internal class ChatComposerController(
      * `@fragment`), record it as a draft mention, and dismiss the suggestion panel.
      */
     fun onMentionSelected(candidate: MentionCandidate) {
-        mentionSearchJob?.cancel()
-        state.update { current ->
-            val (newDraft, newMention) = current.mention.select(candidate, current.draft)
-            current.copy(draft = newDraft, draftRevision = current.draftRevision + 1, mention = newMention)
-        }
-    }
-
-    /**
-     * Fires a debounced directory lookup for the active `@fragment` and folds the
-     * results into the panel below the local roster. Mirrors iOS
-     * `MentionComposerController`: nothing runs for a dismissed panel or a query under
-     * two significant characters (the roster already covers those); a fresh keystroke
-     * cancels the previous in-flight lookup (300 ms debounce). The self-exclusion and
-     * local-first dedup live in the pure [MentionAutocompleteState.applyRemote] merge,
-     * which also drops a slow response whose fragment is already stale.
-     */
-    private fun maybeSearchRemoteMentions(query: String?) {
-        mentionSearchJob?.cancel()
-        if (query == null || !MentionComposer.shouldQueryRemote(query)) return
-        val currentUserId = sessionRepository.currentUser.value?.id
-        mentionSearchJob = scope.launch {
-            delay(MENTION_SEARCH_DEBOUNCE_MS)
-            val remote = try {
-                mentionSearch.search(query.trim())
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                return@launch
-            }.filterNot { it.id == currentUserId }
-            state.update { it.copy(mention = it.mention.applyRemote(query, remote)) }
-        }
+        composerText.replace(mentions.select(candidate, composerText.text))
     }
 
     /**
@@ -302,15 +291,35 @@ internal class ChatComposerController(
         stopTypingEmission()
     }
 
+    private val _pendingPlace = MutableStateFlow<SharedPlace?>(null)
+
+    /** Le lieu choisi attend le prochain envoi, comme la pastille « lieu » du plateau iOS. */
+    val pendingPlace: StateFlow<SharedPlace?> = _pendingPlace.asStateFlow()
+
+    fun setPendingPlace(place: SharedPlace) {
+        _pendingPlace.value = place
+    }
+
+    fun clearPendingPlace() {
+        _pendingPlace.value = null
+    }
+
     fun send() {
-        val text = state.value.draft.trim()
+        val text = composerText.text.trim()
         val clipboard = state.value.clipboardContent
+        val place = _pendingPlace.value
         val tray = pendingTray()
         val hasStaged = tray?.state?.value?.isEmpty == false
-        if (text.isEmpty() && clipboard == null && !hasStaged) return
+        if (!ComposerSendEligibility.canSend(text, hasStaged || clipboard != null, place != null)) return
+        // #13110 — an edit is a send: in an end-to-end conversation nothing leaves the device.
+        if (state.value.isEndToEnd) return
         stopTypingEmission()
         val editingId = state.value.editingMessageId
         if (editingId != null) {
+            if (text == editingOriginal?.trim()) {
+                cancelEdit()
+                return
+            }
             if (text.isNotEmpty() || clipboard != null) applyEdit(editingId, text)
             return
         }
@@ -326,20 +335,19 @@ internal class ChatComposerController(
             state.value.slowModeState(sentAtMillis),
         )
         if (!gate.allowed) return
+        if (place != null && !ComposerSendGate.evaluate(ComposerSendKind.LOCATION, state.value.composerAffordances, state.value.slowModeState(sentAtMillis)).allowed) return
         if (!stagedKindsAllowed(tray, sentAtMillis)) return
         val user = sessionRepository.currentUser.value ?: return
         val replyToId = state.value.replyingToMessageId
         val effects = state.value.pendingEffects
         val batch = tray?.takeForSend()
-        // The composer pill is the authoritative source language: its live detection
-        // or the viewer's manual override, resolved against the user's content language.
-        val languageCode = state.value.composerLanguage.display(
-            fallback = LanguageResolver.resolveUserLanguage(user),
-        )
+        // A manual pick is the source language; otherwise the text is identified at send, the
+        // sender's own language as the fallback — never a partial detection of the typing (#12484).
+        val manualLanguage = state.value.composerLanguage.manualOverride
+        composerText.clear()
+        mentions.reset()
         state.update {
             it.copy(
-                draft = "",
-                draftRevision = it.draftRevision + 1,
                 clipboardContent = null,
                 replyingToMessageId = null,
                 mention = it.mention.reset(),
@@ -349,13 +357,36 @@ internal class ChatComposerController(
                 composerLanguage = ComposerLanguageState(),
             )
         }
+        _pendingPlace.value = null
         persistDraft("", replyToId = null)
-        scope.launch {
+        recordTypedEmojis(text)
+        // #13558 : l'envoi appartient au compte du GESTE — la lecture des fichiers de travail et leur mise en file qui
+        // finissent après un changement de compte ne partent jamais sous le suivant.
+        val gesture = mediaUploadQueue.ticket()
+        scope.launch(gesture.asCoroutineContext()) {
             try {
+                val sentLanguage = ComposeLanguageDetector.originalLanguageAtSend(
+                    text = text,
+                    manual = manualLanguage,
+                    senderLanguage = LanguageResolver.resolveUserLanguage(user),
+                    identifier = languageIdentifier,
+                )
+                // Un lieu qui voyage avec des pièces ou un collage part en message à lui, d'abord :
+                // le texte et les pièces gardent leur envoi, le lieu n'est jamais perdu.
+                val placeAlone = place != null && (batch != null || clipboard != null)
+                if (placeAlone) {
+                    messageRepository.sendOptimistic(
+                        conversationId = conversationId,
+                        content = "",
+                        originalLanguage = sentLanguage,
+                        sender = user,
+                        location = place,
+                    )
+                }
                 if (batch != null) {
                     if (clipboard != null) sendClipboardContent(text, clipboard, user, replyToId, effects)
                     sendStagedBatch(
-                        tray, batch, if (clipboard != null) "" else text, languageCode, user,
+                        tray, batch, if (clipboard != null) "" else text, sentLanguage, user,
                         if (clipboard != null) null else replyToId, effects,
                     )
                 } else if (clipboard != null) {
@@ -364,10 +395,11 @@ internal class ChatComposerController(
                     messageRepository.sendOptimistic(
                         conversationId = conversationId,
                         content = text,
-                        originalLanguage = languageCode,
+                        originalLanguage = sentLanguage,
                         sender = user,
                         replyToId = replyToId,
                         effects = effects,
+                        location = place.takeUnless { placeAlone },
                     )
                 }
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
@@ -375,6 +407,7 @@ internal class ChatComposerController(
                 throw e
             } catch (e: Exception) {
                 state.update { it.copy(errorMessage = e.message) }
+                if (_pendingPlace.value == null) _pendingPlace.value = place
             }
         }
     }
@@ -401,6 +434,7 @@ internal class ChatComposerController(
                 fileName = CLIPBOARD_ATTACHMENT_NAME,
                 mimeType = CLIPBOARD_ATTACHMENT_MIME,
             ),
+            conversationId = conversationId,
         )
         messageRepository.sendOptimistic(
             conversationId = conversationId,
@@ -408,6 +442,7 @@ internal class ChatComposerController(
             originalLanguage = ComposeLanguageDetector.detect(
                 text.ifBlank { clipboard.text },
                 fallback = LanguageResolver.resolveUserLanguage(user),
+                identifier = languageIdentifier,
             ),
             sender = user,
             replyToId = replyToId,
@@ -424,6 +459,66 @@ internal class ChatComposerController(
                 ),
             ),
         )
+    }
+
+    /**
+     * Un sticker part d'UN geste (#14334, iOS `ConversationView+Sticker.sendStickerImage`) : son image rejoint la file
+     * d'envoi durable et la bulle optimiste paraît aussitôt, peinte depuis le fichier de l'appareil, avec sa recette
+     * `sticker` (que la passerelle valide et que le web et iOS redessinent). La réponse armée le suit ; dans une
+     * conversation chiffrée de bout en bout rien ne part.
+     */
+    fun sendSticker(file: File, mimeType: String, sticker: MessageSticker?, width: Int?, height: Int?) {
+        val sentAtMillis = clock.nowMillis()
+        val allowed = !state.value.isEndToEnd &&
+            ComposerSendGate.evaluate(ComposerSendKind.IMAGE, state.value.composerAffordances, state.value.slowModeState(sentAtMillis)).allowed
+        val user = sessionRepository.currentUser.value
+        if (!allowed || user == null) {
+            file.delete()
+            return
+        }
+        val replyToId = state.value.replyingToMessageId
+        state.update { it.copy(replyingToMessageId = null, lastSelfSentAtMillis = sentAtMillis) }
+        stopTypingEmission()
+        val gesture = mediaUploadQueue.ticket()
+        scope.launch(gesture.asCoroutineContext()) {
+            try {
+                val item = MediaUploadItem.onDisk(file, STICKER_ATTACHMENT_NAME, mimeType)
+                val cmid = mediaUploadQueue.enqueue(item, conversationId = conversationId)
+                messageRepository.sendOptimistic(
+                    conversationId = conversationId,
+                    content = "",
+                    originalLanguage = LanguageResolver.resolveUserLanguage(user),
+                    sender = user,
+                    replyToId = replyToId,
+                    messageType = AttachmentMessageType.forMime(mimeType),
+                    attachmentUploadCmids = listOf(cmid),
+                    attachments = listOf(
+                        ApiMessageAttachment(
+                            id = cmid,
+                            fileName = STICKER_ATTACHMENT_NAME,
+                            originalName = STICKER_ATTACHMENT_NAME,
+                            mimeType = mimeType,
+                            fileSize = item.sizeBytes.toInt(),
+                            fileUrl = "file://" + file.absolutePath,
+                            width = width,
+                            height = height,
+                        ),
+                    ),
+                    sticker = sticker,
+                )
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    /** Les emojis tapés dans le message rejoignent les récents (iOS `RecentEmojiStore.record`). */
+    private fun recordTypedEmojis(text: String) {
+        val store = recentEmojis ?: return
+        TypedEmojis.extract(text).forEach(store::record)
     }
 
     /** Chaque famille de pièce en attente doit être permise par la porte d'envoi unique. */
@@ -454,16 +549,19 @@ internal class ChatComposerController(
     ) {
         if (tray == null) return
         val uploaded = batch.items.mapNotNull { item ->
-            val bytes = tray.readBytes(item) ?: return@mapNotNull null
             val name = item.fileName?.trim()?.ifBlank { null } ?: DEFAULT_ATTACHMENT_NAME
             val mime = MimeTypeResolver.resolve(item.mimeType, name)
-            val cmid = mediaUploadQueue.enqueue(MediaUploadItem(bytes = bytes, fileName = name, mimeType = mime))
+            val upload = tray.uploadItem(item, name, mime) ?: return@mapNotNull null
+            val cmid = mediaUploadQueue.enqueue(upload, conversationId = conversationId)
             cmid to ApiMessageAttachment(
                 id = cmid,
                 fileName = name,
                 originalName = name,
                 mimeType = mime,
-                fileSize = bytes.size,
+                fileSize = upload.sizeBytes.toInt(),
+                width = item.width,
+                height = item.height,
+                duration = item.durationMs?.toInt(),
             )
         }
         tray.release(batch)
@@ -493,91 +591,6 @@ internal class ChatComposerController(
         )
     }
 
-    /**
-     * Sends a file picked from the system document/photo picker through the same
-     * durable upload→graft→send chain the clipboard path already uses: the bytes
-     * are queued for upload, the send is enqueued gated on that upload and carrying
-     * its cmid as a placeholder attachment id, and the drainer grafts the real
-     * gateway id in once the upload lands. The message's coarse `messageType`
-     * (image/video/audio/file) is inferred from the resolved MIME via
-     * [AttachmentMessageType]; any text already in the composer rides along as the
-     * body and is cleared, mirroring [sendClipboardContent].
-     *
-     * A blank pick ([bytes] empty) or a signed-out session is inert. Note: audio
-     * picked here is delivered over REST like any other file — the socket audio
-     * pipeline (transcription/translation) is a separate slice; this path never
-     * triggers it.
-     */
-    fun sendFileAttachment(bytes: ByteArray, fileName: String, declaredMimeType: String?) {
-        if (bytes.isEmpty()) return
-        val user = sessionRepository.currentUser.value ?: return
-        val safeName = fileName.trim().ifBlank { DEFAULT_ATTACHMENT_NAME }
-        val mime = MimeTypeResolver.resolve(declaredMimeType, safeName)
-        val messageType = AttachmentMessageType.forMime(mime)
-        // Same unified gate the text path uses: a denied attachment capability or a
-        // running slow-mode cooldown refuses the pick before it leaves the composer.
-        // The "+" ladder stays visible during a cooldown, so this is where the block
-        // is really enforced — and a delivered attachment starts the cooldown too.
-        val sentAtMillis = clock.nowMillis()
-        val gate = ComposerSendGate.evaluate(
-            ComposerSendKind.fromMessageType(messageType),
-            state.value.composerAffordances,
-            state.value.slowModeState(sentAtMillis),
-        )
-        if (!gate.allowed) return
-        val text = state.value.draft.trim()
-        val replyToId = state.value.replyingToMessageId
-        val effects = state.value.pendingEffects
-        val languageCode = state.value.composerLanguage.display(
-            fallback = LanguageResolver.resolveUserLanguage(user),
-        )
-        stopTypingEmission()
-        state.update {
-            it.copy(
-                draft = "",
-                draftRevision = it.draftRevision + 1,
-                replyingToMessageId = null,
-                mention = it.mention.reset(),
-                pendingEffects = MessageEffects(),
-                isEffectsPickerOpen = false,
-                lastSelfSentAtMillis = sentAtMillis,
-                composerLanguage = ComposerLanguageState(),
-            )
-        }
-        persistDraft("", replyToId = null)
-        scope.launch {
-            try {
-                val uploadCmid = mediaUploadQueue.enqueue(
-                    MediaUploadItem(bytes = bytes, fileName = safeName, mimeType = mime),
-                )
-                messageRepository.sendOptimistic(
-                    conversationId = conversationId,
-                    content = text,
-                    originalLanguage = languageCode,
-                    sender = user,
-                    replyToId = replyToId,
-                    effects = effects,
-                    messageType = messageType,
-                    attachmentUploadCmids = listOf(uploadCmid),
-                    attachments = listOf(
-                        ApiMessageAttachment(
-                            id = uploadCmid,
-                            fileName = safeName,
-                            originalName = safeName,
-                            mimeType = mime,
-                            fileSize = bytes.size,
-                        ),
-                    ),
-                )
-                workManager.enqueue(OutboxFlushWorker.buildRequest())
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                state.update { it.copy(errorMessage = e.message) }
-            }
-        }
-    }
-
     /** Present the composer's message-effects picker sheet. */
     fun openEffectsPicker() {
         state.update { it.copy(isEffectsPickerOpen = true) }
@@ -597,7 +610,15 @@ internal class ChatComposerController(
      */
     fun toggleEffect(flag: Long) {
         state.update { it.copy(pendingEffects = MessageEffectsEditor.toggle(it.pendingEffects, flag)) }
-        persistDraft(state.value.draft, state.value.replyingToMessageId)
+        persistDraft(composerText.text, state.value.replyingToMessageId)
+    }
+
+    /** Arm (or disarm, with `null`) the ephemeral [choice] — iOS `ephemeralChoice` (#8303). */
+    fun selectEphemeralChoice(choice: EphemeralChoice?) {
+        state.update {
+            it.copy(pendingEffects = MessageEffectsEditor.withEphemeralChoice(it.pendingEffects, choice))
+        }
+        persistDraft(composerText.text, state.value.replyingToMessageId)
     }
 
     /** Record the chosen ephemeral self-destruct [duration] on the armed selection. */
@@ -605,13 +626,13 @@ internal class ChatComposerController(
         state.update {
             it.copy(pendingEffects = MessageEffectsEditor.withEphemeralDuration(it.pendingEffects, duration))
         }
-        persistDraft(state.value.draft, state.value.replyingToMessageId)
+        persistDraft(composerText.text, state.value.replyingToMessageId)
     }
 
     /** The picker's "clear all" — reset the armed selection to no effects. */
     fun clearEffects() {
         state.update { it.copy(pendingEffects = MessageEffectsEditor.cleared()) }
-        persistDraft(state.value.draft, state.value.replyingToMessageId)
+        persistDraft(composerText.text, state.value.replyingToMessageId)
     }
 
     fun startEdit(messageId: String) {
@@ -626,11 +647,12 @@ internal class ChatComposerController(
             nowMillis = clock.nowMillis(),
         )
         if (!editable) return
+        if (draftBeforeEdit == null) draftBeforeEdit = composerText.text
+        editingOriginal = message.content
+        replaceDraft(message.content)
         state.update {
             it.copy(
                 editingMessageId = messageId,
-                draft = message.content,
-                draftRevision = it.draftRevision + 1,
                 actionMessageId = null,
                 replyingToMessageId = null,
             )
@@ -642,30 +664,44 @@ internal class ChatComposerController(
             it.message.id == messageId && it.sendState == LocalSendState.SYNCED
         }?.message ?: return
         if (message.deletedAt != null) return
+        val restored = if (state.value.isEditing) takeDraftBeforeEdit() else null
+        if (restored != null) replaceDraft(restored)
         state.update {
-            val clearsEdit = it.isEditing
             it.copy(
                 replyingToMessageId = messageId,
                 actionMessageId = null,
                 editingMessageId = null,
-                draft = if (clearsEdit) "" else it.draft,
-                draftRevision = if (clearsEdit) it.draftRevision + 1 else it.draftRevision,
             )
         }
-        persistDraft(state.value.draft, replyToId = messageId)
+        persistDraft(composerText.text, replyToId = messageId)
     }
 
     fun cancelReply() {
         state.update { it.copy(replyingToMessageId = null) }
-        persistDraft(state.value.draft, replyToId = null)
+        persistDraft(composerText.text, replyToId = null)
     }
 
     fun cancelEdit() {
-        state.update { it.copy(editingMessageId = null, draft = "", draftRevision = it.draftRevision + 1) }
+        replaceDraft(takeDraftBeforeEdit())
+        state.update { it.copy(editingMessageId = null) }
+    }
+
+    /** Le brouillon change d'un bloc (édition ouverte ou quittée) : la langue repart de lui. */
+    private fun replaceDraft(text: String) {
+        composerText.replace(text)
+        state.update { it.copy(composerLanguage = it.composerLanguage.onDraftReplaced(text)) }
+    }
+
+    private fun takeDraftBeforeEdit(): String {
+        val restored = draftBeforeEdit.orEmpty()
+        draftBeforeEdit = null
+        editingOriginal = null
+        return restored
     }
 
     private fun applyEdit(messageId: String, content: String) {
-        state.update { it.copy(draft = "", draftRevision = it.draftRevision + 1, editingMessageId = null) }
+        replaceDraft(takeDraftBeforeEdit())
+        state.update { it.copy(editingMessageId = null) }
         scope.launch {
             try {
                 if (messageRepository.editOptimistic(messageId, content)) {
@@ -682,9 +718,9 @@ internal class ChatComposerController(
     private companion object {
         const val TYPING_REEMIT_MS = 3_000L
         const val TYPING_IDLE_MS = 3_000L
-        const val MENTION_SEARCH_DEBOUNCE_MS = 300L
         const val CLIPBOARD_ATTACHMENT_NAME = "clipboard-content.txt"
         const val CLIPBOARD_ATTACHMENT_MIME = "text/plain"
         const val DEFAULT_ATTACHMENT_NAME = "attachment"
+        const val STICKER_ATTACHMENT_NAME = "sticker.png"
     }
 }

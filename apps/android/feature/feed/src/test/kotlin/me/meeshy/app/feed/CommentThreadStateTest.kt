@@ -289,4 +289,56 @@ class CommentThreadStateTest {
         assertThat(base.replaced(ApiPostComment(id = "zzz", content = "edited")))
             .isSameInstanceAs(base)
     }
+
+    @Test
+    fun confirmed_afterTheSocketEchoAlreadyLanded_neverShowsTheCommentTwice() {
+        val state = CommentThreadState()
+            .optimistic(comment("pending-0"))
+            .received(comment("real"))
+            .confirmed("pending-0", comment("real"))
+
+        assertThat(state.comments.map { it.id }).containsExactly("real")
+        assertThat(state.pendingIds).isEmpty()
+    }
+
+    // ─── indentation par profondeur (iso ReplyCell iOS) ─────────────────────
+
+    @Test
+    fun replyIndent_isSixteenPlusFortyPerDepthLevel() {
+        assertThat(CommentThreadLayout.replyIndentDp(depth = 1)).isEqualTo(56)
+        assertThat(CommentThreadLayout.replyIndentDp(depth = 2)).isEqualTo(96)
+        assertThat(CommentThreadLayout.replyIndentDp(depth = 3)).isEqualTo(136)
+    }
+
+    @Test
+    fun replyIndent_clampsANonPositiveDepthToTheFirstReplyLevel() {
+        assertThat(CommentThreadLayout.replyIndentDp(depth = 0)).isEqualTo(56)
+        assertThat(CommentThreadLayout.replyIndentDp(depth = -4)).isEqualTo(56)
+    }
+
+    @Test
+    fun loadMoreRow_sitsOneLevelBelowTheReplies() {
+        assertThat(CommentThreadLayout.loadMoreIndentDp()).isEqualTo(96)
+    }
+
+    @Test
+    fun depthOf_followsTheParentChainThroughLoadedReplies() {
+        val replies = CommentRepliesState()
+            .loaded("top", listOf(comment("r1", "top")))
+            .loaded("r1", listOf(comment("r2", "r1")))
+        assertThat(replies.depthOf("top", topLevelIds = setOf("top"))).isEqualTo(0)
+        assertThat(replies.depthOf("r1", topLevelIds = setOf("top"))).isEqualTo(1)
+        assertThat(replies.depthOf("r2", topLevelIds = setOf("top"))).isEqualTo(2)
+    }
+
+    @Test
+    fun depthOf_anUnknownCommentIsTreatedAsTopLevel() {
+        assertThat(CommentRepliesState().depthOf("ghost", topLevelIds = emptySet())).isEqualTo(0)
+    }
+
+    @Test
+    fun remainingReplies_isTheTotalMinusWhatIsShownNeverNegative() {
+        assertThat(CommentThreadLayout.remainingReplies(total = 7, shown = 3)).isEqualTo(4)
+        assertThat(CommentThreadLayout.remainingReplies(total = 2, shown = 5)).isEqualTo(0)
+    }
 }

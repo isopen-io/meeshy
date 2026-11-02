@@ -1,5 +1,6 @@
 import UIKit
 import AVFoundation
+import Combine
 import PhotosUI
 import SwiftUI
 import ImageIO
@@ -34,6 +35,26 @@ public final class StoryMediaLoader {
                 self?.clearPlayerCache()
             }
         }
+        policyObservation = MediaPolicyMonitor.shared.$policy
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] policy in self?.applyMediaPolicy(policy) }
+    }
+
+    private var policyObservation: AnyCancellable?
+
+    /// **La politique change pendant la lecture (#9880)** : au stade critique,
+    /// plus aucun décodeur n'est tenu d'avance ; sinon le pool rend aussitôt
+    /// les lecteurs que sa taille (le tier, qui suit la chaleur et l'énergie)
+    /// ne tient plus — au lieu d'attendre le prochain préchauffage.
+    public func applyMediaPolicy(_ policy: MediaPolicy) {
+        guard policy.prefetchesVideo else {
+            clearPlayerCache()
+            return
+        }
+        let held = playerCache.count
+        trimToCapacity(min(playerPoolCapacity, policy.preparedPlayers))
+        if playerCache.count != held { announcePoolChange() }
     }
 
     private let thumbnailCache: NSCache<NSString, UIImage> = {
@@ -181,15 +202,13 @@ public final class StoryMediaLoader {
     public func preloadVideoPlayer(
         url: URL, resume: ((TimeInterval) -> TimeInterval?)? = nil
     ) async -> AVPlayer? {
-        let thermalState = ProcessInfo.processInfo.thermalState
+        let thermalState = MediaPolicyMonitor.shared.policy.thermalState
         guard let source = Self.diskPrerollSource(for: url, thermalState: thermalState) else { return nil }
         let item = AVPlayerItem(url: source)
-        // SOTA buffer/bitrate, thermal-aware (WWDC19 #422). Offscreen preroll is
-        // always bitrate-capped; the cap tightens — and the decoded-ahead window
-        // shrinks — once the device heats up. Forward buffer was 2.0s (now ~1s).
-        item.preferredForwardBufferDuration = MediaThermalPolicy.forwardBufferDuration(thermalState: thermalState)
-        item.preferredPeakBitRate = MediaThermalPolicy.preferredPeakBitRate(isVisible: false, thermalState: thermalState)
+        // Tampon d'avance de la politique vivante (#9880) : il rétrécit quand
+        // l'appareil chauffe ou économise, y compris une fois préparé.
         let player = AVQueuePlayer(playerItem: item)
+        MediaPolicyMonitor.shared.adopt(player, role: .prerolled)
         player.automaticallyWaitsToMinimizeStalling = false
 
         // Wait for readyToPlay before prerolling — preroll crashes if called too early
@@ -395,14 +414,15 @@ public final class StoryMediaLoader {
     }
 
     private func insert(_ player: AVPlayer, for key: String) {
+        MediaPolicyMonitor.shared.adopt(player, role: .prerolled)
         playerCache[key] = player
         playerCacheOrder.append(key)
         trimToCapacity()
         announcePoolChange()
     }
 
-    private func trimToCapacity() {
-        let capacity = playerPoolCapacity
+    private func trimToCapacity(_ capacity: Int? = nil) {
+        let capacity = max(1, capacity ?? playerPoolCapacity)
         while playerCache.count > capacity,
               let victim = PlayerPoolEviction.victim(order: playerCacheOrder, distances: retentionDistances) {
             playerCacheOrder.removeAll { $0 == victim }

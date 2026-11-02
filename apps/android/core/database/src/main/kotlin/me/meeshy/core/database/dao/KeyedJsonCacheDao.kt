@@ -18,6 +18,9 @@ public interface KeyedJsonCacheDao {
     @Query("SELECT * FROM keyed_json_cache WHERE namespace = :namespace AND `key` = :key")
     public suspend fun find(namespace: String, key: String): KeyedJsonCacheEntity?
 
+    @Query("SELECT * FROM keyed_json_cache WHERE namespace = :namespace")
+    public suspend fun findAll(namespace: String): List<KeyedJsonCacheEntity>
+
     @Query("DELETE FROM keyed_json_cache WHERE namespace = :namespace AND `key` = :key")
     public suspend fun delete(namespace: String, key: String)
 

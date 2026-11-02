@@ -245,7 +245,7 @@ export default function ProgressionLigueScreen() {
       titre={gameText('game.league.title')}
       teinte={GAME_BRAND}
       compte={(p) => {
-        const current = (p as EngagementWithGame).game?.league?.current;
+        const current = p.game?.league?.current;
         return current === undefined || current === null ? null : `${current.rank} / ${current.groupSize}`;
       }}
     >

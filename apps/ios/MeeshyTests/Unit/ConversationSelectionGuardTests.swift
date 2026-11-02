@@ -167,7 +167,7 @@ final class ConversationSelectionGuardTests: XCTestCase {
     // MARK: - Le tap-catcher de sélection se pose PAR-DESSUS le contenu de la bulle
 
     func test_bubbleRow_selectionTapCatcher_sitsAboveContent() throws {
-        let code = try source("Features/Main/Views/MessageListView.swift")
+        let code = try source("Features/Main/Views/BubbleSwipeContainer.swift")
         guard let bodyBlock = body(of: "var body: some View {", in: code) else {
             return XCTFail("`body` de `BubbleSwipeContainer` introuvable — la garde ne mesurerait rien.")
         }
@@ -183,7 +183,7 @@ final class ConversationSelectionGuardTests: XCTestCase {
     }
 
     func test_bubbleRow_disablesSwipeAndLongPress_duringSelection() throws {
-        let code = try source("Features/Main/Views/MessageListView.swift")
+        let code = try source("Features/Main/Views/BubbleSwipeContainer.swift")
         guard let bodyBlock = body(of: "var body: some View {", in: code) else {
             return XCTFail("`body` introuvable — la garde ne mesurerait rien.")
         }
@@ -254,7 +254,7 @@ final class ConversationSelectionGuardTests: XCTestCase {
     // son propre coin, les deux ancrés à droite).
 
     func test_selectionShift_appliesToAllBubbles_regardlessOfIsMine() throws {
-        let code = try source("Features/Main/Views/MessageListView.swift")
+        let code = try source("Features/Main/Views/BubbleSwipeContainer.swift")
         guard let prop = body(of: "private var selectionShift: CGFloat {", in: code) else {
             return XCTFail("`selectionShift` introuvable — la garde ne mesurerait rien.")
         }
@@ -271,7 +271,7 @@ final class ConversationSelectionGuardTests: XCTestCase {
     }
 
     func test_selectionShiftMultiplier_is3ForBubbleAnd2ForFlatRow() throws {
-        let code = try source("Features/Main/Views/MessageListView.swift")
+        let code = try source("Features/Main/Views/BubbleSwipeContainer.swift")
         guard let prop = body(of: "private var selectionShiftMultiplier: CGFloat {", in: code) else {
             return XCTFail("`selectionShiftMultiplier` introuvable — la garde ne mesurerait rien.")
         }
@@ -284,7 +284,7 @@ final class ConversationSelectionGuardTests: XCTestCase {
     }
 
     func test_content_isPushedRightBy_selectionShift() throws {
-        let code = try source("Features/Main/Views/MessageListView.swift")
+        let code = try source("Features/Main/Views/BubbleSwipeContainer.swift")
         guard let bodyBlock = body(of: "var body: some View {", in: code) else {
             return XCTFail("`body` introuvable — la garde ne mesurerait rien.")
         }
@@ -328,7 +328,7 @@ final class ConversationSelectionGuardTests: XCTestCase {
     }
 
     func test_selectionCircle_alwaysTopLeading_regardlessOfIsMine() throws {
-        let code = try source("Features/Main/Views/MessageListView.swift")
+        let code = try source("Features/Main/Views/BubbleSwipeContainer.swift")
         XCTAssertTrue(
             code.contains(".overlay(alignment: .topLeading) {"),
             "Le cercle doit TOUJOURS se poser au coin haut-GAUCHE — retour porteur 2026-08-27 ter : "

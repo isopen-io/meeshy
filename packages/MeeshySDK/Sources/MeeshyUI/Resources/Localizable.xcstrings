@@ -843,6 +843,53 @@
     "Si un compte existe avec %@, un lien de reinitialisation a ete envoye.": {},
     "Son": {},
     "Sticker %@": {},
+    "story.canvas.a11y.drawing": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeichnung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drawing"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dibujo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dessin"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disegno"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desenho"
+          }
+        }
+      }
+    },
     "story.timeline.transition.select.a11y": {
       "extractionState": "manual",
       "localizations": {
@@ -14671,25 +14718,25 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Avatar-Upload fehlgeschlagen"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Avatar upload failed"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Error al subir el avatar"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Échec du téléchargement de l'avatar"
           }
         },
@@ -14701,7 +14748,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Falha ao enviar o avatar"
           }
         }
@@ -14718,25 +14765,25 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Avatar hochgeladen"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Avatar uploaded"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Avatar subido"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Avatar téléversé"
           }
         },
@@ -14748,7 +14795,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Avatar enviado"
           }
         }
@@ -14765,25 +14812,25 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Banner-Upload fehlgeschlagen"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Banner upload failed"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Error al subir el banner"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Échec du téléchargement de la bannière"
           }
         },
@@ -14795,7 +14842,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Falha ao enviar o banner"
           }
         }
@@ -14812,25 +14859,25 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Banner hochgeladen"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Banner uploaded"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Banner subido"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Bannière téléversée"
           }
         },
@@ -14842,7 +14889,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Banner enviado"
           }
         }
@@ -14859,25 +14906,25 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Community aktualisiert"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Community updated"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Comunidad actualizada"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Communauté mise à jour"
           }
         },
@@ -14889,7 +14936,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Comunidade atualizada"
           }
         }
@@ -21157,25 +21204,25 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Fehler beim Beitreten zur Unterhaltung"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Error joining conversation"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Error al unirse a la conversación"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Erreur lors de la connexion"
           }
         },
@@ -21187,7 +21234,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Erro ao entrar na conversa"
           }
         }
@@ -21204,25 +21251,25 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Dieser Unterhaltungslink wurde nicht gefunden"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "This conversation link could not be found"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "No se pudo encontrar este enlace de conversación"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Ce lien de conversation est introuvable"
           }
         },
@@ -21234,7 +21281,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Este link de conversa não foi encontrado"
           }
         }
@@ -21251,25 +21298,25 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Die Linkinformationen konnten nicht geladen werden"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Unable to load the link information"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "No se pudo cargar la información del enlace"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Impossible de charger les informations du lien"
           }
         },
@@ -21281,7 +21328,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Não foi possível carregar as informações do link"
           }
         }
@@ -21392,26 +21439,26 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Zu viele Benutzer verbunden"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Too many users connected"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Demasiados usuarios conectados"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Trop d'utilisateurs connectes"
+            "state": "translated",
+            "value": "Trop d'utilisateurs connectés"
           }
         },
         "it": {
@@ -21422,7 +21469,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Muitos usuários conectados"
           }
         }
@@ -21439,25 +21486,25 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Unerwarteter Fehler"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Unexpected error"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Error inesperado"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Erreur inattendue"
           }
         },
@@ -21469,7 +21516,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Erro inesperado"
           }
         }
@@ -21486,25 +21533,25 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Unbekannter Fehler"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Unknown error"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Error desconocido"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
             "value": "Erreur inconnue"
           }
         },
@@ -21516,7 +21563,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Erro desconhecido"
           }
         }
@@ -27685,43 +27732,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "سيبدأ التشغيل بعد التنزيل"
+            "value": "جارٍ تحضير التشغيل…"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Wiedergabe startet nach dem Download"
+            "value": "Wiedergabe wird vorbereitet…"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Playback will start after the download"
+            "value": "Preparing playback…"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La reproducción empezará tras la descarga"
+            "value": "Preparando la reproducción…"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "La lecture démarrera après le téléchargement"
+            "value": "Préparation de la lecture…"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La riproduzione inizierà dopo il download"
+            "value": "Preparazione della riproduzione…"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A reprodução começará após o download"
+            "value": "Preparando a reprodução…"
           }
         }
       }
@@ -31508,43 +31555,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جهات الاتصال"
+            "value": "الأصدقاء"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kontakte"
+            "value": "Freunde"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contacts"
+            "value": "Friends"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contactos"
+            "value": "Amigos"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Contacts"
+            "state": "translated",
+            "value": "Amis"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contatti"
+            "value": "Amici"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contatos"
+            "value": "Amigos"
           }
         }
       }
@@ -34163,7 +34210,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Connectes"
+            "value": "Connectés"
           }
         },
         "it": {
@@ -34304,7 +34351,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Postes"
+            "value": "Publications"
           }
         },
         "it": {
@@ -54167,6 +54214,100 @@
         }
       }
     },
+    "story.composer.a11y.composition.post": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "منشور، %1$@: %2$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beitrag, %1$@: %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post, %1$@: %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post, %1$@: %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post, %1$@ : %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post, %1$@: %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post, %1$@: %2$@"
+          }
+        }
+      }
+    },
+    "story.composer.a11y.composition.reel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ريل، %1$@: %2$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel, %1$@: %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel, %1$@: %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel, %1$@: %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réel, %1$@ : %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel, %1$@: %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel, %1$@: %2$@"
+          }
+        }
+      }
+    },
     "story.composer.a11y.compositionCount.many": {
       "extractionState": "manual",
       "localizations": {
@@ -58632,6 +58773,100 @@
         }
       }
     },
+    "story.draft.resume.a11y.post": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مسودة منشور، %lld شريحة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beitragsentwurf, %lld Folie(n)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post draft, %lld slide(s)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrador de post, %lld diapositiva(s)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brouillon de post, %lld slide(s)"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bozza di post, %lld slide"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rascunho de post, %lld slide(s)"
+          }
+        }
+      }
+    },
+    "story.draft.resume.a11y.reel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مسودة ريل، %lld شريحة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel-Entwurf, %lld Folie(n)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel draft, %lld slide(s)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrador de reel, %lld diapositiva(s)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brouillon de réel, %lld slide(s)"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bozza di reel, %lld slide"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rascunho de reel, %lld slide(s)"
+          }
+        }
+      }
+    },
     "story.draft.resume.discard": {
       "extractionState": "manual",
       "localizations": {
@@ -58816,6 +59051,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Retomar seu story?"
+          }
+        }
+      }
+    },
+    "story.draft.resume.title.post": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "استئناف منشورك؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deinen Beitrag fortsetzen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume your post?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Reanudar tu post?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reprendre votre post ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riprendere il tuo post?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retomar seu post?"
+          }
+        }
+      }
+    },
+    "story.draft.resume.title.reel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "استئناف الريل الخاص بك؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Reel fortsetzen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume your reel?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Reanudar tu reel?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reprendre votre réel ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riprendere il tuo reel?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retomar seu reel?"
           }
         }
       }
@@ -60230,6 +60559,100 @@
         }
       }
     },
+    "story.location.add.a11y.post": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة موقع إلى المنشور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einen Ort zum Beitrag hinzufügen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a place to the post"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir un lugar al post"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter un lieu au post"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiungi un luogo al post"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar um local ao post"
+          }
+        }
+      }
+    },
+    "story.location.add.a11y.reel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة موقع إلى الريل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einen Ort zum Reel hinzufügen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a place to the reel"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir un lugar al reel"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter un lieu au réel"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiungi un luogo al reel"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar um local ao reel"
+          }
+        }
+      }
+    },
     "story.location.here": {
       "extractionState": "manual",
       "localizations": {
@@ -60978,6 +61401,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mencionar alguém no story"
+          }
+        }
+      }
+    },
+    "story.mention.add.a11y.post": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الإشارة إلى شخص في المنشور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jemanden im Beitrag erwähnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mention someone in the post"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mencionar a alguien en el post"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mentionner une personne dans le post"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menzionare qualcuno nel post"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mencionar alguém no post"
+          }
+        }
+      }
+    },
+    "story.mention.add.a11y.reel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الإشارة إلى شخص في الريل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jemanden im Reel erwähnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mention someone in the reel"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mencionar a alguien en el reel"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mentionner une personne dans le réel"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menzionare qualcuno nel reel"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mencionar alguém no reel"
           }
         }
       }
@@ -62246,6 +62763,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Seus sons aparecerão aqui assim que você publicar um story com áudio original."
+          }
+        }
+      }
+    },
+    "story.sound.library.emptyMine.post": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ستظهر أصواتك هنا بمجرد نشرك منشورًا يحتوي على صوت أصلي."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Sounds erscheinen hier, sobald du einen Beitrag mit eigenem Audio veröffentlichst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your sounds will appear here as soon as you publish a post with original audio."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus sonidos aparecerán aquí en cuanto publiques un post con audio original."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos sons apparaîtront ici dès que vous publierez un post avec un audio original."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi suoni appariranno qui non appena pubblicherai un post con audio originale."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus sons aparecerão aqui assim que você publicar um post com áudio original."
+          }
+        }
+      }
+    },
+    "story.sound.library.emptyMine.reel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ستظهر أصواتك هنا بمجرد نشرك ريلًا يحتوي على صوت أصلي."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Sounds erscheinen hier, sobald du ein Reel mit eigenem Audio veröffentlichst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your sounds will appear here as soon as you publish a reel with original audio."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus sonidos aparecerán aquí en cuanto publiques un reel con audio original."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos sons apparaîtront ici dès que vous publierez un réel avec un audio original."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi suoni appariranno qui non appena pubblicherai un reel con audio originale."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus sons aparecerão aqui assim que você publicar um reel com áudio original."
           }
         }
       }
@@ -66904,43 +67515,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "نيون"
+            "value": "مضيء"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Neon"
+            "value": "Leuchtend"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Neon"
+            "value": "Luminous"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Neón"
+            "value": "Luminoso"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Néon"
+            "value": "Lumière"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Neon"
+            "value": "Luminoso"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Néon"
+            "value": "Luminoso"
           }
         }
       }
@@ -83062,6 +83673,382 @@
         }
       }
     },
+    "shop.locked": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مقفل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gesperrt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Locked"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por desbloquear"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À débloquer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Da sbloccare"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A desbloquear"
+          }
+        }
+      }
+    },
+    "shop.unlock.closed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يعد معروضًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht mehr im Angebot"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No longer offered"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya no se ofrece"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "N’est plus proposé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non più disponibile"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Já não está disponível"
+          }
+        }
+      }
+    },
+    "shop.unlock.glory": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المجد الناقص: %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fehlender Ruhm: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glory needed: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gloria que falta: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gloire manquante : %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gloria mancante: %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glória em falta: %@"
+          }
+        }
+      }
+    },
+    "shop.unlock.rank": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الرتبة %1$@ — المجد الناقص: %2$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rang %1$@ — fehlender Ruhm: %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rank %1$@ — Glory needed: %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rango %1$@ — Gloria que falta: %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rang %1$@ — Gloire manquante : %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rango %1$@ — Gloria mancante: %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nível %1$@ — Glória em falta: %2$@"
+          }
+        }
+      }
+    },
+    "shop.unlock.season": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مكافأة الموسم %lld"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Belohnung der Saison %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Season %lld reward"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recompensa de la temporada %lld"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Récompense de la saison %lld"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ricompensa della stagione %lld"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recompensa da temporada %lld"
+          }
+        }
+      }
+    },
+    "shop.unlock.trophy": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُكسب بكأس"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit einer Trophäe zu gewinnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Earned with a trophy"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se gana con un trofeo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se gagne avec un trophée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si ottiene con un trofeo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ganha-se com um troféu"
+          }
+        }
+      }
+    },
+    "shop.unlock.until": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متاح حتى %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verfügbar bis %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available until %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disponible hasta el %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disponible jusqu’au %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disponibile fino al %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disponível até %@"
+          }
+        }
+      }
+    },
+    "shop.unlock.upcoming": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متاح ابتداءً من %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verfügbar ab %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available from %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disponible desde el %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disponible à partir du %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disponibile dal %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disponível a partir de %@"
+          }
+        }
+      }
+    },
     "shop.empty": {
       "extractionState": "manual",
       "localizations": {
@@ -83387,6 +84374,147 @@
           "stringUnit": {
             "state": "translated",
             "value": "Molduras de banner"
+          }
+        }
+      }
+    },
+    "post.visibility.acquaintances": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المعارف"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bekannte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acquaintances"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conocidos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connaissances"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conoscenti"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conhecidos"
+          }
+        }
+      }
+    },
+    "post.visibility.close": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المقرّبون"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vertraute"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cercanos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proches"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intimi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Próximos"
+          }
+        }
+      }
+    },
+    "post.visibility.blood": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الدم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blut"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blood"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sangre"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sang"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sangue"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sangue"
           }
         }
       }

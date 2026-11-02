@@ -221,6 +221,27 @@ class ConversationRepositoryDirectTest {
     }
 
     @Test
+    fun `un direct ouvert hors de l'ecran de creation ne choisit aucun mode, la passerelle pose Serveur`() = runTest {
+        serving()
+        coEvery { api.create(any()) } returns ApiResponse(success = true, data = direct("new"))
+
+        repository().directConversationWith("u-peer")
+
+        coVerify(exactly = 1) { api.create(match<CreateConversationRequest> { it.encryptionMode == null }) }
+    }
+
+    @Test
+    fun `le mode choisi a la creation part avec la demande`() = runTest {
+        coEvery { api.create(any()) } returns ApiResponse(success = true, data = direct("new"))
+
+        repository().create("direct", null, listOf("u-peer"), encryptionMode = "hybrid")
+
+        coVerify(exactly = 1) {
+            api.create(CreateConversationRequest(type = "direct", title = null, participantIds = listOf("u-peer"), encryptionMode = "hybrid"))
+        }
+    }
+
+    @Test
     fun `le deuxieme geste retrouve la conversation creee par le premier`() = runTest {
         serving()
         coEvery { api.create(any()) } returns ApiResponse(success = true, data = direct("new"))

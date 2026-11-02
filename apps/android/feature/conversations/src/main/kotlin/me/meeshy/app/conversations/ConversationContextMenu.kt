@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MarkChatRead
 import androidx.compose.material.icons.filled.MarkChatUnread
@@ -65,6 +66,7 @@ import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationCategoryPicker
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.conversationoptions.ConversationTagsEditor
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -109,7 +111,12 @@ internal fun ConversationContextMenu(
     onAssignCategory: (String) -> Unit,
     onCreateCategory: (String) -> Unit,
     isLocked: Boolean,
+    onRemoveCategory: () -> Unit = {},
     onLockToggle: () -> Unit,
+    onViewInfo: (() -> Unit)? = null,
+    onViewProfile: (() -> Unit)? = null,
+    onCreateShareLink: (() -> Unit)? = null,
+    onManageMembers: (() -> Unit)? = null,
 ) {
     var showLeaveConfirm by remember(expanded) { mutableStateOf(false) }
     var showDeleteForMeConfirm by remember(expanded) { mutableStateOf(false) }
@@ -125,12 +132,40 @@ internal fun ConversationContextMenu(
             isPinned = isPinned,
             isMuted = isMuted,
             messages = previewMessages,
+            isSealed = isLocked,
             showSender = previewShowSender,
             currentUserId = currentUserId,
             currentUserPrefs = currentUserPrefs,
             labels = previewLabels,
         )
         HorizontalDivider()
+        onViewInfo?.let { open ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.row_menu_info)) },
+                onClick = {
+                    onDismiss()
+                    open()
+                },
+            )
+        }
+        onViewProfile?.let { open ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.row_menu_view_profile)) },
+                onClick = {
+                    onDismiss()
+                    open()
+                },
+            )
+        }
+        onCreateShareLink?.let { open ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_create_share_link)) },
+                onClick = {
+                    onDismiss()
+                    open()
+                },
+            )
+        }
         DropdownMenuItem(
             text = {
                 Text(
@@ -237,6 +272,18 @@ internal fun ConversationContextMenu(
             leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
             onClick = { showRenameDialog = true },
         )
+        // « Gérer les membres » (parity iOS `ConversationMenuCatalog`, #12631): right after
+        // Rename, before Favorite — present only when the law grants it (#12865).
+        onManageMembers?.let { open ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.row_menu_manage_members)) },
+                leadingIcon = { Icon(Icons.Filled.ManageAccounts, contentDescription = null) },
+                onClick = {
+                    onDismiss()
+                    open()
+                },
+            )
+        }
         // Favorite reaction (parity iOS `ConversationListView+Overlays`'s "Favori"
         // menu): a fixed 8-emoji set — no full picker, matching iOS exactly — plus
         // a conditional "Remove favorite" row shown only once one is set. Drives
@@ -291,7 +338,7 @@ internal fun ConversationContextMenu(
         // whenever the trimmed query matches no known category name. Always shown
         // (not gated on a non-empty catalogue) so a user with zero categories can
         // create their first one from here. Idempotency on selecting an existing
-        // category is enforced by ConversationCategoryReassignment in the ViewModel.
+        // category is enforced by ConversationCategoryReassignment (core:model) in the shared writer.
         var categoryQuery by remember(expanded) { mutableStateOf("") }
         val picker = ConversationCategoryPicker.resolve(categories, currentCategoryId, categoryQuery)
         HorizontalDivider()
@@ -337,6 +384,13 @@ internal fun ConversationContextMenu(
                 text = { Text(category.name) },
                 leadingIcon = { Icon(Icons.Filled.Folder, contentDescription = null) },
                 onClick = { onAssignCategory(category.id); onDismiss() },
+            )
+        }
+        categories.firstOrNull { it.id == currentCategoryId }?.let { current ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_action_remove_category, current.name)) },
+                leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) },
+                onClick = { onRemoveCategory(); onDismiss() },
             )
         }
         HorizontalDivider()
@@ -552,6 +606,7 @@ private fun ConversationPreviewCard(
     isPinned: Boolean,
     isMuted: Boolean,
     messages: List<LocalMessage>?,
+    isSealed: Boolean,
     showSender: Boolean,
     currentUserId: String?,
     currentUserPrefs: MeeshyUser?,
@@ -595,6 +650,21 @@ private fun ConversationPreviewCard(
         }
         Spacer(Modifier.height(MeeshySpacing.xs))
         when {
+            isSealed -> Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Lock,
+                    contentDescription = null,
+                    tint = MeeshyTheme.tokens.textMuted,
+                    modifier = Modifier
+                        .size(14.dp)
+                        .padding(end = MeeshySpacing.xs),
+                )
+                Text(
+                    text = stringResource(R.string.conversations_lock_title_open),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MeeshyTheme.tokens.textMuted,
+                )
+            }
             messages == null -> Text(
                 text = stringResource(R.string.conversations_preview_loading),
                 style = MaterialTheme.typography.bodySmall,

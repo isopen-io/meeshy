@@ -107,4 +107,48 @@ class ShareLinkEligibilityTest {
 
         assertThat(result.map { it.id }).containsExactly("group-moderator-id", "public-moderator-id").inOrder()
     }
+
+    private fun sectionConversation(id: String, type: String, title: String) =
+        ApiConversation(id = id, type = type, title = title)
+
+    @Test
+    fun `sections group conversations into Groups, Communities, Channels and Public in that order`() {
+        val conversations = listOf(
+            sectionConversation("p", "public", "Open square"),
+            sectionConversation("g", "group", "Family"),
+            sectionConversation("ch", "channel", "News"),
+            sectionConversation("co", "community", "Rustaceans"),
+            sectionConversation("gl", "global", "Everyone"),
+            sectionConversation("b", "broadcast", "Announcements"),
+        )
+
+        val sections = ShareLinkEligibility.sections(conversations, query = "") { it.title.orEmpty() }
+
+        assertThat(sections.map { it.section }).containsExactly(
+            ShareLinkPickerSection.Groups,
+            ShareLinkPickerSection.Communities,
+            ShareLinkPickerSection.Channels,
+            ShareLinkPickerSection.Public,
+        ).inOrder()
+        assertThat(sections.first { it.section == ShareLinkPickerSection.Channels }.conversations.map { it.id })
+            .containsExactly("ch", "b").inOrder()
+        assertThat(sections.first { it.section == ShareLinkPickerSection.Public }.conversations.map { it.id })
+            .containsExactly("p", "gl").inOrder()
+    }
+
+    @Test
+    fun `sections omit an empty section and filter by a case-insensitive title query`() {
+        val conversations = listOf(
+            sectionConversation("g1", "group", "Family trip"),
+            sectionConversation("g2", "group", "Work"),
+            sectionConversation("co", "community", "FAMILY friends"),
+        )
+
+        val sections = ShareLinkEligibility.sections(conversations, query = "  family ") { it.title.orEmpty() }
+
+        assertThat(sections.map { it.section })
+            .containsExactly(ShareLinkPickerSection.Groups, ShareLinkPickerSection.Communities).inOrder()
+        assertThat(sections.first().conversations.map { it.id }).containsExactly("g1")
+        assertThat(ShareLinkEligibility.sections(conversations, query = "zzz") { it.title.orEmpty() }).isEmpty()
+    }
 }

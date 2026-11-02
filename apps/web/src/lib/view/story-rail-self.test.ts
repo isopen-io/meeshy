@@ -182,3 +182,26 @@ describe('selfRailEntry — ma photo (#6975)', () => {
     expect(entry?.avatar).toBe('story.png');
   });
 });
+
+/**
+ * **MON NOM SUR MA PASTILLE** (#12571) — sans photo, la tuile « ma story » peignait
+ * les initiales du LIBELLÉ `stories.mine` (« YS » pour « Your story »), pas les
+ * miennes. iOS utilise `userName` (`StoryTrayView.swift:299-306`). L'entrée porte
+ * donc mon nom, venu de la session, sinon de l'auteur de MES stories.
+ */
+describe('selfRailEntry — mon nom (#12571)', () => {
+  test('le nom du lecteur servi par la session est porté par l’entrée', () => {
+    expect(selfRailEntry({ viewerId: 'u-moi', displayName: 'Yann Soro', groups: [], moods: [], now: NOW })?.displayName).toBe('Yann Soro');
+  });
+
+  test('aucun nom de session ⇒ repli sur l’auteur de MES stories', () => {
+    const stories: readonly StoryTrayPost[] = [
+      { id: 's1', type: 'STORY', createdAt: '2026-09-01T10:00:00.000Z', author: { id: 'u-moi', username: 'moi', displayName: 'Moi Même' } },
+    ];
+    expect(selfRailEntry({ viewerId: 'u-moi', groups: groupsOf(stories, 'u-moi'), moods: [], now: NOW })?.displayName).toBe('Moi Même');
+  });
+
+  test('un nom blanc ou absent ⇒ `undefined` (jamais le libellé de la tuile)', () => {
+    expect(selfRailEntry({ viewerId: 'u-moi', displayName: '  ', groups: [], moods: [], now: NOW })?.displayName).toBeUndefined();
+  });
+});

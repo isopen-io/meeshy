@@ -83,6 +83,9 @@ export type ReelSceneStageProps = {
   /** Injectable pour les témoins UNIQUEMENT — la production prend les
    * dépendances de `BackgroundTrackAudio`. */
   readonly mediaDeps?: ProtectedMediaDeps;
+  /** Retenu sous la feuille de commentaires (#11307) : la scène s'arrête,
+   * et reprend à sa fermeture — la pause du lecteur, elle, reste la sienne. */
+  readonly held?: boolean;
 };
 
 function documentHiddenNow(): boolean {
@@ -100,6 +103,7 @@ export default function ReelSceneStage({
   onSoundBlocked,
   onSoundUnavailable,
   mediaDeps,
+  held = false,
 }: ReelSceneStageProps) {
   // `far` ne charge ni le moteur ni la piste — même discipline que
   // `reel-page.tsx` avant de monter ce chunk, et défense en profondeur pour
@@ -149,7 +153,7 @@ export default function ReelSceneStage({
   const scene0 = scene.document.scenes[0];
   const declared = scene0 !== undefined ? sceneDurationSeconds(scene0) : null;
   const duration = reelSceneDuration({ declared, knownMs: knownMaxMs === null ? [] : [knownMaxMs] });
-  const playing = reelScenePlays({ active: mode === 'active', paused: paused || scrubbing, documentHidden: hidden });
+  const playing = reelScenePlays({ active: mode === 'active', paused: paused || scrubbing || held, documentHidden: hidden });
   const muted = !soundOn;
 
   const box = fitScene({ viewport: outer, ratio: SCENE_RATIO });

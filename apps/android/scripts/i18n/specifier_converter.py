@@ -3,16 +3,17 @@
 Règles (miroir de ce que `String(format:)` accepte côté iOS, restreint à ce que
 Android sait afficher) :
 
-  %@                            -> %s
-  %d %i %u %ld %lld %lu ...     -> %d
+  %@                            -> %1$s
+  %d %i %u %ld %lld %lu ...     -> %1$d
   %f %lf %.2f %e %g %a          -> conservés, sans modificateur de longueur
   %x %X %o %c                   -> conservés
   %%                            -> %%  (chaîne AVEC argument) · % (chaîne sans argument, voir plus bas)
   %1$@ %2$lld                   -> %1$s %2$d (déjà positionnels : numéros conservés)
 
-Dès qu'une chaîne compte deux spécificateurs ou plus, tous sont écrits en forme
+Dès qu'une chaîne compte un spécificateur ou plus, tous sont écrits en forme
 positionnelle (%1$s, %2$d) : Android l'exige pour qu'une traduction puisse
-réordonner ses arguments, et aapt2 refuse deux substitutions non positionnelles.
+réordonner ses arguments, aapt2 refuse deux substitutions non positionnelles, et la
+garde `LocalizationGuardTest` (bare-specifier) refuse tout spécificateur nu, même seul.
 
 Un `%` suivi d'un espace (« 30 % de plus ») est de la prose, pas un format : le
 drapeau « espace » du printf n'est volontairement pas reconnu, parce que les
@@ -119,7 +120,7 @@ def convert_specifiers(text: str, *, always_formatted: bool = False) -> Converte
     if 0 < positional_count < len(specifiers):
         raise SpecifierError("formats positionnels et séquentiels mélangés dans la même chaîne")
 
-    positional = positional_count > 0 or len(specifiers) >= 2
+    positional = bool(specifiers)
     numbered = [
         (specifier, specifier.position if specifier.position is not None else index)
         for index, (specifier, _) in enumerate(specifiers, start=1)

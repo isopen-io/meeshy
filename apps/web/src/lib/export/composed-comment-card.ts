@@ -10,12 +10,15 @@ import {
   type PostCommentCardComment,
   type PostCommentCardMode,
   type PostCommentCardSource,
+  type PostCommentCardSubject,
 } from '@meeshy/shared/utils/comment-card-composition';
+import { POST_VISIBILITIES, type PostVisibility } from '@meeshy/shared/types/post';
 
 import type { FeedAuthor, FeedPost } from '@/lib/api/feed-pages';
 import type { PostComment } from '@/lib/api/publication-comments';
 import { resolveFeedText } from '@/lib/feed/text';
 import { readableTextOf } from '@/lib/links/link-reading';
+import { isStoryExpired, storyMediaUrl, type StoryPlaybackStory } from '@/lib/stories/playback';
 
 import { commentCardMediaOf, commentCardMediaWithSticker } from './comment-card-subject';
 import type { MessageCardMediaItem, MessageCardSubject } from './message-card-subject';
@@ -36,7 +39,11 @@ export type PostCommentCardEntry = { readonly kind: MessageCardMediaItem['card']
 
 export type PostCommentSource = PostCommentCardSource<PostCommentCardEntry>;
 
-export type PostCommentCardLabels = { readonly folded: (count: number) => string };
+export type PostCommentCardLabels = {
+  readonly folded: (count: number) => string;
+  /** Le titre du bloc qui porte le fil (« Fil de commentaires », `export.compose.thread` iOS). */
+  readonly thread: string;
+};
 
 export type PostCommentCardInput = {
   readonly post: FeedPost | null;
@@ -103,49 +110,103 @@ export function postCommentCardSourceOf(input: PostCommentCardInput): PostCommen
   };
 }
 
+type ComposedSubject = PostCommentCardSubject<PostCommentCardEntry>;
+
+/**
+ * **LE FIL SUR LA CARTE, COMME iOS** (#13922, `PostCommentCardComposition.subject`) :
+ * au-delà de deux blocs, ce qui suit la citation est UN bloc titré « Fil de
+ * commentaires » — une ligne « Auteur : texte » par commentaire, à son niveau,
+ * la réponse visée en dernier ; le pli s'y écrit seul. Deux blocs restent une
+ * citation et une réponse.
+ */
+function replyOf(subject: ComposedSubject, title: string): MessageCardSubject['reply'] {
+  if (subject.context.length === 0) return subject.reply;
+  const thread = [
+    ...subject.context.map((entry) => ({ author: entry.folded ? null : entry.part.author, handle: entry.folded ? null : entry.part.handle, text: entry.part.text, level: entry.depth, isReply: false })),
+    { author: subject.reply.author, handle: subject.reply.handle, text: subject.reply.text, level: subject.replyDepth, isReply: true },
+  ];
+  return { author: title, text: thread.map((line) => (line.author === null ? line.text : `${line.author} : ${line.text}`)).join('\n'), handle: null, thread };
+}
+
 /** La carte qu'« Imagine » peint pour ce choix — `null` quand rien ne s'image. */
 export function postCommentMessageCardSubjectOf(source: PostCommentSource, choice: PostCommentCardChoice, labels: PostCommentCardLabels): MessageCardSubject | null {
   const subject = postCommentCardSubject(source, { ...choice, foldedLabel: labels.folded });
   if (subject === null) return null;
   return {
     quoted: subject.quoted,
-    reply: subject.reply,
+    reply: replyOf(subject, labels.thread),
     sentAt: new Date(subject.sentAt),
     quotedAt: subject.quotedAt === null ? null : new Date(subject.quotedAt),
     media: subject.media.map(({ media, author, hero }) => ({ ...media.item, author, ...(hero ? { hero: true as const } : {}) })),
-    ...(subject.context.length === 0 ? {} : { context: subject.context }),
-    ...(subject.replyDepth === 0 ? {} : { replyDepth: subject.replyDepth }),
   };
 }
 
 /**
- * LE POST QUI COMPOSE la carte d'un de ses commentaires — `null` quand aucune
- * caisse ne le connaît. Une story ou un statut n'est un support que PAR SON
- * MÉDIA, comme sur iOS (`PostCommentCardStory`) : une story ÉCHUE (`expiresAt`
- * passé) n'est jamais support ; une story à CANVAS ne montre que sa vignette
- * (`thumbnailUrl`, peinte comme une image — sans elle, pas de support) ; sinon sa
- * première photo ou vidéo. Les pièces masquées (vue unique, flou, chiffrées) sont
- * déjà écartées par `cardMediaOf` avant la composition.
+ * LE SUPPORT QUI COMPOSE la carte d'un de ses commentaires — `null` seulement
+ * quand aucune caisse ne le connaît. Un support CONNU compose toujours, comme
+ * iOS (`CommentMoreMenu`, `post` ou `story`) : c'est la composition partagée
+ * qui décide s'il se met en tête, et l'atelier dit pourquoi il ne s'y met pas.
  *
- * AUDIENCE (fail-closed) : une story dont l'audience n'est pas PUBLIQUE n'est
- * jamais support — un post restreint compose encore, mais la composition
- * partagée ne le met jamais en tête (`PostCommentCardPost.visibility`).
+ * Une story ou un statut n'est en tête que PAR SON MÉDIA, comme sur iOS
+ * (`PostCommentCardStory`) : une story ÉCHUE (`isStoryExpired` — son échéance,
+ * à défaut 20 h, `StoryItem.isExpired`) ne montre aucun média ; une story à
+ * CANVAS ne montre que sa vignette (`thumbnailUrl`, peinte comme une image —
+ * sans elle, aucun média) ; sinon sa première photo ou vidéo. Les pièces
+ * masquées (vue unique, flou, chiffrées) sont déjà écartées par `cardMediaOf`
+ * avant la composition.
+ *
+ * AUDIENCE (fail-closed) : une audience qui n'est pas PUBLIQUE garde ses
+ * médias ICI pour que l'atelier puisse dire qu'elle les retient
+ * (`postCommentCardWithheldByAudience`) — la composition partagée ne la met
+ * jamais en tête (`PostCommentCardPost.visibility`).
  */
 export function composingPostOf(post: FeedPost | null | undefined, now: number = Date.now()): FeedPost | null {
   if (post === undefined || post === null) return null;
   const type = post.type.toUpperCase();
   if (type !== 'STORY' && type !== 'STATUS') return post;
-  if ((post.visibility ?? '').toUpperCase() !== 'PUBLIC') return null;
-  if (post.expiresAt !== undefined && post.expiresAt !== null && timeOf(post.expiresAt) <= now) return null;
-  if (post.storyEffects !== undefined && post.storyEffects !== null) {
-    const visual = entriesOf(post.media, null).find((entry) => entry.kind === 'image' || entry.kind === 'video');
-    const piece = visual === undefined ? undefined : (post.media ?? []).find((item) => item.id === visual.item.id);
-    const thumbnail = piece?.thumbnailUrl?.trim() ?? '';
-    return piece === undefined || thumbnail === ''
-      ? null
-      : { ...post, media: [{ id: `${post.id}-thumbnail`, fileUrl: thumbnail, mimeType: 'image/jpeg', width: piece.width ?? null, height: piece.height ?? null }] };
-  }
-  return entriesOf(post.media, null).some((entry) => entry.kind === 'image' || entry.kind === 'video') ? post : null;
+  const headless: FeedPost = { ...post, media: [] };
+  if (isStoryExpired(post, now)) return headless;
+  if (post.storyEffects === undefined || post.storyEffects === null) return post;
+  const visual = entriesOf(post.media, null).find((entry) => entry.kind === 'image' || entry.kind === 'video');
+  const piece = visual === undefined ? undefined : (post.media ?? []).find((item) => item.id === visual.item.id);
+  const thumbnail = piece?.thumbnailUrl?.trim() ?? '';
+  return piece === undefined || thumbnail === ''
+    ? headless
+    : { ...post, media: [{ id: `${post.id}-thumbnail`, fileUrl: thumbnail, mimeType: 'image/jpeg', width: piece.width ?? null, height: piece.height ?? null }] };
+}
+
+const visibilityOf = (value: string | null | undefined): PostVisibility | null => POST_VISIBILITIES.find((known) => known === value?.toUpperCase()) ?? null;
+
+/**
+ * **LA STORY QUE LE LECTEUR JOUE, SUPPORT D'« IMAGER »** (#13922, jumelle de
+ * `StoryViewerView.commentCardStory` iOS) — la story n'est dans aucune caisse
+ * de cartes : le lecteur la remet au fil, qui la lit comme un post de type
+ * STORY (son texte et son Prisme, son auteur, ses médias, son canvas, son
+ * échéance, son audience). Une audience absente reste absente : fail-closed.
+ */
+export function storyCommentSupportOf(story: StoryPlaybackStory): FeedPost {
+  const author = story.author;
+  return {
+    id: story.id,
+    type: 'STORY',
+    createdAt: story.createdAt,
+    expiresAt: story.expiresAt ?? null,
+    content: story.content ?? null,
+    originalLanguage: story.originalLanguage ?? null,
+    translations: story.translations,
+    author: author === undefined ? null : { id: author.id, username: author.username ?? null, displayName: author.displayName ?? null, avatar: author.avatar ?? null },
+    media: (story.media ?? []).map((piece) => ({
+      id: piece.id,
+      fileUrl: storyMediaUrl(piece),
+      mimeType: piece.mimeType ?? null,
+      thumbnailUrl: piece.thumbnailUrl ?? null,
+      thumbHash: piece.thumbHash ?? null,
+      width: piece.width ?? null,
+      height: piece.height ?? null,
+    })),
+    storyEffects: story.storyEffects,
+    visibility: visibilityOf(story.visibility),
+  };
 }
 
 /**
@@ -217,4 +278,3 @@ export function postCommentPickAfter(source: PostCommentSource, pick: PostCommen
     }
   }
 }
-

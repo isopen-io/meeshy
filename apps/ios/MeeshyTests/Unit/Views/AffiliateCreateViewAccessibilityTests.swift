@@ -22,7 +22,7 @@ final class AffiliateCreateViewAccessibilityTests: XCTestCase {
                     .deletingLastPathComponent()
                     .deletingLastPathComponent()
                     .deletingLastPathComponent()
-                    .appendingPathComponent("Meeshy/Features/Main/Views/AffiliateCreateView.swift"),
+                    .appendingPathComponent("Meeshy/Features/Links/Views/AffiliateCreateView.swift"),
                 encoding: .utf8
             )
         }

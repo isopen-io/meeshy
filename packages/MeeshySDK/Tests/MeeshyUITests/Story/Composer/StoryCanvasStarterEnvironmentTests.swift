@@ -29,10 +29,31 @@ final class StoryCanvasStarterEnvironmentTests: XCTestCase {
         _ = provider.makeView { received = $0 }
         appSideSink?(.photo(image))
 
-        guard case .photo(let forwarded) = received else {
+        guard case .photo(let forwarded, let data) = received else {
             return XCTFail("La photo capturée n'a pas été transmise")
         }
         XCTAssertEqual(forwarded, image)
+        XCTAssertNil(data, "sans octets remis, la photo n'en invente pas")
+    }
+
+    /// #11847 — la prise voyage avec ses OCTETS : ceux que le viseur a écrits une fois.
+    func test_storyCameraCaptureProvider_photoCapture_forwardsTheBytesOfTheTake() {
+        var received: StoryCameraCapture?
+        var appSideSink: ((StoryCameraCapture) -> Void)?
+        let image = UIImage(systemName: "camera") ?? UIImage()
+        let octets = Data([0xFF, 0xD8, 0xFF, 0xE0, 0, 0, 0, 0, 0, 0, 0, 0])
+        let provider = StoryCameraCaptureProvider { onCapture in
+            appSideSink = onCapture
+            return AnyView(Color.clear)
+        }
+
+        _ = provider.makeView { received = $0 }
+        appSideSink?(.photo(image, data: octets))
+
+        guard case .photo(_, let data) = received else {
+            return XCTFail("La photo capturée n'a pas été transmise")
+        }
+        XCTAssertEqual(data, octets)
     }
 
     func test_storyCameraCaptureProvider_videoCapture_forwardsTheURLToTheCallback() {

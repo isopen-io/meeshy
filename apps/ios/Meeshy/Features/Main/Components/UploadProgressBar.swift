@@ -96,7 +96,7 @@ struct UploadProgressBar: View {
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundStyle(theme.textMuted)
                 Spacer()
-                Text(formatMediaFileSize(progress.uploadedBytes) + " / " + formatMediaFileSize(progress.totalBytes))
+                Text(MediaFormat.bytes(progress.uploadedBytes) + " / " + MediaFormat.bytes(progress.totalBytes))
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium, design: .monospaced))
                     .foregroundStyle(theme.textMuted)
             }

@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ROOMS, SERVER_EVENTS, type TranslationEvent } from '@meeshy/shared/types/socketio-events';
+import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 import { isMessageTranslationTarget } from '../services/zmq-translation/utils/zmq-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { buildTranslationEvent } from './buildTranslationEvent';
@@ -60,14 +61,18 @@ export async function deliverTextTranslation(
     // rafraîchissement — `conversationIdForBroadcast` sort du MÊME `msg`.
     let senderIdForPreview = '';
     let messageCreatedAt: Date | null = null;
+    // #12822 — une traduction d'une conversation chiffrée au repos ne se range
+    // pas en clair dans la file hors ligne (Redis) : elle y part scellée.
+    let atRest = false;
     try {
       const msg = await deps.prisma.message.findUnique({
         where: { id: result.messageId },
-        select: { conversationId: true, senderId: true, createdAt: true }
+        select: { conversationId: true, senderId: true, createdAt: true, encryptionMode: true }
       });
       conversationIdForBroadcast = msg?.conversationId || null;
       messageCreatedAt = msg?.createdAt ?? null;
       senderIdForPreview = msg?.senderId ?? '';
+      atRest = isServerAtRestMode(msg?.encryptionMode);
     } catch (error) {
       logger.error(`❌ [SocketIOManager] Erreur récupération conversation:`, error);
     }
@@ -140,6 +145,7 @@ export async function deliverTextTranslation(
         payload: translationData,
         dedupKey: `${result.messageId}:${targetLanguage}`,
         restrictToReadersOfLanguage: targetLanguage,
+        atRest,
         ...(readers.kind === 'readers' ? { excludedQueueKeys: readers.excludedQueueKeys } : {}),
       });
 

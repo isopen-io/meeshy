@@ -1,6 +1,7 @@
 package me.meeshy.sdk.lang
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
 /**
@@ -121,6 +122,166 @@ class ComposeLanguageDetectorTest {
         // to French because the French signal dominates the score.
         assertThat(ComposeLanguageDetector.detect("Le petit chat de la maison mange le pain avec el pan", fallback = "en"))
             .isEqualTo("fr")
+    }
+
+    // --- identifieur injectable (ML Kit) ---------------------------------------------------------
+
+    private fun identifier(code: String, confidence: Double) =
+        LanguageIdentifying { LanguageIdentification(code, confidence) }
+
+    @Test
+    fun `identified language at the threshold wins`() = runTest {
+        val result = ComposeLanguageDetector.detect("Hello there my friend", "fr", identifier("en", 0.65))
+        assertThat(result).isEqualTo("en")
+    }
+
+    @Test
+    fun `identified language below the threshold falls back to the sender language`() = runTest {
+        val result = ComposeLanguageDetector.detect("Hello there my friend", "fr", identifier("en", 0.64))
+        assertThat(result).isEqualTo("fr")
+    }
+
+    @Test
+    fun `undetermined identification falls back to the sender language`() = runTest {
+        val result = ComposeLanguageDetector.detect("Hello there my friend", "fr", identifier("und", 0.99))
+        assertThat(result).isEqualTo("fr")
+    }
+
+    @Test
+    fun `fewer than four letters never consults the identifier`() = runTest {
+        var asked = false
+        val spy = LanguageIdentifying { asked = true; LanguageIdentification("en", 0.99) }
+        assertThat(ComposeLanguageDetector.detect("ok 123", "fr", spy)).isEqualTo("fr")
+        assertThat(asked).isFalse()
+    }
+
+    @Test
+    fun `urls are stripped before identification`() = runTest {
+        var seen = ""
+        val spy = LanguageIdentifying { seen = it; LanguageIdentification("en", 0.9) }
+        ComposeLanguageDetector.detect("hello world https://meeshy.me/x?a=1", "fr", spy)
+        assertThat(seen).isEqualTo("hello world")
+        assertThat(ComposeLanguageDetector.detect("https://meeshy.me/x?a=1", "fr", spy)).isEqualTo("fr")
+    }
+
+    @Test
+    fun `an unavailable identifier leaves the heuristic decide`() = runTest {
+        val result = ComposeLanguageDetector.detect(
+            "Bonjour, comment allez-vous aujourd'hui ?", "en", LanguageIdentifying.Unavailable,
+        )
+        assertThat(result).isEqualTo("fr")
+    }
+
+    @Test
+    fun `a failing identifier degrades to the heuristic`() = runTest {
+        val boom = LanguageIdentifying { error("no play services") }
+        val result = ComposeLanguageDetector.detect("Bonjour, comment allez-vous aujourd'hui ?", "en", boom)
+        assertThat(result).isEqualTo("fr")
+    }
+
+    @Test
+    fun `a regional identification is normalised`() = runTest {
+        val result = ComposeLanguageDetector.detect("Olá, tudo bem com você", "fr", identifier("pt-BR", 0.9))
+        assertThat(result).isEqualTo("pt")
+    }
+
+    // --- un signal faible ne relabellise jamais (#12484) -----------------------------------------
+
+    @Test
+    fun `a draft whose only signal is a one-letter word keeps the sender language`() {
+        assertThat(ComposeLanguageDetector.detect("Recette o", fallback = "fr")).isEqualTo("fr")
+        assertThat(ComposeLanguageDetector.detect("Test e", fallback = "fr")).isEqualTo("fr")
+        assertThat(ComposeLanguageDetector.detect("Photo a", fallback = "fr")).isEqualTo("fr")
+    }
+
+    @Test
+    fun `a french text without stopwords keeps the sender language`() {
+        assertThat(ComposeLanguageDetector.detect("Recette offline Android", fallback = "fr")).isEqualTo("fr")
+        assertThat(ComposeLanguageDetector.detect("Commentaire test", fallback = "fr")).isEqualTo("fr")
+    }
+
+    @Test
+    fun `a one-letter word still counts beside a real signal`() {
+        assertThat(ComposeLanguageDetector.detect("Vou a praia com o meu irmão", fallback = "fr")).isEqualTo("pt")
+    }
+
+    // --- la langue gravée à l'envoi (messages ET commentaires) --------------------------------------
+
+    @Test
+    fun `at send a manual pick always wins`() = runTest {
+        val result = ComposeLanguageDetector.originalLanguageAtSend(
+            text = "Recette offline Android", manual = "es", senderLanguage = "fr", identifier = identifier("pt", 0.99),
+        )
+        assertThat(result).isEqualTo("es")
+    }
+
+    @Test
+    fun `at send a weak identification falls back to the sender language`() = runTest {
+        val result = ComposeLanguageDetector.originalLanguageAtSend(
+            text = "Recette offline Android", manual = null, senderLanguage = "fr", identifier = identifier("pt", 0.4),
+        )
+        assertThat(result).isEqualTo("fr")
+    }
+
+    @Test
+    fun `at send without an identifier a weak heuristic falls back to the sender language`() = runTest {
+        val result = ComposeLanguageDetector.originalLanguageAtSend(
+            text = "Commentaire test", manual = null, senderLanguage = "fr", identifier = LanguageIdentifying.Unavailable,
+        )
+        assertThat(result).isEqualTo("fr")
+    }
+
+    @Test
+    fun `at send a confident identification is kept`() = runTest {
+        val result = ComposeLanguageDetector.originalLanguageAtSend(
+            text = "Hello there my friend", manual = null, senderLanguage = "fr", identifier = identifier("en", 0.9),
+        )
+        assertThat(result).isEqualTo("en")
+    }
+
+    private fun identifies(code: String, confidence: Double) = LanguageIdentifying { LanguageIdentification(code, confidence) }
+
+    @Test
+    fun authoredLanguage_confidentDetection_isClaimed() = runTest {
+        assertThat(ComposeLanguageDetector.authoredLanguage("Bonjour à toutes et à tous", identifies("fr", 0.98))).isEqualTo("fr")
+    }
+
+    @Test
+    fun authoredLanguage_weakDetection_isLeftToTheServer_neverTheAuthorsLanguage() = runTest {
+        // #14284 — un compte dont la langue primaire est l'espagnol écrit « Recette commentaire photo S8 » :
+        // l'identifieur hésite, et le commentaire partait badgé « Español ».
+        assertThat(ComposeLanguageDetector.authoredLanguage("Recette commentaire photo S8", identifies("fr", 0.40))).isNull()
+        assertThat(ComposeLanguageDetector.authoredLanguage("Recette commentaire photo S8", LanguageIdentifying.Unavailable)).isNull()
+    }
+
+    @Test
+    fun authoredLanguage_withoutText_isLeftToTheServer() = runTest {
+        // Un vocal sans légende : la langue se lit dans l'audio (transcription), pas dans la langue de l'auteur.
+        assertThat(ComposeLanguageDetector.authoredLanguage("", identifies("es", 0.99))).isNull()
+    }
+
+    @Test
+    fun authoredLanguage_undeterminedIdentification_isLeftToTheServer() = runTest {
+        assertThat(ComposeLanguageDetector.authoredLanguage("Recette offline ok", identifies("und", 0.99))).isNull()
+    }
+
+    @Test
+    fun authoredLanguage_shortTextBelowTheShortTextConfidence_isLeftToTheServer() = runTest {
+        // Recette S8 2026-11-01 : « Recette commentaire story S8 » (français, auteur hispanophone) partait étiqueté « en ».
+        // Quatre mots ne départagent pas deux langues : dans le doute, ne rien affirmer.
+        assertThat(ComposeLanguageDetector.authoredLanguage("Recette commentaire story S8", identifies("en", 0.85))).isNull()
+    }
+
+    @Test
+    fun authoredLanguage_shortTextWithNearCertainty_isClaimed() = runTest {
+        assertThat(ComposeLanguageDetector.authoredLanguage("Merci beaucoup mon ami", identifies("fr", 0.97))).isEqualTo("fr")
+    }
+
+    @Test
+    fun authoredLanguage_longerTextAtOrdinaryConfidence_isClaimed() = runTest {
+        assertThat(
+            ComposeLanguageDetector.authoredLanguage("Je trouve cette story vraiment très réussie aujourd'hui", identifies("fr", 0.8)),
+        ).isEqualTo("fr")
     }
 }
 

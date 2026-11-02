@@ -39,7 +39,7 @@ menu contextuel comme aujourd'hui).
 
 ## 1. Point d'entrée — tap avatar ouvre la liste
 
-**Fichier** : `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift`,
+**Fichier** : `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`,
 `MyStoryButton.body`, closure `onTap` (~ligne 394-401).
 
 Comportement actuel :
@@ -89,7 +89,7 @@ explicitement (par défaut `0`), quelle que soit la story dont l'id a été
 transmis via `postId`. Concrètement : taper la 3ᵉ ligne de `MyStoriesView`
 ouvre aujourd'hui la 1ʳᵉ story du groupe, pas la 3ᵉ.
 
-**Fichier** : `apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift`
+**Fichier** : `apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift`
 
 Nouveau helper pur et testable, ajouté dans le même fichier (ou un fichier
 `StoryIndexResolver.swift` adjacent si la convention du dossier préfère un

@@ -1,12 +1,18 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.media.MediaUploadItem
 import android.content.Context
 import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
 import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -15,6 +21,7 @@ import me.meeshy.sdk.composer.AttachmentIngesting
 import me.meeshy.sdk.composer.AttachmentSourceInfo
 import me.meeshy.sdk.composer.IngestedFile
 import me.meeshy.sdk.model.MimeTypeResolver
+import me.meeshy.sdk.model.composer.ComposerAttachmentLimits
 import me.meeshy.sdk.model.composer.PendingAttachment
 import me.meeshy.sdk.model.composer.PendingAttachmentPhase
 import me.meeshy.sdk.model.composer.PendingAttachmentType
@@ -44,6 +51,15 @@ class ComposerTrayController @Inject constructor(
 
     internal var idFactory: () -> String = { UUID.randomUUID().toString() }
 
+    private val _notices = MutableSharedFlow<String>(extraBufferCapacity = NOTICE_BUFFER)
+
+    /**
+     * Ce que le plateau refuse ou ne peut importer, dit à l'écran au moment où ça arrive.
+     * L'erreur d'écran ([ChatControllerHost.reportError]) ne se voit que sur un fil vide :
+     * sans ce canal, une pièce refusée disparaîtrait sans un mot dans une conversation pleine.
+     */
+    val notices: SharedFlow<String> = _notices.asSharedFlow()
+
     private var host: ChatControllerHost? = null
 
     override fun attach(host: ChatControllerHost) {
@@ -57,15 +73,59 @@ class ComposerTrayController @Inject constructor(
     /** Ajoute les URIs choisis : une pièce en préparation par fichier, dans l'ordre du choix. */
     fun stageUris(uris: List<Uri>) {
         val scope = host?.scope ?: return
+        scope.launch { stageAll(uris) }
+    }
+
+    /**
+     * Comme [stageUris], mais rend la main une fois les copies faites : la caméra supprime
+     * son fichier de prise juste après. La copie vit dans la portée de l'écran, pas dans
+     * celle de l'appelant : une rotation ne la laisse pas à moitié faite.
+     */
+    suspend fun stageUrisAndWait(uris: List<Uri>) {
+        val scope = host?.scope ?: return
+        scope.launch { stageAll(uris) }.join()
+    }
+
+    /**
+     * Ajoute un fichier enregistré par l'app (un vocal) : copié en arrière-plan, sans passer
+     * par la mémoire ni par le fil principal, puis sa source est supprimée.
+     */
+    fun stageFile(file: File, declaredMimeType: String?, fileName: String? = null) {
+        val scope = host?.scope ?: run {
+            file.delete()
+            return
+        }
+        val name = fileName?.takeIf { it.isNotBlank() } ?: file.name
+        val mime = MimeTypeResolver.resolve(declaredMimeType, name)
+        val info = AttachmentSourceInfo(name, mime, 0L)
         scope.launch {
-            for (uri in uris) {
-                val info = runCatching { ingestor.describe(uri) }.getOrNull()
-                val placeholder = placeholderFor(info ?: UNKNOWN_SOURCE)
-                if (!admit(placeholder)) continue
-                launch { prepare(placeholder, info?.fileName) { ingestor.ingest(uri, placeholder.id, info ?: UNKNOWN_SOURCE) } }
+            try {
+                admitSource(info)?.let { placeholder -> prepareFrom(Uri.fromFile(file), placeholder, info) }
+            } finally {
+                ingestor.delete(listOf(file.path))
             }
         }
     }
+
+    private suspend fun stageAll(uris: List<Uri>) = coroutineScope {
+        for (uri in uris) {
+            val info = runCatching { ingestor.describe(uri) }.getOrNull() ?: UNKNOWN_SOURCE
+            val placeholder = admitSource(info) ?: continue
+            launch { prepareFrom(uri, placeholder, info) }
+        }
+    }
+
+    /** Une source trop lourde est refusée avant sa copie, avec un message qui le dit. */
+    private fun admitSource(info: AttachmentSourceInfo): PendingAttachment? {
+        if (!ComposerAttachmentLimits.admitsUpload(info.sizeBytes)) {
+            reportTooLarge(info.fileName)
+            return null
+        }
+        return placeholderFor(info).takeIf(::admit)
+    }
+
+    private suspend fun prepareFrom(uri: Uri, placeholder: PendingAttachment, info: AttachmentSourceInfo) =
+        prepare(placeholder, info.fileName) { ingestor.ingest(uri, placeholder.id, info) }
 
     /** Ajoute un contenu déjà en mémoire (vocal enregistré, photo de la caméra). */
     fun stageBytes(bytes: ByteArray, fileName: String?, declaredMimeType: String?) {
@@ -102,6 +162,33 @@ class ComposerTrayController @Inject constructor(
     }
 
     /**
+     * Une vidéo retouchée (#12735) remplace sa pièce à sa place : le fichier rendu est copié sans passer
+     * par la mémoire, puis supprimé. Une pièce partie entre-temps ne revient pas, et le rendu s'efface.
+     */
+    fun replaceFile(id: String, file: File, declaredMimeType: String?) {
+        val scope = host?.scope
+        if (scope == null || _state.value.items.none { it.id == id }) {
+            file.delete()
+            return
+        }
+        val info = AttachmentSourceInfo(file.name, MimeTypeResolver.resolve(declaredMimeType, file.name), file.length())
+        scope.launch {
+            try {
+                val copied = runCatching { ingestor.ingest(Uri.fromFile(file), "$id-${idFactory()}", info) }.getOrNull() ?: return@launch
+                if (!ComposerAttachmentLimits.admitsUpload(copied.sizeBytes)) {
+                    deleteFiles(listOfNotNull(copied.localPath, copied.thumbnail?.thumbnailPath))
+                    return@launch reportTooLarge(info.fileName)
+                }
+                val replacement = readyFrom(placeholderFor(info).copy(id = id), copied)
+                val reduction = reduce { PendingAttachmentsReducer.replace(it, id, replacement) }
+                if (!reduction.applied) deleteFiles(replacement.ownedPaths)
+            } finally {
+                ingestor.delete(listOf(file.path))
+            }
+        }
+    }
+
+    /**
      * L'envoi consomme le plateau : `null` s'il est vide ou si une pièce se prépare encore
      * (le bouton Envoyer attend), sinon toutes les pièces prêtes, en un seul lot.
      */
@@ -116,6 +203,10 @@ class ComposerTrayController @Inject constructor(
     }
 
     suspend fun readBytes(item: PendingAttachment): ByteArray? = item.localPath?.let { ingestor.readBytes(it) }
+
+    /** Le fichier de travail d'une pièce prête, tel qu'il part à la file d'envoi (jamais relu en mémoire) ; `null` s'il a disparu. */
+    suspend fun uploadItem(item: PendingAttachment, fileName: String, mimeType: String): MediaUploadItem? =
+        item.localPath?.let { ingestor.uploadItem(it, fileName, mimeType) }
 
     /** Supprime les fichiers de travail d'un lot une fois ses octets remis à la file d'envoi. */
     fun release(batch: StagedBatch) {
@@ -132,8 +223,13 @@ class ComposerTrayController @Inject constructor(
         }
         if (file == null) {
             reduce { PendingAttachmentsReducer.remove(it, placeholder.id) }
-            host?.reportError(context.getString(R.string.chat_tray_import_failed, displayName(name)))
+            announce(context.getString(R.string.chat_tray_import_failed, displayName(name)))
             return
+        }
+        if (!ComposerAttachmentLimits.admitsUpload(file.sizeBytes)) {
+            reduce { PendingAttachmentsReducer.remove(it, placeholder.id) }
+            deleteFiles(listOfNotNull(file.localPath, file.thumbnail?.thumbnailPath))
+            return reportTooLarge(name)
         }
         val reduction = reduce { PendingAttachmentsReducer.update(it, placeholder.id) { item -> readyFrom(item, file) } }
         if (!reduction.applied) {
@@ -141,10 +237,21 @@ class ComposerTrayController @Inject constructor(
         }
     }
 
+    private fun announce(message: String) {
+        host?.reportError(message)
+        _notices.tryEmit(message)
+    }
+
+    private fun reportTooLarge(name: String?) {
+        announce(
+            context.getString(R.string.chat_tray_too_large, displayName(name), ComposerAttachmentLimits.MAX_UPLOAD_MEGABYTES),
+        )
+    }
+
     private fun admit(placeholder: PendingAttachment): Boolean {
         val reduction = reduce { PendingAttachmentsReducer.add(it, placeholder) }
         if (reduction.outcome == PendingAttachmentsOutcome.CAP_REACHED) {
-            host?.reportError(context.getString(R.string.chat_tray_cap_reached))
+            announce(context.getString(R.string.chat_tray_cap_reached))
         }
         return reduction.applied
     }
@@ -192,6 +299,7 @@ class ComposerTrayController @Inject constructor(
     }
 
     private companion object {
+        const val NOTICE_BUFFER = 8
         val UNKNOWN_SOURCE = AttachmentSourceInfo(fileName = null, mimeType = "application/octet-stream", sizeBytes = 0L)
     }
 }

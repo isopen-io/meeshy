@@ -25,7 +25,7 @@ data class LinkStatsSnapshot(
 /** Une communauté vue comme un lien de partage — port de `APICommunityMini` (CommunityLinkService.swift). */
 @Serializable
 data class CommunityMini(
-    val id: String,
+    val id: String = "",
     val name: String = "",
     val identifier: String = "",
     val isActive: Boolean = true,

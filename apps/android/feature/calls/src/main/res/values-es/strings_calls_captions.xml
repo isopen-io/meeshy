@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_captions_title">Subtítulos</string>
+    <string name="call_captions_state_off">Desactivados</string>
+    <string name="call_captions_state_translated">Traducción</string>
+    <string name="call_captions_state_original">Texto original</string>
+    <string name="call_captions_peer_active">Tu interlocutor activó la transcripción</string>
+    <string name="call_captions_journal">Registro</string>
+    <string name="call_captions_journal_title">Registro de la llamada</string>
+    <string name="call_captions_journal_hint">Abre todas las frases de la llamada</string>
+    <string name="call_captions_waiting">Los subtítulos aparecerán aquí en cuanto alguien hable.</string>
+    <string name="call_captions_translated">Traducido</string>
+    <string name="call_captions_original">Original</string>
+    <string name="call_captions_back_to_live">Volver al directo</string>
+    <string name="call_captions_new_lines">Frases nuevas</string>
+    <string name="call_captions_end_to_end">Los subtítulos no están disponibles en una conversación cifrada de extremo a extremo.</string>
+    <string name="call_captions_unavailable">Los subtítulos aún no están disponibles para esta llamada.</string>
+    <string name="call_captions_local_unsupported">Tus palabras no se subtitulan en este dispositivo: necesita Android 13 y reconocimiento de voz en el dispositivo. Sigues leyendo los subtítulos de la otra persona.</string>
+    <string name="call_captions_local_language_missing">Tus palabras no se subtitulan: este dispositivo no tiene el modelo de voz de tu idioma. Sigues leyendo los subtítulos de la otra persona.</string>
+</resources>

@@ -60,7 +60,7 @@ final class JoinFlowCopyTests: XCTestCase {
         XCTAssertEqual(JoinFlowCopy.joinFailure(MeeshyError.server(statusCode: 410, message: "expiré"), in: bundle), "expiré")
         XCTAssertEqual(
             JoinFlowCopy.joinFailure(MeeshyError.server(statusCode: 429, message: "x"), in: bundle),
-            "Trop d'utilisateurs connectes"
+            "Trop d'utilisateurs connectés"
         )
         XCTAssertEqual(
             JoinFlowCopy.joinFailure(NSError(domain: "t", code: 1), in: bundle),

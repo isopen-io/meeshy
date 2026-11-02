@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { mediaAdjustmentsPaint } from './media-adjustments';
+import { mediaAdjustmentLayers, mediaAdjustmentsPaint } from './media-adjustments';
 
 /**
  * LES RÉGLAGES D'UN MÉDIA POSÉ, PEINTS PAR LE WEB (#9497) — `payload.adjustments`
@@ -123,5 +123,28 @@ describe('mediaAdjustmentsPaint — les effets', () => {
 
   test('une vidéo ne reçoit ni bloom ni grain', () => {
     expect(video({ bloom: 1, grain: 1 })).toEqual(NOTHING);
+  });
+});
+
+/**
+ * LES MÊMES RÉGLAGES, POUR UN CANVAS (#13880) — l'export d'une story ne lit
+ * pas le CSS : les calques lui sont remis en FORME (teinte, vignette, grain),
+ * la chaîne CSS restant leur projection, et le flou se compte dans l'unité du
+ * peintre.
+ */
+describe('mediaAdjustmentLayers — les calques en forme, la source des calques CSS', () => {
+  test('teinte, vignette, grain : dans l’ordre des calques CSS, avec leurs intensités', () => {
+    expect(mediaAdjustmentLayers({ adjustments: { temperature: -0.5, vignette: 1, grain: 0.5 } }, 'image')).toEqual([
+      { kind: 'tint', rgb: '0, 122, 255', alpha: 0.25 },
+      { kind: 'vignette', alpha: 0.5, clearStop: 0.45 },
+      { kind: 'grain', alpha: 0.05 },
+    ]);
+  });
+  test('sans réglage, aucun calque ; une vidéo n’a pas de grain', () => {
+    expect(mediaAdjustmentLayers({}, 'image')).toEqual([]);
+    expect(mediaAdjustmentLayers({ adjustments: { grain: 1, vignette: 1 } }, 'video').map((layer) => layer.kind)).toEqual(['vignette']);
+  });
+  test('le flou se dit dans l’unité du peintre : des pixels pour un canvas', () => {
+    expect(mediaAdjustmentsPaint({ adjustments: { blur: 0.5 } }, { target: 'image', blurLength: (designPixels) => `${designPixels}px` }).filter).toBe('blur(8px)');
   });
 });

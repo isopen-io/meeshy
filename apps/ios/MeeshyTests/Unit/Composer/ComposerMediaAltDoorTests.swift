@@ -22,7 +22,7 @@ import XCTest
 final class ComposerMediaAltDoorTests: XCTestCase {
 
     private func source(_ fichier: String) throws -> String {
-        try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Composer/\(fichier)")
+        try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Composer/\(fichier)")
     }
 
     private func compact(_ t: String) -> String {

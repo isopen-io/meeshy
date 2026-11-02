@@ -240,9 +240,24 @@ describe('/packs/glory-frame — un registre FIXTURE', () => {
       removable: false,
       names: { fr: { name: 'Pack afrique', description: 'Les cadres afrique.' } },
       preview: ref('b'),
+      previewUrl: `/api/v1/pack-assets/${ref('b').src}`,
       usage: { kind: 'rank', rank: 'ambassadeur', division: 4 },
     });
     expect(data.map((p) => p.usage)).toEqual([{ kind: 'rank', rank: 'ambassadeur', division: 4 }, { kind: 'moment', family: 'flame' }, { kind: 'achievement' }]);
+    await app.close();
+  });
+
+  it('montre chaque pack sans l’installer : l’atlas de ses vignettes, à son adresse, et jamais un atlas démesuré (#10275)', async () => {
+    const heavy = { ...ref('e'), bytes: 262_145 };
+    const index = buildPackIndex({ registries: [[entry('lourd', { preview: heavy }), entry('sans-atlas', { order: 1, preview: null }), entry('leger', { order: 2 })]], retained: [] });
+    const { app } = await frameApp({ index });
+    const data: readonly { slug: string; preview: unknown; previewUrl: unknown }[] = (await app.inject({ method: 'GET', url: '/' })).json().data;
+    expect(data.map(({ slug, preview, previewUrl }) => ({ slug, preview, previewUrl }))).toEqual([
+      { slug: 'lourd', preview: null, previewUrl: null },
+      { slug: 'sans-atlas', preview: null, previewUrl: null },
+      { slug: 'leger', preview: ref('b'), previewUrl: `/api/v1/pack-assets/${ref('b').src}` },
+    ]);
+    expect((await app.inject({ method: 'GET', url: '/leger' })).json().data).toMatchObject({ preview: ref('b'), previewUrl: `/api/v1/pack-assets/${ref('b').src}` });
     await app.close();
   });
 
@@ -257,9 +272,9 @@ describe('/packs/glory-frame — un registre FIXTURE', () => {
     await app.close();
   });
 
-  it('un pack masqué se LIT mais ne s’installe pas', async () => {
+  it('un pack masqué ne se lit ni ne s’installe par son slug pour qui ne l’a pas (audit de #12293)', async () => {
     const { app } = await frameApp();
-    expect((await app.inject({ method: 'GET', url: '/ancien' })).json().data).toMatchObject({ slug: 'ancien', installed: false });
+    expect((await app.inject({ method: 'GET', url: '/ancien' })).statusCode).toBe(404);
     expect((await app.inject({ method: 'PUT', url: '/ancien/install' })).statusCode).toBe(404);
     await app.close();
   });

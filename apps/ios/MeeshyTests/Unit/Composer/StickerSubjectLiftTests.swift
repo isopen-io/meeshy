@@ -98,7 +98,7 @@ final class StickerSubjectLiftTests: XCTestCase {
     /// n'apparaît jamais — deux moitiés justes qui ne se rencontrent pas.
     func test_lApp_injecteLaCapaciteDeDetourage() throws {
         let source = try MyStoriesSourceCorpus.text(
-            of: "Meeshy/Features/Main/Composer/StickerLibraryPaste.swift")
+            of: "Meeshy/Features/Composer/StickerLibraryPaste.swift")
 
         // **Deux FAITS, jamais une signature.** Ce témoin citait la chaîne
         // `"lift: StickerSubjectLift.isAvailable"` — c'est-à-dire un ternaire

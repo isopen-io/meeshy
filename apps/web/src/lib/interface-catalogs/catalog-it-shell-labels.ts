@@ -10,6 +10,8 @@ const itShellLabels = {
   'thread.header.back.unread.one': 'Indietro — {count} messaggio non letto altrove',
   'thread.header.back.unread.other': 'Indietro — {count} messaggi non letti altrove',
   'thread.header.details': 'Dettagli della conversazione',
+  'thread.header.encryption.endToEnd': 'Crittografato end-to-end',
+  'thread.header.encryption.server': 'Crittografato sul server',
   'thread.scrollToBottom': 'Scorri in fondo',
   'thread.scrollToBottom.unread.one': '{count} messaggio non letto, Scorri in fondo',
   'thread.scrollToBottom.unread.other': '{count} messaggi non letti, Scorri in fondo',

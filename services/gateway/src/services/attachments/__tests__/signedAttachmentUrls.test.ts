@@ -81,6 +81,13 @@ describe('signReaderAttachmentUrls', () => {
     expect(grantOf((out.translations as Record<string, { url: string }>).en?.url)).toEqual({ ...expected, storageKey: TRACK });
   });
 
+  it('signe AUSSI les variantes AVIF : une vue unique ne laisse aucune adresse nue à côté (#11262)', () => {
+    const avif = '2026/10/68f2a81417a557e8ce4ddfc1/photo_8b1f0c1e_640w.avif';
+    const out = signed(piece({ avifVariants: [{ width: 640, height: 480, url: avif, size: 8, format: 'avif' }] }), { ...ORDINARY, isViewOnce: true });
+    expect(grantOf((out.avifVariants as Array<{ url: string }>)[0]?.url)).toEqual({ attachmentId: PIECE, readerParticipantId: READER, storageKey: avif });
+    expect((out.avifVariants as Array<Record<string, unknown>>)[0]).toMatchObject({ width: 640, format: 'avif' });
+  });
+
   it('garde les autres champs de la variante et de la piste', () => {
     const out = signed(piece(), { ...ORDINARY, isViewOnce: true });
     expect((out.imageVariants as Array<Record<string, unknown>>)[0]).toMatchObject({ width: 640, height: 480, format: 'webp' });

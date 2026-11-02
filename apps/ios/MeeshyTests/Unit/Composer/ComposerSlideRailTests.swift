@@ -103,10 +103,69 @@ final class ComposerSlideRailTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSlideRail.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSlideRail.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
         let tuile = try XCTUnwrap(code.range(of: "private func tuile("))
         XCTAssertTrue(code[tuile.lowerBound...].contains(".contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))"))
+    }
+
+    // MARK: - La corbeille demande toujours confirmation (#13617)
+
+    /// **Toucher la corbeille ne supprime RIEN** : il ouvre la confirmation de
+    /// la scène visée, même vide.
+    func test_demanderLaSuppression_ouvreLaConfirmation_sansSupprimer() {
+        let invite = ComposerSceneDeletionPrompt().asking(index: 2)
+        XCTAssertTrue(invite.isPresented)
+        XCTAssertEqual(invite.pendingIndex, 2)
+    }
+
+    /// **Annuler ne change rien** : la confirmation se ferme, aucun index n'est rendu.
+    func test_annuler_ferme_etNeSupprimeRien() {
+        let invite = ComposerSceneDeletionPrompt().asking(index: 1).cancelled()
+        XCTAssertFalse(invite.isPresented)
+        XCTAssertNil(invite.pendingIndex)
+        XCTAssertNil(invite.confirmedIndex(sceneCount: 3))
+    }
+
+    /// **Confirmer rend l'index à retirer** — celui-là, une fois.
+    func test_confirmer_rendLIndexVise() {
+        let invite = ComposerSceneDeletionPrompt().asking(index: 1)
+        XCTAssertEqual(invite.confirmedIndex(sceneCount: 3), 1)
+        XCTAssertNil(invite.cancelled().confirmedIndex(sceneCount: 3))
+    }
+
+    /// Une scène retirée entre-temps (index hors rail) ne supprime pas la voisine.
+    func test_confirmer_surUnIndexDevenuHorsRail_neSupprimeRien() {
+        let invite = ComposerSceneDeletionPrompt().asking(index: 2)
+        XCTAssertNil(invite.confirmedIndex(sceneCount: 2))
+    }
+
+    /// **Aucun chemin ne rappelle `onDelete` sans passer par la confirmation** :
+    /// la corbeille arme l'invite, seule la confirmation appelle `onDelete`.
+    func test_laCorbeille_nAppelleJamaisOnDeleteDirectement() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSlideRail.swift")
+        let code = try String(contentsOf: url, encoding: .utf8)
+        let compact = code.filter { !$0.isWhitespace }
+        XCTAssertFalse(compact.contains("Button{onDelete(index)}"),
+                       "la corbeille ne supprime plus sans confirmation")
+        XCTAssertTrue(compact.contains(".confirmationDialog("))
+        XCTAssertTrue(compact.contains("role:.destructive"))
+        XCTAssertEqual(compact.components(separatedBy: "onDelete?(").count - 1
+                       + compact.components(separatedBy: "onDelete(").count - 1, 1,
+                       "un seul site d'appel : la confirmation")
+    }
+
+    @MainActor
+    func test_laConfirmation_aSesTroisLibelles() {
+        for (texte, cle) in [(ComposerSlideRailCopy.deleteConfirmTitle, "composer.slide.rail.deleteConfirm.title"),
+                             (ComposerSlideRailCopy.deleteConfirmAction, "composer.slide.rail.deleteConfirm.action"),
+                             (ComposerSlideRailCopy.deleteCancel, "composer.slide.rail.deleteConfirm.cancel")] {
+            XCTAssertFalse(texte.isEmpty)
+            XCTAssertNotEqual(texte, cle, "clé résolue par le catalogue")
+        }
     }
 
     // MARK: - La tuile EST la vignette de la scène (#5009 + #5037)
@@ -192,7 +251,7 @@ final class ComposerSlideRailTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSlideRail.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSlideRail.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
         XCTAssertFalse(code.contains("SlideMiniPreview("))
         XCTAssertTrue(code.contains("SceneThumbnailRenderer.thumbnail("))
@@ -210,13 +269,13 @@ final class ComposerSlideRailTests: XCTestCase {
             AppSourceGuard.stripComments(
                 try String(contentsOf: racine.appendingPathComponent(chemin), encoding: .utf8))
         }
-        let couches = try code("Meeshy/Features/Main/Composer/MeeshyComposerHost+Layers.swift")
+        let couches = try code("Meeshy/Features/Composer/MeeshyComposerHost+Layers.swift")
         XCTAssertTrue(couches.contains(".feedbackToastOverlay()"),
                       "le meuble doit monter l'hôte des toasts sur son chrome")
         for porte in ["DocumentComposerDoor", "MediaComposerDoor", "ShareComposeDoor",
                       "StoryEditComposer", "StoryRepublishComposer",
                       "ComposerMoodSurface", "MoodComposerDoor"] {
-            XCTAssertFalse(try code("Meeshy/Features/Main/Composer/\(porte).swift").contains(".feedbackToastOverlay()"),
+            XCTAssertFalse(try code("Meeshy/Features/Composer/\(porte).swift").contains(".feedbackToastOverlay()"),
                            "\(porte) repose l'hôte des toasts : chaque toast paraîtrait deux fois")
         }
     }

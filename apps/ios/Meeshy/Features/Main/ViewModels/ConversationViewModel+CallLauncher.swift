@@ -39,7 +39,7 @@ struct ConversationCallLauncher {
         let displayName = peerDisplayName()
             ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
         Task { @MainActor in
-            await CallManager.shared.requestPermissionsThenStartCall(
+            await CallManager.shared.outgoingDial.requestPermissionsThenStartCall(
                 conversationId: conversationId,
                 userId: peerUserId,
                 displayName: displayName,

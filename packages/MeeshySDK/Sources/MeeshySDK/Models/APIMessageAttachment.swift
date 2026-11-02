@@ -115,6 +115,17 @@ public struct APIMessageAttachment: Decodable, Sendable {
     public let transcription: APIAttachmentTranscription?
     public let translations: [String: APIAttachmentTranslation]?
 
+    // ── Description (#12333) — `null` côté passerelle sous protection ──
+    public let alt: String?
+    public let altLanguage: String?
+    /// Langue → texte traduit de `alt` ; décodage TOLÉRANT (une carte malformée
+    /// ne fait jamais perdre la pièce).
+    public let altTranslations: [String: String]?
+
+    private struct AltTranslationEntry: Decodable {
+        let text: String?
+    }
+
     // MARK: - CodingKeys
 
     private enum CodingKeys: String, CodingKey {
@@ -132,6 +143,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
         case viewedCount, downloadedCount, consumedCount
         case isEncrypted, encryptionMode, encryptionIv, encryptionAuthTag
         case transcription, translations
+        case alt, altLanguage, altTranslations
     }
 
     /// Custom `init(from:)` to isolate `transcription` and `translations`
@@ -203,5 +215,9 @@ public struct APIMessageAttachment: Decodable, Sendable {
         // transcription / translations than lose the whole attachment.
         self.transcription = (try? c.decodeIfPresent(APIAttachmentTranscription.self, forKey: .transcription)) ?? nil
         self.translations = (try? c.decodeIfPresent([String: APIAttachmentTranslation].self, forKey: .translations)) ?? nil
+        self.alt = (try? c.decodeIfPresent(String.self, forKey: .alt)) ?? nil
+        self.altLanguage = (try? c.decodeIfPresent(String.self, forKey: .altLanguage)) ?? nil
+        let altEntries = (try? c.decodeIfPresent([String: AltTranslationEntry].self, forKey: .altTranslations)) ?? nil
+        self.altTranslations = altEntries?.compactMapValues { $0.text }
     }
 }

@@ -4,8 +4,8 @@
 **Date** : 2026-07-01
 **Thème** : Dynamic Type (4y11 / accessibilité) + sémantique VoiceOver
 **Fichiers** :
-- `apps/ios/Meeshy/Features/Main/Views/DataStorageView.swift` (201 l.)
-- `apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift` (214 l.)
+- `apps/ios/Meeshy/Features/Settings/Views/DataStorageView.swift` (201 l.)
+- `apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift` (214 l.)
 
 **Branche** : `claude/upbeat-euler-ax4pau`
 **Base** : `main` HEAD (`ef737a02`)

@@ -11,25 +11,25 @@ final class FeedRedrawSourceGuardTests: XCTestCase {
 
     func test_storyViewModel_publishesNoCoverTick() throws {
         let directory = MyStoriesSourceCorpus.appRoot()
-            .appendingPathComponent("Meeshy/Features/Main/ViewModels")
+            .appendingPathComponent("Meeshy/Features/Stories/ViewModels")
         let files = try FileManager.default.contentsOfDirectory(atPath: directory.path)
             .filter { $0.hasPrefix("StoryViewModel") && $0.hasSuffix(".swift") }
         XCTAssertFalse(files.isEmpty)
 
         for file in files {
-            let text = try source("Meeshy/Features/Main/ViewModels/\(file)")
+            let text = try source("Meeshy/Features/Stories/ViewModels/\(file)")
             XCTAssertFalse(text.contains("receiverCoverRenderTick"), "\(file) republie encore le VM pour une cover")
         }
     }
 
     func test_trays_refreshCoversThroughTheirOwnSignal() throws {
-        let tray = try source("Meeshy/Features/Main/Views/StoryTrayView.swift")
+        let tray = try source("Meeshy/Features/Stories/Views/StoryTrayView.swift")
 
         XCTAssertGreaterThanOrEqual(tray.components(separatedBy: "StoryCoverRefresh(signal: viewModel.coverRenders)").count - 1, 2)
     }
 
     func test_trays_doNotFilterStoryGroupsInBody() throws {
-        let tray = try source("Meeshy/Features/Main/Views/StoryTrayView.swift")
+        let tray = try source("Meeshy/Features/Stories/Views/StoryTrayView.swift")
 
         XCTAssertFalse(tray.contains("storyGroups.filter"))
         XCTAssertFalse(tray.contains("storyGroups.first"))

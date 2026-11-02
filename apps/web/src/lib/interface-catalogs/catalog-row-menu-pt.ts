@@ -40,6 +40,7 @@ const pt = {
   'listFilter.pinned': 'Fixadas',
   'listFilter.archived': 'Arquivadas',
   'listRow.muted': 'Silenciada',
+  'listRow.endToEnd': 'Criptografada de ponta a ponta',
   'listRow.announce.pin.on': 'Conversa fixada',
   'listRow.announce.pin.off': 'Conversa desafixada',
   'listRow.announce.mute.on': 'Conversa silenciada',

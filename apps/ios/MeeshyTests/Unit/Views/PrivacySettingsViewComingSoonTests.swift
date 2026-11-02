@@ -90,7 +90,7 @@ final class CallAddressPrivacyTests: XCTestCase {
     private func defaults() -> UserDefaults {
         let suite = "CallAddressPrivacyTests.\(UUID().uuidString)"
         let store = UserDefaults(suiteName: suite)!
-        addTeardownBlock { store.removePersistentDomain(forName: suite) }
+        addTeardownBlock { UserDefaults().removePersistentDomain(forName: suite) }
         return store
     }
 
@@ -105,6 +105,7 @@ final class CallAddressPrivacyTests: XCTestCase {
     }
 
     #if canImport(WebRTC)
+    @MainActor
     func test_configuration_relaisSeul_poseLaPolitiqueRelay() {
         XCTAssertEqual(WebRTCPeerConfiguration.make(iceServers: [], transport: .relayOnly).iceTransportPolicy, .relay)
         XCTAssertEqual(WebRTCPeerConfiguration.make(iceServers: [], transport: .all).iceTransportPolicy, .all)
@@ -115,13 +116,13 @@ final class CallAddressPrivacyTests: XCTestCase {
         let racine = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-        let dossier = racine.appendingPathComponent("Meeshy/Features/Main/Services/WebRTC")
+        let dossier = racine.appendingPathComponent("Meeshy/Features/Call/Services/WebRTC")
         for nom in ["P2PWebRTCClient.swift", "WebRTCGroupPeerLink.swift"] {
             let code = try String(contentsOf: dossier.appendingPathComponent(nom), encoding: .utf8)
             XCTAssertFalse(code.contains("RTCConfiguration()"), "\(nom) : une connexion construite à la main échappe au réglage")
             XCTAssertTrue(code.contains("transport: CallAddressPrivacySetting.transport()"), nom)
         }
-        let reglages = try String(contentsOf: racine.appendingPathComponent("Meeshy/Features/Main/Views/PrivacySettingsView.swift"),
+        let reglages = try String(contentsOf: racine.appendingPathComponent("Meeshy/Features/Settings/Views/PrivacySettingsView.swift"),
                                   encoding: .utf8)
         XCTAssertTrue(reglages.contains("@AppStorage(CallAddressPrivacySetting.key)"), "le réglage vit dans Confidentialité")
     }

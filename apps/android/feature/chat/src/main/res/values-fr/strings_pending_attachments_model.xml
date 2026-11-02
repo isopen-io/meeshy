@@ -4,4 +4,5 @@
     <string name="chat_tray_cap_reached">Limite de 199 médias atteinte</string>
     <string name="chat_tray_remove">Retirer %1$s</string>
     <string name="chat_tray_preparing">Préparation de %1$s</string>
+    <string name="chat_tray_too_large">%1$s dépasse %2$d Mo et ne peut pas être envoyé</string>
 </resources>

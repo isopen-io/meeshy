@@ -101,7 +101,7 @@ final class DeclarationBodyScannerTests: XCTestCase {
     }
 
     func test_body_capteLeCodeQueLesFenetresFixesRataient() throws {
-        let callManager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let callManager = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
 
         let answer = DeclarationBodyScanner.body(containing: "perform action: CXAnswerCallAction", in: callManager)
         XCTAssertNotNil(answer)
@@ -113,7 +113,7 @@ final class DeclarationBodyScannerTests: XCTestCase {
         XCTAssertTrue(end!.contains("action.callUUID == manager.activeCallUUID"),
                       "à 2 399 caractères — hors de l'ancienne fenêtre de 2 000")
 
-        let pill = try source("Meeshy/Features/Main/Views/FloatingCallPillView.swift")
+        let pill = try source("Meeshy/Features/Call/Views/FloatingCallPillView.swift")
         let mute = DeclarationBodyScanner.body(containing: "private var muteButton", in: pill)
         XCTAssertNotNil(mute)
         XCTAssertTrue(mute!.contains("toggleStateAccessibility(isToggle: true, isActive: callManager.isMuted)"),

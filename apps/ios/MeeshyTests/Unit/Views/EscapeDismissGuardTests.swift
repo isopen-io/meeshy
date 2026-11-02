@@ -29,7 +29,7 @@ final class EscapeDismissGuardTests: XCTestCase {
 
     func test_theFiveOverlays_closeOnEscape() throws {
         for path in ["Features/Main/Components/MessageOverlayMenu.swift", "Features/Main/Components/MessagePieceOverlay.swift",
-                     "Features/Main/Components/StatusBubbleOverlay.swift", "Features/Main/Composer/ComposerSceneMenu.swift",
+                     "Features/Main/Components/StatusBubbleOverlay.swift", "Features/Composer/ComposerSceneMenu.swift",
                      "Features/Main/Components/ContactCard/ContactCardDetailSheet.swift"] {
             let code = AppSourceGuard.stripComments(try AppSourceGuard.text(at: appRoot.appendingPathComponent(path)))
             XCTAssertTrue(code.contains(".dismissOnEscape {"), path)

@@ -26,9 +26,19 @@ struct ContentRemovalPolicyTests {
         #expect(mayRemoveMessage(conversationRole: role))
     }
 
-    @Test(arguments: ["MODERATOR", "ADMIN", "BIGBOSS", "bigboss"])
+    @Test(arguments: ["MODERATOR", "ADMIN", "BIGBOSS"])
     func test_mayRemoveMessage_platformModeratorAsMember_isTrue(role: String) {
         #expect(mayRemoveMessage(conversationRole: "member", platformRole: role))
+    }
+
+    /// La table compare EXACTEMENT, comme la passerelle (`isPrivilegedPlatformRole`)
+    /// et le web (`platformModerates`) : un rôle en minuscules ne vient que d'une
+    /// charge forgée, et « Retirer » ne s'offre pas pour un 403 assuré (#11217).
+    @Test(arguments: ["moderator", "admin", "bigboss", "Moderator"])
+    func test_isPlatformModerator_lowercasedRole_isFalse(role: String) {
+        #expect(!ContentRemovalPolicy.isPlatformModerator(role))
+        #expect(!mayRemoveMessage(conversationRole: "member", platformRole: role))
+        #expect(!ContentRemovalPolicy.mayRemovePublication(authoredByViewer: false, platformRole: role))
     }
 
     @Test(arguments: [MeeshyConversation.ConversationType.group, .public, .global, .broadcast])

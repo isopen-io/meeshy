@@ -5,6 +5,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import app.cash.turbine.test
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -89,11 +90,11 @@ class CreateShareLinkViewModelTest {
 
     private fun viewModel(
         api: FakeLinkApi,
-        conversationId: String = "conv-1",
+        conversationId: String? = "conv-1",
         config: MeeshyConfig = MeeshyConfig(),
     ): CreateShareLinkViewModel {
         val handle = SavedStateHandle(
-            mapOf(CreateShareLinkViewModel.CONVERSATION_ID_ARG to conversationId),
+            conversationId?.let { mapOf(CreateShareLinkViewModel.CONVERSATION_ID_ARG to it) } ?: emptyMap(),
         )
         return CreateShareLinkViewModel(ShareLinkRepository(api), handle, config)
             .apply { now = { this@CreateShareLinkViewModelTest.now.toEpochMilli() } }
@@ -231,5 +232,117 @@ class CreateShareLinkViewModelTest {
         advanceUntilIdle()
 
         assertThat(api.requests).hasSize(1)
+    }
+
+    @Test
+    fun withoutAConversationArg_theFormStartsEmptyAndCannotSubmit() {
+        val vm = viewModel(FakeLinkApi(), conversationId = null)
+
+        assertThat(vm.state.value.form.conversationId).isEmpty()
+        assertThat(vm.state.value.canSubmit).isFalse()
+    }
+
+    @Test
+    fun choosingAConversationFromTheInFormPicker_makesTheFormSubmittableAndTargetsIt() = runTest {
+        val api = FakeLinkApi(response = okResponse())
+        val vm = viewModel(api, conversationId = null)
+
+        vm.onConversationSelected("conv-7")
+        vm.submit()
+        advanceUntilIdle()
+
+        assertThat(api.requests.single().conversationId).isEqualTo("conv-7")
+    }
+
+    @Test
+    fun submittingWithoutAConversation_sendsNothing() = runTest {
+        val api = FakeLinkApi(response = okResponse())
+        val vm = viewModel(api, conversationId = null)
+
+        vm.submit()
+        advanceUntilIdle()
+
+        assertThat(api.requests).isEmpty()
+    }
+
+    @Test
+    fun theMaxUsesStepper_movesByTheMagnitudeStep() {
+        val vm = viewModel(FakeLinkApi())
+
+        vm.onMaxUsesIncrement()
+        assertThat(vm.state.value.form.maxUses).isEqualTo(110)
+        vm.onMaxUsesDecrement()
+        vm.onMaxUsesDecrement()
+        assertThat(vm.state.value.form.maxUses).isEqualTo(90)
+    }
+
+    @Test
+    fun submit_success_emitsASuccessHapticOnce() = runTest {
+        val vm = viewModel(FakeLinkApi(response = okResponse()))
+
+        vm.effects.test {
+            vm.submit()
+            advanceUntilIdle()
+            assertThat(awaitItem()).isEqualTo(CreateShareLinkEffect.SuccessHaptic)
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun submit_failure_emitsNoHaptic() = runTest {
+        val vm = viewModel(FakeLinkApi(response = ApiResponse(success = false, error = "nope")))
+
+        vm.effects.test {
+            vm.submit()
+            advanceUntilIdle()
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `inviter mes amis cree le lien des l ouverture avec le message par defaut`() = runTest(dispatcher) {
+        val api = FakeLinkApi(response = okResponse())
+        val vm = viewModel(api)
+
+        vm.createOnOpen("Rejoins-moi")
+        advanceUntilIdle()
+
+        assertThat(api.requests.single().description).isEqualTo("Rejoins-moi")
+        assertThat(vm.state.value.isCreated).isTrue()
+    }
+
+    @Test
+    fun `rouvrir ne fabrique pas un second lien`() = runTest(dispatcher) {
+        val api = FakeLinkApi(response = okResponse())
+        val vm = viewModel(api)
+
+        vm.createOnOpen("m")
+        advanceUntilIdle()
+        vm.createOnOpen("m")
+        advanceUntilIdle()
+
+        assertThat(api.requests).hasSize(1)
+    }
+
+    @Test
+    fun `sans conversation amorcee rien ne se cree a l ouverture`() = runTest(dispatcher) {
+        val api = FakeLinkApi(response = okResponse())
+        val vm = viewModel(api, conversationId = null)
+
+        vm.createOnOpen("m")
+        advanceUntilIdle()
+
+        assertThat(api.requests).isEmpty()
+    }
+
+    @Test
+    fun `personnaliser referme le lien cree et rend le formulaire`() = runTest(dispatcher) {
+        val vm = viewModel(FakeLinkApi(response = okResponse()))
+        vm.createOnOpen("m")
+        advanceUntilIdle()
+
+        vm.customize()
+
+        assertThat(vm.state.value.isCreated).isFalse()
     }
 }

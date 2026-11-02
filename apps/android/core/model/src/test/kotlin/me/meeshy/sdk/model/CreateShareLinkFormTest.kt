@@ -192,4 +192,63 @@ class CreateShareLinkFormTest {
         assertThat(request.allowAnonymousFiles).isTrue()
         assertThat(request.allowViewHistory).isTrue()
     }
+
+    // ---- Max-uses stepper (iOS Stepper 1...10000, step 1 / 10 / 100) --------
+
+    @Test
+    fun maxUsesStep_growsWithTheMagnitudeOfTheValue() {
+        assertThat(CreateShareLinkForm.maxUsesStep(1)).isEqualTo(1)
+        assertThat(CreateShareLinkForm.maxUsesStep(99)).isEqualTo(1)
+        assertThat(CreateShareLinkForm.maxUsesStep(100)).isEqualTo(10)
+        assertThat(CreateShareLinkForm.maxUsesStep(999)).isEqualTo(10)
+        assertThat(CreateShareLinkForm.maxUsesStep(1000)).isEqualTo(100)
+    }
+
+    @Test
+    fun incrementMaxUses_addsTheStepAndStopsAtTheCeiling() {
+        assertThat(CreateShareLinkForm.from("c").withMaxUses(5).incrementMaxUses().maxUses).isEqualTo(6)
+        assertThat(CreateShareLinkForm.from("c").withMaxUses(100).incrementMaxUses().maxUses).isEqualTo(110)
+        assertThat(CreateShareLinkForm.from("c").withMaxUses(1000).incrementMaxUses().maxUses).isEqualTo(1100)
+        assertThat(CreateShareLinkForm.from("c").withMaxUses(9950).incrementMaxUses().maxUses).isEqualTo(10000)
+        assertThat(CreateShareLinkForm.from("c").withMaxUses(10000).incrementMaxUses().maxUses).isEqualTo(10000)
+    }
+
+    @Test
+    fun decrementMaxUses_removesTheStepAndStopsAtOne() {
+        assertThat(CreateShareLinkForm.from("c").withMaxUses(50).decrementMaxUses().maxUses).isEqualTo(49)
+        assertThat(CreateShareLinkForm.from("c").withMaxUses(100).decrementMaxUses().maxUses).isEqualTo(90)
+        assertThat(CreateShareLinkForm.from("c").withMaxUses(5).decrementMaxUses().maxUses).isEqualTo(4)
+        assertThat(CreateShareLinkForm.from("c").withMaxUses(5000).decrementMaxUses().maxUses).isEqualTo(4900)
+        assertThat(CreateShareLinkForm.from("c").withMaxUses(1).decrementMaxUses().maxUses).isEqualTo(1)
+        assertThat(CreateShareLinkForm.from("c").withMaxUses(7).withMaxUses(0).maxUses).isEqualTo(1)
+    }
+
+    // ---- "Compte requis" disables the three guest requirements --------------
+
+    @Test
+    fun requireAccount_disablesAndForcesOffTheThreeGuestRequirements() {
+        val open = CreateShareLinkForm.from("c").withRequireEmail(true)
+        assertThat(open.guestRequirementsEditable).isTrue()
+        assertThat(open.effectiveRequireNickname).isTrue()
+        assertThat(open.effectiveRequireEmail).isTrue()
+
+        val gated = open.withRequireBirthday(true).withRequireAccount(true)
+        assertThat(gated.guestRequirementsEditable).isFalse()
+        assertThat(gated.effectiveRequireNickname).isFalse()
+        assertThat(gated.effectiveRequireEmail).isFalse()
+        assertThat(gated.effectiveRequireBirthday).isFalse()
+    }
+
+    // ---- Conversation chosen from the in-form picker ------------------------
+
+    @Test
+    fun aFormWithoutConversation_cannotSubmitUntilOneIsChosen() {
+        val empty = CreateShareLinkForm.empty()
+        assertThat(empty.canSubmit).isFalse()
+        assertThat(empty.toRequest(nowMillis)).isNull()
+
+        val chosen = empty.withConversation("conv-9")
+        assertThat(chosen.canSubmit).isTrue()
+        assertThat(chosen.toRequest(nowMillis)!!.conversationId).isEqualTo("conv-9")
+    }
 }

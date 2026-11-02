@@ -67,13 +67,17 @@ class CachedMessageUpdaterTest {
     }
 
     @Test
-    fun `an update keeps the row's other columns`() = runHarnessTest { harness ->
+    fun `an update keeps the row's other columns and re-derives the payload's`() = runHarnessTest { harness ->
         harness.seedSynced(message())
         val before = harness.database.messageDao().find("m1")!!
 
         harness.updater.update("m1", requireSynced = true) { it.copy(content = "bonjour") }
 
         val after = harness.database.messageDao().find("m1")!!
-        assertThat(after.copy(payload = before.payload)).isEqualTo(before)
+        assertThat(after.contentText).isEqualTo("bonjour")
+        assertThat(after.changeVersion).isEqualTo(before.changeVersion + 1)
+        assertThat(
+            after.copy(payload = before.payload, contentText = before.contentText, changeVersion = before.changeVersion),
+        ).isEqualTo(before)
     }
 }

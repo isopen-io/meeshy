@@ -36,7 +36,7 @@ final class PlayerBannerPiecesTests: XCTestCase {
     }
 
     func test_theSlot_handsEachPieceToTheBanner_insteadOfOneButton() throws {
-        let host = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Game/PlayerBannerHost.swift"))
+        let host = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Game/PlayerBannerHost.swift"))
         XCTAssertTrue(host.contains("onSelect: { piece in"))
         XCTAssertFalse(host.contains("onTap()"), "plus un seul bouton pour tout le bandeau")
     }

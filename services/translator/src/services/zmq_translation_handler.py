@@ -16,8 +16,18 @@ from typing import Dict, Optional
 
 # Import des modèles ZMQ
 from .zmq_models import TranslationTask
+from .zmq_pool.translation_processor import unsupported_language
 
 logger = logging.getLogger(__name__)
+
+
+def _accepted_error_codes(request_data: dict) -> tuple:
+    """Les codes terminaux que la passerelle ANNONCE savoir lire. Une passerelle
+    qui n'annonce rien les compterait comme des erreurs ordinaires."""
+    announced = request_data.get('acceptsErrorCodes')
+    if not isinstance(announced, list):
+        return ()
+    return tuple(code for code in announced if isinstance(code, str))
 
 # Import du service de cache Redis
 CACHE_AVAILABLE = False
@@ -29,6 +39,7 @@ except ImportError:
 
 # Import de la configuration des limites
 from config.message_limits import can_translate_message
+from services.task_privacy import under_declared_regime
 
 # Import des constantes de disponibilité des pipelines
 try:
@@ -255,7 +266,7 @@ class TranslationHandler:
                     pass
                 else:
                     # Log détaillé pour debug
-                    text_preview = str(request_data.get('text', ''))[:100] if request_data.get('text') else '<empty>'
+                    text_length = len(str(request_data.get('text') or ''))
                     targets = request_data.get('targetLanguages', [])
                     msg_id = request_data.get('messageId', '<no-id>')
                     conv_id = request_data.get('conversationId', '<no-conv>')
@@ -263,7 +274,7 @@ class TranslationHandler:
                     logger.warning(
                         f"⚠️ [TRANSLATOR] Requête de traduction invalide: "
                         f"type={message_type}, messageId={msg_id}, conversationId={conv_id}, "
-                        f"has_text={bool(request_data.get('text'))}, text_preview='{text_preview}', "
+                        f"has_text={bool(request_data.get('text'))}, text_length={text_length}, "
                         f"has_targets={bool(targets)}, targets={targets}, "
                         f"all_keys={all_keys}"
                     )
@@ -277,6 +288,11 @@ class TranslationHandler:
             # === TRANSCRIPTION ONLY ===
             elif message_type == 'transcription_only':
                 await self._handle_transcription_only_request(request_data)
+                return
+
+            # === OUBLI (#13102) ===
+            elif message_type == 'cache_forget':
+                await self._handle_cache_forget(request_data)
                 return
 
             # === STORY TEXT OBJECT TRANSLATION ===
@@ -349,11 +365,13 @@ class TranslationHandler:
                 source_language=request_data.get('sourceLanguage', 'fr'),
                 target_languages=request_data.get('targetLanguages', []),
                 conversation_id=request_data.get('conversationId', 'unknown'),
-                model_type=request_data.get('modelType', 'basic')
+                model_type=request_data.get('modelType', 'basic'),
+                at_rest=request_data.get('atRest') is True,
+                accepted_error_codes=_accepted_error_codes(request_data)
             )
             
             logger.info(f"🔧 [TRANSLATOR] Tâche créée: {task.task_id} pour {task.conversation_id} ({len(task.target_languages)} langues)")
-            logger.info(f"📝 [TRANSLATOR] Détails: texte='{task.text[:50]}...', source={task.source_language}, target={task.target_languages}, modèle={task.model_type}")
+            logger.info(f"📝 [TRANSLATOR] Détails: {len(task.text)} caractères, source={task.source_language}, target={task.target_languages}, modèle={task.model_type}, auRepos={task.at_rest}")
             
             # Enfiler la tâche dans la pool appropriée
             success = await self.pool_manager.enqueue_task(task)
@@ -382,8 +400,10 @@ class TranslationHandler:
     async def _publish_translation_result(self, task_id: str, result: dict, target_language: str):
         """Publie un résultat de traduction via PUB vers la gateway avec informations techniques complètes"""
         try:
-            # DEBUG: Logs réduits de 60% - Suppression des vérifications détaillées
-            
+            if result.get('errorCode') == 'UNSUPPORTED_LANGUAGE':
+                await self._publish_unsupported_language(task_id, result, target_language)
+                return
+
             # Calculer le temps d'attente en queue
             queue_time = time.time() - result.get('created_at', time.time())
             
@@ -448,8 +468,7 @@ class TranslationHandler:
                 logger.error(f"   📋 Task ID: {task_id}")
                 logger.error(f"   📋 Message ID: {result.get('messageId')}")
                 logger.error(f"   📋 Source: {result.get('sourceLanguage')} -> Target: {target_language}")
-                logger.error(f"   📋 Texte original: {result.get('originalText', 'N/A')}")
-                logger.error(f"   📋 Texte traduit: '{translated_text}'")
+                logger.error(f"   📋 Texte traduit: {len(translated_text or '')} caractères")
                 logger.error(f"   📋 Modèle utilisé: {result.get('modelType', 'unknown')}")
                 logger.error(f"   📋 Worker: {result.get('workerName', 'unknown')}")
                 logger.error(f"   📋 Raison: {self._get_translation_error_reason(translated_text)}")
@@ -505,6 +524,26 @@ class TranslationHandler:
             import traceback
             traceback.print_exc()
     
+    async def _publish_unsupported_language(self, task_id: str, result: dict, target_language: str):
+        """Refus TERMINAL d'une langue sans code NLLB-200 : la passerelle solde
+        cette langue sans relance et sert l'original. Il ne part que vers une
+        passerelle qui l'a annoncé (`acceptsErrorCodes`) : une plus ancienne le
+        compterait à son disjoncteur (`refusal_is_understood`)."""
+        message = {
+            'type': 'translation_error',
+            'taskId': task_id,
+            'messageId': result.get('messageId'),
+            'error': result.get('error'),
+            'errorCode': result.get('errorCode'),
+            'targetLanguage': target_language,
+            'conversationId': result.get('conversationId'),
+        }
+        if not self.pub_socket:
+            logger.error("❌ [TRANSLATOR] Socket PUB non initialisé")
+            return
+        await self.pub_socket.send(json.dumps(message).encode('utf-8'))
+        logger.info(f"🚫 [TRANSLATOR] Langue non traduisible signalée: {task_id} -> {target_language}")
+
     def _is_valid_translation(self, translated_text: str, result: dict) -> bool:
         """
         Vérifie si une traduction est valide et peut être envoyée à la Gateway
@@ -594,6 +633,7 @@ class TranslationHandler:
 
         return "Erreur de validation inconnue"
 
+    @under_declared_regime
     async def _handle_story_text_object_translation(self, request_data: dict):
         """
         Traduit un textObject de story en N langues et publie un event combine.
@@ -648,6 +688,8 @@ class TranslationHandler:
             if target_lang == source_language:
                 # Pas besoin de traduire vers la langue source
                 continue
+            if unsupported_language(source_language, target_lang) is not None:
+                continue
             try:
                 result = await translation_service.translate_with_structure(
                     text=text,
@@ -657,7 +699,8 @@ class TranslationHandler:
                     source_channel='zmq_story_text_object'
                 )
                 translated = result.get('translated_text') if isinstance(result, dict) else None
-                if translated and translated.strip() and translated != text:
+                failed = isinstance(result, dict) and bool(result.get('error'))
+                if translated and translated.strip() and translated != text and not failed:
                     translations[target_lang] = translated
             except Exception as e:
                 logger.warning(
@@ -700,6 +743,30 @@ class TranslationHandler:
         logger.warning(f"   Type: {request_data.get('type')}")
         logger.warning(f"   MessageID: {request_data.get('messageId')}")
         logger.warning(f"   → Les requêtes audio doivent être gérées par ZmqAudioHandler")
+
+    async def _handle_cache_forget(self, request_data: dict):
+        """
+        #13102 — efface du cache ce que le translator avait tiré d'une pièce ou
+        d'un texte que la passerelle vient d'effacer, puis l'acquitte
+        (`cache_forget_done`, même `requestId`) : la passerelle rejoue la
+        demande tant qu'elle n'a pas son acquittement.
+        """
+        from services.cache_forget import forget_cached_content, parse_forget_request
+        from services.redis_service import get_audio_cache_service, get_translation_cache_service
+
+        from services.redis_service import ErasureNotConfirmedError
+
+        request = parse_forget_request(request_data)
+        try:
+            deleted = await forget_cached_content(get_audio_cache_service(), get_translation_cache_service(), request)
+        except ErasureNotConfirmedError as error:
+            # Fail-closed : sans confirmation de Redis, aucun acquittement — la passerelle rejoue.
+            logger.warning(f"[TRANSLATOR] Oubli NON confirmé, non acquitté (rejeu attendu) : {error}")
+            return
+        logger.info(f"[TRANSLATOR] Oubli : {len(request['attachmentIds'])} pièce(s), {len(request['messageIds'])} message(s), {deleted} clé(s) effacée(s)")
+        if self.pub_socket and request['requestId']:
+            done = {'type': 'cache_forget_done', 'requestId': request['requestId'], 'deleted': deleted}
+            await self.pub_socket.send(json.dumps(done).encode('utf-8'))
 
     async def _handle_transcription_only_request(self, request_data: dict):
         """

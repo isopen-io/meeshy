@@ -19,8 +19,10 @@ import { applyMessageRemovalEffects } from '../../services/messaging/messageRemo
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import type { ConversationParams } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { refuserCommeIntrouvable } from './utils/access-control';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { messageRefusesPlainErasure, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
 
 // Logger dédié pour messages-advanced
 const logger = enhancedLogger.child({ module: 'messages-advanced' });
@@ -79,6 +81,7 @@ export function registerDeleteMessageRoute(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        409: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -92,7 +95,7 @@ export function registerDeleteMessageRoute(
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       // Vérifier que le message existe
@@ -139,6 +142,11 @@ export function registerDeleteMessageRoute(
 
       if (!canDelete) {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à supprimer ce message');
+      }
+      // #13142 — un message scellé au serveur se supprime pour tous par signal
+      // chiffré signé de l'auteur ; un message d'avant l'activation, en clair, ici.
+      if (await messageRefusesPlainErasure(prisma, existingMessage)) {
+        return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
       }
       const moderationReason = byModeration ? moderationReasonOf(request.body) : null;
       if (byModeration && moderationReason === null) {

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_control_more">Plus d\'actions</string>
+    <string name="call_control_more_caption">Plus</string>
+    <string name="call_control_more_hint">Affiche ou range les actions de l\'appel</string>
+    <string name="call_control_expanded">Déplié</string>
+    <string name="call_control_collapsed">Replié</string>
+    <string name="call_actions_my_image">Mon image</string>
+    <string name="call_actions_the_call">L\'appel</string>
+    <string name="call_actions_label">Actions de l\'appel</string>
+    <string name="call_control_mute_label">Couper le micro</string>
+    <string name="call_control_unmute_label">Réactiver le micro</string>
+    <string name="call_control_mute_caption">Micro</string>
+    <string name="call_control_mute_hint">Coupe votre micro pour le correspondant</string>
+    <string name="call_control_output_hint">Choisit où sort le son de l\'appel</string>
+    <string name="call_control_end_caption">Raccrocher</string>
+    <string name="call_control_end_hint">Termine l\'appel en cours</string>
+    <string name="call_control_video_paused">Vidéo en pause (connexion faible)</string>
+    <string name="call_control_video_paused_caption">En pause</string>
+    <string name="call_control_video_paused_hint">Touchez pour éteindre la caméra. La vidéo reprend automatiquement si la connexion s\'améliore.</string>
+    <string name="call_control_video_caption">Vidéo</string>
+    <string name="call_panel_close">Fermer</string>
+    <string name="call_panel_back">Retour aux actions</string>
+</resources>

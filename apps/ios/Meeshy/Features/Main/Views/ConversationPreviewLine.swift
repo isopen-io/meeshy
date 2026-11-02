@@ -27,6 +27,8 @@ struct ConversationPreviewLine: View {
     var authorFont: Font = MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold)
     var lineLimit: Int = 1
     var onJoin: (() -> Void)? = nil
+    /// Le clair que CET appareil tient du dernier message scellé (#12968).
+    var readOnDevice: ConversationPreviewDeviceText? = nil
 
     var body: some View {
         let now = Date()
@@ -45,7 +47,8 @@ struct ConversationPreviewLine: View {
             for: conversation,
             viewerId: AuthManager.shared.currentUser?.id ?? "",
             preferredLanguages: preferredLanguages,
-            now: now
+            now: now,
+            readOnDevice: readOnDevice
         )
     }
 
@@ -61,18 +64,47 @@ struct ConversationPreviewLine: View {
         viewerId: String,
         preferredLanguages: [String],
         now: Date,
+        readOnDevice: ConversationPreviewDeviceText? = nil,
         strings: ConversationPreviewStrings = ConversationPreviewCatalog.strings(),
-        receipts: EphemeralReceiptRecording = EphemeralReceiptLedger.shared
+        receipts: EphemeralReceiptRecording = EphemeralReceiptLedger.shared,
+        memory: any EndToEndRegimeMemoryProviding = EndToEndRegimeMemory.shared
     ) -> ConversationPreview {
         let input = ConversationPreviewInput(
-            conversation: conversation,
+            conversation: servedSource(of: conversation, memory: memory),
             viewerId: viewerId,
             language: strings.language.rawValue,
             preferredLanguages: preferredLanguages,
             now: now,
-            receivedAt: receivedAt(of: conversation, now: now, receipts: receipts)
+            receivedAt: receivedAt(of: conversation, now: now, receipts: receipts),
+            readOnDevice: readOnDevice
         )
         return ConversationPreviewComposer.compose(input, strings: strings)
+    }
+
+    /// Le dernier message est-il arrivé EN CLAIR dans l'ère chiffrée de la
+    /// conversation (`EndToEndPlaintextLaw`, #11380) ? La ligne le marque,
+    /// comme le fil — sous le régime servi ET retenu sur l'appareil, qu'une
+    /// ligne servie sans régime ne fait pas tomber.
+    nonisolated static func isUnencrypted(
+        _ conversation: Conversation,
+        memory: any EndToEndRegimeMemoryProviding = EndToEndRegimeMemory.shared
+    ) -> Bool {
+        let remembered = memory.resolve(conversationId: conversation.id, served: EndToEndRegime(conversation: conversation))
+        return EndToEndPlaintextLaw.lastMessageStanding(of: conversation, remembered: remembered).isUnencrypted
+    }
+
+    /// La conversation telle que le composeur la lit : un dernier message de
+    /// l'ère chiffrée — arrivé en clair ou déchiffré sur l'appareil —
+    /// n'emporte aucune traduction du serveur, qui ne le lit pas (#11380).
+    nonisolated static func servedSource(
+        of conversation: Conversation,
+        memory: any EndToEndRegimeMemoryProviding = EndToEndRegimeMemory.shared
+    ) -> Conversation {
+        let regime = memory.resolve(conversationId: conversation.id, served: EndToEndRegime(conversation: conversation))
+        guard regime.governs(createdAt: conversation.lastMessageAt) else { return conversation }
+        var source = conversation
+        source.lastMessageTranslations = nil
+        return source
     }
 
     /// La réception locale du dernier message quand c'est un éphémère REÇU —
@@ -97,17 +129,23 @@ struct ConversationPreviewLine: View {
     /// Ce que VoiceOver dit de la ligne — la même valeur que l'œil lit, sans
     /// glyphe (l'icône se dit déjà par le libellé qu'elle précède). `nil` pour
     /// une conversation qui n'a rien à dire.
-    static func spokenPreview(for conversation: Conversation, preferredLanguages: [String], now: Date) -> String? {
+    static func spokenPreview(
+        for conversation: Conversation, preferredLanguages: [String], now: Date,
+        readOnDevice: ConversationPreviewDeviceText? = nil
+    ) -> String? {
         let strings = ConversationPreviewCatalog.strings()
         let preview = Self.preview(
             for: conversation,
             viewerId: AuthManager.shared.currentUser?.id ?? "",
             preferredLanguages: preferredLanguages,
             now: now,
+            readOnDevice: readOnDevice,
             strings: strings
         )
         guard preview.kind != .empty else { return nil }
-        return spokenText(preview, strings: strings)
+        let spoken = spokenText(preview, strings: strings)
+        guard isUnencrypted(conversation) else { return spoken }
+        return "\(UnencryptedMessageCopy.notice), \(spoken)"
     }
 
     /// Sans la notation (#7871) : VoiceOver dit « un mot », jamais
@@ -119,7 +157,7 @@ struct ConversationPreviewLine: View {
             guard case .label(let text) = segment, let seconds = clockSeconds(text) else {
                 return MessageTextRenderer.plainText(segment.text)
             }
-            return LocalizedNumber.spokenDuration(seconds: seconds, locale: locale)
+            return MediaFormat.duration(seconds, style: .spoken, locale: locale)
         }.joined(separator: ", ")
         guard let author = preview.author else { return spoken }
         return strings(.lineAuthor, ["author": author.label, "line": spoken])
@@ -179,6 +217,9 @@ struct ConversationPreviewLine: View {
         let glyph = Self.symbol(for: preview.icon).map { symbol -> Text in
             Text(Image(systemName: symbol)).foregroundColor(iconColor(preview)) + Text(" ")
         } ?? Text("")
+        let unencrypted = Self.isUnencrypted(conversation)
+            ? Text(Image(systemName: UnencryptedMessageCopy.symbol)) + Text(" ")
+            : Text("")
         let direction = preview.direction.map { direction -> Text in
             Text(Image(systemName: direction == .outgoing ? "arrow.up.right" : "arrow.down.left"))
                 .foregroundColor(toneColor(preview.tone)) + Text(" ")
@@ -186,7 +227,7 @@ struct ConversationPreviewLine: View {
         let content = segmentsText(preview.segments, at: now)
             .foregroundColor(toneColor(preview.tone))
         let styledBody = Self.isItalic(preview) ? content.italic() : content
-        return (author + glyph + direction + styledBody).font(font)
+        return (author + unencrypted + glyph + direction + styledBody).font(font)
     }
 
     /// Le corps de la ligne. Dans la dernière minute d'un éphémère, son

@@ -1,19 +1,19 @@
 package me.meeshy.app.chat
 
 import android.widget.Toast
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -30,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
@@ -54,6 +56,8 @@ internal fun ReportMessageSheet(
     onSelectReason: (ReportReason) -> Unit,
     onDetailsChange: (String) -> Unit,
     onSubmit: () -> Unit,
+    onConfirmSubmit: () -> Unit,
+    onCancelConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -62,6 +66,22 @@ internal fun ReportMessageSheet(
             Toast.makeText(context, context.getString(R.string.report_message_sent), Toast.LENGTH_SHORT).show()
             onDismiss()
         }
+    }
+
+    if (form.isConfirming) {
+        AlertDialog(
+            onDismissRequest = onCancelConfirm,
+            title = { Text(stringResource(R.string.message_detail_report_confirm_title)) },
+            text = { Text(stringResource(R.string.message_detail_report_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = onConfirmSubmit) {
+                    Text(stringResource(R.string.common_send), color = MeeshyPalette.Error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onCancelConfirm) { Text(stringResource(R.string.common_cancel)) }
+            },
+        )
     }
 
     ModalBottomSheet(
@@ -92,28 +112,30 @@ internal fun ReportMessageSheet(
                 )
             }
 
-            Text(
-                stringResource(R.string.report_message_details_header),
-                style = MaterialTheme.typography.labelMedium,
-                color = MeeshyTheme.tokens.textSecondary,
-                modifier = Modifier.padding(top = MeeshySpacing.sm),
-            )
+            if (form.showsDetails) {
+                Text(
+                    stringResource(R.string.report_message_details_header),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MeeshyTheme.tokens.textSecondary,
+                    modifier = Modifier.padding(top = MeeshySpacing.sm),
+                )
 
-            OutlinedTextField(
-                value = form.details,
-                onValueChange = onDetailsChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 96.dp),
-                placeholder = { Text(stringResource(R.string.report_message_details_placeholder)) },
-                supportingText = {
-                    Text(
-                        "${form.detailsCount}/${ReportRequestBuilder.MAX_DETAILS_LENGTH}",
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.End,
-                    )
-                },
-            )
+                OutlinedTextField(
+                    value = form.details,
+                    onValueChange = onDetailsChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = DETAILS_MIN_LINES,
+                    maxLines = DETAILS_MAX_LINES,
+                    placeholder = { Text(stringResource(R.string.report_message_details_placeholder)) },
+                    supportingText = {
+                        Text(
+                            "${form.detailsCount}/${ReportRequestBuilder.MAX_DETAILS_LENGTH}",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.End,
+                        )
+                    },
+                )
+            }
 
             if (form.hasError) {
                 Text(
@@ -155,7 +177,7 @@ private fun ReasonRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .padding(vertical = MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
@@ -181,3 +203,6 @@ private fun reasonLabel(reason: ReportReason): String = stringResource(
         ReportReason.OTHER -> R.string.report_reason_other
     },
 )
+
+private const val DETAILS_MIN_LINES = 3
+private const val DETAILS_MAX_LINES = 6

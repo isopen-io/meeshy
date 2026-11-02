@@ -446,8 +446,7 @@ extension ConversationView {
 
     /// Les OCTETS de la prise, quand l'objectif les a rendus, partent sans seconde génération d'encodage (#9885).
     func handleCameraCapture(_ image: UIImage, data: Data? = nil, capturedInApp: Bool = false) {
-        let prep = data.map { AttachmentPreparationService.shared.prepareImageData($0, context: .message, accentColor: accentColor) }
-            ?? AttachmentPreparationService.shared.prepareImage(image, context: .message, accentColor: accentColor)
+        let prep = AttachmentPreparationService.shared.prepareCapture(image, data: data, context: .message, accentColor: accentColor)
         trackPreparation(prep, capturedInApp: capturedInApp)
     }
 

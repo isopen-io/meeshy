@@ -65,6 +65,16 @@ export const CALL_ERROR_CODES = {
   SIGNAL_TOO_LARGE: 'SIGNAL_TOO_LARGE',
   TARGET_NOT_FOUND: 'TARGET_NOT_FOUND',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
+  /**
+   * L'appel vit dans une conversation chiffrée de bout en bout, ou dans une
+   * conversation dont le régime ne se lit pas (#13720) : la passerelle ne
+   * relaie, ne traduit ni ne grave aucune parole (`call:transcription-segment`)
+   * et ne relaie pas `call:transcription-active`. Servi par l'ACQUITTEMENT de
+   * ces deux événements, jamais par `call:error`, que les clients publiés lisent
+   * comme la fin de l'appel. Loi : `callCaptionsAdmissionOf`
+   * (`services/gateway/src/socketio/call-captions-admission.ts`).
+   */
+  E2EE_CAPTIONS_REFUSED: 'E2EE_CAPTIONS_REFUSED',
 } as const;
 
 export type CallErrorCode = typeof CALL_ERROR_CODES[keyof typeof CALL_ERROR_CODES];

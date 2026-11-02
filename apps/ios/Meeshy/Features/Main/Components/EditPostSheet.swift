@@ -400,8 +400,7 @@ struct EditPostSheet: View {
         .onAppear {
             draftContent = originalContent
             selectedLanguage = originalLanguage ?? ""
-            selectedVisibility = originalVisibility
-                .flatMap { PostVisibility(rawValue: $0.uppercased()) } ?? .public
+            selectedVisibility = originalVisibility.map(PostVisibility.init(served:)) ?? .public
             selectedAudience = originalVisibilityUserIds
             // Le type d'ORIGINE, exactement (#9178) : ouvrir n'est pas éditer,
             // et le serveur a déjà accepté ce réel. Seul un retrait qui

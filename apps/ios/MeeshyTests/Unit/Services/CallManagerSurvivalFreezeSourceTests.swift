@@ -33,7 +33,7 @@ import XCTest
 final class CallManagerSurvivalFreezeSourceTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// Body of `actuateSurvivalVideoSend(enabled:callId:)` — the actuator

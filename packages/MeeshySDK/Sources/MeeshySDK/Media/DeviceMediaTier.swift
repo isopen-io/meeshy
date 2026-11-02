@@ -46,7 +46,7 @@ public enum DeviceMediaTier: Int, Sendable, Comparable, CaseIterable {
     static let proFramesPerSecond = 120
 
     public static func classify(_ inputs: DeviceMediaInputs) -> DeviceMediaTier {
-        if inputs.thermal == .serious || inputs.thermal == .critical { return .low }
+        if inputs.thermal.isUnderPressure { return .low }
         let hardware = hardwareTier(inputs)
         return inputs.lowPower ? min(hardware, .mid) : hardware
     }

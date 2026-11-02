@@ -98,9 +98,7 @@ enum ReelPrewarm {
         preroll: Bool = true,
         center: AttachmentDownloadCenter = .shared
     ) async {
-        guard MediaThermalPolicy.shouldPrefetchVideo(
-            thermalState: ProcessInfo.processInfo.thermalState
-        ) else { return }
+        guard MediaPolicyMonitor.shared.policy.prefetchesVideo else { return }
         guard let key = prefetchFile(of: post, center: center) else { return }
         guard preroll else { return }
         await awaitFile(key: key, center: center)
@@ -128,6 +126,16 @@ enum ReelPrewarm {
                             for: tier,
                             videoPolicy: MediaDownloadPreferencesStore.shared.preferences.video))
         return AttachmentDownloadCenter.key(for: attachment.fileUrl)
+    }
+
+    /// Amorce la TÊTE du fichier vidéo de `post` (#11288) : `bytes` octets par
+    /// plage, gardés hors du cache, que le transfert de l'élection reprendra
+    /// à leur dernier octet. Sous la clé que le centre et la lecture liront.
+    static func prefetchHead(of post: FeedPost, bytes: Int, profile: MediaTransferProfile) async {
+        guard bytes > 0, let media = post.primaryReelDisplayMedia, media.type == .video,
+              videoURL(for: post) != nil else { return }
+        let key = AttachmentDownloadCenter.key(for: media.toMessageAttachment().fileUrl)
+        await CacheCoordinator.shared.video.prefetchHead(of: key, bytes: bytes, profile: profile)
     }
 
     /// Attend que le téléchargement de `key` se termine — fini, échoué ou
@@ -226,9 +234,10 @@ nonisolated enum ReelPosterPrefetch {
 ///   décodeurs matériels sont bornés : c'est le seul palier qui en tient un,
 ///   et le pool de `StoryMediaLoader` reste à trois.
 /// - **monté** (N±2) — fichier entier, lancé aussitôt avec le palier décode.
-/// - **amorcé** (N±3…N±R) — fichier entier aussi (le registre ne sait pas
-///   servir une plage), mais APRÈS les proches et un à la fois : il ne dispute
-///   jamais la bande passante du réel qu'on va voir.
+/// - **amorcé** (N±3…N±R) — la TÊTE seule (#11288) : `moov` et premier GOP,
+///   bornés par le tier de l'appareil (`ReelPreloadWindow.headBytes`), APRÈS
+///   les proches et un à la fois. Le reste arrive en flux quand le réel entre
+///   au palier monté : son transfert reprend la tête à son dernier octet.
 ///
 /// Le plus proche d'abord, devant avant derrière. Ce qui sort de la fenêtre
 /// rend son téléchargement automatique et son lecteur ; un appareil qui chauffe
@@ -262,15 +271,13 @@ final class ReelPagerPreloader {
 
     /// Les signaux de l'appareil, lus à l'instant : chemin réseau, mémoire,
     /// économie d'énergie, état thermique, et son tier média (#11281).
+    /// L'énergie, la chaleur et le tier viennent de la politique VIVANTE
+    /// (#9880), la même que lisent les lecteurs.
     static func liveContext(visits: [ReelPreloadWindow.Visit]) -> ReelPreloadWindow.Context {
-        let info = ProcessInfo.processInfo
-        return ReelPreloadWindow.Context(
+        MediaPolicyMonitor.shared.policy.reelWindowContext(
             visits: visits,
             network: ReelPreloadWindow.Network(snapshot: NetworkPathSource.shared.current),
-            deviceMemoryGb: ReelPreloadWindow.gigabytes(physicalMemory: info.physicalMemory),
-            lowPower: info.isLowPowerModeEnabled,
-            thermalState: info.thermalState,
-            tier: DeviceMediaTier.current
+            deviceMemoryGb: ReelPreloadWindow.gigabytes(physicalMemory: ProcessInfo.processInfo.physicalMemory)
         )
     }
 
@@ -311,9 +318,7 @@ final class ReelPagerPreloader {
     }
 
     private func prepareWindow(reels: [FeedPost], activeIndex: Int, window: ReelPreloadWindow.Window) async {
-        guard MediaThermalPolicy.shouldPrefetchVideo(
-            thermalState: ProcessInfo.processInfo.thermalState
-        ) else { return }
+        guard MediaPolicyMonitor.shared.policy.prefetchesVideo else { return }
         let plan = ReelPreloadWindow.plan(count: reels.count, activeIndex: activeIndex, window: window)
         // Les posters partent EN MÊME TEMPS que les fichiers : quelques
         // centaines de Ko, et c'est ce que la page montre la première.
@@ -339,12 +344,22 @@ final class ReelPagerPreloader {
         for entry in nearKeys where entry.step.tier == .mount {
             await ReelPrewarm.awaitFile(key: entry.key, center: center)
         }
+        await primeHeads(reels: reels, plan: plan)
+    }
+
+    /// Les têtes de la fenêtre lointaine, la plus proche d'abord (#11288) —
+    /// jamais le fichier entier d'un réel qu'on ne verra peut-être pas.
+    private func primeHeads(reels: [FeedPost], plan: [ReelPreloadWindow.Step]) async {
+        let network = ReelPreloadWindow.Network(snapshot: NetworkPathSource.shared.current)
+        let device = MediaPolicyMonitor.shared.policy.tier
+        let videoPolicy = MediaDownloadPreferencesStore.shared.preferences.video
         for step in plan where step.tier == .prime {
             guard !Task.isCancelled else { return }
-            guard let key = ReelPrewarm.prefetchFile(of: reels[step.index], tier: step.tier, center: center) else {
-                continue
-            }
-            await ReelPrewarm.awaitFile(key: key, center: center)
+            await ReelPrewarm.prefetchHead(
+                of: reels[step.index],
+                bytes: ReelPreloadWindow.headBytes(tier: step.tier, distance: abs(step.offset), network: network, device: device),
+                profile: ReelTransferPolicy.profile(for: step.tier, videoPolicy: videoPolicy)
+            )
         }
     }
 

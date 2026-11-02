@@ -1,23 +1,27 @@
 package me.meeshy.ui.component.bubble
 
-import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.lang.LanguageResolver
-import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.ApiMessage
-import me.meeshy.sdk.model.ApiMessageAttachment
-import me.meeshy.sdk.model.ApiPostReplyTarget
+import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
+import me.meeshy.sdk.model.isEndToEndBlob
+import me.meeshy.sdk.model.piece.MessagePieceTarget
+import me.meeshy.sdk.model.EndToEndRegimeMemory
 import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.DeliveryStatusResolver
 import me.meeshy.sdk.model.ForwardBadgePolicy
 import me.meeshy.sdk.model.ForwardReference
-import me.meeshy.sdk.model.ImageVariantPicker
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffectRenderPlanner
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.DeliveryTier
 import me.meeshy.sdk.model.SendLifecycle
 import me.meeshy.sdk.model.SendLifecycleResolver
+import me.meeshy.sdk.model.exitOffer
+import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.model.isProtected
+import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.sdk.model.profile.from
+import me.meeshy.sdk.theme.DynamicColorGenerator
 
 public object BubbleContentBuilder {
 
@@ -26,12 +30,6 @@ public object BubbleContentBuilder {
      * elle ne sert qu'à choisir la variante d'image d'aperçu, jamais à dessiner.
      */
     public const val DEFAULT_DISPLAY_DENSITY: Float = 3f
-
-    /** Largeur (dp) de la case d'une image SEULE dans la bulle — celle de `MessageBubble`. */
-    private const val SOLO_IMAGE_WIDTH_DP = 252
-
-    /** Largeur (dp) d'une case de la grille de 2 à 4 images — celle de `MessageBubble`. */
-    private const val GRID_IMAGE_CELL_WIDTH_DP = 124
 
     public fun build(
         message: ApiMessage,
@@ -51,6 +49,8 @@ public object BubbleContentBuilder {
         isSlowSend: Boolean = false,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
+        // #13106 — un blob chiffré de bout en bout scelle la bulle entière, même servie en clair.
+        val isEndToEndSealed = !isDeleted && (message.isEndToEndSealed || message.attachments.any { it.isEndToEndBlob })
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
         val isTranslated = !isDeleted && message.isTranslated(preferences)
         // The active display language. A flag-tap `activeLanguageCode` override wins
@@ -67,50 +67,22 @@ public object BubbleContentBuilder {
             ?: if (showOriginal) originalCode else (preferredCode ?: originalCode)
         val activeIsOriginal = activeCode == null || activeCode == originalCode
         val isShowingOriginal = isTranslated && activeIsOriginal
-        val deliveryStatus = when {
-            !isOutgoing -> DeliveryStatus.Sent
-            else -> when (
-                SendLifecycleResolver.resolve(
-                    isPending = isPending,
-                    isFailed = isFailed,
-                    isOffline = isOffline,
-                )
-            ) {
-                SendLifecycle.Failed -> DeliveryStatus.Failed
-                SendLifecycle.QueuedOffline -> DeliveryStatus.QueuedOffline
-                SendLifecycle.InFlight -> DeliveryStatus.Pending
-                SendLifecycle.Settled -> when (
-                    DeliveryStatusResolver.resolve(
-                        deliveredCount = message.deliveredCount,
-                        readCount = message.readCount,
-                        recipientCount = recipientCount,
-                        readByAllAt = message.readByAllAt,
-                        showReadReceipts = showReadReceipts,
-                    )
-                ) {
-                    DeliveryTier.Read -> DeliveryStatus.Read
-                    DeliveryTier.Delivered -> DeliveryStatus.Delivered
-                    DeliveryTier.Sent -> DeliveryStatus.Sent
-                }
-            }
-        }
+        val deliveryStatus = resolveDeliveryStatus(
+            message = message,
+            isOutgoing = isOutgoing,
+            isPending = isPending,
+            isFailed = isFailed,
+            isOffline = isOffline,
+            recipientCount = recipientCount,
+            showReadReceipts = showReadReceipts,
+        )
         val reactions = message.reactionSummary
             ?.map { (emoji, count) ->
                 ReactionEntry(emoji = emoji, count = count, includesMe = emoji in ownReactions)
             }
             ?: emptyList()
-        val replyToDeleted = message.replyTo?.deletedAt != null
-        val replyToText = message.replyTo?.content?.takeUnless { replyToDeleted }
-        val replyAttachments = if (replyToDeleted) emptyList() else message.replyTo?.attachments.orEmpty()
-        val replyImage = replyAttachments.firstOrNull { it.isImage }
-        val replyToMediaKind = when {
-            replyImage != null -> ReplyMediaKind.Image
-            replyAttachments.isNotEmpty() -> ReplyMediaKind.File
-            else -> ReplyMediaKind.None
-        }
-        val replyToThumbnailUrl = replyImage
-            ?.let { it.thumbnailUrl ?: it.fileUrl }
-            ?.let { resolveMediaUrl(it, mediaBaseUrl) }
+        val quoted = BubbleQuotedReplyBuilder.build(message.replyTo, preferences, mediaBaseUrl)
+        val replyToDeleted = quoted?.isDeleted == true
         // Story/mood-reply preview. A message reply (`replyTo`) takes precedence,
         // and a deleted tombstone carries no metadata (mirrors the pinnedAtIso /
         // isForwarded suppress rules) — so it only surfaces on a live message
@@ -118,71 +90,26 @@ public object BubbleContentBuilder {
         val storyReply = when {
             isDeleted -> null
             message.replyTo != null -> null
-            else -> buildStoryReply(message.postReplyTo, message.storyReplyToId, mediaBaseUrl)
+            else -> BubbleStoryReplyBuilder.build(message.postReplyTo, message.storyReplyToId, mediaBaseUrl)
         }
-        val visibleAttachments = if (isDeleted) emptyList() else message.attachments
-        val imageAttachments = visibleAttachments.filter { it.isImage && it.fileUrl != null }
-        // La vignette d'une bulle est la plus petite variante qui COUVRE la case, jamais
-        // l'original multi-Mo. Un message flouté ou à vue unique garde ses URL d'avant :
-        // aucune URL de plus ne part pour un contenu protégé.
-        val previewWidthPx = ImageVariantPicker.displayWidthPx(
-            widthDp = if (imageAttachments.size == 1) SOLO_IMAGE_WIDTH_DP else GRID_IMAGE_CELL_WIDTH_DP,
-            density = displayDensity,
+        val visibleAttachments = if (isDeleted || isEndToEndSealed) emptyList() else message.attachments
+        val attachments = BubbleAttachmentBuilder.build(
+            visibleAttachments = visibleAttachments,
+            effects = message.effects,
+            preferences = preferences,
+            mediaBaseUrl = mediaBaseUrl,
+            displayDensity = displayDensity,
+            contactScope = ContactCardResolutionScope.of(message),
         )
-        val lighterPreviewsAllowed = imageAttachments.isNotEmpty() &&
-            !message.effects.has(MessageEffectFlags.BLURRED) &&
-            !message.effects.has(MessageEffectFlags.VIEW_ONCE)
-        val images = imageAttachments
-            .map { attachment ->
-                val lighterPreview = if (lighterPreviewsAllowed) attachment.lighterPreviewUrl(previewWidthPx) else null
-                BubbleImage(
-                    attachmentId = attachment.id,
-                    url = resolveMediaUrl(attachment.fileUrl!!, mediaBaseUrl),
-                    thumbnailUrl = (lighterPreview ?: attachment.thumbnailUrl)
-                        ?.let { resolveMediaUrl(it, mediaBaseUrl) },
-                    width = attachment.width,
-                    height = attachment.height,
-                    alt = attachment.alt?.trim()?.ifBlank { null },
-                )
-            }
-        val locations = visibleAttachments
-            .filter { it.isLocation }
-            .map { attachment ->
-                BubbleLocation(
-                    attachmentId = attachment.id,
-                    latitude = attachment.latitude,
-                    longitude = attachment.longitude,
-                    placeName = attachment.originalName?.trim()?.ifBlank { null },
-                )
-            }
-        val audios = visibleAttachments
-            .filter { it.isAudio }
-            .map { attachment ->
-                buildAudio(attachment, preferences, mediaBaseUrl)
-            }
-        val files = visibleAttachments
-            .filterNot { it.isImage || it.isLocation || it.isAudio }
-            .map { attachment ->
-                BubbleFile(
-                    attachmentId = attachment.id,
-                    name = attachment.originalName ?: attachment.fileName,
-                    sizeBytes = attachment.fileSize,
-                    url = attachment.fileUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
-                    isVideo = attachment.isVideo,
-                    isContactCard = attachment.isContactCard,
-                )
-            }
-        val contactCards = visibleAttachments
-            .filter { it.isContactCard }
-            .map { attachment ->
-                BubbleContactCard(
-                    attachmentId = attachment.id,
-                    name = (attachment.originalName ?: attachment.fileName)
-                        ?.trim()?.removeSuffix(".vcf")?.ifBlank { null },
-                )
-            }
+        val messagePlace = message.location
+            ?.takeUnless { isDeleted || isEndToEndSealed }
+            ?.let { BubbleLocation.fromPlace(message.id, it) }
+        // Une pièce qui disparaît (vue unique, floue, éphémère) ou que la loi de sortie retient ne s'ouvre ni ne se
+        // télécharge : sa rangée ne promet rien (#13492) — le même verdict que l'aperçu et le contrôleur.
+        val protectedIds = message.attachments.filter { MessagePieceTarget.isProtected(it, message) }.mapTo(HashSet()) { it.id }
+        val files = attachments.files.map { if (it.attachmentId in protectedIds) it.copy(isProtected = true) else it }
         val text = when {
-            isDeleted -> ""
+            isDeleted || isEndToEndSealed -> ""
             activeIsOriginal -> message.content
             else -> message.translations
                 .firstOrNull {
@@ -203,35 +130,47 @@ public object BubbleContentBuilder {
                 includeTranslatable = true,
             )
         }
+        val senderName = (message.sender?.displayName ?: message.sender?.username)
+            ?.takeIf { it.isNotBlank() }
         return BubbleContent(
             messageId = message.id,
+            viewingConversationId = message.conversationId.takeIf { it.isNotBlank() },
             text = text,
             isOutgoing = isOutgoing,
             isTranslated = isTranslated,
             isShowingOriginal = isShowingOriginal,
             originalText = if (isTranslated && !isShowingOriginal) message.content else null,
             languageStrip = languageStrip,
-            senderName = (message.sender?.displayName ?: message.sender?.username)
-                ?.takeIf { it.isNotBlank() },
+            senderName = senderName,
             showSenderName = showSenderName && !isOutgoing,
+            senderId = message.senderId,
+            senderProfile = if (isOutgoing || message.isSystemMessage) null else ProfileSheetUser.from(message),
+            senderUsername = (message.sender?.username ?: message.sender?.user?.username)
+                ?.takeIf { it.isNotBlank() },
+            senderAvatarUrl = message.sender?.resolvedAvatar,
+            senderColorHex = (senderName ?: message.senderId)?.let(DynamicColorGenerator::colorForName),
             isEdited = message.isEdited,
             isDeleted = isDeleted,
+            isEndToEndSealed = isEndToEndSealed,
+            isReadByServer = PlainSignalAdmission.rowReadByServer(message),
+            sealedPieceIds = if (isEndToEndSealed && !isDeleted) message.attachments.map { it.id } else emptyList(),
+            holdsEndToEndSend = isEndToEndSealed || EndToEndRegimeMemory.messageHoldsSend(message),
             createdAtIso = message.createdAt,
             deliveryStatus = deliveryStatus,
             reactions = reactions,
             replyToId = message.replyTo?.id,
-            replyToText = replyToText,
+            replyToText = quoted?.text,
             replyToDeleted = replyToDeleted,
-            replyToMediaKind = replyToMediaKind,
-            replyToThumbnailUrl = replyToThumbnailUrl,
+            replyToMediaKind = quoted?.mediaKind ?: ReplyMediaKind.None,
+            replyToThumbnailUrl = quoted?.thumbnailUrl,
             storyReply = storyReply,
-            replyToSenderName = message.replyTo?.senderDisplayName,
+            replyToSenderName = quoted?.senderName,
             isPending = isPending,
             clientMessageId = message.clientMessageId,
-            images = images,
+            images = attachments.images.map { if (it.attachmentId in protectedIds) it.copy(isProtected = true) else it },
             files = files,
-            locations = locations,
-            audios = audios,
+            locations = listOfNotNull(messagePlace) + attachments.locations,
+            audios = attachments.audios,
             emojiOnlyCount = if (visibleAttachments.isEmpty()) {
                 EmojiDetector.emojiOnlyCount(text)
             } else {
@@ -262,21 +201,60 @@ public object BubbleContentBuilder {
             // deleted (a tombstone never glows). The played-appearance gate is resolved
             // later at render time by `MessageEffectRenderPlanner.plan`.
             effects = MessageEffectRenderPlanner.renderEffects(message.effects, isDeleted),
-            // View-once burned tombstone inputs — mirror iOS gating burned on
-            // `message.isViewOnce && message.viewOnceCount > 0`. A deleted tombstone
-            // takes precedence (its own path), so zero these out when deleted.
+            // View-once burned tombstone inputs — consumed PER READER, like iOS
+            // `isViewOnceOpened` (#7579): never the global `viewOnceCount`, which another
+            // member's opening raises. A deleted tombstone takes precedence (its own path).
             isViewOnce = !isDeleted && message.effects.has(MessageEffectFlags.VIEW_ONCE),
-            viewOnceCount = if (isDeleted) 0 else message.viewOnceCount,
+            isAfterRead = !isDeleted && message.effects.has(MessageEffectFlags.EPHEMERAL_AFTER_READ),
+            isViewOnceOpenedByMe = !isDeleted && message.isViewOnceOpenedByMe,
             // A conversation notice (join/leave/legacy summary) renders as a centered
             // notice, never a signed bubble — resolved FIRST in `BubbleRenderKind`.
             isSystem = message.isSystemMessage,
             videoCount = files.count { it.isVideo },
-            contactCards = contactCards,
+            contactCards = attachments.contactCards,
             isBlurred = !isDeleted && message.effects.has(MessageEffectFlags.BLURRED),
+            exitOffer = message.exitOffer(),
             replyToIsMe = !replyToDeleted && currentUserId != null &&
                 message.replyTo?.senderId == currentUserId,
             isSlowSend = isOutgoing && isSlowSend,
         )
+    }
+
+    /** Sender-side delivery tier of an outgoing message; an incoming one always reads `Sent`. */
+    private fun resolveDeliveryStatus(
+        message: ApiMessage,
+        isOutgoing: Boolean,
+        isPending: Boolean,
+        isFailed: Boolean,
+        isOffline: Boolean,
+        recipientCount: Int,
+        showReadReceipts: Boolean,
+    ): DeliveryStatus = when {
+        !isOutgoing -> DeliveryStatus.Sent
+        else -> when (
+            SendLifecycleResolver.resolve(
+                isPending = isPending,
+                isFailed = isFailed,
+                isOffline = isOffline,
+            )
+        ) {
+            SendLifecycle.Failed -> DeliveryStatus.Failed
+            SendLifecycle.QueuedOffline -> DeliveryStatus.QueuedOffline
+            SendLifecycle.InFlight -> DeliveryStatus.Pending
+            SendLifecycle.Settled -> when (
+                DeliveryStatusResolver.resolve(
+                    deliveredCount = message.deliveredCount,
+                    readCount = message.readCount,
+                    recipientCount = recipientCount,
+                    readByAllAt = message.readByAllAt,
+                    showReadReceipts = showReadReceipts,
+                )
+            ) {
+                DeliveryTier.Read -> DeliveryStatus.Read
+                DeliveryTier.Delivered -> DeliveryStatus.Delivered
+                DeliveryTier.Sent -> DeliveryStatus.Sent
+            }
+        }
     }
 
     /**
@@ -298,159 +276,6 @@ public object BubbleContentBuilder {
         )
     }
 
-    /**
-     * Projects the quoted post/story into a [BubbleStoryReply] — port of the
-     * `postReplyTo` / `storyReplyToId` branch of iOS `APIMessage → ReplyReference`.
-     * A non-blank `moodEmoji` yields a mood preview (emoji + text); otherwise a
-     * story preview (thumbnail + metrics). A bare `storyReplyToId` with no
-     * snapshot yields a metadata-less story preview. Returns null when neither
-     * a snapshot nor a story id is present.
-     */
-    private fun buildStoryReply(
-        target: ApiPostReplyTarget?,
-        storyReplyToId: String?,
-        mediaBaseUrl: String?,
-    ): BubbleStoryReply? {
-        if (target != null) {
-            val moodEmoji = target.moodEmoji?.trim()?.ifBlank { null }
-            if (moodEmoji != null) {
-                return BubbleStoryReply(
-                    previewText = target.previewText,
-                    moodEmoji = moodEmoji,
-                )
-            }
-            return BubbleStoryReply(
-                previewText = target.previewText,
-                reactionCount = target.reactionCount,
-                commentCount = target.commentCount,
-                shareCount = target.shareCount,
-                thumbnailUrl = target.thumbnailUrl
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let { resolveMediaUrl(it, mediaBaseUrl) },
-            )
-        }
-        if (!storyReplyToId.isNullOrBlank()) {
-            return BubbleStoryReply()
-        }
-        return null
-    }
-
-    /**
-     * Projects an audio attachment into a [BubbleAudio], resolving the displayed
-     * transcription through the Prisme Linguistique — port of iOS `AudioPlayerView`
-     * transcription handling, but done at build time so the viewer sees the
-     * preferred-language transcription by default (iOS defaults to the original and
-     * requires a manual language pick; this surpasses it).
-     *
-     * The duration falls back to the transcription's `durationMs` when the
-     * attachment carries no explicit `duration`, matching the gateway's two sources.
-     */
-    private fun buildAudio(
-        attachment: ApiMessageAttachment,
-        preferences: LanguageResolver.ContentLanguagePreferences,
-        mediaBaseUrl: String?,
-    ): BubbleAudio {
-        val resolved = resolveTranscription(attachment, preferences)
-        val translatedAudio = resolveTranslatedAudio(attachment, preferences)
-        val playableUrl = translatedAudio?.url ?: attachment.fileUrl
-        val durationSeconds = translatedAudio?.durationMs?.let { it / 1000 }
-            ?: attachment.duration
-            ?: attachment.transcription?.durationMs?.let { it / 1000 }
-        return BubbleAudio(
-            attachmentId = attachment.id,
-            url = playableUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
-            durationSeconds = durationSeconds,
-            sizeBytes = attachment.fileSize,
-            transcriptionText = resolved?.text,
-            transcriptionLanguage = resolved?.language,
-            isTranscriptionTranslated = resolved?.isTranslated == true,
-            isAudioTranslated = translatedAudio != null,
-            audioLanguage = translatedAudio?.language ?: resolved?.language,
-        )
-    }
-
-    private data class ResolvedTranscription(
-        val text: String,
-        val language: String?,
-        val isTranslated: Boolean,
-    )
-
-    private data class ResolvedAudio(
-        val url: String,
-        val language: String,
-        val durationMs: Int?,
-    )
-
-    /**
-     * Prisme rule 1 for the audio source: prefer a cloned-voice translation targeting one
-     * of the viewer's preferred languages (in priority order). When the highest-priority
-     * preferred language is the attachment's original transcription language the original
-     * voice wins (returns null) — never an arbitrary translation. Returns null when no
-     * preferred-language translation carries a playable audio url, in which case the
-     * caller falls back to the original voice note. Mirrors [resolveTranscription] so the
-     * played voice and the surfaced transcription line resolve to the same language.
-     */
-    private fun resolveTranslatedAudio(
-        attachment: ApiMessageAttachment,
-        preferences: LanguageResolver.ContentLanguagePreferences,
-    ): ResolvedAudio? {
-        val originalLanguage = attachment.transcription?.language?.trim()?.ifBlank { null }
-        val translations = attachment.translations.orEmpty()
-
-        for (language in LanguageResolver.preferredContentLanguages(preferences)) {
-            if (originalLanguage != null && originalLanguage.equals(language, ignoreCase = true)) {
-                return null
-            }
-            val translated = translations.entries
-                .firstOrNull { it.key.equals(language, ignoreCase = true) }
-                ?.value
-            val url = translated?.url?.trim()?.ifBlank { null }
-            if (url != null) return ResolvedAudio(url, language, translated.durationMs)
-        }
-        return null
-    }
-
-    /**
-     * Prisme rule 1: prefer a translation targeting one of the viewer's preferred
-     * languages (in priority order); when the original transcription is already in
-     * a preferred language it wins as untranslated content; otherwise fall back to
-     * the ORIGINAL transcription (never an arbitrary translation). Returns null when
-     * no non-blank transcription exists at all.
-     */
-    private fun resolveTranscription(
-        attachment: ApiMessageAttachment,
-        preferences: LanguageResolver.ContentLanguagePreferences,
-    ): ResolvedTranscription? {
-        val transcription: ApiAttachmentTranscription? = attachment.transcription
-        val originalText = (transcription?.transcribedText ?: transcription?.text)
-            ?.trim()?.ifBlank { null }
-        val originalLanguage = transcription?.language?.trim()?.ifBlank { null }
-        val translations = attachment.translations.orEmpty()
-
-        for (language in LanguageResolver.preferredContentLanguages(preferences)) {
-            if (originalText != null && originalLanguage.equals(language, ignoreCase = true)) {
-                return ResolvedTranscription(originalText, originalLanguage, isTranslated = false)
-            }
-            val translated = translations.entries
-                .firstOrNull { it.key.equals(language, ignoreCase = true) }
-                ?.value?.transcription?.trim()?.ifBlank { null }
-            if (translated != null) {
-                return ResolvedTranscription(translated, language, isTranslated = true)
-            }
-        }
-        return originalText?.let { ResolvedTranscription(it, originalLanguage, isTranslated = false) }
-    }
-
-    /**
-     * L'URL de la variante WebP d'aperçu quand elle est plus légère que l'original, `null`
-     * sinon. Une image chiffrée n'a pas de variante ; une pièce qui n'a pas PROUVÉ qu'elle
-     * est ordinaire (vue unique, floutée, ou muette sur sa protection) garde ses URL d'avant.
-     */
-    private fun ApiMessageAttachment.lighterPreviewUrl(targetWidthPx: Int): String? {
-        if (isEncrypted == true || isProtected) return null
-        return ImageVariantPicker.lighterPreviewUrl(imageVariants, fileUrl.orEmpty(), width, targetWidthPx)
-    }
-
     private fun String?.normalizedCode(): String? =
         this?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
 
@@ -464,25 +289,4 @@ public object BubbleContentBuilder {
         this == originalCode || message.translations.any {
             it.targetLanguage.normalizedCode() == this && it.translatedContent.isNotBlank()
         }
-
-    private const val LOCATION_MIME = "application/x-location"
-
-    private val ApiMessageAttachment.isImage: Boolean
-        get() = mimeType?.startsWith("image/") == true
-
-    private val ApiMessageAttachment.isLocation: Boolean
-        get() = mimeType == LOCATION_MIME
-
-    private val ApiMessageAttachment.isVideo: Boolean
-        get() = mimeType?.startsWith("video/") == true
-
-    private val ApiMessageAttachment.isContactCard: Boolean
-        get() = mimeType?.lowercase() in VCARD_MIMES ||
-            (originalName ?: fileName)?.lowercase()?.endsWith(".vcf") == true
-
-    private val VCARD_MIMES = setOf("text/vcard", "text/x-vcard", "text/directory")
-
-    private val ApiMessageAttachment.isAudio: Boolean
-        get() = mimeType?.startsWith("audio/") == true
-
 }

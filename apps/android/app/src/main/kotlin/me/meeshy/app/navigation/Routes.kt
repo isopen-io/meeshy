@@ -1,13 +1,18 @@
 package me.meeshy.app.navigation
 
 import android.net.Uri
+import me.meeshy.app.composer.host.ComposerHostRoute
+import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.app.auth.GuestJoinViewModel
+import me.meeshy.app.auth.ShareLinkEntryViewModel
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.conversations.CreateShareLinkViewModel
 import me.meeshy.app.conversations.ShareLinkDetailViewModel
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.profile.ReportUserViewModel
 import me.meeshy.app.stories.StoryViewerViewModel
+import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility
 import me.meeshy.sdk.model.ProfileShareLink
 import me.meeshy.sdk.model.legal.LegalDocumentKind
 
@@ -17,8 +22,24 @@ object Routes {
     const val FORGOT_PASSWORD = "forgot-password"
     const val MAGIC_LINK = "magic-link"
     const val MAGIC_LINK_VALIDATE = "auth/magic-link?token={token}"
+
+    /**
+     * « Nouveau mot de passe » (iOS `MeeshyNewPasswordView`), ouvert par le lien de l'e-mail de reinitialisation.
+     * Le jeton voyage dans l'argument, encode, et le ViewModel l'efface de l'etat sauvegarde des qu'il l'a lu.
+     */
+    const val RESET_PASSWORD = "auth/reset-password?token={token}"
+    fun resetPassword(encodedToken: String): String = "auth/reset-password?token=$encodedToken"
+
+    /** La preuve de l'adresse par le lien de l'e-mail : jeton ET adresse (encodes), meme ecran que le lien de connexion. */
+    const val VERIFY_EMAIL_LINK = "auth/verify-email?token={token}&email={email}"
+    fun verifyEmailLink(token: String, email: String): String = "auth/verify-email?token=$token&email=$email"
     const val GUEST_JOIN = "join/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
-    const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN"
+
+    /**
+     * `?anonymous=true` (optionnel) : l'identité est déjà choisie — « Anonyme » d'une carte de
+     * conversation (#13683) mène droit au formulaire invité, sans l'écran de choix.
+     */
+    const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN?${ShareLinkEntryViewModel.ANONYMOUS_ARG}={${ShareLinkEntryViewModel.ANONYMOUS_ARG}}"
 
     /**
      * LEGACY receiver — `https://meeshy.me/join/{identifier}`, the shape the
@@ -40,6 +61,14 @@ object Routes {
     const val GUEST_JOIN_CHAT_WEB_DEEP_LINK =
         "https://meeshy.me/chat/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
     fun guestJoin(identifier: String): String = "join/$identifier"
+
+    /**
+     * L'entrée SANS COMPTE dans World Wide (#10006) : nom → langue → fil. Elle ne s'atteint que par le QR de
+     * meeshy.me vers `/world` (directive porteur 2026-10-16, #10784) — jamais par un bouton de l'écran de connexion.
+     */
+    const val WORLD_ENTRY = "world"
+    const val WORLD_ENTRY_DEEP_LINK = "meeshy://world"
+    const val WORLD_ENTRY_WEB_DEEP_LINK = "https://meeshy.me/world"
     const val CONVERSATIONS = "conversations"
     const val NEW_CONVERSATION = "conversations/new"
     const val GLOBAL_SEARCH = "search"
@@ -53,6 +82,8 @@ object Routes {
     const val MY_SHARE_LINKS = "share-links"
     const val SHARE_LINK_DETAIL = "share-links/{${ShareLinkDetailViewModel.LINK_ID_ARG}}"
     fun shareLinkDetail(linkId: String): String = "share-links/$linkId"
+    const val SHARE_LINK_ARRIVALS = "share-links/{${ShareLinkDetailViewModel.LINK_ID_ARG}}/arrivals"
+    fun shareLinkArrivals(linkId: String): String = "share-links/$linkId/arrivals"
     const val CHAT = "chat/{${ChatViewModel.CONVERSATION_ID_ARG}}?${ChatRouteArgs.HIGHLIGHT_MESSAGE_ID}={${ChatRouteArgs.HIGHLIGHT_MESSAGE_ID}}"
     const val CHAT_DEEP_LINK = "meeshy://$CHAT"
     const val CONVERSATION_DEEP_LINK = "meeshy://conversations/{${ChatViewModel.CONVERSATION_ID_ARG}}"
@@ -72,6 +103,31 @@ object Routes {
     const val SAVED_POSTS = "feed/saved"
     const val NEARBY_DISCOVERY = "feed/nearby"
     const val POST_DETAIL = "feed/post/{${PostDetailViewModel.POST_ID_ARG}}"
+
+    /**
+     * The receiving half of [PostShareLink]: the canonical `/feeds/post/{id}` link every
+     * client shares, and the legacy `/post/{id}` the gateway's tracked links still mint —
+     * on both hosts. Before these, a shared post link opened the browser, never the app.
+     */
+    val POST_SHARE_DEEP_LINKS: List<String> =
+        listOf(PostShareLink.WEB_HOST, PostShareLink.WWW_HOST).flatMap { host ->
+            listOf(PostShareLink.CANONICAL_SEGMENT, PostShareLink.LEGACY_SEGMENT).map { segment ->
+                "https://$host/$segment/{${PostDetailViewModel.POST_ID_ARG}}"
+            }
+        }
+
+    /** Le lien de partage d'un reel (`/reel/{id}`, l'adresse que la passerelle grave) : ouvre les reels sur ce post. */
+    val REEL_SHARE_DEEP_LINKS: List<String> =
+        listOf(PostShareLink.WEB_HOST, PostShareLink.WWW_HOST).map { host -> "https://$host/reel/{seed}" }
+
+    /**
+     * Le lien d'une story (`/story/{id}`, `/stories/{id}`) : une story est un post du meme espace d'identifiants, donc
+     * l'ouverture connectee est le detail du post — comme iOS quand la story a expire ou n'est pas dans le plateau.
+     */
+    val STORY_SHARE_DEEP_LINKS: List<String> =
+        listOf(PostShareLink.WEB_HOST, PostShareLink.WWW_HOST).flatMap { host ->
+            listOf("story", "stories").map { segment -> "https://$host/$segment/{${PostDetailViewModel.POST_ID_ARG}}" }
+        }
     const val CALLS = "calls"
     const val CONTACTS = "contacts"
     const val CONTACTS_DISCOVER = "contacts/discover"
@@ -81,10 +137,16 @@ object Routes {
     const val TWO_FACTOR = "settings/two-factor"
     const val ACCOUNT_CONTACT = "settings/account-contact"
     const val SECURITY = "settings/security"
+    const val NOTIFICATION_SETTINGS = "settings/notifications"
     const val MEDIA_DOWNLOAD = "settings/media-download"
     const val MEDIA_CACHE = "settings/media-cache"
+    /** Réglages › Packs et téléchargements : la Boutique, ouvrable sur un domaine (`?domain=`) et un pack (`?pack=`). */
+    const val PACK_SHOP = "settings/packs"
+    /** Lien profond de la Boutique (iOS `meeshy://settings/packs?domaine=…&pack=…`) ; `domaine` alimente l'argument `domain`. */
+    const val PACK_SHOP_DEEP_LINK = "meeshy://$PACK_SHOP?domaine={domain}&pack={pack}"
     const val PRIVACY = "settings/privacy"
     const val ACTIVE_SESSIONS = "settings/sessions"
+    const val ENCRYPTED_DEVICES = "settings/encrypted-devices"
     const val BLOCKED_USERS = "contacts/blocked"
     const val DATA_EXPORT = "settings/data-export"
     const val DIAGNOSTICS = "settings/diagnostics"
@@ -112,30 +174,61 @@ object Routes {
     const val PROFILE_SHARE_WEB_DEEP_LINK =
         "https://${ProfileShareLink.WEB_HOST}/${ProfileShareLink.USER_SEGMENT}/{userId}"
     const val USER_POSTS = "profile/{userId}/posts"
+    const val HASHTAG_RESULTS = "hashtag/{tag}"
+    const val MY_STORIES = "stories/mine"
+    const val MOOD_SPOTLIGHT = "mood/{statusId}"
     const val REPORT_USER = "report/{${ReportUserViewModel.USER_ID_ARG}}?${ReportUserViewModel.USERNAME_ARG}={${ReportUserViewModel.USERNAME_ARG}}"
-    const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
-    const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
+    /** `storyId` (facultatif) : une story précise de l'auteur — celle d'une story republiée —, au lieu de sa première non vue. */
+    const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}?${StoryViewerViewModel.STORY_ID_ARG}={${StoryViewerViewModel.STORY_ID_ARG}}"
+    const val STORY_DEEP_LINK = "meeshy://story/{${StoryViewerViewModel.USER_ID_ARG}}"
     const val STORY_COMPOSER = "story_composer"
     const val STORY_COMPOSER_REPOST_ARG = "repostOfId"
-    const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}"
+    const val STORY_COMPOSER_AUDIENCE_ARG = "audience"
+    /** La story PUBLIÉE que le composeur rouvre pour la modifier (#13632) — absente, c'est une story neuve. */
+    const val STORY_COMPOSER_EDIT_ARG = "editStoryId"
+    /** La story VUE dont « Composer » sème une scène neuve (#13849) — ni une édition, ni une republication. */
+    const val STORY_COMPOSER_RECOMPOSE_ARG = "recomposeStoryId"
+    const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}&$STORY_COMPOSER_AUDIENCE_ARG={$STORY_COMPOSER_AUDIENCE_ARG}&$STORY_COMPOSER_EDIT_ARG={$STORY_COMPOSER_EDIT_ARG}&$STORY_COMPOSER_RECOMPOSE_ARG={$STORY_COMPOSER_RECOMPOSE_ARG}"
+    /** L'hôte unique du composeur : la porte (story, flux, mood, brouillon, partage entrant, média de conversation ou de post) voyage en argument, le format est un champ du document. */
+    const val COMPOSER = ComposerHostRoute.PATTERN
     const val REELS = "reels?seed={seed}"
     val CALL = CallRoute.PATTERN
 
+    /** Ouvre l'hôte unique par [origin] ; `null` pour une porte que l'ancien composeur sert encore. */
+    fun composer(origin: ComposerOrigin, seedToken: String? = null): String? = ComposerHostRoute.route(origin, seedToken)
+
     fun reels(seed: String? = null): String = if (seed == null) "reels" else "reels?seed=$seed"
 
-    /** Opens the story composer as a repost of [storyId] — the source id rides as an optional arg. */
-    fun storyComposerRepost(storyId: String): String =
-        "story_composer?$STORY_COMPOSER_REPOST_ARG=${Uri.encode(storyId)}"
+    /** Rouvre la story publiée [storyId] dans le composeur : l'enregistrement la met à jour. */
+    fun storyComposerEdit(storyId: String): String =
+        "story_composer?$STORY_COMPOSER_EDIT_ARG=${Uri.encode(storyId)}"
+
+    /** « Composer » depuis la story [storyId] : une scène neuve semée de la sienne, ses médias faits siens. */
+    fun storyComposerRecompose(storyId: String): String =
+        "story_composer?$STORY_COMPOSER_RECOMPOSE_ARG=${Uri.encode(storyId)}"
+
+    /** Ouvre le composeur de l'onboarding : l'audience servie amorce le brouillon, PUBLIC laisse le défaut. */
+    fun storyComposerFromOnboarding(audience: OnboardingStoryVisibility): String =
+        if (audience == OnboardingStoryVisibility.FRIENDS) "story_composer?$STORY_COMPOSER_AUDIENCE_ARG=FRIENDS" else STORY_COMPOSER
 
     fun postDetail(postId: String): String = "feed/post/$postId"
     fun chat(conversationId: String, highlightMessageId: String? = null): String =
         ChatRouteArgs.route(conversationId, highlightMessageId)
     fun profile(userId: String): String = "profile/$userId"
     fun userPosts(userId: String): String = "profile/$userId/posts"
+    fun moodSpotlight(statusId: String): String = "mood/$statusId"
+    fun hashtag(tag: String): String = "hashtag/${Uri.encode(tag.removePrefix("#"))}"
     fun reportUser(userId: String, username: String): String =
         "report/$userId?${ReportUserViewModel.USERNAME_ARG}=${Uri.encode(username)}"
-    fun story(userId: String): String = "story/$userId"
+    fun story(userId: String, storyId: String? = null): String =
+        if (storyId.isNullOrBlank()) "story/$userId" else "story/$userId?${StoryViewerViewModel.STORY_ID_ARG}=${java.net.URLEncoder.encode(storyId, "UTF-8").replace("+", "%20")}"
     fun legal(kind: LegalDocumentKind): String = "settings/legal/${kind.arg}"
+    fun packShop(domain: String? = null, pack: String? = null): String =
+        listOfNotNull(domain?.let { "domain=${Uri.encode(it)}" }, pack?.let { "pack=${Uri.encode(it)}" })
+            .joinToString("&").let { query -> if (query.isEmpty()) PACK_SHOP else "$PACK_SHOP?$query" }
     fun call(conversationId: String, peerName: String, isVideo: Boolean): String =
         CallRoute.path(conversationId, peerName, isVideo)
 }
+
+/** La porte « nouvelle story » : l'hôte unique ouvert sur la caméra/scène, jamais l'ancien écran seul. */
+internal val storyDoor: String get() = checkNotNull(Routes.composer(ComposerOrigin.StoryTray))

@@ -143,10 +143,10 @@ class StorySlideDeckTextElementsTest {
     }
 
     @Test
-    fun `transformTextElement clamps the scale to the canvas bounds`() {
+    fun `transformTextElement keeps a scale past the old ceiling`() {
         val deck = deckOf(StorySlide(id = "a", elements = listOf(element("e1"))))
         val after = deck.transformTextElement("e1", scaleBy = 100f, rotateByDeg = 0f)
-        assertThat(after.selectedSlide.elements.single().scale).isEqualTo(StoryTextElement.MAX_SCALE)
+        assertThat(after.selectedSlide.elements.single().scale).isEqualTo(100f)
     }
 
     @Test

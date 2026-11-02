@@ -237,10 +237,10 @@ describe('la période et l’onglet vivent dans l’adresse', () => {
     expect(host.querySelector('[data-admin-tab-panel="activity"]')).not.toBeNull();
   });
 
-  test('les onglets sont un tablist ARIA de trois entrées, et le contenu un tabpanel nommé par l’onglet actif', async () => {
+  test('les onglets sont un tablist ARIA de quatre entrées, et le contenu un tabpanel nommé par l’onglet actif', async () => {
     const host = await openPanel('/probe', statsGateway().deps);
     const tabs = [...host.querySelectorAll('[role="tab"]')].map((node) => node.textContent);
-    expect(tabs).toEqual(['Activité', 'Messages', 'Appels']);
+    expect(tabs).toEqual(['Activité', 'Messages', 'Appels', 'Lecture']);
     expect(tab(host, 'activity')?.getAttribute('aria-selected')).toBe('true');
     const panel = host.querySelector('[role="tabpanel"]');
     const labelledBy = panel?.getAttribute('aria-labelledby') ?? '';

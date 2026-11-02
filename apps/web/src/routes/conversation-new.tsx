@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
+import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-creation-encryption';
+import { CreationEncryptionPicker } from '@/components/creation-encryption-picker';
 import { Glyph } from '@/components/glyph';
 import { PeerAvatar } from '@/components/peer-avatar';
 import { createDirectConversation, createGroupConversation, CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
@@ -13,6 +15,7 @@ import { searchUsers } from '@/lib/api/users-search';
 import { resolveViewer } from '@/lib/api/viewer';
 import { candidatesFor, friendsOf } from '@/lib/conversation-new/candidates';
 import { CREATION_FAILED, creationOutcomeOf } from '@/lib/conversation-new/creation';
+import { chosenCreationMode, webCreationEncryptionOffer } from '@/lib/conversation-new/encryption';
 import {
   EMPTY_GROUP_DRAFT,
   GROUP_CREATION_FAILED,
@@ -23,6 +26,7 @@ import {
   type GroupField,
 } from '@/lib/conversation-new/group';
 import { useOnline } from '@/lib/net/online';
+import { useServedGlobalRole } from '@/lib/view/use-admin-access';
 import { coldStateOf, type ColdState } from '@/lib/view/cold-state';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useExhaustPages } from '@/lib/view/use-exhaust-pages';
@@ -69,6 +73,12 @@ import { Link, href, navigate } from '@/routes/route-table';
  * (`SEARCH_BUDGET_EXCEEDED`) : une requête PAR FRAPPE épuisait ce budget en
  * une phrase tapée, et faisait clignoter la liste à chaque lettre. Le filtre des
  * amis, lui, ne coûte rien : il suit chaque frappe.
+ *
+ * LE CHIFFREMENT SE CHOISIT ICI, ET SEULEMENT ICI (décision du 2026-11-01) :
+ * au-dessus des personnes, puisqu'un tap en direct crée aussitôt. L'offre vient
+ * de la loi partagée, jugée sur le rôle SERVI (`useServedGlobalRole`, jamais
+ * deviné) ; le mode qui part est toujours un mode offert et disponible
+ * (`chosenCreationMode`). Changer de mode (direct ↔ groupe) garde le choix.
  */
 
 /** Le temps qu'une frappe se pose — jamais une requête par caractère. */
@@ -89,6 +99,8 @@ export default function ConversationNewScreen() {
   const [groupField, setGroupField] = useState<GroupField | null>(null);
   const [groupMessage, setGroupMessage] = useState<string | null>(null);
   const [focused, setFocused] = useState<'title' | 'description' | null>(null);
+  const [pickedEncryption, setPickedEncryption] = useState<CreationEncryptionMode | null>(null);
+  const platformRole = useServedGlobalRole();
   const queryClient = useQueryClient();
   const online = useOnline();
   const session = useStore(sessionStore, (state) => state.session);
@@ -120,6 +132,9 @@ export default function ConversationNewScreen() {
     enabled: searching,
   });
 
+  const encryptionOffer = useMemo(() => webCreationEncryptionOffer({ platformRole, conversationType: mode }), [platformRole, mode]);
+  const encryptionMode = chosenCreationMode(encryptionOffer, pickedEncryption);
+
   const view = candidatesFor({ friends, query, searchResults: searching ? results.data : undefined, viewerId });
 
   /**
@@ -138,7 +153,8 @@ export default function ConversationNewScreen() {
   }, [draft.participantIds, friends, results.data]);
 
   const create = useMutation({
-    mutationFn: (participantId: string) => createDirectConversation(apiDeps, participantId),
+    mutationFn: (params: { readonly participantId: string; readonly encryptionMode: CreationEncryptionMode }) =>
+      createDirectConversation(apiDeps, params.participantId, { encryptionMode: params.encryptionMode }),
     onSuccess: (result) => {
       /* UN ÉCHEC SE VOIT (revue #5652) — sans cette lecture, un tap sur un
          contact ne faisait RIEN du tout, ni navigation ni message. Un contrôle
@@ -158,8 +174,12 @@ export default function ConversationNewScreen() {
   });
 
   const createGroup = useMutation({
-    mutationFn: (body: { readonly title: string; readonly description?: string; readonly participantIds: readonly string[] }) =>
-      createGroupConversation(apiDeps, body),
+    mutationFn: (body: {
+      readonly title: string;
+      readonly description?: string;
+      readonly participantIds: readonly string[];
+      readonly encryptionMode: CreationEncryptionMode;
+    }) => createGroupConversation(apiDeps, body),
     onSuccess: (result) => {
       const outcome = groupOutcomeOf({ result, online });
       if (outcome.kind === 'open') {
@@ -186,7 +206,7 @@ export default function ConversationNewScreen() {
   /** UN TAP NE FAIT PAS LA MÊME CHOSE DANS LES DEUX MODES — ouvrir, ou cocher. */
   const pick = (participantId: string) => {
     if (mode === 'direct') {
-      create.mutate(participantId);
+      create.mutate({ participantId, encryptionMode });
       return;
     }
     setDraft((current) => ({
@@ -219,7 +239,7 @@ export default function ConversationNewScreen() {
     }
     setGroupField(null);
     setGroupMessage(null);
-    createGroup.mutate(validated.body);
+    createGroup.mutate({ ...validated.body, encryptionMode });
   };
 
   /** Changer de mode n'efface RIEN : revenir au groupe retrouve ce qui était
@@ -271,6 +291,7 @@ export default function ConversationNewScreen() {
       )}
 
       <div className="flex-1 overflow-y-auto pb-safe">
+        <CreationEncryptionPicker offer={encryptionOffer} selected={encryptionMode} onSelect={setPickedEncryption} />
         {mode === 'group' ? (
           <GroupComposer
             draft={draft}

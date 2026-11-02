@@ -429,9 +429,9 @@ le signe que la publication est bien restée hors de la surface.
 
 **Files:**
 - Modify: `apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher.swift` (`:87-99` — le rejet 501 devient un dispatch)
-- Modify: `apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift` (son timer de retry est **désarmé** ; il ne reste que l'exécuteur et les toasts)
+- Modify: `apps/ios/Meeshy/Features/Stories/Services/StoryPublishService.swift` (son timer de retry est **désarmé** ; il ne reste que l'exécuteur et les toasts)
 - Modify: `packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryPublishQueue.swift` (l'`enqueue` écrit AUSSI la ligne outbox pointeuse ; la file cesse de se piloter)
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` (`persistPublishIntentToQueue:1686`)
+- Modify: `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` (`persistPublishIntentToQueue:1686`)
 - Test: `apps/ios/MeeshyTests/Unit/Services/PublishQueueSinglePilotTests.swift` (nouveau)
 
 - [ ] **Step 1: Tests rouges — et le premier est le seul qui compte.**

@@ -12,12 +12,16 @@
     <!-- Components of the call capabilities (foreground services, a picture-in-picture
          activity…) are declared HERE by the lot that adds them, never in :app. -->
 
-    <!-- lot: calls-social-socket-events — le partage d'écran tient la projection dans un service de premier plan. -->
+    <!-- lot: calls-media-projection-service — le partage d'écran (#13332) tient la projection dans un service de premier plan. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
     <!-- lot: calls-foreground-service-and-ongoing-notification — l'appel reste vivant en arrière-plan (Android 14+). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+
+    <!-- lot: calls-core-telecom-integration — l'appel est une connexion auto-gérée du système (androidx.core.telecom) :
+         MANAGE_OWN_CALLS est déclarée ci-dessus, le compte d'appel et le service de connexion viennent du manifeste
+         de la bibliothèque, fusionné par AGP. -->
 
     <application>
         <service
@@ -27,8 +31,9 @@
         <receiver
             android:name="me.meeshy.app.calls.CallHangUpReceiver"
             android:exported="false" />
+        <!-- lot: calls-media-projection-service — la brique commune partage d'écran / enregistrement. -->
         <service
-            android:name="me.meeshy.app.calls.ScreenShareService"
+            android:name="me.meeshy.app.calls.MediaProjectionService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
     </application>

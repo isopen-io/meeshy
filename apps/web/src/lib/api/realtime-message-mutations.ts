@@ -40,7 +40,7 @@ import { purgeViewOnceIn } from './view-once-seal';
  * reçue d'ailleurs, sans fabriquer une charge de socket entière.
  */
 export type MessageEditPayload = Pick<SocketIOMessage, 'id' | 'conversationId' | 'content'> &
-  Partial<Pick<SocketIOMessage, 'isEdited' | 'editedAt' | 'translations' | 'attachments' | 'metadata' | 'validatedMentions' | 'systemEvent'>>;
+  Partial<Pick<SocketIOMessage, 'isEdited' | 'editedAt' | 'editedById' | 'editedByRole' | 'translations' | 'attachments' | 'metadata' | 'validatedMentions' | 'systemEvent'>>;
 
 export function isMessageEditedEvent(payload: unknown): payload is SocketIOMessage {
   if (typeof payload !== 'object' || payload === null) return false;
@@ -91,7 +91,19 @@ const servedMetadata = (data: MessageEditPayload): Pick<Message, 'metadata'> | R
     ? { metadata: data.metadata as NonNullable<Message['metadata']> }
     : {};
 
-const editedRow = (known: Message, data: MessageEditPayload): Message => ({
+/**
+ * L'AUTEUR D'UNE MODIFICATION FAITE PAR UN MODÉRATEUR (#11375) — servi, il
+ * remplace celui de la rangée ; `null` (l'auteur a réécrit) l'efface ; une
+ * charge d'une passerelle antérieure, qui tait la clé, garde celui en place.
+ */
+const withServedEditor = (row: Message, data: MessageEditPayload): Message => {
+  if (data.editedById === undefined) return row;
+  const { editedById: _id, editedByRole: _role, ...rest } = row;
+  if (data.editedById === null) return rest;
+  return { ...rest, editedById: data.editedById, ...(typeof data.editedByRole === 'string' ? { editedByRole: data.editedByRole } : {}) };
+};
+
+const editedRow = (known: Message, data: MessageEditPayload): Message => withServedEditor({
   ...known,
   ...servedAttachments(data),
   ...servedMetadata(data),
@@ -100,7 +112,7 @@ const editedRow = (known: Message, data: MessageEditPayload): Message => ({
   translations: servedTranslations(data),
   ...(data.editedAt === undefined ? {} : { editedAt: data.editedAt }),
   ...(data.validatedMentions === undefined ? {} : { validatedMentions: data.validatedMentions }),
-});
+}, data);
 
 /**
  * Une citation PROTÉGÉE porte un placeholder servi : le texte en clair n'y entre jamais.

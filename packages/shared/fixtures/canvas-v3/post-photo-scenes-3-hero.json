@@ -1,0 +1,159 @@
+{
+  "layout": "hero",
+  "scenes": [
+    {
+      "id": "s1",
+      "objects": [
+        {
+          "anchor": {
+            "t": "free",
+            "x": 0.5,
+            "y": 0.5
+          },
+          "id": "bg",
+          "kind": "media",
+          "payload": {
+            "transform": {
+              "videoFitMode": "fit"
+            }
+          },
+          "plane": "bg",
+          "transform": {
+            "opacity": 1,
+            "rotation": 0,
+            "scale": 1
+          },
+          "z": 0
+        },
+        {
+          "anchor": {
+            "t": "free",
+            "x": 0.5,
+            "y": 0.5
+          },
+          "id": "05DD056E-B77F-444A-8CAF-8B672935C990",
+          "kind": "media",
+          "locale": "fr",
+          "payload": {
+            "aspectRatio": 1.5003663003663004,
+            "isBackground": true,
+            "loop": true,
+            "mediaType": "image",
+            "mediaURL": "https://gate.meeshy.me/api/v1/attachments/file/64b000000000000000000001.jpg",
+            "postMediaId": "64b000000000000000000001"
+          },
+          "plane": "content",
+          "transform": {
+            "opacity": 1,
+            "rotation": 0,
+            "scale": 1
+          },
+          "z": 1
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "objects": [
+        {
+          "anchor": {
+            "t": "free",
+            "x": 0.5,
+            "y": 0.5
+          },
+          "id": "bg",
+          "kind": "media",
+          "payload": {
+            "transform": {
+              "videoFitMode": "fit"
+            }
+          },
+          "plane": "bg",
+          "transform": {
+            "opacity": 1,
+            "rotation": 0,
+            "scale": 1
+          },
+          "z": 0
+        },
+        {
+          "anchor": {
+            "t": "free",
+            "x": 0.5,
+            "y": 0.5
+          },
+          "id": "26679661-6E84-4F09-83D6-C2ADBA630D45",
+          "kind": "media",
+          "locale": "fr",
+          "payload": {
+            "aspectRatio": 0.75,
+            "isBackground": true,
+            "loop": true,
+            "mediaType": "image",
+            "mediaURL": "https://gate.meeshy.me/api/v1/attachments/file/64b000000000000000000002.jpg",
+            "postMediaId": "64b000000000000000000002"
+          },
+          "plane": "content",
+          "transform": {
+            "opacity": 1,
+            "rotation": 0,
+            "scale": 1
+          },
+          "z": 2
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "objects": [
+        {
+          "anchor": {
+            "t": "free",
+            "x": 0.5,
+            "y": 0.5
+          },
+          "id": "bg",
+          "kind": "media",
+          "payload": {
+            "transform": {
+              "videoFitMode": "fit"
+            }
+          },
+          "plane": "bg",
+          "transform": {
+            "opacity": 1,
+            "rotation": 0,
+            "scale": 1
+          },
+          "z": 0
+        },
+        {
+          "anchor": {
+            "t": "free",
+            "x": 0.5,
+            "y": 0.5
+          },
+          "id": "0D27FB22-7E10-42DB-B5E5-68EAAA19ADBB",
+          "kind": "media",
+          "locale": "fr",
+          "payload": {
+            "aspectRatio": 1,
+            "isBackground": true,
+            "loop": true,
+            "mediaType": "image",
+            "mediaURL": "https://gate.meeshy.me/api/v1/attachments/file/64b000000000000000000003.jpg",
+            "postMediaId": "64b000000000000000000003"
+          },
+          "plane": "content",
+          "transform": {
+            "opacity": 1,
+            "rotation": 0,
+            "scale": 1
+          },
+          "z": 3
+        }
+      ]
+    }
+  ],
+  "v": 3
+}

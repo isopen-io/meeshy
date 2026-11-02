@@ -5,6 +5,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendInternalError } from '../utils/response';
 import { NOT_DELETED } from '../services/posts/softDelete';
 import { logError } from '../utils/logger.js';
+import { getBlockRelatedUserIds } from '../utils/blocking';
 
 const ACHIEVEMENT_THRESHOLDS = {
   polyglotte: { field: 'languagesUsed', threshold: 5, icon: 'globe', color: '#3498DB' },
@@ -111,7 +112,10 @@ export async function computeUserAchievementStats(
   prisma: PrismaClient,
   userId: string
 ): Promise<UserAchievementStats> {
-  const identites = await prisma.participant.findMany({ where: { userId }, select: { id: true } });
+  const [identites, blocked] = await Promise.all([
+    prisma.participant.findMany({ where: { userId }, select: { id: true } }),
+    getBlockRelatedUserIds(prisma, userId),
+  ]);
   const ecritPar = { senderId: { in: identites.map((identite) => identite.id) } };
 
   const [
@@ -144,8 +148,10 @@ export async function computeUserAchievementStats(
         translations: { not: { equals: null } },
       },
     }),
+    // #13350 — une demande d'une personne en relation de blocage ne compte
+    // pas : les listes servies la retirent déjà (#13298).
     prisma.friendRequest.count({
-      where: { receiverId: userId },
+      where: { receiverId: userId, ...(blocked.size > 0 ? { senderId: { notIn: [...blocked] } } : {}) },
     }),
     prisma.message.groupBy({
       by: ['originalLanguage'],

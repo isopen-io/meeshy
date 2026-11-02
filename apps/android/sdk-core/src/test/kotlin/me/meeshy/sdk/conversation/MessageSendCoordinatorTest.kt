@@ -3,13 +3,17 @@ package me.meeshy.sdk.conversation
 import com.google.common.truth.Truth.assertThat
 import java.time.Instant
 import kotlinx.serialization.decodeFromString
+import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.MessageSticker
 import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.outbox.OutboxDependencyKey
 import me.meeshy.sdk.outbox.OutboxKind
@@ -74,6 +78,50 @@ class MessageSendCoordinatorTest {
         assertThat(queued.kindEnum).isEqualTo(OutboxKind.SEND_MESSAGE)
         assertThat(queued.targetId).isEqualTo("c1")
         assertThat(harness.outbox.deliverable("message:c2")).isEmpty()
+    }
+
+    @Test
+    fun `a shared place travels on the bubble and on the request, and survives a retry`() = runHarnessTest { harness ->
+        val place = SharedPlace(48.8566, 2.3522, name = "Tour Eiffel", address = "Paris", category = "landmark")
+        val coordinator = coordinator(harness)
+        val cid = coordinator.sendOptimistic("c1", "", "fr", sender, location = place)
+
+        assertThat(harness.cachedMessage(cid).location).isEqualTo(place)
+        assertThat(harness.queuedRequest().location).isEqualTo(place)
+        assertThat(harness.queuedRequest().content).isEmpty()
+
+        coordinator.markSendFailed(cid)
+        harness.outbox.discard(cid)
+        coordinator.retrySend(cid)
+        assertThat(harness.queuedRequest().location).isEqualTo(place)
+    }
+
+    @Test
+    fun `#14334 a sticker travels on the bubble and on the request, and survives a retry`() = runHarnessTest { harness ->
+        val sticker = MessageSticker(templateId = "mee.mee-coucou", emoji = "👋")
+        val coordinator = coordinator(harness)
+        val cid = coordinator.sendOptimistic("c1", "", "fr", sender, messageType = "image", sticker = sticker)
+
+        assertThat(harness.cachedMessage(cid).sticker).isEqualTo(sticker)
+        assertThat(harness.queuedRequest().sticker).isEqualTo(sticker)
+        assertThat(harness.outbox.deliverable("message:c1").single().payload).contains("\"sticker\":{\"templateId\":\"mee.mee-coucou\",\"emoji\":\"👋\"}")
+
+        coordinator.markSendFailed(cid)
+        harness.outbox.discard(cid)
+        coordinator.retrySend(cid)
+        assertThat(harness.queuedRequest().sticker).isEqualTo(sticker)
+    }
+
+    @Test
+    fun `#14334 a message without sticker sends no sticker key`() = runHarnessTest { harness ->
+        coordinator(harness).sendOptimistic("c1", "salut", "fr", sender)
+        assertThat(harness.outbox.deliverable("message:c1").single().payload).doesNotContain("sticker")
+    }
+
+    @Test
+    fun `a text send carries no place`() = runHarnessTest { harness ->
+        coordinator(harness).sendOptimistic("c1", "salut", "fr", sender)
+        assertThat(harness.queuedRequest().location).isNull()
     }
 
     @Test
@@ -221,10 +269,78 @@ class MessageSendCoordinatorTest {
     }
 
     @Test
+    fun `a forwarded piece travels on the request, and a retry from the bubble keeps ONLY that piece`() = runHarnessTest { harness ->
+        val coordinator = coordinator(harness)
+        val cid = coordinator.sendOptimistic(
+            "c1", "", "fr", sender,
+            forwardedFromId = "src-msg", forwardedFromConversationId = "src",
+            forwardedAttachmentIds = listOf("att-2", " ", "att-2"),
+        )
+
+        assertThat(harness.queuedRequest().forwardedAttachmentIds).containsExactly("att-2")
+
+        harness.outbox.markSucceeded(cid)
+        coordinator.markSendFailed(cid)
+        coordinator.retrySend(cid)
+
+        val retried = harness.queuedRequest()
+        assertThat(retried.forwardedFromId).isEqualTo("src-msg")
+        assertThat(retried.forwardedAttachmentIds).containsExactly("att-2")
+    }
+
+    @Test
+    fun `a whole-message forward carries no piece list, so the gateway copies the whole lot`() = runHarnessTest { harness ->
+        val cid = coordinator(harness).sendOptimistic("c1", "salut", "fr", sender, forwardedFromId = "src-msg")
+
+        assertThat(harness.queuedRequest().forwardedAttachmentIds).isNull()
+        assertThat(harness.cachedMessage(cid).metadata).isNull()
+    }
+
+    @Test
     fun `retrying a bubble that is not cached does nothing`() = runHarnessTest { harness ->
         coordinator(harness).retrySend("cid_ghost")
 
         assertThat(harness.outbox.deliverable("message:c1")).isEmpty()
         assertThat(harness.database.messageDao().find("cid_ghost")).isNull()
+    }
+
+    @Test
+    fun `a send refused for its location keeps that reason on the failed bubble`() = runHarnessTest { harness ->
+        val coordinator = coordinator(harness)
+        val cid = coordinator.sendOptimistic("c1", "salut", "fr", sender)
+
+        coordinator.markSendFailed(cid, MediaLocationRefusal.REASON)
+
+        val row = harness.database.messageDao().find(cid)!!
+        assertThat(row.sendState).isEqualTo(LocalSendState.FAILED.name)
+        assertThat(row.lastError).isEqualTo(MediaLocationRefusal.REASON)
+    }
+
+    @Test
+    fun `tapping a bubble refused for its location removes it instead of retrying it — no loop`() = runHarnessTest { harness ->
+        val coordinator = coordinator(harness)
+        val cid = coordinator.sendOptimistic("c1", "salut", "fr", sender)
+        harness.outbox.markExhausted(cid, MediaLocationRefusal.REASON)
+        coordinator.markSendFailed(cid, MediaLocationRefusal.REASON)
+
+        coordinator.retrySend(cid)
+
+        assertThat(harness.database.messageDao().find(cid)).isNull()
+        assertThat(harness.outbox.row(cid)).isNull()
+        assertThat(harness.outbox.deliverable("message:c1")).isEmpty()
+    }
+
+    @Test
+    fun `a send whose media was lost on the device keeps that reason, and tapping it removes it — no loop`() = runHarnessTest { harness ->
+        val coordinator = coordinator(harness)
+        val cid = coordinator.sendOptimistic("c1", "salut", "fr", sender)
+        harness.outbox.markExhausted(cid, MediaLoss.REASON)
+        coordinator.markSendFailed(cid, MediaLoss.REASON)
+
+        assertThat(harness.database.messageDao().find(cid)!!.lastError).isEqualTo(MediaLoss.REASON)
+        coordinator.retrySend(cid)
+
+        assertThat(harness.database.messageDao().find(cid)).isNull()
+        assertThat(harness.outbox.row(cid)).isNull()
     }
 }

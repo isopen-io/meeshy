@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="user_stats_error">Deine Statistiken konnten nicht aktualisiert werden</string>
+    <string name="user_stats_member_days">%1$d T</string>
+    <string name="user_stats_offline">Offline – das sind deine zuletzt bekannten Statistiken</string>
+</resources>

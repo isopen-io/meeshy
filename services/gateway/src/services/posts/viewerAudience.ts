@@ -15,16 +15,18 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility } from '@meeshy/shared/prisma/client';
 import { buildPostVisibilityOrFilter } from './postVisibility';
 import { getCommunityCoMemberIds } from './communityVisibility';
+import { loadFeedCircles, loadFeedFriendIds } from './feedFriends';
 
 /** Le fragment Prisma `where` qui impose la visibilité d'un post à un viewer. */
 export async function buildViewerVisibilityFilter(prisma: PrismaClient, viewerUserId?: string) {
   if (!viewerUserId) {
     return { visibility: PostVisibility.PUBLIC };
   }
-  const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
-    friendIdsForViewer(prisma, viewerUserId),
+  const [friendIds, dmContactIds, communityCoMemberIds, circles] = await Promise.all([
+    loadFeedFriendIds({ prisma, userId: viewerUserId }),
     directConversationContactIds(prisma, viewerUserId),
     getCommunityCoMemberIds(prisma, viewerUserId),
+    loadFeedCircles({ prisma, userId: viewerUserId }),
   ]);
   const audienceIds = [...new Set([...friendIds, ...dmContactIds])];
   /* LE BLOCAGE N'EST PAS POSÉ ICI, ET C'EST UNE DÉCISION (#7184).
@@ -38,7 +40,7 @@ export async function buildViewerVisibilityFilter(prisma: PrismaClient, viewerUs
      Le blocage des accès unitaires appartient donc à `canUserConsumePost`,
      et c'est un lot à part — nommé dans le commentaire de clôture de #7184
      plutôt que laissé à découvrir. */
-  return buildPostVisibilityOrFilter(viewerUserId, audienceIds, communityCoMemberIds);
+  return buildPostVisibilityOrFilter(viewerUserId, audienceIds, communityCoMemberIds, [], circles);
 }
 
 /**
@@ -64,23 +66,6 @@ export async function directConversationContactIds(prisma: PrismaClient, userId:
       select: { userId: true },
     });
     return [...new Set(otherMembers.map((m) => m.userId).filter(Boolean) as string[])];
-  } catch {
-    return [];
-  }
-}
-
-/** Les amis acceptés du viewer, lui exclu. */
-export async function friendIdsForViewer(prisma: PrismaClient, userId: string): Promise<string[]> {
-  try {
-    const friendRequests = await prisma.friendRequest.findMany({
-      where: {
-        status: 'accepted',
-        OR: [{ senderId: userId }, { receiverId: userId }],
-      },
-      select: { senderId: true, receiverId: true },
-    });
-    return Array.from(new Set(friendRequests.flatMap((fr) => [fr.senderId, fr.receiverId])
-      .filter((id) => id !== userId)));
   } catch {
     return [];
   }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_capture_hint_tap_or_hold">المس لفتح الكاميرا · اضغط مطولًا للتصوير</string>
+    <string name="composer_capture_hint_hold">اضغط مطولًا للتصوير</string>
+    <string name="composer_media_from_camera">التقاط صورة</string>
+    <string name="composer_column_media_crop">اقتصاص</string>
+    <string name="story_viewer_compose">إنشاء</string>
+    <string name="story_recompose_preparing">جارٍ تحضير الوسائط…</string>
+    <string name="story_recompose_unavailable">هذه الوسائط غير متاحة. تحقق من اتصالك ثم أعد المحاولة.</string>
+</resources>

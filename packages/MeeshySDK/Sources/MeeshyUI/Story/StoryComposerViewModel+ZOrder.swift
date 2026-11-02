@@ -65,15 +65,14 @@ extension StoryComposerViewModel {
         return currentEffects.sceneObject(id: id)?.zIndex ?? 0
     }
 
-    /// Promote an element to the front. Persists the value into the slide's effects so
-    /// the order survives slide-switches AND publish (the reader applies the same
-    /// `zIndex` modifier for WYSIWYG playback). Previously the map was in-memory only,
-    /// so re-entering slide N showed elements in array-order with no memory of past
-    /// `bringToFront` actions.
+    /// Promote an element above every rank of the MODEL too — the canvas writes ranks
+    /// through the slide, bypassing this cache (#13918). Persisted into the slide's
+    /// effects so the order survives slide-switches AND publish.
     func bringToFront(id: String) {
-        let z = nextZIndex
+        let plusHaut = currentEffects.sceneObjects.filter { $0.id != id && !$0.isBackground }.map(\.zIndex).max() ?? 0
+        let z = max(nextZIndex, plusHaut + 1)
         zIndexMap[id] = z
-        nextZIndex += 1
+        nextZIndex = z + 1
         persistZIndex(z, for: id)
     }
 

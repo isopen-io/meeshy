@@ -179,7 +179,7 @@ final class StoryCoverURLMemoTests: XCTestCase {
 
     func test_theTrayResolver_noLongerTouchesTheDiskItself() throws {
         let source = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryTrayView.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryTrayView.swift")
         )
         XCTAssertTrue(
             Self.resolverIsMemoized(source),

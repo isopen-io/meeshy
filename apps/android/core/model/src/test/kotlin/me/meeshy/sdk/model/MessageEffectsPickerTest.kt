@@ -82,8 +82,10 @@ class MessageEffectsPickerTest {
         // defines (no orphan bit the user cannot pick), and each option's flag is a
         // single distinct bit (no chip toggling two effects at once).
         val union = MessageEffectOption.entries.fold(0L) { acc, option -> acc or option.flag }
+        // EPHEMERAL_AFTER_READ is not a chip: it rides on EPHEMERAL (the "after reading"
+        // duration choice), so it is the one wire bit the catalog does not own.
         assertThat(union).isEqualTo(
-            MessageEffectFlags.LIFECYCLE_MASK or
+            (MessageEffectFlags.LIFECYCLE_MASK and MessageEffectFlags.EPHEMERAL_AFTER_READ.inv()) or
                 MessageEffectFlags.APPEARANCE_MASK or
                 MessageEffectFlags.PERSISTENT_MASK,
         )

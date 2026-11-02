@@ -7,18 +7,14 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.BorderColor
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FormatAlignCenter
@@ -28,13 +24,12 @@ import androidx.compose.material.icons.filled.FormatColorReset
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Timelapse
-import androidx.compose.material.icons.filled.VerticalAlignBottom
-import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.graphics.vector.ImageVector
 import me.meeshy.ui.theme.hexColor
 import androidx.compose.runtime.Composable
@@ -46,22 +41,20 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
+import me.meeshy.sdk.model.composer.TextEditTool
+import me.meeshy.sdk.model.scene.StoryElementTiming
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.model.scene.StoryTextBackgroundPresets
 
-/** The on-canvas text colour palette — hex (no `#`), [StoryTextElement.DEFAULT_COLOR] first. */
+/** La palette des textes — celle d'iOS `StoryTextColors.palette` (couleur, contour, liseré), hex sans `#`, blanc en tête. */
 internal val STORY_TEXT_COLORS = listOf(
-    StoryTextElement.DEFAULT_COLOR,
-    "000000",
-    "FF3B30",
-    "FF9500",
-    "FFCC00",
-    "34C759",
-    "007AFF",
-    "AF52DE",
-    "FF2D55",
+    StoryTextElement.DEFAULT_COLOR, "000000", "FF2E63", "08D9D6", "F8B500",
+    "9B59B6", "2ECC71", "FF6B6B", "3498DB", "E91E63",
+    "FF7F50", "00CED1", "A855F7", "F59E0B",
 )
 
 internal fun StoryTextStyle.labelRes(): Int = when (this) {
@@ -73,10 +66,12 @@ internal fun StoryTextStyle.labelRes(): Int = when (this) {
 }
 
 /**
- * Styling controls for the [element] currently being edited — the iOS-parity style
- * picker (five faces), the alignment toggle, and the colour swatches. Pure glue: each
- * affordance forwards its choice to a ViewModel intent ([onStyle]/[onColor]/[onAlign])
- * whose logic is unit-tested; selection highlighting reads straight off the element.
+ * Styling controls for the [element] being edited. On the scene-first composer each [section]
+ * is a row of the options panel that replaces the keyboard under the style bar (#13835) — the
+ * bar's OK ends the editing, so no « Terminé » rides in a scrolling row. Without a [section],
+ * the single row of iOS `TextEditFloatingBubbles`, with its « Terminé » when [onDone] is given.
+ * Pure glue: each affordance forwards its choice to a ViewModel intent whose logic is
+ * unit-tested; selection highlighting reads straight off the element.
  */
 @Composable
 internal fun TextStyleToolbar(
@@ -92,136 +87,123 @@ internal fun TextStyleToolbar(
     onCycleStart: () -> Unit,
     onCycleDuration: () -> Unit,
     onDuplicate: () -> Unit,
-    onReorder: (StoryZOrder) -> Unit,
     modifier: Modifier = Modifier,
+    onDone: (() -> Unit)? = null,
+    /** Sur le plateau, la colonne droite range les sections : la rangée ne montre que celle qui est ouverte, sans doublon. */
+    section: ComposerObjectEditorSection? = null,
+    /** Cadre, bordure, langue (#13561, #13534) : servis par la colonne, jamais par la rangée complète d'avant le plateau. */
+    intents: TextSectionIntents = TextSectionIntents(),
 ) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(StoryTextStyle.entries) { style ->
-                FilterChip(
-                    selected = element.style == style,
-                    onClick = { onStyle(style) },
-                    label = { Text(stringResource(style.labelRes())) },
-                )
-            }
-        }
+    if (section != null && section in StackedTextSections) {
+        TextStackedSection(element, section, intents, modifier)
+        return
+    }
+    fun shows(group: ComposerObjectEditorSection?) = section == null || section == group
+    val style = ComposerObjectEditorSection.Tool(TextEditTool.STYLE)
+    val effect = ComposerObjectEditorSection.Tool(TextEditTool.EFFECT)
+    val color = ComposerObjectEditorSection.Tool(TextEditTool.COLOR)
+    val align = ComposerObjectEditorSection.Tool(TextEditTool.ALIGN)
+    val background = ComposerObjectEditorSection.Tool(TextEditTool.BACKGROUND)
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            modifier = Modifier
+                .weight(1f)
+                .horizontalScroll(rememberScrollState()),
         ) {
-            AlignToggle(StoryTextAlign.LEFT, element.align, onAlign)
-            AlignToggle(StoryTextAlign.CENTER, element.align, onAlign)
-            AlignToggle(StoryTextAlign.RIGHT, element.align, onAlign)
-            IconButton(onClick = onCycleSize) {
-                Icon(
-                    Icons.Filled.FormatSize,
-                    contentDescription = stringResource(R.string.stories_composer_size),
-                    tint = if (element.size != StoryTextSize.DEFAULT) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+            if (shows(style)) {
+                StoryTextStyle.entries.forEach { textStyle ->
+                    FilterChip(
+                        selected = element.style == textStyle,
+                        onClick = { onStyle(textStyle) },
+                        label = { Text(stringResource(textStyle.labelRes())) },
+                    )
+                }
             }
-            IconButton(onClick = onCycleOutline) {
-                Icon(
-                    Icons.Filled.BorderColor,
-                    contentDescription = stringResource(R.string.stories_composer_outline),
-                    tint = if (element.outline.isVisible) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+            if (shows(align)) {
+                AlignToggle(StoryTextAlign.LEFT, element.align, onAlign)
+                AlignToggle(StoryTextAlign.CENTER, element.align, onAlign)
+                AlignToggle(StoryTextAlign.RIGHT, element.align, onAlign)
             }
-            IconButton(onClick = onCycleFadeIn) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Login,
-                    contentDescription = stringResource(R.string.stories_composer_fade_in),
-                    tint = if (element.fade.hasFadeIn) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+            if (shows(style)) {
+                CycleButton(Icons.Filled.FormatSize, R.string.stories_composer_size, element.size != StoryTextSize.DEFAULT, onCycleSize)
+                if (section == null) {
+                    CycleButton(Icons.Filled.BorderColor, R.string.stories_composer_outline, element.outline.isVisible, onCycleOutline)
+                }
             }
-            IconButton(onClick = onCycleFadeOut) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Logout,
-                    contentDescription = stringResource(R.string.stories_composer_fade_out),
-                    tint = if (element.fade.hasFadeOut) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+            if (shows(color)) {
+                STORY_TEXT_COLORS.forEach { hex ->
+                    ColorSwatch(hex = hex, selected = element.color.equals(hex, ignoreCase = true), onClick = { onColor(hex) })
+                }
             }
-            IconButton(onClick = onCycleStart) {
-                Icon(
-                    Icons.Filled.Schedule,
-                    contentDescription = stringResource(R.string.stories_composer_timing_start),
-                    tint = if (element.timing.hasStart) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+            if (shows(background)) {
+                StoryTextBackgroundPresets.all.forEach { preset ->
+                    BackgroundSwatch(background = preset, selected = element.background == preset, onClick = { onBackground(preset) })
+                }
             }
-            IconButton(onClick = onCycleDuration) {
-                Icon(
-                    Icons.Filled.Timelapse,
-                    contentDescription = stringResource(R.string.stories_composer_timing_duration),
-                    tint = if (element.timing.isTimed) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+            if (shows(effect)) {
+                CycleButton(Icons.AutoMirrored.Filled.Login, R.string.stories_composer_fade_in, element.fade.hasFadeIn, onCycleFadeIn)
+                CycleButton(Icons.AutoMirrored.Filled.Logout, R.string.stories_composer_fade_out, element.fade.hasFadeOut, onCycleFadeOut)
             }
-            IconButton(onClick = onDuplicate) {
-                Icon(
-                    Icons.Filled.ContentCopy,
-                    contentDescription = stringResource(R.string.stories_composer_duplicate_element),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            if (shows(ComposerObjectEditorSection.Timing)) {
+                TimingCycleButtons(element.timing, onCycleStart, onCycleDuration)
+            }
+            if (section == null) {
+                CycleButton(Icons.Filled.ContentCopy, R.string.stories_composer_duplicate_element, false, onDuplicate)
             }
         }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ZOrderButton(Icons.Filled.VerticalAlignBottom, R.string.stories_composer_zorder_to_back) {
-                onReorder(StoryZOrder.TO_BACK)
-            }
-            ZOrderButton(Icons.Filled.ArrowDownward, R.string.stories_composer_zorder_backward) {
-                onReorder(StoryZOrder.BACKWARD)
-            }
-            ZOrderButton(Icons.Filled.ArrowUpward, R.string.stories_composer_zorder_forward) {
-                onReorder(StoryZOrder.FORWARD)
-            }
-            ZOrderButton(Icons.Filled.VerticalAlignTop, R.string.stories_composer_zorder_to_front) {
-                onReorder(StoryZOrder.TO_FRONT)
+        if (onDone != null) {
+            val doneDescription = stringResource(R.string.stories_composer_text_finish_a11y)
+            TextButton(
+                onClick = onDone,
+                modifier = Modifier.semantics { contentDescription = doneDescription },
+            ) {
+                Text(stringResource(R.string.stories_composer_text_finish))
             }
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(STORY_TEXT_COLORS) { hex ->
-                ColorSwatch(
-                    hex = hex,
-                    selected = element.color.equals(hex, ignoreCase = true),
-                    onClick = { onColor(hex) },
-                )
-            }
-        }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(StoryTextBackgroundPresets.all) { preset ->
-                BackgroundSwatch(
-                    background = preset,
-                    selected = element.background == preset,
-                    onClick = { onBackground(preset) },
-                )
-            }
-        }
+    }
+}
+
+/** La section Temps d'un objet (texte ou sticker, iOS `ComposerObjectEditorRail`) : son départ, puis sa durée. */
+@Composable
+internal fun TimingCycleButtons(timing: StoryElementTiming, onCycleStart: () -> Unit, onCycleDuration: () -> Unit) {
+    CycleButton(
+        Icons.Filled.Schedule, R.string.stories_composer_timing_start, timing.hasStart, onCycleStart,
+        stateDescription = timingSecondsText(timing.startSeconds, timing.hasStart),
+    )
+    CycleButton(
+        Icons.Filled.Timelapse, R.string.stories_composer_timing_duration, timing.isTimed, onCycleDuration,
+        stateDescription = timingSecondsText(timing.durationSeconds, timing.isTimed),
+    )
+}
+
+/** Ce que TalkBack annonce d'un départ ou d'une durée : la valeur en secondes, ou « non défini ». */
+@Composable
+internal fun timingSecondsText(seconds: Float, isSet: Boolean): String {
+    if (!isSet) return stringResource(R.string.stories_composer_timing_unset)
+    val shown = java.text.NumberFormat.getInstance().apply { maximumFractionDigits = 1 }.format(seconds)
+    return stringResource(R.string.stories_composer_timing_value, shown)
+}
+
+/** One cycling attribute of the row: tinted primary while the attribute is set. Glue. */
+@Composable
+internal fun CycleButton(
+    icon: ImageVector,
+    labelRes: Int,
+    active: Boolean,
+    onClick: () -> Unit,
+    stateDescription: String? = null,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = if (stateDescription != null) Modifier.semantics { this.stateDescription = stateDescription } else Modifier,
+    ) {
+        Icon(
+            icon,
+            contentDescription = stringResource(labelRes),
+            tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -286,21 +268,6 @@ internal fun AlignToggle(
             icon,
             contentDescription = stringResource(label),
             tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-internal fun ZOrderButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    labelRes: Int,
-    onClick: () -> Unit,
-) {
-    IconButton(onClick = onClick) {
-        Icon(
-            icon,
-            contentDescription = stringResource(labelRes),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

@@ -16,18 +16,36 @@ internal object ComposerBandTools {
         StoryToolMode.MEDIA,
         StoryToolMode.TEXT,
         StoryToolMode.DRAWING,
+        StoryToolMode.AUDIO,
         StoryToolMode.TEXTURE,
+        StoryToolMode.TIMELINE,
     )
 
     /** The tools of the row, in canonical order. */
     val served: List<StoryToolMode> = StoryToolMode.served(withPanel)
 
     /** Number of elements each tool carries on the selected slide (0 hides the badge). */
-    fun badges(mediaCount: Int, textCount: Int, strokeCount: Int, hasBackground: Boolean): Map<StoryToolMode, Int> =
+    fun badges(
+        mediaCount: Int,
+        textCount: Int,
+        strokeCount: Int,
+        hasBackground: Boolean,
+        soundCount: Int = 0,
+        timedCount: Int = 0,
+    ): Map<StoryToolMode, Int> =
         mapOf(
             StoryToolMode.MEDIA to mediaCount,
             StoryToolMode.TEXT to textCount,
             StoryToolMode.DRAWING to strokeCount,
+            StoryToolMode.AUDIO to soundCount,
             StoryToolMode.TEXTURE to if (hasBackground) 1 else 0,
+            StoryToolMode.TIMELINE to timedCount,
         )
+
+    /**
+     * Whether the open tool's panel is shown over the stage. It steps aside while a text is
+     * edited or a stroke drawn: their settings live in the stage footer, which the panel would
+     * otherwise cover (#12298). The band keeps its open tool, so the panel returns after.
+     */
+    fun showsPanel(isDrawing: Boolean, isEditingText: Boolean): Boolean = !isDrawing && !isEditingText
 }

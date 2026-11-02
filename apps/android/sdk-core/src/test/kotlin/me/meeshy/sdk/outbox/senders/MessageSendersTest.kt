@@ -7,6 +7,10 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.decodeFromString
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.e2ee.InMemoryEndToEndRegimeLedger
+import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.outbox.OutboxLanes
+import me.meeshy.sdk.outbox.OutboxPlaintextAdmission
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.api.EditMessageRequest
@@ -29,7 +33,9 @@ class MessageSendersTest {
     )
     private val serverMessage = ApiMessage(id = "srv-1", conversationId = "c1")
 
-    private fun sendHandler() = SendMessageHandler(messageApi, messageRepository, senderJson)
+    private val ledger = InMemoryEndToEndRegimeLedger()
+
+    private fun sendHandler() = SendMessageHandler(messageApi, messageRepository, senderJson, ledger)
 
     private fun sendRow(payload: String = encodedPayload(sendRequest)) =
         outboxRow(OutboxKind.SEND_MESSAGE, targetId = "c1", payload = payload)
@@ -52,6 +58,32 @@ class MessageSendersTest {
 
         assertThat(result).isEqualTo(SendResult.TransientFailure)
         coVerify(exactly = 0) { messageRepository.reconcileSent(any(), any()) }
+    }
+
+    @Test
+    fun `un clair refuse par la passerelle pour chiffrement de bout en bout scelle la conversation et n'est jamais renvoye`() = runTest {
+        coEvery { messageApi.send(any(), any()) } returns ApiResponse(success = false, error = "chiffree", code = "E2EE_PLAINTEXT_REFUSED")
+
+        val result = sendHandler().send(sendRow())
+
+        assertThat(result).isEqualTo(SendResult.PermanentFailure(OutboxPlaintextAdmission.REASON_END_TO_END))
+        assertThat(ledger.isSealed("c1")).isTrue()
+    }
+
+    @Test
+    fun `une modification en clair refusee pour chiffrement de bout en bout scelle la conversation de sa file`() = runTest {
+        coEvery { messageApi.edit(any(), any()) } returns ApiResponse(success = false, error = "chiffree", code = "E2EE_PLAINTEXT_REFUSED")
+        val row = outboxRow(
+            OutboxKind.EDIT_MESSAGE,
+            targetId = "m1",
+            payload = encodedPayload(EditMessageRequest(content = "corrige")),
+            lane = OutboxLanes.forMessage("c9"),
+        )
+
+        val result = EditMessageHandler(messageApi, senderJson, ledger).send(row)
+
+        assertThat(result).isEqualTo(SendResult.PermanentFailure(OutboxPlaintextAdmission.REASON_END_TO_END))
+        assertThat(ledger.isSealed("c9")).isTrue()
     }
 
     @Test
@@ -111,7 +143,7 @@ class MessageSendersTest {
 
     @Test
     fun `delete message maps an accepted call to success and any failure to retryable`() = runTest {
-        val handler = DeleteMessageHandler(messageApi)
+        val handler = DeleteMessageHandler(messageApi, messageRepository, ledger)
         val row = outboxRow(OutboxKind.DELETE_MESSAGE, targetId = "m1")
 
         coEvery { messageApi.delete("m1") } returns accepted(Unit)
@@ -126,7 +158,7 @@ class MessageSendersTest {
 
     @Test
     fun `pin message sends the conversation id from the payload with the message id as target`() = runTest {
-        val handler = PinMessageHandler(messageApi, messageRepository, senderJson)
+        val handler = PinMessageHandler(messageApi, messageRepository, senderJson, ledger)
         val row = outboxRow(OutboxKind.PIN_MESSAGE, targetId = "m1", payload = encodedPayload(PinPayload("c1")))
 
         coEvery { messageApi.pin("c1", "m1") } returns accepted(Unit)
@@ -138,7 +170,7 @@ class MessageSendersTest {
 
     @Test
     fun `unpin message sends the conversation id from the payload with the message id as target`() = runTest {
-        val handler = UnpinMessageHandler(messageApi, messageRepository, senderJson)
+        val handler = UnpinMessageHandler(messageApi, messageRepository, senderJson, ledger)
         val row = outboxRow(OutboxKind.UNPIN_MESSAGE, targetId = "m1", payload = encodedPayload(PinPayload("c1")))
 
         coEvery { messageApi.unpin("c1", "m1") } returns accepted(Unit)
@@ -150,12 +182,31 @@ class MessageSendersTest {
 
     @Test
     fun `pin and unpin fail permanently on an undecodable payload`() = runTest {
-        val pin = PinMessageHandler(messageApi, messageRepository, senderJson)
-        val unpin = UnpinMessageHandler(messageApi, messageRepository, senderJson)
+        val pin = PinMessageHandler(messageApi, messageRepository, senderJson, ledger)
+        val unpin = UnpinMessageHandler(messageApi, messageRepository, senderJson, ledger)
 
         assertThat(pin.send(outboxRow(OutboxKind.PIN_MESSAGE, payload = "{}")))
             .isInstanceOf(SendResult.PermanentFailure::class.java)
         assertThat(unpin.send(outboxRow(OutboxKind.UNPIN_MESSAGE, payload = "")))
             .isInstanceOf(SendResult.PermanentFailure::class.java)
+    }
+
+    @Test
+    fun `pin, unpin and delete for everyone refused for want of the signal channel are final and seal the conversation`() = runTest {
+        val refusal = ApiResponse<Unit>(success = false, error = "canal de signaux requis", code = "E2EE_SIGNAL_CHANNEL_REQUIRED")
+        coEvery { messageApi.pin(any(), any()) } returns refusal
+        coEvery { messageApi.unpin(any(), any()) } returns refusal
+        coEvery { messageApi.delete(any()) } returns refusal
+        val final = SendResult.PermanentFailure(OutboxPlaintextAdmission.REASON_SIGNAL_CHANNEL_REQUIRED)
+
+        val pinned = PinMessageHandler(messageApi, messageRepository, senderJson, ledger)
+            .send(outboxRow(OutboxKind.PIN_MESSAGE, targetId = "m1", payload = encodedPayload(PinPayload("c-pin"))))
+        val unpinned = UnpinMessageHandler(messageApi, messageRepository, senderJson, ledger)
+            .send(outboxRow(OutboxKind.UNPIN_MESSAGE, targetId = "m1", payload = encodedPayload(PinPayload("c-unpin"))))
+        val deleted = DeleteMessageHandler(messageApi, messageRepository, ledger)
+            .send(outboxRow(OutboxKind.DELETE_MESSAGE, targetId = "m1", lane = OutboxLanes.forMessage("c-delete")))
+
+        assertThat(listOf(pinned, unpinned, deleted)).containsExactly(final, final, final)
+        assertThat(listOf("c-pin", "c-unpin", "c-delete").map(ledger::isSealed)).containsExactly(true, true, true)
     }
 }

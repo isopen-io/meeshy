@@ -17,9 +17,10 @@
  *      chemin navigué autre que `/` résout contre CE chemin (404), et une
  *      balise `<base>` qui le rattraperait casserait au passage toutes les
  *      URL réduites à un fragment (D-27 corrigée en revue, #5812) ;
- *   2. AUCUN service worker n'est émis (`sw.js`, `registerSW.js`) — la coque
- *      gère son propre cycle de vie, deux caches sur le même bundle se
- *      marcheraient dessus ;
+ *   2. AUCUN service worker de BUNDLE n'est émis (`sw.js`, `registerSW.js`) —
+ *      la coque gère son propre cycle de vie, deux caches sur le même bundle
+ *      se marcheraient dessus ; le SEUL worker émis est `sw-recent-media.js`
+ *      (#11326), qui ne touche qu'à l'audio et à la vidéo vus récemment ;
  *   3. `viewport-fit=cover` est présent — sans lui la safe-area basse
  *      (défaut 3a) n'est jamais exposée dans le dist réellement embarqué ;
  *   4. le `theme-color` sombre `#09090b` (la surface, #10005) est présent — sans lui, un flash
@@ -46,6 +47,7 @@ import { INSTITUTIONAL_ROUTES } from './lib/institutional-routes.mjs';
 
 const APP = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const OUT_DIR = 'dist-capacitor';
+const SHELL_RECENT_MEDIA_WORKER = 'sw-recent-media.js';
 const OUT = join(APP, OUT_DIR);
 
 /**
@@ -102,13 +104,25 @@ export function auditShellDist(html, files) {
      recopiait de `public/` dans la variante B — un service worker MORT
      embarqué dans l'APK et l'IPA sous une affirmation contraire. Une clause
      qui énumère des noms garde les noms, pas la propriété. */
-  const serviceWorkerFiles = files.filter((f) =>
-    /(?:^|\/)(?:sw[-.].*\.js|sw\.js|registerSW\.js|.*service-worker.*\.js|workbox-[^/]*\.js)$/.test(f),
+  const serviceWorkerFiles = files.filter(
+    (f) =>
+      /(?:^|\/)(?:sw[-.].*\.js|sw\.js|registerSW\.js|.*service-worker.*\.js|workbox-[^/]*\.js)$/.test(f) &&
+      !f.endsWith(`/${SHELL_RECENT_MEDIA_WORKER}`),
   );
   if (serviceWorkerFiles.length > 0) {
     violations.push(
       `un service worker est émis (${serviceWorkerFiles.join(', ')}) — la coque gère son propre ` +
         'cycle de vie, deux caches sur le même bundle se marcheraient dessus.',
+    );
+  }
+
+  /* LE SEUL WORKER DE LA COQUE (#11326) : celui des médias vus récemment. Il
+     ne précache rien du bundle et ne répond qu'aux requêtes audio et vidéo,
+     depuis le seau que la page remplit — sans lui, un réel vu sur le Wi-Fi
+     ne se relit pas hors ligne dans l'application Android. */
+  if (!files.some((f) => f.endsWith(`/${SHELL_RECENT_MEDIA_WORKER}`))) {
+    violations.push(
+      `${SHELL_RECENT_MEDIA_WORKER} absent — la coque ne resservirait aucun média vu récemment hors ligne (#11326).`,
     );
   }
 
@@ -149,6 +163,34 @@ export function auditShellDist(html, files) {
   }
 
   return violations;
+}
+
+/**
+ * LE RUNTIME CAPACITOR N'EST PAS À LA PREMIÈRE PEINTURE (#13115).
+ *
+ * `@capacitor/core` et `@capacitor/push-notifications` n'ont qu'un importeur,
+ * `lib/push/shell-push-runtime.ts`, chargé par `import()` APRÈS la première
+ * peinture (`main.tsx`). La règle « node_modules ⇒ core » de `manualChunks`
+ * les rangeait pourtant dans `core`, que `index.html` précharge : mesuré,
+ * +7,8 Ko bruts que la coque analysait avant sa première image, et qu'aucun
+ * gate ne voyait (`measure-weight.mjs` ne mesure que le dist web). Les noms de
+ * plugins enregistrés par le runtime sont des chaînes littérales : la
+ * minification les garde, ils signent sa présence.
+ */
+const CAPACITOR_RUNTIME_MARKERS = ['CapacitorCookies', 'PushNotifications'];
+
+export function auditFirstPaintChunks(html, read) {
+  const chunks = [
+    ...html.matchAll(/<script[^>]*\ssrc=["']([^"']+\.js)["']/gi),
+    ...html.matchAll(/<link[^>]*rel=["']modulepreload["'][^>]*href=["']([^"']+\.js)["']/gi),
+  ].map((m) => m[1]);
+  return [...new Set(chunks)]
+    .filter((chunk) => CAPACITOR_RUNTIME_MARKERS.some((marker) => read(chunk).includes(marker)))
+    .map(
+      (chunk) =>
+        `${chunk} porte le runtime Capacitor à la PREMIÈRE PEINTURE — il ne sert qu'au push natif, ` +
+        'chargé par import() après elle : nommer @capacitor/ dans manualChunks (#13115).',
+    );
 }
 
 const MIME = {
@@ -354,7 +396,10 @@ async function main() {
 
   const html = readFileSync(join(OUT, 'index.html'), 'utf8');
   const files = allFiles(OUT).map((f) => f.slice(APP.length + 1));
-  const violations = auditShellDist(html, files);
+  const violations = [
+    ...auditShellDist(html, files),
+    ...auditFirstPaintChunks(html, (chunk) => readFileSync(join(OUT, chunk), 'utf8')),
+  ];
 
   console.log('  navigation directe vers /c/c-deploiement (fil) et /c/zzz-inconnu (refus D-6), repli SPA …');
   violations.push(...(await auditDeepLink(OUT)));
@@ -375,7 +420,7 @@ async function main() {
 
   console.log(
     `  ${OUT_DIR}/ honore le contrat de la variante B : base root-absolue sans balise <base>, ` +
-      'sans service worker, ' +
+      'sans service worker de bundle (le seul : sw-recent-media.js), ' +
       'viewport-fit=cover, theme-color #09090b ; lien profond /c/c-deploiement monte le fil, ' +
       '/c/zzz-inconnu rend le refus (D-6).',
   );

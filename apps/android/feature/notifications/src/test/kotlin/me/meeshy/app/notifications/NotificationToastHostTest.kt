@@ -3,6 +3,7 @@ package me.meeshy.app.notifications
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.NotificationActor
+import me.meeshy.sdk.model.NotificationBannerAvatar
 import me.meeshy.sdk.model.NotificationContext
 import org.junit.Test
 
@@ -55,5 +56,32 @@ class NotificationToastHostTest {
     @Test
     fun subtitle_isEmpty_whenNothingToShow() {
         assertThat(notificationToastSubtitle(ApiNotification(id = "n1"))).isEmpty()
+    }
+
+    @Test
+    fun avatar_inADirect_neverBorrowsTheConversationPhoto() {
+        val notification = ApiNotification(
+            id = "n1",
+            actor = NotificationActor(id = "u1", username = "alice", displayName = "Alice A."),
+            context = NotificationContext(conversationType = "direct", conversationAvatar = "legacy.png"),
+        )
+
+        assertThat(notificationToastAvatar(notification)).isEqualTo(NotificationBannerAvatar(name = "Alice A.", url = null))
+    }
+
+    @Test
+    fun avatar_inAGroup_fallsBackToTheGroupPhotoUnderTheGroupInitials() {
+        val notification = ApiNotification(
+            id = "n1",
+            actor = NotificationActor(id = "u1", username = "alice", displayName = "Alice A."),
+            context = NotificationContext(
+                conversationType = "group",
+                conversationTitle = "Team",
+                conversationAvatar = "2026/09/g/photo.png",
+            ),
+        )
+
+        assertThat(notificationToastAvatar(notification))
+            .isEqualTo(NotificationBannerAvatar(name = "Team", url = "2026/09/g/photo.png"))
     }
 }

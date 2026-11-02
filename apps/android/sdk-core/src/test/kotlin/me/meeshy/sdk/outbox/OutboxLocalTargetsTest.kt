@@ -88,6 +88,8 @@ class OutboxLocalTargetsTest {
             OutboxKind.UNBLOCK_USER,
             OutboxKind.SEND_FRIEND_REQUEST,
             OutboxKind.RESPOND_FRIEND_REQUEST,
+            OutboxKind.CONSUME_AFTER_READ,
+            OutboxKind.CONSUME_VIEW_ONCE,
         )
         val notAddressed = listOf(
             OutboxKind.SEND_MESSAGE,

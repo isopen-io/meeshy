@@ -7,6 +7,7 @@ const f = {
   'admin.analytics.tab.activity': 'Activity',
   'admin.analytics.tab.messages': 'Messages',
   'admin.analytics.tab.calls': 'Calls',
+  'admin.analytics.tab.playback': 'Playback',
   'admin.analytics.window.note': 'Period: {window}',
   'admin.analytics.window.24h': 'last 24 hours',
   'admin.analytics.window.7d': 'last 7 days',

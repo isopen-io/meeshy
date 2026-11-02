@@ -2,7 +2,7 @@
 
 **Base** : `main` HEAD `612872b`
 **Branche** : `claude/laughing-thompson-ks1h8d`
-**Fichier** : `apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift` (1 fichier)
+**Fichier** : `apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift` (1 fichier)
 
 ## Objectif
 Éradiquer la couleur figée hors-marque `#8B5CF6` (violet) de l'écran de connexion par

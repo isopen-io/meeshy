@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "settings.section.account",
+          "androidName": "settings_section_account",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.section.tools",
+          "androidName": "settings_section_tools",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.section.help",
+          "androidName": "settings_section_help",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.title",
+          "androidName": "settings_security",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notif.sounds",
+          "androidName": "settings_notif_sounds",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notif.vibrations",
+          "androidName": "settings_notif_vibrations",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notif.more_options",
+          "androidName": "settings_notif_more_options",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.storage",
+          "androidName": "settings_storage",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.help_center",
+          "androidName": "settings_help_center",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.about.meeshy",
+          "androidName": "settings_about_meeshy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.version",
+          "androidName": "settings_version_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.title",
+          "androidName": "settings_privacy_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.interface_language",
+          "androidName": "settings_interface_language",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.interface_language.automatic",
+          "androidName": "settings_interface_language_automatic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.title",
+          "androidName": "settings_notifications_title",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

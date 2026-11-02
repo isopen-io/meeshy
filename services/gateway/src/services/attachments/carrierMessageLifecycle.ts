@@ -62,6 +62,7 @@
  * d'appel évite un `as` chez chaque surface qui l'utilise.
  */
 import type { Prisma } from '@meeshy/shared/prisma/client';
+import { unsetOrNull } from '../../utils/prisma-unset';
 
 /** Les deux seules colonnes qui décident si un message rend encore ses octets. */
 export interface CarrierMessageLifecycle {
@@ -72,7 +73,26 @@ export interface CarrierMessageLifecycle {
   readonly expiresAt?: Date | string | null;
   /** Échéance de purge d'une vue unique (#7578) — sa colonne à elle. */
   readonly viewOnceBurnAt?: Date | string | null;
+  /**
+   * #11269 — la purge d'une vue unique a eu lieu. Un FAIT, comme `deletedAt` :
+   * l'ancienne purge remettait l'échéance à `null` même quand une pièce
+   * résistait, et la ligne survivante redevenait lisible par la seule loi des
+   * échéances.
+   */
+  readonly viewOnceBurnedAt?: Date | string | null;
 }
+
+/**
+ * Les colonnes que la loi lit, à joindre au `select` de chaque surface qui
+ * l'applique sur un message chargé. Une colonne oubliée dans un `select` se lit
+ * `undefined`, donc « pas d'échéance » : la loi s'ouvrirait en silence.
+ */
+export const CARRIER_LIFECYCLE_SELECT = {
+  deletedAt: true,
+  expiresAt: true,
+  viewOnceBurnAt: true,
+  viewOnceBurnedAt: true,
+} as const satisfies Prisma.MessageSelect;
 
 /**
  * Les colonnes d'ÉCHÉANCE de la loi, déclarées une fois.
@@ -114,6 +134,7 @@ export function carrierMessageStillServesBytes(
 ): boolean {
   if (!message) return false;
   if (message.deletedAt) return false;
+  if (message.viewOnceBurnedAt) return false;
 
   return !deadlinePassed(message.expiresAt, now) && !deadlinePassed(message.viewOnceBurnAt, now);
 }
@@ -143,8 +164,11 @@ export function carrierMessageStillServesBytes(
 export function carrierMessageStillServesWhere(now: Date): Prisma.MessageWhereInput {
   return {
     deletedAt: null,
-    AND: CARRIER_DEADLINE_COLUMNS.map((column) => ({
-      OR: [{ [column]: null }, { [column]: { gt: now } }],
-    })),
+    AND: [
+      ...CARRIER_DEADLINE_COLUMNS.map((column) => ({
+        OR: [{ [column]: null }, { [column]: { gt: now } }],
+      })),
+      unsetOrNull('viewOnceBurnedAt'),
+    ],
   };
 }

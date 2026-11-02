@@ -19,8 +19,9 @@ internal fun NavGraphBuilder.callNavGraph(
 ) {
     composable(Routes.CALLS) {
         CallHistoryScreen(
-            onOpenCall = { record ->
-                navController.navigate(CallRoute.redial(record))
+            onBack = { navController.popBackStack() },
+            onRedial = { record, isVideo ->
+                navController.navigate(CallRoute.redial(record, isVideo))
             },
         )
     }
@@ -33,6 +34,7 @@ internal fun NavGraphBuilder.callNavGraph(
             navArgument(CallRoute.CALL_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
             navArgument(CallRoute.INCOMING_ARG) { type = NavType.BoolType; defaultValue = false },
             navArgument(CallRoute.ANSWER_ARG) { type = NavType.BoolType; defaultValue = false },
+            navArgument(CallRoute.PEER_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
         ),
     ) { entry ->
         val args = entry.arguments
@@ -43,6 +45,7 @@ internal fun NavGraphBuilder.callNavGraph(
                 isVideo = args?.getBoolean(CallRoute.VIDEO_ARG),
                 callId = args?.getString(CallRoute.CALL_ID_ARG)?.let(Uri::decode),
                 incoming = args?.getBoolean(CallRoute.INCOMING_ARG) ?: false,
+                peerId = args?.getString(CallRoute.PEER_ID_ARG)?.let(Uri::decode),
             ),
             autoAnswer = args?.getBoolean(CallRoute.ANSWER_ARG) ?: false,
             // Activity-scoped instance (see the hoist above) → the CALL
@@ -53,7 +56,7 @@ internal fun NavGraphBuilder.callNavGraph(
             // CALL entry (inclusive) so the back stack never accumulates stale
             // call screens that a Back press could re-enter (and re-initiate).
             onMinimize = {
-                navController.navigate(Routes.chat(callViewModel.activeConfig.conversationId)) {
+                navController.navigate(CallRoute.minimize(callViewModel.activeConfig.conversationId)) {
                     popUpTo(CallRoute.PATTERN) { inclusive = true }
                     launchSingleTop = true
                 }

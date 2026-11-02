@@ -14,6 +14,23 @@ import me.meeshy.ui.component.bubble.PostLanguageStrip
  * by [CommentProjection] so the resolution stays unit-testable and the Compose layer
  * stays dumb.
  */
+/**
+ * Un média d'un commentaire : sa vignette (absente pour une vidéo sans image d'aperçu), sa nature, et ce que le plein écran
+ * et l'export en lisent (#13915) — le fichier entier, ses dimensions et sa durée servies.
+ */
+@Immutable
+data class CommentMediaPreview(
+    val id: String,
+    val thumbnailUrl: String?,
+    val isVideo: Boolean,
+    val url: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val durationMillis: Int? = null,
+    /** Un commentaire vocal (#14265) : il s'écoute dans le fil, il ne s'ouvre pas en plein écran. */
+    val isAudio: Boolean = false,
+)
+
 @Immutable
 data class CommentPresentation(
     val id: String,
@@ -30,7 +47,23 @@ data class CommentPresentation(
     val isReply: Boolean,
     val isPending: Boolean,
     val isOwn: Boolean,
-)
+    val depth: Int = 0,
+    /** Les médias joints au commentaire (#12972), dans leur ordre. */
+    val media: List<CommentMediaPreview> = emptyList(),
+    /** Le compte de l'auteur : sa présence servie se lit sur la carte unique. */
+    val authorId: String? = null,
+) {
+    /** Un commentaire sans texte (un vocal, une photo seule) ne rend aucun corps : pas de ligne vide sous l'auteur (#14289). */
+    val hasBody: Boolean get() = content.isNotBlank()
+
+    /**
+     * Libellé TalkBack d'une ligne — iso `ReplyCell.accessibilityLabel` : « <nom>, réponse. <contenu>.
+     * <heure> ». [format] est le gabarit localisé à trois arguments positionnels ; [unknownAuthor]
+     * remplace un nom absent.
+     */
+    fun accessibilityLabel(format: String, time: String, unknownAuthor: String): String =
+        String.format(format, authorName ?: unknownAuthor, content, time)
+}
 
 object CommentProjection {
 
@@ -57,6 +90,7 @@ object CommentProjection {
         likeState: CommentLikeState = CommentLikeState(),
         activeLanguageCode: String? = null,
         currentUserId: String? = null,
+        depth: Int = 0,
     ): CommentPresentation {
         val originalCode = comment.originalLanguage.normalizedCode()
         val isTranslated = comment.isTranslated(preferences)
@@ -64,6 +98,7 @@ object CommentProjection {
         val activeIsOriginal = activeCode == null || activeCode == originalCode
         return CommentPresentation(
             id = comment.id,
+            authorId = comment.author?.id?.takeIf { it.isNotBlank() },
             authorName = (comment.author?.displayName ?: comment.author?.username)
                 ?.takeIf { it.isNotBlank() },
             authorAvatarUrl = comment.author?.avatar
@@ -87,8 +122,27 @@ object CommentProjection {
             isReply = !comment.parentId.isNullOrBlank(),
             isPending = isPending,
             isOwn = currentUserId != null && comment.author?.id == currentUserId,
+            depth = depth,
+            media = mediaPreviews(comment, mediaBaseUrl),
         )
     }
+
+    private fun mediaPreviews(comment: ApiPostComment, mediaBaseUrl: String?): List<CommentMediaPreview> =
+        comment.media.orEmpty().sortedBy { it.order ?: 0 }.map { media ->
+            val isVideo = media.mimeType?.startsWith("video") == true
+            val isAudio = media.mimeType?.startsWith("audio") == true
+            val still = if (isAudio) null else media.thumbnailUrl?.takeIf { it.isNotBlank() } ?: media.fileUrl?.takeIf { it.isNotBlank() && !isVideo }
+            CommentMediaPreview(
+                id = media.id,
+                thumbnailUrl = still?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
+                isVideo = isVideo,
+                isAudio = isAudio,
+                url = media.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
+                width = media.width,
+                height = media.height,
+                durationMillis = media.duration,
+            )
+        }
 
     /**
      * The effective displayed language for [comment]: the viewer's [override] when it

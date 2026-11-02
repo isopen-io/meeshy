@@ -53,7 +53,7 @@ extension StoryComposerView {
     /// Le TEXTE y entre en même temps que `StoryPastedItem.text` : l'accepter
     /// sans savoir le poser aurait rendu la capsule active devant un
     /// presse-papier qu'elle ne sait pas servir — pire que de ne pas l'accepter.
-    nonisolated static let pasteStarterContentTypes: [UTType] = [
+    nonisolated public static let pasteStarterContentTypes: [UTType] = [
         .image, .movie, .audio, .plainText, .utf8PlainText
     ]
 

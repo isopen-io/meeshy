@@ -27,6 +27,14 @@ class MediaUrlResolverTest {
     }
 
     @Test
+    fun `un fichier de l appareil reste tel quel — jamais une cle de stockage servie par la passerelle (#14378)`() {
+        assertThat(resolveMediaUrl("file:///data/user/0/me.meeshy.app/cache/s.png", base))
+            .isEqualTo("file:///data/user/0/me.meeshy.app/cache/s.png")
+        assertThat(resolveMediaUrl("content://me.meeshy.app.files/s.png", base))
+            .isEqualTo("content://me.meeshy.app.files/s.png")
+    }
+
+    @Test
     fun `une barre finale sur la base ne se double pas`() {
         assertThat(resolveMediaUrl("2025/10/id/photo.png", "https://gate.meeshy.me/api/v1/"))
             .isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/2025/10/id/photo.png")
@@ -145,6 +153,6 @@ class MediaUrlResolverTest {
 
     @Test
     fun `un environnement local accepte les plages privees`() {
-        assertThat(resolveSafeMediaUrl("http://192.168.1.2:3000/a.png", "http://192.168.1.2:3000/api/v1")).isNotNull()
+        assertThat(resolveSafeMediaUrl("https://192.168.1.2:3000/a.png", "http://192.168.1.2:3000/api/v1")).isNotNull()
     }
 }

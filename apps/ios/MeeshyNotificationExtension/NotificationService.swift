@@ -7,7 +7,6 @@ import Intents
 // No AppIntents.framework dependency found. ». L'import le fait passer en scan
 // bénin (« no relevant symbols »). Cette NSE ne définit aucun App Intent.
 import AppIntents
-import GRDB
 import MeeshySDK
 
 /// Rich-push service extension.
@@ -58,29 +57,84 @@ class NotificationService: UNNotificationServiceExtension {
     // MARK: - Pipeline
 
     private func prepareBestAttempt(_ content: UNMutableNotificationContent) {
-        applyCategory(to: content)
-        applyBadge(to: content)
-        applyThreading(to: content)
-        // Préférences de notification (miroir App Group) — APRÈS applyBadge et
-        // applyThreading pour que sons/badge/regroupement coupés gagnent, et
-        // avant tout chemin de sortie (contentHandler / expiration).
-        NSEPreferencesGate.apply(
-            preferences: NSEPreferencesGate.loadPreferences() ?? .defaults,
-            to: content,
-            rawType: content.userInfo["type"] as? String
+        let lock = Self.conversationLock(content.userInfo)
+        // #11387 — l'ORDRE est une loi pure (`NSEPreparationStep.plan`) : une
+        // conversation verrouillée, ou dont le verrou est inconnu (#12655), est
+        // scellée avant toute décision, ne dépose rien de son message, et son
+        // corps est remplacé en dernier.
+        for step in NSEPreparationStep.plan(for: lock) {
+            perform(step, on: content, lock: lock)
+        }
+    }
+
+    private func perform(_ step: NSEPreparationStep, on content: UNMutableNotificationContent, lock: NSEConversationLock) {
+        switch step {
+        case .sealLockedConversation:
+            content.userInfo = NSEAttachmentPolicy.sealingLockedConversation(content.userInfo, isLocked: true)
+        case .applyCategory:
+            applyCategory(to: content)
+            // #12655 — verrouillée, scellée ou inconnue : aucune action rapide.
+            content.categoryIdentifier = NSEAttachmentPolicy.category(
+                content.categoryIdentifier, under: lock, userInfo: content.userInfo
+            )
+        case .applyBadge:
+            applyBadge(to: content)
+        case .applyThreading:
+            applyThreading(to: content)
+        case .applyPreferences:
+            // Préférences de notification (miroir App Group) — APRÈS applyBadge et
+            // applyThreading pour que sons/badge/regroupement coupés gagnent, et
+            // avant tout chemin de sortie (contentHandler / expiration).
+            NSEPreferencesGate.apply(
+                preferences: NSEPreferencesGate.loadPreferences() ?? .defaults,
+                to: content,
+                rawType: content.userInfo["type"] as? String
+            )
+        case .updateUnreadCount:
+            updateSharedUnreadCount(from: content.userInfo)
+        case .syncMessage:
+            prefetchMessageData(from: content.userInfo)
+        case .prefetchSocial:
+            prefetchSocialData(from: content.userInfo)
+        case .prePersistMessage:
+            NSEMessagePrePersister.prePersist(from: content.userInfo)
+        case .postDeliveryReceipt:
+            postDeliveryReceipt(from: content.userInfo)
+        case .rewriteBody:
+            applyBodyRewrites(to: content)
+        case .applyEphemeralDeadline:
+            // #7453 — L'ÉCHÉANCE, pas une durée figée : une HEURE ne se périme pas,
+            // et elle est aussi GRAVÉE dans le `userInfo` où les balayages la lisent.
+            applyEphemeralDeadline(to: content)
+        case .sweepExpiredBanners:
+            // Une NSE s'exécute à chaque push reçu : l'occasion la plus fréquente
+            // de retirer les bannières dont l'échéance est passée.
+            Self.sweepExpiredDeliveredBanners()
+        case .replaceBodyWithLockLabel:
+            content.body = NSLocalizedString(
+                NSEAttachmentPolicy.lockedConversationLocKey,
+                bundle: InterfaceLanguageResolver.bundle(),
+                comment: ""
+            )
+        }
+    }
+
+    /// La conversation est-elle verrouillée par PIN sur cet appareil ? Le
+    /// fichier miroir que l'app dépose dans le groupe d'apps fait foi (#11387),
+    /// lu en UNE fois : s'ouvrir est son signal, son contenu la donnée
+    /// (#12655). Le cliché `conversation_snapshots` et la clé de renfort ne
+    /// peuvent qu'ajouter un verrou.
+    private static func conversationLock(_ userInfo: [AnyHashable: Any]) -> NSEConversationLock {
+        let suiteName = "group.me.meeshy.apps"
+        let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: suiteName)
+        return NSELockedConversationMirror.conversationLock(
+            conversationId: userInfo["conversationId"] as? String,
+            readFile: { NSELockedConversationMirror.readFile(at: NSELockedConversationMirror.fileURL(inContainer: container)) },
+            readLegacyKey: {
+                UserDefaults(suiteName: suiteName)?.stringArray(forKey: NSELockedConversationMirror.legacyDefaultsKey)
+            },
+            snapshotDeclaresLock: { NSEDataSync.conversationDetails(forId: $0)?.isLocked ?? false }
         )
-        updateSharedUnreadCount(from: content.userInfo)
-        prefetchMessageData(from: content.userInfo)
-        prefetchSocialData(from: content.userInfo)
-        NSEMessagePrePersister.prePersist(from: content.userInfo)
-        postDeliveryReceipt(from: content.userInfo)
-        applyBodyRewrites(to: content)
-        // #7453 — L'ÉCHÉANCE, pas une durée figée : une HEURE ne se périme pas,
-        // et elle est aussi GRAVÉE dans le `userInfo` où les balayages la lisent.
-        applyEphemeralDeadline(to: content)
-        // Une NSE s'exécute à chaque push reçu : l'occasion la plus fréquente
-        // de retirer les bannières dont l'échéance est passée.
-        Self.sweepExpiredDeliveredBanners()
     }
 
     private func applyBodyRewrites(to content: UNMutableNotificationContent) {
@@ -659,6 +713,7 @@ class NotificationService: UNNotificationServiceExtension {
             if normalized.contains("gif") { return ("gif", "com.compuserve.gif") }
             if normalized.contains("webp") { return ("webp", "org.webmproject.webp") }
             if normalized.contains("heic") { return ("heic", "public.heic") }
+            if normalized.contains("heif") { return ("heif", "public.heif") }
             return ("jpg", "public.jpeg")
         }
         if normalized.hasPrefix("audio/") {

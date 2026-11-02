@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "presence.lastSeen.minutes",
+          "androidName": "presence_lastSeen_minutes",
+          "kind": "plurals",
+          "fillMissingQuantities": true,
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "presence.lastSeen.hours",
+          "androidName": "presence_lastSeen_hours",
+          "kind": "plurals",
+          "fillMissingQuantities": true,
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "presence.lastSeen.days",
+          "androidName": "presence_lastSeen_days",
+          "kind": "plurals",
+          "fillMissingQuantities": true,
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

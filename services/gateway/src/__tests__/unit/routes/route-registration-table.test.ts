@@ -245,7 +245,36 @@ describe('ROUTE_TABLE (#4278)', () => {
     // la bannière, vendu en boutique sous `/api/v1/packs/banner-frame`, monté
     // par le même `appearancePacksPlugin`). Aucun alias, aucune route retirée
     // ni renommée.
-    expect(ROUTE_TABLE.length).toBe(89);
+    // 90 : #11271 ajoute `packs-lens` (les lens des partenaires sous
+    // `/api/v1/packs/lens` : proposer, modérer, installer). Aucun alias, aucune
+    // route retirée ni renommée.
+    // 91 : #11275 ajoute `admin-packs-registry` (`/api/v1/admin/packs/registry`,
+    // les surcharges du registre des packs sans déploiement). Aucun alias.
+    // 92 : #3706 ajoute `e2ee` (l'annuaire E2EE par appareil et le relais
+    // d'enveloppes sous `/api/v1/e2ee`). `/signal/*` reste monté, inchangé.
+    // 93 : #10169 (LC) ajoute `packs-capture-frame` — les douze ambiances de
+    // cadres de capture sous `/api/v1/packs/capture-frame`, sur le MÊME moteur
+    // (un montage par domaine). Aucun alias, aucune route retirée ni renommée ;
+    // le manifeste gagne exactement les cinq routes de la fabrique (GET /,
+    // GET /installed, GET /:slug, PUT et DELETE /:slug/install).
+    // 94 : #13142 ajoute `e2ee-signals` — la route unique des signaux chiffrés
+    // d'une conversation e2ee (`POST /api/v1/e2ee/conversations/:id/signals`).
+    // Aucun alias, aucune route retirée ni renommée ; le manifeste gagne
+    // exactement cette route.
+    // 96 : #13998 ajoute `relations-level` — le niveau EFFECTIF du lien avec une
+    // personne (`GET /api/v1/relations/:userId`). Aucun alias, aucune route
+    // retirée ni renommée ; le manifeste gagne exactement cette route.
+    //     #13933 ajoute `relations` — les cercles (`/api/v1/relations` : lecture, baisse
+    // silencieuse, rituel du Sang). Aucun alias, aucune route retirée ni renommée ; le
+    // manifeste gagne exactement les quatre routes de ce montage (le GET /:userId reste celui de #13998).
+    // 97 : #11327 ajoute `lens` — les partenaires des lens, leurs crédits et
+    // l'usage k-anonyme sous `/api/v1/lens` (distinct de `/packs/lens`, dont les
+    // chemins statiques masqueraient des slugs). Aucun alias, aucune route
+    // retirée ni renommée ; le manifeste gagne exactement ses neuf routes.
+    // 98 : #13936 ajoute `bring` — le Bring (`/api/v1/bring` : disponibilité, envoi,
+    // arrêt). Aucun alias, aucune route retirée ni renommée ; le manifeste gagne ses trois
+    // routes, et le montage `relations` les deux du réglage par personne (`/:userId/settings`).
+    expect(ROUTE_TABLE.length).toBe(98);
   });
 });
 

@@ -35,12 +35,18 @@ class CategoryRepositoryTest {
         var response: ApiResponse<List<ApiCategory>>,
         var createResponse: ApiResponse<ApiCategory> = ApiResponse(success = false, error = "not stubbed"),
     ) : PreferencesApi {
+        override suspend fun updateAudio(body: me.meeshy.sdk.model.AudioPreferenceSyncBody) = ApiResponse<Unit>(success = false)
+
+        override suspend fun getAudio() = ApiResponse<me.meeshy.sdk.model.AudioPreferenceSyncBody>(success = false)
+
         var calls: Int = 0
         var createCalls: Int = 0
         var lastCreateBody: CreateCategoryBody? = null
+        var lastLimit: Int? = null
 
         override suspend fun getCategories(limit: Int?): ApiResponse<List<ApiCategory>> {
             calls++
+            lastLimit = limit
             return response
         }
 
@@ -99,6 +105,17 @@ class CategoryRepositoryTest {
             CategoryOption(id = "fam", name = "Family", order = 0),
         ).inOrder()
         assertThat(source.lastSyncedAt().first()).isEqualTo(4_242L)
+    }
+
+    @Test
+    fun `revalidate asks for a page the gateway accepts, never above its maximum of 100`() = runTest {
+        val api = FakePreferencesApi(ok(wire("work", "Work", order = 0)))
+        val source = CategoryCacheSource(InMemoryCategorySnapshotStore(), api, FixedClock(1L))
+
+        source.revalidate()
+
+        assertThat(api.lastLimit).isNotNull()
+        assertThat(api.lastLimit!!).isAtMost(100)
     }
 
     @Test

@@ -30,7 +30,6 @@
     <string name="conversations_delete_for_all_confirm_message">„%1$s“ wird für alle Teilnehmenden geschlossen. Niemand kann mehr schreiben.</string>
     <string name="new_conversation_search_hint">Personen suchen</string>
     <string name="share_link_field_slug">Eigener URL-Slug (optional)</string>
-    <string name="share_link_access_birthday">Geburtsdatum erforderlich</string>
     <string name="share_link_field_max_uses">Maximale Nutzungen</string>
     <string name="share_link_created_title">Link erstellt</string>
     <string name="share_link_created_subtitle">Teile ihn, um Personen zur Unterhaltung einzuladen.</string>
@@ -52,7 +51,9 @@
     <string name="conversations_no_results">Keine passenden Unterhaltungen</string>
     <string name="conversations_open_global_search">Globale Suche</string>
     <string name="conversations_section_all">Meine Unterhaltungen</string>
+    <string name="conversations_section_pinned">Angeheftet</string>
     <string name="dashboard_action_search">Globale Suche</string>
     <string name="global_search_empty_subtitle">Nachrichten, Unterhaltungen, Benutzer</string>
     <string name="global_search_hint">Überall suchen…</string>
+    <string name="new_conversation_error_blocked">Du kannst mit diesem Benutzer keine Unterhaltung beginnen.</string>
 </resources>

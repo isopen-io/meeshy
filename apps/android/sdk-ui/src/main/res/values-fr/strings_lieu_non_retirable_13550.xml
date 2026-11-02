@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_failed_location_refused">Non envoyé : le lieu de ce fichier n\'a pas pu être retiré. Touchez pour le retirer, puis choisissez un autre fichier.</string>
+    <string name="bubble_failed_location_remove">Retirer ce message non envoyé</string>
+</resources>

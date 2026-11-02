@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_preview_sound_on">تشغيل الصوت</string>
+    <string name="call_preview_sound_off">كتم الصوت</string>
+    <string name="call_preview_sound_hint">استمع إلى المتصل قبل الرد</string>
+    <string name="call_preview_seen_by">%1$s يراك قبل الرد</string>
+    <string name="call_preview_heard_by">%1$s يسمعك قبل الرد</string>
+    <string name="call_preview_heard_and_seen_by">%1$s يسمعك ويراك قبل الرد</string>
+    <string name="call_preview_mic_a11y">الميكروفون قبل الرد</string>
+    <string name="call_preview_mic_hint">يحدد ما إذا كان %1$s يسمعك قبل الرد</string>
+    <string name="call_preview_camera_a11y">الكاميرا قبل الرد</string>
+    <string name="call_preview_camera_hint">يحدد ما إذا كان %1$s يراك قبل الرد</string>
+</resources>

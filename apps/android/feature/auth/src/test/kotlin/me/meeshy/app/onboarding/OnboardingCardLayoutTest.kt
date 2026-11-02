@@ -24,7 +24,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], qualifiers = "w411dp-h891dp")
 class OnboardingCardLayoutTest {
 
     @get:Rule
@@ -90,7 +90,7 @@ class OnboardingCardLayoutTest {
     fun `une carte qui tient montre son illustration, son titre et ses deux boutons`() {
         show(heightDp = 460)
 
-        compose.onNodeWithTag("illustration").assertIsDisplayed()
+        compose.onNodeWithTag("illustration", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Title").assertIsDisplayed()
         compose.onNodeWithText("Message").assertIsDisplayed()
         compose.onNodeWithTag("primary").assertIsDisplayed()
@@ -101,7 +101,7 @@ class OnboardingCardLayoutTest {
     fun `l'illustration decorative cede la place quand l'ecran est court`() {
         show(heightDp = 260)
 
-        compose.onNodeWithTag("illustration").assertDoesNotExist()
+        compose.onNodeWithTag("illustration", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithText("Title").assertExists()
         compose.onNodeWithTag("primary").assertIsDisplayed()
     }

@@ -71,6 +71,10 @@ const KOTLIN_PALETTE_SOURCE = join(
   __dirname,
   '../../../apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/theme/MeeshyPalette.kt'
 );
+const KOTLIN_GENERATED_PALETTE_SOURCE = join(
+  __dirname,
+  '../../../apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/theme/MeeshyPaletteGenerated.kt'
+);
 const KOTLIN_AVATAR_SOURCE = join(
   __dirname,
   '../../../apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/MeeshyAvatar.kt'
@@ -114,16 +118,24 @@ function swiftColorHex(source: string, name: string): string {
   return canon(match[1]);
 }
 
-/** Littéral `val Name = Color(0xFFRRGGBB)` d'Android (ARGB, alpha `FF`). */
-function kotlinColorHex(source: string, name: string): string {
-  const pattern = new RegExp(`val ${name}\\s*=\\s*Color\\(0x[Ff]{2}([0-9A-Fa-f]{6})\\)`);
-  const match = source.match(pattern);
-  if (!match) {
+/**
+ * Hex d'Android pour `MeeshyPalette.Name` : soit le littéral `val Name = Color(0xFFRRGGBB)`
+ * de la palette, soit — depuis que la palette est générée depuis `MeeshyColors.swift` —
+ * l'alias `val Name = MeeshyPaletteGenerated.Other`, suivi jusqu'à son littéral.
+ */
+function kotlinColorHex(palette: string, generated: string, name: string): string {
+  const literal = (source: string, token: string) =>
+    source.match(
+      new RegExp(`val ${token}\\s*(?::\\s*Color\\s*)?=\\s*Color\\(0x[Ff]{2}([0-9A-Fa-f]{6})\\)`)
+    )?.[1];
+  const alias = palette.match(new RegExp(`val ${name}\\s*=\\s*MeeshyPaletteGenerated\\.(\\w+)\\b`))?.[1];
+  const hex = literal(palette, name) ?? (alias === undefined ? undefined : literal(generated, alias));
+  if (!hex) {
     throw new Error(
       `Couleur Kotlin \`MeeshyPalette.${name}\` introuvable — la déclaration a-t-elle changé de forme ?`
     );
   }
-  return canon(match[1]);
+  return canon(hex);
 }
 
 /**
@@ -181,6 +193,7 @@ describe('palette de présence 1/3/5 — TS, Swift et Kotlin ne peuvent pas dive
   const swiftColors = readFileSync(SWIFT_COLORS_SOURCE, 'utf8');
   const swiftStyle = readFileSync(SWIFT_STYLE_SOURCE, 'utf8');
   const kotlinPalette = readFileSync(KOTLIN_PALETTE_SOURCE, 'utf8');
+  const kotlinGeneratedPalette = readFileSync(KOTLIN_GENERATED_PALETTE_SOURCE, 'utf8');
   const kotlinAvatar = readFileSync(KOTLIN_AVATAR_SOURCE, 'utf8');
 
   it('les couleurs TS sont bien la palette produit 1/3/5 (contre-épreuve)', () => {
@@ -204,9 +217,9 @@ describe('palette de présence 1/3/5 — TS, Swift et Kotlin ne peuvent pas dive
 
   it('Android MeeshyPalette applique exactement les hex de référence', () => {
     expect({
-      success: kotlinColorHex(kotlinPalette, 'Success'),
-      warning: kotlinColorHex(kotlinPalette, 'Warning'),
-      muted: kotlinColorHex(kotlinPalette, 'Neutral400'),
+      success: kotlinColorHex(kotlinPalette, kotlinGeneratedPalette, 'Success'),
+      warning: kotlinColorHex(kotlinPalette, kotlinGeneratedPalette, 'Warning'),
+      muted: kotlinColorHex(kotlinPalette, kotlinGeneratedPalette, 'Neutral400'),
     }).toEqual(TS_TONE_HEX);
   });
 

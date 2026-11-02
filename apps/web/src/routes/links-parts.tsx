@@ -243,12 +243,12 @@ export function ShareLinkRow({
                 · {link.conversationTitle}
               </span>
             )}
-            {expiry === null ? null : (
-              <span data-share-link-expiry className="shrink-0" style={{ color: INK_2 }}>
-                · {expiry}
-              </span>
-            )}
           </span>
+          {expiry === null ? null : (
+            <span data-share-link-expiry className="truncate text-caption" style={{ color: INK_2 }}>
+              {expiry}
+            </span>
+          )}
         </span>
       </Link>
       <button

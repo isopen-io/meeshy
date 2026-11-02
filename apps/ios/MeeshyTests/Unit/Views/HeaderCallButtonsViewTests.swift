@@ -37,10 +37,10 @@ final class HeaderCallButtonsViewTests: XCTestCase {
 
     func test_actions_wakeTheCallStackThroughTheHost() throws {
         let source = try buttonSource()
-        XCTAssertTrue(source.contains("CallManagerHost.shared.require().rejoinActiveCall("),
+        XCTAssertTrue(source.contains("CallManagerHost.shared.require().outgoingDial.rejoinActiveCall("),
                       "rejoindre doit appeler CallManager.rejoinActiveCall : un simple displayMode ne ferait rien")
         XCTAssertTrue(source.contains("CallManagerHost.shared.require().displayMode = .fullScreen"))
-        XCTAssertTrue(source.contains("CallManagerHost.shared.require().requestPermissionsThenStartCall("))
+        XCTAssertTrue(source.contains("CallManagerHost.shared.require().outgoingDial.requestPermissionsThenStartCall("))
     }
 
     func test_rejoinPill_clearsWhenCallEndedArrivesForThatCall() throws {

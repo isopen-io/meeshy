@@ -3,6 +3,7 @@ package me.meeshy.sdk.story
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
@@ -17,7 +18,12 @@ import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.pagedApiCall
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 import me.meeshy.sdk.util.isoToEpochMillis
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /** Thrown when a stories revalidation fails; carries the API error message. */
 internal class StorySyncException(message: String) : Exception(message)
@@ -35,7 +41,16 @@ internal class StoryCacheSource(
     private val syncMetaDao: SyncMetaDao,
     private val storyApi: StoryApi,
     private val clock: CacheClock,
+    private val fence: AccountFence? = null,
 ) : SwrCacheSource<List<ApiPost>> {
+
+    /**
+     * L'ordre des écritures locales ([upsertLocal]) : une revalidation retient le rang où elle part, et son élagage
+     * épargne toute story écrite APRÈS — une republication adoptée pendant qu'elle était en vol n'est pas sur la page
+     * qu'elle a lue, sans être absente du serveur pour autant (#14458).
+     */
+    private val writeSequence = AtomicLong()
+    private val localWrites = ConcurrentHashMap<String, Long>()
 
     override fun observe(): Flow<List<ApiPost>?> =
         combine(
@@ -45,11 +60,27 @@ internal class StoryCacheSource(
             if (rows.isEmpty() && syncedAt == null) {
                 null
             } else {
-                rows.map { MeeshyApi.json.decodeFromString<ApiPost>(it.payload) }
+                rows.mapNotNull { it.decodedOrNull() }
             }
         }
 
+    /**
+     * Une ligne qui ne se relit plus (écrite par une version antérieure, tronquée) ne
+     * coûte qu'ELLE-MÊME : décoder toutes les lignes d'un bloc faisait lever le flux de la
+     * barre, et l'exception fermait l'app à l'affichage des stories. La revalidation
+     * suivante la réécrit ou l'élague.
+     */
+    private fun StoryEntity.decodedOrNull(): ApiPost? =
+        try {
+            MeeshyApi.json.decodeFromString<ApiPost>(payload)
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+
     override fun lastSyncedAt(): Flow<Long?> = syncMetaDao.observe(RESOURCE_KEY)
+
+    /** Les stories déjà en main, lues une fois — les lignes illisibles sautées. */
+    suspend fun readLocal(): List<ApiPost> = storyDao.observeAll().first().mapNotNull { it.decodedOrNull() }
 
     /**
      * Pages through the feed up to [MAX_PAGES] (`MAX_PAGES * STORIES_PAGE_SIZE` = 300
@@ -62,9 +93,13 @@ internal class StoryCacheSource(
      * the API's pre-pagination shape. Any page failing (including the first) throws
      * without persisting anything — Room already holds a complete prior tray, and
      * replacing it with an unproven partial one is worse than serving the stale one
-     * a beat longer.
+     * a beat longer. A story written locally after this revalidation started (a repost
+     * adopted from its 201, a realtime fold) is never pruned by it: its page was read
+     * before that story existed, so it proves nothing about it.
      */
     override suspend fun revalidate() {
+        val ticket = ticket()
+        val startedAt = writeSequence.get()
         val collected = mutableListOf<ApiPost>()
         var cursor: String? = null
         var isComplete = false
@@ -84,7 +119,7 @@ internal class StoryCacheSource(
             }
         }
 
-        persist(collected, prune = isComplete)
+        persist(collected, prune = isComplete, ticket, writtenAfter = startedAt)
     }
 
     /**
@@ -93,9 +128,12 @@ internal class StoryCacheSource(
      * tray repaints. An unknown id is an inert 0-row delete: Room emits nothing, so an
      * over-broadcast deletion for a story the viewer never cached causes no repaint.
      */
-    suspend fun deleteLocal(storyId: String) {
-        storyDao.deleteById(storyId)
+    suspend fun deleteLocal(storyId: String, ticket: AccountTicket?) {
+        fence.commitOrWrite(ticket) { storyDao.deleteById(storyId) }
     }
+
+    /** Le compte auquel appartient un événement ou une requête qui part MAINTENANT (#13560) ; `null` sans garde. */
+    suspend fun ticket(): AccountTicket? = fence?.currentTicket()
 
     /**
      * Reads a single cached story by id (decoded), or `null` if it is not cached. The
@@ -103,15 +141,16 @@ internal class StoryCacheSource(
      * onto this copy and writes the result back via [upsertLocal].
      */
     suspend fun findLocal(storyId: String): ApiPost? =
-        storyDao.getById(storyId)?.let { MeeshyApi.json.decodeFromString<ApiPost>(it.payload) }
+        storyDao.getById(storyId)?.decodedOrNull()
 
     /**
      * Upserts a single merged story, re-deriving the tray-ordering (`createdAt`) column
      * from it so the Room-backed [observe] stream re-emits with the edit in place. Does
      * not touch `sync_meta`: a realtime fold is not a full revalidation.
      */
-    suspend fun upsertLocal(story: ApiPost) {
-        storyDao.upsertAll(listOf(story.toEntity(clock.nowMillis())))
+    suspend fun upsertLocal(story: ApiPost, ticket: AccountTicket?) {
+        localWrites[story.id] = writeSequence.incrementAndGet()
+        fence.commitOrWrite(ticket) { storyDao.upsertAll(listOf(story.toEntity(clock.nowMillis()))) }
     }
 
     private fun ApiPost.toEntity(cachedAt: Long): StoryEntity =
@@ -122,13 +161,23 @@ internal class StoryCacheSource(
             cachedAt = cachedAt,
         )
 
-    private suspend fun persist(stories: List<ApiPost>, prune: Boolean) {
+    /**
+     * Une story déjà vue sur cet appareil le reste : une page servie avant que la vue ne
+     * soit arrivée au serveur ne regriserait pas l'anneau à l'envers (vue monotone, comme
+     * [me.meeshy.sdk.model.StoryUpdateMerge]).
+     */
+    private suspend fun persist(stories: List<ApiPost>, prune: Boolean, ticket: AccountTicket?, writtenAfter: Long) {
         val now = clock.nowMillis()
-        val rows = stories.map { it.toEntity(now) }
-        database.withTransaction {
-            storyDao.upsertAll(rows)
-            if (prune) storyDao.deleteNotIn(rows.map { it.id })
-            syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now))
+        val seenHere = readLocal().filter { it.isViewedByMe == true }.mapTo(HashSet()) { it.id }
+        val rows = stories
+            .map { if (it.id in seenHere && it.isViewedByMe != true) it.copy(isViewedByMe = true) else it }
+            .map { it.toEntity(now) }
+        fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                storyDao.upsertAll(rows)
+                if (prune) storyDao.deleteNotIn(rows.map { it.id } + localWrites.filterValues { it > writtenAfter }.keys)
+                syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now))
+            }
         }
     }
 

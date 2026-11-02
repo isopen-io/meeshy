@@ -27,7 +27,7 @@ import { SHARE_PREVIEW_COPY } from './share-preview-copy';
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf8');
 const NGINX = read('../../nginx.conf');
 const TRAEFIK = ['docker-compose.staging.yml', 'docker-compose.prod.yml'].map((file) => read(`../../../../infrastructure/docker/compose/${file}`));
-const VITE = read('../../vite.config.ts');
+const VITE = read('../../vite.config.ts') + read('../../vite/pwa.ts');
 const ORIGIN = 'https://meeshy.me';
 
 const SHELL = `<!doctype html>

@@ -1,4 +1,5 @@
 import type { CallsWindow, KpiPeriod, MessageTypesPeriod } from '@/lib/api/admin-analytics';
+import type { PlaybackWindow } from '@/lib/api/admin-analytics-playback';
 import type { LanguagesPeriod, LanguagesTimelinePeriod } from '@/lib/api/admin-languages';
 import type { EngagementPeriod, MessagesPeriod } from '@/lib/api/admin-message-stats';
 
@@ -16,11 +17,13 @@ import type { EngagementPeriod, MessagesPeriod } from '@/lib/api/admin-message-s
 export const ACTIVITY_PERIODS = ['7d', '30d', '90d'] as const satisfies readonly KpiPeriod[];
 export const MESSAGES_PERIODS = ['24h', '7d', '30d', '90d'] as const satisfies readonly MessagesPeriod[];
 export const CALLS_PERIODS = ['7d', '30d', '90d'] as const satisfies readonly KpiPeriod[];
+export const PLAYBACK_PERIODS = ['7d', '30d'] as const satisfies readonly KpiPeriod[];
 export const LANGUAGES_PERIODS = ['7d', '30d', '90d'] as const satisfies readonly LanguagesPeriod[];
 
 export const ACTIVITY_DEFAULT: KpiPeriod = '30d';
 export const MESSAGES_DEFAULT: MessagesPeriod = '30d';
 export const CALLS_DEFAULT: KpiPeriod = '7d';
+export const PLAYBACK_DEFAULT: KpiPeriod = '7d';
 export const LANGUAGES_DEFAULT: LanguagesPeriod = '30d';
 
 /** Les types de messages n'existent pas sur 90 jours : les 30 jours sont la fenêtre servie la plus proche. */
@@ -30,6 +33,9 @@ export const typesPeriodOf = (period: KpiPeriod): MessageTypesPeriod => (period 
 export const engagementPeriodOf = (period: MessagesPeriod): EngagementPeriod => (period === '24h' ? '7d' : period === '90d' ? '30d' : period);
 
 export const callsWindowOf = (period: KpiPeriod): CallsWindow => (period === '7d' ? 7 : period === '30d' ? 30 : 90);
+
+/** La qualité de lecture n'est conservée que 30 jours (#11280) : 90 jours retombe sur 30. */
+export const playbackWindowOf = (period: KpiPeriod): PlaybackWindow => (period === '7d' ? 7 : 30);
 
 /** La chronologie des langues n'existe que sur 7 et 30 jours. */
 export const timelinePeriodOf = (period: LanguagesPeriod): LanguagesTimelinePeriod => (period === '90d' ? '30d' : period);

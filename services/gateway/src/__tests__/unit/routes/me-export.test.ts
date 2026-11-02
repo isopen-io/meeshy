@@ -184,7 +184,7 @@ function makePrisma(opts: PrismaOpts = {}) {
     ),
     // Les packs (#10151) : aucun choix, aucune bibliothèque, aucune proposition.
     ...Object.fromEntries(
-      ['userStickerPack', 'userSticker', 'stickerPack', 'userPackOwnership', 'communityAppearancePack'].map(
+      ['userStickerPack', 'userSticker', 'stickerPack', 'userPackOwnership', 'communityAppearancePack', 'lensPack', 'partnerProfile'].map(
         (model) => [model, { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) }],
       ),
     ),
@@ -196,6 +196,12 @@ function makePrisma(opts: PrismaOpts = {}) {
     ),
     // La télémétrie d'appel (#11277) : un compte qui n'a jamais appelé.
     callParticipant: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    // Les cercles (#14400) : aucun lien, aucun échange, aucun consentement.
+    ...Object.fromEntries(
+      ['userRelation', 'pairInteractionDay', 'relationFeatureSetting'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]) }],
+      ),
+    ),
   };
 }
 
