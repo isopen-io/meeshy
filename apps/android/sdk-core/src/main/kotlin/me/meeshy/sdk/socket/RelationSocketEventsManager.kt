@@ -1,0 +1,76 @@
+package me.meeshy.sdk.socket
+
+import dagger.Binds
+import dagger.Module
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoSet
+import java.util.concurrent.atomic.AtomicBoolean
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.serialization.json.Json
+import me.meeshy.sdk.model.relation.RelationLevelRaisedEvent
+import me.meeshy.sdk.model.relation.RelationRitualCompletedEvent
+import me.meeshy.sdk.model.relation.RelationRitualProgressEvent
+import me.meeshy.sdk.model.relation.RelationRitualStartedEvent
+import me.meeshy.sdk.model.socket.SocketEventNames
+
+/**
+ * Les quatre événements du LIEN entre deux personnes (#13933, #13938) — miroir de `MessageSocketManager+Relations.swift`.
+ *
+ * Tous serveur → client, tous sur la room `user:<id>` (`packages/shared/types/socketio-events/relation-event-names.ts`).
+ * Chaque charge nomme `userId` = l'AUTRE personne, du point de vue du destinataire. Il n'existe AUCUN événement de baisse,
+ * de sortie ni de refus : ce sont des gestes silencieux (RG-07), et le client n'en écoute donc aucun.
+ *
+ * Patron de [ConversationSocketEventsManager] : ses propres routes, installées sur le MÊME [SocketEventRouter] (même voie
+ * série, ordre d'arrivée), attachées par `RealtimeSessionCoordinator` au titre de [RealtimeBinding].
+ */
+@Singleton
+class RelationSocketEventsManager @Inject constructor(
+    private val router: SocketEventRouter,
+    private val json: Json,
+) : RealtimeBinding {
+
+    private val installed = AtomicBoolean(false)
+
+    private val _levelRaised = SocketInboundRoute.subject<RelationLevelRaisedEvent>()
+    private val _ritualStarted = SocketInboundRoute.subject<RelationRitualStartedEvent>()
+    private val _ritualProgress = SocketInboundRoute.subject<RelationRitualProgressEvent>()
+    private val _ritualCompleted = SocketInboundRoute.subject<RelationRitualCompletedEvent>()
+
+    /** `relation:level-raised` — le niveau effectif de la paire a monté (aux DEUX). */
+    val levelRaised: SharedFlow<RelationLevelRaisedEvent> = _levelRaised.exposed()
+
+    /** `relation:ritual-started` — l'autre a ouvert (ou rejoint) le rituel du Sang. */
+    val ritualStarted: SharedFlow<RelationRitualStartedEvent> = _ritualStarted.exposed()
+
+    /** `relation:ritual-progress` — l'autre a tenu l'écran, confirmé, ou lâché. */
+    val ritualProgress: SharedFlow<RelationRitualProgressEvent> = _ritualProgress.exposed()
+
+    /** `relation:ritual-completed` — les deux ont confirmé : le lien vaut Sang. */
+    val ritualCompleted: SharedFlow<RelationRitualCompletedEvent> = _ritualCompleted.exposed()
+
+    override fun attach() {
+        if (installed.compareAndSet(false, true)) router.install(routes())
+    }
+
+    override fun detach() {
+        installed.set(false)
+    }
+
+    internal fun routes(): List<SocketInboundRoute> = listOf(
+        SocketInboundRoute.decoding(SocketEventNames.RELATION_LEVEL_RAISED, json, _levelRaised),
+        SocketInboundRoute.decoding(SocketEventNames.RELATION_RITUAL_STARTED, json, _ritualStarted),
+        SocketInboundRoute.decoding(SocketEventNames.RELATION_RITUAL_PROGRESS, json, _ritualProgress),
+        SocketInboundRoute.decoding(SocketEventNames.RELATION_RITUAL_COMPLETED, json, _ritualCompleted),
+    )
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+internal interface RelationSocketEventsModule {
+    @Binds
+    @IntoSet
+    fun bindRealtime(manager: RelationSocketEventsManager): RealtimeBinding
+}

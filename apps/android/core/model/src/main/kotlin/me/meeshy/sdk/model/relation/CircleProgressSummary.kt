@@ -39,7 +39,7 @@ public sealed interface CircleProgressSummary {
     public companion object {
         public fun of(link: RelationLink): CircleProgressSummary {
             if (link.progress.missing.isNotEmpty()) {
-                return Missing(link.progress.missing.map(MissingPiece::of).distinct())
+                return Missing(link.progress.missing.map { MissingPiece.of(it) }.distinct())
             }
             return when (val offer = link.raiseOffer()) {
                 is RelationRaiseOffer.Available -> Eligible(offer.target)

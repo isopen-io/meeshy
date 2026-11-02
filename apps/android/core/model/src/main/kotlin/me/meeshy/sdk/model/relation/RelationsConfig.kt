@@ -20,9 +20,15 @@ public data class RelationLevelPresentation(
 public data class RelationsConfig(
     val levels: List<RelationLevelPresentation> = emptyList(),
 ) {
-    /** Le libellé du niveau dans [language], ou `null` : l'appelant retombe alors sur le catalogue local, jamais sur la clé. */
-    public fun label(level: RelationLevel, language: String): String? =
-        presentation(level)?.labels?.get(language)?.takeIf { it.isNotBlank() }
+    /**
+     * Le libellé du niveau dans [language], ou `null` : l'appelant retombe alors sur le catalogue local, jamais sur la clé.
+     * La table sert `pt-BR` quand l'appareil dit `pt` : une langue nue retrouve sa variante servie.
+     */
+    public fun label(level: RelationLevel, language: String): String? {
+        val labels = presentation(level)?.labels ?: return null
+        val served = labels[language] ?: labels.entries.firstOrNull { it.key.substringBefore('-') == language }?.value
+        return served?.takeIf { it.isNotBlank() }
+    }
 
     public fun icon(level: RelationLevel): String? = presentation(level)?.icon?.takeIf { it.isNotBlank() }
 

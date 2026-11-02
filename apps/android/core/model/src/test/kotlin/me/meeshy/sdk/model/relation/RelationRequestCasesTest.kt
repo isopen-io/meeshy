@@ -48,7 +48,7 @@ class RelationRequestCasesTest {
             val verdict = RelationRequestRule.evaluate(
                 target = RelationLevel.of(input.text("targetLevel")),
                 current = RelationLevel.of(input.text("currentLevel")),
-                eligibleFor = input.text("eligibleFor")?.let(RelationLevel::of),
+                eligibleFor = input.text("eligibleFor")?.let { RelationLevel.of(it) },
                 cooldownUntilMillis = input.text("cooldownUntil")?.let { Instant.parse(it).toEpochMilli() },
                 nowMillis = Instant.parse(input.text("now")!!).toEpochMilli(),
             )
