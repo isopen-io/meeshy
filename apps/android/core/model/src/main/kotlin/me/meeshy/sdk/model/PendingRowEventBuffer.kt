@@ -76,6 +76,8 @@ class PendingRowEventBuffer(
         return events.remove(id)
     }
 
+    fun clear() = events.clear()
+
     /** Garde la modification la plus récente : une plus ancienne n'écrase pas. */
     fun rememberEdit(id: String, nowMillis: Long, edit: PendingEdit) = remember(id, nowMillis) { current ->
         val kept = current.edit
