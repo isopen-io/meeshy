@@ -145,6 +145,16 @@ class SessionTeardownTest {
     }
 
     @Test
+    fun wipe_clearsTheStoryPostCache() = runTest {
+        val cache = me.meeshy.sdk.story.StoryPostCache()
+        cache.put(me.meeshy.sdk.model.ApiPost(id = "s1", type = "STORY"))
+
+        teardown(perAccountCaches = setOf(cache)).wipe()
+
+        assertThat(cache.get("s1")).isNull()
+    }
+
+    @Test
     fun wipe_clearsTheAccountPreferenceSnapshots() = runTest {
         val snapshots = me.meeshy.sdk.preferences.InMemoryPreferenceSnapshotStore()
         snapshots.save("all", "{}", 5L)
