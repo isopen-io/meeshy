@@ -15,6 +15,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowAudioManager
 import java.time.Duration
 
 /**
@@ -42,6 +43,12 @@ class ReelVideoSurfaceAudioFocusTest {
         compose.waitForIdle()
     }
 
+    // La demande de focus part, elle aussi, du fil de lecture : on l'attend avant de la lire.
+    private fun takenFocus(): ShadowAudioManager.AudioFocusRequest {
+        idleUntil { audioManager.lastAudioFocusRequest != null }
+        return checkNotNull(audioManager.lastAudioFocusRequest) { "aucune demande de focus audio" }
+    }
+
     private fun show(isActive: Boolean, muted: Boolean, onAudioFocusLost: () -> Unit = {}) {
         compose.setContent {
             ReelVideoSurface(
@@ -57,7 +64,7 @@ class ReelVideoSurfaceAudioFocusTest {
     @Test
     fun `une video audible qui joue prend le focus audio`() {
         show(isActive = true, muted = false)
-        assertThat(audioManager.lastAudioFocusRequest).isNotNull()
+        assertThat(takenFocus()).isNotNull()
     }
 
     @Test
@@ -77,9 +84,9 @@ class ReelVideoSurfaceAudioFocusTest {
         var muted by mutableStateOf(false)
         compose.setContent { ReelVideoSurface(mediaUrl = "file:///sdcard/clip.mp4", isActive = true, muted = muted) }
         compose.waitForIdle()
-        assertThat(audioManager.lastAudioFocusRequest).isNotNull()
+        assertThat(takenFocus()).isNotNull()
         muted = true
-        compose.waitForIdle()
+        idleUntil { audioManager.lastAbandonedAudioFocusRequest != null }
         assertThat(audioManager.lastAbandonedAudioFocusRequest).isNotNull()
     }
 
@@ -87,7 +94,7 @@ class ReelVideoSurfaceAudioFocusTest {
     fun `un vocal qui prend le focus met la video en pause et l'hote le sait`() {
         var lost = 0
         show(isActive = true, muted = false, onAudioFocusLost = { lost++ })
-        val request = audioManager.lastAudioFocusRequest
+        val request = takenFocus()
         val listener = request.listener
             ?: request.audioFocusRequest.javaClass.getMethod("getOnAudioFocusChangeListener")
                 .invoke(request.audioFocusRequest) as AudioManager.OnAudioFocusChangeListener
@@ -100,7 +107,7 @@ class ReelVideoSurfaceAudioFocusTest {
     fun `un appel qui sonne (perte passagere) fige aussi la lecture chez l'hote`() {
         var lost = 0
         show(isActive = true, muted = false, onAudioFocusLost = { lost++ })
-        val request = audioManager.lastAudioFocusRequest
+        val request = takenFocus()
         val listener = request.listener
             ?: request.audioFocusRequest.javaClass.getMethod("getOnAudioFocusChangeListener")
                 .invoke(request.audioFocusRequest) as AudioManager.OnAudioFocusChangeListener

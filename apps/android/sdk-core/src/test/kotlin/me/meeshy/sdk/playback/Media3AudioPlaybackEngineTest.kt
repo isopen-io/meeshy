@@ -177,7 +177,7 @@ class Media3AudioPlaybackEngineTest {
 
         rig.engine.cycleSpeed()
         assertThat(rig.engine.state.value.speed).isEqualTo(PlaybackSpeed.X1_25)
-        assertThat(rig.port.speed).isEqualTo(1.25f)
+        assertThat(rig.port.currentSpeed).isEqualTo(1.25f)
 
         rig.engine.play("b", "https://cdn/b.mp3")
         assertThat(rig.port.loads.last().third).isEqualTo(1.25f)
