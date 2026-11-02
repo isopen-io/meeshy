@@ -117,12 +117,26 @@ class ConversationCacheSourceDeltaMergeTest {
 
     @Test
     fun `une activite plus recente que l'apercu garde le merge puis relit la route riche`() = runTest {
+        // La route riche sert d'abord la liste, puis un delta VIDE à la relecture : ce qui reste en cache est le merge.
+        // Un double qui resservirait la ligne d'origine écraserait le merge par une donnée périmée.
+        coEvery { api.listConditional(any(), any(), any(), any()) } returnsMany listOf(
+            Response.success(
+                ApiResponse(success = true, data = listOf(seeded), pagination = Pagination(total = 1, offset = 0, limit = 100, hasMore = false)),
+            ),
+            Response.success(
+                ApiResponse(
+                    success = true,
+                    data = emptyList<ApiConversation>(),
+                    pagination = Pagination(total = 0, offset = 0, limit = 100, hasMore = false),
+                ),
+            ),
+        )
         source(SyncDeltaFetching.None).revalidate()
 
         source(delta(row(lastMessageAt = "2023-11-14T12:00:00.000Z"))).revalidate()
 
         assertThat(cached()!!.title).isEqualTo("Apres")
-        coVerify(atLeast = 1) { api.listConditional(any(), any(), any(), any()) }
+        coVerify(exactly = 2) { api.listConditional(any(), any(), any(), any()) }
     }
 
     @Test

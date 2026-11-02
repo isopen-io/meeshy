@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -16,6 +17,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowAudioManager
+import java.net.InetAddress
+import java.net.ServerSocket
 import java.time.Duration
 
 /**
@@ -28,6 +31,14 @@ class ReelVideoSurfaceAudioFocusTest {
 
     @get:Rule
     val compose = createComposeRule()
+
+    // Une origine qui accepte la connexion et ne répond JAMAIS : le lecteur reste en BUFFERING. Sur un fichier absent, il
+    // tombait en IDLE avant que playWhenReady n'arrive au fil de lecture, et Media3 1.10 ne demandait alors aucun focus.
+    private val stalledOrigin = ServerSocket(0, 8, InetAddress.getLoopbackAddress())
+    private val clipUrl get() = "http://${stalledOrigin.inetAddress.hostAddress}:${stalledOrigin.localPort}/clip.mp4"
+
+    @After
+    fun closeOrigin() = stalledOrigin.close()
 
     private val audioManager get() =
         shadowOf(ApplicationProvider.getApplicationContext<Context>().getSystemService(Context.AUDIO_SERVICE) as AudioManager)
@@ -52,7 +63,7 @@ class ReelVideoSurfaceAudioFocusTest {
     private fun show(isActive: Boolean, muted: Boolean, onAudioFocusLost: () -> Unit = {}) {
         compose.setContent {
             ReelVideoSurface(
-                mediaUrl = "file:///sdcard/clip.mp4",
+                mediaUrl = clipUrl,
                 isActive = isActive,
                 muted = muted,
                 onAudioFocusLost = onAudioFocusLost,
@@ -82,7 +93,7 @@ class ReelVideoSurfaceAudioFocusTest {
     @Test
     fun `couper le son rend le focus`() {
         var muted by mutableStateOf(false)
-        compose.setContent { ReelVideoSurface(mediaUrl = "file:///sdcard/clip.mp4", isActive = true, muted = muted) }
+        compose.setContent { ReelVideoSurface(mediaUrl = clipUrl, isActive = true, muted = muted) }
         compose.waitForIdle()
         assertThat(takenFocus()).isNotNull()
         muted = true
