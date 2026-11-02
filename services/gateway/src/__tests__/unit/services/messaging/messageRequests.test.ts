@@ -11,14 +11,14 @@ import { FOUNDING_MEMBER_PERMISSIONS } from '../../../../services/participantRig
 import {
   MESSAGE_REQUEST_FILTER_THRESHOLD,
   acceptMessageRequest,
-  acceptRequestOnReply,
   decideDirectOpening,
-  loadViewerMessageRequests,
   messageRequestRiskScore,
   requesterPermissionsFor,
   requestRecipientFields,
   servedMessageRequest,
+  shieldedRecipients,
 } from '../../../../services/messaging/messageRequests';
+import { noteMessageInteractions } from '../../../../services/relations/messageInteractions';
 import { ADULT_BIRTH, MINOR_BIRTH, messagingWorld, type CircleLink, type Row } from '../../../helpers/messaging-circle-world';
 
 const NOW = new Date('2026-11-02T12:00:00.000Z');
@@ -109,6 +109,18 @@ describe('decideDirectOpening — direct dès Connaissance, demande en dessous (
   });
 });
 
+describe('shieldedRecipients — un groupe ne débloque rien (RG-22)', () => {
+  it('le Public ne fait pas entrer un mineur ; un co-membre, un majeur et un âge inconnu passent', async () => {
+    const shielded = await shieldedRecipients(db(monde()), ALICE, [MINEUR, CO_MEMBRE_MINEUR, BOB, NOUVEAU], NOW);
+    expect([...shielded]).toEqual([MINEUR]);
+  });
+
+  it('un mineur fait entrer un autre mineur', async () => {
+    const shielded = await shieldedRecipients(db(monde()), CO_MEMBRE_MINEUR, [MINEUR], NOW);
+    expect(shielded.size).toBe(0);
+  });
+});
+
 describe('messageRequestRiskScore — un score borné, renforcé pour un mineur (MIN-03)', () => {
   const base = { senderAccountAgeHours: 24 * 400, senderRequestsLast24h: 0, sharesCommunity: true, recipientMinor: false };
 
@@ -145,13 +157,6 @@ describe('servedMessageRequest — ce que le destinataire reçoit', () => {
     expect(servedMessageRequest({ messageRequestAt: null })).toBeNull();
   });
 
-  it('ne charge que les demandes du LECTEUR, jamais celles d\'un autre participant', async () => {
-    const world = monde({ participants: demandeEnAttente() });
-    const pourBob = await loadViewerMessageRequests(db(world), BOB, [DM]);
-    const pourAlice = await loadViewerMessageRequests(db(world), ALICE, [DM]);
-    expect(pourBob.get(DM)).toMatchObject({ filtered: false });
-    expect(pourAlice.size).toBe(0);
-  });
 });
 
 describe('acceptMessageRequest — accepter fait passer l\'expéditeur au moins en Connaissance (MSG-02)', () => {
@@ -196,15 +201,36 @@ describe('acceptMessageRequest — accepter fait passer l\'expéditeur au moins 
   });
 });
 
-describe('acceptRequestOnReply — répondre à une demande l\'accepte', () => {
-  it('le destinataire qui répond accepte', async () => {
+describe('noteMessageInteractions — répondre à une demande l\'accepte', () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const reply = (world: ReturnType<typeof monde>, sender: string) => {
+    const prisma = {
+      ...world.prisma,
+      conversation: {
+        ...world.conversation,
+        findUnique: async () => ({ type: 'direct', participants: world.participant.rows.map((p) => ({ userId: p.userId, messageRequestAt: p.messageRequestAt ?? null })) }),
+        updateMany: world.conversation.updateMany,
+      },
+      pairInteractionDay: { update: async () => ({}), create: async () => ({}) },
+    };
+    noteMessageInteractions(prisma as never, {
+      conversationId: DM, senderUserId: sender, messageSource: 'user', messageType: 'text', encryptionMode: null,
+      attachmentMimeTypes: [], replyToAuthorUserId: null, mentionedUserIds: [], at: NOW,
+    });
+  };
+
+  it('le destinataire qui répond accepte : la demande s\'efface et le lien monte', async () => {
     const world = monde({ participants: demandeEnAttente() });
-    await expect(acceptRequestOnReply(db(world), { conversationId: DM, senderParticipantId: P_BOB, now: NOW })).resolves.toEqual({ kind: 'accepted', requesterId: ALICE, requesterParticipantId: P_ALICE, levelRaised: true });
+    reply(world, BOB);
+    for (let i = 0; i < 20; i += 1) await flush();
+    expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestAt).toBeNull();
+    expect(world.relations.relations()).toEqual(expect.arrayContaining([expect.objectContaining({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' })]));
   });
 
   it('l\'expéditeur qui relance n\'accepte rien', async () => {
     const world = monde({ participants: demandeEnAttente() });
-    await expect(acceptRequestOnReply(db(world), { conversationId: DM, senderParticipantId: P_ALICE, now: NOW })).resolves.toEqual({ kind: 'not-pending' });
+    reply(world, ALICE);
+    for (let i = 0; i < 20; i += 1) await flush();
     expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestAt).toBeInstanceOf(Date);
   });
 });

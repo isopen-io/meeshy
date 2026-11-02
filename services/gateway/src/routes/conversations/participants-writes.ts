@@ -1,3 +1,4 @@
+import { shieldedRecipients } from '../../services/messaging/messageRequests';
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -252,6 +253,8 @@ export function registerParticipantWriteRoutes(
 
     const userToAdd = await prisma.user.findFirst({ where: { id: userId } });
     if (!userToAdd) return { userId, outcome: 'not-found' };
+    // #14107 (RG-21, RG-22) — le Public ne fait pas entrer un mineur dans un groupe : introuvable.
+    if (currentUserId && (await shieldedRecipients(prisma, currentUserId, [userId])).has(userId)) return { userId, outcome: 'not-found' };
 
     // Le `findFirst({ isActive: true })` qui précédait ne pouvait PAS voir la
     // ligne d'un banni (bannir écrit `isActive: false`) : le `create` lui

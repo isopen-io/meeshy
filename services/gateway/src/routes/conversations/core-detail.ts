@@ -24,7 +24,7 @@ import { conversationDetailWithEngagementResponseSchema, loadViewerEngagementsOr
 import { conversationDetailInclude, conversationUserPreferencesSelect } from './core-selects';
 import { loadReadCursorBoundaries } from './read-cursor-projection';
 import { loadViewerBirthDate } from './viewerWriteRestriction';
-import { loadViewerMessageRequests } from '../../services/messaging/messageRequests';
+import { servedMessageRequest, type ServedMessageRequest } from '../../services/messaging/messageRequests';
 import { memberCountServedToViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
@@ -456,13 +456,16 @@ export function registerConversationDetailRoute(
        * et « non calculé » sont deux propriétés distinctes, et seule la seconde
        * économise quelque chose en amont.
        */
-      const veutParticipantAppelant = sertRang || sertEffectif || sertNonLus || sertFrontiereLecture || sertCurrentUserJoinedAt;
+      const sertDemande = isFieldServed(champs, 'messageRequest');
+      let messageRequest: ServedMessageRequest | null = null;
+      const veutParticipantAppelant = sertRang || sertEffectif || sertNonLus || sertFrontiereLecture || sertCurrentUserJoinedAt || sertDemande;
       try {
         const participant = veutParticipantAppelant
           ? await resolveCallerParticipant(prisma, authRequest.authContext, conversationId)
           : null;
         if (participant) {
           callerConversationRole = participant.role;
+          messageRequest = authRequest.authContext.isAnonymous ? null : servedMessageRequest(participant);
           if (sertCurrentUserJoinedAt) {
             currentUserJoinedAt = participant.joinedAt ?? null;
           }
@@ -613,13 +616,8 @@ export function registerConversationDetailRoute(
         });
       }
 
-      // #14107 — la demande de message en attente du lecteur ; `null` hors demande.
-      if (isFieldServed(champs, 'messageRequest')) {
-        const requests = authRequest.authContext.isAnonymous
-          ? new Map()
-          : await loadViewerMessageRequests(prisma, userId, [conversationId]);
-        charge.messageRequest = requests.get(conversationId) ?? null;
-      }
+      // #14107 — la demande de message en attente du lecteur, lue sur SA ligne ; `null` hors demande.
+      if (sertDemande) charge.messageRequest = messageRequest;
 
       return sendSuccess(reply, restrictFields(charge, champs, CONVERSATION_DETAIL_PINNED));
 

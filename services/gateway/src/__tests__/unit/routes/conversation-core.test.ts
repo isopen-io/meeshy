@@ -1,7 +1,6 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 // ─── Top-level mock variables (hoisted before jest.mock calls) ────────────────
-
 const mockResolveConversationId = jest.fn<any>();
 const mockCanAccessConversation = jest.fn<any>();
 const mockIsBlockedBetween = jest.fn<any>();
@@ -46,13 +45,7 @@ const mockSendErrorResponse = jest.fn<any>();
 
 // ─── jest.mock calls (hoisted) ────────────────────────────────────────────────
 
-// #14107 — la boîte de demandes a ses propres témoins (`messageRequests.test.ts`) :
-// ici, un tête-à-tête s'ouvre direct, comme avant le lot.
-jest.mock('../../../services/messaging/messageRequests', () => ({
-  ...jest.requireActual<typeof import('../../../services/messaging/messageRequests')>('../../../services/messaging/messageRequests'),
-  decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })),
-}));
-
+jest.mock('../../../services/messaging/messageRequests', () => ({ ...jest.requireActual<object>('../../../services/messaging/messageRequests'), decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })) })); // #14107 : un DM s'ouvre direct ici
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));

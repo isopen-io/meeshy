@@ -30,8 +30,6 @@ export enum ErrorCode {
   CANNOT_DELETE_MESSAGE = 'CANNOT_DELETE_MESSAGE',
   CANNOT_ACCESS_CONVERSATION = 'CANNOT_ACCESS_CONVERSATION',
   USER_BLOCKED = 'USER_BLOCKED',
-  /** #14107 (cercles, MSG-01, RG-21) : cette personne ne reçoit pas de demande de message de l'appelant. Ne dit jamais pourquoi (l'âge de la cible ne se révèle pas). */
-  MESSAGE_REQUEST_REFUSED = 'MESSAGE_REQUEST_REFUSED',
   
   // Business Logic (5xxx)
   ALREADY_EXISTS = 'ALREADY_EXISTS',
@@ -163,10 +161,6 @@ export const ErrorMessages: Record<ErrorCode, { fr: string; en: string }> = {
     fr: 'Vous avez fait toutes les réactions permises aujourd’hui. La limite compte vos gestes, jamais vos points : elle se renouvelle à minuit.',
     en: 'You have made all the reactions allowed today. The limit counts your actions, never your points: it renews at midnight.',
   },
-  [ErrorCode.MESSAGE_REQUEST_REFUSED]: {
-    fr: 'Cette personne ne reçoit pas de message de votre part pour le moment.',
-    en: 'This person does not receive messages from you for now.',
-  },
   [ErrorCode.GLOBAL_ADULTS_ONLY]: {
     fr: 'Meeshy Global est en lecture seule jusqu’à vos 18 ans : vous pouvez la lire et réagir, pas y écrire.',
     en: 'Meeshy Global is read-only until you turn 18: you can read it and react, but not post.',
@@ -237,7 +231,6 @@ export const ErrorStatusMap: Record<ErrorCode, number> = {
   [ErrorCode.CANNOT_DELETE_MESSAGE]: 403,
   [ErrorCode.CANNOT_ACCESS_CONVERSATION]: 403,
   [ErrorCode.USER_BLOCKED]: 403,
-  [ErrorCode.MESSAGE_REQUEST_REFUSED]: 403,
   [ErrorCode.GLOBAL_ADULTS_ONLY]: 403,
   
   // Business Logic (409, 422)

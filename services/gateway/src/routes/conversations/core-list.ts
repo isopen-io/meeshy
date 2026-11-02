@@ -54,7 +54,8 @@ import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy
 import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/messaging/servedPostReply';
 import type { ConversationType } from '@meeshy/shared/types/conversation';
 import { loadViewerBirthDate, servedListRowRestriction } from './viewerWriteRestriction';
-import { loadViewerMessageRequests, viewerRequestClause, type MessageRequestListMode } from '../../services/messaging/messageRequests';
+import { servedMessageRequest, type MessageRequestListMode, type ServedMessageRequest } from '../../services/messaging/messageRequests';
+import { emptyDirectVisibility, withViewerRequests } from './utils/list-viewer-scope';
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
 import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
@@ -223,38 +224,9 @@ export function registerConversationListRoute(
         delete whereClause.participants;
       }
 
-      // Visibilité DM vide — Prisme design doc 2026-08-04. Ajouté APRÈS le
-      // bloc withUserId ci-dessus (qui reconstruit whereClause.participants
-      // /.AND) pour ne jamais être écrasé par lui : un OR à la racine du
-      // whereClause se combine par ET implicite avec .AND/.participants,
-      // quel que soit leur contenu.
-      whereClause.OR = [
-        { type: { not: 'direct' } },
-        {
-          // `NOT: { firstMessageSentAt: null }` seul ne matche PAS les
-          // documents où le champ est ABSENT sur le connecteur MongoDB de
-          // Prisma (il ne matche que present-et-non-null) — il exclurait donc
-          // à tort tout DM legacy (créé avant cette migration, jamais
-          // backfillé). Les deux branches sont nécessaires : déjà posé (message
-          // envoyé) OU absent (legacy, avant migration) ⇒ visible.
-          OR: [
-            { NOT: { firstMessageSentAt: null } },
-            { firstMessageSentAt: { isSet: false } }
-          ]
-        },
-        { participants: { some: { userId, role: 'creator' } } },
-        { participants: { none: { role: 'creator' } } } // aucun créateur identifiable ⇒ comportement actuel
-      ];
-
-      // #14107 — la boîte de demandes : `exclude` = la liste principale, `only` /
-      // `filtered` = les demandes du lecteur. Absent = tout, comme avant le lot.
-      const requestsMode = request.query.requests;
-      if (requestsMode) {
-        whereClause.AND = [
-          ...(Array.isArray(whereClause.AND) ? whereClause.AND : whereClause.AND ? [whereClause.AND] : []),
-          { participants: { some: { userId, isActive: true, ...viewerRequestClause(requestsMode) } } }
-        ];
-      }
+      // Visibilité DM vide (Prisme 2026-08-04) et boîte de demandes (#14107) : `utils/list-viewer-scope.ts`.
+      whereClause.OR = emptyDirectVisibility(userId);
+      whereClause.AND = withViewerRequests(whereClause.AND, userId, request.query.requests);
 
       // Pagination par curseur — résolue DANS LE SCOPE DU LECTEUR (#6991).
       //
@@ -423,6 +395,7 @@ export function registerConversationListRoute(
       // Only fall back to a batch query for large groups where the current user wasn't in top 5.
       const currentUserRoleMap = new Map<string, string>();
       const currentUserJoinedAtMap = new Map<string, Date | null>();
+      const currentUserRequestMap = new Map<string, ServedMessageRequest | null>();
       // Participant.id du LECTEUR par conversation — G-123 : c'est la clé qui
       // relie une conversation à son curseur de lecture (`lastOpenedAt` de
       // l'orchestrateur, voir plus bas). Repose sur la même résolution que les
@@ -445,6 +418,7 @@ export function registerConversationListRoute(
             currentUserRoleMap.set(conv.id, found.role);
             currentUserJoinedAtMap.set(conv.id, found.joinedAt);
             currentUserParticipantIdMap.set(conv.id, found.id);
+            currentUserRequestMap.set(conv.id, isAnonymousViewer ? null : servedMessageRequest(found));
           } else {
             convsMissingCurrentUser.push(conv.id);
           }
@@ -474,7 +448,7 @@ export function registerConversationListRoute(
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      const [totalCount, unreadCountMap, readCursorBoundaries, viewerEngagementByConversation, viewerMessageRequests] = await Promise.all([
+      const [totalCount, unreadCountMap, readCursorBoundaries, viewerEngagementByConversation] = await Promise.all([
         // Count (if requested) - skip when using cursor pagination
         (!beforeCursor && (includeCount || offset === 0))
           ? prisma.conversation.count({ where: whereClause })
@@ -497,9 +471,6 @@ export function registerConversationListRoute(
         // « N (M) 🔥 » du lecteur (#8906) — UNE lecture groupée pour la page.
         // Un invité anonyme n'a pas de compte, donc pas d'état d'engagement.
         loadViewerEngagementsOrEmpty(prisma, isAnonymousViewer ? undefined : userId, conversationIds),
-
-        // #14107 — les demandes de message EN ATTENTE du lecteur, une lecture pour la page.
-        isAnonymousViewer ? Promise.resolve(new Map()) : loadViewerMessageRequests(prisma, userId, conversationIds),
       ]);
 
       // Par CONVERSATION plutôt que par participant — c'est la clé que la
@@ -937,7 +908,7 @@ export function registerConversationListRoute(
           ...projectReadCursorBoundary(readCursorByConversation.get(conversation.id)),
           currentUserRole: currentUserRoleMap.get(conversation.id) || null,
           currentUserJoinedAt: currentUserJoinedAtMap.get(conversation.id) || null,
-          messageRequest: viewerMessageRequests.get(conversation.id) ?? null,
+          messageRequest: currentUserRequestMap.get(conversation.id) ?? null,
           // ABSENT tant que le lecteur n'a rien crédité ici (#8906).
           ...(viewerEngagementByConversation.has(conversation.id)
             ? { viewerEngagement: viewerEngagementByConversation.get(conversation.id) }

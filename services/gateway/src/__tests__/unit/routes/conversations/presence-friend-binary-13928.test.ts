@@ -479,7 +479,7 @@ describe('#13928 — un Ami voit « en ligne », jamais lastActiveAt, sur les ro
           }),
           update: jest.fn<any>().mockResolvedValue({}),
         },
-        user: { findUnique: jest.fn<any>().mockResolvedValue(friendUser()) },
+        user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(friendUser()) },
         participant: {
           findMany: jest.fn<any>().mockResolvedValue([]),
           create: jest.fn<any>().mockResolvedValue(friendRow({ user: friendUser() })),

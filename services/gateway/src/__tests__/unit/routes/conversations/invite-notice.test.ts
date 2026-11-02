@@ -49,7 +49,7 @@ function monter() {
       }),
       update: jest.fn<any>().mockResolvedValue(undefined),
     },
-    user: { findUnique: jest.fn<any>().mockResolvedValue(bob) },
+    user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(bob) },
     participant: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       create: jest.fn<any>().mockResolvedValue({ id: 'p-bob', userId: BOB, displayName: 'Bob', user: bob }),

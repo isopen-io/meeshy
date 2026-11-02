@@ -27,6 +27,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { isEndToEndMode } from '../conversations/encryptionRegime.js';
 import { notePairInteraction, type PairInteractionDb } from './pairInteractionRecorder.js';
+import { acceptMessageRequest, type MessageRequestDb } from '../messaging/messageRequests.js';
+import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache.js';
 
 const logger = enhancedLogger.child({ module: 'MessageInteractions' });
 
@@ -47,11 +49,26 @@ export type MessageInteraction = {
   readonly at?: Date;
 };
 
+type InteractionParticipant = { userId: string | null; messageRequestAt?: Date | null };
+
 type MessageInteractionDb = PairInteractionDb & {
   readonly conversation: {
-    findUnique(args: unknown): PromiseLike<{ type: string; participants: ReadonlyArray<{ userId: string | null }> } | null>;
+    findUnique(args: unknown): PromiseLike<{ type: string; participants: ReadonlyArray<InteractionParticipant> } | null>;
   };
 };
+
+/**
+ * #14107 — le destinataire d'une DEMANDE de message qui y répond l'accepte : un
+ * ancien client, qui ne connaît pas la boîte de demandes, reste fonctionnel.
+ * L'expéditeur qui relance n'accepte rien (sa ligne ne porte pas de demande).
+ */
+const answersOwnRequest = (conversation: { type: string; participants: ReadonlyArray<InteractionParticipant> }, sender: string): boolean =>
+  conversation.type === 'direct' && conversation.participants.some((p) => p.userId === sender && p.messageRequestAt instanceof Date);
+
+async function acceptRequestByReply(prisma: unknown, conversationId: string, userId: string, now: Date): Promise<void> {
+  const acceptance = await acceptMessageRequest(prisma as MessageRequestDb, { conversationId, userId, now });
+  if (acceptance.kind === 'accepted') invalidateParticipantLookup(acceptance.requesterParticipantId, conversationId);
+}
 
 const isVoiceMessage = (interaction: MessageInteraction): boolean =>
   interaction.messageType === 'audio' &&
@@ -90,13 +107,14 @@ export function noteMessageInteractions(prisma: MessageInteractionDb | PrismaCli
         where: { id: interaction.conversationId },
         select: {
           type: true,
-          participants: { where: { isActive: true, type: 'user', userId: { not: null } }, select: { userId: true } },
+          participants: { where: { isActive: true, type: 'user', userId: { not: null } }, select: { userId: true, messageRequestAt: true } },
         },
       });
       if (!conversation) return;
       recipients(interaction, conversation, sender).forEach(({ otherId, nature }) =>
         notePairInteraction(db, { actorId: sender, otherId, nature, at }),
       );
+      if (answersOwnRequest(conversation, sender)) await acceptRequestByReply(prisma, interaction.conversationId, sender, at);
     })
     .catch((error: unknown) => logger.warn('message interactions not counted', { conversationId: interaction.conversationId, error }));
 }

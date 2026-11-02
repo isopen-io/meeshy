@@ -29,8 +29,6 @@ import {
 } from './messageNotificationFanOut';
 import { resolveMessageMentions } from './messageMentions';
 import { noteMessageInteractions } from '../relations/messageInteractions';
-import { acceptRequestOnReply } from './messageRequests';
-import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
 import { copyAttachmentsFromMessage } from './copyAttachments';
@@ -978,7 +976,6 @@ export class MessageProcessor {
         isStoryReply: Boolean(message.storyReplyToId),
         mentionedUserIds: validatedMentionUserIds,
       });
-      if (message.messageSource === 'user') this.acceptMessageRequestOnReply(data);
 
       // 2. Déclencher les notifications (Mentions, Réponses, Messages)
       if (this.notificationService) {
@@ -989,15 +986,6 @@ export class MessageProcessor {
     } catch (error) {
       logger.error('[MessageProcessor] Error in handleMentionsAndNotifications', error);
     }
-  }
-
-  /** #14107 — répondre à une demande de message l'accepte ; les droits rouverts de l'expéditeur s'invalident. */
-  private acceptMessageRequestOnReply(data: { senderId: string; conversationId: string }): void {
-    void acceptRequestOnReply(this.prisma, { conversationId: data.conversationId, senderParticipantId: data.senderId })
-      .then((acceptance) => {
-        if (acceptance.kind === 'accepted') invalidateParticipantLookup(acceptance.requesterParticipantId, data.conversationId);
-      })
-      .catch((error: unknown) => logger.error('[MessageProcessor] message request reply-accept failed', error));
   }
 
   /**

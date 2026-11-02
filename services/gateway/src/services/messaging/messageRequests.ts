@@ -31,7 +31,7 @@ import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { isBlockedBetween } from '../../utils/blocking';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../participantRights';
-import { pairAccess, type PairAccessDb } from '../relations/pairAccess';
+import { pairAccess, pairAccessAmong, type PairAccessDb } from '../relations/pairAccess';
 import { recordLevel, type UserRelationDb } from '../relations/userRelationWriter';
 
 export type MessageRequestDb = PairAccessDb & Pick<PrismaClient, 'participant' | 'conversation'>;
@@ -127,6 +127,28 @@ export async function decideDirectOpening(
   return { kind: 'request', risk: messageRequestRiskScore(signals), recipientMinor: signals.recipientMinor };
 }
 
+/**
+ * Les mineurs DÉCLARÉS que `senderId` ne peut pas atteindre (bouclier RG-21) :
+ * le Public ne fait pas entrer un mineur dans un groupe, pas plus qu'il ne lui
+ * écrit — un groupe ne débloque rien (RG-22). Le blocage n'en fait pas partie :
+ * il garde sa propre règle, qui ne vise que le tête-à-tête. Les portes rendent
+ * ces comptes comme INTROUVABLES : l'âge de la cible ne se révèle jamais.
+ */
+export async function shieldedRecipients(
+  prisma: PairAccessDb,
+  senderId: string,
+  recipientIds: readonly string[],
+  now: Date = new Date(),
+): Promise<ReadonlySet<string>> {
+  const ids = [...new Set(recipientIds)].filter((id) => id && id !== senderId);
+  if (ids.length === 0) return new Set();
+  const declared = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, birthDate: true } });
+  const minors = declared.filter((u) => declaredAgeClass(u.birthDate ?? null, now) === 'minor').map((u) => u.id);
+  if (minors.length === 0) return new Set();
+  const verdicts = await pairAccessAmong(prisma, { feature: 'dm.request', subjectId: senderId, otherIds: minors, subjectIs: 'viewer', now });
+  return new Set([...verdicts].filter(([, verdict]) => !verdict.allowed && verdict.reason === 'level').map(([id]) => id));
+}
+
 /** Les colonnes que la ligne `Participant` du DESTINATAIRE reçoit à l'ouverture. */
 export const requestRecipientFields = (
   opening: DirectOpening,
@@ -154,25 +176,6 @@ export function servedMessageRequest(row: { readonly messageRequestAt?: Date | n
     filtered: (row.messageRequestRisk ?? 0) >= MESSAGE_REQUEST_FILTER_THRESHOLD,
     mediaBlurred: true,
   };
-}
-
-/** Les demandes en attente du LECTEUR parmi `conversationIds` — une lecture indexée par `userId`. */
-export async function loadViewerMessageRequests(
-  prisma: Pick<PrismaClient, 'participant'>,
-  viewerId: string,
-  conversationIds: readonly string[],
-): Promise<ReadonlyMap<string, ServedMessageRequest>> {
-  if (!viewerId || conversationIds.length === 0) return new Map();
-  const rows = await prisma.participant.findMany({
-    where: { userId: viewerId, conversationId: { in: [...conversationIds] }, messageRequestAt: { not: null } },
-    select: { conversationId: true, messageRequestAt: true, messageRequestRisk: true },
-  });
-  return new Map(
-    rows.flatMap((row) => {
-      const served = servedMessageRequest(row);
-      return served ? [[row.conversationId, served] as const] : [];
-    }),
-  );
 }
 
 export type MessageRequestListMode = 'exclude' | 'only' | 'filtered';
@@ -254,20 +257,4 @@ export async function acceptMessageRequest(
     requesterParticipantId: requester.id,
     levelRaised: outcome === 'created' || outcome === 'raised',
   };
-}
-
-/**
- * Répondre à une demande l'accepte : un ancien client, qui ne connaît pas la
- * boîte, reste fonctionnel. L'expéditeur qui relance n'accepte rien.
- */
-export async function acceptRequestOnReply(
-  prisma: MessageRequestDb,
-  params: { readonly conversationId: string; readonly senderParticipantId: string; readonly now?: Date },
-): Promise<MessageRequestAcceptance> {
-  const sender = await prisma.participant.findFirst({
-    where: { id: params.senderParticipantId, conversationId: params.conversationId, messageRequestAt: { not: null } },
-    select: { userId: true },
-  });
-  if (!sender?.userId) return NOT_PENDING;
-  return acceptMessageRequest(prisma, { conversationId: params.conversationId, userId: sender.userId, now: params.now });
 }

@@ -102,11 +102,7 @@ function makePrisma(conversations: any[]): any {
       count: jest.fn(async () => conversations.length),
     },
     participant: {
-      findMany: jest.fn(async (args: any) =>
-        args?.where?.messageRequestAt && args.where.userId === USER_ID
-          ? [{ conversationId: CONV_ID, messageRequestAt: REQUEST_SINCE, messageRequestRisk: 80 }]
-          : []
-      ),
+      findMany: jest.fn(async () => []),
     },
     conversationReadCursor: {
       findMany: jest.fn(async () => []),
@@ -138,11 +134,15 @@ describe('GET /conversations — la boîte de demandes (#14107)', () => {
   });
 
   it('sert la demande en attente du lecteur : datée, filtrée selon son score, médias floutés', async () => {
-    const prisma = makePrisma([makeConversation({ type: 'direct', title: null })]);
+    const base = makeConversation({ type: 'direct', title: null });
+    const viewerRow = { ...base.participants[0], messageRequestAt: REQUEST_SINCE, messageRequestRisk: 80 };
+    const prisma = makePrisma([{ ...base, participants: [viewerRow] }]);
     const app = await buildApp(prisma);
     const res = await app.inject({ method: 'GET', url: '/conversations', headers: { authorization: 'Bearer x' } });
     expect(res.statusCode).toBe(200);
-    expect(res.json().data[0].messageRequest).toEqual({ since: REQUEST_SINCE.toISOString(), filtered: true, mediaBlurred: true });
+    const row = res.json().data[0];
+    expect(row.messageRequest).toEqual({ since: REQUEST_SINCE.toISOString(), filtered: true, mediaBlurred: true });
+    expect(JSON.stringify(row.participants ?? row.members ?? [])).not.toContain('messageRequest');
     await app.close();
   });
 

@@ -78,7 +78,7 @@ async function monterApp() {
       }),
       update: jest.fn<any>(async (a: any) => ({ id: a?.where?.id, ...a?.data })),
     },
-    user: {
+    user: { findMany: jest.fn<any>(async () => []),
       findFirst: jest.fn<any>(async () => ({
         id: BOB, username: 'bob', displayName: 'Bob', firstName: null, lastName: null, avatar: null, systemLanguage: 'fr',
       })),

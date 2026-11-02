@@ -92,7 +92,7 @@ function prismaDouble(bobAlreadyMember: boolean) {
       }),
       update: jest.fn(async (args: { where: { id: string }; data: Record<string, unknown> }) => ({ id: args.where.id, ...args.data, user: bob })),
     },
-    user: {
+    user: { findMany: jest.fn(async () => []),
       findFirst: jest.fn(async () => bob),
       findUnique: jest.fn(async () => bob),
     },

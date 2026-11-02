@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { shieldedRecipients } from '../../services/messaging/messageRequests';
 import { MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -193,7 +194,8 @@ export function registerInviteRoute(
         }
       });
 
-      if (!userToInvite) {
+      // #14107 (RG-21, RG-22) — le Public ne fait pas entrer un mineur dans un groupe : introuvable.
+      if (!userToInvite || (await shieldedRecipients(fastify.prisma, inviterId, [userId])).has(userId)) {
         return sendNotFound(reply, 'User not found');
       }
 

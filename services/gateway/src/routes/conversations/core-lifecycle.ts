@@ -24,6 +24,7 @@ import {
 import { isBlockedBetween } from '../../utils/blocking';
 import {
   decideDirectOpening,
+  shieldedRecipients,
   requestRecipientFields,
   requesterPermissionsFor,
   type DirectOpening
@@ -288,8 +289,10 @@ export function registerCreateConversationRoute(
       const opening: DirectOpening = type === 'direct' && uniqueParticipantIds.length === 1
         ? await decideDirectOpening(prisma, { senderId: userId, recipientId: uniqueParticipantIds[0], now: openedAt })
         : { kind: 'direct' };
-      if (opening.kind === 'refused') {
-        throw createError(ErrorCode.MESSAGE_REQUEST_REFUSED);
+      // Le bouclier rend la cible INTROUVABLE (404), jamais « mineure ».
+      const shielded = type === 'direct' ? new Set<string>() : await shieldedRecipients(prisma, userId, uniqueParticipantIds);
+      if (opening.kind === 'refused' || shielded.size > 0) {
+        throw createError(ErrorCode.USER_NOT_FOUND);
       }
 
       const allUserIds = [userId, ...uniqueParticipantIds];
