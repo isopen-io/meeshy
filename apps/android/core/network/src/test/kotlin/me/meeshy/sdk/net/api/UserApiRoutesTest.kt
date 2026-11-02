@@ -23,16 +23,6 @@ class UserApiRoutesTest {
     }
 
     @Test
-    fun `a public profile resolves by username on the u address`() = runTest {
-        val http = RecordingHttp(responseBody = """{"success":true,"data":{"id":"u1","username":"alice"}}""")
-        val response = http.serve(UserApi::class.java).getProfileByUsername("alice")
-
-        assertThat(http.only.method).isEqualTo("GET")
-        assertThat(http.only.path).isEqualTo("/api/v1/u/alice")
-        assertThat(response.data!!.username).isEqualTo("alice")
-    }
-
-    @Test
     fun `mentions of the user and of a message are readable`() = runTest {
         val mine = RecordingHttp(
             responseBody = """{"success":true,"data":[{"id":"m1","messageId":"x","message":{"id":"x","content":"hi @me","sender":null,"conversation":{"id":"c","title":"T","type":"group"}}}]}""",
@@ -48,5 +38,21 @@ class UserApiRoutesTest {
         val users = forMessage.serve(MentionsApi::class.java).forMessage("x")
         assertThat(forMessage.only.path).isEqualTo("/api/v1/mentions/messages/x")
         assertThat(users.data!!.single().mentionedUser!!.username).isEqualTo("alice")
+    }
+
+    @Test
+    fun `mention suggestions are asked for a context and keep the server order`() = runTest {
+        val http = RecordingHttp(
+            responseBody = """{"success":true,"data":[{"id":"u1","username":"anna","displayName":null,"avatar":null,"badge":"friend","inConversation":false,"isFriend":true,"group":"known"},{"id":"u2","username":"zed","displayName":"Zed","avatar":"z.png","badge":"other","inConversation":true,"isFriend":false,"profileDecor":{"ring":"x"}}]}""",
+        )
+        val suggestions = http.serve(MentionsApi::class.java).suggestions(contextId = "p1", contextType = "post", query = "an")
+        assertThat(http.only.method).isEqualTo("GET")
+        assertThat(http.only.path).isEqualTo("/api/v1/mentions/suggestions")
+        assertThat(http.only.queryParameter("contextId")).isEqualTo("p1")
+        assertThat(http.only.queryParameter("contextType")).isEqualTo("post")
+        assertThat(http.only.queryParameter("query")).isEqualTo("an")
+        assertThat(suggestions.data!!.map { it.id }).containsExactly("u1", "u2").inOrder()
+        assertThat(suggestions.data!!.first().group).isEqualTo("known")
+        assertThat(suggestions.data!!.last().group).isNull()
     }
 }

@@ -553,7 +553,7 @@ sans préchargement distant. Pureté SDK : ce fichier ne connaît ni
 
 **Fichiers**
 - Modifier : `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost.swift` (**`init` + propriété seulement**)
-- Modifier : `apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift` (`mediaSeed: nil` + sa raison)
+- Modifier : `apps/ios/Meeshy/Features/Stories/Views/StoryTrayActions.swift` (`mediaSeed: nil` + sa raison)
 - Modifier : `apps/ios/Meeshy/Features/Main/Composer/ComposerMoodSurface.swift` (idem)
 - Modifier : `apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift` (idem)
 - Modifier : `apps/ios/MeeshyTests/Unit/Composer/MeeshyComposerHostGuardTests.swift`

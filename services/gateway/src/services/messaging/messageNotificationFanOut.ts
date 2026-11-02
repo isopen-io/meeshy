@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { isEndToEndMode } from './e2eePlaintextAdmission';
 import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
 import {
   maskedAttachment,
@@ -207,10 +208,39 @@ const attachmentTypeOf = (mimeType?: string | null): 'image' | 'video' | 'audio'
   mimeType?.startsWith('video/') ? 'video' :
   mimeType?.startsWith('audio/') ? 'audio' : 'document';
 
+/**
+ * #14309 — le FICHIER qu'une bannière de message attache, et rien de plus
+ * (décision porteur du 2026-11-01) : une image ne voyage plus qu'en VIGNETTE,
+ * jamais en haute définition ; une vidéo, jamais (sa vignette part par
+ * `contentDetail.videoThumbnailUrl`) ; un document, jamais. Un audio garde son
+ * fichier : il ne se VOIT pas, et l'écoute depuis la notification (#10641)
+ * s'adresse à lui.
+ *
+ * La vignette remplace le fichier : son type annoncé est celui d'une vignette
+ * du serveur (JPEG), et aucune taille ne l'accompagne — celle de l'original
+ * décrirait un autre fichier (cf. `servedAttachmentMedia`).
+ */
+function pushedAttachmentFile(first: { readonly mimeType?: string | null; readonly fileUrl?: string | null; readonly thumbnailUrl?: string | null } | undefined): {
+  readonly firstAttachmentUrl?: string;
+  readonly firstAttachmentMimeType?: string;
+  readonly firstAttachmentIsThumbnail?: true;
+} {
+  const mime = first?.mimeType ?? '';
+  if (mime.startsWith('audio/')) {
+    return { firstAttachmentUrl: first?.fileUrl || undefined, firstAttachmentMimeType: mime || undefined };
+  }
+  if (mime.startsWith('image/') && first?.thumbnailUrl) {
+    return { firstAttachmentUrl: first.thumbnailUrl, firstAttachmentMimeType: 'image/jpeg', firstAttachmentIsThumbnail: true };
+  }
+  return { firstAttachmentMimeType: mime || undefined };
+}
+
 type BannerAttachmentRow = {
   readonly mimeType?: string | null;
   readonly fileName?: string | null;
   readonly originalName?: string | null;
+  readonly pageCount?: number | null;
+  readonly lineCount?: number | null;
 };
 
 /**
@@ -221,7 +251,14 @@ type BannerAttachmentRow = {
  */
 function bannerAttachmentOf(att: BannerAttachmentRow): NotificationAttachmentSummary {
   if (!isContactCardAttachment({ mimeType: att.mimeType, fileName: att.originalName ?? att.fileName })) {
-    return { type: attachmentTypeOf(att.mimeType), filename: att.fileName };
+    return {
+      type: attachmentTypeOf(att.mimeType),
+      filename: att.fileName,
+      mimeType: att.mimeType,
+      originalName: att.originalName,
+      pageCount: att.pageCount,
+      lineCount: att.lineCount,
+    };
   }
   const contactName = contactCardNameFromFileName(att.originalName);
   return { type: 'contact', filename: `${contactName ?? 'contact'}.vcf`, contactName };
@@ -369,11 +406,32 @@ export async function notifyMessageRecipients(params: {
     const deadFor = await loadQuoteCascadeAudience(prisma, message.replyToId);
     const validatedMentionUserIds = (params.validatedMentionUserIds ?? []).filter((id) => !deadFor.has(id));
 
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: {
+        title: true,
+        type: true,
+        encryptionMode: true,
+        participants: {
+          where: { isActive: true, type: 'user' },
+          select: { userId: true },
+        },
+      },
+    });
+    if (!conversation) return;
+
     // Le contenu qu'un message PROTÉGÉ (éphémère, vue unique, flouté, chiffré)
     // est autorisé à montrer sur un écran verrouillé — jamais le contenu lui-même.
+    //
+    // #12518 — le chiffrement se lit sur le MODE DE LA CONVERSATION, pas sur les
+    // seuls champs de la ligne : un message hérité, ou écrit par un chemin qui
+    // n'a pas posé `encryptionMode`, ne rouvre pas l'écran verrouillé.
     const protectedOverride = protectedPreview({
       messageType: message.messageType,
-      isEncrypted: message.isEncrypted === true || message.encryptionMode === 'e2ee',
+      isEncrypted:
+        message.isEncrypted === true
+        || isEndToEndMode(message.encryptionMode)
+        || isEndToEndMode(conversation.encryptionMode),
       isViewOnce: message.isViewOnce,
       isBlurred: message.isBlurred,
       effectFlags: message.effectFlags,
@@ -391,19 +449,6 @@ export async function notifyMessageRecipients(params: {
 
     const sender = await resolveNotificationSender({ prisma, senderParticipantId });
     if (!sender) return;
-
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: {
-        title: true,
-        type: true,
-        participants: {
-          where: { isActive: true, type: 'user' },
-          select: { userId: true },
-        },
-      },
-    });
-    if (!conversation) return;
 
     const memberIds = conversation.participants
       .map(p => p.userId)
@@ -445,6 +490,8 @@ export async function notifyMessageRecipients(params: {
         isViewOnce: true, isBlurred: true, effectFlags: true,
         // #8857 — la vignette d'une VIDÉO, déjà en base : la bannière la montre.
         thumbnailUrl: true,
+        // #14309 — ce que la synthèse du corps compte : pages d'un document, lignes d'un texte.
+        pageCount: true, lineCount: true,
       },
     });
 
@@ -497,8 +544,7 @@ export async function notifyMessageRecipients(params: {
           attachmentCount: attachments.length,
           firstAttachmentType: attachmentTypeOf(first?.mimeType),
           firstAttachmentFilename: first ? bannerAttachmentOf(first).filename ?? undefined : undefined,
-          firstAttachmentUrl: first?.fileUrl || undefined,
-          firstAttachmentMimeType: first?.mimeType || undefined,
+          ...pushedAttachmentFile(first),
           firstAttachmentId: first?.id || undefined,
         }
       : {};

@@ -156,7 +156,7 @@ final class ComposerCaptureEditTests: XCTestCase {
     /// Le témoin de source du look vidéo (#9329) : le chemin « Terminé » rend par
     /// l'exporteur unique, avec le cadrage réglé en retouche.
     func test_finishEditingVideo_exportsThroughTheSingleExporter_withTheFraming() throws {
-        let edition = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift")
+        let edition = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureSession+Edit.swift")
         XCTAssertTrue(edition.contains("ComposerLookVideoExporter.export(url, look: regard, framing: cadrage"),
                       "la vidéo de la scène part avec son look et son cadrage")
         XCTAssertTrue(edition.contains("ComposerLookPainter.renderPhoto(photo, look: regard, framing: cadrage"),
@@ -227,7 +227,7 @@ final class ComposerCaptureEditTests: XCTestCase {
     }
 
     func test_theTopRow_whileEditing_hidesFlashFlipAndExposure_andTheCrossCancels() throws {
-        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
         XCTAssertTrue(barre.contains("var editing = false"))
         XCTAssertTrue(barre.contains("trailingItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode)"),
                       "le curseur du flash ne règle que l'objectif qui vise")
@@ -236,7 +236,7 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertFalse(retouche.contains(.flip), "le retournement s'efface en édition")
         XCTAssertFalse(retouche.contains(.flash), "le flash aussi")
         XCTAssertTrue(barre.contains("ComposerCaptureCopy.cancelEdit"), "la croix dit ce qu'elle fait en édition")
-        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("editing: session.phase.isEditing"))
         // Depuis #9781, la croix d'une prise que Photos n'a pas encore demande d'abord confirmation ;
         // sans confirmation à demander comme après elle, c'est la RETOUCHE qu'elle abandonne.
@@ -247,13 +247,13 @@ final class ComposerCaptureEditTests: XCTestCase {
     }
 
     func test_editScreen_paintsTheEditedSource_reframesWithTheFingers_andOffersDone() throws {
-        let apercu = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let apercu = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(apercu.contains("session.editSource"), "en édition, le peintre lit la photo figée ou la boucle")
         XCTAssertTrue(apercu.contains("framing: session.framing"), "l'aperçu montre le cadrage réglé")
         XCTAssertTrue(apercu.contains("ComposerCaptureSurfaceRule.editFPS(session.thermalBudget)"))
         XCTAssertTrue(apercu.contains("session.reframe(from:"), "un doigt déplace le média")
         XCTAssertTrue(apercu.contains("session.rezoom(from:"), "deux doigts le zooment")
-        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("session.editSource ?? session.camera.liveFeed"),
                       "les miniatures se peignent sur le média retouché")
     }
@@ -263,15 +263,15 @@ final class ComposerCaptureEditTests: XCTestCase {
     /// (X) et « Terminé » sont alignés en haut, au-dessus du sol — jamais en bas,
     /// jamais sur la scène.
     func test_done_sitsTopRight_alignedWithTheCross_andNoLongerAtTheBottom() throws {
-        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
         let retouche = ComposerCaptureTopRow.Input(stage: .armed, editing: true, offersSave: true)
         XCTAssertEqual(ComposerCaptureTopRow.leading(retouche), [.close])
         XCTAssertEqual(ComposerCaptureTopRow.trailing(retouche).last, .done, "« Terminé » ferme la rangée, à droite")
         XCTAssertTrue(barre.contains("ComposerCaptureCopy.done"))
         XCTAssertTrue(barre.contains(".disabled(rendering)"), "un second toucher pendant le rendu ne remet rien")
-        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("onDone: { session.finishEditing() }"))
-        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertFalse(bas.contains("session.finishEditing()"), "« Terminé » a quitté le bas")
         XCTAssertFalse(bas.contains("ComposerCaptureCopy.done"))
     }
@@ -404,21 +404,21 @@ final class ComposerCaptureEditTests: XCTestCase {
     }
 
     func test_editScreen_mountsTheSceneOnTheFloor_withCornerBrackets_andOnlyThreeTools() throws {
-        let montage = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureMount.swift")
+        let montage = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureMount.swift")
         XCTAssertTrue(montage.contains("ComposerEditScene.area("), "les deux couches lisent la même zone")
         XCTAssertTrue(montage.contains("ComposerEditScene.rect("))
         XCTAssertTrue(montage.contains("marges.safeAreaInsets"), "la couche de l'image retrouve les marges qu'elle ignore")
-        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("ComposerCropBrackets("), "quatre crochets aux angles de la scène")
         XCTAssertTrue(chrome.contains("session.setEditAspect("))
-        let crochets = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCropBrackets.swift")
+        let crochets = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCropBrackets.swift")
         XCTAssertTrue(crochets.contains("ComposerEditScene.cropped("), "le geste passe par la règle")
         XCTAssertTrue(crochets.contains("MeeshyControlSize.tapTarget"), "chaque crochet est une cible de 44 pt")
         XCTAssertTrue(crochets.contains("lineCap: .round"), "des crochets arrondis")
         XCTAssertTrue(chrome.contains("ComposerCropPresetBar("), "les proportions par presets, sur la scène (#10930)")
-        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("onTool: { session.toggleEditTool($0) }"))
-        let apercu = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let apercu = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(apercu.contains("ComposerCapturePlacement.radius(for: size, editing: session.phase.isEditing,\n                                                           framed: session.editFramesScene)"),
                       "la scène recadrée a des coins arrondis")
         XCTAssertEqual(ComposerCapturePlacement.radius(for: .fullScreen, editing: true, framed: true),
@@ -430,7 +430,7 @@ final class ComposerCaptureEditTests: XCTestCase {
     }
 
     func test_trimTrack_showsItsBoundsToTheMillisecond_andWearsOneRoundedFrame() throws {
-        let piste = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerTrimTrack.swift")
+        let piste = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerTrimTrack.swift")
         XCTAssertTrue(piste.contains("private var bounds: some View {"), "les bornes se lisent en permanence")
         XCTAssertGreaterThanOrEqual(piste.components(separatedBy: "ComposerTrimRule.millisecondText(").count - 1, 5)
         XCTAssertTrue(piste.contains("UnevenRoundedRectangle("), "les poignées ferment un cadre arrondi d'un seul tenant")
@@ -442,7 +442,7 @@ final class ComposerCaptureEditTests: XCTestCase {
     /// vue ait sa taille (montage, carte ↔ plein écran) : sans trame suivante pour
     /// la rattraper, c'est la toile qui change de taille qui doit redessiner.
     func test_theSurface_redrawsWhenItsCanvasResizes_becauseAStillSourceWarnsOnlyOnce() throws {
-        let surface = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerLiveLookSurface.swift")
+        let surface = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerLiveLookSurface.swift")
         guard let debut = surface.range(of: "drawableSizeWillChange size: CGSize) {"),
               let fin = surface.range(of: "func draw(in view: MTKView)", range: debut.upperBound..<surface.endIndex)
         else { return XCTFail("le moteur de la surface a changé de forme") }
@@ -567,7 +567,7 @@ final class ComposerCaptureEditTests: XCTestCase {
     }
 
     func test_cameraBar_hidesTheSaveOnceTheTakeIsSaved() throws {
-        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
         XCTAssertTrue(barre.contains("offersSave: onSave != nil && saveState.showsSave"))
     }
 
@@ -708,9 +708,9 @@ final class ComposerCaptureEditTests: XCTestCase {
     }
 
     func test_cameraBar_offersTheSaveArrow_wiredToTheSession() throws {
-        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("onSave: { session.saveTakeToPhotos() }"))
-        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
         XCTAssertTrue(barre.contains("arrow.down.to.line"))
         XCTAssertTrue(barre.contains("MeeshyControlSize.tapTarget"))
         XCTAssertFalse(ComposerCaptureCopy.saveToPhotos.isEmpty)

@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import { ADMIN_FICHES, adminListRoute, type AdminBack, type AdminSectionId } from '@/lib/admin/admin-routes';
 import { useAdminReach, type AdminReach } from '@/lib/admin/use-admin-reach';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import { translate } from '@/lib/i18n-catalog';
 import { useOptionalRoute } from '@/lib/router';
 import { AdminScreenFrame } from '@/routes/admin-shell';
 
@@ -48,7 +47,7 @@ export function AdminSectionScreen({
         ? title
         : isFiche
           ? translateAdmin(language, `admin.nav.${section}`)
-          : translate(language, 'admin.title');
+          : translateAdmin(language, 'admin.nav.dashboard');
 
   const frame = { language, title, back: target, heading: 'content' as const, backLabel, fills };
 

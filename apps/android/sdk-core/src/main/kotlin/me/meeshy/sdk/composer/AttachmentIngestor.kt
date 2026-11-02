@@ -36,6 +36,9 @@ interface AttachmentIngesting {
     suspend fun ingest(uri: Uri, id: String, info: AttachmentSourceInfo): IngestedFile?
     suspend fun ingestBytes(bytes: ByteArray, id: String, fileName: String?, mimeType: String): IngestedFile?
     suspend fun readBytes(path: String): ByteArray?
+
+    /** Le fichier de travail [path] tel qu'il part à la file d'envoi — adossé au fichier, jamais lu en mémoire ; `null` s'il a disparu. */
+    suspend fun uploadItem(path: String, fileName: String, mimeType: String): me.meeshy.sdk.media.MediaUploadItem?
     suspend fun delete(paths: Collection<String>)
 }
 
@@ -99,6 +102,11 @@ class AttachmentIngestor @Inject constructor(
 
     override suspend fun readBytes(path: String): ByteArray? =
         withContext(ioDispatcher) { runCatching { File(path).readBytes() }.getOrNull() }
+
+    override suspend fun uploadItem(path: String, fileName: String, mimeType: String): me.meeshy.sdk.media.MediaUploadItem? =
+        withContext(ioDispatcher) {
+            File(path).takeIf { it.isFile }?.let { me.meeshy.sdk.media.MediaUploadItem.onDisk(it, fileName, mimeType) }
+        }
 
     override suspend fun delete(paths: Collection<String>) {
         if (paths.isEmpty()) return

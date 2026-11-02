@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_file_download">Download</string>
+    <string name="bubble_file_downloading">Downloading %1$d%%</string>
+    <string name="bubble_file_downloading_unknown">Downloading…</string>
+    <string name="bubble_file_ready">Ready to open</string>
+    <string name="bubble_file_download_failed">Download failed — tap to retry</string>
+    <string name="bubble_piece_sealed">Encrypted attachment</string>
+    <string name="bubble_piece_sealed_a11y">Encrypted attachment, end-to-end — cannot be opened on this device</string>
+    <string name="bubble_file_cancel">Cancel download</string>
+</resources>

@@ -94,6 +94,8 @@ object SocketEventNames {
     // conversation
     const val CONVERSATION_CLOSED = "conversation:closed"
     const val CONVERSATION_DELETED = "conversation:deleted"
+    const val CONVERSATION_ENCRYPTION_CHANGED = "conversation:encryption-changed"
+    const val CONVERSATION_NEW = "conversation:new"
     const val CONVERSATION_PARTICIPANT_BANNED = "conversation:participant-banned"
     const val CONVERSATION_PARTICIPANT_JOINED = "conversation:participant-joined"
     const val CONVERSATION_PARTICIPANT_LEFT = "conversation:participant-left"
@@ -103,8 +105,11 @@ object SocketEventNames {
     const val CONVERSATION_UPDATED = "conversation:updated"
 
     // location
+    const val LOCATION_LIVE_START = "location:live-start"
     const val LOCATION_LIVE_STARTED = "location:live-started"
+    const val LOCATION_LIVE_STOP = "location:live-stop"
     const val LOCATION_LIVE_STOPPED = "location:live-stopped"
+    const val LOCATION_LIVE_UPDATE = "location:live-update"
     const val LOCATION_LIVE_UPDATED = "location:live-updated"
 
     // media
@@ -148,6 +153,12 @@ object SocketEventNames {
     const val PRESENCE_APP_STATE = "presence:app-state"
     const val PRESENCE_SNAPSHOT = "presence:snapshot"
 
+    // game
+    const val GAME_UPDATED = "game:updated"
+
+    // pack
+    const val PACK_INSTALLATION_UPDATED = "pack:installation-updated"
+
     // reaction
     const val PROFILE_DECOR_UPDATED = "profile:decor-updated"
     const val REACTION_ADDED = "reaction:added"
@@ -155,6 +166,12 @@ object SocketEventNames {
 
     // read-status
     const val READ_STATUS_UPDATED = "read-status:updated"
+
+    // relation (#13933, #13938) : tous serveur -> client, sur la room `user:<id>` ; aucun événement de baisse (RG-07)
+    const val RELATION_LEVEL_RAISED = "relation:level-raised"
+    const val RELATION_RITUAL_STARTED = "relation:ritual-started"
+    const val RELATION_RITUAL_PROGRESS = "relation:ritual-progress"
+    const val RELATION_RITUAL_COMPLETED = "relation:ritual-completed"
 
     // status
     const val STATUS_CREATED = "status:created"
@@ -186,6 +203,35 @@ object SocketEventNames {
     const val VIEWING_SNAPSHOT = "viewing:snapshot"
     const val VIEWING_START = "viewing:start"
     const val VIEWING_STOP = "viewing:stop"
+
+    // lot: chat-realtime-events-and-local-deltas (famille du fil)
+    const val ATTACHMENT_REACTION_ADD = "attachment:reaction-add"
+    const val ATTACHMENT_REACTION_ADDED = "attachment:reaction-added"
+    const val ATTACHMENT_REACTION_REMOVE = "attachment:reaction-remove"
+    const val ATTACHMENT_REACTION_REMOVED = "attachment:reaction-removed"
+    const val ATTACHMENT_DELETED = "attachment:deleted"
+    const val ATTACHMENT_READY = "attachment:ready"
+    const val ATTACHMENT_STATUS_UPDATED = "attachment-status:updated"
+    const val AUDIO_TRANSCRIPTION_FAILED = "audio:transcription-failed"
+    const val AUDIO_TRANSLATION_FAILED = "audio:translation-failed"
+    const val AUDIO_TRANSLATIONS_COMPLETED = "audio:translations-completed"
+    const val AUDIO_TRANSLATIONS_PROGRESSIVE = "audio:translations-progressive"
+    const val CONVERSATION_JOIN_ERROR = "conversation:join-error"
+    const val CONVERSATION_JOINED = "conversation:joined"
+    const val CONVERSATION_LEFT = "conversation:left"
+    const val CONVERSATION_STATS = "conversation:stats"
+    const val MESSAGE_CITED_POST_WITHDRAWN = "message:cited-post-withdrawn"
+
+    /** `engagement:conversation-updated` : l'instantané « N (M) 🔥 » du lecteur, vers sa room personnelle (#8906). */
+    const val ENGAGEMENT_CONVERSATION_UPDATED = "engagement:conversation-updated"
+    const val MESSAGE_CONSUMED = "message:consumed"
+    const val MESSAGE_COUNTDOWN_STARTED = "message:countdown-started"
+    const val MESSAGE_HIDDEN_FOR_ME = "message:hidden-for-me"
+    const val MESSAGE_PENDING_DELIVERED = "message:pending-delivered"
+    const val MESSAGE_RESTORED_FOR_ME = "message:restored-for-me"
+    const val MESSAGE_VIEW_ONCE_PURGED = "message:view-once-purged"
+    const val PARTICIPANT_RIGHTS_UPDATED = "participant:rights-updated"
+    const val TRANSLATION_FAILED = "translation:failed"
 
     /** Tous les noms du catalogue, dans l'ordre de déclaration. */
     val all: List<String> = listOf(
@@ -260,6 +306,8 @@ object SocketEventNames {
         COMMENT_UPDATED,
         CONVERSATION_CLOSED,
         CONVERSATION_DELETED,
+        CONVERSATION_ENCRYPTION_CHANGED,
+        CONVERSATION_NEW,
         CONVERSATION_PARTICIPANT_BANNED,
         CONVERSATION_PARTICIPANT_JOINED,
         CONVERSATION_PARTICIPANT_LEFT,
@@ -267,8 +315,13 @@ object SocketEventNames {
         CONVERSATION_RESTORED,
         CONVERSATION_UNREAD_UPDATED,
         CONVERSATION_UPDATED,
+        ENGAGEMENT_CONVERSATION_UPDATED,
+        GAME_UPDATED,
+        LOCATION_LIVE_START,
         LOCATION_LIVE_STARTED,
+        LOCATION_LIVE_STOP,
         LOCATION_LIVE_STOPPED,
+        LOCATION_LIVE_UPDATE,
         LOCATION_LIVE_UPDATED,
         MEDIA_CAPTION_TRANSLATION_UPDATED,
         MESSAGE_ATTACHMENT_UPDATED,
@@ -297,12 +350,17 @@ object SocketEventNames {
         POST_TRANSLATION_UPDATED,
         POST_UNLIKED,
         POST_UPDATED,
+        PACK_INSTALLATION_UPDATED,
         PRESENCE_APP_STATE,
         PRESENCE_SNAPSHOT,
         PROFILE_DECOR_UPDATED,
         REACTION_ADDED,
         REACTION_REMOVED,
         READ_STATUS_UPDATED,
+        RELATION_LEVEL_RAISED,
+        RELATION_RITUAL_STARTED,
+        RELATION_RITUAL_PROGRESS,
+        RELATION_RITUAL_COMPLETED,
         STATUS_CREATED,
         STATUS_DELETED,
         STATUS_REACTED,
@@ -324,5 +382,29 @@ object SocketEventNames {
         VIEWING_SNAPSHOT,
         VIEWING_START,
         VIEWING_STOP,
+        ATTACHMENT_REACTION_ADD,
+        ATTACHMENT_REACTION_ADDED,
+        ATTACHMENT_REACTION_REMOVE,
+        ATTACHMENT_REACTION_REMOVED,
+        ATTACHMENT_DELETED,
+        ATTACHMENT_READY,
+        ATTACHMENT_STATUS_UPDATED,
+        AUDIO_TRANSCRIPTION_FAILED,
+        AUDIO_TRANSLATION_FAILED,
+        AUDIO_TRANSLATIONS_COMPLETED,
+        AUDIO_TRANSLATIONS_PROGRESSIVE,
+        CONVERSATION_JOIN_ERROR,
+        CONVERSATION_JOINED,
+        CONVERSATION_LEFT,
+        CONVERSATION_STATS,
+        MESSAGE_CITED_POST_WITHDRAWN,
+        MESSAGE_CONSUMED,
+        MESSAGE_COUNTDOWN_STARTED,
+        MESSAGE_HIDDEN_FOR_ME,
+        MESSAGE_PENDING_DELIVERED,
+        MESSAGE_RESTORED_FOR_ME,
+        MESSAGE_VIEW_ONCE_PURGED,
+        PARTICIPANT_RIGHTS_UPDATED,
+        TRANSLATION_FAILED,
     )
 }

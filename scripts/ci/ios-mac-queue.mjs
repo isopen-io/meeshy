@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// File d'attente des suites iOS complètes [#9751]
+// File d'attente des suites iOS et SDK complètes [#9751]
 //
 // L'org tourne sur l'offre Free : 5 jobs macOS simultanés pour tout le compte.
 // Une suite complète en prend 5 à elle seule (build + 4 tranches, #9692). Deux
@@ -13,18 +13,27 @@
 // ubuntu qui ne coûte aucune place Mac : il attend qu'aucun run iOS PLUS
 // ANCIEN n'ait de suite complète en cours ou en attente.
 //
-// Une suite complète se reconnaît à ses jobs : la file elle-même, le build des
-// produits de test, ou une tranche. Les runs de compilation seule n'en ont
+// Une suite complète (app iOS ou SDK) se reconnaît à ses jobs : la file elle-même,
+// le build des produits de test, ou une tranche. Les runs de compilation seule n'en ont
 // aucun et ne bloquent personne.
 //
 // La file ne bloque jamais la CI : une erreur d'API ou une attente qui passe
 // `--max-minutes` laisse passer le run, avec un avertissement.
 //
+// L'ATTENTE COÛTE UN RUNNER LINUX, et l'offre Free en plafonne 20 pour tout le
+// compte, macOS compris (#12706). Avec 150 min d'attente permise, une dizaine de
+// files en attente bloquaient le 2026-10-24 la construction Docker, la CI et la
+// promotion en production plus de 40 min. Le plafond est donc de 20 min : au-delà,
+// le run laisse ses jobs macOS dans la file NATIVE de GitHub, qui n'occupe aucun
+// runner Linux — l'ordre premier arrivé premier servi n'est plus garanti, mais le
+// reste de la CI n'est plus pris en otage.
+//
 // Usage (dans le job, GITHUB_TOKEN / GITHUB_REPOSITORY / GITHUB_RUN_ID posés) :
-//   node scripts/ci/ios-mac-queue.mjs [--poll-seconds 90] [--max-minutes 150]
+//   node scripts/ci/ios-mac-queue.mjs [--poll-seconds 90] [--max-minutes 20]
 
 export const QUEUE_JOB = "File d'attente Mac";
-const FULL_SUITE_JOB = /^(File d'attente Mac|Build app \(produits de test\)|Tests unitaires — tranche \d+)$/;
+export const QUEUE_WORKFLOWS = ['ios.yml', 'sdk-tests.yml'];
+const FULL_SUITE_JOB = /^(File d'attente Mac|Build app \(produits de test\)|Tests unitaires — tranche \d+|Build SDK \(produits de test\)|Tests SDK — tranche \d+)$/;
 
 export const holdsMac = (jobs) =>
   jobs.some((job) => job.status !== 'completed' && FULL_SUITE_JOB.test(job.name));
@@ -48,8 +57,10 @@ const api = async (path) => {
   return response.json();
 };
 
+// Les suites iOS ET SDK se disputent les mêmes cinq Mac : une seule file, ordonnée par l'identifiant de run.
 const unfinishedRuns = async () =>
-  (await api('/actions/workflows/ios.yml/runs?per_page=50')).workflow_runs
+  (await Promise.all(QUEUE_WORKFLOWS.map((workflow) => api(`/actions/workflows/${workflow}/runs?per_page=50`))))
+    .flatMap((page) => page.workflow_runs)
     .filter((run) => run.status !== 'completed')
     .map((run) => ({ id: run.id, status: run.status }));
 
@@ -71,7 +82,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const main = async () => {
   const myRunId = Number(process.env.GITHUB_RUN_ID);
   const pollMs = option('poll-seconds', 90) * 1000;
-  const deadline = Date.now() + option('max-minutes', 150) * 60_000;
+  const deadline = Date.now() + option('max-minutes', 20) * 60_000;
   const started = Date.now();
   for (;;) {
     const blocking = await ahead(myRunId).catch((error) => {

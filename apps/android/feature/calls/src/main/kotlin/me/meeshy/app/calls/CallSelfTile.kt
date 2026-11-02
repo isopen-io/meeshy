@@ -1,6 +1,10 @@
 package me.meeshy.app.calls
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
@@ -50,12 +54,15 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallSafeInsets
+import me.meeshy.sdk.model.call.CallSelfTileControlsLaw
 import me.meeshy.sdk.model.call.CallSelfTileCorner
 import me.meeshy.sdk.model.call.CallSelfTileLaw
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.sdk.model.call.CallSelfTileScale
 import me.meeshy.sdk.model.call.CallTilePoint
+import me.meeshy.sdk.model.call.CallTileRect
 import me.meeshy.sdk.model.call.CallTileSize
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshyTheme
@@ -76,6 +83,11 @@ private val TileShadow = 8.dp
  * appel ; un toucher permute les deux vidéos. Pour TalkBack elle est ajustable (petite, moyenne,
  * grande) et dit son état de survie quand [paused].
  *
+ * Ses commandes l'ENTOURENT (iOS `CallSelfTileControlsPlacement`) : [effectsControls] ([effectsCount] boutons,
+ * « Effets · Écran ») au-dessus, [cameraControls] ([cameraCount] boutons, « Retourner · Caméra ») en dessous ; elles
+ * la suivent au glissé et s'effacent avec le chrome. Au repos, la vignette leur laisse la place sous l'en-tête et
+ * au-dessus de la pilule.
+ *
  * [content] est le flux qu'elle montre ; [overlay] se pose par-dessus, au coin (micro coupé du pair
  * après une permutation).
  */
@@ -87,6 +99,11 @@ internal fun CallSelfTile(
     reduceMotion: Boolean,
     onSwap: () -> Unit,
     modifier: Modifier = Modifier,
+    effectsCount: Int = 0,
+    cameraCount: Int = 0,
+    controlsVisible: Boolean = true,
+    effectsControls: @Composable () -> Unit = {},
+    cameraControls: @Composable () -> Unit = {},
     overlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -104,7 +121,10 @@ internal fun CallSelfTile(
         val haptics = LocalHapticFeedback.current
 
         val size = CallSelfTileLaw.tileSize(container, insets, scale, pinch)
-        val center = CallSelfTileLaw.center(corner, container, size, insets)
+        val rowBounds = CallSelfTileControlsLaw.bounds(container, insets)
+        fun restingCenter(at: CallSelfTileCorner): CallTilePoint =
+            CallSelfTileControlsLaw.restingCenter(CallSelfTileLaw.center(at, container, size, insets), size, rowBounds)
+        val center = restingCenter(corner)
 
         fun settle(target: CallSelfTileScale) {
             val previous = scale
@@ -125,7 +145,7 @@ internal fun CallSelfTile(
         fun dropAt(point: CallTilePoint) {
             val next = CallSelfTileLaw.nearestCorner(point, container, size, insets)
             val from = absolutePx(center, container, rtl, density) + drag
-            val to = absolutePx(CallSelfTileLaw.center(next, container, size, insets), container, rtl, density)
+            val to = absolutePx(restingCenter(next), container, rtl, density)
             corner = next
             val start = from - to
             if (reduceMotion) {
@@ -203,7 +223,33 @@ internal fun CallSelfTile(
             content()
             overlay()
         }
+
+        val rows = CallSelfTileControlsLaw.rows(center, size, rowBounds, effectsCount, cameraCount)
+        rows.effects?.let { CallSelfTileControlRowSlot(it, container, rtl, drag, controlsVisible, effectsControls) }
+        rows.camera?.let { CallSelfTileControlRowSlot(it, container, rtl, drag, controlsVisible, cameraControls) }
     }
+}
+
+/** Une rangée posée hors de la vignette, miroitée en lecture droite-à-gauche et décalée du glissé en cours. */
+@Composable
+private fun CallSelfTileControlRowSlot(
+    row: CallTileRect,
+    container: CallTileSize,
+    rtl: Boolean,
+    drag: Offset,
+    visible: Boolean,
+    content: @Composable () -> Unit,
+) {
+    val density = LocalDensity.current
+    val rowX = if (rtl) container.widthDp - row.xDp - row.widthDp else row.xDp
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(CallChromeVisibility.FADE_DURATION_MILLIS.toInt())),
+        exit = fadeOut(tween(CallChromeVisibility.FADE_DURATION_MILLIS.toInt())),
+        modifier = Modifier
+            .offset { IntOffset((rowX * density.density + drag.x).roundToInt(), (row.yDp * density.density + drag.y).roundToInt()) }
+            .size(row.widthDp.dp, row.heightDp.dp),
+    ) { content() }
 }
 
 @Composable

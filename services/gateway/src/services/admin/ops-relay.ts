@@ -9,6 +9,12 @@
  * blanche fixe d'actions, et publie son état dans `OPS_STATE_DIR` (monté en
  * lecture seule) : `ops.json`, `docker.json` et `containers.json` (#11441).
  *
+ * Le nettoyage n'est permis qu'aux heures creuses, de 02:00 à 06:00 heure de Paris
+ * (#11452) : hors fenêtre, la demande est refusée AVANT tout dépôt
+ * (`OPERATION_OUTSIDE_WINDOW`), et la prochaine disponibilité servie est la plus
+ * tardive du délai et de la fenêtre (`serverOperationAvailableAt`). Le runner
+ * rejette de son côté une demande traitée hors fenêtre : il fait foi.
+ *
  * Les deux fichiers lus sont une FRONTIÈRE DE CONFIANCE : bornés en taille et
  * validés à chaque lecture. Absents, illisibles ou hors schéma, ils valent
  * `null` — jamais une erreur qui remonte.
@@ -26,10 +32,12 @@ import {
   OPS_ENVIRONMENTS,
   OPS_REQUEST_FILE_MAX_BYTES,
   SERVER_OPERATIONS,
-  SERVER_OPERATION_COOLDOWN_MS,
+  SERVER_OPERATION_WINDOWS,
   dockerUsageSchema,
   opsRequestFileSchema,
+  serverOperationAvailableAt,
   serverOperationStateFileSchema,
+  serverOperationWindowAt,
   type DockerUsage,
   type OpsEnvironment,
   type OpsRequestFile,
@@ -38,6 +46,7 @@ import {
   type ServerOperationRun,
   type ServerOperationStateFile,
   type ServerOperationStatus,
+  type ServerOperationWindowView,
 } from '@meeshy/shared/types/admin-ops';
 
 export type OpsEnv = Readonly<Record<string, string | undefined>>;
@@ -158,16 +167,19 @@ const queuedRunOf = (request: OpsRequestFile): ServerOperationRun => ({
   code: null,
 });
 
+/** La fin du délai ET de la fenêtre, le plus tardif ; `null` : permise maintenant (#11452). */
 const availableAtOf = (
   state: ServerOperationStateFile | null,
   operation: ServerOperation,
   now: Date,
-): string | null => {
-  const last = state?.lastAcceptedAt[operation];
-  if (!last) return null;
-  const available = Date.parse(last) + SERVER_OPERATION_COOLDOWN_MS[operation];
-  return available > now.getTime() ? new Date(available).toISOString() : null;
+): string | null => serverOperationAvailableAt({ operation, lastAcceptedAt: state?.lastAcceptedAt[operation], now });
+
+const windowViewOf = (operation: ServerOperation, now: Date): ServerOperationWindowView | null => {
+  const window = SERVER_OPERATION_WINDOWS[operation];
+  return window ? { ...window, open: serverOperationWindowAt(window, now).open } : null;
 };
+
+const outsideWindow = (operation: ServerOperation, now: Date): boolean => windowViewOf(operation, now)?.open === false;
 
 const isLiveRun = (run: ServerOperationRun | null | undefined, now: Date): boolean =>
   !!run &&
@@ -179,7 +191,8 @@ export type SubmitResult =
   | { readonly kind: 'refused'; readonly status: 503; readonly code: 'OPS_RELAY_UNAVAILABLE' }
   | { readonly kind: 'refused'; readonly status: 503; readonly code: 'AUDIT_UNAVAILABLE' }
   | { readonly kind: 'refused'; readonly status: 409; readonly code: 'OPERATION_IN_PROGRESS' }
-  | { readonly kind: 'refused'; readonly status: 409; readonly code: 'OPERATION_COOLDOWN'; readonly availableAt: string };
+  | { readonly kind: 'refused'; readonly status: 409; readonly code: 'OPERATION_COOLDOWN'; readonly availableAt: string }
+  | { readonly kind: 'refused'; readonly status: 409; readonly code: 'OPERATION_OUTSIDE_WINDOW'; readonly availableAt: string };
 
 export type OpsRelay = {
   readonly settings: OpsSettings;
@@ -227,6 +240,8 @@ export function createOpsRelay(options: OpsRelayOptions): OpsRelay {
     const now = options.now();
     const state = await readOpsState(settings.stateDir);
     const availableAt = availableAtOf(state, operation, now);
+    /* Hors fenêtre, c'est la fenêtre qui refuse, même sous un délai : `availableAt` dit déjà le plus tardif des deux. */
+    if (availableAt && outsideWindow(operation, now)) return { kind: 'refused', status: 409, code: 'OPERATION_OUTSIDE_WINDOW', availableAt };
     if (availableAt) return { kind: 'refused', status: 409, code: 'OPERATION_COOLDOWN', availableAt };
 
     const pending = await pendingRequests(requestsDir);
@@ -276,6 +291,7 @@ export function createOpsRelay(options: OpsRelayOptions): OpsRelay {
       relayInstalled: writable && state !== null,
       runs: { [backup]: runOf(backup), [imagePrune]: runOf(imagePrune) },
       availableAt: { [backup]: availableAtOf(state, backup, now), [imagePrune]: availableAtOf(state, imagePrune, now) },
+      windows: { [backup]: windowViewOf(backup, now), [imagePrune]: windowViewOf(imagePrune, now) },
     };
   };
 

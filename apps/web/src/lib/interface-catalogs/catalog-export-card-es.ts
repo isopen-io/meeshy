@@ -135,6 +135,7 @@ const es = {
   'export.card.compose.post': 'Publicación arriba',
   'export.card.compose.replies': 'Respuestas en la tarjeta',
   'export.card.compose.folded': '+{count} respuestas',
+  'export.card.compose.thread': 'Hilo de comentarios',
   'export.card.compose.head': 'Medio arriba',
   'export.card.compose.head.image': 'Foto {position}',
   'export.card.compose.head.video': 'Vídeo {position}',

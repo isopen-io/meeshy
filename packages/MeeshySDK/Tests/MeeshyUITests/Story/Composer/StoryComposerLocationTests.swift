@@ -71,8 +71,16 @@ final class StoryComposerLocationTests: XCTestCase {
         // étiquette VoiceOver. Une icône nue et muette serait un bouton que
         // rien n'annonce. La clé est vérifiée ENTIÈRE — `story.location.add`
         // seule serait satisfaite par n'importe quel préfixe.
-        XCTAssertTrue(panel.contains("story.location.add.a11y"),
-                      "L'étiquette accessible du bouton « Lieu » passe par le catalogue (bundle: .module).")
+        // Depuis 07a8747f, l'étiquette nomme le FORMAT composé (story, post,
+        // réel) : le panneau la lit chez `ComposerFormatWording`, qui la tient
+        // du catalogue, clé par format.
+        XCTAssertTrue(panel.contains("a11y: formatWording.addPlace"),
+                      "L'étiquette accessible du bouton « Lieu » vient de ComposerFormatWording.")
+        let wording = try source("Sources/MeeshyUI/Story/ComposerFormatWording.swift")
+        for key in ["\"story.location.add.a11y\"", "\"story.location.add.a11y.post\"", "\"story.location.add.a11y.reel\""] {
+            XCTAssertTrue(wording.contains(key),
+                          "L'étiquette accessible du bouton « Lieu » passe par le catalogue (bundle: .module) : \(key).")
+        }
 
         let media = try source("Sources/MeeshyUI/Story/StoryComposerView+Media.swift")
         XCTAssertTrue(media.contains("$showLocationPicker"),

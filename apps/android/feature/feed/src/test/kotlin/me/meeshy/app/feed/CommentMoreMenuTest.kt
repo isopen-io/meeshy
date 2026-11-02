@@ -9,6 +9,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.card.PostCommentCardPart
+import me.meeshy.sdk.model.card.PostCommentCardSubject
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -16,7 +18,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/** iOS `CommentMoreMenu`: Copy text for all, Delete for one's own, behind a 44 dp « … ». */
+/** iOS `CommentMoreMenu`: Copy text for all, Imager when the comment composes a card (#13922), Delete for one's own, behind a 44 dp « … ». */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class CommentMoreMenuTest {
@@ -43,10 +45,19 @@ class CommentMoreMenuTest {
         isOwn = isOwn,
     )
 
-    private fun show(isOwn: Boolean) {
-        compose.setContent { MeeshyTheme { CommentMoreMenu(comment(isOwn), onDelete = { deleted += it }) } }
+    private fun show(isOwn: Boolean, imaging: CommentImaging? = null) {
+        compose.setContent { MeeshyTheme { CommentMoreMenu(comment(isOwn), onDelete = { deleted += it }, imaging = imaging) } }
         compose.waitForIdle()
     }
+
+    private val card = PostCommentCardSubject(
+        quoted = PostCommentCardPart("Awa", "Le coucher de soleil", "awa"),
+        reply = PostCommentCardPart("Amina", "Bonjour", null),
+        thread = emptyList(),
+        sentAtMillis = 0L,
+        quotedAtMillis = 0L,
+        media = emptyList(),
+    )
 
     @Test
     fun `the more button is a 44 dp target and nothing is deleted on the first touch`() {
@@ -77,5 +88,37 @@ class CommentMoreMenuTest {
         compose.onNodeWithContentDescription("More options").performClick()
 
         compose.onAllNodesWithText("Delete comment").assertCountEquals(0)
+    }
+
+    @Test
+    fun `a comment that composes a card offers Imager, after Copy and before Delete, and opens its card`() {
+        val opened = mutableListOf<Pair<String, PostCommentCardSubject>>()
+        show(isOwn = true, imaging = CommentImaging(cardOf = { card }, open = { id, composed -> opened += id to composed }))
+
+        compose.onNodeWithContentDescription("More options").performClick()
+        val copy = compose.onNodeWithText("Copy text").getBoundsInRoot().top
+        val imagine = compose.onNodeWithText("Picture it").getBoundsInRoot().top
+        val delete = compose.onNodeWithText("Delete comment").getBoundsInRoot().top
+        compose.onNodeWithText("Picture it").performClick()
+
+        assertThat(copy).isLessThan(imagine)
+        assertThat(imagine).isLessThan(delete)
+        assertThat(opened).containsExactly("c1" to card)
+    }
+
+    @Test
+    fun `a comment that composes nothing, or a host without the card workshop, offers no Imager`() {
+        show(isOwn = false, imaging = CommentImaging(cardOf = { null }, open = { _, _ -> }))
+        compose.onNodeWithContentDescription("More options").performClick()
+
+        compose.onAllNodesWithText("Picture it").assertCountEquals(0)
+    }
+
+    @Test
+    fun `without the card workshop there is no Imager`() {
+        show(isOwn = false)
+        compose.onNodeWithContentDescription("More options").performClick()
+
+        compose.onAllNodesWithText("Picture it").assertCountEquals(0)
     }
 }

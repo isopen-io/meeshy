@@ -31,7 +31,14 @@ enum StarredSnapshotFactory {
         )
     }
 
+    /// Le favori s'écrit dans les réglages de l'app, hors du coffre : un message
+    /// chiffré de bout en bout n'y laisse que son libellé (#12999), même lu.
+    static var sealedPreview: String {
+        String(localized: "message.overlay.preview.encrypted", defaultValue: "Message chiffré", bundle: .main)
+    }
+
     private static func previewText(of message: Message, attachmentKind: String?, translatedPreview: String?) -> String {
+        guard !message.isEncrypted, !message.isContentDecryptedOnDevice else { return sealedPreview }
         if let translated = translatedPreview, !translated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return translated
         }

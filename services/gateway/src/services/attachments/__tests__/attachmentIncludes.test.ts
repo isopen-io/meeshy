@@ -21,7 +21,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
     // Fields fetched from DB for server-side aggregation only — intentionally
     // absent from messageAttachmentSchema because they are transformed before
     // serialization. BUG2 A': raw reactions → reactionSummary + currentUserReactions.
-    const INTERNAL_AGGREGATION_FIELDS = new Set(['reactions']);
+    const INTERNAL_AGGREGATION_FIELDS = new Set(['reactions', 'message']);
 
     it('attachmentMediaSelect ⊆ messageAttachmentSchema.properties', () => {
       const missing = Object.keys(attachmentMediaSelect)
@@ -111,6 +111,13 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       );
     });
 
+    it('includes lensSlug — le crédit « Lens par X » voyage avec le média (#11327)', () => {
+      // Le média reçu affiche la lens qui l'a produit ; la LISTE de messages et le
+      // canal socket le livrent depuis ce select. Absent d'ici, le crédit ne
+      // s'affiche jamais, E2EE compris (l'identifiant voyage en clair, #11251).
+      expect(attachmentMediaSelect).toEqual(expect.objectContaining({ lensSlug: true }));
+    });
+
     it('keeps the full file + audio/video codec set', () => {
       expect(attachmentMediaSelect).toEqual(
         expect.objectContaining({
@@ -152,7 +159,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       });
     });
 
-    it('selects exactly 33 documented fields — guards against silent omission', () => {
+    it('selects exactly 34 documented fields — guards against silent omission', () => {
       const expectedKeys = [
         'id',
         'messageId',
@@ -186,10 +193,11 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'transcription',
         'translations',
         'capturedInApp',
+        'lensSlug',
         'reactions',
       ];
       expect(Object.keys(attachmentMediaSelect).sort()).toEqual(expectedKeys.sort());
-      expect(Object.keys(attachmentMediaSelect)).toHaveLength(33);
+      expect(Object.keys(attachmentMediaSelect)).toHaveLength(34);
     });
   });
 
@@ -327,7 +335,9 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         absentesDuDetail: [...clesSocket].filter((k) => !clesCompletes.has(k)).sort(),
       }).toEqual({
         absentesDuFil: [...ENVELOPPE_SERVEUR].sort(),
-        absentesDuDetail: [],
+        // #12333 — la description (et la protection du porteur qui la garde)
+        // est servie par le FIL ; le détail ne la sert pas encore.
+        absentesDuDetail: ['alt', 'altLanguage', 'altTranslations', 'message'],
       });
     });
   });

@@ -143,11 +143,12 @@ describe('createReactionNotification — le texte d’un message PROTÉGÉ ne pa
     expect((notification as any)?.content).toContain('🔥');
   });
 
-  it('témoin — un message ORDINAIRE garde son extrait', async () => {
+  it('témoin — un message ORDINAIRE se décrit par sa synthèse, jamais par son texte (#14309)', async () => {
     // Sans lui, un masque appliqué à tout le monde passerait pour un correctif.
     const { notification } = await runReaction(plainMessage);
 
-    expect((notification as any)?.content).toContain(SECRET);
+    expect((notification as any)?.content).toContain('Message texte');
+    expect((notification as any)?.content).not.toContain(SECRET);
   });
 });
 
@@ -160,7 +161,7 @@ const makeMentionPrisma = () => ({
   },
   participant: {
     findMany: jest.fn().mockResolvedValue([]),
-    findUnique: jest.fn().mockResolvedValue({ userId: AUTHOR_ID }),
+    findUnique: jest.fn().mockResolvedValue({ userId: AUTHOR_ID, isActive: true, conversationId: CONV_ID }),
   },
   user: {
     findUnique: jest.fn().mockResolvedValue({ username: 'alice', displayName: 'Alice', avatar: null }),
@@ -258,6 +259,7 @@ describe('reproduceEditedMessageNotifications — une édition ne DÉMASQUE pas 
       undefined
     );
 
-    expect(JSON.stringify(written(prisma))).toContain('texte corrigé');
+    expect(written(prisma)[0]?.content).toBe('Petit message texte');
+    expect(JSON.stringify(written(prisma))).not.toContain('texte corrigé');
   });
 });

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_preview_sound_on">Activer le son</string>
+    <string name="call_preview_sound_off">Couper le son</string>
+    <string name="call_preview_sound_hint">Écoute l’appelant avant de décrocher</string>
+    <string name="call_preview_seen_by">%1$s vous voit avant de décrocher</string>
+    <string name="call_preview_heard_by">%1$s vous entend avant de décrocher</string>
+    <string name="call_preview_heard_and_seen_by">%1$s vous entend et vous voit avant de décrocher</string>
+    <string name="call_preview_mic_a11y">Micro avant le décroché</string>
+    <string name="call_preview_mic_hint">Décide si %1$s vous entend avant de décrocher</string>
+    <string name="call_preview_camera_a11y">Caméra avant le décroché</string>
+    <string name="call_preview_camera_hint">Décide si %1$s vous voit avant de décrocher</string>
+</resources>

@@ -1,6 +1,6 @@
 /**
  * LES COTES DE LA RANGÉE PLATE — DÉRIVÉES de
- * `apps/ios/Meeshy/Features/Main/Focal/Core/FocalMetrics.swift`, gardées par
+ * `apps/ios/Meeshy/Features/Focal/Core/FocalMetrics.swift`, gardées par
  * `scripts/check-curve.mjs` (même dispositif, même raison, que
  * `src/lib/lens/law.ts` pour `LentilleMetrics.swift` : une comparaison
  * texte-à-texte sur des LITTÉRAUX, jamais une importation de tout le SDK

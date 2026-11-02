@@ -22,6 +22,16 @@ except ImportError:
     logger.warning("⚠️ Cache Redis non disponible")
 
 
+def segments_without_cache(segments: List[Dict[str, Any]]) -> Tuple[List[Optional[Dict]], List[Tuple[int, str]]]:
+    """Le résultat de `check_cache_batch` quand aucun cache ne sert : toute ligne non vide est à traduire."""
+    to_translate = [
+        (i, seg.get('text', ''))
+        for i, seg in enumerate(segments)
+        if seg.get('type') == 'line' and seg.get('text', '').strip()
+    ]
+    return [None] * len(segments), to_translate
+
+
 class TranslationCache:
     """
     Gestionnaire de cache pour traductions
@@ -92,7 +102,8 @@ class TranslationCache:
         target_lang: str,
         translated_text: str,
         model_type: str,
-        ttl: Optional[int] = None
+        ttl: Optional[int] = None,
+        message_id: Optional[str] = None
     ):
         """
         Enregistre une traduction dans le cache
@@ -115,7 +126,8 @@ class TranslationCache:
                 target_lang=target_lang,
                 translated_text=translated_text,
                 model_type=model_type,
-                ttl=ttl
+                ttl=ttl,
+                message_id=message_id
             )
         except Exception as e:
             logger.debug(f"Erreur mise en cache: {e}")
@@ -142,12 +154,7 @@ class TranslationCache:
                 - segments_à_traduire: Liste de (index, texte) à traduire
         """
         if not self.is_available():
-            # Pas de cache, tout à traduire
-            segments_to_translate = []
-            for i, seg in enumerate(segments):
-                if seg.get('type') == 'line' and seg.get('text', '').strip():
-                    segments_to_translate.append((i, seg.get('text', '')))
-            return [None] * len(segments), segments_to_translate
+            return segments_without_cache(segments)
 
         cached_results = [None] * len(segments)
         segments_to_translate = []
@@ -204,7 +211,8 @@ class TranslationCache:
         cache_items: List[Tuple[str, str]],
         source_lang: str,
         target_lang: str,
-        model_type: str
+        model_type: str,
+        message_id: Optional[str] = None
     ):
         """
         Met en cache plusieurs résultats en parallèle (fire-and-forget)
@@ -227,7 +235,8 @@ class TranslationCache:
                     source_lang=source_lang,
                     target_lang=target_lang,
                     translated_text=trans_text,
-                    model_type=model_type
+                    model_type=model_type,
+                    message_id=message_id
                 )
                 tasks.append(task)
 

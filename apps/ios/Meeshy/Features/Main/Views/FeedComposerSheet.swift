@@ -26,18 +26,28 @@ struct FeedComposerSheet: View {
     @ObservedObject var viewModel: FeedViewModel
     let initialText: String
     let pendingAttachmentType: String?
-    var quotePost: FeedPost? = nil
+    var quotePost: FeedPost?
     let onDismiss: () -> Void
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
-    @ObservedObject private var authManager = AuthManager.shared
+    @ObservedObject private var authManager: AuthManager
     @State private var composerText = ""
     @State private var delays = DelayedActions()
     @FocusState private var isFocused: Bool
     /// Une pièce en attente, ouverte dans la retouche de la caméra (#11170).
     @State private var pieceToRetouch: ComposerRetouchPiece?
+
+    init(viewModel: FeedViewModel, initialText: String, pendingAttachmentType: String?, quotePost: FeedPost? = nil,
+         onDismiss: @escaping () -> Void, authManager: AuthManager = .shared) {
+        self.viewModel = viewModel
+        self.initialText = initialText
+        self.pendingAttachmentType = pendingAttachmentType
+        self.quotePost = quotePost
+        self.onDismiss = onDismiss
+        self.authManager = authManager
+    }
     @State private var videosToPreview: [URL] = []
 
     @State private var pendingAttachments: [MessageAttachment] = []
@@ -69,9 +79,9 @@ struct FeedComposerSheet: View {
     @State private var audiencePickerMode: PostVisibility? = nil
 
     /// La visibilité choisie, relue comme un mode du modèle — un `rawValue`
-    /// inconnu (état corrompu) retombe sur PUBLIC, le défaut produit.
+    /// inconnu se lit RESTREINT (#13939), jamais public.
     private var selectedPostVisibility: PostVisibility {
-        PostVisibility(rawValue: postVisibility) ?? .public
+        PostVisibility(served: postVisibility)
     }
 
     /// EXCEPT sans exclus = privé fantôme ; ONLY sans inclus = invisible pour

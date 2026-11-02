@@ -37,9 +37,9 @@ final class ComposerCameraOpeningTests: XCTestCase {
     // MARK: - La session préparée avant d'être montrée
 
     func test_host_prewarmsTheCamera_whenTheFormatFilms() throws {
-        let hote = try Self.code("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+        let hote = try Self.code("Meeshy/Features/Composer/MeeshyComposerHost.swift")
         XCTAssertTrue(hote.contains("if filme { sceneCapture.prewarm() }"))
-        let capture = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
+        let capture = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession.swift")
         XCTAssertTrue(capture.contains("camera.prewarm()"))
     }
 

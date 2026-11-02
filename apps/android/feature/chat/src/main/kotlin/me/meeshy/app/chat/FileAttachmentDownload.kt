@@ -34,6 +34,8 @@ data class FileAttachmentDownloadUiState(
     /** True = open the file via `ACTION_VIEW` once downloaded ("Ouvrir"); false = hand it
      * to a share sheet instead ("Partager"). Decided once, at tap time. */
     val openWhenDone: Boolean,
+    /** True = « Enregistrer » une pièce (#13494) : téléchargée dans les Téléchargements, ni ouverte ni partagée. */
+    val saveOnly: Boolean = false,
 )
 
 enum class FileAttachmentDownloadFailure {
@@ -46,6 +48,10 @@ enum class FileAttachmentDownloadFailure {
     ServerError,
     /** The attachment has no `fileUrl` yet (still uploading, or a purely local echo). */
     NotAvailable,
+    /** The piece disappears (view-once, flame, blur) or sits in an encrypted conversation: it never leaves Meeshy. */
+    Protected,
+    /** « Enregistrer » n'a pas pu écrire dans les Téléchargements (permission refusée, stockage plein ou indisponible). */
+    SaveFailed,
 }
 
 /**

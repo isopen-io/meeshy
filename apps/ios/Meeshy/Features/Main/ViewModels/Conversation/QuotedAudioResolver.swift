@@ -12,7 +12,7 @@ enum QuotedAudioResolver {
         guard !quoted.isDeleted, !quoted.isViewOnce, !quoted.isBlurred, !quoted.isEncrypted else { return nil }
         if let expiresAt = quoted.expiresAt, expiresAt <= now { return nil }
         guard let attachment = reference.citedAttachment(among: quoted.attachments),
-              attachment.type == .audio, !attachment.isViewOnce, !attachment.isBlurred,
+              attachment.type == .audio, !attachment.declaresViewOnce, !attachment.declaresBlur,
               !attachment.fileUrl.isEmpty
         else { return nil }
         return QueuedAudio(

@@ -56,9 +56,8 @@ describe('normalizeLensLut', () => {
   it('une LUT 16 bits sort en 16 bits, chaque valeur intacte', async () => {
     const width = 32;
     const height = 8;
-    const raw16 = Buffer.alloc(width * height * 3 * 2);
-    for (let index = 0; index < width * height * 3; index += 1) raw16.writeUInt16LE((index * 977) % 65_536, index * 2);
-    const source = await sharp(raw16, { raw: { width, height, channels: 3, depth: 'ushort' } }).toColourspace('rgb16').png().toBuffer();
+    const raw16 = Uint16Array.from({ length: width * height * 3 }, (_, index) => (index * 977) % 65_536);
+    const source = await sharp(raw16, { raw: { width, height, channels: 3 } }).toColourspace('rgb16').png().toBuffer();
 
     const outcome = await normalizeLensLut(source);
 

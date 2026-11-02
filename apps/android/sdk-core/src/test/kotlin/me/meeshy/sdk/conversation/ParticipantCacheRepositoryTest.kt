@@ -2,6 +2,7 @@ package me.meeshy.sdk.conversation
 
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -87,6 +88,8 @@ class ParticipantCacheRepositoryTest {
         advanceUntilIdle()
 
         assertThat(net.calls).hasSize(2)
+        val revalidated = repo.observe("c1").first { roster -> roster?.members?.size == 2 }
+        assertThat(revalidated?.members?.map { it.id }).containsExactly("a", "b").inOrder()
         assertThat(ids(repo.firstPage("c1"))).containsExactly("a", "b").inOrder()
     }
 

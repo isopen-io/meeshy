@@ -76,44 +76,7 @@ extension StoryComposerViewModel {
     /// `"fit"` (letterbox) : dans ces cas le fond ne couvre pas le canvas et on
     /// matérialise ses contours (directive user 2026-07-14).
     var backgroundFillsCanvas: Bool {
-        Self.backgroundFillsCanvas(for: currentEffects)
-    }
-
-    /// Résolution pure (testable) : un fond visuel remplit le canvas sauf en
-    /// mode `"fit"`. Le double-tap du fond cycle `nil` (auto = aspectFill) →
-    /// `"fit"` (aspectFit) → `"fill"` (aspectFill) — seul `"fit"` laisse des
-    /// bandes vides. Le fit-mode du fond vit sur `backgroundTransform`.
-    static func backgroundFillsCanvas(for effects: StoryEffects) -> Bool {
-        guard effects.resolvedBackgroundMedia != nil else { return false }
-        return effects.backgroundTransform?.videoFitMode != "fit"
-    }
-
-    /// **La SCÈNE est figée en 9:16 — le fond n'impose plus sa forme
-    /// (directive porteur, 2026-08-31).**
-    ///
-    /// Elle suivait le ratio CONTINU du fond, clampé à [9/21, 21/9] : « l'import
-    /// du fond impose le cadre et forme du Canvas » (directive du 2026-07-14).
-    /// Une photo paysage donnait donc un canvas 16:9 — ce que le porteur a
-    /// mesuré sur capture, là où toutes les planches du document montrent une
-    /// scène verticale.
-    ///
-    /// **Ce que la règle d'avant coûtait, au-delà de la forme** : le canvas
-    /// changeait de proportion SOUS la composition. Un texte posé sur une scène
-    /// verticale se retrouvait ailleurs dès qu'on ajoutait un fond paysage, et
-    /// l'outil de dessin traçait sur un cadre qui n'était plus celui de la carte
-    /// (#4515). Une scène qui change de forme n'est plus une scène : c'est un
-    /// cadre qui suit son contenu, quand c'est au contenu de trouver sa place
-    /// dans le cadre.
-    ///
-    /// `nil` veut dire « portrait 9:16 » — la valeur par défaut de
-    /// `StoryCanvasAspect.from(ratio:)`. On n'écrit donc pas un nombre : **on
-    /// s'abstient d'en imposer un**, ce qui laisse le défaut du modèle décider.
-    ///
-    /// Ce qui est déjà PUBLIÉ garde son ratio : cette règle ne gouverne que ce
-    /// qui se compose maintenant. Et le média qui ne remplit pas la scène laisse
-    /// des bandes — elles se peignent, elles ne restent pas noires.
-    static func canvasAspectRatio(forBackgroundOf effects: StoryEffects) -> Double? {
-        nil
+        StorySceneFrame.backgroundFillsCanvas(for: currentEffects)
     }
 
     var isContentToolActive: Bool {
@@ -223,26 +186,26 @@ extension StoryComposerViewModel {
         (currentEffects.audioPlayerObjects?.count ?? 0)
     }
 
-    var canAddText: Bool { textCount < 5 }
+    var canAddText: Bool { textCount < StoryComposerLimits.maxTextsPerScene }
 
-    /// `public` : le bouton « Coller » du rail s'éteint quand la scène est
-    /// pleine — dix médias. Sans ce plafond lu de l'extérieur, il proposerait un
-    /// collage que la pose refuserait ensuite en silence.
-    public var canAddMedia: Bool { mediaCount < 10 }
+    /// `public` : le bouton « Coller » du rail s'éteint quand la scène ne peut
+    /// plus recevoir AUCUN média (images, vidéos et audios pleins). Sans ce
+    /// plafond lu de l'extérieur, il proposerait un collage que la pose
+    /// refuserait ensuite en silence.
+    public var canAddMedia: Bool { canAddImage || canAddVideo || canAddAudio }
 
-    var canAddImage: Bool {
-        canAddMedia &&
-        (currentEffects.mediaObjects?.filter { $0.kind == .image }.count ?? 0) < 5
-    }
+    var canAddImage: Bool { StoryComposerLimits.canAdd(.image, to: currentEffects) }
+    var canAddVideo: Bool { StoryComposerLimits.canAdd(.video, to: currentEffects) }
+    var canAddAudio: Bool { StoryComposerLimits.canAdd(.audio, to: currentEffects) }
+    public var canAddSticker: Bool { StoryComposerLimits.canAdd(.sticker, to: currentEffects) }
 
-    var canAddVideo: Bool {
-        canAddMedia &&
-        (currentEffects.mediaObjects?.filter { $0.kind == .video }.count ?? 0) < 4
-    }
+    /// Dit au composeur qu'un plafond vient de refuser un geste.
+    func refuse(_ limit: StoryComposerLimit) { onLimitReached?(limit) }
 
-    var canAddAudio: Bool {
-        canAddMedia &&
-        (currentEffects.audioPlayerObjects?.count ?? 0) < 5
+    /// `effects` reçoit-il un objet de plus de `limit` ? Sinon le refus se DIT.
+    func admits(_ limit: StoryComposerLimit, in effects: StoryEffects) -> Bool {
+        guard StoryComposerLimits.canAdd(limit, to: effects) else { refuse(limit); return false }
+        return true
     }
 
     @discardableResult
@@ -267,7 +230,7 @@ extension StoryComposerViewModel {
     }
 
     public func addText() -> StoryTextObject? {
-        guard canAddText else { return nil }
+        guard canAddText else { refuse(.text); return nil }
         let center = nextObjectPosition(in: currentEffects)
         // fontSize en design units (référentiel 1080-px). 96 design ≈ 36 pt
         // sur iPhone 16 Pro (scaleFactor ≈ 0.38) — taille parfaitement
@@ -324,7 +287,7 @@ extension StoryComposerViewModel {
         effects.audioPlayerObjects?.removeAll { $0.id == id }
         effects.stickerObjects?.removeAll { $0.id == id }
         // Retirer l'image de fond rend au canvas sa forme verticale par défaut.
-        effects.canvasAspectRatio = Self.canvasAspectRatio(forBackgroundOf: effects)
+        effects.canvasAspectRatio = StorySceneFrame.canvasAspectRatio(forBackgroundOf: effects)
         currentEffects = effects
         if selectedElementId == id { selectedElementId = nil }
         // Si on supprime le texte en cours d'édition flottante, sortir du mode.
@@ -384,7 +347,9 @@ extension StoryComposerViewModel {
         var effects = currentEffects
         var texts = effects.textObjects
         guard let index = texts.firstIndex(where: { $0.id == id }) else { return }
-        texts[index].text = text
+        let fitted = StoryComposerLimits.clampedText(text)
+        if fitted != text { refuse(.textLength) }
+        texts[index].text = fitted
         effects.textObjects = texts
         currentEffects = effects
     }
@@ -444,51 +409,46 @@ extension StoryComposerViewModel {
     /// Public depuis #4063 — même raison que `deleteElement`.
     public func duplicateElement(id: String) {
         var effects = currentEffects
-        if var text = effects.textObjects.first(where: { $0.id == id }) {
-            // Locked text objects (repost-attribution badge) are not duplicable —
-            // duplicating would create a second editable copy that strips intent.
-            if text.isLocked == true { return }
-            guard canAddText else { return }
-            text.id = UUID().uuidString
-            // Offset is 20 design pixels in the 1080x1920 canvas (≈2% x, ≈1% y).
-            // Small enough that the clone visibly overlaps its source so the
-            // user sees the duplication happened, large enough to be selectable
-            // independently. The previous 0.05 (54 design px) was too wide and
-            // jumped the clone outside the source's selection rect.
-            text.x = min(1.0, text.x + 20.0 / 1080.0)
-            text.y = min(1.0, text.y + 20.0 / 1920.0)
-            effects.textObjects.append(text)
-            selectedElementId = text.id
-        } else if var media = effects.mediaObjects?.first(where: { $0.id == id }) {
+        let copie: String
+        var devant = false
+        if let text = effects.textObjects.first(where: { $0.id == id }) {
+            // Le badge d'attribution d'un repost ne se copie pas.
+            guard text.isLocked != true, canAddText else { return }
+            let clone = StorySceneDuplicate.text(text)
+            effects.textObjects.append(clone)
+            copie = clone.id
+        } else if let media = effects.mediaObjects?.first(where: { $0.id == id }) {
             guard canAddMedia else { return }
-            let newId = UUID().uuidString
-            media.id = newId
-            // Le clone est TOUJOURS un foreground : dupliquer un média de fond
-            // créait un 2e background (invariant « au plus 1 background / slide »
-            // violé) qui remplit tout le canvas en ignorant l'offset → clone
-            // invisible (l'utilisateur ne voyait rien). Bug 2026-06-01.
-            media.isBackground = false
-            media.x = min(1.0, media.x + 0.05)
-            media.y = min(1.0, media.y + 0.05)
-            effects.mediaObjects?.append(media)
-            if let img = loadedImages[id] { loadedImages[newId] = img }
-            if let url = loadedVideoURLs[id] { loadedVideoURLs[newId] = url }
-            selectedElementId = media.id
-        } else if var audio = effects.audioPlayerObjects?.first(where: { $0.id == id }) {
+            let clone = StorySceneDuplicate.media(media)
+            effects.mediaObjects?.append(clone)
+            copie = clone.id
+            if let img = loadedImages[id] { loadedImages[copie] = img }
+            if let url = loadedVideoURLs[id] { loadedVideoURLs[copie] = url }
+        } else if let audio = effects.audioPlayerObjects?.first(where: { $0.id == id }) {
             guard canAddMedia else { return }
-            let newId = UUID().uuidString
-            audio.id = newId
-            // Idem média : le clone est foreground, sinon dupliquer l'audio de
-            // fond créait un 2e background audio (invariant « 1 audio de fond /
-            // slide » violé). Bug 2026-06-01.
-            audio.isBackground = false
-            audio.x = min(1.0, audio.x + 0.05)
-            audio.y = min(1.0, audio.y + 0.05)
-            effects.audioPlayerObjects?.append(audio)
-            if let url = loadedAudioURLs[id] { loadedAudioURLs[newId] = url }
-            selectedElementId = audio.id
+            let clone = StorySceneDuplicate.audio(audio)
+            effects.audioPlayerObjects?.append(clone)
+            copie = clone.id
+            if let url = loadedAudioURLs[id] { loadedAudioURLs[copie] = url }
+        } else if let sticker = effects.stickerObjects?.first(where: { $0.id == id }) {
+            guard canAddSticker else { return }
+            let clone = StorySceneDuplicate.sticker(sticker)
+            effects.stickerObjects?.append(clone)
+            copie = clone.id
+            devant = true
+            if let img = loadedImages[id] { registerLoadedImage(img, for: copie) }
+            if let bytes = loadedStickerAnimations[id] { registerLoadedStickerAnimation(bytes, for: copie) }
+        } else if let lieu = effects.locationObjects.first(where: { $0.id == id }) {
+            let clone = StorySceneDuplicate.place(lieu)
+            effects.locationObjects.append(clone)
+            copie = clone.id
+            devant = true
+        } else {
+            return
         }
+        selectedElementId = copie
         currentEffects = effects
+        if devant { bringToFront(id: copie) }
     }
 
     /// Bascule le statut background pour un media visuel OU un audio.
@@ -505,16 +465,14 @@ extension StoryComposerViewModel {
                 || effects.resolvedBackgroundMedia?.id == id
             let newValue = !current
             if newValue {
-                for i in effects.mediaObjects!.indices {
-                    effects.mediaObjects![i].isBackground = (i == idx) ? true : false
-                }
+                effects.promoteBackgroundMedia(at: idx)
             } else {
                 // Matérialise le flag à `false` pour neutraliser la règle legacy.
                 effects.mediaObjects![idx].isBackground = false
             }
             // Promotion → le canvas épouse la forme du nouveau fond ; rétrogradation
             // → retour au canvas vertical par défaut (plus aucune image de fond).
-            effects.canvasAspectRatio = Self.canvasAspectRatio(forBackgroundOf: effects)
+            effects.canvasAspectRatio = StorySceneFrame.canvasAspectRatio(forBackgroundOf: effects)
             currentEffects = effects
             refreshStaleCropPreviews(of: effects.mediaObjects ?? [])   // fond ⇄ posé : le bitmap suit (#9499)
             return
@@ -551,49 +509,45 @@ extension StoryComposerViewModel {
     /// Volume d'un audio (clamp [0, 1]). No-op si l'id ne match aucun audio.
     /// Passe par le mémento : glisser le slider à 0 vaut mute un-bouton, et
     /// l'unmute suivant restaurera le niveau quitté.
-    func setAudioVolume(audioId: String, volume: Float) {
-        var effects = currentEffects
-        guard var audios = effects.audioPlayerObjects,
-              let i = audios.firstIndex(where: { $0.id == audioId }) else { return }
-        audios[i].setVolumePreservingMuteMemento(min(1, volume))
-        effects.audioPlayerObjects = audios
-        currentEffects = effects
+    public func setAudioVolume(audioId: String, volume: Float) {
+        editAudio(id: audioId) { $0.setVolumePreservingMuteMemento(min(1, volume)) }
     }
 
     /// Mute un-bouton d'une piste AUDIO (chip canvas, cellule du panneau Son).
     /// Persisté via `volume` (0 = muet) + mémento de restauration — le reader
     /// d'un autre utilisateur n'entend donc jamais une piste mutée par l'auteur.
-    func toggleAudioMute(id: String) {
-        var effects = currentEffects
-        guard var audios = effects.audioPlayerObjects,
-              let i = audios.firstIndex(where: { $0.id == id }) else { return }
-        audios[i].toggleMute()
-        effects.audioPlayerObjects = audios
-        currentEffects = effects
+    public func toggleAudioMute(id: String) {
+        editAudio(id: id) { $0.toggleMute() }
     }
 
-    /// **Le quart de tour d'un média** (#4082, vue `2d`). La règle vit dans
-    /// `StoryMediaRotation` : elle normalise, et elle porte le SENS du glyphe.
-    ///
-    /// Contrairement au muet, ce geste vaut pour une IMAGE autant que pour une
-    /// vidéo — une photo prise de travers est le cas nominal, pas l'exception.
+    /// **Le quart de tour d'un média** (#4082, vue `2d`), image comme vidéo ;
+    /// la règle et le SENS du glyphe vivent dans `StoryMediaRotation`.
     public func rotateMedia(id: String) {
-        var effects = currentEffects
-        guard var medias = effects.mediaObjects,
-              let i = medias.firstIndex(where: { $0.id == id }) else { return }
-        medias[i].rotation = StoryMediaRotation.turned(medias[i].rotation)
-        effects.mediaObjects = medias
-        currentEffects = effects
+        editMedia(id: id) { $0.rotation = StoryMediaRotation.turned($0.rotation) }
     }
 
-    /// Mute un-bouton d'une piste VIDÉO (bouton canvas, rangée du panneau
-    /// Médias). No-op pour une image — rien à couper.
+    /// Mute un-bouton d'une piste VIDÉO ; no-op pour une image.
     public func toggleMediaMute(id: String) {
+        editMedia(id: id, videoOnly: true) { $0.toggleMute() }
+    }
+
+    /// Volume d'une piste VIDÉO, 0 à `StoryVolume.maxGain` (#13974) ; 0 vaut Muet.
+    public func setMediaVolume(id: String, volume: Float) {
+        editMedia(id: id, videoOnly: true) { $0.setVolumePreservingMuteMemento(min(StoryVolume.maxGain, volume)) }
+    }
+
+    private func editAudio(id: String, _ edit: (inout StoryAudioPlayerObject) -> Void) {
+        guard var audios = currentEffects.audioPlayerObjects,
+              let i = audios.firstIndex(where: { $0.id == id }) else { return }
+        edit(&audios[i])
+        currentEffects.audioPlayerObjects = audios
+    }
+
+    private func editMedia(id: String, videoOnly: Bool = false, _ edit: (inout StoryMediaObject) -> Void) {
         var effects = currentEffects
-        guard var medias = effects.mediaObjects,
-              let i = medias.firstIndex(where: { $0.id == id }),
-              medias[i].kind == .video else { return }
-        medias[i].toggleMute()
+        guard var medias = effects.mediaObjects, let i = medias.firstIndex(where: { $0.id == id }),
+              !videoOnly || medias[i].kind == .video else { return }
+        edit(&medias[i])
         effects.mediaObjects = medias
         currentEffects = effects
     }

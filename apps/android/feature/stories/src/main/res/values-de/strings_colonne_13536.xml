@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_column_text_style">Stil</string>
+    <string name="composer_column_text_effect">Überblendungen</string>
+    <string name="composer_column_text_color">Farbe</string>
+    <string name="composer_column_text_align">Ausrichtung</string>
+    <string name="composer_column_text_background">Hintergrund</string>
+    <string name="composer_column_text_timing">Zeitfenster</string>
+    <string name="composer_column_draw_color">Pinselfarbe</string>
+    <string name="composer_column_draw_width">Pinselstärke</string>
+    <string name="composer_column_exit_tool">Werkzeug beenden</string>
+</resources>

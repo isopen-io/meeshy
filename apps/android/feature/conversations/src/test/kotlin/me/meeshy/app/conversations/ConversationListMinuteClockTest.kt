@@ -73,7 +73,7 @@ class ConversationListMinuteClockTest {
                         ),
                         currentUserId = "me",
                         currentUserPrefs = null,
-                        presence = null,
+                        peerUserId = null,
                         storyRing = StoryRingState.None,
                         moodEmoji = null,
                         draft = null,
@@ -88,6 +88,6 @@ class ConversationListMinuteClockTest {
             }
         }
 
-        compose.onNodeWithText("5 min").assertExists()
+        compose.onNodeWithText("5 min", useUnmergedTree = true).assertExists()
     }
 }

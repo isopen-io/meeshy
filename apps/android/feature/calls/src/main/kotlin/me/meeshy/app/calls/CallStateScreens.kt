@@ -8,9 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -35,33 +33,15 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * The peer block of the call screen, whatever the phase (ringing, connecting,
- * connected, reconnecting, ended): the avatar (audio calls), the name, the status
- * line, the connection-quality bars and the notices about the other side
- * (degraded network, screen capture, muted mic, camera off). Pure glue — every
- * show/hide decision is the [CallUiState]'s; the [accent] is the peer's. Over the video stage
- * ([videoStage]) the avatar and the muted / camera-off notices are on the picture itself.
+ * The peer block of the call screen over the VIDEO stage: the name, the status line, the
+ * connection-quality bars and the notices about the other side (degraded network, screen
+ * capture, muted mic, camera off). Pure glue — every show/hide decision is the [CallUiState]'s;
+ * the [accent] is the peer's. The avatar is not here: on the video stage the picture is the peer,
+ * and the audio stage shows the photo through [CallAudioStage] (#12569, one face per circle).
  */
 @Composable
 internal fun CallPeerBlock(state: CallUiState, accent: Color, videoStage: Boolean = false) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        if (!state.isVideoCall && !videoStage) {
-            Box(
-                modifier = Modifier
-                    .size(96.dp)
-                    .clip(CircleShape)
-                    .background(accent),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = state.peerName.take(1).uppercase(),
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-            Spacer(Modifier.height(MeeshySpacing.lg))
-        }
         Text(
             text = state.peerName,
             style = MaterialTheme.typography.headlineSmall,
@@ -69,12 +49,7 @@ internal fun CallPeerBlock(state: CallUiState, accent: Color, videoStage: Boolea
             color = MeeshyTheme.tokens.textPrimary,
         )
         Spacer(Modifier.height(MeeshySpacing.sm))
-        Text(
-            text = statusLabel(state),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MeeshyTheme.tokens.textSecondary,
-            textAlign = TextAlign.Center,
-        )
+        CallStatusText(state)
         state.connectionQuality?.let { quality ->
             Spacer(Modifier.height(MeeshySpacing.sm))
             ConnectionQualityBars(quality = quality, accent = accent)
@@ -90,6 +65,19 @@ internal fun CallPeerBlock(state: CallUiState, accent: Color, videoStage: Boolea
         }
         if (state.isPeerCameraOff && !videoStage) {
             PeerNotice(stringResource(R.string.call_peer_camera_off, state.peerName), MeeshyTheme.tokens.textSecondary)
+        }
+    }
+}
+
+/**
+ * Sur la scène vidéo, ce que le pair fait subir à MON appareil — sa capture d'écran — reste dit, en
+ * haut sous l'en-tête, jamais au centre de son image.
+ */
+@Composable
+internal fun CallVideoPeerNotices(state: CallUiState, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        if (state.isPeerScreenCapturing) {
+            PeerNotice(stringResource(R.string.call_peer_screen_capturing, state.peerName), MeeshyTheme.tokens.error)
         }
     }
 }
@@ -122,13 +110,26 @@ internal fun CallCaption(text: String) {
     )
 }
 
+/** La ligne d'état : seule elle lit le chrono vivant, le reste de l'écran ne bouge pas chaque seconde. */
+@Composable
+private fun CallStatusText(state: CallUiState) {
+    Text(
+        text = statusLabel(state),
+        style = MaterialTheme.typography.bodyLarge,
+        color = MeeshyTheme.tokens.textSecondary,
+        textAlign = TextAlign.Center,
+    )
+}
+
 @Composable
 private fun statusLabel(state: CallUiState): String = when (state.status) {
     CallStatus.IDLE -> ""
     CallStatus.INCOMING -> stringResource(R.string.call_status_incoming)
     CallStatus.OUTGOING_RINGING -> stringResource(R.string.call_status_ringing)
     CallStatus.CONNECTING -> stringResource(R.string.call_status_connecting)
-    CallStatus.CONNECTED -> state.durationLabel ?: stringResource(R.string.call_status_connected)
+    CallStatus.CONNECTED -> state.durationLabel
+        ?.let { clockLabel(liveOrFixedSeconds(state.hasLiveClock, LocalCallLiveSeconds.current, state.durationSeconds)) }
+        ?: stringResource(R.string.call_status_connected)
     CallStatus.RECONNECTING -> stringResource(R.string.call_status_reconnecting, state.reconnectAttempt)
     CallStatus.ENDED -> {
         val base = endedLabel(state.endReason)

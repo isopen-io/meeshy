@@ -165,6 +165,34 @@ export function auditShellDist(html, files) {
   return violations;
 }
 
+/**
+ * LE RUNTIME CAPACITOR N'EST PAS À LA PREMIÈRE PEINTURE (#13115).
+ *
+ * `@capacitor/core` et `@capacitor/push-notifications` n'ont qu'un importeur,
+ * `lib/push/shell-push-runtime.ts`, chargé par `import()` APRÈS la première
+ * peinture (`main.tsx`). La règle « node_modules ⇒ core » de `manualChunks`
+ * les rangeait pourtant dans `core`, que `index.html` précharge : mesuré,
+ * +7,8 Ko bruts que la coque analysait avant sa première image, et qu'aucun
+ * gate ne voyait (`measure-weight.mjs` ne mesure que le dist web). Les noms de
+ * plugins enregistrés par le runtime sont des chaînes littérales : la
+ * minification les garde, ils signent sa présence.
+ */
+const CAPACITOR_RUNTIME_MARKERS = ['CapacitorCookies', 'PushNotifications'];
+
+export function auditFirstPaintChunks(html, read) {
+  const chunks = [
+    ...html.matchAll(/<script[^>]*\ssrc=["']([^"']+\.js)["']/gi),
+    ...html.matchAll(/<link[^>]*rel=["']modulepreload["'][^>]*href=["']([^"']+\.js)["']/gi),
+  ].map((m) => m[1]);
+  return [...new Set(chunks)]
+    .filter((chunk) => CAPACITOR_RUNTIME_MARKERS.some((marker) => read(chunk).includes(marker)))
+    .map(
+      (chunk) =>
+        `${chunk} porte le runtime Capacitor à la PREMIÈRE PEINTURE — il ne sert qu'au push natif, ` +
+        'chargé par import() après elle : nommer @capacitor/ dans manualChunks (#13115).',
+    );
+}
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript',
@@ -368,7 +396,10 @@ async function main() {
 
   const html = readFileSync(join(OUT, 'index.html'), 'utf8');
   const files = allFiles(OUT).map((f) => f.slice(APP.length + 1));
-  const violations = auditShellDist(html, files);
+  const violations = [
+    ...auditShellDist(html, files),
+    ...auditFirstPaintChunks(html, (chunk) => readFileSync(join(OUT, chunk), 'utf8')),
+  ];
 
   console.log('  navigation directe vers /c/c-deploiement (fil) et /c/zzz-inconnu (refus D-6), repli SPA …');
   violations.push(...(await auditDeepLink(OUT)));

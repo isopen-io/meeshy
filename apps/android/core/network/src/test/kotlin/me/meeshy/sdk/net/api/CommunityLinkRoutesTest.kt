@@ -40,7 +40,7 @@ class CommunityLinkRoutesTest {
 
     @Test
     fun `la carte et les statistiques d'un lien ont leur route`() = runTest {
-        val http = RecordingHttp(responseBody = """{"success":true,"data":{"visits":4}}""")
+        val http = RecordingHttp(responseBody = """{"success":true,"data":{"kind":"share-link","visits":4}}""")
         val api = http.serve(LinkDetailApi::class.java)
 
         api.card("abc")

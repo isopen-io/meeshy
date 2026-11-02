@@ -35,7 +35,7 @@ const EMPTY_STATUS_MOODS: readonly StatusMoodPost[] = [];
  * bande épinglée) : c'est ce qui garantit que la tuile jumelle vers laquelle la
  * bande rend le focus existe (`RailTitleSlot`).
  */
-export function useStoryRailProps(viewerId: string | undefined, viewerAvatar?: string): StoryRailProps {
+export function useStoryRailProps(viewerId: string | undefined, viewerAvatar?: string, viewerName?: string): StoryRailProps {
   const tray = useStoryTray();
   const seenNow = useStore(storyViewedStore, (s) => s.ids);
   const moods = useStatusMoods();
@@ -76,11 +76,12 @@ export function useStoryRailProps(viewerId: string | undefined, viewerAvatar?: s
       selfRailEntry({
         viewerId,
         ...(viewerAvatar === undefined ? {} : { avatar: viewerAvatar }),
+        ...(viewerName === undefined ? {} : { displayName: viewerName }),
         groups,
         moods: moods.data ?? EMPTY_STATUS_MOODS,
         now: Date.now(),
       }),
-    [viewerId, viewerAvatar, groups, moods.data],
+    [viewerId, viewerAvatar, viewerName, groups, moods.data],
   );
 
   return useMemo(

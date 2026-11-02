@@ -93,7 +93,7 @@ final class ComposerPublishChannelTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/DocumentComposerDoor.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/DocumentComposerDoor.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
             .components(separatedBy: .whitespacesAndNewlines).joined()
         // `ComposerFormat` n'est qu'`Equatable` — la comparaison porte donc sur
@@ -120,7 +120,7 @@ final class ComposerPublishChannelTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Socle.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/MeeshyComposerHost+Socle.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(code.contains("ComposerPublishMenuRule.route(surface: mountedSurface, choice: choice)"),
                       "Le canal suit le CHOIX du geste (#6502), par la règle éprouvée.")

@@ -51,7 +51,23 @@ type ScopeParticipant = {
   readonly userId?: string | undefined;
   readonly role?: string | undefined;
   readonly permissions?: { readonly canSendMessages?: boolean } | undefined;
+  readonly isActive?: boolean | undefined;
 };
+
+/**
+ * LE LECTEUR EST-IL UN PARTICIPANT ACTIF ? (#11415) — la passerelle ne sert le
+ * détail qu'à un participant actif (`verdictAccesConversation`) et exige la
+ * même chose de « Supprimer pour moi », de la réaction et du signalement. Le
+ * client dit fermé ce qu'il ne sait pas (aucune conversation lue), et rien ne
+ * survit à ce que le serveur a dit : `isMember: false` — servi, ou posé par la
+ * fin d'appartenance reçue fil ouvert (`realtime-membership-ended.ts`) — ou la
+ * ligne du lecteur servie inactive. `isActive` seul, comme la passerelle
+ * (`user-deletions.ts`) : rejoindre efface `leftAt`, qui ne décide rien.
+ */
+const viewerIsActiveMember = (
+  conversation: { readonly isMember?: boolean | undefined } | undefined,
+  participant: ScopeParticipant | undefined,
+): boolean => conversation !== undefined && conversation.isMember !== false && participant?.isActive !== false;
 
 /** Le lecteur de l'écran, composé UNE fois : compte, rôles et permission d'envoi viennent de ce que le serveur a servi. */
 export function menuViewerOf(input: {
@@ -78,7 +94,7 @@ export function menuViewerOf(input: {
     platformRole: hasAccount ? input.platformRole : null,
     conversationRole: conversation?.currentUserRole ?? participant?.role ?? null,
     canSendMessages: participant?.permissions?.canSendMessages ?? id !== '',
-    isActiveMember: conversation !== undefined && conversation.isMember !== false,
+    isActiveMember: viewerIsActiveMember(conversation, participant),
     isDeclaredMinor: conversation?.viewerWriteRestriction === 'minor-global',
   };
 }
@@ -193,12 +209,14 @@ export const webRepliesToMessage = (message: ActionMessage, scope: ActionScope, 
   message.isViewOnce !== true && webRepliesTo(messageActionsOf(message, scope, input));
 
 /**
- * MODIFIER DEPUIS LE WEB, EN AUTEUR SEULEMENT (#11372) — la loi admet qu'un
- * rôle de plateforme réécrive le message d'un autre (`edit.asModerator`), mais
- * la passerelle n'enregistre pas l'auteur de la modification et l'interface ne
- * l'affiche pas : ce serait une réécriture silencieuse. Le web ne l'offre pas.
+ * MODIFIER DEPUIS LE WEB (#11372, #11375) — le verdict `edit` de la loi, tel
+ * quel. #11372 retirait la réécriture du message d'un autre au titre d'un rôle
+ * de plateforme (`edit.asModerator`), parce qu'elle aurait été SILENCIEUSE. La
+ * décision porteur du 2026-10-24 (#11375) l'autorise À VISAGE DÉCOUVERT : la
+ * passerelle enregistre l'auteur de la modification et son rôle, et tous les
+ * membres lisent « modifié par un modérateur ». Le web l'offre donc de nouveau.
  */
-export const webEditsAsAuthor = (actions: MessageActions): boolean => actions.verdicts.edit !== null && !actions.verdicts.edit.asModerator;
+export const webEdits = (actions: MessageActions): boolean => actions.verdicts.edit !== null;
 
 /**
  * LES OFFRES D'UNE PIÈCE, DANS CE QUE LE MESSAGE ADMET (#11210, #11372) — la

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "notifications.action.commentPlaceholder", "androidName": "post_comments_composer_hint", "status": "adopted" },
+        { "catalog": "app", "iosKey": "thread.reply.placeholder", "androidName": "post_comments_composer_reply_hint", "status": "adopted" }
+      ]
+    }
+  }
+}

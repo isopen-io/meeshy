@@ -1,10 +1,11 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.util.resolveMediaUrl
+import me.meeshy.sdk.util.resolveServedImageUrl
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.PostServedRing
-import me.meeshy.sdk.model.PresenceState
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.story.isExpired
 import me.meeshy.sdk.story.isFullyExpired
 
@@ -43,8 +44,11 @@ data class StoryRing(
     /** Story que l'anneau MONTRE : première vivante non vue, sinon première vivante (iOS `StoryRailReach`). */
     val displayedStoryId: String? = null,
     val coverUrl: String? = null,
-    /** Présence servie de l'auteur ; `null` = aucun point (jamais fabriquée). */
-    val presence: PresenceState? = null,
+    /**
+     * Présence que la charge a SERVIE pour l'auteur ; `null` = rien servi. Le point la lit à travers
+     * la carte unique (`rememberPresence`), qui la recouvre et la fait décroître : jamais figée ici.
+     */
+    val servedPresence: UserPresence? = null,
     val style: StoryRingStyle = StoryRingStyle.resolve(storyCount, hasUnviewed, null),
 )
 
@@ -89,14 +93,14 @@ object StoryTrayBuilder {
         return StoryRing(
             userId = id,
             displayName = username,
-            avatarUrl = coverOf(this)?.let { resolveMediaUrl(it, mediaBaseUrl) },
+            avatarUrl = resolveServedImageUrl(coverOf(this), mediaBaseUrl),
             accentHex = avatarColor,
             hasUnviewed = unviewed > 0,
             storyCount = live.size,
             unviewedCount = unviewed,
             isMine = currentUserId != null && id == currentUserId,
             displayedStoryId = (live.firstOrNull { !it.isViewed } ?: live.firstOrNull())?.id,
-            presence = authorPresence?.state(nowMillis),
+            servedPresence = authorPresence,
             style = StoryRingStyle.resolve(live.size, unviewed > 0, authorRing),
         )
     }

@@ -232,4 +232,62 @@ class RepostEmbedBuilderTest {
         assertThat(embed?.location?.label).isNull()
         assertThat(embed?.location?.latitude).isEqualTo(12.0)
     }
+
+    // --- #13654 : l'incrustation d'un post du fil ---
+
+    private fun outer(
+        repostOf: ApiRepostOf? = null,
+        originalRepostOfId: String? = null,
+        isQuote: Boolean? = null,
+    ) = me.meeshy.sdk.model.ApiPost(
+        id = "outer",
+        type = "POST",
+        repostOf = repostOf,
+        originalRepostOfId = originalRepostOfId,
+        isQuote = isQuote,
+    )
+
+    @Test
+    fun forPost_aPlainPostHasNoEmbed() {
+        assertThat(RepostEmbedBuilder.forPost(outer(), Prefs(), null)).isNull()
+    }
+
+    @Test
+    fun forPost_aRepostCarriesTheOriginalAuthorHandleForTheHeaderAttribution() {
+        val embed = RepostEmbedBuilder.forPost(outer(repostOf = repost()), Prefs(), null)
+        assertThat(embed?.authorUsername).isEqualTo("orig")
+        assertThat(embed?.isUnavailable).isFalse()
+        assertThat(embed?.storyItem).isNull()
+    }
+
+    @Test
+    fun forPost_aStoryRepostCarriesTheStoryForTheSceneReader() {
+        val embed = RepostEmbedBuilder.forPost(outer(repostOf = repost(type = "STORY")), Prefs(), null)
+        assertThat(embed?.isStory).isTrue()
+        assertThat(embed?.storyItem?.repostOfId).isEqualTo("r1")
+    }
+
+    @Test
+    fun forPost_aRepostWhoseOriginalIsNoLongerServedIsADrawnState() {
+        val embed = RepostEmbedBuilder.forPost(outer(originalRepostOfId = "gone-1"), Prefs(), null)
+        assertThat(embed?.isUnavailable).isTrue()
+        assertThat(embed?.id).isEqualTo("gone-1")
+        assertThat(embed?.content).isEmpty()
+    }
+
+    @Test
+    fun forPost_aQuoteWhoseOriginalIsNoLongerServedIsADrawnStateToo() {
+        val embed = RepostEmbedBuilder.forPost(outer(isQuote = true), Prefs(), null)
+        assertThat(embed?.isUnavailable).isTrue()
+        assertThat(embed?.isQuote).isTrue()
+    }
+
+    @Test
+    fun the_header_attribution_names_the_original_author_and_stays_silent_when_it_is_gone() {
+        val served = feedPostPresentation().copy(repostEmbed = RepostEmbedBuilder.forPost(outer(repostOf = repost()), Prefs(), null))
+        assertThat(served.repostAttribution).isEqualTo("orig")
+        val gone = feedPostPresentation().copy(repostEmbed = RepostEmbedBuilder.forPost(outer(originalRepostOfId = "x"), Prefs(), null))
+        assertThat(gone.repostAttribution).isNull()
+        assertThat(feedPostPresentation().repostAttribution).isNull()
+    }
 }

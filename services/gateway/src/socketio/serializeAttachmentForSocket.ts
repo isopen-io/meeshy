@@ -1,3 +1,4 @@
+import { servedDescription } from '../services/attachments/mediaSideContent';
 import {
   attachmentProtectionOf,
   type AttachmentProtectionField,
@@ -104,9 +105,18 @@ export interface SocketAttachment extends AttachmentProtectionFlags {
    * (`MessageAttachment.capturedInApp`, `Boolean @default(false)`).
    */
   readonly capturedInApp: boolean;
+  /** #11327 — la lens qui a produit le média (`null` : aucune) ; le client en tire « Lens par X ». */
+  readonly lensSlug: string | null;
   readonly createdAt: Date | string;
   readonly transcription: unknown;
   readonly translations: unknown;
+  /**
+   * #12333 — la description (texte alternatif), sa langue et ses traductions,
+   * `null` sous protection de la pièce OU de son message (`servedDescription`).
+   */
+  readonly alt: string | null;
+  readonly altLanguage: string | null;
+  readonly altTranslations: unknown;
   /** BUG2 A' — réactions par-image agrégées (emoji→count). */
   readonly reactionSummary: Readonly<Record<string, number>>;
   /** BUG2 A' — emojis posés par le destinataire (vide si destinataire inconnu, ex broadcast). */
@@ -210,10 +220,12 @@ export function serializeAttachmentForSocket(
     // reflète la valeur de colonne (`@default(false)`) pour un appelant qui
     // aurait requêté sans ce champ.
     capturedInApp: (raw.capturedInApp as boolean | null | undefined) ?? false,
+    lensSlug: typeof raw.lensSlug === 'string' ? raw.lensSlug : null,
     createdAt: raw.createdAt as Date | string,
     // Prisme Linguistique — null = pas encore enrichi, présent = serialize tel quel
     transcription: raw.transcription ?? null,
     translations: raw.translations ?? null,
+    ...servedDescription(raw as Parameters<typeof servedDescription>[0]),
     reactionSummary,
     currentUserReactions,
     // #7070 — les défauts reflètent les colonnes `@default(...)` du schéma

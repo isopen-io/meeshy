@@ -334,7 +334,7 @@ struct HeaderFlameDecoration: ViewModifier {
     let avatarDiameter: CGFloat
     let onDismiss: () -> Void
 
-    @ObservedObject private var store: ConversationEngagementStore = .shared
+    @ObservedObject private var store: ConversationEngagementStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase: CGFloat = 1
     @State private var isPlaying = false
@@ -344,6 +344,17 @@ struct HeaderFlameDecoration: ViewModifier {
     @State private var replayCount = 0
 
     private static let gapUnderAvatar: CGFloat = 4
+
+    init(conversationId: String, seed: ConversationEngagementSnapshot?, headerExpanded: Bool, dismissed: Bool,
+         avatarDiameter: CGFloat, onDismiss: @escaping () -> Void, store: ConversationEngagementStore = .shared) {
+        self.conversationId = conversationId
+        self.seed = seed
+        self.headerExpanded = headerExpanded
+        self.dismissed = dismissed
+        self.avatarDiameter = avatarDiameter
+        self.onDismiss = onDismiss
+        self.store = store
+    }
 
     func body(content: Content) -> some View {
         let snapshot = store.displayed(for: conversationId, seed: seed, at: Date())

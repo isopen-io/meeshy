@@ -73,13 +73,23 @@ nonisolated enum NSEAttachmentPolicy {
         return fileSize > 0 && fileSize <= maxAttachmentBytes
     }
 
-    /// Image ou audio — les deux familles qu'iOS rend nativement sur l'écran
-    /// verrouillé. Le paramètre peut porter ses paramètres de type
+    /// Les images que la NSE OUVRE (#11328). Une liste blanche, pas la famille
+    /// `image/*` : le serveur fabrique des rendus AVIF (#11262), et un AVIF
+    /// attaché sans être décodé ne produit aucune image sur l'écran verrouillé.
+    /// `heic`/`heif` restent : c'est le format d'origine d'un iPhone, encore en
+    /// base pour les pièces jointes antérieures à la conversion (#11263).
+    /// `image/jpg` est l'alias que le serveur accepte et range tel quel.
+    static let renderableImageTypes: Set<String> = [
+        "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif",
+    ]
+
+    /// Image décodable ou audio — les deux familles qu'iOS rend nativement sur
+    /// l'écran verrouillé. Le paramètre peut porter ses paramètres de type
     /// (`audio/mp4; codecs=mp4a.40.2`) et une casse quelconque : ce qui arrive
     /// ici vient d'une charge réseau, pas d'une constante du dépôt.
     static func isRenderableFamily(_ mimeType: String) -> Bool {
         let base = baseType(mimeType)
-        return base.hasPrefix("image/") || base.hasPrefix("audio/")
+        return renderableImageTypes.contains(base) || base.hasPrefix("audio/")
     }
 
     /// Un média AUDIO — ce que la notification déployée sait faire écouter
@@ -118,6 +128,83 @@ nonisolated enum NSEAttachmentPolicy {
         return flags & lifecycleFlagsMask != 0
     }
 
+    /// La clé du corps d'une notification de conversation VERROUILLÉE PAR PIN
+    /// (#11387) : un libellé du catalogue de l'extension, jamais du contenu.
+    static let lockedConversationLocKey = "notification.locked_conversation"
+
+    /// **Le verrou PIN protège le CONTENU** (#11387). La charge d'une
+    /// conversation verrouillée DÉCLARE une protection (`notificationLocKey`, que `declaresProtection` lit) : le
+    /// média, le détail, la vignette et le lecteur audio la respectent sans
+    /// qu'aucun n'ait à connaître le verrou, et le corps se lit au catalogue.
+    /// Les clés de routage restent : toucher la bannière ouvre la
+    /// conversation, que la porte du routeur garde par le PIN (#11386).
+    ///
+    /// La charge scellée ne garde QUE ce qui route (#12655) : le `userInfo`
+    /// livré reste dans le Centre de notifications et se relit par quiconque
+    /// l'énumère. Une liste d'EXCLUSION ratait toute clé de contenu qu'elle ne
+    /// nommait pas (média, position, contact, invitation, lien, réaction,
+    /// langues, et l'alerte APNs, dont le corps est l'aperçu) ; une liste
+    /// d'ADMISSION refuse par défaut ce qu'une passerelle future ajoutera.
+    static func sealingLockedConversation(_ userInfo: [AnyHashable: Any], isLocked: Bool) -> [AnyHashable: Any] {
+        guard isLocked else { return userInfo }
+        return userInfo
+            .filter { key, _ in (key as? String).map(sealedConversationKeys.contains) ?? false }
+            .merging([AnyHashable("notificationLocKey"): lockedConversationLocKey]) { _, sealed in sealed }
+    }
+
+    /// Ce qui survit au scellé : router le toucher (conversation, message,
+    /// post, commentaire, appel), dater, compter, nommer l'expéditeur, et
+    /// déclarer la protection. Rien qui décrive le contenu.
+    ///
+    /// Un appel entrant se scelle comme le reste : ses clés sont ADMISES une
+    /// à une plutôt que son type exempté, pour qu'une clé de contenu ajoutée
+    /// demain à sa charge reste refusée. Décrocher depuis la bannière exige
+    /// les serveurs ICE (`iceServers`, le relais TURN) et l'avatar de
+    /// l'appelant : ni l'un ni l'autre ne décrit le contenu de la conversation.
+    static let sealedConversationKeys: Set<String> = [
+        "type", "notificationId", "conversationId", "conversationTitle", "conversationType", "messageId",
+        "postId", "postType", "commentId", "parentCommentId", "friendRequestId", "route",
+        "contentId", "contentType",
+        "senderId", "senderUsername", "senderDisplayName", "senderAvatar", "imageURL",
+        "unreadCount", "badge", "createdAt", "ephemeralDuration", "effectFlags", "replacesActorSubject",
+        "callType", "isVideo", "callBackLabel", "callId", "callerUserId", "callerName", "callerAvatar",
+        "iceServers",
+        "isEncrypted", "apiBaseURL",
+    ]
+
+    /// La charge a-t-elle été scellée pour une conversation verrouillée ?
+    static func isSealedForLockedConversation(_ userInfo: [AnyHashable: Any]) -> Bool {
+        (userInfo["notificationLocKey"] as? String) == lockedConversationLocKey
+    }
+
+    /// La catégorie, SANS aucune action, d'une bannière de conversation
+    /// verrouillée (#12655, décision porteur : le PIN est exigé). Ni
+    /// « Répondre » ni « Marquer comme lu » : toucher la bannière ouvre la
+    /// conversation, que la porte du routeur garde par le PIN (#11386).
+    static let lockedConversationCategory = "MEESHY_LOCKED_CONVERSATION"
+
+    /// Les appels gardent leurs gestes : décrocher ou rappeler n'écrit rien
+    /// dans le fil, et la décision ne vise que la réponse et la lecture.
+    private static let callCategories: Set<String> = ["MEESHY_CALL_INCOMING", "MEESHY_CALL_MISSED", "MEESHY_CALL"]
+
+    /// **La catégorie que garde une bannière, verrou compris.** Une charge
+    /// scellée, d'une conversation verrouillée, ou dont l'extension ne peut pas
+    /// savoir si elle l'est (fail-closed), perd toute action rapide : elle prend
+    /// `lockedConversationCategory`, quelle que soit la catégorie choisie avant
+    /// (message, mention, vocal, éphémère, détail, ou celle posée par la
+    /// passerelle).
+    static func category(
+        _ chosen: String,
+        under lock: NSEConversationLock,
+        userInfo: [AnyHashable: Any]
+    ) -> String {
+        guard !chosen.isEmpty, !callCategories.contains(chosen) else { return chosen }
+        guard lock.offersQuickActions, !isSealedForLockedConversation(userInfo) else {
+            return lockedConversationCategory
+        }
+        return chosen
+    }
+
     /// Masque des bits de cycle de vie de `MessageEffectFlags` — éphémère (0),
     /// flouté (1), vue unique (2). Écrit ici plutôt qu'importé : ce fichier ne
     /// dépend que de Foundation, et c'est cette absence de dépendance qui le
@@ -152,5 +239,65 @@ nonisolated enum NSEAttachmentPolicy {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
         return Int(trimmed)
+    }
+}
+
+/// **Ce que l'extension sait du verrou PIN de la conversation d'une charge**
+/// (#12655). `unknown` n'est pas `open` : avant le premier déverrouillage,
+/// l'extension ne peut pas savoir si la conversation est sous PIN, et la traite
+/// comme si elle l'était — contenu scellé, rien du message déposé dans le
+/// groupe d'apps, aucune action rapide (fail-closed).
+nonisolated enum NSEConversationLock: Equatable, Sendable {
+    case noConversation
+    case open
+    case locked
+    case unknown
+
+    var sealsContent: Bool { self == .locked || self == .unknown }
+
+    var offersQuickActions: Bool { self == .open || self == .noConversation }
+}
+
+/// **L'ordre dans lequel l'extension prépare une bannière** (#11387), extrait de
+/// `NotificationService.prepareBestAttempt` pour être ÉPROUVABLE : un verrou PIN
+/// ne se garde que si la charge est scellée AVANT toute décision (catégorie,
+/// média, détail) et si le corps est remplacé APRÈS toute réécriture — et une
+/// conversation verrouillée ne dépose rien de son message dans le groupe d'app
+/// (« aucun préchargement ne met en cache les messages d'une conversation
+/// verrouillée », décision porteur du 2026-10-24).
+nonisolated enum NSEPreparationStep: Equatable, Sendable {
+    case sealLockedConversation
+    case applyCategory
+    case applyBadge
+    case applyThreading
+    case applyPreferences
+    case updateUnreadCount
+    case syncMessage
+    case prefetchSocial
+    case prePersistMessage
+    case postDeliveryReceipt
+    case rewriteBody
+    case applyEphemeralDeadline
+    case sweepExpiredBanners
+    case replaceBodyWithLockLabel
+
+    /// Le plan de la bannière d'une conversation dont l'extension sait CE
+    /// verrou : un verrou connu ou inconnu scelle (#12655).
+    static func plan(for lock: NSEConversationLock) -> [NSEPreparationStep] {
+        plan(isLockedConversation: lock.sealsContent)
+    }
+
+    static func plan(isLockedConversation: Bool) -> [NSEPreparationStep] {
+        let decisions: [NSEPreparationStep] = [
+            .applyCategory, .applyBadge, .applyThreading, .applyPreferences, .updateUnreadCount,
+        ]
+        let staging: [NSEPreparationStep] = isLockedConversation
+            ? [.prefetchSocial]
+            : [.syncMessage, .prefetchSocial, .prePersistMessage]
+        let rewrites: [NSEPreparationStep] = [
+            .postDeliveryReceipt, .rewriteBody, .applyEphemeralDeadline, .sweepExpiredBanners,
+        ]
+        guard isLockedConversation else { return decisions + staging + rewrites }
+        return [.sealLockedConversation] + decisions + staging + rewrites + [.replaceBodyWithLockLabel]
     }
 }

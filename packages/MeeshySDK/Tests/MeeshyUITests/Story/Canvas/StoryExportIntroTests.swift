@@ -163,6 +163,55 @@ final class StoryExportIntroTests: XCTestCase {
         XCTAssertEqual(image.width, Int(renderSize.width))
     }
 
+    // MARK: - Contour de l'avatar
+
+    /// Un contour plein ROUGE, de largeur 0,08 : il occupe la couronne entre le
+    /// trou (rayon 42 du viewBox 100) et le bord de la boîte de l'avatar.
+    private func redRing() throws -> AvatarRingDesign {
+        let json = ##"{"key":"rouge","stroke":{"style":"solid","width":0.08,"colors":["#FF0000"]}}"##
+        return try JSONDecoder().decode(AvatarRingDesign.self, from: Data(json.utf8))
+    }
+
+    private func withRing(_ ring: AvatarRingDesign?) -> StoryExportIntroContent {
+        StoryExportIntroContent(displayName: "J. Charles N. M.",
+                                username: "jcnm",
+                                accentColorHex: "6366F1",
+                                avatarRing: ring)
+    }
+
+    /// Le contour se pose comme sur la carte d'identité de la visionneuse :
+    /// l'avatar se ramène au trou, et la couronne au-delà — que le disque
+    /// d'accent couvrait — porte la couleur du contour.
+    func test_render_withRing_paintsTheRingOutsideTheAvatarDisc() throws {
+        let image = try XCTUnwrap(StoryExportIntro.render(withRing(try redRing()), size: renderSize))
+        // Boîte de l'avatar (270×480) : centre (135, 209,76), rayon 37,8 ; trou
+        // 31,75 ; à 35 du centre, au-dessus, on est dans la couronne.
+        let crown = try XCTUnwrap(pixel(of: image, x: 135, y: 175))
+        XCTAssertGreaterThan(crown.red, crown.blue + 80,
+                             "la couronne porte le rouge du contour (got r=\(crown.red) b=\(crown.blue))")
+
+        let bare = try XCTUnwrap(StoryExportIntro.render(withRing(nil), size: renderSize))
+        let disc = try XCTUnwrap(pixel(of: bare, x: 135, y: 175))
+        XCTAssertGreaterThan(disc.blue, disc.red, "sans contour, ce point est le disque d'accent indigo")
+    }
+
+    /// Sans contour, le rendu est celui d'avant — octet pour octet, même après
+    /// qu'un export a peint un contour (le tampon du contour ne fuit pas).
+    func test_render_nilRing_leavesTheRenderUnchanged() throws {
+        let before = try XCTUnwrap(StoryExportIntro.render(makeContent(), size: renderSize))
+        _ = StoryExportIntro.render(withRing(try redRing()), size: renderSize)
+        let after = try XCTUnwrap(StoryExportIntro.render(makeContent(), size: renderSize))
+
+        XCTAssertEqual(bytes(of: before), bytes(of: after))
+        XCTAssertNotEqual(bytes(of: before),
+                          bytes(of: try XCTUnwrap(StoryExportIntro.render(withRing(try redRing()), size: renderSize))),
+                          "le témoin sait voir un contour")
+    }
+
+    private func bytes(of image: CGImage) -> Data? {
+        image.dataProvider?.data.map { $0 as Data }
+    }
+
     // MARK: - Encodage
 
     func test_makeClip_writesAVideoOfTheIntroDuration() async throws {

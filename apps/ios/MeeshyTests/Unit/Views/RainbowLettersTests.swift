@@ -64,7 +64,7 @@ final class RainbowLettersTests: XCTestCase {
     }
 
     func test_focalRow_wiresTheLetters_andNotTheOutline() throws {
-        let row = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Focal/Row/FocalRow.swift"))
+        let row = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Focal/Row/FocalRow.swift"))
         XCTAssertTrue(row.contains("rainbowSeed: RainbowLetters.seed(for: input.effects, messageId: input.localId)"))
         XCTAssertTrue(row.contains(".messageEffects(RainbowLetters.rowEffects(input.effects))"))
         XCTAssertFalse(row.contains(".messageEffects(input.effects)"))

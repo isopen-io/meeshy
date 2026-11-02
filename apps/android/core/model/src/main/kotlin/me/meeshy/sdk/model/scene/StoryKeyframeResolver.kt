@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.StoryKeyframe
  * The animated transform of a canvas clip at one playback instant. Every channel
  * is fully resolved: a channel with no keyframes falls back to the clip's static
  * base value, so a caller can read `x`/`y`/`scale`/`opacity` unconditionally.
+ * [scale] is the RENDERED scale: the clip's base scale times the keyframe factor (#14316).
  */
 data class ResolvedKeyframeTransform(
     val x: Double,
@@ -22,6 +23,8 @@ data class ResolvedKeyframeTransform(
  * A wire [StoryKeyframe] carries four independently-optional channels (`x`, `y`,
  * `scale`, `opacity`); a point that keys only one leaves the others `null`, and
  * that channel is then ignored — exactly as a position-only point ignores scale.
+ * **A keyed scale is a FACTOR of the clip's base scale**, never a replacement (#14316, iso iOS
+ * `StoryRenderer.applyKeyframeOverrides`, web `objectPose`; witness `packages/shared/fixtures/keyframe-scale.vectors.json`).
  * Each present channel is projected onto its own [KeyframeChannelSample] list and
  * handed to [StoryKeyframeInterpolator]. **Before a channel's first keyframe it yields
  * to the base value** (no jump at the start of the clip).
@@ -64,7 +67,7 @@ object StoryKeyframeResolver {
         return ResolvedKeyframeTransform(
             x = x ?: baseX,
             y = y ?: baseY,
-            scale = scale ?: baseScale,
+            scale = baseScale * (scale ?: 1.0),
             opacity = opacity ?: baseOpacity,
         )
     }

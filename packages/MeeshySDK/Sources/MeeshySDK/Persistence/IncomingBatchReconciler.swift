@@ -18,11 +18,14 @@ enum IncomingBatchReconciler {
             if let localId = existingLocalId,
                var existing = try MessageRecord.fetchOne(db, key: localId) {
                 let newState = max(existing.state, msg.computedState)
-                guard newState != existing.state || existing.content != msg.content else {
+                // Le littéral servi d'un message chiffré ne remplace jamais le
+                // texte de la ligne : le clair de l'expéditeur, ou le littéral (#12916).
+                let rewritesContent = !msg.isEncrypted && existing.content != msg.content
+                guard newState != existing.state || rewritesContent else {
                     continue
                 }
                 existing.state = newState
-                existing.content = msg.content
+                if rewritesContent { existing.content = msg.content }
                 existing.updatedAt = Date()
                 existing.changeVersion += 1
                 try existing.update(db)
@@ -32,11 +35,11 @@ enum IncomingBatchReconciler {
                     localId: msg.id, serverId: msg.id,
                     conversationId: msg.conversationId,
                     senderId: msg.senderId,
-                    content: msg.content,
+                    content: msg.persistedContent,
                     originalLanguage: "fr", messageType: msg.messageType,
                     messageSource: msg.messageSource, contentType: "text",
                     state: msg.computedState, retryCount: 0, lastError: nil,
-                    isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+                    isEncrypted: msg.isEncrypted, encryptionMode: msg.encryptionMode, encryptedPayload: nil,
                     replyToId: nil, storyReplyToId: nil,
                     forwardedFromId: nil, forwardedFromConversationId: nil,
                     replyToJson: nil, forwardedFromJson: nil,

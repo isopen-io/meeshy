@@ -37,7 +37,7 @@ struct MessageCellCallbacks {
     let compose: ((String) -> Void)?
     let imagine: ((String) -> Void)?
     let moreSheet: ((String) -> Void)?
-    let canEdit: ((String) -> Bool)?
+    let rowOffer: ((MeeshyMessage) -> MessageRowOffer)?
     let openReactPicker: ((String) -> Void)?
     let showInfo: ((String) -> Void)?
     let showReadStatus: ((String) -> Void)?
@@ -160,7 +160,7 @@ extension MessageListViewController {
             compose: onComposeFromMessage,
             imagine: onImagineFromMessage,
             moreSheet: onOpenMoreSheet,
-            canEdit: canEditMessage,
+            rowOffer: rowOffer,
             openReactPicker: onOpenReactPicker,
             showInfo: onShowMessageInfo,
             showReadStatus: onShowReadStatus,

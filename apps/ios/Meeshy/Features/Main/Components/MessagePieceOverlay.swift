@@ -230,12 +230,8 @@ struct MessagePieceOverlay: View {
     }
 
     private var dimBackground: some View {
-        Color.black
-            .opacity(isVisible ? 0.62 : 0)
+        LongPressVeil(visibility: isVisible ? 1 : 0, onDismiss: dismiss)
             .animation(.easeOut(duration: 0.24), value: isVisible)
-            .contentShape(Rectangle())
-            .onTapGesture { dismiss() }
-            .accessibilityHidden(true)
     }
 
     // MARK: - Les actions

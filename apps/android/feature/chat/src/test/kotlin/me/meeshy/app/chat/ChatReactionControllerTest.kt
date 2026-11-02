@@ -22,6 +22,8 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.model.ReactionSyncResponse
 import me.meeshy.sdk.reaction.InMemoryEmojiUsageStore
+import me.meeshy.sdk.reaction.OwnReactionWithdrawal
+import me.meeshy.sdk.reaction.OwnReactionWithdrawals
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -41,6 +43,7 @@ class ChatReactionControllerTest {
         val emojiUsage: InMemoryEmojiUsageStore,
         val added: MutableSharedFlow<ReactionUpdateEvent>,
         val removed: MutableSharedFlow<ReactionUpdateEvent>,
+        val withdrawals: OwnReactionWithdrawals,
     ) {
         val state: ChatUiState get() = flow.value
         fun mine(messageId: String): Set<String> = controller.ownReactions.value[messageId] ?: emptySet()
@@ -56,6 +59,7 @@ class ChatReactionControllerTest {
         val session = mockk<SessionRepository>()
         every { session.currentUser } returns MutableStateFlow(me)
         val emojiUsage = InMemoryEmojiUsageStore()
+        val withdrawals = OwnReactionWithdrawals()
         val added = MutableSharedFlow<ReactionUpdateEvent>()
         val removed = MutableSharedFlow<ReactionUpdateEvent>()
         val socket = mockk<MessageSocketManager>()
@@ -71,8 +75,9 @@ class ChatReactionControllerTest {
             emojiUsageStore = emojiUsage,
             messageSocketManager = socket,
             workManager = workManager,
+            ownReactionWithdrawals = withdrawals,
         )
-        return Rig(controller, flow, repo, reactions, workManager, emojiUsage, added, removed)
+        return Rig(controller, flow, repo, reactions, workManager, emojiUsage, added, removed, withdrawals)
     }
 
     private fun event(userId: String, conversationId: String = "c1") =
@@ -169,6 +174,52 @@ class ChatReactionControllerTest {
 
         assertThat(r.mine("m1")).containsExactly("🔥")
         coVerify(exactly = 2) { r.repo.toggleReactionOptimistic("m1", "🔥", true) }
+    }
+
+    // --- #13803 — a reaction the outbox gives up on takes the viewer's mark back too -----------
+
+    @Test
+    fun `an exhausted add takes the chip out of the viewer's own reactions`() = runTest {
+        val r = rig()
+        r.controller.start()
+        advanceUntilIdle()
+        r.controller.toggle("m1", "🔥")
+        r.controller.toggle("m1", "👍")
+        advanceUntilIdle()
+
+        r.withdrawals.announce(OwnReactionWithdrawal("m1", "🔥", stillMine = false))
+        advanceUntilIdle()
+
+        assertThat(r.mine("m1")).containsExactly("👍")
+    }
+
+    @Test
+    fun `an exhausted removal puts the chip back among the viewer's own reactions`() = runTest {
+        val r = rig()
+        r.controller.start()
+        advanceUntilIdle()
+        r.controller.toggle("m1", "🔥")
+        advanceUntilIdle()
+        r.controller.toggle("m1", "🔥")
+        advanceUntilIdle()
+        assertThat(r.mine("m1")).isEmpty()
+
+        r.withdrawals.announce(OwnReactionWithdrawal("m1", "🔥", stillMine = true))
+        advanceUntilIdle()
+
+        assertThat(r.mine("m1")).containsExactly("🔥")
+    }
+
+    @Test
+    fun `a withdrawal on a message this screen never reacted to marks nothing`() = runTest {
+        val r = rig()
+        r.controller.start()
+        advanceUntilIdle()
+
+        r.withdrawals.announce(OwnReactionWithdrawal("elsewhere", "🔥", stillMine = true))
+        advanceUntilIdle()
+
+        assertThat(r.controller.ownReactions.value).doesNotContainKey("elsewhere")
     }
 
     // --- one toggle in flight per message + emoji ---------------------------------------------

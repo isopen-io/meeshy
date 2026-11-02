@@ -10,7 +10,7 @@
    429,
    716
   ],
-  "windowPx": 155546,
+  "windowPx": 155549,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -25,7 +25,7 @@
    454,
    716
   ],
-  "windowPx": 156693,
+  "windowPx": 156695,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -61,7 +61,7 @@
  },
  {
   "file": "neon-ambassadeur-5",
-  "overlap": 113,
+  "overlap": 117,
   "face": 0,
   "depth": 5,
   "bbox": [
@@ -70,13 +70,13 @@
    423,
    708
   ],
-  "windowPx": 152699,
+  "windowPx": 152714,
   "layout": "pied",
   "verdict": "ok"
  },
  {
   "file": "neon-legende-1",
-  "overlap": 150,
+  "overlap": 151,
   "face": 0,
   "depth": 5,
   "bbox": [
@@ -85,7 +85,7 @@
    445,
    709
   ],
-  "windowPx": 150974,
+  "windowPx": 150975,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -100,7 +100,7 @@
    443,
    711
   ],
-  "windowPx": 154979,
+  "windowPx": 154978,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -145,22 +145,22 @@
    440,
    711
   ],
-  "windowPx": 158033,
+  "windowPx": 158035,
   "layout": "pied",
   "verdict": "ok"
  },
  {
   "file": "neon-mythe-a",
-  "overlap": 62,
+  "overlap": 13,
   "face": 0,
-  "depth": 5,
+  "depth": 2,
   "bbox": [
-   156,
-   704,
-   178,
-   709
+   141,
+   706,
+   149,
+   708
   ],
-  "windowPx": 150718,
+  "windowPx": 150786,
   "layout": "duo",
   "verdict": "ok"
  },
@@ -175,7 +175,7 @@
    423,
    709
   ],
-  "windowPx": 151002,
+  "windowPx": 151001,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -260,7 +260,7 @@
    430,
    714
   ],
-  "windowPx": 152668,
+  "windowPx": 152669,
   "layout": "pied",
   "verdict": "ok"
  },

@@ -2,7 +2,6 @@ package me.meeshy.ui.icons
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material.icons.automirrored.filled.ArrowBack as AfArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward as AfArrowForward
 import androidx.compose.material.icons.automirrored.filled.Article as AfArticle
 import androidx.compose.material.icons.automirrored.filled.Backspace as AfBackspace
@@ -63,9 +62,11 @@ import androidx.compose.material.icons.filled.Check as FiCheck
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank as FiCheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.CheckCircle as FiCheckCircle
 import androidx.compose.material.icons.filled.Close as FiClose
+import androidx.compose.material.icons.filled.CloseFullscreen as FiCloseFullscreen
 import androidx.compose.material.icons.filled.Code as FiCode
 import androidx.compose.material.icons.filled.ContentCopy as FiContentCopy
 import androidx.compose.material.icons.filled.ContentCut as FiContentCut
+import androidx.compose.material.icons.filled.Crop as FiCrop
 import androidx.compose.material.icons.filled.CreateNewFolder as FiCreateNewFolder
 import androidx.compose.material.icons.filled.Dangerous as FiDangerous
 import androidx.compose.material.icons.filled.Delete as FiDelete
@@ -94,12 +95,15 @@ import androidx.compose.material.icons.filled.FormatQuote as FiFormatQuote
 import androidx.compose.material.icons.filled.Forum as FiForum
 import androidx.compose.material.icons.filled.Forward10 as FiForward10
 import androidx.compose.material.icons.filled.Forward5 as FiForward5
+import androidx.compose.material.icons.filled.Gesture as FiGesture
 import androidx.compose.material.icons.filled.GppMaybe as FiGppMaybe
+import androidx.compose.material.icons.filled.FiberManualRecord as FiFiberManualRecord
 import androidx.compose.material.icons.filled.GraphicEq as FiGraphicEq
 import androidx.compose.material.icons.filled.GridView as FiGridView
 import androidx.compose.material.icons.filled.Group as FiGroup
 import androidx.compose.material.icons.filled.GroupOff as FiGroupOff
 import androidx.compose.material.icons.filled.Groups as FiGroups
+import androidx.compose.material.icons.filled.Hearing as FiHearing
 import androidx.compose.material.icons.filled.History as FiHistory
 import androidx.compose.material.icons.filled.HourglassEmpty as FiHourglassEmpty
 import androidx.compose.material.icons.filled.HowToReg as FiHowToReg
@@ -128,6 +132,7 @@ import androidx.compose.material.icons.filled.Memory as FiMemory
 import androidx.compose.material.icons.filled.Menu as FiMenu
 import androidx.compose.material.icons.filled.Mic as FiMic
 import androidx.compose.material.icons.filled.MicOff as FiMicOff
+import androidx.compose.material.icons.filled.MonetizationOn as FiMonetizationOn
 import androidx.compose.material.icons.filled.MoreHoriz as FiMoreHoriz
 import androidx.compose.material.icons.filled.Movie as FiMovie
 import androidx.compose.material.icons.filled.MusicNote as FiMusicNote
@@ -179,6 +184,7 @@ import androidx.compose.material.icons.filled.Speaker as FiSpeaker
 import androidx.compose.material.icons.filled.SportsEsports as FiSportsEsports
 import androidx.compose.material.icons.filled.Star as FiStar
 import androidx.compose.material.icons.filled.Stop as FiStop
+import androidx.compose.material.icons.filled.StopCircle as FiStopCircle
 import androidx.compose.material.icons.filled.SwapHoriz as FiSwapHoriz
 import androidx.compose.material.icons.filled.SwapVert as FiSwapVert
 import androidx.compose.material.icons.filled.Sync as FiSync
@@ -192,8 +198,12 @@ import androidx.compose.material.icons.filled.TheaterComedy as FiTheaterComedy
 import androidx.compose.material.icons.filled.Timer as FiTimer
 import androidx.compose.material.icons.filled.TimerOff as FiTimerOff
 import androidx.compose.material.icons.filled.TouchApp as FiTouchApp
+import androidx.compose.material.icons.filled.Bookmark as FiBookmark
 import androidx.compose.material.icons.filled.Translate as FiTranslate
+import androidx.compose.material.icons.filled.Speed as FiSpeed
+import androidx.compose.material.icons.filled.Subtitles as FiSubtitles
 import androidx.compose.material.icons.filled.Tune as FiTune
+import androidx.compose.material.icons.filled.VerticalSplit as FiVerticalSplit
 import androidx.compose.material.icons.filled.UnfoldLess as FiUnfoldLess
 import androidx.compose.material.icons.filled.UnfoldMore as FiUnfoldMore
 import androidx.compose.material.icons.filled.Verified as FiVerified
@@ -224,6 +234,7 @@ import androidx.compose.material.icons.outlined.EmojiEmotions as OuEmojiEmotions
 import androidx.compose.material.icons.outlined.ErrorOutline as OuErrorOutline
 import androidx.compose.material.icons.outlined.FavoriteBorder as OuFavoriteBorder
 import androidx.compose.material.icons.outlined.Folder as OuFolder
+import androidx.compose.material.icons.outlined.PictureInPictureAlt as OuPictureInPictureAlt
 import androidx.compose.material.icons.outlined.Forum as OuForum
 import androidx.compose.material.icons.outlined.GridView as OuGridView
 import androidx.compose.material.icons.outlined.Group as OuGroup
@@ -267,7 +278,7 @@ public object MeeshyIcons {
     public val AlignLeft: ImageVector get() = Icons.AutoMirrored.Filled.AfFormatAlignLeft
     public val ArrowUpRight: ImageVector get() = Icons.AutoMirrored.Filled.AfCallMade
     public val Article: ImageVector get() = Icons.AutoMirrored.Filled.AfArticle
-    public val Back: ImageVector get() = Icons.AutoMirrored.Filled.AfArrowBack
+    public val Back: ImageVector get() = Icons.AutoMirrored.Filled.AfKeyboardArrowLeft
     public val Backspace: ImageVector get() = Icons.AutoMirrored.Filled.AfBackspace
     public val ChartLine: ImageVector get() = Icons.AutoMirrored.Filled.AfShowChart
     public val Chat: ImageVector get() = Icons.AutoMirrored.Filled.AfChat
@@ -318,6 +329,7 @@ public object MeeshyIcons {
     public val Bold: ImageVector get() = Icons.Filled.FiFormatBold
     public val Bolt: ImageVector get() = Icons.Filled.FiBolt
     public val Bookmark: ImageVector get() = Icons.Outlined.OuBookmarkBorder
+    public val BookmarkFilled: ImageVector get() = Icons.Filled.FiBookmark
     public val Brightness: ImageVector get() = Icons.Outlined.OuLightMode
     public val BrightnessFilled: ImageVector get() = Icons.Filled.FiLightMode
     public val BrokenImage: ImageVector get() = Icons.Filled.FiBrokenImage
@@ -335,10 +347,12 @@ public object MeeshyIcons {
     public val Close: ImageVector get() = Icons.Filled.FiClose
     public val CloseCircle: ImageVector get() = Icons.Outlined.OuCancel
     public val CloseCircleFilled: ImageVector get() = Icons.Filled.FiCancel
+    public val CloseFullscreen: ImageVector get() = Icons.Filled.FiCloseFullscreen
     public val Cloud: ImageVector get() = Icons.Outlined.OuCloud
     public val Code: ImageVector get() = Icons.Filled.FiCode
     public val ComposeNew: ImageVector get() = Icons.Outlined.OuEditNote
     public val Copy: ImageVector get() = Icons.Filled.FiContentCopy
+    public val Crop: ImageVector get() = Icons.Filled.FiCrop
     public val Cut: ImageVector get() = Icons.Filled.FiContentCut
     public val Dangerous: ImageVector get() = Icons.Filled.FiDangerous
     public val Delete: ImageVector get() = Icons.Outlined.OuDelete
@@ -387,6 +401,7 @@ public object MeeshyIcons {
     public val Groups: ImageVector get() = Icons.Outlined.OuGroups
     public val GroupsFilled: ImageVector get() = Icons.Filled.FiGroups
     public val Hand: ImageVector get() = Icons.Filled.FiPanTool
+    public val Hearing: ImageVector get() = Icons.Filled.FiHearing
     public val Heart: ImageVector get() = Icons.Outlined.OuFavoriteBorder
     public val HeartFilled: ImageVector get() = Icons.Filled.FiFavorite
     public val History: ImageVector get() = Icons.Filled.FiHistory
@@ -420,6 +435,7 @@ public object MeeshyIcons {
     public val Menu: ImageVector get() = Icons.Filled.FiMenu
     public val Mic: ImageVector get() = Icons.Filled.FiMic
     public val MicOff: ImageVector get() = Icons.Filled.FiMicOff
+    public val MonetizationOn: ImageVector get() = Icons.Filled.FiMonetizationOn
     public val MoreHorizontal: ImageVector get() = Icons.Filled.FiMoreHoriz
     public val Movie: ImageVector get() = Icons.Filled.FiMovie
     public val MusicNote: ImageVector get() = Icons.Filled.FiMusicNote
@@ -437,6 +453,7 @@ public object MeeshyIcons {
     public val PhotoFilled: ImageVector get() = Icons.Filled.FiImage
     public val PhotoFilter: ImageVector get() = Icons.Filled.FiPhotoFilter
     public val PhotoLibrary: ImageVector get() = Icons.Filled.FiPhotoLibrary
+    public val PictureInPicture: ImageVector get() = Icons.Outlined.OuPictureInPictureAlt
     public val Pin: ImageVector get() = Icons.Outlined.OuPushPin
     public val PinFilled: ImageVector get() = Icons.Filled.FiPushPin
     public val Play: ImageVector get() = Icons.Filled.FiPlayArrow
@@ -447,6 +464,7 @@ public object MeeshyIcons {
     public val QrCode: ImageVector get() = Icons.Filled.FiQrCode
     public val Quote: ImageVector get() = Icons.Filled.FiFormatQuote
     public val RadioUnchecked: ImageVector get() = Icons.Filled.FiRadioButtonUnchecked
+    public val Record: ImageVector get() = Icons.Filled.FiFiberManualRecord
     public val RecordVoice: ImageVector get() = Icons.Filled.FiRecordVoiceOver
     public val Refresh: ImageVector get() = Icons.Filled.FiRefresh
     public val Remove: ImageVector get() = Icons.Filled.FiRemove
@@ -457,6 +475,7 @@ public object MeeshyIcons {
     public val Replay5: ImageVector get() = Icons.Filled.FiReplay5
     public val Schedule: ImageVector get() = Icons.Outlined.OuSchedule
     public val ScheduleFilled: ImageVector get() = Icons.Filled.FiSchedule
+    public val Scribble: ImageVector get() = Icons.Filled.FiGesture
     public val Search: ImageVector get() = Icons.Filled.FiSearch
     public val Security: ImageVector get() = Icons.Filled.FiSecurity
     public val SelectAll: ImageVector get() = Icons.Filled.FiSelectAll
@@ -479,6 +498,7 @@ public object MeeshyIcons {
     public val Star: ImageVector get() = Icons.Outlined.OuStarOutline
     public val StarFilled: ImageVector get() = Icons.Filled.FiStar
     public val Stop: ImageVector get() = Icons.Filled.FiStop
+    public val StopCircle: ImageVector get() = Icons.Filled.FiStopCircle
     public val SwapHorizontal: ImageVector get() = Icons.Filled.FiSwapHoriz
     public val SwapVertical: ImageVector get() = Icons.Filled.FiSwapVert
     public val Sync: ImageVector get() = Icons.Filled.FiSync
@@ -497,6 +517,9 @@ public object MeeshyIcons {
     public val Triangle: ImageVector get() = Icons.Filled.FiChangeHistory
     public val Trophy: ImageVector get() = Icons.Filled.FiEmojiEvents
     public val Tune: ImageVector get() = Icons.Filled.FiTune
+    public val Speed: ImageVector get() = Icons.Filled.FiSpeed
+    public val Subtitles: ImageVector get() = Icons.Filled.FiSubtitles
+    public val VerticalSplit: ImageVector get() = Icons.Filled.FiVerticalSplit
     public val UnfoldLess: ImageVector get() = Icons.Filled.FiUnfoldLess
     public val UnfoldMore: ImageVector get() = Icons.Filled.FiUnfoldMore
     public val Verified: ImageVector get() = Icons.Outlined.OuVerified

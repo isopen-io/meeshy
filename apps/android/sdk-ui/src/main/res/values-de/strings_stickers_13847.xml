@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sticker_library_title">Meine Sticker</string>
+    <string name="sticker_library_empty">Füge ein Bild ein, um deine Bibliothek zu beginnen</string>
+    <string name="sticker_library_lift">Freistellen</string>
+    <string name="sticker_library_lift_a11y">Motiv eines Fotos freistellen</string>
+    <string name="sticker_library_item_a11y">Sticker aus deiner Bibliothek</string>
+    <string name="sticker_library_paste">Einfügen</string>
+    <string name="sticker_pack_by">von %1$s</string>
+    <string name="sticker_text_example">Hallo!</string>
+    <string name="sticker_text_placeholder">Schreib deine Worte…</string>
+    <string name="sticker_text_field_a11y">Text der Dekoration</string>
+    <string name="sticker_custom_text">Text</string>
+    <string name="sticker_custom_time">Uhrzeit</string>
+    <string name="sticker_shop_install">Installieren</string>
+    <string name="sticker_shop_remove">Entfernen</string>
+    <string name="sticker_shop_failed">Das Paket konnte nicht geändert werden. Versuch es erneut.</string>
+    <string name="sticker_template_text_speech_bubble">Sprechblase</string>
+    <string name="sticker_template_text_thought_bubble">Gedankenblase</string>
+    <string name="sticker_template_text_sticky_note">Haftnotiz</string>
+    <string name="sticker_template_text_ribbon">Band</string>
+    <string name="sticker_template_text_badge">Abzeichen</string>
+    <string name="sticker_template_text_neon">Neon</string>
+    <string name="sticker_template_text_tag">Etikett</string>
+    <string name="sticker_template_text_signboard">Schild</string>
+    <string name="sticker_template_text_tape">Klebeband</string>
+    <string name="sticker_template_text_stamp">Stempel</string>
+    <string name="sticker_template_time_digital">Digitaluhr</string>
+    <string name="sticker_template_time_analog">Zifferblatt</string>
+    <string name="sticker_template_time_ribbon">Band</string>
+    <string name="sticker_template_time_calendar_day">Kalenderblatt</string>
+    <string name="sticker_template_time_a11y">%1$s, %2$s</string>
+</resources>

@@ -13,10 +13,13 @@ struct BubbleEditedIndicator: View, Equatable {
     let isSaving: Bool
     let hasEditHistory: Bool
     let isDark: Bool
+    /// #11375 — la modification d'un modérateur de plateforme se dit en MOTS.
+    var byModerator: Bool = false
     @Environment(\.bubbleSkin) private var skin
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.isMe == rhs.isMe && lhs.isSaving == rhs.isSaving && lhs.hasEditHistory == rhs.hasEditHistory && lhs.isDark == rhs.isDark
+        lhs.isMe == rhs.isMe && lhs.isSaving == rhs.isSaving && lhs.hasEditHistory == rhs.hasEditHistory
+            && lhs.isDark == rhs.isDark && lhs.byModerator == rhs.byModerator
     }
 
     var body: some View {
@@ -57,12 +60,20 @@ struct BubbleEditedIndicator: View, Equatable {
                 Image(systemName: "pencil")
                     .font(.system(.caption2, design: .default).weight(.semibold))
                     .minimumScaleFactor(0.8)
+                // #11375 — le crayon seul laisserait lire ce texte comme celui
+                // de son auteur : la modification d'un tiers se dit en mots.
+                if byModerator {
+                    Text(BubbleEditMark.spokenLabel(byModerator: true))
+                        .font(.caption2.weight(.medium))
+                        .italic()
+                        .lineLimit(1)
+                }
             }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(isSaving
             ? String(localized: "bubble.meta.saving", defaultValue: "Enregistrement…", bundle: .main)
-            : String(localized: "bubble.meta.edited", defaultValue: "modifié", bundle: .main))
+            : BubbleEditMark.spokenLabel(byModerator: byModerator))
         .foregroundColor(metaColor)
     }
 }

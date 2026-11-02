@@ -12,6 +12,7 @@ import { callActions } from '@/lib/calls/call-actions';
 import { callsAvailable } from '@/lib/calls/calls-availability';
 import { translate } from '@/lib/i18n-catalog';
 import { categoryIdOf, reactionOf, type ConversationFlags } from '@/lib/api/preferences';
+import { endToEndRegimeLedger, endToEndSealed } from '@/lib/end-to-end-regime-ledger';
 import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
 import { accentOf, withAccent } from '@/lib/accent';
 import { useColorScheme } from '@/lib/use-color-scheme';
@@ -34,6 +35,7 @@ import { THREAD_SEARCH_PARAM } from '@/lib/view/thread-search-door';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { readingModeStore } from '@/lib/reading-mode/store';
 import { useLongPress } from '@/lib/view/long-press';
+import { useExitMotion } from '@/lib/view/exit-presence';
 import { requestDeparture } from '@/lib/conversation-departure';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
@@ -109,8 +111,18 @@ export type RowState = {
 
 const AT_REST: RowState = { magnified: false, alpha: 1, scale: 1, breathing: 0 };
 
+/** La place d'une rangée dans SA section — `aria-posinset` / `aria-setsize` (#11228). */
+export type RowPlace = { readonly position: number; readonly size: number };
+
 export type LensRowProps = {
   conversation: Conversation;
+  /**
+   * SA PLACE DANS SA SECTION (#11228) — la liste est virtualisée : les cales
+   * `aria-hidden` ne comptent pas pour le lecteur d'écran, qui annoncerait
+   * « 3 sur 18 » une section de cinq cents. Absente (World Wide, seule hors
+   * section), la rangée n'annonce rien.
+   */
+  place?: RowPlace | undefined;
   languages: readonly string[];
   viewerId: string;
   status?: RowState;
@@ -250,6 +262,7 @@ function useRowGestures(swipe: RowSwipeProps, press: RowPressProps) {
 
 function LensRowImpl({
   conversation,
+  place,
   languages,
   viewerId,
   status = AT_REST,
@@ -299,6 +312,7 @@ function LensRowImpl({
    */
   const chromeFade = flags.isMuted ? MUTED_OPACITY : 1;
   const group = isGroup(conversation);
+  const endToEnd = useStore(endToEndRegimeLedger, (state) => endToEndSealed(state, { conversationId: conversation.id, servedMode: conversation.encryptionMode }));
   const title = titleOf(conversation, viewerId);
   const photo = avatarOf(conversation, viewerId);
   /**
@@ -381,6 +395,9 @@ function LensRowImpl({
   const swipeSides = () =>
     conversationRowSwipeSides({ flags, unread, language: currentInterfaceLanguage(), canDelete: account });
   const swipe = useConversationRowSwipe(swipeSides);
+  /* ARCHIVÉE OU SUPPRIMÉE, LA LIGNE SE REPLIE AVANT DE PARTIR (#11574) — quand
+     l'`ExitPresence` de la liste la déclare sortante. */
+  useExitMotion(swipe.rowProps.ref);
   /* L'APPUI LONG OUVRE L'APERÇU (#11211) — `useLongPress`, sur la ligne
      entière, à côté du balayage : un doigt qui bouge de plus de 6 px annule
      l'appui avant que le balayage ne s'engage. Seuls ses gestes de POINTEUR
@@ -436,6 +453,7 @@ function LensRowImpl({
   return (
     <li
       data-row={conversation.id}
+      {...(place === undefined ? {} : { 'aria-posinset': place.position, 'aria-setsize': place.size })}
       /**
        * `group` : ancre `RowActions` (second enfant, ci-dessous) pour
        * `group-hover`/`group-focus-within` — le bouton d'actions ne reste
@@ -692,6 +710,14 @@ function LensRowImpl({
                 <Glyph name="bellSlash" size={12} title={rowMenuText(currentInterfaceLanguage(), 'listRow.muted')} style={{ color: 'var(--color-ios-ink-3)' }} />
               </span>
             ) : null}
+            {/* LE CADENAS DU BOUT EN BOUT (#12966) — deux tête-à-tête avec la
+                même personne, le chiffré et celui que le serveur lit, se
+                distinguent ici, quel que soit leur dernier message. */}
+            {endToEnd ? (
+              <span data-end-to-end className="flex shrink-0" style={{ opacity: chromeFade }}>
+                <Glyph name="lock" size={12} title={rowMenuText(currentInterfaceLanguage(), 'listRow.endToEnd')} style={{ color: 'var(--color-ios-ink-3)' }} />
+              </span>
+            ) : null}
             {/*
               LA PILE DE NON-LUS FINIT LA LIGNE DU NOM (#6080) — et l'HEURE a
               quitté cette ligne.
@@ -713,7 +739,7 @@ function LensRowImpl({
               droite que le « 1 min » de la rangée suivante. Rien ne
               s'alignait, parce que rien n'avait de colonne.
             */}
-            <UnreadBadge count={unreadCount} opacity={chromeFade} />
+            <UnreadBadge count={unreadCount} opacity={chromeFade} language={labelLanguage} />
           </span>
 
           {/*
@@ -880,6 +906,7 @@ function LensRowImpl({
  */
 export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
   if (prev.conversation !== next.conversation) return false;
+  if (prev.place?.position !== next.place?.position || prev.place?.size !== next.place?.size) return false;
   if (prev.languages !== next.languages) return false;
   if (prev.viewerId !== next.viewerId) return false;
   if (prev.unreadCount !== next.unreadCount) return false;

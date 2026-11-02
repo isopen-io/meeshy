@@ -109,6 +109,19 @@ final class APIRequestPipelineCharacterizationTests: XCTestCase {
         }
     }
 
+    func test_post_writesBodyDatesToTheMillisecond() async throws {
+        struct Body: Encodable { let at: Date }
+        let client = makeClient(token: Self.tokenOne)
+        PipelineStubProtocol.script = [.http(200, [:], #"{"success":true,"data":{"ok":true}}"#)]
+
+        let _: APIResponse<Pong> = try await client.post(
+            endpoint: "/stamps", body: Body(at: Date(timeIntervalSince1970: 1_757_928_863.563))
+        )
+
+        let body = try XCTUnwrap(PipelineStubProtocol.requests.first?.body)
+        XCTAssertEqual(String(decoding: body, as: UTF8.self), #"{"at":"2025-09-15T09:34:23.563Z"}"#)
+    }
+
     func test_request_callerHeadersOverrideAuthorizationAndContentType() async throws {
         let client = makeClient(token: Self.tokenOne)
         PipelineStubProtocol.script = [.http(200, [:], Self.okBody)]
@@ -163,6 +176,27 @@ final class APIRequestPipelineCharacterizationTests: XCTestCase {
             XCTAssertEqual(rejection.statusCode, 429)
             XCTAssertEqual(rejection.code, "DAILY_COMMENT_LIMIT")
             XCTAssertEqual(rejection.limit, 50)
+        }
+        XCTAssertEqual(PipelineStubProtocol.requests.count, 1)
+    }
+
+    /// #14169 — trop de personnes choisies sans lien aujourd'hui : un refus du
+    /// jour, jamais une cadence. Le transport ne le rejoue pas.
+    func test_request_onlyUnlinkedRecipients429_isSentOnce_andRejected() async throws {
+        let client = makeClient()
+        PipelineStubProtocol.script = [.http(429, ["Retry-After": "3600"],
+                                             #"{"code":"ONLY_UNLINKED_RECIPIENTS_LIMIT","limit":50,"unlinked":7,"error":"Trop"}"#)]
+
+        do {
+            let _: Pong = try await client.stringRequest(endpoint: "/posts")
+            XCTFail("le refus des personnes sans lien doit lever")
+        } catch MeeshyError.rejected(let rejection) {
+            XCTAssertEqual(rejection.statusCode, 429)
+            XCTAssertEqual(rejection.code, "ONLY_UNLINKED_RECIPIENTS_LIMIT")
+            XCTAssertEqual(rejection.limit, 50)
+            XCTAssertEqual(DailyGestureLimit.from(MeeshyError.rejected(rejection))?.gesture, .unlinkedRecipients)
+            XCTAssertTrue(StoryPublishRetryPolicy.isPermanent(MeeshyError.rejected(rejection)),
+                          "la file de publication ne le rejoue pas non plus")
         }
         XCTAssertEqual(PipelineStubProtocol.requests.count, 1)
     }

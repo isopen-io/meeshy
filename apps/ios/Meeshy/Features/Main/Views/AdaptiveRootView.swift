@@ -99,6 +99,8 @@ struct AdaptiveRootView: View {
             regular: { iPadRootView(scope: $0) }
         )
         .environment(\.rootNavigationHandoff, navigationHandoff)
+        // #3707 — un envoi chiffré qui bute sur la limite d'appareils du compte ouvre l'écran de retrait.
+        .modifier(EndToEndDeviceLimitPresenter())
         // Le composer de story démonté avec sa racine (compact ↔ regular) : son brouillon est tenu ICI, au-dessus
         // des deux racines, jusqu'à ce que la suivante le rouvre (`RootIntentRoutingLayer`).
         .onReceive(NotificationCenter.default.publisher(for: .storyComposerTornDown)) { note in
@@ -323,9 +325,14 @@ struct WindowSceneReader: UIViewRepresentable {
 
 /// N'ouvre la fenêtre principale que dans la scène qui la tient.
 struct MainWindowGate<Content: View>: View {
-    @ObservedObject private var registry = MainWindowRegistry.shared
+    @ObservedObject private var registry: MainWindowRegistry
     @State private var scene: UIWindowScene?
     @ViewBuilder let content: () -> Content
+
+    init(registry: MainWindowRegistry = .shared, @ViewBuilder content: @escaping () -> Content) {
+        self.registry = registry
+        self.content = content
+    }
 
     var body: some View {
         ZStack {
@@ -409,7 +416,12 @@ struct DetachedWindowView: View {
     /// Le compte qui a ouvert la fenêtre. Une conversation ou un fil de réels appartient à UN compte : après un
     /// changement de compte, la fenêtre ne doit rien montrer au suivant — elle se ferme.
     @SceneStorage("meeshy.detached.ownerUserId") private var ownerUserId: String?
-    @ObservedObject private var mainWindows = MainWindowRegistry.shared
+    @ObservedObject private var mainWindows: MainWindowRegistry
+
+    init(content: DetachedWindowContent?, mainWindows: MainWindowRegistry = .shared) {
+        self.content = content
+        self.mainWindows = mainWindows
+    }
 
     var body: some View {
         ZStack {
@@ -474,7 +486,7 @@ struct DetachedWindowView: View {
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
-                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) }
+                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) }, dependencies: .live
             )
             .modifier(MeeshyRouterInjection(router: router))
             .environmentObject(statusViewModel)

@@ -28,6 +28,7 @@ import {
 } from '@/lib/api/link-join';
 import { appQueryClient } from '@/lib/api/query-client';
 import { heldAccountOf, sessionStore, type GuestIdentity } from '@/lib/api/session';
+import { USERNAME_MIN_LENGTH } from '@/lib/identity-bounds';
 import { translateInvite, type InviteCatalogKey } from '@/lib/i18n-invite-catalog';
 import { currentInterfaceLanguage, interfaceLanguageOf, setInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { ANONYMOUS_MODE, joinChoicesOf } from '@/lib/links/invitation-view';
@@ -396,7 +397,13 @@ export function ChatJoin({
 
     const validated = validateGuestDraft(submitted, load.invitation.guest);
     if (!validated.ok) {
-      setInput({ field: validated.field, message: translateInvite(language, MISSING_KEY[validated.field]) });
+      setInput({
+        field: validated.field,
+        message:
+          validated.reason === 'too-short'
+            ? translateInvite(language, 'invite.tooShort.nickname', { min: String(USERNAME_MIN_LENGTH) })
+            : translateInvite(language, MISSING_KEY[validated.field]),
+      });
       /* Le bouton vit dans la barre collée, loin des champs : un formulaire
          incomplet MÈNE au champ fautif plutôt que de s'y refuser en silence. */
       const target = document.getElementById(`chat-join-${validated.field}`);

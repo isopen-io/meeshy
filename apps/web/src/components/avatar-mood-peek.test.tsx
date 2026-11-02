@@ -61,8 +61,11 @@ describe('le lecteur d’écran entend l’humeur avec le nom', () => {
     expect(avatar({ mood: '🎉' })).toContain('aria-label="Nour, humeur 🎉"');
   });
 
-  test('avec une photo, c’est son texte de remplacement', () => {
-    expect(avatar({ mood: '🎉', src: 'https://cdn.example/n.png' })).toContain('alt="Nour, humeur 🎉"');
+  test('avec une photo, la racine porte le même libellé et l’image reste muette (#12571)', () => {
+    const html = avatar({ mood: '🎉', src: 'https://cdn.example/n.png' });
+    expect(html).toContain('aria-label="Nour, humeur 🎉"');
+    expect(html).toContain('role="img"');
+    expect(html).toContain('alt=""');
   });
 
   test('sans humeur, le libellé reste le nom', () => {

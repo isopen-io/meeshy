@@ -36,7 +36,7 @@ const ar = {
   'sendSheet.limit.recipients': 'بحد أقصى {count} مستلمين',
   'sendSheet.error.captionTooLong': 'هذه الرسالة أطول من أن تُنشر (بحد أقصى {count} حرفًا)',
   'sendSheet.error.tooManyFiles': 'بحد أقصى {count} ملفات لكل منشور',
-  'sendSheet.moreOptions': 'المشاركة خارج Meeshy',
+  'sendSheet.moreOptions': 'مشاركة',
   'sendSheet.compose': 'تعديل في الاستوديو',
   'sendSheet.copyLink': 'نسخ الرابط',
   'sendSheet.linkCopied': 'تم نسخ الرابط',

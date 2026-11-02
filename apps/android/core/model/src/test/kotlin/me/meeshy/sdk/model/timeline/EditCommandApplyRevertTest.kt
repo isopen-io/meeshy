@@ -228,7 +228,7 @@ class EditCommandApplyRevertTest {
     fun `la transformation est bornee et ignore les valeurs non finies`() {
         val t = ClipTransform.IDENTITY
         assertThat(t.applying(ClipTransform.Field.X(9.0)).x).isEqualTo(1.5)
-        assertThat(t.applying(ClipTransform.Field.Scale(0.0)).scale).isEqualTo(0.05)
+        assertThat(t.applying(ClipTransform.Field.Scale(0.0), smallestSideDesignPx = 140.0).scale).isWithin(1e-12).of(5.0 / 140.0)
         assertThat(t.applying(ClipTransform.Field.Rotation(720.0)).rotation).isEqualTo(180.0)
         assertThat(t.applying(ClipTransform.Field.ZIndex(500)).zIndex).isEqualTo(100)
         assertThat(t.applying(ClipTransform.Field.Y(Double.NaN))).isEqualTo(t)

@@ -2,7 +2,6 @@ package me.meeshy.app;
 
 import android.app.Activity;
 import android.graphics.drawable.ColorDrawable;
-import android.os.Build;
 import android.view.Window;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -10,9 +9,14 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 /**
- * #9533 — le fond des barres systeme suit le theme CHOISI dans l'app, la ou
- * le systeme les peint encore (`SystemBarPaint`). La couleur vient de la meta
- * `theme-color` du schema peint (`src/lib/scheme.ts`), seule source.
+ * #9533 — le fond derriere les barres systeme suit le theme CHOISI dans
+ * l'app. La couleur vient de la meta `theme-color` du schema peint
+ * (`src/lib/scheme.ts`), seule source.
+ *
+ * #12447 — la coque est bord a bord a toute version (`MainActivity`,
+ * `EdgeToEdge.enable`) : les barres sont transparentes et c'est la page, ou
+ * ce fond de fenetre, qui se voit derriere. Plus aucun appel a
+ * `setStatusBarColor` / `setNavigationBarColor`, obsoletes depuis l'API 35.
  *
  * #10085 — le fond de la fenetre aussi, a toute version : sous une WebView
  * < 140, `SystemBars` rembourre la fenetre et ce fond se voit derriere les
@@ -22,7 +26,6 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 public class MeeshySystemBarsPlugin extends Plugin {
 
     @PluginMethod
-    @SuppressWarnings("deprecation")
     public void paint(PluginCall call) {
         Activity activity = getActivity();
         Integer color = SystemBarPaint.opaque(call.getString("color"));
@@ -33,8 +36,6 @@ public class MeeshySystemBarsPlugin extends Plugin {
         activity.runOnUiThread(() -> {
             Window window = activity.getWindow();
             window.setBackgroundDrawable(new ColorDrawable(color));
-            if (SystemBarPaint.paintsStatus(Build.VERSION.SDK_INT)) window.setStatusBarColor(color);
-            if (SystemBarPaint.paintsNavigation(Build.VERSION.SDK_INT)) window.setNavigationBarColor(color);
             call.resolve();
         });
     }

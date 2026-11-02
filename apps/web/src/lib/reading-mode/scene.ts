@@ -15,7 +15,7 @@ import { SCENE_FLATTEN_DURATION_MS } from './metrics';
  * `MessageListViewController.applyFocalPerspectiveToVisibleCells`
  * (:3283-3345) et de `flattenFocalScene` (:3236-3268), sur un hook hors
  * React — voir `src/lib/scene/activity.ts` pour la loi PURE que ce hook
- * consomme, et `Main/Focal/Core/FocalScrollPerspective.swift` pour la
+ * consomme, et `Focal/Core/FocalScrollPerspective.swift` pour la
  * référence complète.
  *
  * QUATRE RÈGLES gouvernent ce fichier :

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_unsent_media_row">Mídia %1$d</string>
+    <string name="feed_unsent_media_uploaded">Enviado</string>
+    <string name="feed_unsent_media_waiting">Aguardando</string>
+    <string name="feed_unsent_media_refused">Recusado, precisa ser reenviado</string>
+    <string name="feed_unsent_media_lost">Não encontrado neste dispositivo</string>
+    <string name="feed_unsent_rupture_counts">Faltando: %1$d. Intacto: %2$d.</string>
+    <string name="feed_unsent_gesture_replace">Reabra para substituir a mídia que falta.</string>
+    <string name="feed_unsent_gesture_replace_story">Exclua e componha novamente.</string>
+    <string name="feed_unsent_gesture_wait">Será enviada assim que a conexão voltar.</string>
+    <string name="feed_unsent_gesture_retry">Tente novamente: nada foi perdido.</string>
+</resources>

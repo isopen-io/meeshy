@@ -120,8 +120,7 @@ extension CacheCoordinator {
     // MARK: - Translation Cache Persistence
 
     private func persistTranslationIncremental(messageId: String, translations: [TranslationData], cachedAt: Date) {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         do {
             try db.write { db in
                 // Delete existing records for this message, then insert fresh
@@ -145,8 +144,7 @@ extension CacheCoordinator {
     }
 
     func loadTranslationCaches() {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         let cutoff = Date().addingTimeInterval(-Self.translationMaxAge)
         do {
             let records: [TranslationCacheRecord] = try db.read { db in

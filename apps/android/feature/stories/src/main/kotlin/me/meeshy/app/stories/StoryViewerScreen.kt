@@ -12,7 +12,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -36,10 +35,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.automirrored.outlined.Comment
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -57,13 +56,18 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -96,25 +100,34 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.StoryRepostAudience
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.app.feed.rememberContentShareOut
+import me.meeshy.sdk.model.share.ShareCard
+import me.meeshy.sdk.model.share.ShareCards
+import me.meeshy.sdk.model.share.ShareSubject
+import me.meeshy.sdk.model.story.StoryReplyRules
+import me.meeshy.ui.share.LocalShareLauncher
+import me.meeshy.ui.share.open
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.story.canvas.SceneLookChain
 import me.meeshy.ui.component.EmojiQuickStrip
+import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.LanguageQuickOption
 import me.meeshy.ui.component.LanguageQuickStrip
 import me.meeshy.ui.component.audio.AudioTrackSurface
 import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.component.video.ReelVideoSurface
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
-private val SWIPE_HORIZONTAL_THRESHOLD = 64.dp
-private val SWIPE_VERTICAL_THRESHOLD = 120.dp
 
 /**
  * Minimal but real story viewer: segmented progress, tap-to-advance/dismiss,
@@ -125,10 +138,19 @@ private val SWIPE_VERTICAL_THRESHOLD = 120.dp
 @Composable
 fun StoryViewerScreen(
     onClose: () -> Unit,
-    onRepost: (String) -> Unit = {},
+    onOpenProfile: (String) -> Unit = {},
+    onEditStory: ((String) -> Unit)? = null,
+    /** « Composer » (#13849, iOS `message.compose.title`) : une scène NEUVE semée de celle de la story, pour toute story. */
+    onComposeStory: ((String) -> Unit)? = null,
+    onStoryMissing: (String) -> Unit = { onClose() },
     viewModel: StoryViewerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    state.missingStoryId?.let { missingId ->
+        LaunchedEffect(missingId) { onStoryMissing(missingId) }
+        StoryViewerLoading()
+        return
+    }
     if (state.loadFailed) {
         StoryViewerNotFound(onRetry = viewModel::retry, onClose = onClose)
         return
@@ -146,8 +168,10 @@ fun StoryViewerScreen(
 
     var showViewers by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
+    var showReply by remember { mutableStateOf(false) }
     var showSendTo by remember { mutableStateOf(false) }
-    var sendToStoryId by remember { mutableStateOf<String?>(null) }
+    val shareLauncher = LocalShareLauncher.current
+    val shareContext = androidx.compose.ui.platform.LocalContext.current
     var showOptions by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -167,13 +191,63 @@ fun StoryViewerScreen(
     var flightSerial by remember { mutableIntStateOf(0) }
     var heartBouncePulse by remember { mutableIntStateOf(0) }
     var boxOriginInRoot by remember { mutableStateOf(Offset.Zero) }
+    var headerHeightPx by remember { mutableIntStateOf(0) }
+    var composerHeightPx by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
+    val meeshyHaptics = rememberMeeshyHaptics()
+    // Le doigt déplace la carte en phase de DESSIN (graphicsLayer) : aucune recomposition
+    // pendant le geste ; seule la prise du doigt fige la lecture.
+    val cardMotion = rememberStoryCardMotion()
     val railOverlayActive = reactionBarVisible || languageBarVisible || scrubKind != null
+    val videoExport = rememberStoryVideoExport(
+        item = { state.currentStoryId?.let(viewModel::rawItem) },
+        slide = slide,
+        author = { state.exportAuthor(accent) },
+    )
+    val commentThread = rememberStoryCommentThread(state.currentStoryId)
+    val currentItem = state.currentStoryId?.let(viewModel::rawItem)
+    val commentCount = rememberStoryCommentCount(commentThread, currentItem?.commentCount ?: 0)
+    val keyboardVisible = storyKeyboardVisible()
+    val railPlan = StoryRailPlan.resolve(
+        isOwnStory = state.isOwnStory,
+        hasTranslatableContent = state.availableLanguages.isNotEmpty(),
+        canReply = StoryReplyRules.canReply(state.isOwnStory, state.currentStoryId, state.authorUserId),
+        canCompose = onComposeStory != null && state.canCompose,
+        commentCount = commentCount,
+        isRepublishable = StoryRepostAudience.isRepublishable(currentItem?.visibility),
+    )
     val cover = StoryViewerCover(
-        sheet = showViewers || showComments || showSendTo,
+        sheet = showViewers || showComments || showReply || showSendTo || state.languageExplorer != null,
         railBar = railOverlayActive,
         menu = showOptions,
-        dialog = showReportDialog || showDeleteDialog,
+        dialog = showReportDialog || showDeleteDialog || videoExport.busy,
+        composing = railPlan.pinsCommentComposer && storyCommentHolds(commentThread),
     )
+
+    val shareOut = rememberContentShareOut()
+
+    fun storyCard(): ShareCard? = state.currentStoryId?.let { storyId ->
+        ShareCards.story(
+            storyId = storyId,
+            authorId = null,
+            messageText = shareContext.getString(R.string.share_story_text, state.authorName, ShareCards.storyUrl(storyId)),
+            isPublic = currentItem?.visibility.equals(PUBLIC_STORY_VISIBILITY, ignoreCase = true),
+        )
+    }
+
+    // « Republier » (#14443) : un geste publie, comme le rail iOS ; le lecteur reste ouvert et dit l'issue.
+    fun repost() {
+        meeshyHaptics.light()
+        viewModel.repostCurrentStory()
+    }
+
+    // « Envoyer » (#14315) : la feuille Meeshy, qui frappe le lien de l'utilisateur pour une story publique.
+    fun openSendTo() {
+        val card = storyCard() ?: return
+        val launcher = shareLauncher ?: return shareOut(card)
+        showSendTo = true
+        launcher.open(ShareSubject.Card(card)) { showSendTo = false }
+    }
 
     fun closeRailBars() {
         reactionBarVisible = false
@@ -334,7 +408,8 @@ fun StoryViewerScreen(
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     // Une story joue tant qu'elle n'est ni retenue (appui long) ni cachée : app en
     // arrière-plan, appel entrant, écran éteint figent l'horloge et le son (#11040).
-    val playing = !state.isPaused && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    val playing = !state.isPaused && !cardMotion.dragging &&
+        lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
     var progressSlideKey by remember { mutableStateOf<String?>(null) }
 
     androidx.compose.runtime.LaunchedEffect(
@@ -365,19 +440,21 @@ fun StoryViewerScreen(
     }
 
     val overlayActiveState = rememberUpdatedState(railOverlayActive)
+    val hasNextGroupState = rememberUpdatedState(state.hasNextGroup)
+    val hasPreviousGroupState = rememberUpdatedState(state.hasPreviousGroup)
+    StoryCubeEntryOnAuthorChange(cardMotion, authorKey = state.authorUserId, groupIndex = state.groupIndex)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(hexColor(accent))
-            .onGloballyPositioned { boxOriginInRoot = it.positionInRoot() }
+            .background(Color.Black)
             .pointerInput(state.groupIndex, state.index, state.slides.size) {
                 // Appui long ≥ 200 ms = pause qui tient au relâchement ; le tap suivant
                 // reprend sans naviguer (iOS `StoryGestureOverlayView`).
                 detectStoryCanvasTaps(
                     isDoubleTapZone = { StoryTapZone.of(it.x, size.width.toFloat()) == StoryTapZone.Center },
                     onDoubleTap = { if (!overlayActiveState.value) viewModel.onCanvasDoubleTap() },
-                    onHold = { if (!overlayActiveState.value) viewModel.pauseByHold() },
+                    onHold = { if (!overlayActiveState.value) viewModel.toggleByHold() },
                 ) { offset ->
                     if (overlayActiveState.value) {
                         closeRailBars()
@@ -386,198 +463,72 @@ fun StoryViewerScreen(
                     }
                 }
             }
-            .pointerInput(state.groupIndex, state.index, state.slides.size) {
-                val horizontalThreshold = SWIPE_HORIZONTAL_THRESHOLD.toPx()
-                val verticalThreshold = SWIPE_VERTICAL_THRESHOLD.toPx()
-                var dragX = 0f
-                var dragY = 0f
-                detectDragGestures(
-                    onDragStart = { dragX = 0f; dragY = 0f },
-                    onDragEnd = {
-                        if (overlayActiveState.value) return@detectDragGestures
-                        viewModel.onSwipe(
-                            StorySwipeResolver.resolve(
-                                dragX = dragX,
-                                dragY = dragY,
-                                horizontalThreshold = horizontalThreshold,
-                                verticalThreshold = verticalThreshold,
-                            ),
-                        )
-                    },
-                    onDrag = { change, drag ->
-                        change.consume()
-                        dragX += drag.x
-                        dragY += drag.y
-                    },
-                )
-            },
+            .storyCardDrag(
+                motion = cardMotion,
+                scope = scope,
+                hasNextGroup = hasNextGroupState,
+                hasPreviousGroup = hasPreviousGroupState,
+                overlayActive = overlayActiveState,
+                onOverlayDismiss = ::closeRailBars,
+                onCommit = viewModel::onSwipe,
+                onCommitFeedback = meeshyHaptics::light,
+            ),
     ) {
-        when {
-            slide?.backgroundVideoUrl != null -> {
-                val bg = slide.backgroundTransform
-                ReelVideoSurface(
-                    mediaUrl = slide.backgroundVideoUrl,
-                    isActive = playing,
-                    rewindWhenInactive = false,
-                    muted = state.isMuted,
-                    // La fenêtre de lecture que l'auteur a posée (#5129) — `null`
-                    // quand la source joue en entier.
-                    sourceStartMs = slide.backgroundVideoWindow?.startMs,
-                    sourceEndMs = slide.backgroundVideoWindow?.endMs,
-                    // Aspect-fill base, then the author's pan/zoom framing on top — the
-                    // offset fractions scale to the measured canvas so it is resolution-
-                    // independent (mirrors the image branch and iOS's "zoom inside the
-                    // background", clipped by the 9:16 frame).
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            // Deux axes depuis #5085 : un recadrage non carré
-                            // agrandit différemment en largeur et en hauteur.
-                            scaleX = bg.scaleX
-                            scaleY = bg.scaleY
-                            rotationZ = bg.rotationDegrees
-                            translationX = bg.offsetXFraction * size.width
-                            translationY = bg.offsetYFraction * size.height
-                        },
-                )
-            }
-            slide?.imageUrl != null -> {
-                val imageUrl = slide.imageUrl
-                val bg = slide.backgroundTransform
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    colorFilter = SceneLookChain.colorFilter(slide.lookRecipe),
-                    // Instant blur behind the loading image — no black flash on cold
-                    // load (decoded from the slide's ThumbHash; null → plain background).
-                    placeholder = rememberThumbHashPainter(slide.backgroundThumbHash),
-                    // Resolved (loaded or failed) → the countdown gate may open.
-                    onSuccess = { viewModel.onImageResolved(imageUrl) },
-                    onError = { viewModel.onImageResolved(imageUrl) },
-                    // Aspect-fill base, then the author's pan/zoom framing on top — the
-                    // offset fractions scale to the measured canvas so it is resolution-
-                    // independent (mirrors iOS's "zoom inside the background", clipped).
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            // Deux axes depuis #5085 : un recadrage non carré
-                            // agrandit différemment en largeur et en hauteur.
-                            scaleX = bg.scaleX
-                            scaleY = bg.scaleY
-                            rotationZ = bg.rotationDegrees
-                            translationX = bg.offsetXFraction * size.width
-                            translationY = bg.offsetYFraction * size.height
-                        },
-                )
-            }
-            slide != null -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(StorySceneFill.resolve(slide.background, slide.accentHex).brush()),
-                )
-            }
-        }
-
-        val playheadSeconds = progress.value * slideDurationMs / 1000f
-
-        slide?.foregroundMedia?.forEach { foreground ->
-            if (foreground.isVisible(playheadSeconds)) {
-                key(foreground.url) {
-                    StoryForegroundLayer(
-                        media = foreground,
-                        playheadSeconds = playheadSeconds,
-                        playing = playing,
-                        muted = state.isMuted,
-                    )
-                }
-            }
-        }
-
-        slide?.textObjects?.forEach { textObject ->
-            if (textObject.isVisible(playheadSeconds)) {
-                key(textObject.id) {
-                    StoryTextObjectLayer(
-                        textObject = textObject,
-                        playheadSeconds = playheadSeconds,
-                    )
-                }
-            }
-        }
-
-        slide?.stickers?.forEach { sticker ->
-            if (sticker.isVisible(playheadSeconds)) {
-                key(sticker.id) { StoryStickerLayer(sticker = sticker, playheadSeconds = playheadSeconds) }
-            }
-        }
-        slide?.audioChips?.forEach { chip ->
-            if (chip.isVisible(playheadSeconds)) {
-                key(chip.id) { StoryAudioChipLayer(chip = chip) }
-            }
-        }
-
-        // The author's freehand drawing, read-only — a stroke-only slide is publishable
-        // (StorySlideDeck.publishableSlides) but carries no other overlay, so without this
-        // the reader (and the author, re-viewing their own story) would see a bare background.
-        if (slide != null && slide.strokes.isNotEmpty()) {
-            StoryDrawingLayer(
-                strokes = slide.strokes,
-                isCapturing = false,
-                activeColorHex = "#FFFFFF",
-                activeWidthDesign = 0.0,
-                onStrokeCaptured = {},
-                modifier = Modifier.fillMaxSize(),
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .storyCardFrame(cardMotion)
+            .background(hexColor(accent))
+            .onGloballyPositioned { boxOriginInRoot = it.positionInRoot() },
+    ) {
+        if (slide != null) {
+            StorySceneBackground(
+                slide = slide,
+                playing = playing,
+                muted = state.isMuted,
+                // Un vocal ou un appel prend le son : la story se fige avec la vidéo (minuterie comprise), comme un appui long.
+                onAudioFocusLost = viewModel::pauseByHold,
+                onImageResolved = viewModel::onImageResolved,
             )
         }
 
-        slide?.backgroundAudioUrl?.let { url ->
-            key(url) {
-                AudioTrackSurface(
-                    mediaUrl = url,
-                    isActive = playing,
-                    rewindWhenInactive = false,
-                    volume = if (state.isMuted) 0f else 1f,
-                    loop = slide.backgroundLoop,
-                    sourceStartMs = slide.backgroundAudioWindow?.startMs,
-                    sourceEndMs = slide.backgroundAudioWindow?.endMs,
-                )
-            }
-        }
-        slide?.foregroundAudioUrl?.let { url ->
-            key(url) {
-                AudioTrackSurface(
-                    mediaUrl = url,
-                    isActive = playing,
-                    rewindWhenInactive = false,
-                    volume = if (state.isMuted) 0f else 1f,
-                    loop = false,
-                    // Un vocal rogné compte autant qu'une vidéo rognée : iOS
-                    // écrit les deux bornes sur les deux familles (#5129).
-                    sourceStartMs = slide.foregroundAudioWindow?.startMs,
-                    sourceEndMs = slide.foregroundAudioWindow?.endMs,
-                )
-            }
+        if (slide != null) {
+            StorySceneOverlays(
+                slide = slide,
+                progress = progress,
+                slideDurationMs = slideDurationMs,
+                playing = playing,
+                muted = state.isMuted,
+                onAudioFocusLost = viewModel::pauseByHold,
+            )
         }
 
-        if (slide != null && slide.text.isNotBlank()) {
-            StoryCaptionOverlay(
-                text = slide.text,
-                storyId = slide.id,
-                modifier = Modifier.align(Alignment.BottomStart),
-            )
+        if (slide != null) StorySceneAudio(slide = slide, playing = playing, muted = state.isMuted)
+
+        val composerPinned = commentThread != null && railPlan.pinsCommentComposer && slide != null && !state.isDismissed &&
+            (!state.isPaused || cover.composing)
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth()) {
+            if (slide != null && slide.text.isNotBlank()) {
+                StoryCaptionOverlay(text = slide.text, storyId = slide.id)
+            }
+            // #14313 — le composeur de commentaire épinglé sous la story d'autrui (iOS `composerLayer`).
+            if (composerPinned && commentThread != null) {
+                StoryPinnedCommentComposer(thread = commentThread, modifier = Modifier.onSizeChanged { composerHeightPx = it.height })
+                StoryCommentSentFeedback(thread = commentThread)
+            }
         }
 
         if (!state.isPaused) Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .onSizeChanged { headerHeightPx = it.height }
                 .statusBarsPadding()
                 .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.sm),
         ) {
             SegmentedProgress(
                 count = state.slides.size,
                 index = state.index,
-                currentProgress = progress.value,
+                currentProgress = { progress.value },
             )
             Row(
                 modifier = Modifier
@@ -586,9 +537,17 @@ fun StoryViewerScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 StoryAuthorIdentity(
+                    onClick = state.authorUserId?.let { userId ->
+                        {
+                            meeshyHaptics.light()
+                            onOpenProfile(userId)
+                        }
+                    },
                     name = state.authorName,
                     avatarUrl = state.authorAvatarUrl,
                     accentHex = accent,
+                    authorUserId = state.authorUserId,
+                    authorPresence = state.authorPresence,
                     createdAtMillis = slide?.createdAtMillis,
                     repostAttribution = slide?.repostAttribution,
                     modifier = Modifier
@@ -601,28 +560,6 @@ fun StoryViewerScreen(
                 if (slide?.isTranslated == true) {
                     TranslatedBadge()
                 }
-                if (state.isOwnStory && state.currentStoryId != null) {
-                    Text(
-                        text = stringResource(R.string.stories_viewers_title),
-                        color = MeeshyPalette.White,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.4f))
-                            .clickable { showViewers = true }
-                            .padding(horizontal = MeeshySpacing.sm, vertical = 2.dp),
-                    )
-                }
-                if (state.currentStoryId != null) {
-                    IconButton(onClick = { showComments = true }) {
-                        Icon(
-                            Icons.AutoMirrored.Outlined.Comment,
-                            contentDescription = stringResource(R.string.stories_comments_open),
-                            tint = MeeshyPalette.White,
-                        )
-                    }
-                }
                 if (state.currentStoryId != null) {
                     Box {
                         IconButton(onClick = { showOptions = true }) {
@@ -633,34 +570,64 @@ fun StoryViewerScreen(
                             )
                         }
                         DropdownMenu(expanded = showOptions, onDismissRequest = { showOptions = false }) {
+                            // « Partager » (#14315) : hors de Meeshy, par la feuille du système ; « Envoyer » est au rail.
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.stories_action_send_to)) },
+                                text = { Text(stringResource(R.string.stories_action_share)) },
+                                leadingIcon = { Icon(MeeshyIcons.Share, contentDescription = null) },
                                 onClick = {
                                     showOptions = false
-                                    sendToStoryId = state.currentStoryId
-                                    showSendTo = true
+                                    storyCard()?.let(shareOut)
                                 },
                             )
+                            StoryVideoExportMenuEntries(onPick = { mode ->
+                                showOptions = false
+                                videoExport.start(mode)
+                            })
+                            if (onComposeStory != null && state.canCompose) {
+                                state.currentStoryId?.let { storyId ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.story_viewer_compose)) },
+                                        leadingIcon = { Icon(MeeshyIcons.MagicWand, contentDescription = null) },
+                                        onClick = {
+                                            showOptions = false
+                                            onComposeStory(storyId)
+                                        },
+                                    )
+                                }
+                            }
                             if (state.isOwnStory) {
+                                if (onEditStory != null && StoryEditEntry.offered(state.isOwnStory, state.currentStoryId)) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.my_stories_edit)) },
+                                        leadingIcon = { Icon(MeeshyIcons.Edit, contentDescription = null) },
+                                        onClick = {
+                                            showOptions = false
+                                            state.currentStoryId?.let(onEditStory)
+                                        },
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.stories_action_delete), color = MeeshyPalette.Error) },
+                                    leadingIcon = { Icon(MeeshyIcons.Delete, contentDescription = null, tint = MeeshyPalette.Error) },
                                     onClick = {
                                         showOptions = false
                                         showDeleteDialog = true
                                     },
                                 )
                             } else {
-                                state.currentStoryId?.let { storyId ->
+                                if (railPlan.showsRepost) {
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.stories_action_repost)) },
+                                        leadingIcon = { Icon(MeeshyIcons.Repeat, contentDescription = null) },
                                         onClick = {
                                             showOptions = false
-                                            onRepost(storyId)
+                                            repost()
                                         },
                                     )
                                 }
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.stories_action_report)) },
+                                    leadingIcon = { Icon(MeeshyIcons.Warning, contentDescription = null) },
                                     onClick = {
                                         showOptions = false
                                         showReportDialog = true
@@ -680,12 +647,24 @@ fun StoryViewerScreen(
             }
         }
 
-        val languageBadge = slide?.languageCode ?: state.languageOverride
-        if (slide != null && !state.isDismissed && !state.isPaused) {
+        val languageBadge = state.activeLanguageCode
+        val railFrame = StoryRailFrame.of(headerHeightPx, composerHeightPx, composerPinned, with(density) { MeeshySpacing.sm.roundToPx() })
+        if (slide != null && !state.isDismissed && !state.isPaused && !keyboardVisible) {
             StoryActionRail(
-                plan = StoryRailPlan.resolve(
-                    isOwnStory = state.isOwnStory,
-                    hasTranslatableContent = state.availableLanguages.isNotEmpty(),
+                plan = railPlan,
+                counts = StoryRailCounts(
+                    comments = commentCount,
+                    shares = currentItem?.shareCount ?: 0,
+                    reposts = state.repostCount,
+                    reposted = state.hasReposted,
+                    views = currentItem?.viewCount ?: 0,
+                ),
+                taps = StoryRailTaps(
+                    onSend = { closeRailBars(); meeshyHaptics.light(); openSendTo() },
+                    onRepost = { closeRailBars(); repost() },
+                    onViews = { closeRailBars(); meeshyHaptics.light(); showViewers = true },
+                    onCompose = { closeRailBars(); meeshyHaptics.light(); state.currentStoryId?.let { id -> onComposeStory?.invoke(id) } },
+                    onComments = { closeRailBars(); meeshyHaptics.light(); showComments = true },
                 ),
                 reactionCount = state.reactionCount,
                 hasReacted = state.myReactions.isNotEmpty(),
@@ -697,11 +676,17 @@ fun StoryViewerScreen(
                     hoveredIndex = null
                     languageBarVisible = !languageBarVisible
                 },
+                onTapReply = {
+                    closeRailBars()
+                    meeshyHaptics.light()
+                    showReply = true
+                },
                 onScrubEvent = ::handleScrub,
                 onHeartBounds = { heartBounds = it },
                 onLanguageBounds = { languageButtonBounds = it },
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
+                    .padding(top = with(density) { railFrame.topPx.toDp() }, bottom = with(density) { railFrame.bottomPx.toDp() })
                     .padding(end = MeeshySpacing.sm),
             )
         }
@@ -753,6 +738,10 @@ fun StoryViewerScreen(
                 activeCode = languageBadge,
                 highlightedIndex = if (scrubKind == StoryScrubKind.Languages) hoveredIndex else null,
                 onTileBounds = { index, rect -> languageTileBounds[index] = rect },
+                onOpenAll = {
+                    closeRailBars()
+                    viewModel.openLanguageExplorer()
+                },
             )
         }
 
@@ -774,6 +763,11 @@ fun StoryViewerScreen(
                 modifier = Modifier.align(Alignment.Center),
             )
         }
+        FeedbackToastHost(
+            toasts = viewModel.toasts,
+            modifier = Modifier.padding(bottom = with(density) { (if (composerPinned) composerHeightPx else 0).toDp() }),
+        )
+    }
     }
 
     if (showFullEmojiPicker) {
@@ -798,6 +792,15 @@ fun StoryViewerScreen(
         }
     }
 
+    state.languageExplorer?.let { explorer ->
+        StoryLanguageSheet(
+            explorer = explorer,
+            onSelectLanguage = viewModel::selectLanguage,
+            onTranslate = viewModel::requestStoryTranslation,
+            onDismiss = viewModel::closeLanguageExplorer,
+        )
+    }
+
     val viewersStoryId = state.currentStoryId
     if (showViewers && viewersStoryId != null) {
         StoryViewersSheet(
@@ -807,40 +810,38 @@ fun StoryViewerScreen(
         )
     }
 
-    val commentsStoryId = state.currentStoryId
-    if (showComments && commentsStoryId != null) {
-        StoryCommentsSheet(
-            storyId = commentsStoryId,
-            accentHex = accent,
-            onDismiss = { showComments = false },
+    val replyStoryId = state.currentStoryId
+    val replyAuthorId = state.authorUserId
+    if (showReply && replyStoryId != null && replyAuthorId != null) {
+        StoryReplySheet(
+            quote = StoryReplyQuote(
+                storyId = replyStoryId,
+                authorId = replyAuthorId,
+                authorName = state.authorName,
+                preview = StoryReplyRules.quotePreview(slide?.text),
+                thumbnailUrl = slide?.imageUrl,
+                accentHex = accent,
+            ),
+            onDismiss = { showReply = false },
         )
     }
 
-    val frozenSendToStoryId = sendToStoryId
-    if (showSendTo && frozenSendToStoryId != null) {
-        StorySendToSheet(
-            storyId = frozenSendToStoryId,
-            accentHex = accent,
-            onDismiss = {
-                showSendTo = false
-                sendToStoryId = null
-            },
+    if (showComments && commentThread != null) {
+        StoryCommentsThreadSheet(
+            thread = commentThread,
+            serverCommentCount = currentItem?.commentCount ?: 0,
+            onDismiss = { showComments = false },
         )
     }
 }
 
 @Composable
-private fun SegmentedProgress(count: Int, index: Int, currentProgress: Float) {
+private fun SegmentedProgress(count: Int, index: Int, currentProgress: () -> Float) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         repeat(count) { i ->
-            val fill = when {
-                i < index -> 1f
-                i == index -> currentProgress
-                else -> 0f
-            }
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -848,12 +849,26 @@ private fun SegmentedProgress(count: Int, index: Int, currentProgress: Float) {
                     .clip(CircleShape)
                     .background(MeeshyPalette.White.copy(alpha = 0.3f)),
             ) {
+                // Lue en phase de dessin : l'avancement de la barre ne recompose rien.
                 Box(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(fill)
-                        .clip(CircleShape)
-                        .background(MeeshyPalette.White),
+                        .fillMaxSize()
+                        .drawBehind {
+                            val fill = when {
+                                i < index -> 1f
+                                i == index -> currentProgress().coerceIn(0f, 1f)
+                                else -> 0f
+                            }
+                            if (fill <= 0f) return@drawBehind
+                            val filled = size.width * fill
+                            val left = if (layoutDirection == LayoutDirection.Rtl) size.width - filled else 0f
+                            drawRoundRect(
+                                color = MeeshyPalette.White,
+                                topLeft = Offset(left, 0f),
+                                size = Size(filled, size.height),
+                                cornerRadius = CornerRadius(size.height / 2f),
+                            )
+                        },
                 )
             }
         }
@@ -958,3 +973,6 @@ private fun ReactionFlightOverlay(
             .wrapContentSize(Alignment.Center),
     )
 }
+
+/** L'audience d'une story qui s'ouvre sans compte — la seule qui reçoit un lien suivi (#14315). */
+private const val PUBLIC_STORY_VISIBILITY = "PUBLIC"

@@ -24,12 +24,10 @@ extension UniversalComposerBar {
 
     var topToolbar: some View {
         ComposerToolbarStrip {
-            // Ephemeral mode toggle (hidden for comments)
             if !resolvedHideEphemeral {
                 ephemeralToggleButton
             }
 
-            // Blur mode toggle
             if !hideBlur {
                 blurToggleButton
             }
@@ -46,7 +44,6 @@ extension UniversalComposerBar {
                 effectsToggleButton
             }
 
-            // Permanent effects inline toggle (comments only)
             if resolvedShowPermanentEffects {
                 permanentEffectsToggleButton
             }
@@ -55,7 +52,7 @@ extension UniversalComposerBar {
             // 2026-10-02) : l'indicateur passif de tonalité laisse sa place à
             // la porte du sélecteur de stickers — rendue seulement si l'hôte
             // sait l'ouvrir (loi 4).
-            if let openStickers = onRequestStickerPicker {
+            if let openStickers = resolvedOnStickerPicker {
                 glassDoorButton(
                     symbol: "rectangle.portrait.on.rectangle.portrait.angled",
                     label: String(localized: "composer.attach.sticker", defaultValue: "Sticker", bundle: .main),
@@ -68,7 +65,6 @@ extension UniversalComposerBar {
             // sous les portes de droite dès que la rangée débordait.
             languageSelectorPill
         } trailing: {
-            // Character counter
             if let maxLen = maxLength {
                 let count = text.count
                 if count > Int(Double(maxLen) * 0.8) {

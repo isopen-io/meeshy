@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_circle_notify_title">Qui est prévenu</string>
+    <string name="settings_circle_notify_intro">Choisissez, action par action, le cercle de votre entourage qui reçoit une notification.</string>
+    <string name="settings_circle_notify_family_publication">Mes publications</string>
+    <string name="settings_circle_notify_family_on_my_content">L’activité des autres sur mes contenus</string>
+    <string name="settings_circle_notify_family_elsewhere">Mon activité ailleurs</string>
+    <string name="settings_circle_notify_summary_mixed">Selon l’action</string>
+    <string name="settings_circle_notify_choice_nobody">Personne</string>
+    <string name="settings_circle_notify_explain_nobody">Personne de votre entourage n’est prévenu.</string>
+    <string name="settings_circle_notify_explain_community">Tous vos liens, de Sang à Connaissance, et les membres des communautés que vous partagez.</string>
+    <string name="settings_circle_notify_explain_public">Les mêmes personnes que Communauté : Meeshy n’a pas d’abonnés, aucun inconnu n’est prévenu.</string>
+    <string name="settings_circle_notify_action_post">Publication</string>
+    <string name="settings_circle_notify_action_reel">Réel</string>
+    <string name="settings_circle_notify_action_story">Story</string>
+    <string name="settings_circle_notify_action_mood">Humeur</string>
+    <string name="settings_circle_notify_action_repost">Republication</string>
+    <string name="settings_circle_notify_action_share">Partage</string>
+    <string name="settings_circle_notify_action_comment">Commentaire</string>
+    <string name="settings_circle_notify_action_reaction">Réaction</string>
+    <string name="settings_circle_notify_action_quote">Citation</string>
+    <string name="settings_circle_notify_action_reference">Référence</string>
+    <string name="settings_circle_notify_action_mention">Mention</string>
+    <string name="settings_circle_notify_choice_blood">Sang</string>
+    <string name="settings_circle_notify_choice_close">Proche</string>
+    <string name="settings_circle_notify_choice_friend">Ami</string>
+    <string name="settings_circle_notify_choice_acquaintance">Connaissance</string>
+    <string name="settings_circle_notify_choice_community">Communauté</string>
+    <string name="settings_circle_notify_choice_public">Public</string>
+</resources>

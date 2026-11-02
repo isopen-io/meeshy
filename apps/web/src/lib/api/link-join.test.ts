@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
 
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
 import {
@@ -385,6 +386,37 @@ describe('validateGuestDraft — le refus de SAISIE se connaît AVANT l’aller-
   test('un pseudo FACULTATIF et absent laisse la passerelle en générer un', () => {
     const validated = validateGuestDraft(draft({ nickname: '' }), { ...TERMS, nicknameRequired: false });
     expect(validated).toEqual({ ok: true, body: { language: 'fr' } });
+  });
+
+  /**
+   * LE PLANCHER DU PSEUDO D'INVITÉ (#13825, directive porteur 2026-10-30) — la
+   * règle du pseudo : trois caractères au moins une fois rogné, jamais moins.
+   * « Al » est refusé, comme « A » ; exigé ou facultatif, un pseudo DONNÉ doit
+   * tenir la borne (seul le pseudo ABSENT laisse la passerelle en générer un).
+   */
+  test('un pseudo trop court est refusé sur son champ, avec la raison, et rien ne part', () => {
+    expect(validateGuestDraft(draft({ nickname: 'Al' }), TERMS)).toEqual({ ok: false, field: 'nickname', reason: 'too-short' });
+    expect(validateGuestDraft(draft({ nickname: 'A' }), TERMS)).toEqual({ ok: false, field: 'nickname', reason: 'too-short' });
+  });
+
+  test('« Ali » passe, et les espaces ne comptent pas', () => {
+    expect(validateGuestDraft(draft({ nickname: '  Ali  ' }), TERMS)).toEqual({ ok: true, body: { language: 'fr', nickname: 'Ali' } });
+    expect(validateGuestDraft(draft({ nickname: '  Al  ' }), TERMS)).toEqual({ ok: false, field: 'nickname', reason: 'too-short' });
+  });
+
+  test('un pseudo FACULTATIF donné mais trop court est refusé quand même', () => {
+    expect(validateGuestDraft(draft({ nickname: 'Al' }), { ...TERMS, nicknameRequired: false })).toEqual({ ok: false, field: 'nickname', reason: 'too-short' });
+  });
+
+  test('le pseudo se mesure sur ce que la passerelle en SERT : « Al# » et « Zoé » n\'y gardent que deux caractères', () => {
+    expect(validateGuestDraft(draft({ nickname: 'Al#' }), TERMS)).toEqual({ ok: false, field: 'nickname', reason: 'too-short' });
+    expect(validateGuestDraft(draft({ nickname: 'Zoé' }), TERMS)).toEqual({ ok: false, field: 'nickname', reason: 'too-short' });
+    expect(validateGuestDraft(draft({ nickname: 'Zoe' }), TERMS).ok).toBe(true);
+  });
+
+  test('la borne est celle du schéma partagé', () => {
+    expect(validateGuestDraft(draft({ nickname: 'a'.repeat(usernameMinLength - 1) }), TERMS)).toEqual({ ok: false, field: 'nickname', reason: 'too-short' });
+    expect(validateGuestDraft(draft({ nickname: 'a'.repeat(usernameMinLength) }), TERMS).ok).toBe(true);
   });
 
   test('un e-mail exigé et absent, puis mal formé, désignent leur champ', () => {

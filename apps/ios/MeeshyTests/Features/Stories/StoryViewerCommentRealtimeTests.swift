@@ -48,7 +48,7 @@ final class StoryViewerCommentRealtimeTests: XCTestCase {
         let existing = [makeComment(id: "existing", author: "Alice", authorId: "u1", content: "First!")]
         let newComment = makeComment(id: "comment-new")
 
-        let result = StoryViewerView.applyingStoryCommentAdded(
+        let result = Self.applyingStoryCommentAdded(
             comment: newComment, expandedThreads: [], comments: existing, repliesMap: [:]
         )
 
@@ -61,7 +61,7 @@ final class StoryViewerCommentRealtimeTests: XCTestCase {
         let comments = [makeComment(id: "parent-1", author: "Alice", authorId: "u1", content: "Root comment", replies: 0)]
         let reply = makeComment(id: "reply-1", parentId: "parent-1")
 
-        let result = StoryViewerView.applyingStoryCommentAdded(
+        let result = Self.applyingStoryCommentAdded(
             comment: reply, expandedThreads: ["parent-1"], comments: comments, repliesMap: [:]
         )
 
@@ -75,7 +75,7 @@ final class StoryViewerCommentRealtimeTests: XCTestCase {
         let reply = makeComment(id: "reply-1", parentId: "parent-1")
 
         // expandedThreads deliberately empty — thread collapsed.
-        let result = StoryViewerView.applyingStoryCommentAdded(
+        let result = Self.applyingStoryCommentAdded(
             comment: reply, expandedThreads: [], comments: comments, repliesMap: [:]
         )
 
@@ -86,11 +86,11 @@ final class StoryViewerCommentRealtimeTests: XCTestCase {
 
     func test_applyingStoryCommentAdded_duplicateCommentId_isNotAppendedTwice() {
         let comment = makeComment(id: "comment-1")
-        let firstPass = StoryViewerView.applyingStoryCommentAdded(
+        let firstPass = Self.applyingStoryCommentAdded(
             comment: comment, expandedThreads: [], comments: [], repliesMap: [:]
         )
 
-        let secondPass = StoryViewerView.applyingStoryCommentAdded(
+        let secondPass = Self.applyingStoryCommentAdded(
             comment: comment, expandedThreads: [], comments: firstPass.comments, repliesMap: firstPass.repliesMap
         )
 
@@ -105,7 +105,7 @@ final class StoryViewerCommentRealtimeTests: XCTestCase {
         let comments = [makeComment(id: tempId, author: "Bob", authorId: "u2", content: "Nice story!")]
         let realEcho = makeComment(id: "comment-real", author: "Bob", authorId: "u2", content: "Nice story!")
 
-        let result = StoryViewerView.applyingStoryCommentAdded(
+        let result = Self.applyingStoryCommentAdded(
             comment: realEcho, expandedThreads: [], comments: comments, repliesMap: [:]
         )
 
@@ -121,7 +121,7 @@ final class StoryViewerCommentRealtimeTests: XCTestCase {
         let comments = [makeComment(id: tempId, author: "Alice", authorId: "u1", content: "Unrelated draft")]
         let realEcho = makeComment(id: "comment-real", author: "Bob", authorId: "u2", content: "Nice story!")
 
-        let result = StoryViewerView.applyingStoryCommentAdded(
+        let result = Self.applyingStoryCommentAdded(
             comment: realEcho, expandedThreads: [], comments: comments, repliesMap: [:]
         )
 
@@ -134,7 +134,7 @@ final class StoryViewerCommentRealtimeTests: XCTestCase {
         let repliesMap = ["parent-1": [makeComment(id: tempId, author: "Bob", authorId: "u2", content: "Nice story!", parentId: "parent-1")]]
         let realEcho = makeComment(id: "reply-real", author: "Bob", authorId: "u2", content: "Nice story!", parentId: "parent-1")
 
-        let result = StoryViewerView.applyingStoryCommentAdded(
+        let result = Self.applyingStoryCommentAdded(
             comment: realEcho, expandedThreads: ["parent-1"], comments: comments, repliesMap: repliesMap
         )
 
@@ -154,7 +154,7 @@ final class StoryViewerCommentRealtimeTests: XCTestCase {
         let comments = [makeComment(id: cmid, author: "Bob", authorId: "u2", content: "Texte <b>brut</b>")]
         let realEcho = makeComment(id: "comment-real", author: "Bob", authorId: "u2", content: "Texte brut")
 
-        let result = StoryViewerView.applyingStoryCommentAdded(
+        let result = Self.applyingStoryCommentAdded(
             comment: realEcho, clientMutationId: cmid, expandedThreads: [], comments: comments, repliesMap: [:]
         )
 
@@ -168,7 +168,7 @@ final class StoryViewerCommentRealtimeTests: XCTestCase {
         let repliesMap = ["parent-1": [makeComment(id: cmid, author: "Bob", authorId: "u2", content: "Rép <i>stylée</i>", parentId: "parent-1")]]
         let realEcho = makeComment(id: "reply-real", author: "Bob", authorId: "u2", content: "Rép stylée", parentId: "parent-1")
 
-        let result = StoryViewerView.applyingStoryCommentAdded(
+        let result = Self.applyingStoryCommentAdded(
             comment: realEcho, clientMutationId: cmid, expandedThreads: ["parent-1"], comments: comments, repliesMap: repliesMap
         )
 
@@ -183,11 +183,22 @@ final class StoryViewerCommentRealtimeTests: XCTestCase {
         let comments = [makeComment(id: "existing", author: "Alice", authorId: "u1", content: "First!")]
         let incoming = makeComment(id: "comment-new", author: "Bob", authorId: "u2", content: "Yo")
 
-        let result = StoryViewerView.applyingStoryCommentAdded(
+        let result = Self.applyingStoryCommentAdded(
             comment: incoming, clientMutationId: "cmid_aaaa1111-2222-4333-8444-555566667777",
             expandedThreads: [], comments: comments, repliesMap: [:]
         )
 
         XCTAssertEqual(result.comments.map(\.id), ["existing", "comment-new"])
+    }
+
+    /// The story overlay's echo: the thread's one rule, new rows at the end.
+    private static func applyingStoryCommentAdded(
+        comment: FeedComment, clientMutationId: String? = nil, expandedThreads: Set<String>,
+        comments: [FeedComment], repliesMap: [String: [FeedComment]]
+    ) -> (comments: [FeedComment], repliesMap: [String: [FeedComment]]) {
+        let echoed = FeedCommentThread(roots: comments, replies: repliesMap)
+            .applyingEcho(comment, clientMutationId: clientMutationId, expandedThreads: expandedThreads, at: .last)
+            .thread
+        return (echoed.roots, echoed.replies)
     }
 }

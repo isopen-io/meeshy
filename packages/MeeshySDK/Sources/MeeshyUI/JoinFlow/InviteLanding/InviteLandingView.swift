@@ -12,7 +12,7 @@ public struct InviteLandingView: View {
     let info: ShareLinkInfo
     let isSignedIn: Bool
     let resumesGuestSession: Bool
-    let accountInitials: String?
+    let accountFace: InviteAccountFace?
     let onChoice: (InviteLandingChoice) -> Void
     let onClose: () -> Void
 
@@ -23,14 +23,14 @@ public struct InviteLandingView: View {
         info: ShareLinkInfo,
         isSignedIn: Bool,
         resumesGuestSession: Bool = false,
-        accountInitials: String? = nil,
+        accountFace: InviteAccountFace? = nil,
         onChoice: @escaping (InviteLandingChoice) -> Void,
         onClose: @escaping () -> Void
     ) {
         self.info = info
         self.isSignedIn = isSignedIn
         self.resumesGuestSession = resumesGuestSession
-        self.accountInitials = accountInitials
+        self.accountFace = accountFace
         self.onChoice = onChoice
         self.onClose = onClose
     }
@@ -62,7 +62,7 @@ public struct InviteLandingView: View {
                 isSignedIn: isSignedIn,
                 requireAccount: info.requireAccount,
                 resumesGuestSession: resumesGuestSession,
-                accountInitials: accountInitials,
+                accountFace: accountFace,
                 isDark: isDark,
                 onChoice: onChoice
             )

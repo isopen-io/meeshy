@@ -15,7 +15,7 @@ import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
 import sharp from 'sharp';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, type AttachmentReadyEventData } from '@meeshy/shared/types/socketio-events';
 import { deferredMediaKinds, mediaJobId, mediaJobRef, readMediaJob, type MediaJob } from '../jobs';
 import {
   MEDIA_WORKER_HEARTBEAT_KEY,
@@ -29,7 +29,7 @@ import { processMediaJob } from '../process-job';
 import { deferrableKinds, scheduleDeferred } from '../dispatch';
 import { handleMediaReady, readMediaReadyNotice, type MediaReadyPorts } from '../ready-notifier';
 import { listenerLease, type LeaseClient } from '../listener-lease';
-import { sweepPendingMedia } from '../sweep';
+import { sweepPendingMedia, type SweepPorts } from '../sweep';
 import { sweepPendingInGateway, type GatewaySweepPorts } from '../gateway-sweep';
 import { markMediaJobFailed } from '../process-job';
 import { runMediaJob, workerConcurrency } from '../../../../workers/media-worker';
@@ -358,7 +358,7 @@ describe('processMediaJob — rendre, écrire, relire (#11264, audit S9 défauts
     const base = await uploadRoot();
     await fs.writeFile(path.join(base, 'p.jpg'), await smallPhoto());
     const { rows, prisma } = rowsStore([photoRow()]);
-    const progress = jest.fn(async () => undefined);
+    const progress = jest.fn(async (_progress: unknown) => undefined);
     const generateThumbnail = jest.spyOn(MetadataManager.prototype, 'generateThumbnail');
 
     await processMediaJob(depsFor(base, prisma), { target: 'messageAttachment', recordId: ID(1), kinds: ['thumb', 'transcode'] }, { done: ['thumb'], onRendered: progress });
@@ -394,7 +394,7 @@ describe('runMediaJob — le dernier essai raté passe la pièce `failed` AVANT 
     await fs.writeFile(path.join(base, 'p.jpg'), Buffer.from('pas une image'));
     const row = { filePath: 'p.jpg', mimeType: 'image/jpeg', fileSize: 1, thumbHash: null, renditions: null, processingState: 'pending' };
     const store = rowsStore([{ id: ID(1), ...row }, { id: ID(5), ...row }]);
-    const progress = jest.fn(async () => undefined);
+    const progress = jest.fn(async (_progress: unknown) => undefined);
 
     await expect(runMediaJob(depsFor(base, store.prisma), { ...failingJob(2), updateProgress: progress } as never)).rejects.toThrow();
 
@@ -411,8 +411,8 @@ describe('runMediaJob — le dernier essai raté passe la pièce `failed` AVANT 
 
 describe('sweepPendingMedia — une pièce `pending` sans tâche est remise en file (défaut 1)', () => {
   it('une fois par jeu d’octets, avec les rendus de son type', async () => {
-    const reschedule = jest.fn(async () => undefined);
-    const listPending = jest.fn(async (target: string) => (target === 'messageAttachment'
+    const reschedule = jest.fn<SweepPorts['reschedule']>(async () => undefined);
+    const listPending = jest.fn<SweepPorts['listPending']>(async (target) => (target === 'messageAttachment'
       ? [
         { id: ID(1), filePath: 'v.mp4', mimeType: 'video/mp4', fileSize: 10 },
         { id: ID(2), filePath: 'v.mp4', mimeType: 'video/mp4', fileSize: 10 },
@@ -429,13 +429,13 @@ describe('sweepPendingMedia — une pièce `pending` sans tâche est remise en f
 
 describe('handleMediaReady — qui apprend que le média a avancé (#11264)', () => {
   const ports = (over: Partial<MediaReadyPorts> = {}) => {
-    const emitted: Array<{ room: string; event: string; payload: Record<string, unknown> }> = [];
+    const emitted: Array<{ room: string; event: string; payload: AttachmentReadyEventData }> = [];
     const base: MediaReadyPorts = {
       loadMessageAttachment: async () => null,
       loadPostMedia: async () => null,
       emitAttachmentUpdated: jest.fn(async () => undefined),
       notifyPostReaders: jest.fn(async () => undefined),
-      emitToUser: (userId, event, payload) => emitted.push({ room: userId, event, payload: payload as Record<string, unknown> }),
+      emitToUser: (userId, event, payload) => emitted.push({ room: userId, event, payload }),
       serialize: (r) => r,
       ...over,
     };
@@ -560,7 +560,7 @@ describe('sweepPendingInGateway — file éteinte ou worker perdu : la passerell
   });
 
   it('ne reprend que les pièces plus vieilles que 15 min', async () => {
-    const listPending = jest.fn(async () => []);
+    const listPending = jest.fn<SweepPorts['listPending']>(async () => []);
     const { ports } = gatewayPorts('/nowhere', { listPending });
     await sweepPendingInGateway(ports, { now: new Date('2026-10-23T12:00:00Z'), compatRenditionEnabled: false });
     expect(listPending).toHaveBeenCalledWith('messageAttachment', new Date('2026-10-23T11:45:00Z'), 5);

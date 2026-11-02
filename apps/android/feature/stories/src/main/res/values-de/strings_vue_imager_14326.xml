@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_imager_preparing">Komposition wird vorbereitet…</string>
+    <string name="stories_imager_save">Speichern</string>
+    <string name="stories_imager_share">Teilen</string>
+    <string name="stories_imager_close">Schließen</string>
+    <string name="stories_imager_duration">Dauer · %1$s</string>
+</resources>

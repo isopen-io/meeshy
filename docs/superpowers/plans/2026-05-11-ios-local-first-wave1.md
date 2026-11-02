@@ -1486,7 +1486,7 @@ git commit -m "refactor(outbox): unify ReactionQueue + MessageRetryQueue into Ou
 ### Task 3.7: Wire each new mutation kind from ViewModels to OfflineQueue
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift` (block/unblock)
+- Modify: `apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift` (block/unblock)
 - Modify: `apps/ios/Meeshy/Features/Contacts/ViewModels/RequestsViewModel.swift` (respond)
 - Modify: `apps/ios/Meeshy/Features/Contacts/Views/ContactsListView.swift` (send friend req)
 - Modify: `apps/ios/Meeshy/Features/Main/ViewModels/EditProfileViewModel.swift` (updateProfile)
@@ -1691,7 +1691,7 @@ git commit -m "fix(ux): SWR pattern for messages preview in conversation list"
 - Modify: `apps/ios/Meeshy/Features/Main/ViewModels/GlobalSearchViewModel.swift:252, 333`
 - Modify: `apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel.swift:313`
 - Modify: `apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift:1886`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/UserStatsView.swift:194`
+- Modify: `apps/ios/Meeshy/Features/Profile/Views/UserStatsView.swift:194`
 - Modify: `packages/MeeshySDK/Sources/MeeshySDK/Services/ParticipantService.swift` (3 sites)
 - Test: 7 new SWR tests (one per site)
 
@@ -1922,8 +1922,8 @@ git commit -m "feat(ux): ConnectionBanner syncing state via ConnectionStatusView
 - Modify: `apps/ios/Meeshy/MeeshyApp.swift:16`
 - Modify: `apps/ios/Meeshy/Features/Auth/Views/SecurityView.swift:12, 24`
 - Modify: `apps/ios/Meeshy/Features/Main/Views/EditProfileView.swift:12`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift:10-11`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift:13`
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift:10-11`
+- Modify: `apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift:13`
 - Modify: `apps/ios/Meeshy/Features/Main/Views/AudioPostComposerView.swift:13`
 
 - [ ] **Step 1: Write a UI perf test (count `body` calls)**
@@ -1966,7 +1966,7 @@ git commit -m "perf(ux): drop @ObservedObject on singletons in 7 views"
 ### Task 4.9: Optimistic + rollback for block/friend-request/profile updates
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift` (block/unblock)
+- Modify: `apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift` (block/unblock)
 - Modify: `apps/ios/Meeshy/Features/Contacts/ViewModels/RequestsViewModel.swift` (accept/reject)
 - Modify: `apps/ios/Meeshy/Features/Main/ViewModels/EditProfileViewModel.swift` (avatar/bio/displayName)
 - Test: corresponding test files

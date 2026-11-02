@@ -289,7 +289,7 @@ nonisolated enum ComposableAttachment {
     /// qu'un MASQUE DE RENDU, jamais une transformation du blob : matérialiser
     /// une pièce floutée rend le fichier d'origine, EN CLAIR.
     static func isProtected(_ attachment: MessageAttachment) -> Bool {
-        attachment.isViewOnce || attachment.isBlurred || attachment.isEncrypted
+        attachment.declaresViewOnce || attachment.declaresBlur || attachment.isEncrypted
     }
 
     /// **LA règle d'offre de « Composer » — un site, trois lecteurs.**
@@ -402,7 +402,9 @@ enum MessageActionResolver {
         if ctx.canReply { out.append(.reply) }
         let showsContent = !ctx.isBlurred
         if showsContent { out.append(contentsOf: ctx.kindActions) }
-        if ctx.isMine && ctx.canEdit && ctx.hasText { out.append(.edit) }
+        // #11375 — `canEdit` porte le verdict de la loi : l'auteur, ou un
+        // modérateur de plateforme sur le message d'autrui, à visage découvert.
+        if ctx.canEdit && ctx.hasText { out.append(.edit) }
         // « Sélectionner » — retour porteur 2026-08-27 : juste À CÔTÉ
         // d'Éditer, parmi les premiers éléments (jamais dans « Plus… »).
         out.append(.select)
@@ -439,9 +441,12 @@ enum MessageActionResolver {
         // supprimer.
         let showsContent = !ctx.isBlurred
         var actions: [MoreItem] = ctx.canReply ? [.reply] : []
-        if showsContent && ctx.canForward && ctx.exits.offers(.forward) { actions.append(.forward) }
+        // D8 (#10949) : un flouté se TRANSFÈRE, flou hérité — la loi de sortie
+        // le dit (`MessageExitOffer.offers(.forward)`), la feuille ne la
+        // resserre pas ; glissé et VoiceOver lisent ce verdict (#12626).
+        if ctx.canForward && ctx.exits.offers(.forward) { actions.append(.forward) }
         actions.append(.thread)
-        if ctx.isMine && ctx.canEdit && ctx.hasText { actions.append(.edit) }
+        if ctx.canEdit && ctx.hasText { actions.append(.edit) }
         if ctx.hasText && showsContent && ctx.exits.offers(.copy) { actions.append(.copy) }
         if showsContent && ctx.exits.offers(.share) { actions.append(.share) }
         if ctx.canImagine && showsContent && ctx.exits.offers(.imagine) { actions.append(.imager) }

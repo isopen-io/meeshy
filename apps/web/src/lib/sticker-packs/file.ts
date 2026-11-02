@@ -1,15 +1,17 @@
 import type { StickerPackItem } from '@meeshy/shared/types/sticker-pack';
 
-import { attachmentSrc } from '@/lib/api/media-url';
 import { rasterizeSvg } from '@/lib/mee/png';
 import type { RasterizeSvg } from '@/lib/mee/png';
 
 import { renderInstantSvg } from './render';
+import { stickerPackFileSrc } from './src';
 import type { PackSlots } from './render';
 
 /**
  * **L'IMAGE QUI PART AVEC UN STICKER DE PACK** (#9141) — le repli de tout
  * lecteur qui ne redessine pas le sticker (iOS, Android, un vieux client) :
+ * Ses octets se lisent à l'adresse que la feuille affiche (`stickerPackFileSrc` :
+ * le magasin adressé quand la passerelle le sert, #10188, l'ancien chemin sinon).
  * - fixe ou cinématique : le fichier du pack TEL QUEL — un GIF ou un WebP
  *   animé reste animé chez tout le monde ;
  * - Instant : l'image du pack AVEC le texte saisi, en PNG — c'est le seul
@@ -22,7 +24,7 @@ const EXTENSION: Readonly<Record<string, string>> = { 'image/png': 'png', 'image
 
 async function bytesOf(item: StickerPackItem, fetcher: Fetcher): Promise<ArrayBuffer | null> {
   try {
-    const response = await fetcher(attachmentSrc(item.fileUrl));
+    const response = await fetcher(stickerPackFileSrc(item));
     return response.ok ? await response.arrayBuffer() : null;
   } catch {
     return null;

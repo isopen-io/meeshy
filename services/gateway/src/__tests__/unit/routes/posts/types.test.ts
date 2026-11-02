@@ -15,6 +15,8 @@ import {
   StoryEffectsSchema,
   CreateCommentSchema,
   TranslatePostSchema,
+  RepostSchema,
+  PublishAttachmentSchema,
 } from '../../../../routes/posts/types';
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 
@@ -153,7 +155,7 @@ describe('CreatePostSchema', () => {
       type: 'POST',
       content: 'Hello',
       visibility: 'EXCEPT',
-      visibilityUserIds: ['user-001'],
+      visibilityUserIds: ['507f1f77bcf86cd799439011'],
     });
     expect(result.success).toBe(true);
   });
@@ -168,7 +170,7 @@ describe('CreatePostSchema', () => {
       type: 'POST',
       content: 'Hello',
       visibility: 'ONLY',
-      visibilityUserIds: ['user-001'],
+      visibilityUserIds: ['507f1f77bcf86cd799439011'],
     });
     expect(result.success).toBe(true);
   });
@@ -337,12 +339,12 @@ describe('UpdatePostSchema', () => {
   });
 
   it('accepts EXCEPT visibility with non-empty visibilityUserIds', () => {
-    const result = UpdatePostSchema.safeParse({ visibility: 'EXCEPT', visibilityUserIds: ['user-1'] });
+    const result = UpdatePostSchema.safeParse({ visibility: 'EXCEPT', visibilityUserIds: ['507f1f77bcf86cd799439011'] });
     expect(result.success).toBe(true);
   });
 
   it('accepts ONLY visibility with non-empty visibilityUserIds', () => {
-    const result = UpdatePostSchema.safeParse({ visibility: 'ONLY', visibilityUserIds: ['user-1'] });
+    const result = UpdatePostSchema.safeParse({ visibility: 'ONLY', visibilityUserIds: ['507f1f77bcf86cd799439011'] });
     expect(result.success).toBe(true);
   });
 
@@ -358,8 +360,8 @@ describe('UpdatePostSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects mediaIds beyond 10 entries', () => {
-    const mediaIds = Array.from({ length: 11 }, (_, i) => i.toString(16).padStart(24, '0'));
+  it('rejects mediaIds beyond the widest bound (a story\'s 200) — the route narrows to 10 for non-stories', () => {
+    const mediaIds = Array.from({ length: 201 }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = UpdatePostSchema.safeParse({ mediaIds });
     expect(result.success).toBe(false);
   });
@@ -370,10 +372,10 @@ describe('UpdatePostSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects MAX_POST_MEDIA + 1 media ids', () => {
+  it('accepts MAX_POST_MEDIA + 1 media ids at the schema (the post type is stored, the route decides)', () => {
     const mediaIds = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = UpdatePostSchema.safeParse({ mediaIds });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
   it('accepts mediaAlt alongside newly attached mediaIds', () => {
@@ -408,14 +410,14 @@ describe('StoryEffectsSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects mediaObjects array exceeding 32 entries', () => {
-    const mediaObjects = Array.from({ length: 33 }, (_, i) => ({ id: `media-${i}` }));
+  it('rejects more than 50 images in mediaObjects (#13590)', () => {
+    const mediaObjects = Array.from({ length: 51 }, (_, i) => ({ id: `media-${i}` }));
     const result = StoryEffectsSchema.safeParse({ mediaObjects });
     expect(result.success).toBe(false);
   });
 
-  it('accepts mediaObjects array at max cap (32 entries)', () => {
-    const mediaObjects = Array.from({ length: 32 }, (_, i) => ({ id: `media-${i}` }));
+  it('accepts mediaObjects array at max cap (50 entries)', () => {
+    const mediaObjects = Array.from({ length: 50 }, (_, i) => ({ id: `media-${i}` }));
     const result = StoryEffectsSchema.safeParse({ mediaObjects });
     expect(result.success).toBe(true);
   });
@@ -591,5 +593,30 @@ describe('StoryEffectsSchema — plafond de volume', () => {
       audioPlayerObjects: [{ id: 'a1', postMediaId: 'm1', volume: -0.1 }],
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('les audiences de cercle — un seul schéma d\'audience pour les quatre entrées (#13931)', () => {
+  const CIRCLES = ['ACQUAINTANCES', 'CLOSE', 'BLOOD'] as const;
+  const HISTORIC = ['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE'] as const;
+  const SOURCE_ID = '507f1f77bcf86cd799439011';
+
+  const entrances: ReadonlyArray<readonly [string, (visibility: string) => { success: boolean }]> = [
+    ['CreatePostSchema', (visibility) => CreatePostSchema.safeParse({ type: 'POST', content: 'Bonjour', visibility })],
+    ['UpdatePostSchema', (visibility) => UpdatePostSchema.safeParse({ visibility })],
+    ['RepostSchema', (visibility) => RepostSchema.safeParse({ visibility })],
+    ['PublishAttachmentSchema', (visibility) => PublishAttachmentSchema.safeParse({ attachmentId: SOURCE_ID, visibility })],
+  ];
+
+  it.each(entrances)('%s accepte les trois audiences de cercle et garde les valeurs historiques', (_name, parse) => {
+    [...CIRCLES, ...HISTORIC].forEach((visibility) => expect(parse(visibility).success).toBe(true));
+  });
+
+  it.each(entrances)('%s refuse une audience inconnue, y compris Atome (hors MVP) et la casse approchante', (_name, parse) => {
+    ['ATOM', 'close', 'Blood', 'ACQUAINTANCE', ''].forEach((visibility) => expect(parse(visibility).success).toBe(false));
+  });
+
+  it('une story STATUS (humeur) accepte aussi une audience de cercle', () => {
+    expect(CreatePostSchema.safeParse({ type: 'STATUS', moodEmoji: '🙂', visibility: 'CLOSE' }).success).toBe(true);
   });
 });

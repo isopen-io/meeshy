@@ -40,21 +40,21 @@ final class SheetToolbarSemanticsTests: XCTestCase {
     /// Les fichiers du meuble, nommés. La liste est ADDITIVE : en retirer une
     /// entrée sans la remplacer perd une surface de la mesure, en silence.
     private static let moodComposerFiles = [
-        "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift",
+        "Meeshy/Features/Composer/MeeshyComposerHost.swift",
         // Le meuble est découpé (#4102). La liste étant ADDITIVE, ses trois
         // extensions y entrent : sans elles la mesure perdrait les surfaces
         // et les feuilles qui ont déménagé.
-        "Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift",
-        "Meeshy/Features/Main/Composer/MeeshyComposerHost+Intake.swift",
+        "Meeshy/Features/Composer/MeeshyComposerHost+Surfaces.swift",
+        "Meeshy/Features/Composer/MeeshyComposerHost+Intake.swift",
         // #6069 — les six SÉLECTEURS (lieu, langue, emoji, sticker, référence)
         // quittent `+Intake` pour leur propre fichier. La liste étant ADDITIVE,
         // la destination s'y inscrit dans le MÊME commit : sans cette ligne, les
         // feuilles sortiraient de la mesure sans qu'aucun témoin ne rougisse —
         // le mode de panne que le doc-comment ci-dessus annonce.
-        "Meeshy/Features/Main/Composer/MeeshyComposerHost+Pickers.swift",
-        "Meeshy/Features/Main/Composer/MeeshyComposerHost+Socle.swift",
-        "Meeshy/Features/Main/Composer/ComposerMoodSurface.swift",
-        "Meeshy/Features/Main/Composer/MoodComposerDoor.swift",
+        "Meeshy/Features/Composer/MeeshyComposerHost+Pickers.swift",
+        "Meeshy/Features/Composer/MeeshyComposerHost+Socle.swift",
+        "Meeshy/Features/Composer/ComposerMoodSurface.swift",
+        "Meeshy/Features/Composer/MoodComposerDoor.swift",
     ]
 
     /// **La raison d'origine, portée sur la surface qui a remplacé l'écran.**
@@ -78,7 +78,7 @@ final class SheetToolbarSemanticsTests: XCTestCase {
         // l'UNITÉ — lire le seul fichier principal ferait échouer la garde sur
         // un membre simplement déménagé.
         let host = try AppSourceGuard.composerHostSource()
-        let surface = try readSource("Meeshy/Features/Main/Composer/ComposerMoodSurface.swift")
+        let surface = try readSource("Meeshy/Features/Composer/ComposerMoodSurface.swift")
 
         XCTAssertTrue(
             surface.contains("let onClose: () -> Void"),

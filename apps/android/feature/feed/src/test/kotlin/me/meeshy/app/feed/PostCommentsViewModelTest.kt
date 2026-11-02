@@ -22,6 +22,7 @@ import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentUpdatedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
@@ -30,7 +31,9 @@ import me.meeshy.sdk.model.SocketCommentTranslationUpdatedData
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.InMemoryUnsentCommentStore
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.UnsentCommentStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import org.junit.After
@@ -66,6 +69,7 @@ class PostCommentsViewModelTest {
         postId: String? = "p1",
         user: MeeshyUser? = MeeshyUser(id = "me", username = "me"),
         mentionSearch: MentionSearch = FakeMentionSearch(),
+        unsent: UnsentCommentStore? = null,
     ): PostCommentsViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
         every { socialSocket.commentAdded } returns commentAdded
@@ -75,8 +79,14 @@ class PostCommentsViewModelTest {
         every { socialSocket.commentReactionRemoved } returns commentReactionRemoved
         every { socialSocket.commentTranslationUpdated } returns commentTranslationUpdated
         val handle = SavedStateHandle(if (postId == null) emptyMap() else mapOf("postId" to postId))
-        return PostCommentsViewModel(repository, session, socialSocket, config, mentionSearch, handle)
+        return PostCommentsViewModel(repository, session, socialSocket, config, mentionSearch, handle, mediaUploader = uploader, unsentComments = unsent)
     }
+
+    private val uploader: CommentMediaUploader = mockk(relaxed = true)
+
+    private fun uploadedMedia(id: String) = me.meeshy.sdk.model.UploadedMedia(id, "https://x/$id.jpg", "image/jpeg", 2, 10, 10, null, null)
+
+    private fun photo(name: String = "a.jpg") = me.meeshy.sdk.media.MediaUploadItem(byteArrayOf(1, 2), name, "image/jpeg")
 
     /** Fake directory lookup: records the queries it saw, returns a per-query or default candidate list. */
     private class FakeMentionSearch(
@@ -85,11 +95,17 @@ class PostCommentsViewModelTest {
         private val throwOn: Set<String> = emptySet(),
     ) : MentionSearch {
         val queries = mutableListOf<String>()
+        val contexts = mutableListOf<MentionContext?>()
 
         override suspend fun search(query: String): List<MentionCandidate> {
             queries += query
             if (query in throwOn) throw RuntimeException("directory offline")
             return byQuery[query] ?: default
+        }
+
+        override suspend fun suggest(query: String, context: MentionContext?): List<MentionCandidate> {
+            contexts += context
+            return search(query)
         }
     }
 
@@ -219,7 +235,7 @@ class PostCommentsViewModelTest {
     @Test
     fun `submit optimistically prepends then confirms with the server row`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("a")))
-        coEvery { repository.addComment("p1", "Bonjour", any(), any()) } returns
+        coEvery { repository.addComment("p1", "Bonjour", any(), any(), any(), any()) } returns
             NetworkResult.Success(comment("real", content = "Bonjour"))
         val vm = viewModel()
         vm.compose("  Bonjour  ")
@@ -229,13 +245,13 @@ class PostCommentsViewModelTest {
             assertThat(s.comments.first().content).isEqualTo("Bonjour")
             assertThat(s.comments.map { it.id }).containsExactly("real", "a").inOrder()
         }
-        coVerify(exactly = 1) { repository.addComment("p1", "Bonjour", null, null) }
+        coVerify(exactly = 1) { repository.addComment("p1", "Bonjour", null, null, any(), any()) }
     }
 
     @Test
     fun `submit rolls back the optimistic row on failure and surfaces an error`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("a")))
-        coEvery { repository.addComment("p1", any(), any(), any()) } returns
+        coEvery { repository.addComment("p1", any(), any(), any(), any(), any()) } returns
             NetworkResult.Failure(ApiError(message = "nope"))
         val vm = viewModel()
         vm.compose("hi")
@@ -247,18 +263,50 @@ class PostCommentsViewModelTest {
     }
 
     @Test
+    fun `a photo joined to a comment uploads as a comment and leaves with its id, even without text`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(emptyList())
+        coEvery { uploader.upload(any()) } returns NetworkResult.Success(listOf(uploadedMedia("m1")))
+        coEvery { repository.addComment("p1", "", any(), any(), any(), any(), listOf("m1")) } returns
+            NetworkResult.Success(comment("real", content = ""))
+        val vm = viewModel()
+        vm.attachMedia(photo())
+        assertThat(vm.state.value.attachments.attachmentIds).containsExactly("m1")
+        vm.submit()
+        coVerify(exactly = 1) { repository.addComment("p1", "", null, null, any(), any(), listOf("m1")) }
+        assertThat(vm.state.value.attachments.hasMedia).isFalse()
+    }
+
+    @Test
+    fun `a retouched piece replaces the old one in place and uploads again, and a failed upload leaves the tray`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(emptyList())
+        coEvery { uploader.upload(any()) } returnsMany listOf(
+            NetworkResult.Success(listOf(uploadedMedia("m1"))),
+            NetworkResult.Success(listOf(uploadedMedia("m2"))),
+            NetworkResult.Failure(ApiError(message = "nope")),
+        )
+        val vm = viewModel()
+        vm.attachMedia(photo())
+        val id = vm.state.value.attachments.pieces.single().id
+        vm.replaceMedia(id, photo("a_retouche.jpg"))
+        assertThat(vm.state.value.attachments.pieces.single().item.fileName).isEqualTo("a_retouche.jpg")
+        assertThat(vm.state.value.attachments.attachmentIds).containsExactly("m2")
+        vm.attachMedia(photo("b.jpg"))
+        assertThat(vm.state.value.attachments.pieces.map { it.id }).containsExactly(id)
+    }
+
+    @Test
     fun `submit is inert for blank content`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(emptyList())
         val vm = viewModel()
         vm.compose("   ")
-        coVerify(exactly = 0) { repository.addComment(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { repository.addComment(any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun `submit is inert for a blank postId`() = runTest {
         val vm = viewModel(postId = null)
         vm.compose("hi")
-        coVerify(exactly = 0) { repository.addComment(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { repository.addComment(any(), any(), any(), any(), any(), any()) }
     }
 
     private fun likedComment(id: String) =
@@ -601,7 +649,7 @@ class PostCommentsViewModelTest {
     fun `submit with a reply target sends a reply under the parent and clears the target`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
         coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns NetworkResult.Success(emptyList())
-        coEvery { repository.addComment("p1", "Salut", "c1", any()) } returns
+        coEvery { repository.addComment("p1", "Salut", "c1", any(), any(), any()) } returns
             NetworkResult.Success(reply("real", "c1", content = "Salut"))
         val vm = viewModel()
         vm.beginReply("c1")
@@ -611,8 +659,8 @@ class PostCommentsViewModelTest {
             assertThat(s.replyTarget).isNull()
             assertThat(s.replyThreads.getValue("c1").replies.map { it.id }).containsExactly("real")
         }
-        coVerify(exactly = 1) { repository.addComment("p1", "Salut", "c1", null) }
-        coVerify(exactly = 0) { repository.addComment("p1", any(), null, any()) }
+        coVerify(exactly = 1) { repository.addComment("p1", "Salut", "c1", null, any(), any()) }
+        coVerify(exactly = 0) { repository.addComment("p1", any(), null, any(), any(), any()) }
     }
 
     @Test
@@ -620,7 +668,7 @@ class PostCommentsViewModelTest {
         coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
         coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns NetworkResult.Success(emptyList())
         val gate = CompletableDeferred<NetworkResult<ApiPostComment>>()
-        coEvery { repository.addComment("p1", "Hey", "c1", any()) } coAnswers { gate.await() }
+        coEvery { repository.addComment("p1", "Hey", "c1", any(), any(), any()) } coAnswers { gate.await() }
         val vm = viewModel()
         vm.beginReply("c1")
         vm.compose("Hey")
@@ -640,7 +688,7 @@ class PostCommentsViewModelTest {
         coEvery { repository.getComments("p1", null, any()) } returns
             NetworkResult.Success(listOf(authored("c1").copy(replyCount = 2)))
         coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns NetworkResult.Success(emptyList())
-        coEvery { repository.addComment("p1", "Hey", "c1", any()) } returns
+        coEvery { repository.addComment("p1", "Hey", "c1", any(), any(), any()) } returns
             NetworkResult.Success(reply("real", "c1"))
         val vm = viewModel()
         vm.beginReply("c1")
@@ -655,7 +703,7 @@ class PostCommentsViewModelTest {
         coEvery { repository.getComments("p1", null, any()) } returns
             NetworkResult.Success(listOf(authored("c1").copy(replyCount = 2)))
         coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns NetworkResult.Success(emptyList())
-        coEvery { repository.addComment("p1", "Hey", "c1", any()) } returns
+        coEvery { repository.addComment("p1", "Hey", "c1", any(), any(), any()) } returns
             NetworkResult.Failure(ApiError(message = "nope"))
         val vm = viewModel()
         vm.beginReply("c1")
@@ -671,14 +719,14 @@ class PostCommentsViewModelTest {
     @Test
     fun `submit with no reply target still posts a top-level comment`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("a")))
-        coEvery { repository.addComment("p1", "Top", null, any()) } returns
+        coEvery { repository.addComment("p1", "Top", null, any(), any(), any()) } returns
             NetworkResult.Success(comment("real", content = "Top"))
         val vm = viewModel()
         vm.compose("Top")
         vm.state.test {
             assertThat(awaitItem().comments.map { it.id }).containsExactly("real", "a").inOrder()
         }
-        coVerify(exactly = 1) { repository.addComment("p1", "Top", null, null) }
+        coVerify(exactly = 1) { repository.addComment("p1", "Top", null, null, any(), any()) }
     }
 
     // --- Reply previews (auto-preload) ---
@@ -1460,7 +1508,7 @@ class PostCommentsViewModelTest {
     @Test
     fun `submitting clears the draft and the mention panel`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1", name = "Alice")))
-        coEvery { repository.addComment("p1", "hi @alice", any(), any()) } returns
+        coEvery { repository.addComment("p1", "hi @alice", any(), any(), any(), any()) } returns
             NetworkResult.Success(comment("real", content = "hi @alice"))
         val vm = viewModel()
         vm.onDraftChange("hi @al")
@@ -1471,7 +1519,7 @@ class PostCommentsViewModelTest {
             assertThat(s.draft).isEmpty()
             assertThat(s.mention.isActive).isFalse()
         }
-        coVerify(exactly = 1) { repository.addComment("p1", "hi @alice", null, null) }
+        coVerify(exactly = 1) { repository.addComment("p1", "hi @alice", null, null, any(), any()) }
     }
 
     @Test
@@ -1490,19 +1538,33 @@ class PostCommentsViewModelTest {
     // --- Composer @-mention: remote directory merge ---
 
     @Test
-    fun `a two-character at-fragment merges directory results below the local roster`() = runTest {
+    fun `a two-character at-fragment with a local match stays on the thread roster`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(authored("c1", name = "Alice")))
+        val remote = FakeMentionSearch(default = listOf(MentionCandidate(id = "u9", username = "alex")))
+        val vm = viewModel(mentionSearch = remote)
+        vm.onDraftChange("hey @al")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertThat(remote.queries).isEmpty()
+        assertThat(vm.state.value.mention.suggestions.map { it.username }).containsExactly("alice")
+    }
+
+    @Test
+    fun `a three-character at-fragment merges the post suggestions below the local roster`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns
             NetworkResult.Success(listOf(authored("c1", name = "Alice")))
         val remote = FakeMentionSearch(
             default = listOf(MentionCandidate(id = "u9", username = "alex", displayName = "Alex R")),
         )
         val vm = viewModel(mentionSearch = remote)
-        vm.onDraftChange("hey @al")
+        vm.onDraftChange("hey @ali")
         dispatcher.scheduler.advanceUntilIdle()
 
         assertThat(vm.state.value.mention.suggestions.map { it.username })
             .containsExactly("alice", "alex").inOrder()
-        assertThat(remote.queries).containsExactly("al")
+        assertThat(remote.queries).containsExactly("ali")
+        assertThat(remote.contexts).containsExactly(MentionContext.post("p1"))
     }
 
     @Test
@@ -1560,7 +1622,7 @@ class PostCommentsViewModelTest {
             NetworkResult.Success(listOf(authored("c1", name = "Alice")))
         val remote = FakeMentionSearch(default = listOf(MentionCandidate(id = "u9", username = "alex")))
         val vm = viewModel(mentionSearch = remote)
-        vm.onDraftChange("hey @al")
+        vm.onDraftChange("hey @ali")
         vm.onMentionSelected(vm.state.value.mention.suggestions.first())
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -1572,13 +1634,13 @@ class PostCommentsViewModelTest {
     fun `a failed directory lookup degrades to the local roster`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns
             NetworkResult.Success(listOf(authored("c1", name = "Alice"), authored("c2", name = "Alan")))
-        val remote = FakeMentionSearch(throwOn = setOf("al"))
+        val remote = FakeMentionSearch(throwOn = setOf("ala"))
         val vm = viewModel(mentionSearch = remote)
-        vm.onDraftChange("hey @al")
+        vm.onDraftChange("hey @ala")
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertThat(remote.queries).containsExactly("al")
-        assertThat(vm.state.value.mention.suggestions.map { it.username }).containsExactly("alice", "alan").inOrder()
+        assertThat(remote.queries).containsExactly("ala")
+        assertThat(vm.state.value.mention.suggestions.map { it.username }).containsExactly("alan")
     }
 
     // --- What the reader sees when the thread fails (iOS FeedCommentsSheet+Loading, toasts) ---
@@ -1601,7 +1663,7 @@ class PostCommentsViewModelTest {
     @Test
     fun `a failed send says so and gives the text back to the composer`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("a")))
-        coEvery { repository.addComment("p1", any(), any(), any()) } returns NetworkResult.Failure(ApiError(message = "nope"))
+        coEvery { repository.addComment("p1", any(), any(), any(), any(), any()) } returns NetworkResult.Failure(ApiError(message = "nope"))
         val vm = viewModel()
 
         vm.compose("Mon commentaire")
@@ -1614,7 +1676,7 @@ class PostCommentsViewModelTest {
     fun `a failed reply says so and gives the text back to the composer`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("c1")))
         coEvery { repository.getCommentReplies("p1", "c1", any(), any()) } returns NetworkResult.Success(emptyList())
-        coEvery { repository.addComment("p1", any(), "c1", any()) } returns NetworkResult.Failure(ApiError(message = "nope"))
+        coEvery { repository.addComment("p1", any(), "c1", any(), any(), any()) } returns NetworkResult.Failure(ApiError(message = "nope"))
         val vm = viewModel()
         vm.beginReply("c1")
 
@@ -1639,5 +1701,19 @@ class PostCommentsViewModelTest {
 
         assertThat(afterDelete).isEqualTo(CommentNotice.DELETED)
         assertThat(vm.state.value.notice).isEqualTo(CommentNotice.DELETE_FAILED)
+    }
+
+    @Test
+    fun `un commentaire de banniere refuse revient dans le champ de son post a l ouverture`() = runTest {
+        val kept = InMemoryUnsentCommentStore().apply {
+            keep("p1", "Bravo pour ce post")
+            keep("p2", "Autre post")
+        }
+
+        val vm = viewModel(unsent = kept)
+
+        assertThat(vm.state.value.draft).isEqualTo("Bravo pour ce post")
+        assertThat(kept.peek("p1")).isNull()
+        assertThat(kept.peek("p2")).isEqualTo("Autre post")
     }
 }

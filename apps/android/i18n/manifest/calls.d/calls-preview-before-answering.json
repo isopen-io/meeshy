@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.preview.sound.on",
+          "androidName": "call_preview_sound_on",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.preview.sound.off",
+          "androidName": "call_preview_sound_off",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.preview.sound.hint",
+          "androidName": "call_preview_sound_hint",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.preview.seenBy",
+          "androidName": "call_preview_seen_by",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.preview.heardBy",
+          "androidName": "call_preview_heard_by",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.preview.heardAndSeenBy",
+          "androidName": "call_preview_heard_and_seen_by",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.preview.mic.a11y",
+          "androidName": "call_preview_mic_a11y",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.preview.mic.hint",
+          "androidName": "call_preview_mic_hint",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.preview.camera.a11y",
+          "androidName": "call_preview_camera_a11y",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.preview.camera.hint",
+          "androidName": "call_preview_camera_hint",
+          "status": "candidate"
+        }
+      ]
+    }
+  }
+}

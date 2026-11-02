@@ -51,7 +51,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/AuthActionButton.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/PasswordStrengthIndicator.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/AuthInfoHint.swift",
-   "apps/ios/Meeshy/Features/Main/Views/LoginView.swift"
+   "apps/ios/Meeshy/Features/Auth/Views/LoginView.swift"
   ],
   "feature_keys": [
    "auth-input-atoms"
@@ -246,8 +246,8 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/LaunchRouter.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Navigation/EmailLinkSecret.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/InAppLinks.swift"
+   "apps/ios/Meeshy/Features/Navigation/EmailLinkSecret.swift",
+   "apps/ios/Meeshy/Features/Navigation/InAppLinks.swift"
   ],
   "feature_keys": [
    "dst-email-link-secret-inapp-links"
@@ -360,11 +360,11 @@
    "apps/android/app/src/main/AndroidManifest.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Navigation/Router.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/RouterCommands.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/PresentedSurfaceRegistry.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/PresentedSurfaceModifier.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/InteractivePopEnabler.swift"
+   "apps/ios/Meeshy/Features/Navigation/Router.swift",
+   "apps/ios/Meeshy/Features/Navigation/RouterCommands.swift",
+   "apps/ios/Meeshy/Features/Navigation/PresentedSurfaceRegistry.swift",
+   "apps/ios/Meeshy/Features/Navigation/PresentedSurfaceModifier.swift",
+   "apps/ios/Meeshy/Features/Navigation/InteractivePopEnabler.swift"
   ],
   "feature_keys": [
    "dst-nav-router-stack",
@@ -937,8 +937,8 @@
    "apps/android/feature/auth/src/test/kotlin/me/meeshy/app/auth/LoginScreenTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/AccountSwitcherSheet.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/LoginView.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/AccountSwitcherSheet.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/AuthTextField.swift"
   ],
   "feature_keys": [
@@ -1056,7 +1056,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/App/ExternalEntry.swift",
    "apps/ios/Meeshy/App/ExternalEntryHandlers.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/DeepLinkRouter.swift",
+   "apps/ios/Meeshy/Features/Navigation/DeepLinkRouter.swift",
    "apps/ios/Meeshy/MeeshyApp+VisitorContent.swift",
    "apps/ios/Meeshy/Features/Auth/Views/PendingLinkNotice.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/PendingReferralStore.swift"
@@ -1310,7 +1310,7 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyAvatar.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/SocialChromeEnvironment.swift",
+   "apps/ios/Meeshy/Features/Navigation/SocialChromeEnvironment.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Primitives/PresenceDotWaves.swift"
   ],
   "feature_keys": [
@@ -1363,7 +1363,7 @@
    "apps/android/feature/auth/src/test/kotlin/me/meeshy/app/auth/LoginTwoFactorStepTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/LoginView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthService.swift"
   ],
@@ -1441,7 +1441,7 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Appearance/ProfileDecor.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Appearance/ProfileDecorWearer.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileDecorSheet.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileDecorSheet.swift"
   ],
   "feature_keys": [
    "dst-profile-decor-equip",
@@ -1558,7 +1558,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Auth/MeeshyNewPasswordView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/PasswordReset.swift",
    "apps/ios/Meeshy/Features/Auth/PasswordResetLinkPresenter.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/DeepLinkRouter.swift"
+   "apps/ios/Meeshy/Features/Navigation/DeepLinkRouter.swift"
   ],
   "feature_keys": [
    "auth-password-reset-new-password"
@@ -1898,7 +1898,7 @@
    "apps/android/sdk-ui/src/main/res/values-pt/strings_message_a11y.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Preferences/MessageAccessibilityLabelComposer.swift"
+   "apps/ios/Meeshy/Features/Focal/Preferences/MessageAccessibilityLabelComposer.swift"
   ],
   "feature_keys": [
    "cl-message-a11y-label"
@@ -1923,7 +1923,7 @@
   ],
   "tests": [
    "sdk-ui LentilleMetricsTest: valeurs gelées de chaque cote",
-   "sdk-ui LentilleMetricsSourceParityTest: relit apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift en remontant l'arborescence et compare les constantes numériques (garde de parité, patron des gardes source iOS)",
+   "sdk-ui LentilleMetricsSourceParityTest: relit apps/ios/Meeshy/Features/Lens/Core/LentilleMetrics.swift en remontant l'arborescence et compare les constantes numériques (garde de parité, patron des gardes source iOS)",
    "feature/conversations ConversationRowActionsTest: valeurs par défaut sans effet, copie immuable",
    "Non-régression: ConversationListContentTest, EmptyStateVisualTest, ConversationSectionsTest inchangés"
   ],
@@ -1945,7 +1945,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleMetrics.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+EmptyState.swift"
   ],
@@ -2040,14 +2040,14 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/reading/focal/AgentAuthoredStyle.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalMetrics.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/LongMessageExpansionLaw.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/KeyboardFirstScroll.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalChromeReturn.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalAudioBlock.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalProtectedContent.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Agent/AgentAuthoredStyle.swift"
+   "apps/ios/Meeshy/Features/Focal/Core/FocalMetrics.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/LongMessageExpansionLaw.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/KeyboardFirstScroll.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalChromeReturn.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalAudioBlock.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalProtectedContent.swift",
+   "apps/ios/Meeshy/Features/Focal/Agent/AgentAuthoredStyle.swift"
   ],
   "feature_keys": [
    "clist-focal-attachments-grid",
@@ -2097,14 +2097,14 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/reading/focal/FocalFocusTimestamp.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusCurve.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleFocusElection.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleSceneActivity.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusDetailsMotionLaw.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/ScrollTimePillLaw.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusTimestamp.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentillePerspective.swift"
+   "apps/ios/Meeshy/Features/Focal/Core/FocalFocusCurve.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalScrollPerspective.swift",
+   "apps/ios/Meeshy/Features/Lens/Perspective/LentilleFocusElection.swift",
+   "apps/ios/Meeshy/Features/Lens/Perspective/LentilleSceneActivity.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalFocusDetailsMotionLaw.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/ScrollTimePillLaw.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalFocusTimestamp.swift",
+   "apps/ios/Meeshy/Features/Lens/Perspective/LentillePerspective.swift"
   ],
   "feature_keys": [
    "clist-lentille-perspective-scroll",
@@ -2147,9 +2147,9 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/deeplink/ConversationLinkTarget.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Navigation/DeepLinkRouter.swift",
+   "apps/ios/Meeshy/Features/Navigation/DeepLinkRouter.swift",
    "apps/ios/Meeshy/Features/Main/Components/ConversationCard/ConversationLinkTarget.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/ShareLinkEntryResolver.swift"
+   "apps/ios/Meeshy/Features/Navigation/ShareLinkEntryResolver.swift"
   ],
   "feature_keys": [
    "cl-root-deeplinks",
@@ -2192,8 +2192,8 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/conversationlist/ConversationListSectionDefaults.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleSectionResolver.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSectionIdentity.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleSectionResolver.swift",
+   "apps/ios/Meeshy/Features/Lens/Chrome/LentilleSectionIdentity.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationListWorldHead.swift",
    "apps/ios/Meeshy/Features/Main/Components/SectionFoldedUnread.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListSectionMemory.swift",
@@ -2290,7 +2290,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+EmptyState.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+SectionRules.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleSkeletonRow.swift"
+   "apps/ios/Meeshy/Features/Lens/Row/LentilleSkeletonRow.swift"
   ],
   "feature_keys": [
    "cl-list-empty-states",
@@ -2425,13 +2425,13 @@
    "apps/android/docs/magic-link-app-links.md"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Navigation/DeepLinkRouter.swift",
+   "apps/ios/Meeshy/Features/Navigation/DeepLinkRouter.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootView.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/ShareLinkEntryResolver.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/Router.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/PackFocusSlug.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/ConversationListEntry.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/InAppLinks.swift"
+   "apps/ios/Meeshy/Features/Navigation/ShareLinkEntryResolver.swift",
+   "apps/ios/Meeshy/Features/Navigation/Router.swift",
+   "apps/ios/Meeshy/Features/Navigation/PackFocusSlug.swift",
+   "apps/ios/Meeshy/Features/Navigation/ConversationListEntry.swift",
+   "apps/ios/Meeshy/Features/Navigation/InAppLinks.swift"
   ],
   "feature_keys": [
    "cl-root-deeplinks",
@@ -2492,11 +2492,11 @@
    "apps/android/feature/conversations/src/main/res/values-pt/strings_row.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",
+   "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift",
    "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationRowWidthLaw.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift"
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleMetrics.swift"
   ],
   "feature_keys": [
    "clist-lentille-flat-row"
@@ -2697,17 +2697,17 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ReadingModeCycle.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Core/ReadingModeOrchestrator.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleReadingModeContext.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleProviders.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleBridgeFormatter.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/GatewayBridgeProvider.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/AgentAssistContracts.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleBridgeLine.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverLaneResolver.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Preferences/ConversationViewerIdentityResolver.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/ReadingModeOrchestrator.swift",
+   "apps/ios/Meeshy/Features/Lens/Mode/LentilleReadingModeContext.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleProviders.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleBridgeFormatter.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/GatewayBridgeProvider.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/AgentAssistContracts.swift",
+   "apps/ios/Meeshy/Features/Lens/Row/LentilleBridgeLine.swift",
+   "apps/ios/Meeshy/Features/River/Core/RiverLaneResolver.swift",
+   "apps/ios/Meeshy/Features/Focal/Preferences/ConversationViewerIdentityResolver.swift",
    "apps/ios/Meeshy/Features/Main/Models/ReadingModeProtectionChrome.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Preferences/ReadingModeController.swift"
+   "apps/ios/Meeshy/Features/Focal/Preferences/ReadingModeController.swift"
   ],
   "feature_keys": [
    "clist-reading-mode-law",
@@ -2898,11 +2898,11 @@
    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/settings/InterfaceFeatureFlagsStoreTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Preferences/ReadingModePreferenceStore.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Preferences/ReadingModeController.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleFeatureFlag.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Preferences/MeeshyFeatureFlags.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift"
+   "apps/ios/Meeshy/Features/Focal/Preferences/ReadingModePreferenceStore.swift",
+   "apps/ios/Meeshy/Features/Focal/Preferences/ReadingModeController.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleFeatureFlag.swift",
+   "apps/ios/Meeshy/Features/Focal/Preferences/MeeshyFeatureFlags.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift"
   ],
   "feature_keys": [
    "cl-lentille-feature-flags",
@@ -2967,14 +2967,14 @@
    "apps/android/sdk-ui/src/main/res/values-pt/strings_focal_row.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalRow.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalRowInput.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalMetrics.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalMetaColumn.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalConversationStartRow.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/EquatableFocalRow.swift"
+   "apps/ios/Meeshy/Features/Focal/Row/FocalRow.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalRowInput.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalMetrics.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalIdentityHeader.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalMetaColumn.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalMetaRow.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalConversationStartRow.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/EquatableFocalRow.swift"
   ],
   "feature_keys": [
    "clist-focal-flat-message-row",
@@ -3199,7 +3199,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+SectionHeader.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+SectionRows.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSticker.swift",
+   "apps/ios/Meeshy/Features/Lens/Chrome/LentilleSticker.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+StickyHeaderInset.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationListReorderMotion.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift"
@@ -3256,8 +3256,8 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Settings/SettingsComponents.swift",
-   "apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift"
   ],
   "feature_keys": [
    "sps-settings-ui-atoms"
@@ -3319,7 +3319,7 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Services/UserPreferencesManager.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/PreferenceModels.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift"
   ],
   "feature_keys": [
    "sps-settings-entry-points",
@@ -3377,8 +3377,8 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/account/PhoneChangeFlowTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/SecurityView.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/TwoFactorViewModel.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift",
+   "apps/ios/Meeshy/Features/Settings/ViewModels/TwoFactorViewModel.swift"
   ],
   "feature_keys": [
    "sps-security-hub",
@@ -3431,8 +3431,8 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/SettingsViewModelSyncTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift"
   ],
   "feature_keys": [
    "sps-settings-entry-points"
@@ -3496,9 +3496,9 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/settings/SettingsHubCatalogTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Settings/SettingsComponents.swift",
-   "apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift"
   ],
   "feature_keys": [
    "sps-settings-hub"
@@ -3904,7 +3904,7 @@
    "apps/ios/Meeshy/Localizable.xcstrings",
    "apps/ios/MeeshyWidgets/Localizable.xcstrings",
    "apps/ios/MeeshyShareExtension/InfoPlist.xcstrings",
-   "apps/ios/Meeshy/Features/Main/Views/CallView.swift",
+   "apps/ios/Meeshy/Features/Call/Views/CallView.swift",
    "apps/ios/Meeshy/Features/Notifications"
   ],
   "feature_keys": [
@@ -4162,13 +4162,13 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Localizable.xcstrings",
-   "apps/ios/Meeshy/Features/Main/Views/AboutView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/TermsOfServiceView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/PrivacyPolicyView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/AboutView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/PrivacyPolicyView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/ActiveSessionsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift",
    "apps/ios/Meeshy/Core/UILanguageOverride.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift"
   ],
   "feature_keys": [
    "res-strings-domain-settings-account",
@@ -4519,7 +4519,7 @@
    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/auth/WelcomeStoreTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/WelcomeView.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/WelcomeView.swift",
    "apps/ios/Meeshy/App/RootPresentationRules.swift",
    "apps/ios/Meeshy/App/AppRootGate.swift"
   ],
@@ -4690,10 +4690,10 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/Routes.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Navigation/NotificationContentRouter.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/ReelDoor.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/StoryDoor.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/DetailOpenSource.swift"
+   "apps/ios/Meeshy/Features/Navigation/NotificationContentRouter.swift",
+   "apps/ios/Meeshy/Features/Navigation/ReelDoor.swift",
+   "apps/ios/Meeshy/Features/Navigation/StoryDoor.swift",
+   "apps/ios/Meeshy/Features/Navigation/DetailOpenSource.swift"
   ],
   "feature_keys": [
    "dst-nav-content-doors"
@@ -5033,7 +5033,7 @@
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager+EmailAccess.swift",
    "apps/ios/Meeshy/App/SessionTransitionPlan.swift",
-   "apps/ios/Meeshy/Features/Main/Views/AccountSwitcherSheet.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/AccountSwitcherSheet.swift",
    "apps/ios/Meeshy/Core/AccountDataRetention.swift"
   ],
   "feature_keys": [
@@ -5119,8 +5119,8 @@
    "apps/ios/Meeshy/MeeshyApp+VisitorContent.swift",
    "apps/ios/Meeshy/App/ExternalEntry.swift",
    "apps/ios/Meeshy/App/RootPresentationRules.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/VisitorContent.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/VisitorContentReach.swift"
+   "apps/ios/Meeshy/Features/Navigation/VisitorContent.swift",
+   "apps/ios/Meeshy/Features/Navigation/VisitorContentReach.swift"
   ],
   "feature_keys": [
    "auth-visitor-content-landing",
@@ -5375,8 +5375,8 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Services/MediaPermissionCoordinator.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+VideoFallback.swift",
-   "apps/ios/Meeshy/Features/Main/Services/CallManager+MediaControls.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+VideoFallback.swift",
+   "apps/ios/Meeshy/Features/Call/Services/CallManager+MediaControls.swift",
    "apps/ios/Meeshy/Features/Onboarding/OnboardingFriendsCard.swift"
   ],
   "feature_keys": [
@@ -5450,7 +5450,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Utilities/ImageCompressor.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Utilities/PickedMedia.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyImageEditorView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift"
   ],
   "feature_keys": [
    "dst-image-pick-edit-compress",
@@ -5738,7 +5738,7 @@
    "apps/ios/Meeshy/Features/Auth/WorldEntry/WorldGuestEntryView.swift",
    "apps/ios/Meeshy/Features/Auth/WorldEntry/WorldGuestEntryViewModel.swift",
    "apps/ios/Meeshy/Features/Auth/WorldEntry/WorldGuestEntryCopy.swift",
-   "apps/ios/Meeshy/Features/Main/Views/LoginView.swift"
+   "apps/ios/Meeshy/Features/Auth/Views/LoginView.swift"
   ],
   "feature_keys": [
    "auth-world-guest-entry"
@@ -6623,7 +6623,7 @@
    "apps/android/feature/auth/src/test/kotlin/me/meeshy/app/auth/MagicLinkViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/LinkDeviceBinding.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/EmailVerificationWatch.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthService.swift"
@@ -7152,10 +7152,10 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/AccountSwitcherViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/AccountSwitcherSheet.swift",
-   "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/AccountSwitcherSheet.swift",
+   "apps/ios/Meeshy/Features/Auth/Views/LoginView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager+Accounts.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager+ConnectionAccount.swift"
   ],
@@ -7417,7 +7417,7 @@
    "apps/android/feature/stories/src/main/res/values/strings.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerTopBar.swift",
+   "apps/ios/Meeshy/Features/Composer/ComposerTopBar.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+TopBar.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryTextEditTopBar.swift",
    "apps/ios/Meeshy/Features/Main/Components/BackgroundColorPalette.swift"
@@ -7577,7 +7577,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Panels.swift",
    "apps/ios/Meeshy/Features/Main/Views/iPadRootSheetTargets.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/PanelBackAction.swift"
+   "apps/ios/Meeshy/Features/Navigation/PanelBackAction.swift"
   ],
   "feature_keys": [
    "dst-tablet-panel-routing-deeplinks"
@@ -7741,7 +7741,7 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Fullscreen/FullscreenTopBar.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Theme/CanvasChromeScheme.swift",
-   "apps/ios/Meeshy/Features/Main/Views/RevealCircleShape.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/RevealCircleShape.swift"
   ],
   "feature_keys": [
    "dst-canvas-chrome-scheme",
@@ -7788,11 +7788,11 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/reading/summary/LivingSummaryAssembly.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/DeterministicDigestBuilder.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeSegmenter.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/FaceRampRanking.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryAssembly.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/LivingSummaryModels.swift"
+   "apps/ios/Meeshy/Features/Focal/Summary/DeterministicDigestBuilder.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/EpisodeSegmenter.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/FaceRampRanking.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryAssembly.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/LivingSummaryModels.swift"
   ],
   "feature_keys": [
    "cl-living-summary-engine",
@@ -7948,7 +7948,7 @@
    "apps/ios/Meeshy/App/RootScene.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootRouteDestination.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootSharedLayers.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/NowPlayingReturnNavigation.swift"
+   "apps/ios/Meeshy/Features/Navigation/NowPlayingReturnNavigation.swift"
   ],
   "feature_keys": [
    "clist-root-launch-routing",
@@ -8240,7 +8240,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+PeerSignals.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",
+   "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
    "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift"
   ],
@@ -8314,7 +8314,7 @@
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+FilterChips.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListHelpers.swift",
    "apps/ios/Meeshy/Features/Main/Models/ConversationFilterLabel.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleSectionResolver.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleSectionResolver.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/MeeshyConversationFilter.swift"
   ],
   "feature_keys": [
@@ -8477,12 +8477,12 @@
    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/ScrollMotionVisibility.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Chrome/ScrollTimePillOverlay.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Chrome/ScrollTimePillState.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/ScrollTimePillLaw.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Chrome/FocalTimestampRevealState.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Chrome/EdgeHiddenChrome.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/KeyboardFirstScroll.swift"
+   "apps/ios/Meeshy/Features/Focal/Chrome/ScrollTimePillOverlay.swift",
+   "apps/ios/Meeshy/Features/Focal/Chrome/ScrollTimePillState.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/ScrollTimePillLaw.swift",
+   "apps/ios/Meeshy/Features/Focal/Chrome/FocalTimestampRevealState.swift",
+   "apps/ios/Meeshy/Features/Focal/Chrome/EdgeHiddenChrome.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/KeyboardFirstScroll.swift"
   ],
   "feature_keys": [
    "clist-focal-scroll-time-pill",
@@ -8529,9 +8529,9 @@
    "apps/android/sdk-ui/src/main/res/values-pt/strings_long_message.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Core/LongMessageExpansionLaw.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalGlassBlock.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalRow.swift"
+   "apps/ios/Meeshy/Features/Focal/Core/LongMessageExpansionLaw.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalGlassBlock.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalRow.swift"
   ],
   "feature_keys": [
    "clist-focal-long-message-expansion"
@@ -8575,9 +8575,9 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/ReplyJump.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalQuotedReplyView.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalQuoteRail.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalRow.swift"
+   "apps/ios/Meeshy/Features/Focal/Row/FocalQuotedReplyView.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalQuoteRail.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalRow.swift"
   ],
   "feature_keys": [
    "clist-focal-quoted-reply"
@@ -8625,10 +8625,10 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/FlatThreadRow.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalNonMediaBlock.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalProtectedContent.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalRow.swift"
+   "apps/ios/Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalNonMediaBlock.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalProtectedContent.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalRow.swift"
   ],
   "feature_keys": [
    "clist-focal-attachments-grid",
@@ -8673,9 +8673,9 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/FlatThreadRow.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalAudioBlock.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalSystemRows.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalRow.swift"
+   "apps/ios/Meeshy/Features/Focal/Row/FocalAudioBlock.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalSystemRows.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalRow.swift"
   ],
   "feature_keys": [
    "clist-focal-audio-block",
@@ -8729,9 +8729,9 @@
    "apps/android/feature/conversations/src/main/res/values-pt/strings_live_call.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleProviders.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/GatewayBridgeProvider.swift",
+   "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleProviders.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/GatewayBridgeProvider.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+PeerSignals.swift"
   ],
   "feature_keys": [
@@ -8798,11 +8798,11 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/ReadingModeMenu.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeMenu.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeLabels.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleReadingModeContext.swift"
+   "apps/ios/Meeshy/Features/Focal/Lens/ReadingModeChip.swift",
+   "apps/ios/Meeshy/Features/Focal/Lens/ReadingModeLensSheet.swift",
+   "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeMenu.swift",
+   "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeLabels.swift",
+   "apps/ios/Meeshy/Features/Lens/Mode/LentilleReadingModeContext.swift"
   ],
   "feature_keys": [
    "cl-reading-mode-selector",
@@ -8918,7 +8918,7 @@
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+DragDrop.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+ChipDrag.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+SectionHeader.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSectionIdentity.swift"
+   "apps/ios/Meeshy/Features/Lens/Chrome/LentilleSectionIdentity.swift"
   ],
   "feature_keys": [
    "cl-row-drag-to-section"
@@ -9038,13 +9038,13 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/summary/EpisodeListView.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryView.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryHost.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/FaceRampView.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeListView.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/SummaryProtectionsView.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/ConversationAnalysisProviding.swift"
+   "apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryView.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryHost.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryViewModel.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/FaceRampView.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/EpisodeListView.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/SummaryProtectionsView.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/ConversationAnalysisProviding.swift"
   ],
   "feature_keys": [
    "cl-living-summary-screen",
@@ -9228,9 +9228,9 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/session/SessionsListReducerTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsPresentation.swift",
+   "apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsPresentation.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/SessionService.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsViewModel.swift"
+   "apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsViewModel.swift"
   ],
   "feature_keys": [
    "sps-active-sessions"
@@ -9396,7 +9396,7 @@
    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/session/SessionRepositoryHasPasswordTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Auth/PasswordChangeForm.swift"
   ],
   "feature_keys": [
@@ -9440,8 +9440,8 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/DataExportViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/DeleteAccountView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/DataExportView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/DeleteAccountView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/DataExportView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/DataExportService.swift"
   ],
   "feature_keys": [
@@ -9496,7 +9496,7 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/PrivacySettingsViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/PreferenceModels.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Settings/SettingsComponents.swift"
   ],
@@ -9602,7 +9602,7 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Services/SessionService.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsViewModel.swift"
+   "apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsViewModel.swift"
   ],
   "feature_keys": [
    "sps-active-sessions"
@@ -9773,9 +9773,9 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/ActiveSessionsUiMapperTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsPresentation.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/ActiveSessionsView.swift",
+   "apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsViewModel.swift",
+   "apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsPresentation.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/SessionService.swift"
   ],
   "feature_keys": [
@@ -9848,7 +9848,7 @@
    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/media/CacheMediaAttributionTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/DataStorageView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/DataStorageView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Settings/SelectiveCachePurgeView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Cache/CachePurgeService.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheMediaAttribution.swift",
@@ -9900,7 +9900,7 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/SecurityLockViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/SecurityView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift",
    "apps/ios/Meeshy/Features/Main/Components/ConversationLockSheet.swift",
    "apps/ios/Meeshy/Features/Main/Services/ConversationLockManager.swift"
   ],
@@ -9962,10 +9962,10 @@
    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/auth/AuthRepositoryTwoFactorTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/TwoFactorSetupView.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/TwoFactorViewModel.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/TwoFactorSetupView.swift",
+   "apps/ios/Meeshy/Features/Settings/ViewModels/TwoFactorViewModel.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/TwoFactorService.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SecurityView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift"
   ],
   "feature_keys": [
    "sps-two-factor"
@@ -10014,7 +10014,7 @@
    "apps/android/feature/settings/src/test/kotlin/me/meeshy/app/settings/SignOutViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift"
   ],
   "feature_keys": [
@@ -10144,7 +10144,7 @@
    "apps/android/app/src/test/kotlin/me/meeshy/app/LocalesConfigGuardTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift",
    "apps/ios/Meeshy/Core/UILanguageOverride.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/PreferenceModels.swift"
   ],
@@ -10198,7 +10198,7 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/settings/SettingsHubCatalogGatingTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/UserPreferencesManager.swift"
   ],
   "feature_keys": [
@@ -10461,7 +10461,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Resources/Fonts/GloryFrames/NOTICE.md",
    "apps/ios/Meeshy/Resources/Fonts/GloryFrames/GloryFrameFonts-OFL.txt",
-   "apps/ios/Meeshy/Features/Main/Game/Frames/GloryFrameFonts.swift"
+   "apps/ios/Meeshy/Features/Game/Frames/GloryFrameFonts.swift"
   ],
   "feature_keys": [
    "res-fonts-glory-frames"
@@ -10500,7 +10500,7 @@
    "apps/android/app/src/main/AndroidManifest.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Navigation/NowPlayingReturnNavigation.swift"
+   "apps/ios/Meeshy/Features/Navigation/NowPlayingReturnNavigation.swift"
   ],
   "feature_keys": [
    "dst-nav-now-playing-return"
@@ -10863,9 +10863,9 @@
    "apps/android/feature/conversations/src/main/res/values-pt/strings_tablet.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Navigation/MeeshyCommands.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/MeeshyShortcut.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/SceneCommandFocus.swift",
+   "apps/ios/Meeshy/Features/Navigation/MeeshyCommands.swift",
+   "apps/ios/Meeshy/Features/Navigation/MeeshyShortcut.swift",
+   "apps/ios/Meeshy/Features/Navigation/SceneCommandFocus.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Primitives/PointerInteractive.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListKeyboardNavigation.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+HeaderOverlay.swift",
@@ -11178,7 +11178,7 @@
    "core/model RiverLanesVectorParityTest: rejoue reading-modes/river-lanes.vectors.json",
    "core/model RiverHeadersVectorParityTest: river-headers.vectors.json",
    "core/model RiverStepVectorParityTest: river-step.vectors.json",
-   "core/model RiverColumnLayoutTest, RiverConversationMappingTest, RiverColumnPackingTest, RiverTimeScaleTest: ports de apps/ios/MeeshyTests/Unit/Riviere/*",
+   "core/model RiverColumnLayoutTest, RiverConversationMappingTest, RiverColumnPackingTest, RiverTimeScaleTest: ports de apps/ios/MeeshyTests/Unit/River/*",
    "core/model RiverModeGateTest: disponibilité selon capacités"
   ],
   "android_modules": [
@@ -11197,13 +11197,13 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/reading/river/RiverMetrics.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverConversationMapping.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverColumnPacking.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverColumnLayout.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverTimeScale.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverNavigationController.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverModeGate.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverMetrics.swift"
+   "apps/ios/Meeshy/Features/River/Core/RiverConversationMapping.swift",
+   "apps/ios/Meeshy/Features/River/Core/RiverColumnPacking.swift",
+   "apps/ios/Meeshy/Features/River/Core/RiverColumnLayout.swift",
+   "apps/ios/Meeshy/Features/River/Core/RiverTimeScale.swift",
+   "apps/ios/Meeshy/Features/River/Core/RiverNavigationController.swift",
+   "apps/ios/Meeshy/Features/River/Core/RiverModeGate.swift",
+   "apps/ios/Meeshy/Features/River/Core/RiverMetrics.swift"
   ],
   "feature_keys": [
    "cl-river-geometry-time-scale"
@@ -11255,7 +11255,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/ReelsRevealContainer.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/ReelDoor.swift",
+   "apps/ios/Meeshy/Features/Navigation/ReelDoor.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootView.swift"
   ],
   "feature_keys": [
@@ -11312,7 +11312,7 @@
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootSharedLayers.swift",
    "apps/ios/Meeshy/Features/Main/Services/StatusBubbleController.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/StoryDoor.swift"
+   "apps/ios/Meeshy/Features/Navigation/StoryDoor.swift"
   ],
   "feature_keys": [
    "clist-root-story-doors",
@@ -11365,11 +11365,11 @@
    "apps/android/sdk-ui/src/main/res/values-pt/strings_focal_focus.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalFocusChrome.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalGlassBlock.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusTimestamp.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusDetailsMotionLaw.swift"
+   "apps/ios/Meeshy/Features/Focal/Row/FocalFocusChrome.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalGlassBlock.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalScrollPerspective.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalFocusTimestamp.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalFocusDetailsMotionLaw.swift"
   ],
   "feature_keys": [
    "clist-focal-focus-card",
@@ -11429,13 +11429,13 @@
    "apps/android/feature/conversations/src/main/res/values-pt/strings_lentille.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentillePerspective.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleSceneActivity.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleFocusElectionHost.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleMagnification.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleFocusBreathing.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleWholeChipsLine.swift",
+   "apps/ios/Meeshy/Features/Lens/Perspective/LentillePerspective.swift",
+   "apps/ios/Meeshy/Features/Lens/Perspective/LentilleSceneActivity.swift",
+   "apps/ios/Meeshy/Features/Lens/Perspective/LentilleFocusElectionHost.swift",
+   "apps/ios/Meeshy/Features/Lens/Mode/LentilleMagnification.swift",
+   "apps/ios/Meeshy/Features/Lens/Mode/LentilleFocusCard.swift",
+   "apps/ios/Meeshy/Features/Lens/Mode/LentilleFocusBreathing.swift",
+   "apps/ios/Meeshy/Features/Lens/Row/LentilleWholeChipsLine.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+ReaderAnonymity.swift"
   ],
   "feature_keys": [
@@ -11548,13 +11548,13 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/river/RiverBubbleView.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverLaneCanvas.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverQuotedMediaFace.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverRendering.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverCoordinateSpace.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverBubbleView.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverLaneCanvas.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverQuotedMediaFace.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverRendering.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverCoordinateSpace.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationView+ReaderLayers.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverConversationHost.swift"
+   "apps/ios/Meeshy/Features/River/View/RiverConversationHost.swift"
   ],
   "feature_keys": [
    "cl-river-bubbles-canvas",
@@ -11605,10 +11605,10 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatScreen.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverStreamHost.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverConversationHost.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverLaneHeaderStrip.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverTimeHandle.swift"
+   "apps/ios/Meeshy/Features/River/View/RiverStreamHost.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverConversationHost.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverLaneHeaderStrip.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverTimeHandle.swift"
   ],
   "feature_keys": [
    "cl-river-stream-gestures"
@@ -11666,8 +11666,8 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/device/DeviceMediaTierTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/AboutView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/SupportView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/AboutView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/SupportView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Cache/MediaTransferProfile.swift"
   ],
   "feature_keys": [
@@ -11717,9 +11717,9 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/licenses/OpenSourceLicensePresentationBuilderTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/TermsOfServiceView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/PrivacyPolicyView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/LicensesView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/PrivacyPolicyView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/LicensesView.swift"
   ],
   "feature_keys": [
    "sps-legal-documents",

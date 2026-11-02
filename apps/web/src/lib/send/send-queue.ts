@@ -1,3 +1,4 @@
+import { idbDeviceRecords } from './device-records';
 import type { SendPayload, SendPlanEntry } from './send-sheet-plan';
 import { createSendRun, pendingKeysOf, type SendRun, type SendRunSnapshot, type SendSheetPorts } from './send-sheet-run';
 
@@ -248,45 +249,9 @@ export function createSendQueue(params: {
   };
 }
 
-export const SEND_QUEUE_DB_NAME = 'meeshy-send-queue';
-const SEND_QUEUE_DB_VERSION = 1;
-const SEND_QUEUE_STORE = 'jobs';
 const SEND_QUEUE_KEY = 'all';
 
-const withStore = <T,>(factory: IDBFactory, mode: IDBTransactionMode, work: (store: IDBObjectStore) => IDBRequest | null, read: (request: IDBRequest | null) => T): Promise<T> =>
-  new Promise((resolve, reject) => {
-    try {
-      const open = factory.open(SEND_QUEUE_DB_NAME, SEND_QUEUE_DB_VERSION);
-      open.onupgradeneeded = () => {
-        if (!open.result.objectStoreNames.contains(SEND_QUEUE_STORE)) open.result.createObjectStore(SEND_QUEUE_STORE);
-      };
-      open.onerror = () => reject(open.error);
-      open.onsuccess = () => {
-        const db = open.result;
-        try {
-          const transaction = db.transaction(SEND_QUEUE_STORE, mode);
-          const request = work(transaction.objectStore(SEND_QUEUE_STORE));
-          transaction.oncomplete = () => {
-            db.close();
-            resolve(read(request));
-          };
-          transaction.onerror = () => {
-            db.close();
-            reject(transaction.error);
-          };
-          transaction.onabort = () => {
-            db.close();
-            reject(transaction.error);
-          };
-        } catch (error) {
-          db.close();
-          reject(error);
-        }
-      };
-    } catch (error) {
-      reject(error);
-    }
-  });
+export { SEND_QUEUE_DB_NAME, idbDeviceRecords, memoryDeviceRecords, type DeviceRecords } from './device-records';
 
 const isStoredJob = (value: unknown): value is StoredSendJob => {
   if (typeof value !== 'object' || value === null) return false;
@@ -297,18 +262,12 @@ const isStoredJob = (value: unknown): value is StoredSendJob => {
 /** IndexedDB, un seul enregistrement : la liste des envois. Indisponible ⇒ rejet, que la file avale. */
 export function idbSendQueueStorage(factory: IDBFactory | undefined = typeof indexedDB === 'undefined' ? undefined : indexedDB): SendQueueStorage {
   if (factory === undefined) return memorySendQueueStorage();
+  const records = idbDeviceRecords(factory);
   return {
-    load: () =>
-      withStore(factory, 'readonly', (store) => store.get(SEND_QUEUE_KEY), (request) => {
-        const value: unknown = request?.result;
-        return Array.isArray(value) ? value.filter(isStoredJob) : [];
-      }),
-    save: (jobs) =>
-      withStore(
-        factory,
-        'readwrite',
-        (store) => (jobs.length === 0 ? store.delete(SEND_QUEUE_KEY) : store.put([...jobs], SEND_QUEUE_KEY)),
-        () => undefined,
-      ),
+    load: async () => {
+      const value = await records.load(SEND_QUEUE_KEY);
+      return Array.isArray(value) ? value.filter(isStoredJob) : [];
+    },
+    save: (jobs) => records.save(SEND_QUEUE_KEY, jobs.length === 0 ? undefined : [...jobs]),
   };
 }

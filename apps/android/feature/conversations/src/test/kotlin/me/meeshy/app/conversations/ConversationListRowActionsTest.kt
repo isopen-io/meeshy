@@ -18,6 +18,8 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
+import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.net.NetworkResult
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -30,10 +32,10 @@ class ConversationListRowActionsTest {
         val workManager: WorkManager,
     )
 
-    private fun TestScope.harness(vararg conversations: ApiConversation): Harness {
+    private fun TestScope.harness(vararg conversations: ApiConversation, active: String? = null): Harness {
         val repo = mockk<ConversationRepository>(relaxed = true)
         val workManager = mockk<WorkManager>(relaxed = true)
-        val state = MutableStateFlow(ConversationListUiState())
+        val state = MutableStateFlow(ConversationListUiState(conversations = conversations.toList()))
         val actions = ConversationListRowActions(
             scope = backgroundScope,
             state = state,
@@ -43,6 +45,7 @@ class ConversationListRowActionsTest {
             categoryRepository = mockk<CategoryRepository>(relaxed = true),
             draftStore = InMemoryConversationDraftStore(),
             workManager = workManager,
+            activeConversationId = { active },
         )
         return Harness(actions, state, repo, workManager)
     }
@@ -117,5 +120,124 @@ class ConversationListRowActionsTest {
         runCurrent()
 
         coVerify { h.repo.setCategoryOptimistic("c1", "ghost") }
+    }
+
+    @Test
+    fun `removing the category from the list menu uncategorizes the row`() = runTest(StandardTestDispatcher()) {
+        val h = harness(
+            ApiConversation(id = "c1", preferences = ApiConversationPreferences(categoryId = "work")),
+        )
+        coEvery { h.repo.setCategoryOptimistic("c1", null) } returns true
+
+        h.actions.removeCategory("c1")
+        runCurrent()
+
+        coVerify { h.repo.setCategoryOptimistic("c1", null) }
+        verify(exactly = 1) { h.workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun `removing the category of an uncategorized row is inert`() = runTest(StandardTestDispatcher()) {
+        val h = harness(ApiConversation(id = "c1"))
+
+        h.actions.removeCategory("c1")
+        runCurrent()
+
+        coVerify(exactly = 0) { h.repo.setCategoryOptimistic(any(), any()) }
+    }
+
+    @Test
+    fun `mark read on the open conversation clears the cache locally and never reaches the network`() =
+        runTest(StandardTestDispatcher()) {
+            val h = harness(ApiConversation(id = "c1", unreadCount = 3), active = "c1")
+
+            h.actions.markRead("c1")
+            runCurrent()
+
+            coVerify { h.repo.markReadLocally("c1") }
+            coVerify(exactly = 0) { h.repo.markReadOptimistic(any()) }
+            verify(exactly = 0) { h.workManager.enqueue(any<androidx.work.WorkRequest>()) }
+        }
+
+    @Test
+    fun `mark read on another conversation goes through the outbox`() = runTest(StandardTestDispatcher()) {
+        val h = harness(ApiConversation(id = "c1", unreadCount = 3), active = "c2")
+        coEvery { h.repo.markReadOptimistic("c1") } returns true
+
+        h.actions.markRead("c1")
+        runCurrent()
+
+        coVerify { h.repo.markReadOptimistic("c1") }
+        coVerify(exactly = 0) { h.repo.markReadLocally(any()) }
+        verify(exactly = 1) { h.workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun `mark read clears the badge at once, sections included`() = runTest(StandardTestDispatcher()) {
+        val pinned = ApiConversation(id = "c1", unreadCount = 3, preferences = ApiConversationPreferences(isPinned = true))
+        val other = ApiConversation(id = "c2", unreadCount = 2)
+        val h = harness(pinned, other)
+
+        h.actions.markRead("c1")
+
+        val sections = ConversationSections.of(h.state.value.conversations, emptyList())
+        val unreadById = sections.flatMap { it.items }.associate { it.id to it.unreadCount }
+        assertThat(unreadById).containsExactly("c1", 0, "c2", 2)
+    }
+
+    @Test
+    fun `archive sets the archived preference without toggling`() = runTest(StandardTestDispatcher()) {
+        val h = harness(ApiConversation(id = "c1", preferences = ApiConversationPreferences(isArchived = true)))
+
+        h.actions.archive("c1")
+        runCurrent()
+
+        coVerify { h.repo.setArchivedOptimistic("c1", true) }
+    }
+
+    @Test
+    fun `hiding a conversation drops its row at once, before the server answers`() = runTest(StandardTestDispatcher()) {
+        val h = harness(ApiConversation(id = "c1"), ApiConversation(id = "c2"))
+
+        h.actions.deleteConversationForMe("c1")
+
+        assertThat(h.state.value.conversations.map { it.id }).containsExactly("c2")
+    }
+
+    @Test
+    fun `a refused hide brings the row back and says why`() = runTest(StandardTestDispatcher()) {
+        val h = harness(ApiConversation(id = "c1"), ApiConversation(id = "c2"))
+        coEvery { h.repo.deleteForMe("c1") } returns NetworkResult.Failure(ApiError(message = "Not a participant"))
+
+        h.actions.deleteConversationForMe("c1")
+        runCurrent()
+
+        assertThat(h.state.value.conversations.map { it.id }).containsExactly("c1", "c2")
+        assertThat(h.state.value.errorMessage).isEqualTo("Not a participant")
+    }
+
+    @Test
+    fun `an accepted hide keeps the row away while the cache still carries it`() = runTest(StandardTestDispatcher()) {
+        val h = harness(ApiConversation(id = "c1"), ApiConversation(id = "c2"))
+        coEvery { h.repo.deleteForMe("c1") } returns NetworkResult.Success(Unit)
+
+        h.actions.deleteConversationForMe("c1")
+        runCurrent()
+        val reEmitted = h.state.value.withVisible(listOf(ApiConversation(id = "c1"), ApiConversation(id = "c2")))
+
+        assertThat(reEmitted.conversations.map { it.id }).containsExactly("c2")
+    }
+
+    @Test
+    fun `a hidden conversation that comes back after the purge shows again`() = runTest(StandardTestDispatcher()) {
+        val h = harness(ApiConversation(id = "c1"), ApiConversation(id = "c2"))
+        coEvery { h.repo.deleteForMe("c1") } returns NetworkResult.Success(Unit)
+
+        h.actions.deleteConversationForMe("c1")
+        runCurrent()
+        val purged = h.state.value.withVisible(listOf(ApiConversation(id = "c2")))
+        val revived = purged.withVisible(listOf(ApiConversation(id = "c1"), ApiConversation(id = "c2")))
+
+        assertThat(revived.conversations.map { it.id }).containsExactly("c1", "c2")
     }
 }

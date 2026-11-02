@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="live_location_channel_name">Posizione in tempo reale</string>
+    <string name="live_location_notification_title">Condivisione della posizione in tempo reale</string>
+    <string name="live_location_notification_stop">Interrompi</string>
+</resources>

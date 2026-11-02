@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "conversation.selection.capReached", "androidName": "chat_selection_cap_reached", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversation.selection.count", "androidName": "chat_selection_count", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversation.selection.toggleMessage", "androidName": "chat_selection_toggle_message", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversation.view.delete_messages.title", "androidName": "chat_delete_confirm_title_many", "kind": "plurals", "fillMissingQuantities": true, "status": "adopted"}
+      ]
+    }
+  }
+}

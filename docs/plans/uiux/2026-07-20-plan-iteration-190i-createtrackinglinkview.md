@@ -2,7 +2,7 @@
 
 **Date**: 2026-07-20
 **Scope**: iOS-only
-**Target**: `apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift` (166 lignes)
+**Target**: `apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift` (166 lignes)
 **Type**: Accessibility (VoiceOver) + HIG feedback
 
 ## Contexte

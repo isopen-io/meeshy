@@ -16,11 +16,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -28,8 +30,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.ui.accessibility.decorative
 import me.meeshy.ui.accessibility.meeshyTapTarget
@@ -80,7 +80,6 @@ public fun ProfileAvatar(
     } else {
         Modifier
     }
-    val gray = if (signs.isGrayedOut) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null
     val outer = size + RingExtra
 
     Box(modifier.size(outer).scale(entrance.value), contentAlignment = Alignment.Center) {
@@ -92,17 +91,8 @@ public fun ProfileAvatar(
                     .clickable(role = Role.Button, onClick = onViewStory),
             )
         }
-        Box(Modifier.size(size).clip(CircleShape).then(photoTap)) {
-            MeeshyAvatar(name = name, size = size, containerColor = signs.accent)
-            if (photoTarget != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context).data(photoTarget.url).crossfade(true).build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    colorFilter = gray,
-                    modifier = Modifier.size(size),
-                )
-            }
+        Box(Modifier.size(size).clip(CircleShape).then(photoTap).grayscale(signs.isGrayedOut)) {
+            MeeshyAvatar(name = name, size = size, containerColor = signs.accent, imageUrl = photoTarget?.url)
         }
         if (signs.showsDecor && decor != null) Box(Modifier.size(outer).decorative()) { decor() }
         signs.presenceDot?.let { dot ->
@@ -127,3 +117,16 @@ private fun isReduceMotionEnabled(context: android.content.Context): Boolean =
     runCatching {
         Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     }.getOrDefault(false)
+
+/** Désature tout ce que le cercle dessine (photo OU initiales) : un profil bloqué n'a plus de couleur. */
+private fun Modifier.grayscale(enabled: Boolean): Modifier {
+    if (!enabled) return this
+    val paint = Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) }
+    return drawWithContent {
+        drawIntoCanvas { canvas ->
+            canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height), paint)
+            drawContent()
+            canvas.restore()
+        }
+    }
+}

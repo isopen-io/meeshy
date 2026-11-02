@@ -81,8 +81,10 @@ extension StoryCanvasUIView {
         // surface `blankCanvasStarters` (SwiftUI, ses propres libellés/actions
         // déjà annotés) se superpose au canvas UIKit dans cet état — un résumé
         // fantôme ici ferait doublon.
-        guard !elements.isEmpty else { return elements }
-        let summaryLabels = elements.compactMap(\.accessibilityLabel)
+        let dessin = slide.effects.carriesDrawing
+        guard !elements.isEmpty || dessin else { return elements }
+        // Le dessin compte dans le résumé, sans être touchable (#13839, L5).
+        let summaryLabels = elements.compactMap(\.accessibilityLabel) + (dessin ? [drawingAccessibilityWord] : [])
         return [compositionSummaryElement(objectLabels: summaryLabels)] + elements
     }
 
@@ -166,9 +168,7 @@ extension StoryCanvasUIView {
             : String(localized: "story.composer.a11y.compositionCount.many", defaultValue: "\(count) objets", bundle: .module)
         let joined = objectLabels.joined(separator: ", ")
         let el = UIAccessibilityElement(accessibilityContainer: self)
-        el.accessibilityLabel = String(localized: "story.composer.a11y.composition",
-                                       defaultValue: "Story, \(countLabel) : \(joined)",
-                                       bundle: .module)
+        el.accessibilityLabel = formatWording.compositionSummary(count: countLabel, objects: joined)
         el.accessibilityTraits = .staticText
         el.accessibilityFrameInContainerSpace = bounds
         return el
@@ -261,6 +261,10 @@ extension StoryCanvasUIView {
             return "\(stickerAccessibilityWord) \(name.capitalized)"
         }
         return stickerAccessibilityWord
+    }
+
+    var drawingAccessibilityWord: String {
+        String(localized: "story.canvas.a11y.drawing", defaultValue: "Dessin", bundle: .module)
     }
 
     var stickerAccessibilityWord: String {
@@ -392,5 +396,12 @@ extension StoryCanvasUIView {
             return true
         })
         return actions
+    }
+}
+
+extension StoryEffects {
+    /// La slide porte-t-elle un dessin — traits modernes ou ancien PencilKit ?
+    var carriesDrawing: Bool {
+        !(drawingStrokes ?? []).isEmpty || !(drawingData ?? Data()).isEmpty
     }
 }

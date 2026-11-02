@@ -194,6 +194,7 @@ function doublePrisma(posts: readonly Ligne[]) {
         return amities.filter((a) => a.senderId === moi || a.receiverId === moi);
       }),
     },
+    userRelation: { findUnique: jest.fn(async () => null), findMany: jest.fn(async () => []) },
     participant: { findMany: jest.fn(async () => []) },
     communityMember: { findMany: jest.fn(async () => []) },
     user: { findMany: jest.fn(async () => []), findUnique: jest.fn(async () => ({ blockedUserIds: [] })) },

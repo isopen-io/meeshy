@@ -4,45 +4,33 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.unit.dp
 import java.util.Locale
-import me.meeshy.feature.feed.R
-import me.meeshy.ui.theme.MeeshyPalette
-import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
-import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * Emplacement médias de la carte : images, lieu, repost intégré et aperçu de reel.
+ * Emplacement médias de la carte : scènes d'un post composé sur la scène ou images, lieu, repost intégré et couverture du reel.
  */
 @Composable
 internal fun FeedPostCardMediaSlot(
     post: FeedPostPresentation,
     onImageTap: (Int) -> Unit,
     onOpenPost: (String) -> Unit,
+    onOpenReel: (String) -> Unit = onOpenPost,
 ) {
-    if (post.images.isNotEmpty()) {
+    val scenes = post.scenes
+    if (scenes != null) {
+        Spacer(Modifier.height(MeeshySpacing.md))
+        val live by rememberSceneLive(post.id)
+        PostScenesView(scenes = scenes, live = live, modifier = Modifier.sceneFrame(post.id))
+    } else if (post.images.isNotEmpty()) {
         Spacer(Modifier.height(MeeshySpacing.md))
         PostImageLayout(images = post.images, layout = post.layout, onImageTap = onImageTap)
     }
@@ -56,36 +44,35 @@ internal fun FeedPostCardMediaSlot(
         )
     }
 
-    post.repostEmbed?.let { embed ->
+    FeedPostQuoteAndReel(post = post, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
+}
+
+/**
+ * La citation d'un repost et la couverture du réel, partagées par la carte du fil et par Enregistrés, Publications d'un
+ * utilisateur, Proximité et Détail du post : même composant, même toucher. Un appui sur la couverture du réel ouvre le
+ * lecteur de réels sur CE réel ; celui d'un réel cité l'ouvre sur le réel cité (iOS `ReelFeedCard`, `ReelRepostEmbedCell`).
+ * Un réel republié ne porte qu'UNE couverture, celle du réel source, qui ouvre le réel cité : sa citation ne se répète pas.
+ */
+@Composable
+internal fun FeedPostQuoteAndReel(
+    post: FeedPostPresentation,
+    onOpenPost: (String) -> Unit,
+    onOpenReel: (String) -> Unit = onOpenPost,
+) {
+    post.repostEmbed?.takeIf { post.republishedReel == null }?.let { embed ->
         Spacer(Modifier.height(MeeshySpacing.md))
-        RepostEmbedCell(embed = embed, onOpen = onOpenPost)
+        RepostEmbedCell(embed = embed, onOpen = onOpenPost, onOpenReel = onOpenReel, sceneId = post.id)
     }
 
-    if (post.isReel) {
+    post.reelCover?.takeIf { post.isReel }?.let { cover ->
         Spacer(Modifier.height(MeeshySpacing.md))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp)
-                .clip(RoundedCornerShape(MeeshyRadius.lg))
-                .background(MeeshyPalette.Indigo500.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector = Icons.Filled.PlayCircle,
-                    contentDescription = null,
-                    tint = MeeshyPalette.Indigo500,
-                    modifier = Modifier.size(48.dp),
-                )
-                Text(
-                    text = stringResource(R.string.feed_reel),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MeeshyTheme.tokens.textSecondary,
-                    modifier = Modifier.padding(top = MeeshySpacing.xs),
-                )
-            }
-        }
+        ReelCoverView(
+            cover = cover,
+            authorName = post.republishedReel?.authorName ?: post.authorName,
+            onOpen = { onOpenReel(post.reelOpenId) },
+            modifier = Modifier.fillMaxWidth().aspectRatio(post.reelAspect),
+            sceneId = post.id,
+        )
     }
 }
 

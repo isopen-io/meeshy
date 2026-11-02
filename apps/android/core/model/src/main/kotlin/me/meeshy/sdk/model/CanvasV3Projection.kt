@@ -246,6 +246,19 @@ private fun ObjectV3.asAudio(at: Pair<Double, Double>): StoryAudioPlayerObject =
     fadeIn = payload.dbl("fadeIn")?.toFloat(),
     fadeOut = payload.dbl("fadeOut")?.toFloat(),
     sourceLanguage = locale,
+    waveformSamples = (payload["waveformSamples"] as? JsonArray)
+        ?.mapNotNull { (it as? JsonPrimitive)?.doubleOrNull?.toFloat() }.orEmpty(),
+    keyframes = timing?.keyframes,
+    name = payload.str("name"),
+    mutedVolumeMemento = payload.dbl("mutedVolumeMemento")?.toFloat(),
+    // Le fichier et la PROVENANCE d'un son emprunté (iOS `CanvasV3RenderRules.audioObject`) : sans eux, le son posé sur la
+    // scène d'un post n'avait rien à jouer ni à nommer (#13893, #14201).
+    mediaURL = payload.str("mediaURL"),
+    soundId = payload.str("soundId"),
+    soundAuthorUsername = payload.str("soundAuthorUsername"),
+    soundCreatedAt = payload.str("soundCreatedAt"),
+    scale = transform.scale.takeIf { it != 1.0 },
+    rotation = transform.rotation.takeIf { it != 0.0 },
 )
 
 /**
@@ -308,7 +321,16 @@ fun StoryEffects.Companion.rendering(document: CanvasV3, sceneIndex: Int = 0): S
                 background = item.payload.str("background")
                 backgroundTransform = decodeWire(item.payload.obj("transform"))
             }
-            item.kind == "media" -> medias += item.asMedia(at)
+            item.kind == "media" -> {
+                val media = item.asMedia(at)
+                medias += media
+                // Le fond posé en plan `content` porte lui-même son cadrage (iOS, « second passage ») : sans cette lecture,
+                // un fond AJUSTÉ se peignait rempli et rogné (#14199).
+                if (media.isBackground) {
+                    background = background ?: item.payload.str("background")
+                    backgroundTransform = backgroundTransform ?: decodeWire(item.payload.obj("transform"))
+                }
+            }
             item.kind == "text" -> item.asText(at)?.let { texts += it }
             item.kind == "sticker" -> item.asSticker(at)?.let { stickers += it }
             item.kind == "place" -> item.asLocation(at)?.let { locations += it }

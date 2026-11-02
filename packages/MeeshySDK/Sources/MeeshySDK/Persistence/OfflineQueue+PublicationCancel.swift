@@ -137,4 +137,8 @@ final class OutboxInflightDispatches: Sendable {
         let task = tasks.read { $0[id] }
         task?.cancel()
     }
+
+    func isDispatching(_ id: String) -> Bool {
+        tasks.read { $0[id] != nil }
+    }
 }

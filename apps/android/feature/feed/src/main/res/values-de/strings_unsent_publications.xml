@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_notice_publish_queued">Dein Beitrag wird gesendet</string>
+    <string name="feed_unsent_title">Nicht gesendete Beiträge</string>
+    <plurals name="feed_unsent_count">
+        <item quantity="one">%1$d nicht gesendeter Beitrag</item>
+        <item quantity="other">%1$d nicht gesendete Beiträge</item>
+    </plurals>
+    <string name="feed_unsent_open">Nicht gesendete Beiträge anzeigen</string>
+    <string name="feed_unsent_sending">Wird gesendet…</string>
+    <string name="feed_unsent_failed">Senden fehlgeschlagen</string>
+    <string name="feed_unsent_retry">Erneut versuchen</string>
+    <string name="feed_unsent_reopen">Wieder öffnen</string>
+    <string name="feed_unsent_delete">Löschen</string>
+    <string name="feed_unsent_delete_confirm_title">Diesen Beitrag löschen?</string>
+    <string name="feed_unsent_delete_confirm_body">Er wird samt Medien von diesem Gerät entfernt.</string>
+    <string name="feed_unsent_cancel">Abbrechen</string>
+    <string name="feed_unsent_kind_post">Beitrag</string>
+    <string name="feed_unsent_kind_reel">Reel</string>
+    <string name="feed_unsent_kind_story">Story</string>
+    <plurals name="feed_unsent_media_count">
+        <item quantity="one">%1$d Medium</item>
+        <item quantity="other">%1$d Medien</item>
+    </plurals>
+</resources>

@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game2.prestige.go",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.prestige.stay",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.prestige.done",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.prestige.confirm.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.prestige.confirm.resets",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.prestige.confirm.keeps",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.prestige.confirm.access",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.prestige.confirm.consent",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

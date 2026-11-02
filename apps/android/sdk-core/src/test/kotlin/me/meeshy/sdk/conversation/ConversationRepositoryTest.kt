@@ -447,6 +447,8 @@ private class CountingConversationDao(private val delegate: ConversationDao) : C
         return delegate.recentByUpdatedAt(limit)
     }
 
+    override fun observeRecentByUpdatedAt(limit: Int): Flow<List<ConversationEntity>> =
+        delegate.observeRecentByUpdatedAt(limit)
     override fun observeById(id: String): Flow<ConversationEntity?> = delegate.observeById(id)
     override suspend fun find(id: String): ConversationEntity? = delegate.find(id)
     override suspend fun payloadsContaining(needle: String): List<ConversationEntity> =
@@ -561,6 +563,26 @@ class ConversationRepositoryTest {
     }
 
     @Test
+    fun `markReadLocally zeroes the cached unread count and queues nothing`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team", unreadCount = 4)),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.markReadLocally("c1")
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.unreadCount).isEqualTo(0)
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).isEmpty()
+        assertThat(repo.markReadLocally("c1")).isFalse()
+    }
+
+    @Test
     fun `markReadOptimistic is a no-op when the conversation is already read`() = runTest {
         val repo = repository(
             FakeConversationApi(
@@ -576,6 +598,63 @@ class ConversationRepositoryTest {
 
         assertThat(applied).isFalse()
         assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).isEmpty()
+    }
+
+    @Test
+    fun `acknowledgeRead queues a READ_RECEIPT even when the cached count was already zeroed by a list sync`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team", unreadCount = 0)),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        val queued = repo.acknowledgeRead("c1")
+
+        assertThat(queued).isTrue()
+        val row = OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT).single()
+        assertThat(row.targetId).isEqualTo("c1")
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.READ_RECEIPT)
+    }
+
+    @Test
+    fun `acknowledgeRead zeroes a badge that is still set and queues the receipt`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team", unreadCount = 4)),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        assertThat(repo.acknowledgeRead("c1")).isTrue()
+
+        assertThat(repo.conversationStream("c1").first()?.unreadCount).isEqualTo(0)
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).hasSize(1)
+    }
+
+    @Test
+    fun `a repeated acknowledgeRead keeps a single pending READ_RECEIPT`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team", unreadCount = 2)),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        repo.acknowledgeRead("c1")
+        repo.acknowledgeRead("c1")
+        repo.markReadOptimistic("c1")
+
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).hasSize(1)
     }
 
     @Test
@@ -754,6 +833,46 @@ class ConversationRepositoryTest {
     }
 
     @Test
+    fun `an unrelated pref snapshot never resends a stored appearance the gateway would re-validate`() = runTest {
+        val stored = me.meeshy.sdk.model.appearance.ConversationAppearance.DEFAULT.withSolid("sky").toWire()
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", preferences = me.meeshy.sdk.model.ApiConversationPreferences(appearance = stored))),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        repo.setPinnedOptimistic("c1", true)
+
+        val payload = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(
+            OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS).single().payload,
+        )
+        assertThat(payload.isPinned).isTrue()
+        assertThat(payload.appearance).isNull()
+    }
+
+    @Test
+    fun `a pending appearance change survives a later pin that supersedes its snapshot`() = runTest {
+        val repo = repository(
+            FakeConversationApi(ApiResponse(success = true, data = listOf(ApiConversation(id = "c1")))),
+        )
+        repo.refresh()
+        val chosen = me.meeshy.sdk.model.appearance.ConversationAppearance.DEFAULT.withSolid("sky")
+
+        repo.setAppearanceOptimistic("c1", chosen)
+        repo.setPinnedOptimistic("c1", true)
+
+        val rows = OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS)
+        assertThat(rows).hasSize(1)
+        val payload = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(rows.single().payload)
+        assertThat(payload.isPinned).isTrue()
+        assertThat(payload.appearance).isEqualTo(chosen.toWire())
+    }
+
+    @Test
     fun `successive pref mutations coalesce into one latest-wins snapshot`() = runTest {
         val repo = repository(
             FakeConversationApi(
@@ -850,6 +969,77 @@ class ConversationRepositoryTest {
         assertThat(applied).isFalse()
         assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS))
             .isEmpty()
+    }
+
+    @Test
+    fun `removing the category uncategorizes the cached row and queues an explicit clear`() = runTest {
+        val categorized = ApiConversation(
+            id = "c1",
+            preferences = me.meeshy.sdk.model.ApiConversationPreferences(categoryId = "work"),
+        )
+        val repo = repository(FakeConversationApi(ApiResponse(success = true, data = listOf(categorized))))
+        repo.refresh()
+
+        val applied = repo.setCategoryOptimistic("c1", null)
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.preferences?.categoryId).isNull()
+        val payload = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(
+            OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS).single().payload,
+        )
+        assertThat(payload.categoryId).isNull()
+        assertThat(payload.clearCategory).isTrue()
+    }
+
+    @Test
+    fun `an unrelated pref snapshot of an uncategorized row never clears a category`() = runTest {
+        val repo = repository(FakeConversationApi(ApiResponse(success = true, data = listOf(ApiConversation(id = "c1")))))
+        repo.refresh()
+
+        repo.setPinnedOptimistic("c1", true)
+
+        val payload = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(
+            OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS).single().payload,
+        )
+        assertThat(payload.clearCategory).isFalse()
+    }
+
+    @Test
+    fun `a pending category removal survives a later pin that supersedes its snapshot`() = runTest {
+        val categorized = ApiConversation(
+            id = "c1",
+            preferences = me.meeshy.sdk.model.ApiConversationPreferences(categoryId = "work"),
+        )
+        val repo = repository(FakeConversationApi(ApiResponse(success = true, data = listOf(categorized))))
+        repo.refresh()
+
+        repo.setCategoryOptimistic("c1", null)
+        repo.setPinnedOptimistic("c1", true)
+
+        val rows = OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS)
+        assertThat(rows).hasSize(1)
+        val payload = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(rows.single().payload)
+        assertThat(payload.isPinned).isTrue()
+        assertThat(payload.clearCategory).isTrue()
+    }
+
+    @Test
+    fun `filing the row again after a pending removal sends the new category, not the clear`() = runTest {
+        val categorized = ApiConversation(
+            id = "c1",
+            preferences = me.meeshy.sdk.model.ApiConversationPreferences(categoryId = "work"),
+        )
+        val repo = repository(FakeConversationApi(ApiResponse(success = true, data = listOf(categorized))))
+        repo.refresh()
+
+        repo.setCategoryOptimistic("c1", null)
+        repo.setCategoryOptimistic("c1", "family")
+
+        val payload = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(
+            OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS).single().payload,
+        )
+        assertThat(payload.categoryId).isEqualTo("family")
+        assertThat(payload.clearCategory).isFalse()
     }
 
     @Test

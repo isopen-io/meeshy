@@ -15,6 +15,7 @@ const itCallCaptions = {
   'callCaptions.listening': 'La tua voce viene trascritta',
   'callCaptions.unsupported': 'La tua voce non viene trascritta su questo dispositivo: leggi gli altri',
   'callCaptions.denied': 'Riconoscimento vocale negato: leggi gli altri',
+  'callCaptions.sealed': 'Sottotitoli non disponibili: questa conversazione è crittografata end-to-end, oppure non è stato possibile verificarne la crittografia',
   'callCaptions.journal.title': 'Registro della chiamata',
   'callCaptions.participant': 'Partecipante',
   'callTranscript.show': 'Trascrizione',

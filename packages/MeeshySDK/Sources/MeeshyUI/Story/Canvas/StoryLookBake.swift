@@ -58,16 +58,23 @@ public nonisolated enum StoryLookBake {
     /// L'image elle-même, à l'identique, quand il n'y a ni filtre ni réglage
     /// actif ; sinon le bitmap cuit, `.up`, à la même échelle et à la même
     /// taille affichée.
+    ///
+    /// `look` (#13840) : le look de la retouche, peint AVANT le filtre et les
+    /// réglages par le peintre de l'app — l'ordre de la publication, qui cuit le
+    /// look dans les octets puis laisse le lecteur peindre filtre et réglages.
     public static func image(_ image: UIImage, filter: StoryFilter?, intensity: Float,
-                             adjustments: ImageAdjustments?, imageId: String?) -> UIImage {
+                             adjustments: ImageAdjustments?, imageId: String?,
+                             look: StoryMediaLook? = nil) -> UIImage {
         let reglages = adjustments.flatMap { $0.activeCount > 0 ? $0 : nil }
-        guard filter != nil || reglages != nil,
+        let regard = StoryMediaLookPainterRegistry.paintable(look)
+        guard filter != nil || reglages != nil || regard != nil,
               let source = StoryRenderingContext.orientedSource(of: image),
               source.extent.width >= 1, source.extent.height >= 1 else { return image }
-        let cle = key(image, filter: filter, intensity: intensity, adjustments: reglages, imageId: imageId)
+        let cle = key(image, filter: filter, intensity: intensity, adjustments: reglages, imageId: imageId, look: regard)
         if let deja = cached(cle, source: image) { return deja }
 
-        let chaine = StoryBackgroundLook.ciImage(source, filter: filter, intensity: intensity, adjustments: reglages)
+        let peinte = StoryMediaLookPainterRegistry.painted(source, look: regard, still: true)
+        let chaine = StoryBackgroundLook.ciImage(peinte, filter: filter, intensity: intensity, adjustments: reglages)
         guard let cuit = StoryRenderingContext.shared.bitmap(chaine, from: source.extent,
                                                              preserving: image.cgImage?.colorSpace) else { return image }
         let rendu = UIImage(cgImage: cuit, scale: image.scale, orientation: .up)
@@ -79,7 +86,7 @@ public nonisolated enum StoryLookBake {
     /// rejoue hors du fil principal (`StoryLiveLook`).
     public static func bake(_ request: StoryLookBakeRequest) -> UIImage {
         image(request.image, filter: request.filter, intensity: request.intensity,
-              adjustments: request.adjustments, imageId: request.imageId)
+              adjustments: request.adjustments, imageId: request.imageId, look: request.look)
     }
 
     /// **Ce qui se pose SANS cuire** : l'image elle-même quand il n'y a rien à
@@ -87,21 +94,22 @@ public nonisolated enum StoryLookBake {
     /// rendu. Un curseur qui revient sur une valeur vue se repeint sur place.
     public static func ready(_ request: StoryLookBakeRequest) -> UIImage? {
         let reglages = request.adjustments.flatMap { $0.activeCount > 0 ? $0 : nil }
-        guard request.filter != nil || reglages != nil else { return request.image }
+        let regard = StoryMediaLookPainterRegistry.paintable(request.look)
+        guard request.filter != nil || reglages != nil || regard != nil else { return request.image }
         return cached(key(request.image, filter: request.filter, intensity: request.intensity,
-                          adjustments: reglages, imageId: request.imageId), source: request.image)
+                          adjustments: reglages, imageId: request.imageId, look: regard), source: request.image)
     }
 
     /// Une clé DÉTERMINISTE : l'instance, l'identifiant de l'appelant, le
     /// filtre au centième et la signature des réglages — jamais `hashValue`
     /// d'un état, qui peut collisionner.
     static func key(_ image: UIImage, filter: StoryFilter?, intensity: Float,
-                    adjustments: ImageAdjustments?, imageId: String?) -> NSString {
+                    adjustments: ImageAdjustments?, imageId: String?, look regard: StoryMediaLook? = nil) -> NSString {
         let instance = "\(imageId ?? "")#\(ObjectIdentifier(image).hashValue)"
         let centieme = Int((max(0, min(1, intensity)) * 100).rounded())
         let look = filter.map { "\($0.rawValue)@\(centieme)" } ?? "-"
         let reglages = adjustments.map(StoryMediaAdjustmentsProcessor.signature) ?? "-"
-        return "\(instance)|\(look)|\(reglages)" as NSString
+        return "\(instance)|\(look)|\(reglages)|\(regard?.signature ?? "-")" as NSString
     }
 }
 
@@ -113,9 +121,12 @@ public nonisolated struct StoryLookBakeRequest: Sendable {
     public let intensity: Float
     public let adjustments: ImageAdjustments?
     public let imageId: String?
+    /// Le look de la retouche (#13840), peint avant le filtre.
+    public let look: StoryMediaLook?
 
     public init(image: UIImage, filter: StoryFilter?, intensity: Float,
-                adjustments: ImageAdjustments?, imageId: String?) {
+                adjustments: ImageAdjustments?, imageId: String?, look: StoryMediaLook? = nil) {
+        self.look = look
         self.image = image
         self.filter = filter
         self.intensity = intensity

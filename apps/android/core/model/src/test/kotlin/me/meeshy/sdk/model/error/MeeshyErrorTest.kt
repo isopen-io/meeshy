@@ -3,6 +3,7 @@ package me.meeshy.sdk.model.error
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.net.EndpointAuthKind
 import me.meeshy.sdk.model.net.EndpointRejectionPolicy
+import me.meeshy.sdk.model.net.UpgradeRequirement
 import org.junit.Test
 
 class MeeshyErrorTest {
@@ -60,5 +61,11 @@ class MeeshyErrorTest {
         assertThat(MeeshyError.fromHttp(502, null)).isEqualTo(MeeshyError.Server(502, "Erreur serveur"))
         assertThat(MeeshyError.fromHttp(404, null)).isEqualTo(MeeshyError.Server(404, "Erreur inconnue"))
         assertThat(MeeshyError.fromHttp(426, null)).isEqualTo(MeeshyError.Server(426, "Mise à jour requise"))
+    }
+
+    @Test
+    fun `426 reste un refus serveur pour les appelants, quelle que soit la politique du point d acces`() {
+        assertThat(MeeshyError.fromHttp(UpgradeRequirement.STATUS, "outdated", rejectionPolicy = EndpointRejectionPolicy.STRUCTURED))
+            .isEqualTo(MeeshyError.Server(426, "outdated"))
     }
 }

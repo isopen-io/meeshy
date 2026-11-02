@@ -12,7 +12,8 @@ import MeeshyUI
 /// pixels, bornés au cadre de la cellule, tranchaient l'identité et la méta
 /// posées à cheval sur lui. L'aperçu ne capture plus rien — il rend la rangée
 /// du fil elle-même, entière. En Script et en Focal, c'est la rangée plate ; en
-/// Bulles, en Rivière et dans le Résumé, la bulle.
+/// Bulles, en Rivière et dans le Résumé, la bulle — en Rivière, celle du
+/// couloir, que l'hôte remet (`RiverOverlayFace`, #12630).
 enum MessageOverlayPreviewKind: Equatable {
     case flatRow
     case bubble
@@ -24,6 +25,31 @@ enum MessageOverlayPreviewKind: Equatable {
     /// La densité de la rangée, celle que la cellule reçoit (`focalRowInput`).
     static func density(for readingMode: ConversationReadingMode) -> FocalRowInput.Density {
         readingMode == .script ? .script : .focal
+    }
+}
+
+// MARK: - La bulle de la Rivière, remise à l'aperçu (#12630)
+
+/// **Ce que la Rivière remet à l'aperçu de l'appui long** : la bulle pressée
+/// telle que son couloir la peint (le contenu résolu par la projection, Prisme
+/// compris) et la largeur à laquelle l'aperçu la pose. L'hôte la tient le temps
+/// du menu (`ConversationOverlayState.overlayRiverFace`) et la pose dans
+/// l'environnement de l'overlay ; hors Rivière, `nil`.
+struct RiverOverlayFace: Equatable {
+    let content: RiverBubbleContent
+    let contentWidth: CGFloat
+
+    var messageId: String { content.bubble.messageId }
+}
+
+private struct RiverOverlayFaceKey: EnvironmentKey {
+    static let defaultValue: RiverOverlayFace? = nil
+}
+
+extension EnvironmentValues {
+    var riverOverlayFace: RiverOverlayFace? {
+        get { self[RiverOverlayFaceKey.self] }
+        set { self[RiverOverlayFaceKey.self] = newValue }
     }
 }
 
@@ -46,6 +72,8 @@ struct MessageOverlayCellPreview: View {
     enum Face: Equatable {
         case flatRow(FocalRowInput)
         case bubble(ThemedMessageBubble)
+        /// La bulle de la Rivière, telle que son couloir la peint (#12630).
+        case river(RiverOverlayFace)
 
         static func == (lhs: Face, rhs: Face) -> Bool {
             switch (lhs, rhs) {
@@ -53,10 +81,24 @@ struct MessageOverlayCellPreview: View {
                 return left == right
             case let (.bubble(left), .bubble(right)):
                 return left == right
+            case let (.river(left), .river(right)):
+                return left == right
             default:
                 return false
             }
         }
+    }
+
+    /// **La face MONTRÉE** (#12630) : en Rivière, la cellule pressée n'est pas
+    /// une `ThemedMessageBubble` mais une `RiverBubbleView` — couleur de
+    /// couloir, en-tête d'identité, largeur de couloir. L'hôte de la Rivière la
+    /// remet (`riverOverlayFace`) ; elle remplace la bulle du fil pour CE
+    /// message, sous ses deux identités (`cid_…` accusé compris). Une rangée
+    /// plate reste une rangée plate : la Rivière n'en a pas.
+    static func displayedFace(_ face: Face, river: RiverOverlayFace?, message: Message) -> Face {
+        guard case .bubble = face, let river,
+              river.messageId == message.id || river.messageId == message.clientMessageId else { return face }
+        return .river(river)
     }
 
     /// La rangée plate se pose à 16 pt des bords de l'écran.
@@ -70,11 +112,15 @@ struct MessageOverlayCellPreview: View {
     let message: Message
     let isDark: Bool
     let accentHex: String
+    /// **Lire un vocal depuis l'aperçu** (#11339) : le bouton du lecteur de la
+    /// cellule appelle ici, comme dans le fil. Exclu d'`Equatable`.
+    var onPlayAudio: ((String) -> Void)? = nil
 
     /// Les heures d'une rangée au repos ne se montrent qu'au défilement
     /// (`FocalRevealedTime`) : l'aperçu porte son propre révélé, fermé, comme
     /// la rangée immobile qu'on vient de presser.
     @StateObject private var timestampReveal = FocalTimestampRevealState()
+    @Environment(\.riverOverlayFace) private var riverFace
 
     var body: some View {
         let protection = OverlayPreviewProtection.form(for: message)
@@ -89,9 +135,9 @@ struct MessageOverlayCellPreview: View {
 
     @ViewBuilder
     private var faceView: some View {
-        switch face {
+        switch Self.displayedFace(face, river: riverFace, message: message) {
         case .flatRow(let input):
-            FocalRow(input: input, actions: FocalRowActions())
+            FocalRow(input: input, actions: rowActions)
                 .environmentObject(timestampReveal)
                 .fixedSize(horizontal: false, vertical: true)
                 .background(
@@ -104,7 +150,51 @@ struct MessageOverlayCellPreview: View {
                 .equatable()
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, Self.bubbleMargin)
+        case .river(let river):
+            // Les 16 pt des bords sont déjà dans le cadre que l'hôte a posé
+            // (`RiverPressedCell.windowFrame`) : la bulle a la largeur de ce
+            // cadre, et son cadre publié ne remonte pas jusqu'au suivi du fil.
+            RiverBubbleView(content: river.content, contentWidth: river.contentWidth, drawsTopSeam: false)
+                .equatable()
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+                .transformPreference(MessageFramePreferenceKey.self) { $0 = [:] }
         }
+    }
+
+    /// La rangée plate ne reçoit que la lecture (#11339) : le reste de ses
+    /// rappels reste vide, l'aperçu n'est pas le fil.
+    private var rowActions: FocalRowActions {
+        var actions = FocalRowActions()
+        actions.onPlayAudio = onPlayAudio
+        return actions
+    }
+}
+
+// MARK: - Le masque de l'aperçu : tout sauf la lecture (#11339)
+
+/// **Le masque posé sur l'aperçu** : il prend chaque toucher HORS des zones de
+/// lecture — un toucher y ferme le menu, comme le voile ; un glissement remonte
+/// au geste du cluster —, et laisse passer ceux qui tombent DANS une zone
+/// jusqu'au lecteur de la cellule. Un tracé pair-impair : le cadre plein, les
+/// zones en trous.
+struct MessageOverlayPreviewTouchMask: View {
+    let holes: [CGRect]
+    let onTapOutside: () -> Void
+
+    var body: some View {
+        Color.clear
+            .contentShape(MessageOverlayPreviewTouchShape(holes: holes), eoFill: true)
+            .onTapGesture(perform: onTapOutside)
+            .accessibilityHidden(true)
+    }
+}
+
+nonisolated struct MessageOverlayPreviewTouchShape: Shape {
+    let holes: [CGRect]
+
+    func path(in rect: CGRect) -> Path {
+        holes.reduce(into: Path(rect)) { path, hole in path.addRect(hole) }
     }
 }
 
@@ -196,15 +286,18 @@ nonisolated enum MessageOverlayPreviewFit {
 
 /// **Le cadre où l'aperçu réduit se pose** : à `naturalSize × scale`, ancré à
 /// son bord natif, borné à `visibleHeight`. Quand le contenu réduit dépasse
-/// encore, il défile à l'intérieur — le contenu lui-même ne reçoit aucun
-/// toucher (c'est une image de la cellule, pas un lecteur), seul le cadre
-/// défile ; un fondu en pied dit qu'il y a une suite.
+/// encore, il défile à l'intérieur — le contenu ne reçoit de toucher que dans
+/// ses zones de lecture (#11339), seul le cadre défile ; un fondu en pied dit
+/// qu'il y a une suite.
 struct MessageOverlayPreviewViewport<Content: View>: View {
     let scale: CGFloat
     let naturalSize: CGSize
     let visibleHeight: CGFloat
     let scrolls: Bool
     let isTrailing: Bool
+    /// L'aperçu porte une zone de lecture (#11339) : son contenu reçoit les
+    /// touchers, que le masque de l'aperçu trie. Sinon, une image inerte.
+    var interactive: Bool = false
     @ViewBuilder let content: Content
 
     private static var fadeHeight: CGFloat { 24 }
@@ -229,7 +322,7 @@ struct MessageOverlayPreviewViewport<Content: View>: View {
         let alignment: Alignment = isTrailing ? .topTrailing : .topLeading
         let anchor: UnitPoint = isTrailing ? .topTrailing : .topLeading
         let scaled = content
-            .allowsHitTesting(false)
+            .allowsHitTesting(interactive)
             .scaleEffect(scale, anchor: anchor)
             .frame(width: width, height: naturalSize.height * scale, alignment: alignment)
         if scrolls {

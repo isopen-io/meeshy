@@ -70,7 +70,7 @@ final class FocalQuotedReplyRichTests: XCTestCase {
     }
 
     private func quotedReplySource() throws -> String {
-        try source("Meeshy/Features/Main/Focal/Row/FocalQuotedReplyView.swift")
+        try source("Meeshy/Features/Focal/Row/FocalQuotedReplyView.swift")
     }
 
     /// ANCRE POSITIVE — à passer AVANT tout comptage ou toute assertion
@@ -459,7 +459,7 @@ final class FocalQuotedReplyRichTests: XCTestCase {
     // MARK: - Câblage jusqu'à la rangée
 
     func test_focalRow_passesTheMediaCallbackToTheQuotedReplyView() throws {
-        let code = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let code = try source("Meeshy/Features/Focal/Row/FocalRow.swift")
         XCTAssertTrue(
             code.contains("onQuotedMediaTap: actions.onQuotedMediaTap"),
             "FocalRow doit transmettre onQuotedMediaTap — sans ce fil, la vignette est décorative."
@@ -482,14 +482,14 @@ final class FocalQuotedReplyRichTests: XCTestCase {
     /// « Un écart NON DIT est un défaut » : celui-ci était non dit parce que
     /// la peau concernée porte le nom de l'AUTRE mode.
     func test_loiDesZones_laCitationHebergeeParLAudio_recoitAussiSesDeuxZones() throws {
-        let row = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let row = try source("Meeshy/Features/Focal/Row/FocalRow.swift")
         XCTAssertTrue(
             row.contains("onQuotedAuthorTap: actions.onQuotedAuthorTap")
                 && row.contains("onQuotedMediaTap: actions.onQuotedMediaTap"),
             "FocalRow doit transmettre les deux zones à FocalAudioBlock AUSSI — sans quoi la citation d'un " +
             "message vocal reste la seule du mode à n'offrir ni avatar ni zone média."
         )
-        let block = try source("Meeshy/Features/Main/Focal/Row/FocalAudioBlock.swift")
+        let block = try source("Meeshy/Features/Focal/Row/FocalAudioBlock.swift")
         XCTAssertTrue(
             block.contains("var onQuotedAuthorTap: ((ReplyReference) -> Void)? = nil")
                 && block.contains("var onQuotedMediaTap: ((ReplyReference) -> Void)? = nil"),
@@ -534,7 +534,7 @@ final class FocalQuotedReplyRichTests: XCTestCase {
     /// explicitement, sinon la fiche lui reste inaccessible »). Le lot du
     /// 2026-08-24 avait copié l'idiome du TRAIT et laissé l'ACTION derrière lui.
     func test_loiDesZones_lesDeuxZonesSontOffertesAVoiceOver_surLaRangee() throws {
-        let row = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let row = try source("Meeshy/Features/Focal/Row/FocalRow.swift")
         XCTAssertTrue(
             row.contains(".accessibilityActions {"),
             "la rangée doit offrir les zones de la citation en actions NOMMÉES : son `children: .combine` + " +

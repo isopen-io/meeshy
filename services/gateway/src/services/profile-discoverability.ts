@@ -27,6 +27,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { loadPrivacyPreferencesCached } from './preferences/privacy-cache';
+import { amisAcceptesParmi } from './friendship';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'ProfileDiscoverability' });
@@ -41,7 +42,7 @@ export function isDiscoverableBy(facts: DiscoverabilityFacts): boolean {
   return facts.isSelf || facts.areFriends || !facts.hidesFromSearch;
 }
 
-type DiscoverabilityPrisma = Pick<PrismaClient, 'userPreferences' | 'userPreference' | 'friendRequest'>;
+type DiscoverabilityPrisma = Pick<PrismaClient, 'userPreferences' | 'userPreference' | 'friendRequest' | 'userRelation'>;
 
 async function acceptedFriendsAmong(
   prisma: DiscoverabilityPrisma,
@@ -49,17 +50,7 @@ async function acceptedFriendsAmong(
   candidateIds: readonly string[]
 ): Promise<ReadonlySet<string>> {
   if (!viewerId || candidateIds.length === 0) return new Set();
-  const rows = await prisma.friendRequest.findMany({
-    where: {
-      status: 'accepted',
-      OR: [
-        { senderId: viewerId, receiverId: { in: [...candidateIds] } },
-        { senderId: { in: [...candidateIds] }, receiverId: viewerId },
-      ],
-    },
-    select: { senderId: true, receiverId: true },
-  });
-  return new Set(rows.map((row) => (row.senderId === viewerId ? row.receiverId : row.senderId)));
+  return amisAcceptesParmi(prisma, viewerId, candidateIds);
 }
 
 /**

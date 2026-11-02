@@ -40,6 +40,7 @@ const en = {
   'listFilter.pinned': 'Pinned',
   'listFilter.archived': 'Archived',
   'listRow.muted': 'Muted',
+  'listRow.endToEnd': 'End-to-end encrypted',
   'listRow.announce.pin.on': 'Conversation pinned',
   'listRow.announce.pin.off': 'Conversation unpinned',
   'listRow.announce.mute.on': 'Conversation muted',

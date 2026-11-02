@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_network_title">Quality and network</string>
+    <string name="call_network_timeline">Timeline</string>
+    <string name="call_network_packet_loss">Packet loss</string>
+    <string name="call_network_latency">Latency</string>
+    <string name="call_network_jitter">Jitter</string>
+    <string name="call_network_reconnections">Reconnections</string>
+    <string name="call_network_route">Network path</string>
+    <string name="call_network_route_relayed">Relay</string>
+    <string name="call_network_route_direct">Direct</string>
+    <string name="call_network_profiles">Data profile</string>
+    <string name="call_network_faults">Media incidents</string>
+    <string name="call_network_peak">%1$s (peak %2$s)</string>
+    <string name="call_network_ms">%1$s ms</string>
+    <string name="call_network_event_link_connecting">Connecting link</string>
+    <string name="call_network_event_link_connected">Link established</string>
+    <string name="call_network_event_link_disconnected">Link interrupted</string>
+    <string name="call_network_event_link_failed">Link lost</string>
+    <string name="call_network_event_reconnecting">Reconnecting, attempt %1$d</string>
+    <string name="call_network_event_reconnected">Reconnected</string>
+    <string name="call_network_event_route">Path: %1$s</string>
+    <string name="call_network_event_tier">Quality: %1$s</string>
+    <string name="call_network_event_profile">Profile: %1$s</string>
+    <string name="call_network_event_fault">Media incident</string>
+    <string name="call_network_event_ended">Call ended</string>
+    <string name="call_network_tier_excellent">Excellent</string>
+    <string name="call_network_tier_good">Good</string>
+    <string name="call_network_tier_fair">Fair</string>
+    <string name="call_network_tier_poor">Poor</string>
+    <string name="call_transcript_disclaimer">Encrypted copy kept on this device. The call\'s transcript is also stored on the Meeshy server, readable only by the call\'s participants. It includes what the other person said, as received during the call.</string>
+    <string name="call_transcript_delete">Delete this transcript</string>
+    <string name="call_transcript_delete_confirm_title">Delete this transcript?</string>
+    <string name="call_transcript_delete_confirm_message">It is removed from this device for good. The transcript kept on the server is not erased.</string>
+</resources>

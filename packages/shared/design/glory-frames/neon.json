@@ -41,6 +41,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM190 528h700v1h4v1h2v1h2v1h3v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v3h1v2h1v5h1v863h-1v4h-1v2h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-3v1h-2v1h-4v1h-700v-1h-4v-1h-2v-1h-3v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-2h-1v-4h-1v-863h1v-5h1v-2h1v-3h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h3v-1h2v-1h2v-1h4ZM198 530v1h-8v1h-4v1h-2v1h-2v1h-1v1h-2v1h-1v1h-1v1h-1v1h-1v2h-1v2h-1v2h-1v4h-1v8h-1v848h1v8h1v4h1v2h1v2h1v1h1v2h1v1h1v1h1v1h1v1h2v1h2v1h2v1h4v1h8v1h684v-1h8v-1h4v-1h2v-1h2v-1h2v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-2h1v-2h1v-4h1v-8h1v-848h-1v-8h-1v-4h-1v-2h-1v-2h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-2v-1h-3v-1h-3v-1h-8v-1ZM192 534h696v1h4v1h2v1h2v1h2v1h1v1h1v1h1v2h1v1h1v2h1v2h1v4h1v860h-1v4h-1v2h-1v2h-1v1h-1v2h-1v1h-1v1h-2v1h-1v1h-2v1h-3v1h-4v1h-694v-1h-5v-1h-2v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-4h-1v-860h1v-4h1v-2h1v-2h1v-1h1v-2h1v-1h1v-1h1v-1h2v-1h2v-1h2v-1h4ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "95aa6f824b9cb703.webp",
               "bytes": 730,
@@ -356,27 +357,46 @@
                 "mee": {
                   "sticker": "mee-sourire",
                   "box": [
-                    52,
-                    1276,
+                    6.4,
+                    1350.2,
                     264,
                     264
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-cool",
                   "box": [
-                    764,
-                    1276,
+                    790.8,
+                    1345.6,
                     264,
                     264
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 117,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -431,6 +451,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM190 524h699v1h4v1h2v1h2v1h2v1h1v1h1v1h1v1h1v1h1v2h1v2h1v2h1v4h1v870h-1v4h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-2v1h-4v1h-698v-1h-4v-1h-2v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-4h-1v-870h1v-4h1v-2h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h5ZM192 527v1h-4v1h-2v1h-2v1h-1v1h-1v1h-2v2h-1v1h-1v2h-1v2h-1v4h-1v868h1v4h1v2h1v2h1v1h1v2h2v1h1v1h1v1h2v1h2v1h4v1h696v-1h4v-1h2v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-2h1v-4h1v-868h-1v-4h-1v-2h-1v-2h-1v-1h-1v-2h-2v-1h-1v-1h-1v-1h-2v-1h-2v-1h-4v-1ZM196 529h688v1h5v1h2v1h3v1h1v1h1v1h1v1h1v1h1v2h1v2h1v3h1v6h1v856h-1v6h-1v3h-1v3h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-3v1h-3v1h-6v1h-684v-1h-6v-1h-3v-1h-3v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-4h-1v-6h-1v-856h1v-6h1v-3h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h3v-1h2v-1h5ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "ae01871e2443e920.webp",
               "bytes": 708,
@@ -945,14 +966,20 @@
                 "mee": {
                   "sticker": "mee-coucou",
                   "box": [
-                    28,
+                    16,
                     1384,
                     224,
                     224
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-salut",
@@ -964,8 +991,21 @@
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "ruban": {
+                "overlap": 23,
+                "depth": 4,
+                "face": 0
               }
             }
           },
@@ -1020,6 +1060,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM187 524h706v1h4v1h2v1h2v1h2v1h1v1h1v1h1v1h1v1h1v2h1v2h1v2h1v4h1v874h-1v4h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-2v1h-4v1h-706v-1h-4v-1h-2v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-4h-1v-874h1v-4h1v-2h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h2v-1h2v-1h4ZM189 529v1h-3v1h-3v1h-2v1h-1v1h-1v1h-1v1h-1v1h-1v2h-1v2h-1v4h-1v870h1v4h1v2h1v2h1v1h1v1h1v1h1v1h1v1h2v1h3v1h3v1h702v-1h3v-1h3v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-2h1v-4h1v-870h-1v-4h-1v-2h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-3v-1h-3v-1ZM191 531h698v1h4v1h3v1h1v1h2v1h1v1h1v2h1v2h1v2h1v4h1v866h-1v4h-1v2h-1v2h-1v1h-1v2h-2v1h-1v1h-1v1h-3v1h-5v1h-696v-1h-5v-1h-3v-1h-1v-1h-1v-1h-2v-2h-1v-1h-1v-2h-1v-2h-1v-4h-1v-866h1v-4h1v-2h1v-2h1v-2h1v-1h1v-1h2v-1h1v-1h3v-1h4ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "0b1f05a5758b4593.webp",
               "bytes": 700,
@@ -1309,27 +1350,46 @@
                 "mee": {
                   "sticker": "mee-bravo",
                   "box": [
-                    52,
-                    1268,
+                    -1.6,
+                    1391.4,
                     272,
                     272
                   ],
                   "rotate": -4,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0411,
+                    0,
+                    0.9179,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-bravo",
                   "box": [
-                    756,
-                    1268,
+                    799,
+                    1365.8,
                     272,
                     272
                   ],
                   "rotate": 4,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0325,
+                    0,
+                    0.9349,
+                    1
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 107,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -1384,6 +1444,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM188 536h704v1h5v1h1v1h2v1h1v1h1v1h1v1h1v1h1v2h1v2h1v3h1v866h-1v3h-1v2h-1v1h-1v2h-1v1h-1v1h-1v1h-2v1h-1v1h-2v1h-3v1h-706v-1h-3v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-3h-1v-866h1v-3h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h5ZM190 541v1h-3v1h-2v1h-1v1h-1v1h-2v2h-1v1h-1v3h-1v3h-1v858h1v3h1v3h1v1h1v1h1v1h1v1h1v1h1v1h3v1h3v1h698v-1h4v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-2h1v-3h1v-858h-1v-3h-1v-3h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-4v-1ZM195 543h690v1h5v1h2v1h2v1h1v1h1v1h1v1h1v1h1v3h1v6h1v848h-1v6h-1v3h-1v1h-1v2h-1v1h-2v1h-1v1h-3v1h-3v1h-692v-1h-5v-1h-3v-1h-1v-1h-2v-2h-1v-1h-1v-2h-1v-2h-1v-5h-1v-851h1v-4h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h2v-1h2v-1h5ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "f7f6b16dc63537ed.webp",
               "bytes": 700,
@@ -1730,27 +1791,46 @@
                 "mee": {
                   "sticker": "mee-wow",
                   "box": [
-                    62,
-                    1278,
+                    4.8,
+                    1404.4,
                     252,
                     252
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-roi",
                   "box": [
-                    766,
-                    1278,
+                    809.6,
+                    1353.8,
                     252,
                     252
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0125,
+                    1,
+                    0.975
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 157,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -1805,6 +1885,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM195 532h690v1h4v1h2v1h2v1h2v1h1v1h1v1h1v1h1v1h1v2h1v2h1v2h1v4h1v862h-1v4h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-2v1h-4v1h-690v-1h-4v-1h-2v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-4h-1v-862h1v-4h1v-2h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h2v-1h2v-1h4ZM196 537v1h-3v1h-2v1h-2v1h-1v1h-2v2h-1v1h-1v1h-1v3h-1v3h-1v860h1v3h1v2h1v2h1v1h1v2h2v1h1v1h2v1h2v1h3v1h688v-1h3v-1h2v-1h2v-1h1v-1h2v-2h1v-1h1v-2h1v-2h1v-3h1v-860h-1v-3h-1v-3h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-2v-1h-3v-1ZM201 539h678v1h6v1h2v1h2v1h1v1h1v1h1v1h1v1h1v2h1v3h1v6h1v848h-1v6h-1v3h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-6v1h-678v-1h-6v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-3h-1v-6h-1v-848h1v-6h1v-3h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h2v-1h6ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "cf74af83f7c4ef73.webp",
               "bytes": 692,
@@ -2151,27 +2232,46 @@
                 "mee": {
                   "sticker": "mee-fete",
                   "box": [
-                    50,
-                    1266,
+                    19.6,
+                    1334.8,
                     268,
                     268
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0219,
+                    0,
+                    0.9562,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-champagne",
                   "box": [
-                    762,
-                    1266,
+                    801.4,
+                    1360.8,
                     268,
                     268
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0758,
+                    1,
+                    0.8484
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 126,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -2226,6 +2326,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM191 532h698v1h4v1h2v1h2v1h2v1h1v1h1v1h1v1h1v1h1v2h1v2h1v2h1v4h1v700h-2v-692h-1v-8h-1v-3h-1v-2h-1v-2h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-3v-1h-2v-1h-3v-1h-8v-1h-682v1h-8v1h-3v1h-2v1h-3v1h-1v1h-1v1h-1v1h-1v2h-1v2h-1v2h-1v3h-1v8h-1v692h-2v-700h1v-4h1v-2h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h2v-1h2v-1h4ZM192 538h696v1h3v1h2v1h2v1h1v1h1v1h1v1h1v2h1v2h1v4h1v698h-30v1h-3v1h-1v1h-1v1h-1v1h-1v1h-1v3h-1v162h-646v-162h-1v-3h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-3v-1h-30v-698h1v-4h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h2v-1h2v-1h3ZM217 1426h646v2h-646ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "e273d73d16f69358.webp",
               "bytes": 644,
@@ -2572,27 +2673,46 @@
                 "mee": {
                   "sticker": "mee-bisou-vole",
                   "box": [
-                    24,
-                    1084,
-                    232,
-                    232
+                    7.87,
+                    1132.27,
+                    191.86,
+                    191.86
                   ],
                   "rotate": -8,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0824,
+                    1,
+                    0.8352
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-feu-artifice",
                   "box": [
-                    824,
-                    1084,
-                    232,
-                    232
+                    867.56,
+                    1148.16,
+                    218.08,
+                    218.08
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "libre": {
+                "overlap": 46,
+                "depth": 3,
+                "face": 0
               }
             }
           },
@@ -2647,6 +2767,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM188 532h703v1h6v1h1v1h2v1h1v1h1v1h1v1h1v1h1v3h1v1h1v4h1v865h-1v3h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-3v1h-706v-1h-3v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-3h-1v-865h1v-4h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h5ZM197 536v1h-7v1h-3v1h-2v1h-2v1h-1v1h-1v2h-1v1h-1v2h-1v4h-1v858h1v3h1v3h1v1h1v1h1v1h1v1h1v1h1v1h3v1h3v1h698v-1h3v-1h3v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-2h1v-3h1v-860h-1v-2h-1v-2h-1v-1h-1v-2h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v1h-1v-1h-5v-1h-1v1h-4v-1h-2v1h-6v-1h-2v1h-5v-1h-2v1h-2v-1h-1v1h-3v-1h-2v1h-6v-1h-1v1h-5v-1h-1v1h-2v-1h-1v1h-7v-1h-2v1h-4v-1h-1v1h-2v-1h-2v1h-5v-1h-2v1h-8v-1h-3v1h-4v-1h-1v1h-1v-1h-1v1h-5v-1h-2v1h-5v-1h-2v1h-3v-1h-1v1h-5v-1h-1v1h-5v-1h-1v1h-3v-1h-2v1h-3v-1h-1v1h-5v-1h-1v1h-6v-1h-2v1h-8v-1h-1v1h-2v-1h-1v1h-4v-1h-1v1h-4v-1h-1v1h-2v-1h-1v1h-8v-1h-1v1h-7v-1h-1v1h-4v-1h-1v1h-4v-1h-1v1h-2v-1h-1v1h-7v-1h-2v1h-2v-1h-1v1h-7v-1h-2v1h-1v-1h-2v1h-4v-1h-1v1h-8v-1h-1v1h-6v-1h-2v1h-6v-1h-1v1h-1v-1h-1v1h-6v-1h-2v1h-1v-1h-1v1h-9v-1h-1v1h-8v-1h-2v1h-7v-1h-1v1h-2v-1h-1v1h-8v-1h-4v1h-3v-1h-2v1h-2v-1h-2v1h-6v-1h-1v1h-5v-1h-2v1h-6v-1h-1v1h-4v-1h-1v1h-3v-1h-2v1h-2v-1h-1v1h-7v-1h-1v1h-3v-1h-2v1h-8v-1h-2v1h-9v-1h-1v1h-3v-1h-2v1h-2v-1h-1v1h-5v-1h-2v1h-3v-1h-2v1h-4v-1h-1v1h-6v-1h-2v1h-4v-1h-1v1h-2v-1h-2v1h-4v-1h-1v1h-3v-1h-1v1h-2v-1h-2v1h-5v-1h-1v1h-8v-1h-1v1h-3v-1h-2v1h-5v-1h-1v1h-5v-1h-1v1h-6v-1h-2v1h-3v-1h-2v1h-3v-1h-2v1h-6v-1h-1v1h-6v-1h-1v1h-4v-1h-2v1h-6v-1h-1v1h-5v-1h-1v1h-4v-1h-1v1h-4v-1h-1v1h-5v-1h-1v1h-7v-1h-1v1h-4v-1h-2v1h-3v-1h-2v1h-4v-1h-2v1h-3v-1h-2v1h-5v-1h-1v1h-4v-1h-1v1h-6v-1h-1v1h-6v-1h-2v1h-4v-1h-1v1h-6v-1h-1v1h-1v-1h-1v1h-6v-1h-1v1h-5v-1h-1v1h-2v-1h-1v1h-6v-1h-2v1h-3v-1h-1v1h-6v-1h-1v1h-3v-1h-2v1h-2v-1h-2v1h-6v-1h-1v1h-2v-1h-2v1h-4v-1h-2v1h-2v-1h-1v1h-6v-1h-1v1h-1v-1h-2v1h-8v-1ZM198 539h9v1h1v-1h1v1h2v-1h5v1h2v-1h1v1h1v-1h5v1h2v-1h2v1h1v-1h7v1h1v-1h2v1h2v-1h3v1h1v-1h6v1h2v-1h2v1h2v-1h6v1h1v-1h1v1h2v-1h5v1h1v-1h6v1h1v-1h1v1h1v-1h6v1h1v-1h4v1h1v-1h7v1h1v-1h6v1h2v-1h10v1h1v-1h3v1h2v-1h5v1h1v-1h3v1h1v-1h4v1h2v-1h7v1h1v-1h5v1h2v-1h3v1h1v-1h4v1h1v-1h4v1h2v-1h7v1h1v-1h4v1h1v-1h6v1h2v-1h6v1h1v-1h4v1h1v-1h3v1h1v-1h7v1h1v-1h5v1h1v-1h5v1h2v-1h2v1h2v-1h8v1h1v-1h6v1h1v-1h3v1h1v-1h2v1h1v-1h4v1h1v-1h2v1h1v-1h5v1h1v-1h6v1h2v-1h5v1h1v-1h14v1h1v-1h3v1h1v-1h20v1h1v-1h11v1h1v-1h2v1h2v-1h8v1h1v-1h6v1h1v-1h6v1h1v-1h7v1h2v-1h2v1h1v-1h3v1h1v-1h13v1h2v-1h8v1h1v-1h8v1h1v-1h11v1h1v-1h7v1h2v-1h7v1h1v-1h7v1h1v-1h14v1h1v-1h1v1h1v-1h8v1h2v-1h10v1h1v-1h1v1h2v-1h4v1h1v-1h3v1h2v-1h7v1h1v-1h11v1h1v-1h4v1h1v-1h3v1h2v-1h11v1h2v-1h6v1h1v-1h6v1h1v-1h7v1h1v-1h5v1h1v-1h5v1h1v-1h3v1h2v-1h5v1h2v-1h5v1h1v-1h1v1h1v-1h4v1h1v-1h10v1h1v-1h6v1h2v-1h1v1h2v-1h4v1h2v-1h7v1h1v-1h2v1h1v-1h5v1h1v-1h7v1h2v-1h2v1h1v-1h1v1h2v-1h6v1h2v-1h7v1h1v-1h3v1h6v1h3v1h2v1h1v1h1v1h1v1h1v2h1v2h1v5h1v850h-1v5h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-3v1h-5v1h-690v-1h-5v-1h-3v-1h-1v-1h-2v-2h-1v-1h-1v-1h-1v-3h-1v-4h-1v-851h1v-5h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h2v-1h3v-1h7ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "704d4084b0de3f55.webp",
               "bytes": 856,
@@ -2993,27 +3114,46 @@
                 "mee": {
                   "sticker": "mee-courage",
                   "box": [
-                    56,
-                    1276,
+                    -14.8,
+                    1402.8,
                     256,
                     256
                   ],
                   "rotate": -4,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0932,
+                    0,
+                    0.8136,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-serenade",
                   "box": [
-                    772,
-                    1284,
+                    807.8,
+                    1371.6,
                     248,
                     248
                   ],
                   "rotate": 4,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.075,
+                    0,
+                    0.85,
+                    1
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 67,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -3066,6 +3206,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM191 532h275v2h-267v1h-8v1h-3v1h-2v1h-3v1h-1v1h-1v1h-1v1h-1v2h-1v2h-1v2h-1v3h-1v8h-1v842h1v8h1v3h1v3h1v1h1v2h1v1h1v1h1v1h2v1h2v1h2v1h4v1h7v1h682v-1h7v-1h4v-1h2v-1h2v-1h2v-1h1v-1h1v-1h1v-2h1v-2h1v-2h1v-3h1v-8h1v-842h-1v-8h-1v-3h-1v-2h-1v-2h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-3v-1h-2v-1h-3v-1h-8v-1h-267v-2h275v1h4v1h2v1h2v1h2v1h1v1h1v1h1v1h1v1h1v2h1v2h1v2h1v4h1v858h-1v4h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-2v1h-4v1h-698v-1h-4v-1h-2v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-4h-1v-858h1v-4h1v-2h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h2v-1h2v-1h4ZM467 532h11v1h-4v1h-7ZM482 532h116v1h4v1h-124v-1h4ZM602 532h11v2h-7v-1h-4ZM192 538h696v1h3v1h2v1h2v1h1v1h1v1h1v1h1v2h1v2h1v3h1v856h-1v3h-1v2h-1v1h-1v2h-1v1h-1v1h-1v1h-2v1h-2v1h-3v1h-696v-1h-3v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-3h-1v-855h1v-4h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h2v-1h2v-1h3ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "72f87b91df9d6492.webp",
               "bytes": 720,
@@ -3414,7 +3555,8 @@
                 46
               ],
               "contrast": 12.13,
-              "sample": "ON AIR"
+              "sample": "ON AIR",
+              "i18n": "game.frame.decor.on-air"
             },
             "decor.9": {
               "x": 950,
@@ -3665,27 +3807,46 @@
                 "mee": {
                   "sticker": "mee-danse",
                   "box": [
-                    58,
-                    1278,
+                    6.2,
+                    1401.8,
                     260,
                     260
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0583,
+                    1,
+                    0.8833
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-yo",
                   "box": [
                     762,
-                    1278,
+                    1370,
                     260,
                     260
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0789,
+                    1,
+                    0.8423
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 42,
+                "depth": 4,
+                "face": 0
               }
             }
           },
@@ -3740,6 +3901,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM191 532h698v1h4v1h2v1h2v1h2v1h1v1h1v1h1v1h1v1h1v2h1v2h1v2h1v4h1v858h-1v4h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-2v1h-4v1h-698v-1h-4v-1h-2v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-4h-1v-858h1v-4h1v-2h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h2v-1h2v-1h4ZM192 535v1h-4v1h-2v1h-2v1h-1v1h-1v1h-2v2h-1v1h-1v2h-1v2h-1v4h-1v856h1v4h1v2h1v2h1v1h1v2h2v1h1v1h1v1h2v1h2v1h4v1h696v-1h4v-1h2v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-2h1v-4h1v-856h-1v-4h-1v-2h-1v-2h-1v-1h-1v-2h-2v-1h-1v-1h-1v-1h-2v-1h-2v-1h-4v-1ZM196 537h688v1h5v1h2v1h3v1h1v1h1v1h1v1h1v1h1v2h1v2h1v3h1v6h1v844h-1v6h-1v3h-1v3h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-3v1h-3v1h-6v1h-684v-1h-6v-1h-3v-1h-3v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-3h-1v-7h-1v-845h1v-5h1v-3h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h3v-1h2v-1h5ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "4da5b71e35b09503.webp",
               "bytes": 706,
@@ -3919,7 +4081,8 @@
                 18
               ],
               "contrast": 10.16,
-              "sample": "PLÉIADES"
+              "sample": "PLÉIADES",
+              "i18n": "game.frame.decor.pleiades"
             },
             "decor.4": {
               "x": 540,
@@ -3947,7 +4110,8 @@
                 18
               ],
               "contrast": 8.64,
-              "sample": "AR 04h 47m · DÉC +22°"
+              "sample": "AR 04h 47m · DÉC +22°",
+              "i18n": "game.frame.decor.pleiades-coordinates"
             },
             "decor.5": {
               "x": 92,
@@ -3975,7 +4139,8 @@
                 18
               ],
               "contrast": 15.84,
-              "sample": "FLOCON"
+              "sample": "FLOCON",
+              "i18n": "game.frame.decor.snowflake"
             },
             "decor.6": {
               "x": 92,
@@ -4031,7 +4196,8 @@
                 18
               ],
               "contrast": 9.5,
-              "sample": "QUARTZ"
+              "sample": "QUARTZ",
+              "i18n": "game.frame.decor.quartz"
             },
             "decor.8": {
               "x": 988,
@@ -4254,26 +4420,45 @@
                   "sticker": "mee-montee-au-ciel",
                   "box": [
                     58,
-                    1278,
+                    1410,
                     260,
                     260
                   ],
                   "rotate": -4,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0105,
+                    0,
+                    0.9789,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-love",
                   "box": [
                     762,
-                    1278,
+                    1406,
                     260,
                     260
                   ],
                   "rotate": 4,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0192,
+                    1,
+                    0.9617
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 139,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -4328,6 +4513,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM191 532h698v1h4v1h2v1h2v1h2v1h1v1h1v1h1v1h1v1h1v2h1v2h1v2h1v4h1v858h-1v4h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-2v1h-4v1h-698v-1h-4v-1h-2v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-4h-1v-858h1v-4h1v-2h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h2v-1h2v-1h4ZM192 535v1h-4v1h-2v1h-2v1h-1v1h-1v1h-2v2h-1v1h-1v2h-1v2h-1v4h-1v856h1v4h1v2h1v2h1v1h1v1h1v1h1v1h1v1h1v1h2v1h2v1h4v1h696v-1h4v-1h2v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-2h1v-4h1v-856h-1v-4h-1v-2h-1v-2h-1v-1h-1v-2h-2v-1h-1v-1h-1v-1h-2v-1h-2v-1h-4v-1ZM196 537h688v1h5v1h2v1h3v1h1v1h1v1h1v1h1v1h1v2h1v2h1v3h1v6h1v844h-1v6h-1v3h-1v3h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-3v1h-3v1h-6v1h-684v-1h-6v-1h-3v-1h-3v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-3h-1v-7h-1v-845h1v-5h1v-3h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h3v-1h2v-1h5ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "f4f678155b5b5e6d.webp",
               "bytes": 708,
@@ -4451,7 +4637,8 @@
                 18
               ],
               "contrast": 17.11,
-              "sample": "POLLEN"
+              "sample": "POLLEN",
+              "i18n": "game.frame.decor.pollen"
             },
             "decor.2": {
               "x": 92,
@@ -4507,7 +4694,8 @@
                 18
               ],
               "contrast": 17.31,
-              "sample": "CELLULE"
+              "sample": "CELLULE",
+              "i18n": "game.frame.decor.cell"
             },
             "decor.4": {
               "x": 988,
@@ -4780,8 +4968,122 @@
             }
           },
           "birds": {
-            "default": "selfie",
+            "default": "pied",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    46,
+                    1390,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    734,
+                    1350,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    -34.8,
+                    745.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    888.2,
+                    822.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
               "selfie": {
                 "pair": {
                   "sticker": "duo-meo-selfie",
@@ -4793,8 +5095,36 @@
                   ],
                   "rotate": 0,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.165,
+                    1,
+                    0.67
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 60,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 77,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 2103,
+                "depth": 46,
+                "face": 0
               }
             }
           },
@@ -4849,6 +5179,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM191 532h698v1h4v1h2v1h2v1h2v1h1v1h1v1h1v1h1v1h1v2h1v2h1v2h1v4h1v858h-1v4h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-2v1h-4v1h-698v-1h-4v-1h-2v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-4h-1v-858h1v-4h1v-2h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h2v-1h2v-1h4ZM192 535v1h-4v1h-2v1h-2v1h-1v1h-1v1h-2v2h-1v1h-1v2h-1v2h-1v4h-1v856h1v4h1v2h1v2h1v1h1v2h2v1h1v1h1v1h2v1h2v1h4v1h696v-1h4v-1h2v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-2h1v-4h1v-856h-1v-4h-1v-2h-1v-2h-1v-1h-1v-2h-2v-1h-1v-1h-1v-1h-2v-1h-2v-1h-4v-1ZM196 537h688v1h5v1h2v1h3v1h1v1h1v1h1v1h1v1h1v2h1v2h1v3h1v6h1v844h-1v6h-1v3h-1v3h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-3v1h-3v1h-6v1h-684v-1h-6v-1h-3v-1h-3v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-4h-1v-6h-1v-844h1v-6h1v-3h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h3v-1h2v-1h5ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "4786f03333ee7be0.webp",
               "bytes": 706,
@@ -4972,7 +5303,8 @@
                 18
               ],
               "contrast": 13.14,
-              "sample": "SILICIUM"
+              "sample": "SILICIUM",
+              "i18n": "game.frame.decor.silicon"
             },
             "decor.2": {
               "x": 92,
@@ -5028,7 +5360,8 @@
                 18
               ],
               "contrast": 12.38,
-              "sample": "TRANSISTOR"
+              "sample": "TRANSISTOR",
+              "i18n": "game.frame.decor.transistor"
             },
             "decor.4": {
               "x": 988,
@@ -5308,26 +5641,45 @@
                   "sticker": "mee-amoureuse",
                   "box": [
                     56,
-                    1280,
+                    1396,
                     256,
                     256
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0789,
+                    1,
+                    0.8421
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-salut",
                   "box": [
-                    768,
-                    1280,
+                    773.6,
+                    1353.6,
                     256,
                     256
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 152,
+                "depth": 4,
+                "face": 0
               }
             }
           },
@@ -5382,6 +5734,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM202 537h676v1h7v1h3v1h3v1h1v1h2v1h1v1h1v1h1v1h1v1h1v2h1v2h1v4h1v7h1v840h-1v7h-1v3h-1v3h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-3v1h-8v1h-676v-1h-8v-1h-3v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-3h-1v-3h-1v-7h-1v-840h1v-7h1v-4h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h2v-1h4v-1h7ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "9b8cfe2d18dd33a7.webp",
               "bytes": 606,
@@ -5617,7 +5970,8 @@
                 18
               ],
               "contrast": 10.89,
-              "sample": "GALAXIE"
+              "sample": "GALAXIE",
+              "i18n": "game.frame.decor.galaxy"
             },
             "decor.6": {
               "x": 992,
@@ -5645,7 +5999,8 @@
                 18
               ],
               "contrast": 11.03,
-              "sample": "NÉBULEUSE"
+              "sample": "NÉBULEUSE",
+              "i18n": "game.frame.decor.nebula"
             },
             "decor.7": {
               "x": 992,
@@ -5673,7 +6028,8 @@
                 18
               ],
               "contrast": 11.04,
-              "sample": "AMAS"
+              "sample": "AMAS",
+              "i18n": "game.frame.decor.cluster"
             },
             "decor.8": {
               "x": 300,
@@ -5895,27 +6251,46 @@
                 "mee": {
                   "sticker": "mee-jackpot",
                   "box": [
-                    58,
-                    1278,
+                    22.2,
+                    1365.6,
                     260,
                     260
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0746,
+                    1,
+                    0.8507
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-muscles",
                   "box": [
-                    762,
-                    1278,
+                    823.4,
+                    1318.4,
                     260,
                     260
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.073,
+                    0,
+                    0.8541,
+                    1
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 82,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -5970,6 +6345,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM206 541h668v1h7v1h3v1h3v1h1v1h2v1h1v1h1v1h1v1h1v1h1v2h1v2h1v4h1v7h1v836h-1v7h-1v3h-1v3h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-3v1h-8v1h-668v-1h-8v-1h-3v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-3h-1v-3h-1v-7h-1v-836h1v-7h1v-4h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h3v-1h3v-1h7ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "3f6a5b748e917e47.webp",
               "bytes": 602,
@@ -6080,7 +6456,8 @@
                 18
               ],
               "contrast": 6.54,
-              "sample": "ADN · 2 nm"
+              "sample": "ADN · 2 nm",
+              "i18n": "game.frame.decor.dna-scale"
             },
             "decor.2": {
               "x": 992,
@@ -6108,7 +6485,8 @@
                 18
               ],
               "contrast": 10.6,
-              "sample": "ADN · 2 nm"
+              "sample": "ADN · 2 nm",
+              "i18n": "game.frame.decor.dna-scale"
             },
             "decor.3": {
               "x": 540,
@@ -6136,7 +6514,8 @@
                 18
               ],
               "contrast": 8.55,
-              "sample": "GALAXIE · 100 000 ANNÉES-LUMIÈRE"
+              "sample": "GALAXIE · 100 000 ANNÉES-LUMIÈRE",
+              "i18n": "game.frame.decor.galaxy-scale"
             },
             "kicker": {
               "x": 540,
@@ -6383,19 +6762,186 @@
           "birds": {
             "default": "duo",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    46,
+                    1394,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    734,
+                    1378,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    -34.8,
+                    745.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    885.2,
+                    825.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
               "duo": {
                 "pair": {
                   "sticker": "duo-main-dans-la-main",
                   "box": [
-                    730,
-                    1230,
+                    764,
+                    1298,
                     300,
                     300
                   ],
                   "rotate": 0,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.125,
+                    1,
+                    0.75
+                  ]
                 }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 60,
+                "depth": 5,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 45,
+                "depth": 3,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 38,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 10578,
+                "depth": 116,
+                "face": 0
               }
             }
           },
@@ -6450,6 +6996,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM206 541h668v1h7v1h3v1h3v1h1v1h2v1h1v1h1v1h1v1h1v1h1v2h1v2h1v4h1v7h1v836h-1v7h-1v3h-1v3h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-3v1h-8v1h-668v-1h-8v-1h-3v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-3h-1v-3h-1v-7h-1v-836h1v-7h1v-4h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h2v-1h4v-1h7ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "ffed283d0285b4ca.webp",
               "bytes": 602,
@@ -6573,7 +7120,8 @@
                 18
               ],
               "contrast": 1.07,
-              "sample": "NEURONE · 0,1 mm"
+              "sample": "NEURONE · 0,1 mm",
+              "i18n": "game.frame.decor.neuron-scale"
             },
             "decor.2": {
               "x": 540,
@@ -6601,7 +7149,8 @@
                 18
               ],
               "contrast": 2.68,
-              "sample": "SUPERNOVA · 10 ANNÉES-LUMIÈRE"
+              "sample": "SUPERNOVA · 10 ANNÉES-LUMIÈRE",
+              "i18n": "game.frame.decor.supernova-scale"
             },
             "kicker": {
               "x": 540,
@@ -6852,27 +7401,46 @@
                 "mee": {
                   "sticker": "mee-wow",
                   "box": [
-                    62,
-                    1286,
+                    10.2,
+                    1405.8,
                     252,
                     252
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-bravo",
                   "box": [
-                    766,
-                    1286,
+                    801.8,
+                    1369.6,
                     252,
                     252
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0325,
+                    0,
+                    0.9349,
+                    1
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 89,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -6927,6 +7495,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM206 545h668v1h7v1h4v1h2v1h1v1h2v1h1v1h1v1h1v1h1v1h1v2h1v2h1v4h1v7h1v832h-1v7h-1v3h-1v3h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-3v1h-8v1h-668v-1h-8v-1h-3v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-3h-1v-3h-1v-7h-1v-833h1v-6h1v-4h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h2v-1h4v-1h7ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "d613bf388765f6be.webp",
               "bytes": 606,
@@ -7106,7 +7675,8 @@
                 23
               ],
               "contrast": 11.53,
-              "sample": "1024 m · amas"
+              "sample": "1024 m · amas",
+              "i18n": "game.frame.decor.cluster-scale"
             },
             "decor.4": {
               "x": 88,
@@ -7356,27 +7926,46 @@
                 "mee": {
                   "sticker": "mee-lettre",
                   "box": [
-                    62,
-                    1286,
+                    31.6,
+                    1358.8,
                     252,
                     252
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-trophee",
                   "box": [
-                    766,
-                    1286,
+                    817.8,
+                    1409.8,
                     252,
                     252
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.033,
+                    1,
+                    0.934
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 171,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -7431,6 +8020,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM207 550h666v1h4v1h2v1h3v1h1v1h1v1h2v1h1v1h1v1h1v2h1v1h1v2h1v3h1v4h1v830h-1v4h-1v2h-1v3h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-2v1h-1v1h-2v1h-3v1h-4v1h-666v-1h-4v-1h-3v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-3h-1v-2h-1v-4h-1v-830h1v-4h1v-2h1v-3h1v-1h1v-2h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h3v-1h2v-1h4ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "cd0101edcc6a3634.webp",
               "bytes": 608,
@@ -7554,7 +8144,8 @@
                 18
               ],
               "contrast": 9.79,
-              "sample": "ATOME"
+              "sample": "ATOME",
+              "i18n": "game.frame.decor.atom"
             },
             "decor.2": {
               "x": 100,
@@ -7610,7 +8201,8 @@
                 18
               ],
               "contrast": 17.59,
-              "sample": "NEURONE"
+              "sample": "NEURONE",
+              "i18n": "game.frame.decor.neuron"
             },
             "decor.4": {
               "x": 980,
@@ -7889,27 +8481,46 @@
                 "mee": {
                   "sticker": "mee-fete",
                   "box": [
-                    54,
-                    1278,
+                    30.8,
+                    1336.6,
                     260,
                     260
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0219,
+                    0,
+                    0.9562,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-roi",
                   "box": [
-                    766,
-                    1278,
+                    806,
+                    1346.6,
                     260,
                     260
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0125,
+                    1,
+                    0.975
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 151,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -7964,6 +8575,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM206 548h668v1h4v1h2v1h3v1h2v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v3h1v2h1v4h1v832h-1v4h-1v2h-1v3h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-2v1h-3v1h-4v1h-668v-1h-4v-1h-3v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-3h-1v-2h-1v-4h-1v-832h1v-4h1v-3h1v-2h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h3v-1h2v-1h4ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "41e3ec990df8803f.webp",
               "bytes": 614,
@@ -8143,7 +8755,8 @@
                 18
               ],
               "contrast": 1.67,
-              "sample": "SINGULARITÉ · HORIZON DES ÉVÉNEMENTS"
+              "sample": "SINGULARITÉ · HORIZON DES ÉVÉNEMENTS",
+              "i18n": "game.frame.decor.singularity-horizon"
             },
             "plate.1": {
               "x": 540,
@@ -8422,15 +9035,28 @@
                 "pair": {
                   "sticker": "duo-mee-trinquer",
                   "box": [
-                    28,
-                    1164,
-                    392,
-                    392
+                    7.76,
+                    1319.76,
+                    368.48,
+                    368.48
                   ],
                   "rotate": -3,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.25,
+                    1,
+                    0.5
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "duo": {
+                "overlap": 13,
+                "depth": 2,
+                "face": 0
               }
             }
           },
@@ -8485,6 +9111,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM207 550h666v1h4v1h2v1h3v1h1v1h1v1h2v1h1v1h1v1h1v2h1v1h1v2h1v3h1v4h1v830h-1v4h-1v2h-1v3h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-2v1h-3v1h-4v1h-666v-1h-4v-1h-3v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-3h-1v-2h-1v-4h-1v-830h1v-4h1v-3h1v-2h1v-1h1v-2h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h3v-1h2v-1h4ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "21fd03501bfdb076.webp",
               "bytes": 606,
@@ -8608,7 +9235,8 @@
                 20
               ],
               "contrast": 8.75,
-              "sample": "QUASAR"
+              "sample": "QUASAR",
+              "i18n": "game.frame.decor.quasar"
             },
             "decor.2": {
               "x": 128,
@@ -8664,7 +9292,8 @@
                 20
               ],
               "contrast": 14.29,
-              "sample": "QUARKS"
+              "sample": "QUARKS",
+              "i18n": "game.frame.decor.quarks"
             },
             "decor.4": {
               "x": 952,
@@ -8971,27 +9600,46 @@
                 "mee": {
                   "sticker": "mee-lettre",
                   "box": [
-                    66,
-                    1278,
+                    35.6,
+                    1350.8,
                     252,
                     252
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-champagne",
                   "box": [
-                    762,
-                    1278,
+                    794.2,
+                    1362.4,
                     252,
                     252
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0758,
+                    1,
+                    0.8484
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 145,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -9046,6 +9694,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM215 562h650v1h4v1h2v1h3v1h1v1h1v1h2v1h1v1h1v1h1v2h1v1h1v2h1v3h1v4h1v818h-1v4h-1v2h-1v3h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-2v1h-3v1h-4v1h-650v-1h-4v-1h-3v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-3h-1v-2h-1v-4h-1v-818h1v-4h1v-3h1v-2h1v-1h1v-2h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h3v-1h2v-1h4ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "743535696c597204.webp",
               "bytes": 602,
@@ -9169,7 +9818,8 @@
                 18
               ],
               "contrast": 11.68,
-              "sample": "TOILE"
+              "sample": "TOILE",
+              "i18n": "game.frame.decor.web"
             },
             "decor.2": {
               "x": 88,
@@ -9225,7 +9875,8 @@
                 18
               ],
               "contrast": 13.43,
-              "sample": "AMAS"
+              "sample": "AMAS",
+              "i18n": "game.frame.decor.cluster"
             },
             "decor.4": {
               "x": 88,
@@ -9281,7 +9932,8 @@
                 18
               ],
               "contrast": 11.68,
-              "sample": "GALAXIE"
+              "sample": "GALAXIE",
+              "i18n": "game.frame.decor.galaxy"
             },
             "decor.6": {
               "x": 88,
@@ -9337,7 +9989,8 @@
                 18
               ],
               "contrast": 13.07,
-              "sample": "ÉTOILE"
+              "sample": "ÉTOILE",
+              "i18n": "game.frame.decor.star"
             },
             "decor.8": {
               "x": 88,
@@ -9393,7 +10046,8 @@
                 18
               ],
               "contrast": 14.25,
-              "sample": "TERRE"
+              "sample": "TERRE",
+              "i18n": "game.frame.decor.earth"
             },
             "decor.10": {
               "x": 88,
@@ -9449,7 +10103,8 @@
                 18
               ],
               "contrast": 8.61,
-              "sample": "CELLULE"
+              "sample": "CELLULE",
+              "i18n": "game.frame.decor.cell"
             },
             "decor.12": {
               "x": 992,
@@ -9505,7 +10160,8 @@
                 18
               ],
               "contrast": 8.7,
-              "sample": "MOLÉCULE"
+              "sample": "MOLÉCULE",
+              "i18n": "game.frame.decor.molecule"
             },
             "decor.14": {
               "x": 992,
@@ -9561,7 +10217,8 @@
                 18
               ],
               "contrast": 7.73,
-              "sample": "ATOME"
+              "sample": "ATOME",
+              "i18n": "game.frame.decor.atom"
             },
             "decor.16": {
               "x": 992,
@@ -9617,7 +10274,8 @@
                 18
               ],
               "contrast": 7.73,
-              "sample": "NOYAU"
+              "sample": "NOYAU",
+              "i18n": "game.frame.decor.nucleus"
             },
             "decor.18": {
               "x": 992,
@@ -9673,7 +10331,8 @@
                 18
               ],
               "contrast": 8.9,
-              "sample": "CORDE"
+              "sample": "CORDE",
+              "i18n": "game.frame.decor.string"
             },
             "decor.20": {
               "x": 992,
@@ -9729,7 +10388,8 @@
                 18
               ],
               "contrast": 10.97,
-              "sample": "DU QUARK AU QUASAR · 61 PUISSANCES DE DIX"
+              "sample": "DU QUARK AU QUASAR · 61 PUISSANCES DE DIX",
+              "i18n": "game.frame.decor.quark-to-quasar-powers"
             },
             "plate.1": {
               "x": 540,
@@ -10015,8 +10675,21 @@
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0883,
+                    1,
+                    0.8233
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "duo": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
               }
             }
           },

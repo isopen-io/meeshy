@@ -786,6 +786,13 @@ endif
 # =============================================================================
 # Configuration du backend PyTorch (cpu, gpu, gpu-cu121, gpu-cu118)
 TORCH_BACKEND ?= cpu
+# #14184 — torch CPU vient de l'index `pytorch-cpu` de `[tool.uv.sources]`
+# (services/translator/pyproject.toml) : il n'y a pas d'extra cpu/gpu. Un backend
+# GPU remplace torch et torchaudio depuis l'index CUDA, comme l'en-tête du pyproject.
+TORCH_INDEX_gpu = https://download.pytorch.org/whl/cu124
+TORCH_INDEX_gpu-cu121 = https://download.pytorch.org/whl/cu121
+TORCH_INDEX_gpu-cu118 = https://download.pytorch.org/whl/cu118
+UV_TORCH_SYNC = $(if $(filter cpu,$(TORCH_BACKEND)),uv sync --extra dev,UV_EXTRA_INDEX_URL=$(TORCH_INDEX_$(TORCH_BACKEND)) uv sync --extra dev --reinstall-package torch --reinstall-package torchaudio)
 
 uv-install: ## Installer uv (package manager Python)
 	@if [ "$(HAS_UV)" = "yes" ]; then \
@@ -802,7 +809,7 @@ uv-sync: ## Synchroniser les dépendances Python (CPU par défaut)
 		exit 1; \
 	fi
 	@echo "$(BLUE)📦 Synchronisation des dépendances (backend: $(TORCH_BACKEND))...$(NC)"
-	@cd $(TRANSLATOR_DIR) && uv sync --extra $(TORCH_BACKEND) --extra dev
+	@cd $(TRANSLATOR_DIR) && $(UV_TORCH_SYNC)
 	@echo "$(GREEN)✅ Dépendances synchronisées ($(TORCH_BACKEND))$(NC)"
 
 uv-sync-cpu: ## Synchroniser avec PyTorch CPU (léger, ~2GB)
@@ -866,7 +873,7 @@ uv-upgrade: ## Mettre à jour toutes les dépendances Python
 	fi
 	@echo "$(BLUE)📦 Mise à jour des dépendances...$(NC)"
 	@cd $(TRANSLATOR_DIR) && uv lock --upgrade
-	@cd $(TRANSLATOR_DIR) && uv sync --extra $(TORCH_BACKEND) --extra dev
+	@cd $(TRANSLATOR_DIR) && $(UV_TORCH_SYNC)
 	@echo "$(GREEN)✅ Dépendances mises à jour$(NC)"
 
 uv-info: ## Afficher les informations sur l'environnement Python/uv

@@ -7,11 +7,14 @@ import {
   removeNotifications,
   restoreNotifications,
   snapshotNotifications,
+  unreadNotificationIds,
 } from './notifications-cache';
 import {
   NOTIFICATION_COUNTS_QUERY_KEY,
+  NOTIFICATIONS_QUERY_KEY,
   postAllNotificationsRead,
   postNotificationRead,
+  postNotificationsReadByTypes,
   removeNotification,
   type NotificationCounts,
   type NotificationsDeps,
@@ -48,6 +51,86 @@ export async function performMarkNotificationRead(params: { readonly id: string;
   const result = await postNotificationRead(deps, id);
   if (!result.ok) restoreNotifications(deps.queryClient, snapshot);
   return result.ok;
+}
+
+/**
+ * Les lignes non lues d'UN type (#10175) : le carnet ouvert éteint « moments à immortaliser » sans toucher au reste
+ * de la cloche. La passerelle, pas le cache, sait quelles lignes éteindre : le push ne part que pour un compte HORS
+ * LIGNE, le tap ouvre le carnet à froid et la ligne, créée app fermée, n'est dans aucune liste en cache. D'où UNE
+ * requête `read-by-types`, qui couvre aussi les lignes jamais chargées et annonce `notification:read-bulk` aux
+ * autres appareils. Le cache bouge d'abord (lignes connues, compte), le compte est relu à la confirmation.
+ *
+ * Seule une cloche qui SAIT n'avoir aucune non-lue dispense de la requête : un compte inconnu n'est pas un zéro.
+ */
+export async function performMarkNotificationsOfTypeRead(params: { readonly type: string; readonly deps: NotificationActionDeps }): Promise<boolean> {
+  const { type, deps } = params;
+  const matches = (n: { readonly type: string }) => n.type === type;
+  const cached = unreadNotificationIds(deps.queryClient, matches);
+  const counts = deps.queryClient.getQueryData<NotificationCounts>(NOTIFICATION_COUNTS_QUERY_KEY);
+  if (cached.length === 0 && counts?.unread === 0) return true;
+
+  const snapshot = snapshotNotifications(deps.queryClient);
+  markNotificationsRead(deps.queryClient, matches);
+  adjustNotificationCounts(deps.queryClient, { unread: -cached.length });
+
+  const result = await postNotificationsReadByTypes(deps, [type]);
+  if (!result.ok) {
+    restoreNotifications(deps.queryClient, snapshot);
+    return false;
+  }
+  void deps.queryClient.invalidateQueries({ queryKey: NOTIFICATION_COUNTS_QUERY_KEY });
+  return true;
+}
+
+/**
+ * Tant que l'écran est ouvert (#10175) : une non-lue arrivée pendant qu'il est à l'écran — la fenêtre visible, le
+ * service worker se tait — s'éteint aussi. Une ARRIVÉE est le compte de CE type (`byType`) qui MONTE ou une ligne de ce
+ * type jamais vue — jamais le compte global : un message ou une réaction, carnet ouvert, ne relance rien, et aucun
+ * retour arrière ne vient effacer ce qui est arrivé entre-temps. `byType` compte les lignes lues comme non lues : ni la
+ * confirmation ni le retour arrière d'un refus ne le font monter. Rend l'arrêt, à appeler quand l'écran se ferme.
+ */
+export function followNotificationsOfTypeRead(params: { readonly type: string; readonly deps: NotificationActionDeps }): () => void {
+  const { type, deps } = params;
+  const ofTypeNow = (): number | undefined => {
+    const counts = deps.queryClient.getQueryData<NotificationCounts>(NOTIFICATION_COUNTS_QUERY_KEY);
+    return counts === undefined ? undefined : (counts.byType[type] ?? 0);
+  };
+  const pendingOfType = () => unreadNotificationIds(deps.queryClient, (n) => n.type === type);
+  const state = { stopped: false, running: false, missed: false, observed: ofTypeNow(), handled: new Set<string>() };
+
+  const arrived = (): boolean => {
+    const now = ofTypeNow();
+    const rose = now !== undefined && state.observed !== undefined && now > state.observed;
+    state.observed = now;
+    return rose || pendingOfType().some((id) => !state.handled.has(id));
+  };
+
+  const run = async (): Promise<void> => {
+    state.running = true;
+    state.missed = false;
+    state.handled = new Set([...state.handled, ...pendingOfType()]);
+    const ok = await performMarkNotificationsOfTypeRead({ type, deps });
+    state.running = false;
+    state.observed = ofTypeNow();
+    if (!state.stopped && ok && state.missed) await run();
+  };
+  const start = (): void =>
+    void run().catch(() => {
+      state.running = false;
+    });
+
+  const unsubscribe = deps.queryClient.getQueryCache().subscribe((event) => {
+    if (state.stopped || event.query.queryKey[0] !== NOTIFICATIONS_QUERY_KEY[0]) return;
+    if (!arrived()) return;
+    if (state.running) state.missed = true;
+    else start();
+  });
+  start();
+
+  return () => {
+    state.stopped = true;
+    unsubscribe();
+  };
 }
 
 export async function performMarkAllNotificationsRead(params: { readonly deps: NotificationActionDeps }): Promise<boolean> {

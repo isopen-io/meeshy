@@ -126,7 +126,7 @@ final class GameMintHeroTests: XCTestCase {
     // MARK: - Le jour de jeu est celui du compte (#9539)
 
     func test_theDailyMissionsEndWithTheAccountDay_notTheDeviceDay() throws {
-        let text = try source("Meeshy/Features/Main/Game/GameMissionsView.swift")
+        let text = try source("Meeshy/Features/Game/GameMissionsView.swift")
         XCTAssertTrue(text.contains("GameMissionClock.endOfDay(missions.dayKey, timezone: accountTimezone)"),
                       "la fin du jour se lit dans le fuseau du compte, celui où la passerelle découpe le jour de jeu")
     }
@@ -135,25 +135,25 @@ final class GameMintHeroTests: XCTestCase {
 
     /// Le compteur de l'en-tête ne joue plus la frappe : il ouvre la fiche des Meeshes, où Mee et Meo la jouent.
     func test_theCounterNoLongerStrikes_theMeeshSheetPlaysTheScene() throws {
-        let entry = try source("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift")
+        let entry = try source("Meeshy/Features/Profile/Views/ProgressionMeeshEntry.swift")
         let compteur = entry.components(separatedBy: "struct ProgressionMeeshEntry").dropFirst().first?
             .components(separatedBy: "struct MeeshCoinGlyph").first ?? ""
         XCTAssertFalse(compteur.contains("MintStrikeScene("), "le compteur ne joue plus de scène de frappe")
         XCTAssertFalse(compteur.contains("startStrike"), "le compteur ne frappe plus")
-        XCTAssertTrue(try source("Meeshy/Features/Main/Game/GameMintPreviewView.swift").contains("MintStrikeScene("),
+        XCTAssertTrue(try source("Meeshy/Features/Game/GameMintPreviewView.swift").contains("MintStrikeScene("),
                       "Mee et Meo frappent dans la fiche des Meeshes")
     }
 
     // MARK: - Une seule section Héro de frappe (#9537)
 
     func test_thereIsOneMintHero_theLevelHeroNoLongerCarriesOne() throws {
-        let hero = try source("Meeshy/Features/Main/Game/GameHeroView.swift")
+        let hero = try source("Meeshy/Features/Game/GameHeroView.swift")
         XCTAssertFalse(hero.contains("GameHeroMint"), "le héro de niveau ne porte plus de « Comment frapper »")
-        let parts = try source("Meeshy/Features/Main/Game/GameHeroParts.swift")
+        let parts = try source("Meeshy/Features/Game/GameHeroParts.swift")
         XCTAssertFalse(parts.contains("struct GameHeroMint"), "le doublon est supprimé, pas masqué")
-        let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
+        let fiche = try source("Meeshy/Features/Game/ProgressionConceptPage.swift")
         XCTAssertEqual(fiche.components(separatedBy: "GameMintPreviewView(").count - 1, 1, "UN héro de frappe, dans la fiche des Meeshes (#9564)")
-        let front = try source("Meeshy/Features/Main/Game/ProgressionFrontList.swift")
+        let front = try source("Meeshy/Features/Game/ProgressionFrontList.swift")
         XCTAssertFalse(front.contains("GameMintPreviewView("), "la première page ne porte plus la frappe")
     }
 
@@ -163,10 +163,10 @@ final class GameMintHeroTests: XCTestCase {
     /// l'ordre des concepts (`ProgressionConcept`) range la Ligue… après les Meeshes. Ce que #9541 voulait — lire sa
     /// ligue sans passer par le bouton qui coûte — tient autrement : la carte de la Ligue dit son rang dès la première page.
     func test_theLeagueDetailLivesInTheLeagueSheet_notNextToTheMint() throws {
-        let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
+        let fiche = try source("Meeshy/Features/Game/ProgressionConceptPage.swift")
         XCTAssertTrue(fiche.contains("GameLeagueDetailCard.make(league: game?.league, onOpen: { onOpenLink(.page(.league)) })"),
                       "le détail de ligue est monté par la fiche de la Ligue, et son toucher ouvre le classement")
-        let front = try source("Meeshy/Features/Main/Game/ProgressionFrontList.swift")
+        let front = try source("Meeshy/Features/Game/ProgressionFrontList.swift")
         XCTAssertFalse(front.contains("GameLeagueDetailCard"), "la première page ne porte que des cartes de concept")
     }
 
@@ -192,7 +192,7 @@ final class GameMintHeroTests: XCTestCase {
     }
 
     func test_theLeagueDetailSaysGemPlaceWeekPointsAndTheClosing() throws {
-        let text = try source("Meeshy/Features/Main/Game/GameLeagueDetailCard.swift")
+        let text = try source("Meeshy/Features/Game/GameLeagueDetailCard.swift")
         for piece in ["LeagueGemView(", "leagueRankLine(", "leagueDetailWeek(points:", "leagueCloses(remaining:"] {
             XCTAssertTrue(text.contains(piece), "le détail de ligue dit « \(piece) »")
         }

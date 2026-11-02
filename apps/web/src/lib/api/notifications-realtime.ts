@@ -77,8 +77,9 @@ export const notificationIdOf = (payload: unknown): string | null => {
 
 /**
  * Une notification NEUVE, déjà décodée : en tête de chaque catégorie en cache
- * qui l'accepte, le compte AVANCÉ d'un si elle est non lue. Une ligne déjà
- * connue ne compte pas deux fois.
+ * qui l'accepte, le compte AVANCÉ d'un si elle est non lue, et celui de son
+ * type (`byType`) d'un dans tous les cas. Une ligne déjà connue ne compte pas
+ * deux fois.
  *
  * Les listes sont marquées PÉRIMÉES sans être relues (`refetchType: 'none'`) :
  * la charge socket porte le titre de la BANNIÈRE (le nom de l'acteur), pas le
@@ -88,7 +89,7 @@ export const notificationIdOf = (payload: unknown): string | null => {
 export function applyNotificationNew(queryClient: QueryClient, notification: NotificationRecord): void {
   if (findNotification(queryClient, notification.id) !== undefined) return;
   prependNotification(queryClient, notification);
-  adjustNotificationCounts(queryClient, { total: 1, unread: notification.state.isRead ? 0 : 1 });
+  adjustNotificationCounts(queryClient, { total: 1, unread: notification.state.isRead ? 0 : 1, ofType: notification.type });
   void queryClient.invalidateQueries({ queryKey: NOTIFICATION_LISTS_KEY, refetchType: 'none' });
 }
 

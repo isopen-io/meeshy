@@ -2,6 +2,8 @@ package me.meeshy.ui.component
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -12,11 +14,14 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
@@ -24,20 +29,37 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.TextUnit
+import kotlin.math.PI
+import kotlin.math.cos
+import coil.ImageLoader
+import coil.decode.DataSource
+import coil.imageLoader
+import coil.memory.MemoryCache
 import coil.request.ImageRequest
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.avatar.AvatarAccessibilityLabel
 import me.meeshy.sdk.model.appearance.AvatarRingDesign
@@ -87,8 +109,11 @@ public fun meeshyPresenceDotColor(presence: PresenceState?): Color? = when (pres
  * of *which* size/ring/presence a given surface uses (iOS `AvatarContext`) stays
  * app-side.
  *
- * [imageUrl] is the person's photo (iOS `avatarURL:`): it covers the initials once
- * loaded, and the initials stay visible while it loads or if it fails.
+ * [imageUrl] is the person's photo reference (iOS `avatarURL:`), resolved HERE ([AvatarFace]) so no
+ * caller composes an address. ONE face at a time: the initials stand IN PLACE of the photo while it
+ * loads or if it fails, and are removed once it shows — never layered under it (#12569).
+ *
+ * [here] : le pair a l'ecran de CETTE conversation ouvert ; son point « ici » prime sur la presence.
  */
 @Composable
 public fun MeeshyAvatar(
@@ -102,6 +127,7 @@ public fun MeeshyAvatar(
     presence: PresenceState? = null,
     moodEmoji: String? = null,
     imageUrl: String? = null,
+    here: ConversationHere = ConversationHere.ABSENT,
 ) {
     val density = LocalDensity.current
     val textSize = with(density) { (size * 0.38f).toSp() }
@@ -114,6 +140,8 @@ public fun MeeshyAvatar(
     val gradientEnd = secondaryColor ?: containerColor.copy(alpha = 0.6f)
     val dotColor = meeshyPresenceDotColor(presence)
     val dotBorderColor = MeeshyTheme.tokens.backgroundPrimary
+    val apiBaseUrl = LocalMediaBaseUrl.current
+    val face = remember(name, imageUrl, apiBaseUrl) { AvatarFace.resolve(name, imageUrl, apiBaseUrl) }
 
     Box(modifier = modifier.size(boxSize), contentAlignment = Alignment.Center) {
         when (storyRing) {
@@ -128,30 +156,14 @@ public fun MeeshyAvatar(
             StoryRingState.None -> Unit
         }
 
-        Box(
-            modifier = Modifier
-                .size(size)
-                .clip(CircleShape)
-                .background(Brush.linearGradient(listOf(containerColor, gradientEnd)))
-                .semantics { contentDescription = name.ifBlank { fallbackDescription } },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = avatarInitials(name),
-                color = contentColor,
-                fontFamily = NunitoFontFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = textSize,
-            )
-            imageUrl?.takeIf { it.isNotBlank() }?.let { url ->
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current).data(url).crossfade(true).build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(size),
-                )
-            }
-        }
+        AvatarDisc(
+            face = face,
+            size = size,
+            brush = Brush.linearGradient(listOf(containerColor, gradientEnd)),
+            contentColor = contentColor,
+            fontSize = textSize,
+            modifier = Modifier.semantics { contentDescription = name.ifBlank { fallbackDescription } },
+        )
 
         if (!moodEmoji.isNullOrEmpty()) {
             Text(
@@ -159,10 +171,20 @@ public fun MeeshyAvatar(
                 fontSize = with(density) { (size * 0.4f).toSp() },
                 modifier = Modifier.align(Alignment.BottomEnd),
             )
+        } else if (here.isHere) {
+            AvatarPresenceDot(
+                presence = presence,
+                avatarSize = size.value,
+                modifier = Modifier.align(Alignment.BottomEnd),
+                isHere = true,
+                here = here,
+                frameSize = boxSize.value,
+            )
         } else if (dotColor != null) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    .testTag(presenceDotTag(presence))
                     .size(size * 0.26f + 4.dp)
                     .clip(CircleShape)
                     .background(dotBorderColor)
@@ -173,6 +195,9 @@ public fun MeeshyAvatar(
         }
     }
 }
+
+/** Repère de test du point de présence d'un avatar : `presence-dot-ONLINE`, `-AWAY` ou `-IDLE` ; absent = aucun point. */
+public fun presenceDotTag(presence: PresenceState?): String = "presence-dot-${presence?.name}"
 
 /** Couleur d'une teinte de point ou de contour : « ici » en primaire, le reste par le mapping central. */
 public fun meeshyDotToneColor(tone: AvatarDotTone): Color = when (tone) {
@@ -190,6 +215,8 @@ public fun meeshyDotToneColor(tone: AvatarDotTone): Color = when (tone) {
  * diminue, l'entrant rebondit) ; rien ne pulse en liste ni sous Reduire les animations. TalkBack lit le nom,
  * l'humeur puis « dans la conversation ».
  *
+ * [onDotTap] = toucher du POINT de presence (iOS `onOnlineTap`) : une zone de [DOT_TOUCH_ZONE] centree sur lui, bornee par le
+ * cadre de l'avatar, donc jamais sur son centre ; le reste de l'avatar garde le geste de son hote. `null` = aucune zone.
  * [isUser] = faux pour une entite (communaute, groupe) : ni humeur ni anneau de story.
  * [ring] = le contour choisi par son porteur (miroir d'`avatarRingWithin`) : il se pose DANS l'empreinte, l'anneau de
  * story reste concentrique dedans, la pastille de presence se pose par-dessus. `null` = rendu historique.
@@ -209,9 +236,13 @@ public fun MeeshyAvatar(
     isUser: Boolean = true,
     enablePulse: Boolean = context.defaultPulse,
     onMoodTap: (() -> Unit)? = null,
+    onDotTap: (() -> Unit)? = null,
     ring: AvatarRingDesign? = null,
+    imageUrl: String? = null,
 ) {
     val reduceMotion = LocalReduceMotion.current
+    val apiBaseUrl = LocalMediaBaseUrl.current
+    val face = remember(name, imageUrl, apiBaseUrl) { AvatarFace.resolve(name, imageUrl, apiBaseUrl) }
     val density = LocalDensity.current
     val size = context.size.dp
     val effectiveRing = if (isUser && context.showsStoryRing) storyRing else StoryRingState.None
@@ -244,22 +275,14 @@ public fun MeeshyAvatar(
                 StoryRingState.Read -> Box(Modifier.size(frame).border(context.ringWidth.dp, containerColor.copy(alpha = 0.3f), CircleShape))
                 StoryRingState.None -> Unit
             }
-            Box(
-                modifier = Modifier
-                    .size(size)
-                    .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(containerColor, gradientEnd)))
-                    .semantics { contentDescription = spokenName },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = avatarInitials(name),
-                    color = contentColor,
-                    fontFamily = NunitoFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = with(density) { context.initialFont.dp.toSp() },
-                )
-            }
+            AvatarDisc(
+                face = face,
+                size = size,
+                brush = Brush.linearGradient(listOf(containerColor, gradientEnd)),
+                contentColor = contentColor,
+                fontSize = with(density) { context.initialFont.dp.toSp() },
+                modifier = Modifier.semantics { contentDescription = spokenName },
+            )
         }
         AvatarCorner(
             corner = corner,
@@ -271,7 +294,127 @@ public fun MeeshyAvatar(
             onMoodTap = onMoodTap,
             modifier = Modifier.align(Alignment.BottomEnd),
         )
+        if (onDotTap != null && corner is AvatarCornerBadge.Dot) {
+            AvatarDotTouchZone(corner.dot, context.size, frame.value, onDotTap, Modifier.align(Alignment.BottomEnd))
+        }
     }
+}
+
+/** Etiquette de test de la zone tactile du point. */
+public const val AvatarPresenceDotTouchTestTag: String = "avatar-presence-dot-touch"
+
+/** Cote maximal (dp) de la zone tactile du point, centree sur lui ; le cadre de l'avatar la borne encore. */
+public val DOT_TOUCH_ZONE: Dp = 32.dp
+
+/** Marge (dp) entre le bord de la zone et le centre du cercle : le centre de l'avatar n'est JAMAIS dans la zone. */
+private const val DOT_TOUCH_CENTER_CLEARANCE = 2f
+
+@Composable
+private fun AvatarDotTouchZone(
+    dot: AvatarPresenceDot,
+    avatarSize: Float,
+    frameSize: Float,
+    onTap: () -> Unit,
+    modifier: Modifier,
+) {
+    val diameter = dot.diameter(avatarSize)
+    val fromCentre = avatarSize / 2f * cos(PI / 4).toFloat()
+    val side = minOf(DOT_TOUCH_ZONE.value, 2f * (fromCentre - DOT_TOUCH_CENTER_CLEARANCE))
+    val shift = AvatarPresenceDot.centerOffset(avatarSize, frameSize, diameter) + (side - diameter) / 2f
+    val directed = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -shift else shift
+    // Compose elargit toute cible plus petite que 48 dp : ici elle recouvrirait le centre de l'avatar, que son hote garde.
+    val base = LocalViewConfiguration.current
+    val exact = remember(base) {
+        object : ViewConfiguration by base {
+            override val minimumTouchTargetSize: DpSize = DpSize.Zero
+        }
+    }
+    CompositionLocalProvider(LocalViewConfiguration provides exact) {
+        Box(
+            modifier = modifier
+                .offset(directed.dp, shift.dp)
+                .size(side.dp)
+                .testTag(AvatarPresenceDotTouchTestTag)
+                .pointerInput(onTap) { detectTapGestures(onTap = { onTap() }) },
+        )
+    }
+}
+
+/**
+ * Le cercle d'avatar, UN seul visage ([AvatarFace.layer]) : les initiales tiennent la place de la photo
+ * tant qu'elle charge ou si elle échoue (ni spinner, ni « Réessayer »), et sont RETIRÉES dès qu'elle
+ * s'affiche. Une photo déjà en mémoire tient le cercle dès la première image ([AvatarPhotoState.firstFrame]) :
+ * une ligne qui revient à l'écran ne fait pas clignoter ses initiales. La photo remplit le cercle en `Crop` :
+ * une image non carrée ne laisse ni bande de dégradé ni initiales autour d'elle.
+ */
+@Composable
+private fun AvatarDisc(
+    face: AvatarFace,
+    size: Dp,
+    brush: Brush,
+    contentColor: Color,
+    fontSize: TextUnit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val sidePx = with(LocalDensity.current) { size.roundToPx() }
+    val resident = remember(face, sidePx) { face is AvatarFace.Photo && context.imageLoader.holds(face.model, sidePx) }
+    var photoState by remember(face) { mutableStateOf(AvatarPhotoState.firstFrame(resident)) }
+    var warm by remember(face) { mutableStateOf(resident) }
+    val layer = face.layer(photoState)
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(brush),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (layer is AvatarLayer.Initials) {
+            Text(
+                text = layer.text,
+                color = contentColor,
+                fontFamily = NunitoFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = fontSize,
+            )
+        }
+        if (face is AvatarFace.Photo) {
+            val photoAlpha by animateFloatAsState(
+                targetValue = if (photoState == AvatarPhotoState.Success) 1f else 0f,
+                animationSpec = if (warm) snap() else tween(PHOTO_FADE_MILLIS),
+                label = "avatarPhotoFade",
+            )
+            val request = remember(face.model, context) { ImageRequest.Builder(context).data(face.model).build() }
+            AsyncImage(
+                model = request,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                onState = { state ->
+                    if (state is AsyncImagePainter.State.Success) warm = state.result.dataSource == DataSource.MEMORY_CACHE
+                    photoState = photoState.then(state.toPhotoState())
+                },
+                modifier = Modifier.size(size).alpha(photoAlpha),
+            )
+        }
+    }
+}
+
+/** Le fondu de la photo qui remplace les initiales (iOS : 0,15 s) ; une photo déjà en mémoire s'affiche d'emblée. */
+private const val PHOTO_FADE_MILLIS = 150
+
+/**
+ * La photo est-elle déjà en mémoire à une taille qui couvre le cercle ? Lecture synchrone, sans requête :
+ * une valeur qui couvre les deux côtés est celle que Coil servira sans recharger.
+ */
+private fun ImageLoader.holds(model: String, sidePx: Int): Boolean {
+    val bitmap = memoryCache?.get(MemoryCache.Key(model))?.bitmap ?: return false
+    return bitmap.width >= sidePx && bitmap.height >= sidePx
+}
+
+private fun AsyncImagePainter.State.toPhotoState(): AvatarPhotoState = when (this) {
+    is AsyncImagePainter.State.Success -> AvatarPhotoState.Success
+    is AsyncImagePainter.State.Error -> AvatarPhotoState.Error
+    else -> AvatarPhotoState.Loading
 }
 
 @Composable

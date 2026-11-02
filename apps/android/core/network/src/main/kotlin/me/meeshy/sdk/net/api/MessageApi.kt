@@ -1,6 +1,8 @@
 package me.meeshy.sdk.net.api
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.MessagesApiResponse
@@ -21,6 +23,10 @@ import retrofit2.http.Query
 
 @Serializable
 data class EditMessageRequest(val content: String)
+
+/** Corps de `POST /conversations/:id/messages/after-read/consume` (#8302) : 1 à 200 ids. */
+@Serializable
+data class ConsumeAfterReadRequest(val messageIds: List<String>)
 
 interface MessageApi {
     @GET("conversations/{cid}/messages")
@@ -80,6 +86,38 @@ interface MessageApi {
         @Query("limit") limit: Int? = null,
     ): MessagesApiResponse
 
+    /**
+     * Lecture CIBLÉE d'un message par son id (#13797) : `around=<id>` avec `limit=1` donne une moitié de
+     * fenêtre nulle de chaque côté, donc la liste ne rend QUE ce message, mais passée par tout
+     * l'enrichissement de la liste (`enrichForwardedMessagesForList` : l'aperçu `forwardedFrom` d'un
+     * transfert), que `GET /messages/{id}` ne sert pas (son `select` n'a que `forwardedFromId`).
+     */
+    @GET("conversations/{cid}/messages")
+    suspend fun listAround(
+        @Path("cid") conversationId: String,
+        @Query("around") messageId: String,
+        @Query("limit") limit: Int = 1,
+    ): ApiResponse<List<ApiMessage>>
+
+    /**
+     * L'index d'un genre pour l'écran « Médias, liens et documents » : `view=media` (la passerelle ne sert que les
+     * messages porteurs du genre demandé), paginé par `before`. [kinds] est absent pour le visuel (défaut serveur,
+     * compris aussi d'une passerelle antérieure à #8098) ; [query] n'est envoyé qu'à partir de deux caractères.
+     * Comme [listAfter], rend [MessagesApiResponse] : `hasMore`/`nextCursor` vivent sous `cursorPagination`.
+     */
+    @GET("conversations/{cid}/messages")
+    suspend fun listMedia(
+        @Path("cid") conversationId: String,
+        @Query("view") view: String,
+        @Query("limit") limit: Int,
+        @Query("include_replies") includeReplies: Boolean,
+        @Query("include_translations") includeTranslations: Boolean,
+        @Query("kinds") kinds: String?,
+        @Query("q") query: String?,
+        @Query("before") before: String?,
+        @Query("languages") languages: String?,
+    ): MessagesApiResponse
+
     @POST("conversations/{cid}/messages")
     suspend fun send(
         @Path("cid") conversationId: String,
@@ -118,6 +156,24 @@ interface MessageApi {
         @Path("cid") conversationId: String,
         @Path("mid") messageId: String,
     ): ApiResponse<Unit>
+
+    /**
+     * La flamme-œil (#8302) : à la sortie de la conversation, les messages « après lecture » vus
+     * disparaissent chez l'appelant seul (iOS `MessageService.consumeAfterRead`).
+     */
+    @POST("conversations/{cid}/messages/after-read/consume")
+    suspend fun consumeAfterRead(
+        @Path("cid") conversationId: String,
+        @Body body: ConsumeAfterReadRequest,
+    ): ApiResponse<JsonElement>
+
+    /** La vue unique lue et refermée consomme son compteur serveur (iOS `MessageService.consumeViewOnce`). */
+    @POST("conversations/{cid}/messages/{mid}/consume")
+    suspend fun consumeViewOnce(
+        @Path("cid") conversationId: String,
+        @Path("mid") messageId: String,
+        @Body body: JsonObject = JsonObject(emptyMap()),
+    ): ApiResponse<JsonElement>
 }
 
 /**

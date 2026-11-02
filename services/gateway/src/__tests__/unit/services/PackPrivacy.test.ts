@@ -195,6 +195,7 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
       publishedAnonymized: 1,
       filesDeleted: 4,
       ownershipsDeleted: 2,
+      partnerProfilesDeleted: 0,
     });
   });
 
@@ -215,7 +216,7 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
 
     const second = await purgePackData(db as never, PARTI, { files: files.store });
 
-    expect(second).toEqual({ choicesDeleted: 0, libraryDeleted: 0, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 0, ownershipsDeleted: 0 });
+    expect(second).toEqual({ choicesDeleted: 0, libraryDeleted: 0, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 0, ownershipsDeleted: 0, partnerProfilesDeleted: 0 });
     expect(JSON.stringify(db.tables)).toBe(after);
   });
 
@@ -225,7 +226,7 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
 
     const measured = await measurePackData(db as never, PARTI, { files: files.store });
 
-    expect(measured).toEqual({ choicesDeleted: 3, libraryDeleted: 1, submissionsDeleted: 2, publishedAnonymized: 1, filesDeleted: 4, ownershipsDeleted: 2 });
+    expect(measured).toEqual({ choicesDeleted: 3, libraryDeleted: 1, submissionsDeleted: 2, publishedAnonymized: 1, filesDeleted: 4, ownershipsDeleted: 2, partnerProfilesDeleted: 0 });
     expect(JSON.stringify(db.tables)).toBe(before);
     expect(db.writes).toEqual([]);
     expect(files.removed).toEqual([]);

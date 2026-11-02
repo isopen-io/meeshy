@@ -159,6 +159,22 @@ describe('electDescription — le TEXTE d’une pièce, et rien d’autre (#5805
     });
   });
 
+  test('la description de l’AUTEUR se sert traduite au rang du lecteur (#12333)', () => {
+    const described: MediaAttachment = {
+      alt: 'Un chat roux sur le canapé',
+      altLanguage: 'fr',
+      altTranslations: { de: { text: 'Eine rote Katze auf dem Sofa' } },
+      originalName: 'chat.jpg',
+      translations: {},
+      fileUrl: 'data:image/jpeg;base64,ABC',
+    };
+    expect(electDescription({ attachment: described, readerLanguages: ['es', 'de'], fallbackLanguage: 'fr' })).toEqual({
+      text: 'Eine rote Katze auf dem Sofa',
+      language: 'de',
+      translated: true,
+    });
+  });
+
   test('une pièce sans transcription ni alt retombe sur son nom, jamais sur du vide inventé', () => {
     const bare: MediaAttachment = { originalName: 'facture.pdf', translations: {}, fileUrl: 'data:application/pdf;base64,ABC' };
     expect(electDescription({ attachment: bare, readerLanguages: ['en', 'fr'], fallbackLanguage: 'fr' })).toEqual({

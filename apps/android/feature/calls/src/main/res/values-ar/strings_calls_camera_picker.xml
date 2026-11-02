@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_camera_front">الكاميرا الأمامية</string>
+    <string name="call_camera_back">الكاميرا الخلفية</string>
+    <string name="call_camera_external">كاميرا خارجية</string>
+    <string name="call_camera_external_numbered">كاميرا خارجية %1$d</string>
+</resources>

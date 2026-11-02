@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "calls.detail.participants",
+          "androidName": "call_detail_participants",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.detail.transcript",
+          "androidName": "call_detail_transcript",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.transcript.participant",
+          "androidName": "call_transcript_participant",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.translation.showOriginal",
+          "androidName": "call_transcript_show_original",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.translation.showTranslated",
+          "androidName": "call_transcript_show_translated",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

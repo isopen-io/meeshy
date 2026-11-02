@@ -224,41 +224,6 @@ final class ComposerDocumentToolChainTests: XCTestCase {
 
     // MARK: - T2.6 — DoD du lot 2 : le meuble sert RÉELLEMENT la rangée du document
 
-    /// **Assertion DIRECTE, pas une attente sur T3.1.**
-    /// `MeeshyComposerHostGuardTests.test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`
-    /// reste VACUOUS — ses trois booléens (dont `leMeubleSertLaRangeeDuDocument()`,
-    /// équivalent exact de ce test) ne s'évaluent QUE si un site de
-    /// production monte une porte-document, ce qu'aucun ne fait encore. La
-    /// deuxième capacité du DoD du lot 2 (spec v2 §E — la rangée d'outils du
-    /// meuble couvre celle de la feuille absorbée) tombe donc RÉELLEMENT à ce
-    /// lot, mais rien ne le mesure tant que T3.1 ne câble pas la porte. Cette
-    /// garde ferme ce trou : elle lit la SOURCE du meuble (`servedDocumentTools`
-    /// existe et EST `ComposerDocumentTool.servedRow`) et vérifie la valeur au
-    /// niveau du TYPE — même mesure que
-    /// `MeeshyComposerHostGuardTests.leMeubleSertLaRangeeDuDocument()`, câblée
-    /// ICI plutôt que d'attendre que la porte soit montée.
-    ///
-    /// Mutation nommée par le plan : oublier un effet sur n'importe lequel des
-    /// six outils fait rougir ce test.
-    func test_leMeuble_sertReellementLaRangeeDuDocument_dansLeSource() throws {
-        let code = try hostCode()
-        guard declarationBody(startingAt: "var servedDocumentTools", in: code) != nil else {
-            return XCTFail("`servedDocumentTools` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
-        }
-        XCTAssertTrue(
-            compact(code).contains(compact("ComposerDocumentTool.servedRow(for: selectedFormat)")),
-            "`servedDocumentTools` doit rester une PROJECTION de `ComposerDocumentTool.servedRow` — jamais "
-                + "une seconde liste écrite dans le meuble, qui pourrait diverger de la rangée canonique. "
-                + "Depuis #4700 la projection prend le FORMAT : une story n'a pas de champ de contenu à outiller."
-        )
-        XCTAssertEqual(
-            ComposerDocumentTool.servedRow, ComposerDocumentTool.canonicalRow,
-            "Le meuble sert `servedDocumentTools`, projection de `servedRow` : tant que `servedRow` ne "
-                + "couvre pas `canonicalRow`, le meuble perd des outils par rapport à la feuille historique "
-                + "qu'il remplace — photo·caméra·fichier·lieu·micro d'un coup si la rangée était vide."
-        )
-    }
-
     // MARK: - T2.5 — Le lieu choisi atteint le brouillon envoyé à la porte
 
     /// **Le canal, pas seulement le sélecteur.** `LocationPickerView` prouve

@@ -20,12 +20,18 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.SocketPostBookmarkedData
+import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.model.SocketPostLikedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostPage
+import me.meeshy.sdk.report.ReportRepository
+import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.ui.component.FeedbackKind
+import me.meeshy.ui.component.FeedbackToastRequest
+import me.meeshy.feature.reels.R
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
@@ -57,9 +63,11 @@ class ReelsViewModelTest {
     private val repository: PostRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
+    private val reportRepository: ReportRepository = mockk(relaxed = true)
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
     private val postUnliked = MutableSharedFlow<SocketPostUnlikedData>(extraBufferCapacity = 64)
     private val postBookmarked = MutableSharedFlow<SocketPostBookmarkedData>(extraBufferCapacity = 64)
+    private val postDeleted = MutableSharedFlow<SocketPostDeletedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
     private var clockNow: Long = 0L
     private val clock = object : CacheClock {
@@ -97,13 +105,14 @@ class ReelsViewModelTest {
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
         every { socialSocket.postBookmarked } returns postBookmarked
+        every { socialSocket.postDeleted } returns postDeleted
         every { repository.feedCacheSnapshot } returns cachedFeed
         coEvery { repository.getReelsPage(any(), any(), any()) } returns
             NetworkResult.Success(PostPage(posts = thread, nextCursor = nextCursor, hasMore = hasMore))
         val privacyStore = InMemoryPrivacyPreferencesStore(
             PrivacyPreferences(allowAnalytics = allowAnalytics),
         )
-        return ReelsViewModel(repository, session, socialSocket, config, clock, privacyStore)
+        return ReelsViewModel(repository, session, socialSocket, config, clock, privacyStore, reportRepository)
     }
 
     // MARK: - Post room membership
@@ -500,6 +509,51 @@ class ReelsViewModelTest {
     }
 
     @Test
+    fun `a seed that cannot be fetched says why instead of landing on another reel`() = runTest {
+        val vm = viewModel(cachedFeed = null)
+        coEvery { repository.getPost("gone") } returns NetworkResult.Failure(ApiError("nope", "HTTP_404", 404))
+        coEvery { repository.getReelsPage("gone", any(), any()) } returns
+            NetworkResult.Success(PostPage(posts = listOf(reel("other-1")), nextCursor = null, hasMore = false))
+
+        vm.load(seed = "gone")
+
+        assertThat(vm.state.value.seedFailure).isEqualTo(me.meeshy.sdk.model.ContentFetchFailure.NOT_FOUND)
+    }
+
+    @Test
+    fun `an offline seed fetch is typed NETWORK so that retry is offered`() = runTest {
+        val vm = viewModel(cachedFeed = null)
+        coEvery { repository.getPost("tapped") } returns NetworkResult.Failure(ApiError("offline", "NETWORK"))
+
+        vm.load(seed = "tapped")
+
+        assertThat(vm.state.value.seedFailure).isEqualTo(me.meeshy.sdk.model.ContentFetchFailure.NETWORK)
+        assertThat(vm.state.value.seedFailure?.offersRetry).isTrue()
+    }
+
+    @Test
+    fun `retry reopens the same seed and clears its failure once it resolves`() = runTest {
+        val vm = viewModel(cachedFeed = null)
+        coEvery { repository.getPost("tapped") } returns NetworkResult.Failure(ApiError("offline", "NETWORK"))
+        vm.load(seed = "tapped")
+
+        coEvery { repository.getPost("tapped") } returns NetworkResult.Success(reel("tapped"))
+        vm.retry()
+
+        assertThat(vm.state.value.seedFailure).isNull()
+        assertThat(vm.state.value.reels.map { it.id }).contains("tapped")
+    }
+
+    @Test
+    fun `a seed served from the feed cache never raises a failure`() = runTest {
+        val vm = viewModel(cachedFeed = listOf(reel("tapped")))
+
+        vm.load(seed = "tapped")
+
+        assertThat(vm.state.value.seedFailure).isNull()
+    }
+
+    @Test
     fun `load leaves the thread to the network page alone when the explicit seed fetch fails`() = runTest {
         val vm = viewModel(cachedFeed = null)
         coEvery { repository.getPost("tapped") } returns NetworkResult.Failure(ApiError("offline"))
@@ -713,5 +767,149 @@ class ReelsViewModelTest {
         val shown = vm.state.value.reels.single()
         assertThat(shown.videoUrl).isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/2026/10/r1/clip.mp4")
         assertThat(shown.posterUrl).isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/2026/10/r1/poster.jpg")
+    }
+
+    // MARK: - Ordre stable, fin en direct, echec
+
+    @Test
+    fun `a refresh keeps the watched reel and those before it where they are`() = runTest {
+        val vm = viewModel(thread = listOf(reel("a"), reel("b"), reel("c"), reel("d")))
+        vm.load()
+        vm.setCurrentReel("b")
+        coEvery { repository.getReelsPage(any(), any(), any()) } returns
+            NetworkResult.Success(PostPage(posts = listOf(reel("d"), reel("z"), reel("a"), reel("b")), nextCursor = null, hasMore = false))
+
+        vm.load()
+
+        assertThat(vm.state.value.reels.map { it.id }).containsExactly("a", "b", "d", "z").inOrder()
+    }
+
+    @Test
+    fun `loadMore appends in the tail and never moves what is shown`() = runTest {
+        val vm = viewModel(thread = listOf(reel("a"), reel("b")), nextCursor = "c1", hasMore = true)
+        vm.load()
+        coEvery { repository.getReelsPage(any(), "c1", any()) } returns
+            NetworkResult.Success(PostPage(posts = listOf(reel("b"), reel("c")), nextCursor = null, hasMore = false))
+
+        vm.loadMore()
+
+        assertThat(vm.state.value.reels.map { it.id }).containsExactly("a", "b", "c").inOrder()
+    }
+
+    @Test
+    fun `a reel deleted live disappears from the pager`() = runTest {
+        val vm = viewModel(thread = listOf(reel("a"), reel("b")))
+        vm.load()
+
+        postDeleted.emit(SocketPostDeletedData(postId = "a"))
+
+        assertThat(vm.state.value.reels.map { it.id }).containsExactly("b")
+    }
+
+    @Test
+    fun `a failed first load shows an error not an empty thread and retry reloads`() = runTest {
+        val vm = viewModel()
+        coEvery { repository.getReelsPage(any(), any(), any()) } returns NetworkResult.Failure(ApiError("offline"))
+        vm.load()
+        assertThat(vm.state.value.reels).isEmpty()
+        assertThat(vm.state.value.loadFailure).isNotNull()
+
+        coEvery { repository.getReelsPage(any(), any(), any()) } returns
+            NetworkResult.Success(PostPage(posts = listOf(reel("a")), nextCursor = null, hasMore = false))
+        vm.retry()
+
+        assertThat(vm.state.value.reels.map { it.id }).containsExactly("a")
+        assertThat(vm.state.value.loadFailure).isNull()
+    }
+
+    // MARK: - Menu : epingler, supprimer, signaler
+
+    private fun authored(id: String, authorId: String) = reel(id).copy(author = me.meeshy.sdk.model.ApiAuthor(id = authorId))
+
+    @Test
+    fun `supprimer retire le reel tout de suite et le garde retire quand le serveur confirme`() = runTest {
+        coEvery { repository.delete("r2") } returns NetworkResult.Success(Unit)
+        val vm = viewModel(thread = listOf(reel("r1"), reel("r2"), reel("r3")))
+        vm.load()
+
+        vm.delete("r2")
+
+        assertThat(vm.state.value.reels.map { it.id }).containsExactly("r1", "r3").inOrder()
+        coVerify(exactly = 1) { repository.delete("r2") }
+    }
+
+    @Test
+    fun `une suppression refusee remet le reel a sa place et le dit`() = runTest {
+        coEvery { repository.delete("r2") } returns NetworkResult.Failure(ApiError("x"))
+        val vm = viewModel(thread = listOf(reel("r1"), reel("r2"), reel("r3")))
+        vm.load()
+
+        vm.toasts.test {
+            vm.delete("r2")
+            val toast = awaitItem()
+            assertThat(toast.kind).isEqualTo(FeedbackKind.Error)
+            assertThat(toast.messageRes).isEqualTo(R.string.reels_toast_delete_failed)
+        }
+        assertThat(vm.state.value.reels.map { it.id }).containsExactly("r1", "r2", "r3").inOrder()
+    }
+
+    @Test
+    fun `signaler envoie le motif inapproprie et confirme`() = runTest {
+        coEvery { reportRepository.reportPost("r1", ReportReason.INAPPROPRIATE, null) } returns NetworkResult.Success(Unit)
+        val vm = viewModel(thread = listOf(reel("r1")))
+        vm.load()
+
+        vm.toasts.test {
+            vm.report("r1")
+            assertThat(awaitItem().messageRes).isEqualTo(R.string.reels_toast_reported)
+        }
+        coVerify(exactly = 1) { reportRepository.reportPost("r1", ReportReason.INAPPROPRIATE, null) }
+    }
+
+    @Test
+    fun `epingler appelle la passerelle et un echec le dit`() = runTest {
+        coEvery { repository.pinPost("r1") } returns NetworkResult.Failure(ApiError("x"))
+        val vm = viewModel(thread = listOf(reel("r1")))
+        vm.load()
+
+        vm.toasts.test {
+            vm.pin("r1")
+            assertThat(awaitItem().messageRes).isEqualTo(R.string.reels_toast_pin_failed)
+        }
+    }
+
+    @Test
+    fun `un reel est le sien quand son auteur est l utilisateur connecte`() = runTest {
+        val vm = viewModel(thread = listOf(authored("r1", "me"), authored("r2", "autre")), currentUserId = "me")
+        vm.load()
+
+        assertThat(vm.isOwn(vm.state.value.reels[0])).isTrue()
+        assertThat(vm.isOwn(vm.state.value.reels[1])).isFalse()
+    }
+
+    @Test
+    fun `republier monte le compteur au geste et le confirme`() = runTest {
+        coEvery { repository.repost("r1", any(), any(), any()) } returns NetworkResult.Success(ApiPost(id = "rp1"))
+        val vm = viewModel(thread = listOf(reel("r1")))
+        vm.load()
+
+        vm.toasts.test {
+            vm.repost("r1")
+            assertThat(awaitItem()).isEqualTo(FeedbackToastRequest(R.string.reels_toast_reposted, FeedbackKind.Success))
+        }
+        assertThat(vm.state.value.reels.single().repostCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `une republication refusee rend le compteur et le dit`() = runTest {
+        coEvery { repository.repost("r1", any(), any(), any()) } returns NetworkResult.Failure(ApiError("x", httpStatus = 500))
+        val vm = viewModel(thread = listOf(reel("r1")))
+        vm.load()
+
+        vm.toasts.test {
+            vm.repost("r1")
+            assertThat(awaitItem()).isEqualTo(FeedbackToastRequest(R.string.reels_toast_repost_failed, FeedbackKind.Error))
+        }
+        assertThat(vm.state.value.reels.single().repostCount).isEqualTo(0)
     }
 }

@@ -19,9 +19,12 @@ import java.util.Set;
  *
  * Les bannieres de la coque sont dessinees par FCM sous `notify(tag, 0)`, avec
  * `tag = threadId || notificationId` (`android-push-config.ts`) — `threadId`
- * etant la conversation. On annule donc le tag de CHAQUE notification, et
- * celui de sa conversation SEULEMENT pour un arrivage de message : revoquer
- * une reaction ne doit jamais effacer la banniere du message courant du fil.
+ * etant la conversation. On annule donc le tag de CHAQUE notification ; celui
+ * de sa conversation n'est regarde que pour un arrivage de message, et n'y
+ * part qu'une banniere SANS marque (#12523) : sous ce tag s'affiche le DERNIER
+ * message du fil, qui reste quand un plus ancien est retire, comme sur le web
+ * (`banner-revocation.ts`). Une banniere marquee de la notification retiree
+ * part par {@link #closesMarked}.
  *
  * Pure et testee sur la JVM seule ; {@link MeeshyMessagingService} annule.
  */
@@ -43,12 +46,26 @@ final class NotificationRevocation {
         for (String id : ids) {
             if (!id.isEmpty()) tags.add(id);
         }
-        if (tags.isEmpty()) return Collections.emptyList();
+        return new ArrayList<>(tags);
+    }
+
+    /** Les tags de conversation des arrivages de message revoques, sans doublon. */
+    static List<String> conversationTags(Map<String, String> data) {
+        if (tagsToCancel(data).isEmpty()) return Collections.emptyList();
+        List<String> ids = split(data.get("notificationIds"));
+        List<String> conversations = split(data.get("conversationIds"));
+        List<String> types = split(data.get("types"));
+        Set<String> tags = new LinkedHashSet<>();
         for (int i = 0; i < ids.size(); i++) {
             String conversation = at(conversations, i);
             if (!conversation.isEmpty() && CONVERSATION_INDEXED.contains(at(types, i))) tags.add(conversation);
         }
         return new ArrayList<>(tags);
+    }
+
+    /** #12523 — `marked` : la marque de la banniere affichee sous le tag d'une conversation. */
+    static boolean closesConversationBanner(String marked) {
+        return marked == null || marked.trim().isEmpty();
     }
 
     /**

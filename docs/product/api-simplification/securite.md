@@ -684,7 +684,7 @@ Réfutations cherchées et tombées :
 - Fuite de hook depuis la sœur : `routes/me/preferences/index.ts:55` fait `fastify.addHook('preHandler', authMiddleware)` — mais `userPreferencesRoutes` n'est PAS enveloppé dans `fastify-plugin` (grep `fp(`/`fastify-plugin` sur les quatre fichiers de `routes/me/` : zéro occurrence). Le hook reste encapsulé dans l'enfant `/preferences` …
 
 
-*Sites :* `MaintenanceService.ts:412`, `MaintenanceService.ts:731`, `__tests__/unit/routes/me-delete-account.test.ts:478`, `apps/ios/Meeshy/Features/Main/Views/DeleteAccountView.swift:254`, `delete-account.ts:38`, `middleware/clientMutationId.ts:58`, `packages/shared/prisma/schema.prisma:3624`, `request-id.ts:15`
+*Sites :* `MaintenanceService.ts:412`, `MaintenanceService.ts:731`, `__tests__/unit/routes/me-delete-account.test.ts:478`, `apps/ios/Meeshy/Features/Settings/Views/DeleteAccountView.swift:254`, `delete-account.ts:38`, `middleware/clientMutationId.ts:58`, `packages/shared/prisma/schema.prisma:3624`, `request-id.ts:15`
 
 **Impact réel** — Atteignable en pratique par un simple appel HTTP, sans en-tête : trois mutations d'état déclenchées par une requête GET dépourvue de tout effet de bord assumé. Le porteur du jeton est le seul facteur — et ce jeton arrive dans la boîte de la victime, donc la menace réaliste est un pré-chargeur non humain sur le trajet de son courrier (antivirus, Safe Links, prefetch), pas un attaquant distant qui choisirait sa cible.
 

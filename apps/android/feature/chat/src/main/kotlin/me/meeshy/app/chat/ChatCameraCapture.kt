@@ -18,6 +18,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import java.io.File
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.PermissionNature
+import me.meeshy.ui.component.permission.PermissionFlowHost
+import me.meeshy.ui.component.permission.launchWithCameraAccess
+import me.meeshy.ui.component.permission.rememberPermissionFlow
 
 /**
  * Filenames for a composer-drawer camera capture (issue #3738) — photo or video.
@@ -39,12 +43,32 @@ object ChatCameraCaptureFile {
     private const val PHOTO_EXTENSION = ".jpg"
     private const val VIDEO_PREFIX = "chat_video_"
     private const val VIDEO_EXTENSION = ".mp4"
+    private const val RETOUCHED_PREFIX = "chat_retouch_"
 
     /** e.g. `next(1700000000000L) == "chat_capture_1700000000000.jpg"`. */
     fun next(nowMillis: Long): String = "$PHOTO_PREFIX$nowMillis$PHOTO_EXTENSION"
 
     /** e.g. `nextVideo(1700000000000L) == "chat_video_1700000000000.mp4"`. */
     fun nextVideo(nowMillis: Long): String = "$VIDEO_PREFIX$nowMillis$VIDEO_EXTENSION"
+
+    /** The rendered photo a retouch hands back (#12614), e.g. `"chat_retouch_1700000000000.jpg"`. */
+    fun nextRetouched(nowMillis: Long): String = "$RETOUCHED_PREFIX$nowMillis$PHOTO_EXTENSION"
+
+    /**
+     * A retouched capture written under a GENERATED [token], keeping only a safe extension (1–5 ASCII letters or
+     * digits) of the provider-supplied [displayName]: e.g. `nextRetouchedNamed("ab", "Vacances.PNG") == "chat_retouch_ab.png"`.
+     */
+    fun nextRetouchedNamed(token: String, displayName: String): String {
+        val extension = displayName.substringAfterLast('.', "").lowercase()
+            .takeIf { it.length in 1..5 && it.all { c -> c in 'a'..'z' || c in '0'..'9' } }
+        return "$RETOUCHED_PREFIX$token" + (extension?.let { ".$it" } ?: PHOTO_EXTENSION)
+    }
+
+    /** The copy of a captured video a retouch reads (#12650), e.g. `"chat_video_source_1700000000000.mp4"`. */
+    fun nextVideoSource(nowMillis: Long): String = "${VIDEO_PREFIX}source_$nowMillis$VIDEO_EXTENSION"
+
+    /** The rendered video a retouch hands back (#12650), e.g. `"chat_retouch_1700000000000.mp4"`. */
+    fun nextRetouchedVideo(nowMillis: Long): String = "$RETOUCHED_PREFIX$nowMillis$VIDEO_EXTENSION"
 }
 
 /** The two capture launchers the composer's Camera tile chooser offers. */
@@ -60,10 +84,14 @@ class ChatCameraCaptureLaunchers internal constructor(
  * Wires the two system capture intents — `ACTION_IMAGE_CAPTURE` and
  * `ACTION_VIDEO_CAPTURE` — behind [ActivityResultContracts.TakePicture] /
  * [ActivityResultContracts.CaptureVideo], the exact pattern
- * `me.meeshy.app.feed.FeedComposerSheet`'s own two camera tiles already proved:
- * no CameraX dependency (absent from the version catalog), no `CAMERA` runtime
- * permission to request here — the system camera app that resolves the intent
- * owns that permission, not this composer.
+ * `me.meeshy.app.feed.FeedComposerSheet`'s own two camera tiles already proved,
+ * with no CameraX dependency (absent from the version catalog). The manifest
+ * DECLARES `CAMERA`, so the system refuses both intents with a
+ * `SecurityException` until the user grants it: each launch therefore goes
+ * through [launchWithCameraAccess] behind [rememberPermissionFlow] (explanation
+ * sheet, system prompt, « Open Settings » card — hosted here by
+ * [PermissionFlowHost]), and a refused or failed launch deletes the
+ * destination it had just created.
  *
  * A fresh [ChatCameraCaptureFile]-named destination is created under the app's
  * `FileProvider` before each launch; write permission is granted directly on
@@ -122,16 +150,34 @@ fun rememberChatCameraCapture(onCaptured: suspend (uri: Uri, isVideo: Boolean) -
         finish(uri, success, isVideo = true)
     }
 
+    val cameraAccess = rememberPermissionFlow()
+    PermissionFlowHost(cameraAccess)
+
+    fun guardedLaunch(fileName: () -> String, start: (Uri) -> Unit) {
+        scope.launch {
+            var created: Uri? = null
+            val started = launchWithCameraAccess(
+                ensureAccess = { cameraAccess.ensure(PermissionNature.CAMERA) },
+                launch = {
+                    val uri = context.createChatCaptureUri(fileName())
+                    created = uri
+                    pendingUri = uri
+                    start(uri)
+                },
+            )
+            if (!started) {
+                created?.let { runCatching { context.contentResolver.delete(it, null, null) } }
+                pendingUri = null
+            }
+        }
+    }
+
     return ChatCameraCaptureLaunchers(
         launchPhotoImpl = {
-            val uri = context.createChatCaptureUri(ChatCameraCaptureFile.next(System.currentTimeMillis()))
-            pendingUri = uri
-            takePicture.launch(uri)
+            guardedLaunch({ ChatCameraCaptureFile.next(System.currentTimeMillis()) }, takePicture::launch)
         },
         launchVideoImpl = {
-            val uri = context.createChatCaptureUri(ChatCameraCaptureFile.nextVideo(System.currentTimeMillis()))
-            pendingUri = uri
-            captureVideo.launch(uri)
+            guardedLaunch({ ChatCameraCaptureFile.nextVideo(System.currentTimeMillis()) }, captureVideo::launch)
         },
     )
 }

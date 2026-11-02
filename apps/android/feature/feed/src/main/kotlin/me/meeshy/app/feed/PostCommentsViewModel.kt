@@ -5,32 +5,39 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.lang.ComposeLanguageDetector
+import me.meeshy.sdk.media.MediaIntake
+import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.mention.MentionAutocompleteState
-import me.meeshy.sdk.mention.MentionComposer
+import me.meeshy.sdk.mention.MentionContacts
+import me.meeshy.sdk.mention.MentionLookupDriver
 import me.meeshy.sdk.mention.MentionSearch
-import me.meeshy.sdk.mention.applyRemote
-import me.meeshy.sdk.mention.onTextChange
-import me.meeshy.sdk.mention.reset
-import me.meeshy.sdk.mention.select
+import me.meeshy.sdk.model.card.PostCommentCardComposition
+import me.meeshy.sdk.model.card.PostCommentCardLabels
+import me.meeshy.sdk.model.card.PostCommentCardPost
+import me.meeshy.sdk.model.card.PostCommentCardSubject
 import me.meeshy.sdk.model.ApiAuthor
+import me.meeshy.sdk.model.ComposerLanguage
+import me.meeshy.sdk.model.ComposerLanguageState
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PostTranslationMerge
 import me.meeshy.sdk.model.SocketCommentReactionUpdateData
 import me.meeshy.sdk.model.SocketCommentTranslationUpdatedData
+import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.UnsentCommentStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
@@ -65,7 +72,14 @@ data class PostCommentsUiState(
     /** A one-shot localized feedback, cleared by [PostCommentsViewModel.consumeNotice]. */
     val notice: CommentNotice? = null,
     val translatingLanguages: Set<String> = emptySet(),
-)
+    /** Les pièces jointes au commentaire en cours (#12972). */
+    val attachments: CommentAttachmentTray = CommentAttachmentTray(),
+    /** La langue que montre la pastille du composeur (#14384) : choisie, sinon détectée, sinon celle du lecteur. */
+    val composerLanguageCode: String = ComposerLanguage.DEFAULT,
+) {
+    /** Envoyer : du texte ou une pièce, rien qui se téléverse encore, aucun envoi en vol. */
+    val canSubmit: Boolean get() = (draft.isNotBlank() || attachments.hasMedia) && !attachments.isUploading && !isSubmitting
+}
 
 /**
  * The projected reply thread beneath one top-level comment. When [isExpanded] the full loaded
@@ -98,6 +112,10 @@ class PostCommentsViewModel @Inject constructor(
     private val config: MeeshyConfig,
     private val mentionSearch: MentionSearch,
     savedStateHandle: SavedStateHandle,
+    private val languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
+    private val mediaUploader: CommentMediaUploader? = null,
+    private val unsentComments: UnsentCommentStore? = null,
+    mentionContacts: MentionContacts = MentionContacts.None,
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
@@ -123,23 +141,33 @@ class PostCommentsViewModel @Inject constructor(
      *  background re-emit (a socket comment landing) never tears the half-typed draft down. */
     private val composerDraft = MutableStateFlow(ComposerDraft())
 
-    /** The @-mention candidates for the thread, recomputed on every projection from the loaded
-     *  authors. Cached here so the synchronous [onDraftChange] intent can filter without a suspend. */
-    private var mentionRoster: List<MentionCandidate> = emptyList()
+    /**
+     * The « @ » law of #14053 for this thread: the cached contacts and the thread's authors at once,
+     * the post's own suggestions (`contextType=post`) from the third character — or the second when
+     * the first two letters found nobody locally.
+     */
+    private val mentions = MentionLookupDriver(
+        scope = viewModelScope,
+        search = mentionSearch,
+        contacts = mentionContacts,
+        selfId = { sessionRepository.currentUser.value?.id },
+        read = { composerDraft.value.mention },
+        write = { transform -> composerDraft.update { it.copy(mention = transform(it.mention)) } },
+    )
     private var pendingSeq = 0
-
-    /** The in-flight debounced directory lookup for the active `@fragment`; a fresh keystroke or a
-     *  selection cancels it so a stale response never lands in the panel. */
-    private var mentionSearchJob: Job? = null
 
     /** The `@username ` prefix [beginReply] last injected, tracked so retargeting the composer to
      *  a different reply strips exactly that prefix rather than any leading text. */
     private var prefilledMention: String? = null
 
+    private val attachments = MutableStateFlow(CommentAttachmentTray())
+    private var pieceSeq = 0
+
     private val _state = MutableStateFlow(PostCommentsUiState())
     val state: StateFlow<PostCommentsUiState> = _state.asStateFlow()
 
     init {
+        mentions.bind(MentionContext.post(postId))
         viewModelScope.launch {
             combine(thread, sessionRepository.currentUser, status, likes, replies) { t, user, st, likeState, replyState ->
                 ProjectionInputs(t, user, st, likeState, replyState)
@@ -151,10 +179,19 @@ class PostCommentsViewModel @Inject constructor(
                 ProjectionBundle(inputs, replyTarget, langs, draft)
             }.combine(translatingLanguages) { bundle, translating ->
                 project(bundle.inputs, bundle.replyTarget, bundle.activeLanguages, bundle.draft, translating)
-            }.collect { projected -> _state.value = projected }
+            }.combine(attachments) { projected, tray -> projected.copy(attachments = tray) }
+                .collect { projected -> _state.value = projected }
         }
+        restoreUnsentComment()
         observeRealtime()
         loadInitial()
+    }
+
+    /** #13693 — a comment typed in a banner and refused for good comes back in this post's field (it leaves the store). */
+    private fun restoreUnsentComment() {
+        if (postId.isBlank()) return
+        val kept = unsentComments?.take(postId) ?: return
+        composerDraft.update { draft -> if (draft.text.isBlank()) draft.copy(text = kept) else draft }
     }
 
     /**
@@ -274,6 +311,7 @@ class PostCommentsViewModel @Inject constructor(
     /** Leaves the realtime room this VM joined in [observeRealtime]. */
     override fun onCleared() {
         if (postId.isNotBlank()) socialSocket.leavePostRoom(postId)
+        attachments.value.pieces.forEach { MediaIntake.release(it.item) }
         super.onCleared()
     }
 
@@ -334,53 +372,36 @@ class PostCommentsViewModel @Inject constructor(
     }
 
     /**
-     * A composer keystroke: store the new [value] and recompute the @-mention autocomplete panel
-     * against the thread's roster (the shared [me.meeshy.sdk.mention.MentionComposer] SSOT). Kept in
-     * a folded flow so a realtime re-projection never drops the half-typed draft.
+     * A composer keystroke: store the new [value], then let the « @ » law serve the panel — the
+     * cached contacts and the thread's authors at once, the post's suggestions from the network when
+     * [me.meeshy.sdk.model.mention.MentionLookupLaw.stage] says so. Kept in a folded flow so a
+     * realtime re-projection never drops the half-typed draft.
      */
     fun onDraftChange(value: String) {
-        composerDraft.update { it.copy(text = value, mention = it.mention.onTextChange(value, mentionRoster)) }
-        maybeSearchRemoteMentions(composerDraft.value.mention.activeQuery)
+        composerDraft.update { it.copy(text = value, language = it.language.onDraftChanged(value)) }
+        mentions.onTextChange(value)
     }
 
-    /**
-     * Fires a debounced directory lookup for the active `@fragment` and folds the results into the
-     * panel below the local roster — the feed-comment counterpart of the chat composer's remote merge,
-     * on the same shared [MentionSearch] SSOT. Nothing runs for a dismissed panel or a query under two
-     * significant characters ([MentionComposer.shouldQueryRemote] — the thread roster already covers
-     * those); a fresh keystroke cancels the previous in-flight lookup (300 ms debounce). The signed-in
-     * user is excluded, and the pure [applyRemote] merge drops a slow response whose fragment is already
-     * stale and keeps the local candidates ahead of the directory ones. A failed lookup degrades to the
-     * local roster (the shared [me.meeshy.sdk.mention.DirectoryMentionSearch] already maps failure → empty).
-     */
-    private fun maybeSearchRemoteMentions(query: String?) {
-        mentionSearchJob?.cancel()
-        if (query == null || !MentionComposer.shouldQueryRemote(query)) return
-        val currentUserId = sessionRepository.currentUser.value?.id
-        mentionSearchJob = viewModelScope.launch {
-            delay(MENTION_SEARCH_DEBOUNCE_MS)
-            val remote = try {
-                mentionSearch.search(query.trim())
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                return@launch
-            }.filterNot { it.id == currentUserId }
-            composerDraft.update { it.copy(mention = it.mention.applyRemote(query, remote)) }
-        }
+    /** La pastille DÉCLARE la langue du commentaire (iOS `composerLanguage`, #6587) : elle gagne sur la détection. */
+    fun onComposerLanguagePicked(code: String) {
+        composerDraft.update { it.copy(language = it.language.withManualPick(code)) }
+    }
+
+    /** Un emoji rapide part aussitôt comme commentaire (iOS `sendQuickEmoji`) — jamais par-dessus un brouillon. */
+    fun sendQuickEmoji(emoji: String) {
+        if (composerDraft.value.text.isNotBlank() || attachments.value.hasMedia) return
+        composerDraft.update { it.copy(text = emoji) }
+        submit()
     }
 
     /**
      * Insert the picked [candidate]'s handle into the draft (replacing the trailing `@fragment`),
-     * record it as a draft mention, and dismiss the suggestion panel — the same [select] reducer the
-     * chat composer uses, so both surfaces behave identically. Inert when no mention is in progress.
+     * record it as a draft mention, and dismiss the suggestion panel — the same driver the chat
+     * composer uses, so both surfaces behave identically. Inert when no mention is in progress.
      */
     fun onMentionSelected(candidate: MentionCandidate) {
-        mentionSearchJob?.cancel()
-        composerDraft.update {
-            val (newText, newMention) = it.mention.select(candidate, it.text)
-            it.copy(text = newText, mention = newMention)
-        }
+        val text = mentions.select(candidate, composerDraft.value.text)
+        composerDraft.update { it.copy(text = text) }
     }
 
     /**
@@ -392,10 +413,15 @@ class PostCommentsViewModel @Inject constructor(
      */
     fun submit() {
         val content = composerDraft.value.text.trim()
-        if (content.isEmpty() || postId.isBlank() || status.value.isSubmitting) return
+        val tray = attachments.value
+        if ((content.isEmpty() && !tray.hasMedia) || tray.isUploading || postId.isBlank() || status.value.isSubmitting) return
+        val attachmentIds = tray.attachmentIds.takeIf { it.isNotEmpty() }
+        val declaredLanguage = composerDraft.value.language.manualOverride
+        attachments.value = CommentAttachmentTray()
+        tray.pieces.forEach { MediaIntake.release(it.item) }
         composer.value?.let { target ->
             clearDraft()
-            sendReply(target.parentId, content)
+            sendReply(target.parentId, content, attachmentIds, declaredLanguage)
             return
         }
         val tempId = "pending-${pendingSeq++}"
@@ -404,7 +430,8 @@ class PostCommentsViewModel @Inject constructor(
         status.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             try {
-                when (val result = postRepository.addComment(postId, content)) {
+                val language = declaredLanguage ?: ComposeLanguageDetector.authoredLanguage(content, languageIdentifier)
+                when (val result = postRepository.addComment(postId, content, originalLanguage = language, attachmentIds = attachmentIds)) {
                     is NetworkResult.Success -> {
                         thread.update { it.confirmed(tempId, result.data) }
                         status.update { it.copy(isSubmitting = false, error = null) }
@@ -420,6 +447,49 @@ class PostCommentsViewModel @Inject constructor(
                 thread.update { it.failed(tempId) }
                 sendFailed(e.message, content, CommentNotice.SEND_FAILED)
             }
+        }
+    }
+
+    /** Joint une photo ou une vidéo (#12972) : elle entre au bandeau et se téléverse aussitôt. */
+    fun attachMedia(item: MediaUploadItem) {
+        if (attachments.value.isFull) return
+        val id = "piece-${pieceSeq++}"
+        attachments.update { it.adding(id, item) }
+        upload(id, item)
+    }
+
+    /** La pièce retouchée (#12735) remplace l'autre à sa place, et se téléverse de nouveau. */
+    fun replaceMedia(id: String, item: MediaUploadItem) {
+        val replaced = attachments.value.piece(id) ?: return
+        attachments.update { it.replacing(id, item) }
+        if (replaced.item !== item) MediaIntake.release(replaced.item)
+        upload(id, item)
+    }
+
+    fun removeMedia(id: String) {
+        attachments.value.piece(id)?.let { MediaIntake.release(it.item) }
+        attachments.update { it.removing(id) }
+    }
+
+    /** Une réponse ne s'applique qu'à la pièce qu'elle téléversait : une pièce retouchée ou retirée entre-temps l'ignore. */
+    private fun upload(id: String, item: MediaUploadItem) {
+        viewModelScope.launch {
+            val result = try {
+                mediaUploader?.upload(item)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            val media = (result as? NetworkResult.Success)?.data?.firstOrNull()
+            attachments.update { tray ->
+                when {
+                    tray.piece(id)?.item !== item -> tray
+                    media != null -> tray.uploaded(id, media)
+                    else -> tray.failed(id).also { MediaIntake.release(item) }
+                }
+            }
+            if (media == null) status.update { it.copy(notice = CommentNotice.MEDIA_FAILED) }
         }
     }
 
@@ -457,7 +527,7 @@ class PostCommentsViewModel @Inject constructor(
 
     /** Reset the composer text + mention tracking after a send. */
     private fun clearDraft() {
-        mentionSearchJob?.cancel()
+        mentions.reset()
         composerDraft.value = ComposerDraft()
     }
 
@@ -522,7 +592,7 @@ class PostCommentsViewModel @Inject constructor(
         }
     }
 
-    private fun sendReply(parentId: String, content: String) {
+    private fun sendReply(parentId: String, content: String, attachmentIds: List<String>?, declaredLanguage: String?) {
         val tempId = "pending-${pendingSeq++}"
         val row = optimisticRow(tempId, content).copy(parentId = parentId)
         replies.update { it.optimisticReply(parentId, row) }
@@ -531,7 +601,8 @@ class PostCommentsViewModel @Inject constructor(
         status.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             try {
-                when (val result = postRepository.addComment(postId, content, parentId)) {
+                val language = declaredLanguage ?: ComposeLanguageDetector.authoredLanguage(content, languageIdentifier)
+                when (val result = postRepository.addComment(postId, content, parentId, originalLanguage = language, attachmentIds = attachmentIds)) {
                     is NetworkResult.Success -> {
                         replies.update { it.confirmedReply(parentId, tempId, result.data) }
                         status.update { it.copy(isSubmitting = false, error = null) }
@@ -559,6 +630,26 @@ class PostCommentsViewModel @Inject constructor(
     private fun sendFailed(message: String?, content: String, notice: CommentNotice) {
         status.update { it.copy(isSubmitting = false, error = message, notice = notice) }
         if (composerDraft.value.text.isBlank()) composerDraft.update { it.copy(text = content) }
+    }
+
+    /**
+     * #13922 — la carte qu'« Imager » ouvre sur [commentId] (iOS `CommentMoreMenu`) : lui tel que sa rangée l'affiche, le
+     * fil chargé autour de lui, et [support], le post en tête quand il est public ; `null` quand rien ne s'image.
+     */
+    fun commentCard(commentId: String, support: PostCommentCardPost?, labels: PostCommentCardLabels): PostCommentCardSubject? {
+        val target = findComment(commentId) ?: return null
+        val shown = _state.value.comments + _state.value.replyThreads.values.flatMap { it.replies }
+        val user = sessionRepository.currentUser.value
+        val source = CommentCardReading.source(
+            target = target,
+            shownText = shown.firstOrNull { it.id == commentId }?.content,
+            loaded = thread.value.comments + replies.value.repliesByParent.values.flatten(),
+            pending = shown.filter { it.isPending }.map { it.id }.toSet(),
+            support = support,
+            viewer = user,
+            preferences = user ?: EmptyContentPreferences,
+        )
+        return PostCommentCardComposition.cardOf(source, labels)
     }
 
     private fun findComment(id: String): ApiPostComment? =
@@ -749,7 +840,7 @@ class PostCommentsViewModel @Inject constructor(
             }
         val allComments = thread.comments + replyState.repliesByParent.values.flatten()
         val mentionDisplayNames = CommentMentionDirectory.build(allComments)
-        mentionRoster = CommentMentionRoster.build(allComments, excludeUserId = inputs.user?.id)
+        mentions.updateRoster(CommentMentionRoster.build(allComments, excludeUserId = inputs.user?.id))
         val showSkeleton = st.isLoading && !thread.hasLoaded && thread.comments.isEmpty() && st.error == null
         return PostCommentsUiState(
             comments = rows,
@@ -768,6 +859,7 @@ class PostCommentsViewModel @Inject constructor(
             loadFailed = st.error != null && !st.isLoading && !thread.hasLoaded && thread.comments.isEmpty(),
             notice = st.notice,
             translatingLanguages = translatingLanguages,
+            composerLanguageCode = draft.language.display(inputs.user?.let(LanguageResolver::resolveUserLanguage) ?: ComposerLanguage.DEFAULT),
         )
     }
 
@@ -775,9 +867,6 @@ class PostCommentsViewModel @Inject constructor(
         const val POST_ID_ARG = "postId"
         private const val PAGE_SIZE = 20
         private const val HEART_EMOJI = "❤️"
-
-        /** Debounce before a directory lookup fires for the active `@fragment` (mirror of chat). */
-        private const val MENTION_SEARCH_DEBOUNCE_MS = 300L
 
         /** Replies shown in a collapsed preview before the viewer taps "View all". */
         private const val PREVIEW_REPLY_LIMIT = 2
@@ -808,6 +897,7 @@ private data class Status(
 private data class ComposerDraft(
     val text: String = "",
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
+    val language: ComposerLanguageState = ComposerLanguageState(),
 )
 
 /** The projection inputs accumulated before the final [translatingLanguages] fold, threaded

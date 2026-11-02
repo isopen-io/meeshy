@@ -181,12 +181,14 @@ final class ReadingModesFlagIntegrationTests: XCTestCase {
     }
 
     func test_messageListView_neverMentionsReadingModeFlagTypes() throws {
-        let code = try source("MessageListView.swift")
-        for forbidden in ["LentilleFeatureFlag", "MeeshyFeatureFlags"] {
-            XCTAssertFalse(
-                code.contains(forbidden),
-                "MessageListView.swift ne doit JAMAIS mentionner \(forbidden) — même raison que MessageListViewController."
-            )
+        for file in ["MessageListView.swift", "BubbleSwipeContainer.swift", "MessageRowOffer.swift", "MessageMenuPreviewContainer.swift"] {
+            let code = try source(file)
+            for forbidden in ["LentilleFeatureFlag", "MeeshyFeatureFlags"] {
+                XCTAssertFalse(
+                    code.contains(forbidden),
+                    "\(file) ne doit JAMAIS mentionner \(forbidden) — même raison que MessageListViewController."
+                )
+            }
         }
     }
 

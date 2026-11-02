@@ -48,9 +48,9 @@ describe('withPostRemoved — l’effet optimiste du retrait sur la fiche en cac
   });
 });
 
-describe('isRestrictedVisibility — les trois audiences que la LISTE ne lit pas', () => {
+describe('isRestrictedVisibility — les cinq audiences que la LISTE ne lit pas', () => {
   test('PRIVATE, ONLY et EXCEPT sont restreintes', () => {
-    expect([...RESTRICTED_POST_VISIBILITIES]).toEqual(['PRIVATE', 'ONLY', 'EXCEPT']);
+    expect([...RESTRICTED_POST_VISIBILITIES]).toEqual(['PRIVATE', 'ONLY', 'EXCEPT', 'CLOSE', 'BLOOD']);
     for (const visibility of RESTRICTED_POST_VISIBILITIES) expect(isRestrictedVisibility(visibility)).toBe(true);
   });
 

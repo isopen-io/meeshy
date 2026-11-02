@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddCircle
@@ -79,6 +78,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CreateShareLinkForm
+import me.meeshy.sdk.model.ShareLinkAddress
 import me.meeshy.sdk.model.ShareLinkExpiration
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.chrome.MeeshyBackground
@@ -88,6 +88,8 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 private val EXPIRATION_OPTIONS = listOf(
     ShareLinkExpiration.Never to R.string.share_link_expiration_never,
@@ -113,6 +115,7 @@ fun CreateShareLinkScreen(
     onBack: () -> Unit,
     onCreated: () -> Unit,
     onNewConversation: () -> Unit = {},
+    createOnOpen: Boolean = false,
     viewModel: CreateShareLinkViewModel = hiltViewModel(),
     pickerViewModel: ShareLinkPickerViewModel = hiltViewModel(),
 ) {
@@ -120,6 +123,11 @@ fun CreateShareLinkScreen(
     val pickerState by pickerViewModel.state.collectAsStateWithLifecycle()
     val haptics = rememberMeeshyHaptics()
     var showPicker by rememberSaveable { mutableStateOf(false) }
+
+    val defaultInviteMessage = stringResource(R.string.invite_defaultMessage)
+    LaunchedEffect(viewModel, createOnOpen) {
+        if (createOnOpen) viewModel.createOnOpen(defaultInviteMessage)
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -130,7 +138,11 @@ fun CreateShareLinkScreen(
     }
 
     state.createdJoinUrl?.let { joinUrl ->
-        CreatedShareLinkSheet(joinUrl = joinUrl, onDone = onCreated)
+        CreatedShareLinkSheet(
+            joinUrl = joinUrl,
+            onDone = onCreated,
+            onCustomize = viewModel::customize.takeIf { createOnOpen },
+        )
     }
 
     if (showPicker) {
@@ -169,8 +181,8 @@ fun CreateShareLinkScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.share_link_create_back),
+                                leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.share_link_create_back)),
                             )
                         }
                     },
@@ -308,7 +320,7 @@ private fun IdentitySection(form: CreateShareLinkForm, enabled: Boolean, vm: Cre
         )
         if (form.slug.isNotBlank()) {
             Text(
-                text = "meeshy.me/chat/${form.slug.trim().lowercase()}",
+                text = ShareLinkAddress(form.slug.trim().lowercase()).displayString(),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
                 color = ShareAccent,

@@ -38,11 +38,11 @@ final class StoryComposingFocusTests: XCTestCase {
         AppSourceGuard.stripComments(try AppSourceGuard.unit(
             chemin,
             alsoIncluding: chemin.hasSuffix("StoryViewerView+Canvas.swift")
-                ? ["Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"] : []))
+                ? ["Meeshy/Features/Stories/Views/StoryReaderCanvasLayout.swift"] : []))
     }
 
     private var canvas: String {
-        get throws { try source("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift") }
+        get throws { try source("Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift") }
     }
 
     private func occurrences(_ motif: String, in code: String) -> Int {
@@ -72,7 +72,7 @@ final class StoryComposingFocusTests: XCTestCase {
     }
 
     func test_laLegende_laTranscriptionEtLaPastilleDeSon_seTaisentEnSaisie() throws {
-        let code = try source("Meeshy/Features/Main/Views/StoryViewerView+CanvasCaption.swift")
+        let code = try source("Meeshy/Features/Stories/Views/StoryViewerView+CanvasCaption.swift")
         XCTAssertTrue(code.contains(".storyFocusFade(readerDecorationsShown)"))
         XCTAssertEqual(occurrences(".opacity(readerDecorationsShown ? 1 : 0)", in: code), 2)
     }
@@ -81,7 +81,7 @@ final class StoryComposingFocusTests: XCTestCase {
     /// lit que l'immersion, et la couche des commentaires n'est touchée par
     /// aucune des deux règles.
     func test_leComposeurEtLesCommentaires_restent() throws {
-        let composeur = try source("Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerLayer.swift")
+        let composeur = try source("Meeshy/Features/Stories/Views/StoryViewerView+CanvasComposerLayer.swift")
         XCTAssertTrue(composeur.contains(".opacity(chromeVisible ? 1 : 0)"))
         XCTAssertFalse(composeur.contains("readerChromeShown"),
                        "le champ qu'on tape ne disparaît pas sous son propre doigt")
@@ -198,11 +198,11 @@ final class StorySceneFocusTests: XCTestCase {
         AppSourceGuard.stripComments(try AppSourceGuard.unit(
             chemin,
             alsoIncluding: chemin.hasSuffix("StoryViewerView+Canvas.swift")
-                ? ["Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"] : []))
+                ? ["Meeshy/Features/Stories/Views/StoryReaderCanvasLayout.swift"] : []))
     }
 
     func test_leLecteur_consulteLaLoi() throws {
-        let code = try source("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift")
+        let code = try source("Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift")
         XCTAssertTrue(code.contains("StorySceneFocus.presentation("), "le plein écran cède à la saisie")
         XCTAssertTrue(code.contains("StorySceneFocus.framingInput("), "le cadrage lit la réserve du composeur")
         XCTAssertGreaterThanOrEqual(
@@ -213,14 +213,14 @@ final class StorySceneFocusTests: XCTestCase {
     /// La carte anime SON recadrage — un seul site pour les trois couches, et
     /// Reduce Motion y est lu.
     func test_laCarte_animeSonRecadrage() throws {
-        let code = try source("Meeshy/Features/Main/Views/StoryViewerView+ReaderCard.swift")
+        let code = try source("Meeshy/Features/Stories/Views/StoryViewerView+ReaderCard.swift")
         XCTAssertTrue(code.contains("StorySceneFocus.reframeAnimation(reduceMotion:"))
         XCTAssertTrue(code.contains("value: resting ?? framing"),
                       "le ressort ne couvre que le cadrage de REPOS : ce que le clavier déplace suit sa transaction (#10544)")
     }
 
     func test_lesDecorations_lisentLesCommentairesOuverts() throws {
-        let code = try source("Meeshy/Features/Main/Views/StoryComposingFocus.swift")
+        let code = try source("Meeshy/Features/Stories/Views/StoryComposingFocus.swift")
         XCTAssertTrue(code.contains("StorySceneFocus.showsContentDecorations(isComposing: isComposerEngaged, commentsOpen: showCommentsOverlay)"))
     }
 }
@@ -290,9 +290,9 @@ final class StoryKeyboardLiftTests: XCTestCase {
 
     private func source(_ nom: String) throws -> String {
         AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Views/" + nom,
+            AppSourceGuard.featureViewPath(nom),
             alsoIncluding: nom == "StoryViewerView+Canvas.swift"
-                ? ["Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"] : []))
+                ? ["Meeshy/Features/Stories/Views/StoryReaderCanvasLayout.swift"] : []))
     }
 
     /// La réserve de la scène et la zone des commentaires lisent le MÊME

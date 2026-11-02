@@ -51,7 +51,7 @@ Session continuée depuis une conversation précédente (context compaction).
 apps/ios/Meeshy.xcodeproj/project.pbxproj
 apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift
 apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift
-apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift
+apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift
 apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift
 apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift
 apps/ios/Meeshy/Features/Main/Views/RootView.swift

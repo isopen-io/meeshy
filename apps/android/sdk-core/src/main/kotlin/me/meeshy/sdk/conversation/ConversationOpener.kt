@@ -83,7 +83,7 @@ class ConversationOpener(
     private class RepositoryStore(private val repository: ConversationRepository) : ConversationOpenerStore {
         override suspend fun cached(id: String): ApiConversation? = repository.cachedById(id)
         override suspend fun fetch(id: String): NetworkResult<ApiConversation> = repository.getById(id)
-        override suspend fun remember(conversation: ApiConversation) = repository.remember(conversation)
+        override suspend fun remember(conversation: ApiConversation) = repository.rememberServed(conversation)
     }
 
     companion object {

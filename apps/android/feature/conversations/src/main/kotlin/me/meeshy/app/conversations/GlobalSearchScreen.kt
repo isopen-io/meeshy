@@ -1,5 +1,7 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.theme.accentColorPalette
+import me.meeshy.sdk.model.displayedAvatar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,7 +22,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
@@ -57,12 +58,19 @@ import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.sdk.search.MessageSearchHit
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
+import me.meeshy.sdk.model.PresenceState
+import me.meeshy.sdk.theme.otherParticipantUserId
+import me.meeshy.sdk.model.search.SearchLoadState
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.hexColor
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
  * Recherche globale plein ecran — parite iOS `GlobalSearchView` : pilule de
@@ -112,15 +120,19 @@ fun GlobalSearchScreen(
                     label = stringResource(R.string.global_search_empty_title),
                     sublabel = stringResource(R.string.global_search_empty_subtitle),
                 )
+                state.loadState == SearchLoadState.ERROR -> SearchFailureState(onRetry = viewModel::retryLastSearch)
                 state.isCurrentTabEmpty -> SearchStatus(
                     label = stringResource(R.string.global_search_no_results),
                     sublabel = stringResource(R.string.global_search_no_results_hint),
                 )
-                else -> SearchResults(
-                    state = state,
-                    onOpenConversation = onOpenConversation,
-                    onOpenUser = onOpenUser,
-                )
+                else -> {
+                    SearchStateBanner(state = state, onRetry = viewModel::retryLastSearch)
+                    SearchResults(
+                        state = state,
+                        onOpenConversation = onOpenConversation,
+                        onOpenUser = onOpenUser,
+                    )
+                }
             }
         }
     }
@@ -141,8 +153,8 @@ private fun SearchHeader(
     ) {
         IconButton(onClick = onBack) {
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = stringResource(R.string.global_search_back),
+                imageVector = leadingNavigationIcon(),
+                contentDescription = leadingNavigationLabel(stringResource(R.string.global_search_back)),
                 tint = MeeshyTheme.tokens.textPrimary,
             )
         }
@@ -301,6 +313,7 @@ private fun SearchResults(
             GlobalSearchTab.MESSAGES -> items(state.results.messages, key = { it.message.id }) { hit ->
                 MessageHitRow(
                     hit = hit,
+                    identity = hit.identity(state.currentUserId),
                     query = state.resultsQuery,
                     onClick = { onOpenConversation(hit.message.conversationId) },
                 )
@@ -336,13 +349,13 @@ private fun ResultCard(onClick: () -> Unit, content: @Composable androidx.compos
 }
 
 @Composable
-private fun MessageHitRow(hit: MessageSearchHit, query: String, onClick: () -> Unit) {
+private fun MessageHitRow(hit: MessageSearchHit, identity: MessageHitIdentity, query: String, onClick: () -> Unit) {
     ResultCard(onClick = onClick) {
-        MeeshyAvatar(name = hit.conversationTitle, size = 40.dp)
+        MeeshyAvatar(name = identity.title, size = 40.dp, imageUrl = identity.avatarUrl)
         Spacer(Modifier.width(MeeshySpacing.md))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = hit.conversationTitle.ifBlank { hit.message.sender?.displayName ?: "" },
+                text = identity.title.ifBlank { hit.message.sender?.displayName ?: "" },
                 style = MaterialTheme.typography.titleSmall,
                 color = MeeshyTheme.tokens.textPrimary,
                 maxLines = 1,
@@ -389,10 +402,16 @@ private fun buildHighlightedContent(content: String, query: String, wash: Color)
 private val SEARCH_HIGHLIGHT_WASH = MeeshyPalette.Warning.copy(alpha = 0.45f)
 
 @Composable
-private fun ConversationHitRow(conversation: ApiConversation, currentUserId: String?, onClick: () -> Unit) {
+internal fun ConversationHitRow(conversation: ApiConversation, currentUserId: String?, onClick: () -> Unit) {
     val title = conversation.displayTitle(currentUserId)
     ResultCard(onClick = onClick) {
-        MeeshyAvatar(name = title, size = 40.dp)
+        MeeshyAvatar(
+            name = title,
+            size = 40.dp,
+            containerColor = hexColor(conversation.accentColorPalette().primary),
+            imageUrl = conversation.displayedAvatar(currentUserId),
+            presence = rememberPresence(conversation.otherParticipantUserId(currentUserId)),
+        )
         Spacer(Modifier.width(MeeshySpacing.md))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -432,9 +451,10 @@ private fun ConversationHitRow(conversation: ApiConversation, currentUserId: Str
 }
 
 @Composable
-private fun UserHitRow(user: UserSearchResult, onClick: () -> Unit) {
+internal fun UserHitRow(user: UserSearchResult, onClick: () -> Unit) {
+    val presence = rememberPresence(user.id, user.servedPresence())
     ResultCard(onClick = onClick) {
-        MeeshyAvatar(name = user.displayName ?: user.username, size = 40.dp)
+        MeeshyAvatar(name = user.displayName ?: user.username, size = 40.dp, imageUrl = user.avatar, presence = presence)
         Spacer(Modifier.width(MeeshySpacing.md))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -450,7 +470,7 @@ private fun UserHitRow(user: UserSearchResult, onClick: () -> Unit) {
                 maxLines = 1,
             )
         }
-        if (user.isOnline == true) {
+        if (presence == PresenceState.ONLINE) {
             Text(
                 text = stringResource(R.string.global_search_online),
                 style = MaterialTheme.typography.labelSmall,

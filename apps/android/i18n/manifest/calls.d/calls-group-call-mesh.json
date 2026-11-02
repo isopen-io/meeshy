@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.control.addPeople",
+          "androidName": "call_control_add_people",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.addPeople.caption",
+          "androidName": "call_control_add_people_caption",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.invite.sheet.title",
+          "androidName": "call_invite_sheet_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.invite.sheet.empty",
+          "androidName": "call_invite_sheet_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.invite.failed",
+          "androidName": "call_invite_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.invite.ringing",
+          "androidName": "call_invite_ringing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.moderation.cancel",
+          "androidName": "call_moderation_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.group.stage",
+          "androidName": "call_group_stage",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.group.tile.you",
+          "androidName": "call_group_tile_you",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.group.tile.unknown",
+          "androidName": "call_group_tile_unknown",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

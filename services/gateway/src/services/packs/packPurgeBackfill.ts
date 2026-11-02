@@ -35,7 +35,7 @@ export type PackPurgeBackfillReport = {
   readonly totals: PackPurgeSummary;
 };
 
-const ZERO: PackPurgeSummary = { choicesDeleted: 0, libraryDeleted: 0, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 0, ownershipsDeleted: 0 };
+const ZERO: PackPurgeSummary = { choicesDeleted: 0, libraryDeleted: 0, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 0, ownershipsDeleted: 0, partnerProfilesDeleted: 0 };
 
 const add = (a: PackPurgeSummary, b: PackPurgeSummary): PackPurgeSummary => ({
   choicesDeleted: a.choicesDeleted + b.choicesDeleted,
@@ -44,6 +44,7 @@ const add = (a: PackPurgeSummary, b: PackPurgeSummary): PackPurgeSummary => ({
   publishedAnonymized: a.publishedAnonymized + b.publishedAnonymized,
   filesDeleted: a.filesDeleted + b.filesDeleted,
   ownershipsDeleted: a.ownershipsDeleted + b.ownershipsDeleted,
+  partnerProfilesDeleted: a.partnerProfilesDeleted + b.partnerProfilesDeleted,
 });
 
 const isEmpty = (summary: PackPurgeSummary): boolean => Object.values(summary).every((count) => count === 0);

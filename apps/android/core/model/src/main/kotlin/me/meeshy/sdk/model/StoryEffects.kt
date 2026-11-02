@@ -5,6 +5,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
+import kotlinx.serialization.json.JsonObject
 
 /**
  * Story canvas models — port of StoryModels.swift.
@@ -124,4 +125,18 @@ data class StoryEffects(
      */
     @Transient
     val unpaintableObjects: List<ObjectV3> = emptyList(),
+    /**
+     * Le document multi-scènes d'une PUBLICATION de post (miroir de `StoryEffects.canvasV3` d'iOS) : une scène par photo,
+     * composé par `ScenePostDocument` et écrit tel quel par [PostStoryEffectsWireSerializer] (l'outbox rejoue la charge).
+     * À la lecture d'un post servi, [PostReadStoryEffectsSerializer] l'y garde quand il porte deux scènes ou plus : le fil
+     * en peint chaque scène ([PostSceneReading]). [StoryEffects.rendering] ne le pose jamais.
+     */
+    @Transient
+    val canvas: CanvasV3? = null,
+    /**
+     * Le blob d'une story MODIFIÉE (#13632), déjà composé à partir de celui que la passerelle tient (`StoryEditDocument`) :
+     * écrit tel quel par [StoryEditEffectsWireSerializer], seul à le lire. Jamais posé par une lecture.
+     */
+    @Transient
+    val document: JsonObject? = null,
 )

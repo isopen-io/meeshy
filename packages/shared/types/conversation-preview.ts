@@ -101,6 +101,8 @@ export interface LastMessageCallSummary {
  * - `system.conversation-renamed` — params `{ actor }` : le titre a changé
  * - `system.conversation-image` — params `{ actor }` : l'image a changé
  * - `system.encryption-enabled` — params `{ mode }` (`e2ee` | `server` | `hybrid`)
+ * - `system.encryption-disabled` — params `{ actor }` : le chiffrement a été
+ *   désactivé (#12522) ; un client qui ne connaît pas la clé rend `system.generic`
  * - `system.generic` — un message système que le serveur ne sait pas typer ;
  *   aucun paramètre, le client rend son texte (Prisme compris), comme le fil,
  *   et un libellé neutre seulement sans texte (#8561).
@@ -114,6 +116,7 @@ export type SystemEventKey =
   | 'system.conversation-renamed'
   | 'system.conversation-image'
   | 'system.encryption-enabled'
+  | 'system.encryption-disabled'
   | 'system.generic';
 
 export interface LastMessageSystemEvent {

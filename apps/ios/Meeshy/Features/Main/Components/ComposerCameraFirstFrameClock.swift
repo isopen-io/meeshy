@@ -10,36 +10,32 @@ import MeeshySDK
 /// configurée à froid au toucher.
 ///
 /// Thread-safe : démarré sur le fil principal, arrêté sur la file des trames.
-nonisolated final class ComposerCameraFirstFrameClock: @unchecked Sendable {
-    private let lock = NSLock()
-    private var startedAt: CFTimeInterval?
-    private var prewarmed = false
+nonisolated final class ComposerCameraFirstFrameClock: Sendable {
+    private nonisolated struct Armed: Sendable {
+        let startedAt: CFTimeInterval
+        let prewarmed: Bool
+    }
+
+    private let armed = Locked<Armed?>(nil)
 
     nonisolated deinit {}
 
     init() {}
 
     func start(prewarmed: Bool, at instant: CFTimeInterval = CACurrentMediaTime()) {
-        lock.lock()
-        startedAt = instant
-        self.prewarmed = prewarmed
-        lock.unlock()
+        armed.mutate { $0 = Armed(startedAt: instant, prewarmed: prewarmed) }
     }
 
     /// La première trame depuis `start` : sa durée, en millisecondes, une fois ;
     /// `nil` pour toutes les suivantes.
     @discardableResult
     func report(at instant: CFTimeInterval = CACurrentMediaTime()) -> Int? {
-        lock.lock()
-        guard let debut = startedAt else {
-            lock.unlock()
-            return nil
-        }
-        startedAt = nil
-        let prechauffee = prewarmed
-        lock.unlock()
-        let duree = Int(((instant - debut) * 1000).rounded())
-        Logger.media.info("camera first frame: \(duree, privacy: .public) ms (\(prechauffee ? "prewarmed" : "cold", privacy: .public))")
-        return duree
+        guard let started = armed.mutate({ state -> Armed? in
+            defer { state = nil }
+            return state
+        }) else { return nil }
+        let elapsedMs = Int(((instant - started.startedAt) * 1000).rounded())
+        Logger.media.info("camera first frame: \(elapsedMs, privacy: .public) ms (\(started.prewarmed ? "prewarmed" : "cold", privacy: .public))")
+        return elapsedMs
     }
 }

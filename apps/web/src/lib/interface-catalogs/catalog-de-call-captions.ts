@@ -15,6 +15,7 @@ const deCallCaptions = {
   'callCaptions.listening': 'Deine Stimme wird transkribiert',
   'callCaptions.unsupported': 'Deine Stimme wird auf diesem Gerät nicht transkribiert: Du liest die anderen',
   'callCaptions.denied': 'Spracherkennung abgelehnt: Du liest die anderen',
+  'callCaptions.sealed': 'Untertitel nicht verfügbar: Diese Unterhaltung ist Ende-zu-Ende-verschlüsselt, oder ihre Verschlüsselung konnte nicht geprüft werden',
   'callCaptions.journal.title': 'Anrufprotokoll',
   'callCaptions.participant': 'Teilnehmer',
   'callTranscript.show': 'Transkript',

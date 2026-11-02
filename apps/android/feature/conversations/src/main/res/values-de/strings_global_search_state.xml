@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="global_search_offline_banner">Ergebnisse von diesem Gerät</string>
+    <string name="global_search_partial_failure">Einige Ergebnisse konnten nicht geladen werden</string>
+    <string name="global_search_retry">Erneut versuchen</string>
+    <string name="global_search_failed_title">Suche nicht verfügbar</string>
+    <string name="global_search_failed_hint">Prüfe deine Verbindung und versuche es erneut.</string>
+</resources>

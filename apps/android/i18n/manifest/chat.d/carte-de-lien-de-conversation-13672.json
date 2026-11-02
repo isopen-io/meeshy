@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {"androidName": "conversation_card_a11y_join_anonymously", "status": "android-only"},
+        {"androidName": "conversation_card_a11y_join_with_account", "status": "android-only"},
+        {"androidName": "conversation_card_a11y_join_with_named_account", "status": "android-only"},
+        {"androidName": "conversation_card_a11y_label", "status": "android-only"},
+        {"androidName": "conversation_card_a11y_languages", "status": "android-only"},
+        {"androidName": "conversation_card_a11y_members", "status": "android-only"},
+        {"androidName": "conversation_card_a11y_messages", "status": "android-only"},
+        {"androidName": "conversation_card_error_forbidden", "status": "android-only"},
+        {"androidName": "conversation_card_error_inactive", "status": "android-only"},
+        {"androidName": "conversation_card_error_join", "status": "android-only"},
+        {"androidName": "conversation_card_error_leave", "status": "android-only"},
+        {"androidName": "conversation_card_error_not_found", "status": "android-only"},
+        {"androidName": "conversation_card_expired", "status": "android-only"},
+        {"androidName": "conversation_card_in_progress", "status": "android-only"},
+        {"androidName": "conversation_card_invites_you", "status": "android-only"},
+        {"androidName": "conversation_card_join_choice_account", "status": "android-only"},
+        {"androidName": "conversation_card_join_choice_anonymous", "status": "android-only"},
+        {"androidName": "conversation_card_join_prompt", "status": "android-only"},
+        {"androidName": "conversation_card_leave", "status": "android-only"},
+        {"androidName": "conversation_card_leave_confirm_message", "status": "android-only"},
+        {"androidName": "conversation_card_leave_confirm_title", "status": "android-only"},
+        {"androidName": "conversation_card_loading", "status": "android-only"},
+        {"androidName": "conversation_card_open", "status": "android-only"},
+        {"androidName": "conversation_card_private_hint", "status": "android-only"},
+        {"androidName": "conversation_card_private_title", "status": "android-only"}
+      ]
+    }
+  }
+}

@@ -28,9 +28,15 @@ final class ComposerScenePickingTests: XCTestCase {
         XCTAssertEqual(ComposerMediaPlacement.role(door: .sceneSeries, currentSlideHasBackground: false), .background)
     }
 
-    func test_laPhotothequeSOuvreALaCreation_dUnPostOuDUneStory() {
-        XCTAssertTrue(ComposerScenePicking.opensOnPicker(origin: .storyTray, compositionIsEmpty: true))
+    func test_laPhotothequeSOuvreALaCreation_dUnPost() {
         XCTAssertTrue(ComposerScenePicking.opensOnPicker(origin: .feedComposer, compositionIsEmpty: true))
+    }
+
+    /// **La story s'ouvre sur la scène, jamais sur Photos** (#13839, directive
+    /// porteur du 2026-10-30) : la photothèque imposée à l'ouverture recouvrait
+    /// la scène qu'on venait demander. Le bouton Média la sert d'un geste.
+    func test_opensOnPicker_storyVierge_resteSurLaScene() {
+        XCTAssertFalse(ComposerScenePicking.opensOnPicker(origin: .storyTray, compositionIsEmpty: true))
     }
 
     /// Jamais sur ce qui REPREND un contenu, ni sur l'humeur, ni sur une

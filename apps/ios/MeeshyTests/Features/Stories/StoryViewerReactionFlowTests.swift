@@ -208,7 +208,7 @@ final class StoryViewerReactionFlowTests: XCTestCase {
             .deletingLastPathComponent()  // Features
             .deletingLastPathComponent()  // MeeshyTests
             .deletingLastPathComponent()  // ios
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -218,7 +218,7 @@ final class StoryViewerReactionFlowTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+ActionButton.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+ActionButton.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

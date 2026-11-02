@@ -50,13 +50,17 @@ abstract class GenerateCallFrameCatalogue : DefaultTask() {
             require(file.isFile) { "ambiance sans fichier : $file" }
             "        ${kotlinLiteral(mood)} to ${kotlinLiteral(file.readText(Charsets.UTF_8))}"
         }
+        val spotlight = File(sourceDir.get().asFile, "spotlight.json")
+        require(spotlight.isFile) { "mise en avant sans fichier : $spotlight" }
         out.writeText(
             "// GÉNÉRÉ — ne pas éditer ; source : packages/shared/design/call-capture-frames\n" +
                 "// Régénéré par la tâche Gradle generateCallFrameCatalogue.\n" +
                 "package me.meeshy.sdk.model.call.frames\n\n" +
                 "internal object CallFrameCatalogueGenerated {\n" +
                 "    /** Les douze fichiers d'ambiance, dans l'ordre canonique : ambiance to texte JSON. */\n" +
-                "    val moodFiles: List<Pair<String, String>> = listOf(\n$entries,\n    )\n}\n",
+                "    val moodFiles: List<Pair<String, String>> = listOf(\n$entries,\n    )\n\n" +
+                "    /** La mise en avant (#12683) : les ambiances ouvertes d'office et leurs cadres vedettes. */\n" +
+                "    val spotlightFile: String = ${kotlinLiteral(spotlight.readText(Charsets.UTF_8))}\n}\n",
             Charsets.UTF_8,
         )
     }

@@ -86,14 +86,11 @@ const enStickerPacks = {
   'packs.shop.domains': "Shop category",
   'packs.shop.hint': "Every pack: stickers, frames, backgrounds, rings and banners. What you own shows up in the screens that use it.",
   'packs.retry': "Try again",
-  'packs.locked': "Locked",
-  'packs.unlock.rank': "Rank {rank} — Glory needed: {missing}",
-  'packs.unlock.glory': "Glory needed: {missing}",
-  'packs.unlock.trophy': "Earned with a trophy",
-  'packs.unlock.season': "Season {number} reward",
-  'packs.unlock.upcoming': "Available from {date}",
-  'packs.unlock.until': "Available until {date}",
-  'packs.unlock.closed': "No longer offered",
+  'packs.error.notRemovable': "This pack stays installed: it can’t be removed.",
+  'packs.frames.changeAtmosphere': "Change atmosphere",
+  'packs.frames.yourAtmosphere': "Your atmosphere",
+  'packs.frames.atmosphereKept': "This pack holds your atmosphere, so it stays installed. Change atmosphere to remove it.",
+  'packs.frames.atmosphereQueued': "Offline: your choice will be sent once you’re back online.",
 } satisfies StickerPacksCatalog;
 
 export default enStickerPacks;

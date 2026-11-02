@@ -117,6 +117,12 @@ class StoryGroupingTest {
     }
 
     @Test
+    fun `toStoryItem carries the caption's original language so it competes at its Prisme rank`() {
+        val item = storyPost("p1", "u1", createdAt = isoAgo(1)).copy(originalLanguage = "fr").toStoryItem()
+        assertThat(item.originalLanguage).isEqualTo("fr")
+    }
+
+    @Test
     fun `toStoryItem carries a media's caption and its captionTranslations, flattened (#6280)`() {
         val post = storyPost("p1", "u1", createdAt = isoAgo(1)).copy(
             media = listOf(

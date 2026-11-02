@@ -5,6 +5,15 @@
       "id": "distingue.monogramme",
       "mood": "distingue",
       "name": "Monogramme",
+      "localizedNames": {
+        "fr": "Monogramme",
+        "en": "Monogram",
+        "es": "Monograma",
+        "pt": "Monograma",
+        "de": "Monogramm",
+        "it": "Monogramma",
+        "ar": "مونوغرام"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -129,6 +138,15 @@
       "id": "distingue.bibliotheque",
       "mood": "distingue",
       "name": "Bibliothèque",
+      "localizedNames": {
+        "fr": "Bibliothèque",
+        "en": "Library",
+        "es": "Biblioteca",
+        "pt": "Biblioteca",
+        "de": "Bibliothek",
+        "it": "Biblioteca",
+        "ar": "مكتبة"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -257,6 +275,15 @@
       "id": "distingue.cercle",
       "mood": "distingue",
       "name": "Cercle",
+      "localizedNames": {
+        "fr": "Cercle",
+        "en": "Circle",
+        "es": "Círculo",
+        "pt": "Círculo",
+        "de": "Zirkel",
+        "it": "Circolo",
+        "ar": "دائرة"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -399,6 +426,15 @@
       "id": "distingue.correspondance",
       "mood": "distingue",
       "name": "Correspondance",
+      "localizedNames": {
+        "fr": "Correspondance",
+        "en": "Correspondence",
+        "es": "Correspondencia",
+        "pt": "Correspondência",
+        "de": "Briefwechsel",
+        "it": "Corrispondenza",
+        "ar": "مراسلات"
+      },
       "surfaces": [
         "capture",
         "live"

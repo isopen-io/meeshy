@@ -69,10 +69,11 @@ export interface ConversationHandlerDependencies {
   presenceViewer: (userId: string) => Promise<PresenceViewer>;
   /**
    * La loi UNIQUE de visibilité de la présence — amitié acceptée, ADMIN+,
-   * blocage, préférences — `PresenceVisibilityService.resolveForTargets`, la
-   * même porte que `presence:snapshot` et `GET /users/presence`.
+   * blocage, préférences — dans sa forme d'ÉVÉNEMENT POUSSÉ,
+   * `PresenceVisibilityService.resolveForPresenceEvent`, la même porte que
+   * `presence:snapshot` : un blocage l'emporte sur le privilège ADMIN (#13298).
    */
-  presenceVisibility: Pick<PresenceVisibilityService, 'resolveForTargets'>;
+  presenceVisibility: Pick<PresenceVisibilityService, 'resolveForPresenceEvent'>;
 }
 
 export class ConversationHandler {
@@ -83,7 +84,7 @@ export class ConversationHandler {
   private retractTyping?: (socket: Socket, conversationId: string) => Promise<void>;
   private replayLiveLocations?: (socket: Socket, conversationId: string) => void;
   private presenceViewer: (userId: string) => Promise<PresenceViewer>;
-  private presenceVisibility: Pick<PresenceVisibilityService, 'resolveForTargets'>;
+  private presenceVisibility: Pick<PresenceVisibilityService, 'resolveForPresenceEvent'>;
   private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ConversationHandlerDependencies) {
@@ -469,7 +470,7 @@ export class ConversationHandler {
 
     const viewerUserId = this._registeredUserIdOf(socket);
     const viewer = viewerUserId ? await this.presenceViewer(viewerUserId) : null;
-    const visibility = await this.presenceVisibility.resolveForTargets(
+    const visibility = await this.presenceVisibility.resolveForPresenceEvent(
       viewer,
       onlineUsers.map((u) => u.id),
     );

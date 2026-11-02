@@ -40,6 +40,31 @@ class SignupFormTest {
     }
 
     @Test
+    fun nameOfASingleCharacter_isRefusedWithTheMinimumIssue() {
+        // #13825 : « A » ou « B » ne sont pas des noms ; « Al », « Li », « Sy » le sont.
+        assertThat(valid(displayName = "A").validate().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_TOO_SHORT)
+        assertThat(valid(displayName = "A").canSubmit).isFalse()
+        listOf("Al", "Li", "Sy").forEach { name ->
+            assertThat(valid(displayName = name).validate().displayName).isNull()
+            assertThat(valid(displayName = name).canSubmit).isTrue()
+        }
+    }
+
+    @Test
+    fun nameMinimumIsMeasuredAfterTrim() {
+        assertThat(valid(displayName = "   A   ").validate().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_TOO_SHORT)
+        assertThat(valid(displayName = "  Al  ").validate().displayName).isNull()
+    }
+
+    @Test
+    fun aSingleCharacterNameIsShownRefusedAsSoonAsItIsTyped() {
+        assertThat(valid(displayName = "A").visibleValidation().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_TOO_SHORT)
+    }
+
+    @Test
     fun blankName_isRefused() {
         assertThat(valid(displayName = "   ").validate().displayName)
             .isEqualTo(SignupFieldIssue.DISPLAY_NAME_REQUIRED)
@@ -52,10 +77,27 @@ class SignupFormTest {
     }
 
     @Test
-    fun nameCarryingOneLetterAmongDigits_isAccepted() {
-        // Le miroir client ne porte QUE la règle « au moins une lettre » : le jeu
-        // de caractères borne firstName/lastName, jamais displayName.
-        assertThat(valid(displayName = "R2 D2").canSubmit).isTrue()
+    fun nameCarryingDigitsOrSymbols_isRefusedWithTheCharacterSetIssue() {
+        // Le motif du serveur (`^(?=.*\p{L})[\p{L}\p{M}\s'’ʼ.-]+$`) refuse « R2 D2 » : le client le
+        // dit avant l'envoi, dans la langue du lecteur, au lieu de montrer le motif brut.
+        listOf("R2 D2", "Jean_Eric", "Ana@home", "Bob!").forEach { name ->
+            assertThat(valid(displayName = name).validate().displayName)
+                .isEqualTo(SignupFieldIssue.DISPLAY_NAME_INVALID_CHARACTERS)
+            assertThat(valid(displayName = name).canSubmit).isFalse()
+        }
+    }
+
+    @Test
+    fun nameMadeOfLettersMarksSpacesApostrophesDotsAndHyphens_isAccepted() {
+        listOf("Mary-Jane O’Neil", "J. R. R. Tolkien", "Ana ʼAli", "Zoë d'Été", "محمد علي", "e\u0301lise").forEach { name ->
+            assertThat(valid(displayName = name).validate().displayName).isNull()
+        }
+    }
+
+    @Test
+    fun nameWithoutLetter_staysRequiredEvenWithForbiddenCharacters() {
+        assertThat(valid(displayName = "1234 !").validate().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_REQUIRED)
     }
 
     @Test
@@ -365,6 +407,29 @@ class SignupFormPhasedTest {
         assertThat(form.effectiveDisplayName).isEqualTo("Ada Lovelace")
         assertThat(form.effectiveUsername).isEqualTo("ada-lovelace")
         assertThat(form.isIdentityDefined).isTrue()
+    }
+
+    @Test
+    fun `un pseudo de deux caracteres est refuse, trois sont acceptes, rognes`() {
+        assertThat(phased(username = "Al").usernameRefusal).isEqualTo(RegistrationIdentity.UsernameRefusal.TOO_SHORT)
+        assertThat(phased(username = "Al").isIdentityDefined).isFalse()
+        assertThat(phased(username = "  Al  ").isIdentityDefined).isFalse()
+        assertThat(phased(username = "Ali").usernameRefusal).isNull()
+        assertThat(phased(username = "  Ali  ").isIdentityDefined).isTrue()
+        assertThat(phased(username = "Al").canSubmitPhased).isFalse()
+    }
+
+    @Test
+    fun `un nom tape d'un caractere ne definit pas l'identite, deux oui`() {
+        assertThat(phased(displayName = "A").isIdentityDefined).isFalse()
+        assertThat(phased(displayName = "A").canSubmitPhased).isFalse()
+        assertThat(phased(displayName = "Al").isIdentityDefined).isTrue()
+    }
+
+    @Test
+    fun `un nom derive d'une adresse d'une seule lettre ne definit pas l'identite`() {
+        assertThat(phased(email = "a12@meeshy.me").effectiveDisplayName).isEqualTo("A")
+        assertThat(phased(email = "a12@meeshy.me").isIdentityDefined).isFalse()
     }
 
     @Test

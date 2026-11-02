@@ -114,7 +114,7 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   // ── Exemptes, avec leur raison ────────────────────────────────────────────
   'admin/user-reports.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'admin/user-member-stats.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
-  'attachments/metadata.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  'attachments/metadata.ts': { kind: 'exempt', reads: 4, why: DOES_NOT_SELECT_SENDER },
   // #9927 — lit le TYPE de la conversation du message visé (règle des 13-17 ans), jamais son expéditeur.
   'attachments/upload.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-advanced-reads.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -153,7 +153,8 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   // dans `deliverTextTranslation.ts` (déclaré juste en dessous) — sa lecture
   // (`conversationId`, `senderId` scalaire, `createdAt`) a changé de fichier,
   // pas de nature.
-  'MeeshySocketIOManager.ts': { kind: 'exempt', reads: 6, why: DOES_NOT_SELECT_SENDER },
+  // #11381 — la lecture de `translation:request` est partie dans `messaging/atRestTranslationSource.ts`.
+  'MeeshySocketIOManager.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },
   'deliverTextTranslation.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/participant-resolver.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/personalPreviewOverride.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -163,6 +164,9 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   // `sender`. Absent du garde du masquage personnel : une `findUnique`, hors
   // de son périmètre (`findMany`/`count`), et elle ne sert aucun contenu.
   'readerSignedDelivery.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #12822 — relit le seul régime du message enrichi (`encryptionMode`, et
+  // celui de sa conversation) pour sceller son entrée de file hors ligne.
+  'emitAttachmentUpdated.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
 };
 
 /** `services/` — même règle, troisième racine. */
@@ -196,6 +200,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'attachments/attachmentCarrierServerReadable.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #9315 — même nature que son voisin : l'état des messages porteurs d'un fichier, sans `sender`.
   'attachments/fileRouteVerdict.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #13100 — le rattrapage du scellement au repos : les seuls identifiants des messages d'une conversation. Jamais `sender`.
+  'attachments/atRest/atRestBackfill.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #9646 — les cinq colonnes de protection des porteurs d'une page de pièces
   // (galerie, détail), pour signer celles qui disparaissent. Jamais `sender`.
   'attachments/signServedAttachments.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -223,6 +229,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // éphémère devait y ajouter. La lecture a changé de fichier, pas de nature.
   'MessageReadStatusService.ts': { kind: 'exempt', reads: 10, why: DOES_NOT_SELECT_SENDER },
   'messaging/anonymizeDeletedAccountMessages.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #11381 — le texte à retraduire (colonnes au repos seules, jamais `sender`).
+  'messaging/atRestTranslationSource.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7451 — la fenêtre du gel : `select: { id: true }`, rien d'autre.
   'messaging/freezeMessageStatus.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7740 — anti-répétition de Global : `select: { content: true }`, aucun expéditeur.
@@ -234,8 +242,13 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'game/MissionHabits.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7729 — suggestions d'onboarding : `select: { senderId: true }`, la relation n'est jamais chargée.
   'onboarding/OnboardingService.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #14105 — le lien d'un choisi d'un post ONLY : a-t-il écrit dans la conversation directe ?
+  // `select: { senderId: true }`, la relation n'est jamais chargée.
+  'posts/directContactVisibility.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7578 — purge serveur du contenu d'une vue unique : ni expéditeur ni contenu servi.
   'messaging/purgeViewOnceContent.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #11269 — rattrapage des médias à vue unique lus par tous : `senderId` (colonne) seul, la relation n'est jamais chargée.
+  'messaging/viewOnceMediaCatchUp.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #9382 — le signal de jeu « réponse reçue » : `select: { createdAt: true }`
   // seul, pour mesurer la fenêtre d'éligibilité du bonus. Aucun expéditeur servi.
   'game/MessageGameSignals.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },

@@ -1,5 +1,7 @@
 package me.meeshy.sdk.notification
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -465,22 +467,24 @@ class NotificationRepository @Inject constructor(
         return result
     }
 
-    private suspend fun revalidateNotifications(onError: (Throwable) -> Unit = {}) {
-        when (val result = pagedApiCall { notificationApi.list(0, PAGE_SIZE, null) }) {
+    /**
+     * Le compteur est demandé EN MÊME TEMPS que la liste et posé AVANT elle : écrire le cache
+     * relance `transformLatest` de [notificationsStream], qui annule le bloc en cours — un
+     * `unreadCount()` demandé après la liste était annulé 3 ms après l'envoi (#13354).
+     */
+    private suspend fun revalidateNotifications(onError: (Throwable) -> Unit = {}) = coroutineScope {
+        val count = async { unreadCount() }
+        val page = pagedApiCall { notificationApi.list(0, PAGE_SIZE, null) }
+        val countResult = count.await()
+        if (countResult is NetworkResult.Success) _unreadCount.value = countResult.data
+        when (page) {
             is NetworkResult.Success -> {
-                _notificationsCache.value = result.data.data
+                _hasMore.value = page.data.pagination?.hasMore ?: false
+                nextCursor = page.data.pagination?.nextCursor
+                _notificationsCache.value = page.data.data
                 _notificationsSyncedAt.value = clock.nowMillis()
-                _hasMore.value = result.data.pagination?.hasMore ?: false
-                nextCursor = result.data.pagination?.nextCursor
             }
-            is NetworkResult.Failure -> {
-                onError(Exception(result.error.message))
-                return
-            }
-        }
-        val countResult = unreadCount()
-        if (countResult is NetworkResult.Success) {
-            _unreadCount.value = countResult.data
+            is NetworkResult.Failure -> onError(Exception(page.error.message))
         }
     }
 

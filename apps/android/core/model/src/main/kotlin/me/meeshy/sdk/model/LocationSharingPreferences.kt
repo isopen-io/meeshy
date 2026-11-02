@@ -54,10 +54,11 @@ enum class LocationPrecision(val storageValue: String) {
 
     /**
      * Applique la dégradation au lieu choisi. Arrondir les coordonnées ne suffit pas : envoyer
-     * « 12 rue de la Paix, Paris » avec une position à ±10 km annulerait l'arrondi. Aux deux
-     * paliers grossiers, le nom et l'adresse sont REMPLACÉS par le composant géographique de
-     * granularité correspondante, et la catégorie POI est vidée. Sans composant disponible, le
-     * résultat ne porte que les coordonnées arrondies.
+     * « 12 rue de la Paix, Paris » avec une position à ±10 km annulerait l'arrondi. Aux paliers
+     * non exacts, le nom et l'adresse sont REMPLACÉS par le composant géographique de
+     * granularité correspondante, et la catégorie POI est vidée. Cela vaut dès [AROUND] : une rue
+     * ou un nom de commerce situe le point à quelques mètres et annulerait l'arrondi à ~100 m.
+     * Sans composant disponible, le résultat ne porte que les coordonnées arrondies.
      */
     fun coarsen(place: SharedPlace, names: PlaceCoarseNames = PlaceCoarseNames.EMPTY): SharedPlace {
         if (decimalPlaces == null) return place
@@ -65,8 +66,7 @@ enum class LocationPrecision(val storageValue: String) {
         val longitude = roundCoordinate(place.longitude)
         return when (this) {
             EXACT -> place
-            AROUND -> place.copy(latitude = latitude, longitude = longitude)
-            NEIGHBORHOOD -> {
+            AROUND, NEIGHBORHOOD -> {
                 val name = names.subLocality ?: names.locality
                 SharedPlace(
                     latitude = latitude,

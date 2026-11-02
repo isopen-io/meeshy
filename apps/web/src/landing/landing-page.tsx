@@ -16,7 +16,7 @@ export const WORLD_QR_PATH = '/world-qr.svg';
  * `landingBoot` sur des attributs `data-*` — d'où un HTML identique pour tous,
  * que les robots lisent tel quel.
  *
- * Les adresses sont celles de l'application : `/login`, `/signup`, `/chats`, et
+ * Les adresses sont celles de l'application : `/signup`, `/chats`, et
  * les pages statiques `/help`, `/faq`, `/privacy`, `/terms`, `/download`. Son
  * en-tête et son pied sont ceux de tout meeshy.me (`site-chrome.tsx`, #10071).
  *

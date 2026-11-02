@@ -77,15 +77,27 @@ final class SceneStickerPoseTests: XCTestCase {
 
     /// Une fois chargé, un sticker CINÉMATIQUE garde son mouvement ; un fixe
     /// n'en porte aucun.
+    func test_aSceneAtTheStickerCap_refusesTheNextPose_andSaysWhy() {
+        let vm = StoryComposerViewModel()
+        var refused: [StoryComposerLimit] = []
+        vm.onLimitReached = { refused.append($0) }
+        for _ in 0..<StoryComposerLimits.maxStickersPerScene {
+            XCTAssertNotNil(SceneStickerPose.pose(.emoji("🎉"), on: vm))
+        }
+
+        XCTAssertNil(SceneStickerPose.pose(.emoji("🔥"), on: vm))
+        XCTAssertEqual(refused, [.sticker])
+    }
+
     func test_aLoadedPackSticker_keepsItsMotionOnlyWhenCinematic() throws {
         let vm = StoryComposerViewModel()
         let image = UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2)).image { _ in }
         let octets = Data([0x52, 0x49, 0x46, 0x46])
 
-        let anime = SceneStickerPose.posePackSticker(
-            StickerPackItemImages.Loaded(image: image, data: octets, isAnimated: true), on: vm)
-        let fixe = SceneStickerPose.posePackSticker(
-            StickerPackItemImages.Loaded(image: image, data: octets, isAnimated: false), on: vm)
+        let anime = try XCTUnwrap(SceneStickerPose.posePackSticker(
+            StickerPackItemImages.Loaded(image: image, data: octets, isAnimated: true), on: vm))
+        let fixe = try XCTUnwrap(SceneStickerPose.posePackSticker(
+            StickerPackItemImages.Loaded(image: image, data: octets, isAnimated: false), on: vm))
 
         XCTAssertEqual(vm.loadedStickerAnimations[anime], octets)
         XCTAssertNil(vm.loadedStickerAnimations[fixe])
@@ -110,7 +122,7 @@ final class SceneStickerPoseTests: XCTestCase {
     /// Le chargement d'un sticker de pack retient le type de son fichier : c'est
     /// lui qui nomme le fichier envoyé et qui part à l'upload.
     func test_packStickerLoading_keepsTheItemMimeType() throws {
-        let code = try appSource("Meeshy/Features/Main/Composer/SceneStickerPose.swift")
+        let code = try appSource("Meeshy/Features/Composer/SceneStickerPose.swift")
         XCTAssertTrue(code.contains("isAnimated:item.isAnimated,mimeType:item.mimeType"),
                       "le chargement doit porter le genre et le type du fichier du pack")
         let envoi = try appSource("Meeshy/Features/Main/Views/ConversationView+StickerSheet.swift")

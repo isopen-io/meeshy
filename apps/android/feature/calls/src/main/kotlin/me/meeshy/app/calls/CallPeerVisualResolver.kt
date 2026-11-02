@@ -45,12 +45,15 @@ class CallPeerVisualResolver @Inject constructor(
 ) : CallPeerVisualSource {
 
     override fun visualFor(config: CallConfig): Flow<CallPeerVisual> = flow {
-        val selfId = session.currentUser.value?.id
+        val me = session.currentUser.value
+        val selfId = me?.id
         val conversation = conversationOf(config.conversationId)
         val interlocutor = conversation?.interlocutor(selfId)
         val cached = CallPeerVisual(
             avatarUrl = safe(config.peerAvatarUrl) ?: safe(interlocutor?.avatarUrl) ?: safe(groupAvatar(conversation)),
             bannerUrl = safe(config.peerBannerUrl) ?: safe(groupBanner(conversation)),
+            selfName = me?.effectiveDisplayName?.takeIf { it.isNotBlank() },
+            selfAvatarUrl = safe(me?.avatar),
         )
         if (cached != CallPeerVisual.EMPTY) emit(cached)
         val peerId = config.peerId.ifBlank { interlocutor?.userId.orEmpty() }
@@ -67,7 +70,7 @@ class CallPeerVisualResolver @Inject constructor(
     private suspend fun visualOf(profile: MeeshyUser, cached: CallPeerVisual): CallPeerVisual {
         val equipped = profile.servedDecor.avatarRing
         val ring = equipped?.let { item -> attempt { catalog.catalog().ring(item.pack, item.item) } }
-        return CallPeerVisual(
+        return cached.copy(
             avatarUrl = safe(profile.avatar) ?: cached.avatarUrl,
             bannerUrl = safe(profile.banner) ?: cached.bannerUrl,
             ring = ring,

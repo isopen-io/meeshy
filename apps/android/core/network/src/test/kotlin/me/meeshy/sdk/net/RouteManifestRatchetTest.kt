@@ -27,8 +27,78 @@ import org.junit.Test
 class RouteManifestRatchetTest {
 
     private companion object {
-        /** 286 : la dette de dev (280) plus les six routes de lecture et d'installation des lens (#11271). */
-        const val TO_PORT_CEILING = 286
+        /**
+         * 253 : 286 (dev 280 + six routes des lens, #11271) moins les 34 routes « à porter » que les
+         * interfaces des liens, du suivi de liens, de l'affiliation, des médias, de l'annuaire, des
+         * hashtags et des packs déclarent depuis la vague du 2026-10-23, plus `GET /u/:username`
+         * qui y revient : c'est un alias du profil public, qu'aucune interface ne vise (#4161, #4250).
+         * 254 : plus `GET /attachments/:attachmentId/subtitles/:lang`, servie par la passerelle depuis
+         * #11329 et sans interface Retrofit encore.
+         * 262 : plus les huit routes de l'annuaire E2EE par appareil (#3706 : appareils, pré-clés,
+         * enveloppes), servies par la passerelle et que l'E2EE Android ne vise pas encore.
+         * 263 : plus `DELETE /conversations/:conversationId/encryption` (#12522 : désactivation du
+         * régime de chiffrement), servie par la passerelle et sans interface Retrofit encore côté Android.
+         * 262 : moins `DELETE /e2ee/devices/:deviceId`, que porte `E2eeDeviceApi` (#13014, « Mes appareils
+         * chiffrés ») ; `GET /e2ee/devices`, servie dans le même lot, y naît déjà implémentée.
+         * 266 : plus quatre routes de l'étagère des ambiances de capture (#10169 : catalogue, détail,
+         * installation et retrait), servies par la passerelle ; Android les portera avec ses ambiances
+         * (#13093). `GET /packs/capture-frame/installed` naît implémentée par `packs/{domain}/installed`.
+         * 267 : plus `POST /e2ee/conversations/:conversationId/signals` (#13142 : la route unique des
+         * signaux chiffrés d'une conversation e2ee), servie par la passerelle et appelée par iOS ;
+         * Android la portera avec ses signaux chiffrés (#13202).
+         * 265 : moins `GET /me/onboarding` et `PATCH /me/onboarding` (#13268 : le parcours d'accueil),
+         * que porte `OnboardingApi.kt` depuis 76d43a11aa.
+         * 264 : moins `GET /me/preferences/audio` (#13240 : la transcription automatique des vocaux
+         * entrants), que porte `PreferencesApi.getAudio`.
+         * 258 : moins `GET /me/game/league/week`, `GET /me/game/league/friends`, `GET /me/game/privacy`,
+         * `POST /me/game/league/consent` et `PUT /me/game/privacy` (#13326 : les pages Joute et Réglages du jeu),
+         * que porte `GameApi.kt`.
+         * 257 : moins `PUT /me/game/visibility` (#13326 : « Jeu masqué » ferme les quatre visibilités à « moi seul »,
+         * comme iOS `closeEverything`), que porte `GameApi.setVisibility`.
+         * 250 : moins les sept ÉCRITURES du jeu qui touchent un solde (#13325, #13346) — `POST /me/game/missions/:missionId/reroll`,
+         * `chest/claim`, `flame/freezes`, `flame/relight`, `season/steps/:step/claim`, `season/seal` et `prestige` —
+         * que porte `GameApi.kt`, chacune avec son identifiant d'idempotence.
+         * 245 : moins `PUT /me/game/showcase/order`, `PUT /me/game/league/pseudonym`, `POST /me/game/duo/invite`,
+         * `POST /me/game/duo/:duoId/accept` et `POST /me/game/duo/:duoId/abandon` (#13347 : ranger la vitrine, l'alliance et
+         * le nom de joute), que porte `GameApi.kt`, chacune avec son identifiant d'idempotence.
+         * 241 : moins `GET /sounds/mine`, `GET /stories/audio`, `PATCH /sounds/:id` et `DELETE /sounds/:id`
+         * (#13428 : l'étagère des sons du composeur), que porte `SoundLibraryApi.kt`.
+         * 238 : moins `GET /conversations/:conversationId/encryption-status`, `POST …/encryption` et
+         * `DELETE …/encryption` (#13463 : la fiche Chiffrement d'une conversation), que porte
+         * `ConversationEncryptionApi.kt`.
+         * 237 : moins `GET /conversations/:id/engagement` (#13297 : la Flamme de l'en-tête du fil), que porte
+         * `ConversationEngagementApi.kt`.
+         * 236 : moins `DELETE /attachments/:attachmentId` (#13596 : supprimer UNE pièce d'un message), que porte
+         * `MediaApi.delete`.
+         * 235 : moins `GET /users/:userId/game` (#13498 : le niveau et le rang d'un autre membre sur sa bannière, selon
+         * SES réglages), que porte `GameApi.userGame`.
+         * 230 : moins `GET /packs/shop` et les quatre `POST /packs/<domaine>/:slug/purchase` (#13625 : la Boutique des packs,
+         * achat confirmé par le serveur), que porte `PackApi`.
+         * 229 : moins `GET /conversations/:id/card` (#13672 : la carte d'un lien direct de conversation dans
+         * une bulle), que porte `LinkDetailApi.directCard`.
+         * 208 : moins l'installation et le retrait d'un pack (`PUT` / `DELETE /packs/<domaine>/:slug/install`) et la
+         * boutique d'un domaine (`GET /packs/<domaine>`, le repli d'un ancien serveur) (#13641), que porte `PackApi` ; le
+         * motif `{domain}` couvre aussi les domaines que l'écran n'offre pas (capture-frame, glory-frame, lens).
+         * 207 : moins `POST /me/game/guide/seen` (#13885 : la ligne de Mee et sa feuille sur la première page
+         * Progression), que porte `GameApi.markGuideSeen`.
+         * 205 : moins `POST /conversations/:id/messages/after-read/consume` et `POST …/messages/:messageId/consume`
+         * (#13995 : la flamme-œil consommée à la sortie, la vue unique consommée à la fermeture), que porte `MessageApi`.
+         * 199 : moins les six routes que `StickerPackApi` et `SharedTranslationApi` déclarent par les constantes du
+         * catalogue généré (`ApiRoutesStickerPacks`, `ApiRoutesConversations`) : le scanner ne lisait que les chemins
+         * écrits en littéral et les croyait donc « à porter ». Il résout désormais `ApiRoutesX.NOM` (#13998, qui
+         * branche `RelationsApi` par `ApiRoutesRelations.BY_USER_ID`).
+         * 198 : moins `GET /mentions/suggestions` (#14053 : la liste « @ » fait remonter les personnes du
+         * contexte d'une conversation ou d'un post), que porte `MentionsApi.suggestions`.
+         * 201 : plus les trois routes des cercles que la passerelle sert (`GET /relations`,
+         * `POST /relations/:userId/level`, `POST /relations/:userId/ritual`, #13933) et que l'écran des cercles d'Android
+         * portera (ui-cercles) : à porter, pas hors périmètre.
+         * 199 : moins `GET /relations` et `POST /relations/:userId/ritual` (#13938 : « Mes cercles » et le rituel du
+         * Sang), que porte `RelationsApi`. `POST /relations/:userId/level` (baisser un lien, #14228) reste à porter.
+         * 204 : plus les cinq routes du Bring et du réglage par personne (`GET|POST /bring/:userId`,
+         * `DELETE /bring/:bringId`, `GET|PUT /relations/:userId/settings`, #13936), servies par la passerelle et
+         * que le sous-lot `proche-bring@android` portera.
+         */
+        const val TO_PORT_CEILING = 204
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

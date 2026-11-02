@@ -71,8 +71,8 @@ struct SharePlanTests {
             expected: [.send, .caption, .reorder, .imager, .copyText]),
         Row(label: "une publication", entry: .card(.post, url: "https://meeshy.me/p/1"),
             expected: [.send, .caption, .publishPost, .publishStory, .copyLink, .shareOut]),
-        Row(label: "une story — pas de republication (D14)", entry: .card(.story, url: "https://meeshy.me/s/1"),
-            expected: [.send, .caption, .copyLink, .shareOut]),
+        Row(label: "une story — republiable et recomposable (D14, #12644)", entry: .card(.story, url: "https://meeshy.me/s/1"),
+            expected: [.send, .caption, .publishPost, .publishStory, .publishReel, .studio, .copyLink, .shareOut]),
         Row(label: "un réel", entry: .card(.reel, url: "https://meeshy.me/r/1"),
             expected: [.send, .caption, .publishPost, .publishStory, .copyLink, .shareOut]),
         Row(label: "un profil (D15)", entry: .card(.profile, url: "https://meeshy.me/u/lea"), expected: [.send, .caption, .copyLink, .shareOut]),
@@ -231,21 +231,19 @@ struct SharePlanTests {
 
     // MARK: - Plafonds (D10, V9)
 
-    @Test func twentyTwoFilesAndSixHundredTwelveMegabytesTrimTheLastTwo() {
-        let media = (0..<20).map { ShareMedia(id: "f\($0)", mimeType: "image/jpeg", bytes: 23 * Self.mb) } + [
-            ShareMedia(id: "f20", mimeType: "video/mp4", bytes: 12 * Self.mb, durationMs: 10_000),
-            ShareMedia(id: "f21", mimeType: "video/mp4", bytes: 140 * Self.mb, durationMs: 60_000),
-        ]
+    @Test func twoFilesOverTheFileCapTrimTheLastTwo() {
+        let media = (0..<(ShareLimits.maxFiles + 2)).map { ShareMedia(id: "f\($0)", mimeType: "image/jpeg", bytes: Self.mb) }
         let plan = SharePlanner.plan(entry: .media(media, text: nil), destinations: [ShareDestination(id: "d")])
-        #expect(plan.limits.files == 22)
+        #expect(plan.limits.files == ShareLimits.maxFiles + 2)
         #expect(plan.limits.trimCount == 2)
         #expect(plan.canSend == false)
     }
 
     @Test func bytesAloneCanForceATrim() {
+        let overHalf = ShareLimits.maxTotalBytes / 2 + Self.mb
         let media = [
-            ShareMedia(id: "a", mimeType: "video/mp4", bytes: 300 * Self.mb, durationMs: 10_000),
-            ShareMedia(id: "b", mimeType: "video/mp4", bytes: 300 * Self.mb, durationMs: 10_000),
+            ShareMedia(id: "a", mimeType: "video/mp4", bytes: overHalf, durationMs: 10_000),
+            ShareMedia(id: "b", mimeType: "video/mp4", bytes: overHalf, durationMs: 10_000),
         ]
         #expect(SharePlanner.plan(entry: .media(media, text: nil)).limits.trimCount == 1)
     }
@@ -266,8 +264,8 @@ struct SharePlanTests {
     }
 
     @Test func limitsMirrorTheSharedPackage() {
-        #expect(ShareLimits.maxFiles == 20)
-        #expect(ShareLimits.maxTotalBytes == 500 * 1024 * 1024)
+        #expect(ShareLimits.maxFiles == 100)
+        #expect(ShareLimits.maxTotalBytes == 5 * 1024 * 1024 * 1024)
         #expect(ShareLimits.maxRecipients == 10)
         #expect(ShareLimits.maxPublicationMedia == 10)
     }

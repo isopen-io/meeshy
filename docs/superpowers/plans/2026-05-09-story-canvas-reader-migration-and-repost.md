@@ -30,8 +30,8 @@
 | `packages/MeeshySDK/Sources/MeeshyUI/Story/ReaderAudioMixer.swift` | `configureBackground(audio:url:looping:)`, `duckingEnabled`, `duckedBackgroundVolume`, `fadeOutAndStop(duration:)` |
 | `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift` | `setReaderContext(_)`, `observeMuteNotifications`, `updateFilterLayer`, `configureAudio`, completion timing in displayLinkTick |
 | `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift` | `render(... languages:)` param, `applyKeyframes`, `clipTransitionOpacity`, `applyOpening`, `renderBackground` |
-| `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` | 2 renames `StoryCanvasReaderView` → `StoryReaderRepresentable` |
-| `apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift` | 1 rename |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` | 2 renames `StoryCanvasReaderView` → `StoryReaderRepresentable` |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift` | 1 rename |
 | `packages/MeeshySDK/Sources/MeeshyUI/Story/UnifiedPostComposer.swift` | 1 rename + `importFromStory(_)` + reprojection banner UI |
 
 ### Files to delete (Phase A4)
@@ -2371,11 +2371,11 @@ git commit -m "feat(story-canvas): StoryReaderRepresentable repost + post inits"
 ### Task 22: Migrer `StoryViewerView.swift`
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift`
 
 - [ ] **Step 1: Verify current call sites**
 
-Run: `grep -n "StoryCanvasReaderView" apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift`
+Run: `grep -n "StoryCanvasReaderView" apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift`
 Expected: 2 lines (450, 464 per audit).
 
 - [ ] **Step 2: Apply renames**
@@ -2383,7 +2383,7 @@ Expected: 2 lines (450, 464 per audit).
 Replace `StoryCanvasReaderView(` with `StoryReaderRepresentable(` at both occurrences. Adjust SwiftUI argument labels if signatures differ (the new init mirrors the legacy signature).
 
 ```bash
-sed -i '' 's/StoryCanvasReaderView(/StoryReaderRepresentable(/g' apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
+sed -i '' 's/StoryCanvasReaderView(/StoryReaderRepresentable(/g' apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
 ```
 
 - [ ] **Step 3: Build**
@@ -2398,7 +2398,7 @@ Run: `./apps/ios/meeshy.sh run` (logs blocks — Ctrl+C to exit). Manually open 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
 git commit -m "refactor(story-canvas): migrate StoryViewerView to StoryReaderRepresentable"
 ```
 
@@ -2407,17 +2407,17 @@ git commit -m "refactor(story-canvas): migrate StoryViewerView to StoryReaderRep
 ### Task 23: Migrer `StoryRepostEmbedCell.swift`
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift`
 
 - [ ] **Step 1: Verify current call site**
 
-Run: `grep -n "StoryCanvasReaderView" apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift`
+Run: `grep -n "StoryCanvasReaderView" apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift`
 Expected: 1 line (32 per audit).
 
 - [ ] **Step 2: Apply rename**
 
 ```bash
-sed -i '' 's/StoryCanvasReaderView(/StoryReaderRepresentable(/g' apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift
+sed -i '' 's/StoryCanvasReaderView(/StoryReaderRepresentable(/g' apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift
 ```
 
 - [ ] **Step 3: Build**
@@ -2432,7 +2432,7 @@ Open the feed in the simulator → verify embed cell renders the repost story (a
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift
 git commit -m "refactor(story-canvas): migrate StoryRepostEmbedCell to StoryReaderRepresentable"
 ```
 

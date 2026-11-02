@@ -26,7 +26,7 @@ final class TrackedLinksSurfacesTests: XCTestCase {
     private static let carteJSON = "[{\"url\":\"\(notes)\",\"token\":\"tok42\"}]"
 
     private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
-        try APIClient.makeAPIPayloadDecoder().decode(T.self, from: Data(json.utf8))
+        try MeeshyCoders.decoder(.api).decode(T.self, from: Data(json.utf8))
     }
 
     private func commentaireJSON(extra: String) -> String {
@@ -135,7 +135,7 @@ final class TrackedLinksSurfacesTests: XCTestCase {
         let api = try decode(APIPostComment.self,
                              commentaireJSON(extra: ",\"metadata\":{\"trackingLinks\":\(Self.carteJSON)}"))
 
-        XCTAssertEqual(StoryViewerView.storyComment(from: api, preferredLanguages: []).trackedLinkMap, Self.carte)
+        XCTAssertEqual(StoryCommentSession.comment(from: api, preferredLanguages: []).trackedLinkMap, Self.carte)
     }
 
     func test_commentaire_survitAuCache() throws {

@@ -47,9 +47,9 @@ struct ConversationMessageSheets: ViewModifier {
                     conversationId: viewModel.conversationId,
                     sections: MessageActionResolver.moreSections(ctx),
                     initialItem: overlayState.moreSheetInitialItem,
-                    textTranslations: viewModel.messageTranslations[msg.id] ?? [],
+                    textTranslations: UnencryptedMessageGate.translations(of: msg, in: viewModel),
                     transcription: viewModel.messageTranscriptions[msg.id],
-                    translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
+                    translatedAudios: UnencryptedMessageGate.translatedAudios(of: msg, in: viewModel),
                     editRevisions: viewModel.editRevisions(for: msg.id),
                     onReply: { actions.reply(msg) },
                     // #4021 — transférer ARME la sélection multiple au lieu
@@ -144,13 +144,13 @@ struct ConversationMessageSheets: ViewModifier {
                 .presentationDragIndicator(.visible)
             }
             .sheet(item: $overlayState.shareMessage) { msg in
-                ShareSheet(activityItems: [viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content])
+                ShareSheet(activityItems: [UnencryptedMessageGate.preferredTranslation(of: msg, in: viewModel)?.translatedContent ?? msg.content])
                     .presentationDetents([.medium, .large])
             }
             .sheet(isPresented: $overlayState.showReplyThread) {
                 if let parentId = overlayState.replyThreadParentId,
                    let parent = viewModel.messages.first(where: { $0.id == parentId }) {
-                    ThreadView(parentMessage: parent, conversationId: viewModel.conversationId)
+                    ThreadView(parentMessage: parent, conversationId: viewModel.conversationId, replyDispatcher: ThreadReplyDispatcher(viewModel: viewModel, parentMessageId: parent.id))
                         .environmentObject(statusViewModel)
                 }
             }

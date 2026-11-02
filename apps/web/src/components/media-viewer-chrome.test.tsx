@@ -177,7 +177,7 @@ describe('MediaViewer — la colonne flotte sur la scène, la barre colle sous e
     }
   });
 
-  test('sous la scène, de haut en bas : la piste, la ligne d’informations, la légende, « Répondre », la pellicule', async () => {
+  test('sous la scène, de haut en bas : la piste, la ligne d’informations, la légende, la pellicule — « Répondre » est dans le rail (#12424)', async () => {
     const { dialog, restore } = await mountClip();
     try {
       const bar = dialog.querySelector('[data-viewer-bottom-bar]')!;
@@ -186,7 +186,6 @@ describe('MediaViewer — la colonne flotte sur la scène, la barre colle sous e
         slot.querySelector('[role="slider"]'),
         dialog.querySelector('[data-viewer-meta]'),
         dialog.querySelector('[data-viewer-caption-text]'),
-        dialog.querySelector('[data-viewer-reply]'),
         dialog.querySelector('[data-filmstrip-item]'),
       ];
       expect(ordered.every((el) => el !== null && bar.contains(el))).toBe(true);
@@ -267,11 +266,11 @@ describe('MediaViewer — une vidéo en plein écran (#9577)', () => {
   const actionsOf = (dialog: HTMLElement): readonly (string | null)[] =>
     Array.from(dialog.querySelectorAll('[data-viewer-rail-slot] [data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'));
 
-  test('le muet puis « ⋯ » suivent « Composer » dans la colonne d’actions', async () => {
+  test('le muet puis « ⋯ » suivent les actions dans la colonne, comme sur iOS (#12420)', async () => {
     const restore = stubPlayback();
     try {
-      const dialog = await mount({ offers: { ...ALL, share: true }, items: [clip('v')] });
-      expect(actionsOf(dialog).slice(-3)).toEqual(['compose', 'mute', 'more']);
+      const dialog = await mount({ offers: { ...ALL, share: true }, items: [clip('v')], onReply: () => {} });
+      expect(actionsOf(dialog)).toEqual(['react', 'reply', 'compose', 'save', 'mute', 'more']);
       expect(actionsOf(dialog)[0]).toBe('react');
     } finally {
       restore();
@@ -363,28 +362,28 @@ describe('MediaViewer — le chrome commun des plein écrans (#8879)', () => {
     expect(closed).toEqual([1]);
   });
 
-  test('« Répondre… » est une capsule sous la légende, et appelle l’action de réponse de l’hôte', async () => {
+  test('« Répondre » est une action du rail, et appelle l’action de réponse de l’hôte — plus aucune capsule sous la légende (#12424)', async () => {
     const replies: number[] = [];
     const dialog = await mount({ offers: ALL, onReply: () => replies.push(1) });
-    const capsule = dialog.querySelector<HTMLButtonElement>('[data-viewer-bottom-bar] [data-viewer-reply]')!;
-    expect(capsule.textContent).toContain('Répondre');
+    expect(dialog.querySelector('[data-viewer-bottom-bar] [data-viewer-reply]')).toBeNull();
+    const button = dialog.querySelector<HTMLButtonElement>('[data-viewer-stage-rail] [data-viewer-action="reply"]')!;
+    expect(button.getAttribute('aria-label')).toBe('Répondre');
     act(() => {
-      capsule.click();
+      button.click();
     });
     expect(replies).toEqual([1]);
+  });
+
+  test('un hôte qui ne sait pas répondre n’a pas de bouton Répondre (loi 4)', async () => {
+    const dialog = await mount({ offers: { ...ALL, reply: false } });
     expect(dialog.querySelector('[data-viewer-action="reply"]')).toBeNull();
   });
 
-  test('un hôte qui ne sait pas répondre n’a pas de capsule (loi 4)', async () => {
-    const dialog = await mount({ offers: { ...ALL, reply: false } });
-    expect(dialog.querySelector('[data-viewer-reply]')).toBeNull();
-  });
-
-  test('Réagir et Créer forment la colonne verticale au bord de fin de la scène ; Enregistrer n’y est pas', async () => {
+  test('Réagir, Répondre, Créer et Enregistrer forment la colonne verticale au bord de fin de la scène, dans l’ordre d’iOS (#12424, #12420)', async () => {
     const dialog = await mount({ offers: ALL, onReply: () => {} });
     const rail = dialog.querySelector('[data-viewer-stage-rail] [data-viewer-rail]')!;
     const actions = Array.from(rail.querySelectorAll('[data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'));
-    expect(actions).toEqual(['react', 'compose']);
+    expect(actions).toEqual(['react', 'reply', 'compose', 'save']);
     expect(rail.getAttribute('aria-label')).toBe('Réagir');
   });
 
@@ -403,7 +402,7 @@ describe('MediaViewer — le chrome commun des plein écrans (#8879)', () => {
     const dialog = await mount({ offers: NO_MEDIA_OFFERS });
     expect(dialog.querySelector('[data-viewer-menu-button]')).toBeNull();
     expect(dialog.querySelector('[data-viewer-rail]')).toBeNull();
-    expect(dialog.querySelector('[data-viewer-reply]')).toBeNull();
+    expect(dialog.querySelector('[data-viewer-action="reply"]')).toBeNull();
   });
 
   test('UNE seule région vivante annonce les issues, à la racine de la couche', async () => {

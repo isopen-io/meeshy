@@ -2,7 +2,7 @@
 
 **Base:** `main` HEAD (`a598cbe`, post-193i #2170 merge)
 **Branch:** `claude/laughing-thompson-qk04t7`
-**File:** `apps/ios/Meeshy/Features/Main/Views/TermsOfServiceView.swift` (1 file, iOS only)
+**File:** `apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift` (1 file, iOS only)
 
 ## Goal
 

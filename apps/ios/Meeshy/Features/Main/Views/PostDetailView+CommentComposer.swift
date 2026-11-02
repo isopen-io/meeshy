@@ -30,7 +30,7 @@ extension PostDetailView {
             accentColor: accentColor,
             secondaryColor: composerSecondaryColor,
             forceShowAttachment: true,
-            forceShowVoice: true,
+            voiceDoor: .open,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
             onFocusChange: { composerIsFocused = $0 },
@@ -131,8 +131,8 @@ extension PostDetailView {
         }
         // « Éditer » une pièce jointe : la scène du composeur (#9127).
         .commentSceneRetouch(attachments: $commentAttachments)
-        // La caméra, à droite de « Photos » comme dans un message (#9736).
-        .commentCamera(attachments: $commentAttachments)
+        // La caméra (#9736) et le sticker (#14335), comme dans un message.
+        .commentMediaDoors(attachments: $commentAttachments, accentColor: accentColor)
         // #9743 — un commentaire non envoyé auquel l'auteur renonce quitte la liste.
         .unsentComments(restore: {}, discard: { viewModel.discardUnsentComment($0) }, draft: $composerText)
     }

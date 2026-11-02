@@ -1,3 +1,5 @@
+import type { SafeStorage } from '@/lib/storage';
+
 /**
  * `createOfflineQueue` (#7367, W3) — LA FILE FIFO GÉNÉRIQUE (CLAUDE.md §
  * Instant App, « Offline Graceful Degradation : Write actions queued
@@ -48,29 +50,77 @@ export type OfflineQueue<T> = {
   /** `run` rend `true` ⇒ le job est retiré ; `false` ⇒ le flush s'arrête là. */
   readonly flush: (run: (payload: T) => Promise<boolean>) => Promise<void>;
   readonly size: () => number;
+  /** Les jobs en attente, dans l'ordre FIFO : ce qu'un écran doit continuer d'afficher comme fait. */
+  readonly pending: () => readonly T[];
   readonly clear: () => void;
 };
 
-export function createOfflineQueue<T>(): OfflineQueue<T> {
-  const jobs = new Map<string, T>();
+/**
+ * LA FILE QUI SURVIT AU RECHARGEMENT (#10174) — sans elle, une écriture mise
+ * en file hors ligne mourait avec l'onglet. Le stockage est une FRONTIÈRE DE
+ * CONFIANCE : chaque entrée relue passe par `parse`, et une entrée illisible
+ * est écartée sans faire tomber les autres. Une écriture refusée (quota,
+ * navigation privée) laisse la file en mémoire : elle se rejoue tant que
+ * l'onglet vit, comme avant.
+ */
+export type OfflineQueuePersistence<T> = {
+  readonly storage: SafeStorage;
+  readonly key: string;
+  readonly parse: (raw: unknown) => T | null;
+};
+
+const readPersisted = <T,>(persistence: OfflineQueuePersistence<T>): readonly (readonly [string, T])[] => {
+  try {
+    const raw: unknown = JSON.parse(persistence.storage.getItem(persistence.key) ?? '[]');
+    if (!Array.isArray(raw)) return [];
+    return raw.flatMap((entry: unknown): (readonly [string, T])[] => {
+      if (!Array.isArray(entry) || typeof entry[0] !== 'string') return [];
+      const payload = persistence.parse(entry[1]);
+      return payload === null ? [] : [[entry[0], payload]];
+    });
+  } catch {
+    return [];
+  }
+};
+
+export function createOfflineQueue<T>(persistence?: OfflineQueuePersistence<T>): OfflineQueue<T> {
+  const jobs = new Map<string, T>(persistence === undefined ? [] : readPersisted(persistence));
   let flushing = false;
+
+  function save(): void {
+    if (persistence === undefined) return;
+    try {
+      if (jobs.size === 0) persistence.storage.removeItem(persistence.key);
+      else persistence.storage.setItem(persistence.key, JSON.stringify([...jobs]));
+    } catch {
+      return;
+    }
+  }
 
   function enqueue(key: string, payload: T): void {
     jobs.set(key, payload);
+    save();
   }
 
   function remove(key: string): void {
     jobs.delete(key);
+    save();
   }
 
+  /**
+   * Toujours la TÊTE de la file : un job remplacé pendant son envoi garde sa
+   * place et repart avec sa valeur la plus récente, au lieu d'être retiré
+   * avec celle qui vient de partir.
+   */
   async function flush(run: (payload: T) => Promise<boolean>): Promise<void> {
     if (flushing) return;
     flushing = true;
     try {
-      for (const [key, payload] of jobs) {
+      for (let head = jobs.entries().next(); !head.done; head = jobs.entries().next()) {
+        const [key, payload] = head.value;
         const succeeded = await run(payload);
         if (!succeeded) break;
-        jobs.delete(key);
+        if (jobs.get(key) === payload) remove(key);
       }
     } finally {
       flushing = false;
@@ -81,9 +131,14 @@ export function createOfflineQueue<T>(): OfflineQueue<T> {
     return jobs.size;
   }
 
-  function clear(): void {
-    jobs.clear();
+  function pending(): readonly T[] {
+    return [...jobs.values()];
   }
 
-  return { enqueue, remove, flush, size, clear };
+  function clear(): void {
+    jobs.clear();
+    save();
+  }
+
+  return { enqueue, remove, flush, size, pending, clear };
 }

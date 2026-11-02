@@ -53,3 +53,16 @@ export function outcomeOf(result: unknown): Outcome {
 export function isPermanentFailure(failure: { readonly status: number } | undefined): boolean {
   return failure !== undefined && outcomeOf({ ok: false, status: failure.status }) === 'permanent';
 }
+
+/**
+ * L'ENVOI A-T-IL PU ARRIVER MALGRÉ L'ÉCHEC ? (#12632) — une coupure en cours
+ * d'appel (`status: 0`), un délai dépassé (408) ou une erreur serveur (5xx)
+ * laissent ouverte la possibilité que la passerelle ait déjà enregistré le
+ * message. Un refus 4xx tranché ou un envoi jamais parti (hors ligne,
+ * `undefined`) ne l'est pas. Abandonner un tel envoi ne doit donc rien
+ * promettre : il peut revenir par l'écho `message:new`.
+ */
+export function mayHaveReachedServer(failure: { readonly status: number } | undefined): boolean {
+  if (failure === undefined) return false;
+  return failure.status === 0 || failure.status === 408 || failure.status >= 500;
+}

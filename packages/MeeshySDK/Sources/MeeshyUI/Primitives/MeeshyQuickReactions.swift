@@ -53,5 +53,5 @@ public enum MeeshyQuickReactions {
     /// comme le lecteur de réels l'empruntaient à cette troisième surface : le
     /// cœur du post dépendait du fichier du lecteur de story, et le lire n'en
     /// disait rien.
-    public static let heart: String = "❤️"
+    public nonisolated static let heart: String = "❤️"
 }

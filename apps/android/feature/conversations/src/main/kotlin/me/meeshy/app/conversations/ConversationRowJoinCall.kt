@@ -25,14 +25,14 @@ internal object ConversationRowJoinCall {
 
     /**
      * Visible dès qu'un appel est en cours là, sauf si la ligne est verrouillée (son contenu est
-     * masqué : on ne révèle pas qu'un appel y a lieu) ou si le pair est en train d'écrire (l'aperçu
-     * « écrit… » garde la place).
+     * masqué : on ne révèle pas qu'un appel y a lieu) ou si le pair est en train d'écrire (la rangée
+     * dit déjà la frappe : un seul signal vivant à la fois).
      */
     fun isVisible(callInProgress: Boolean, isLocked: Boolean, isTyping: Boolean): Boolean =
         callInProgress && !isLocked && !isTyping
 }
 
-/** Le bouton « Rejoindre » de la ligne d'aperçu (iOS `call.header.rejoin`). */
+/** Le bouton « Rejoindre » à droite de la ligne du titre, à la place des non-lus (iOS `joinLiveCallButton`). */
 @Composable
 internal fun ConversationRowJoinButton(accent: Color, onClick: () -> Unit) {
     val description = stringResource(R.string.row_join_call_a11y)

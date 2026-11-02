@@ -51,8 +51,8 @@ Chaque phase est fonctionnelle mergeable indépendamment (le frontend peut comme
 
 | Fichier | Action | Responsabilité |
 |---------|--------|----------------|
-| `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` | Modify | Bouton « Partager » droite → composer story ; menu kebab nouveaux items |
-| `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` | Modify | Suppression `reshareStory()` ; ajout `repostAsPostDirect()` |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` | Modify | Bouton « Partager » droite → composer story ; menu kebab nouveaux items |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift` | Modify | Suppression `reshareStory()` ; ajout `repostAsPostDirect()` |
 | `apps/ios/Meeshy/Features/Main/Views/PostDetailView.swift` (ou cellule feed) | Modify | Branchement de rendu repost-de-story + header double attribution |
 | `apps/ios/MeeshyTests/Unit/ViewModels/StoryViewerViewModelMenuTests.swift` | Create | 6 tests TDD du menu et boutons |
 | `apps/ios/MeeshyTests/Integration/StoryRepostFlowTests.swift` | Create | 4 tests d'intégration end-to-end |
@@ -1540,11 +1540,11 @@ git commit -m "feat(sdk): StoryCanvasReaderView accepts APIPost for feed cell re
 ### Task C.1 : Bouton « Partager » droite → ouvre `StoryComposerView` repost
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:573-579`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift:573-579`
 
 - [ ] **Step 1: Localiser le bouton "Partager"**
 
-Run: `grep -n "label: \"Partager\"\|reshareStory" apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift`
+Run: `grep -n "label: \"Partager\"\|reshareStory" apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift`
 Expected: Ligne 573-579 (basé sur le spec).
 
 - [ ] **Step 2: Ajouter un state pour présenter le composer story repost**
@@ -1622,7 +1622,7 @@ Expected: Build réussi.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
 git commit -m "feat(ios): share button opens StoryComposerView in repost mode"
 ```
 
@@ -1631,8 +1631,8 @@ git commit -m "feat(ios): share button opens StoryComposerView in repost mode"
 ### Task C.2 : Menu kebab — ajouter « Republier en post »
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:1252-1271`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift:1252-1271`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift`
 
 - [ ] **Step 1: Ajouter la méthode `repostAsPostDirect`**
 
@@ -1766,7 +1766,7 @@ Expected: Build réussi.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
 git commit -m "feat(ios): kebab menu shows Republier en post + Editer et republier en post"
 ```
 

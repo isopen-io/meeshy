@@ -1,7 +1,6 @@
 import Foundation
 import Combine
 import UIKit
-import GRDB
 import MeeshySDK
 import MeeshyUI
 import os
@@ -164,7 +163,7 @@ extension ConversationViewModel {
     func requestTextTranslation(
         messageId: String, content: String, sourceLanguage: String, targetLanguage: String, conversationEncryptionMode: String?
     ) async {
-        guard ServerTranslationAdmission.admits(messageIndex(for: messageId).map { messages[$0] }, conversationEncryptionMode: conversationEncryptionMode) else { return translationRequestFailed.send(.serverRefused(messageId: messageId, language: targetLanguage, kind: .text)) }
+        guard ServerTranslationAdmission.admits(messageIndex(for: messageId).map { messages[$0] }, conversationEncryptionMode: startupDependencies.encryptedEra.encryptionMode(conversationEncryptionMode, in: self)) else { return translationRequestFailed.send(.serverRefused(messageId: messageId, language: targetLanguage, kind: .text)) }
         guard !(translatingTextLanguages[messageId]?.contains(targetLanguage) ?? false) else { return }
         translatingTextLanguages[messageId, default: []].insert(targetLanguage)
         defer { translatingTextLanguages[messageId]?.remove(targetLanguage) }
@@ -202,7 +201,7 @@ extension ConversationViewModel {
     func requestAudioTranslation(
         messageId: String, attachmentId: String, sourceLanguage: String, targetLanguage: String, conversationEncryptionMode: String?
     ) async {
-        guard ServerTranslationAdmission.admits(messageIndex(for: messageId).map { messages[$0] }, conversationEncryptionMode: conversationEncryptionMode) else { return translationRequestFailed.send(.serverRefused(messageId: messageId, language: targetLanguage, kind: .audio)) }
+        guard ServerTranslationAdmission.admits(messageIndex(for: messageId).map { messages[$0] }, conversationEncryptionMode: startupDependencies.encryptedEra.encryptionMode(conversationEncryptionMode, in: self)) else { return translationRequestFailed.send(.serverRefused(messageId: messageId, language: targetLanguage, kind: .audio)) }
         guard !(translatingAudioLanguages[messageId]?.contains(targetLanguage) ?? false) else { return }
         translatingAudioLanguages[messageId, default: []].insert(targetLanguage)
         defer { translatingAudioLanguages[messageId]?.remove(targetLanguage) }
@@ -229,7 +228,7 @@ extension ConversationViewModel {
     // MARK: - Résolution du Prisme (traduction préférée)
 
     func preferredTranslation(for messageId: String) -> MessageTranslation? {
-        if let override = activeTranslationOverrides[messageId] {
+        if let override = activeTranslationOverrides[messageId], startupDependencies.encryptedEra.serves(override, for: messageId, in: self) {
             return override
         }
         if cachedRevisionForTranslation != preferredLanguageRevision {
@@ -246,7 +245,7 @@ extension ConversationViewModel {
         case .none:
             break
         }
-        guard let translations = messageTranslations[messageId], !translations.isEmpty else {
+        guard case let translations = startupDependencies.encryptedEra.servedTranslations(for: messageId, in: self), !translations.isEmpty else {
             translationResolutionCache.updateValue(nil, forKey: messageId)
             return nil
         }
@@ -297,7 +296,7 @@ extension ConversationViewModel {
         let manual = activeTranslationOverrides[messageId].flatMap { $0?.targetLanguage }
         return ConsumedLanguageResolver.resolve(
             originalLanguage: messages[index].originalLanguage,
-            availableTranslations: (messageTranslations[messageId] ?? []).map(\.targetLanguage),
+            availableTranslations: startupDependencies.encryptedEra.servedTranslations(for: messageId, in: self).map(\.targetLanguage),
             preferredLanguages: preferredLanguages,
             manualSelection: manual
         )

@@ -5,6 +5,15 @@
       "id": "corporate.conseil",
       "mood": "corporate",
       "name": "Conseil",
+      "localizedNames": {
+        "fr": "Conseil",
+        "en": "Board",
+        "es": "Consejo",
+        "pt": "Conselho",
+        "de": "Vorstand",
+        "it": "Consiglio",
+        "ar": "مجلس"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -134,6 +143,15 @@
       "id": "corporate.keynote",
       "mood": "corporate",
       "name": "Keynote",
+      "localizedNames": {
+        "fr": "Keynote",
+        "en": "Keynote",
+        "es": "Keynote",
+        "pt": "Keynote",
+        "de": "Keynote",
+        "it": "Keynote",
+        "ar": "كلمة رئيسية"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -280,6 +298,15 @@
       "id": "corporate.badge",
       "mood": "corporate",
       "name": "Badge",
+      "localizedNames": {
+        "fr": "Badge",
+        "en": "Badge",
+        "es": "Acreditación",
+        "pt": "Crachá",
+        "de": "Ausweis",
+        "it": "Badge",
+        "ar": "شارة"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -394,6 +421,15 @@
       "id": "corporate.poignee-de-main",
       "mood": "corporate",
       "name": "Poignée de main",
+      "localizedNames": {
+        "fr": "Poignée de main",
+        "en": "Handshake",
+        "es": "Apretón de manos",
+        "pt": "Aperto de mão",
+        "de": "Händedruck",
+        "it": "Stretta di mano",
+        "ar": "مصافحة"
+      },
       "surfaces": [
         "capture",
         "live"

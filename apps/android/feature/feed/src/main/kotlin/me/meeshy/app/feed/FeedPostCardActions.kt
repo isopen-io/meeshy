@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
@@ -19,8 +18,6 @@ import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,6 +35,8 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.feed.R
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -51,28 +50,36 @@ internal fun PostStatsRow(
     onComments: () -> Unit,
     onRepost: () -> Unit,
     onQuote: () -> Unit,
+    modifier: Modifier = Modifier,
+    overMedia: Boolean = false,
+    onSend: (() -> Unit)? = null,
 ) {
+    val neutral = if (overMedia) MeeshyPalette.White else MeeshyTheme.tokens.textSecondary
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     ) {
         val likeLabel = stringResource(if (post.isLiked) R.string.feed_unlike else R.string.feed_like)
         StatAction(
             icon = if (post.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
             count = post.likeCount,
             contentDescription = likeLabel,
-            tint = if (post.isLiked) MeeshyPalette.Error else MeeshyTheme.tokens.textSecondary,
+            tint = if (post.isLiked) MeeshyPalette.Error else neutral,
+            active = post.isLiked,
+            heart = true,
+            countColor = neutral,
             onClick = onLike,
         )
         StatAction(
             icon = Icons.Outlined.ChatBubbleOutline,
             count = post.commentCount,
             contentDescription = stringResource(R.string.feed_comments),
-            tint = MeeshyTheme.tokens.textSecondary,
+            tint = neutral,
+            countColor = neutral,
             onClick = onComments,
         )
-        RepostStatAction(count = post.repostCount, onRepost = onRepost, onQuote = onQuote)
+        RepostStatAction(count = post.repostCount, reposted = post.isReposted, tint = neutral, onRepost = onRepost, onQuote = onQuote)
         Spacer(Modifier.weight(1f))
         val bookmarkLabel =
             stringResource(if (post.isBookmarked) R.string.feed_unbookmark else R.string.feed_bookmark)
@@ -80,9 +87,23 @@ internal fun PostStatsRow(
             icon = if (post.isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
             count = post.bookmarkCount,
             contentDescription = bookmarkLabel,
-            tint = if (post.isBookmarked) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary,
+            tint = if (post.isBookmarked) MeeshyPalette.Indigo500 else neutral,
+            active = post.isBookmarked,
+            countColor = neutral,
             onClick = onBookmark,
         )
+        // « Envoyer » (#14315, iOS `FeedPostActionsBar`) : la feuille Meeshy, avec le lien de l'utilisateur ;
+        // « Partager », hors de Meeshy, vit dans le menu « ⋯ ».
+        onSend?.let { send ->
+            StatAction(
+                icon = MeeshyIcons.Send,
+                count = 0,
+                contentDescription = stringResource(R.string.feed_action_send),
+                tint = neutral,
+                countColor = neutral,
+                onClick = send,
+            )
+        }
     }
 }
 
@@ -93,7 +114,11 @@ private fun StatAction(
     contentDescription: String,
     tint: Color,
     onClick: (() -> Unit)?,
+    active: Boolean = false,
+    heart: Boolean = false,
+    countColor: Color = MeeshyTheme.tokens.textSecondary,
 ) {
+    val haptics = rememberMeeshyHaptics()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs, Alignment.CenterHorizontally),
@@ -102,24 +127,13 @@ private fun StatAction(
             .clip(RoundedCornerShape(MeeshyRadius.pill))
             .let { base ->
                 if (onClick == null) base
-                else base.clickable(onClick = onClick).semantics { role = Role.Button }
+                else base.clickable(onClick = { haptics.light(); onClick() }).semantics { role = Role.Button }
             }
             .padding(horizontal = MeeshySpacing.xs)
             .semantics { this.contentDescription = contentDescription },
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(18.dp),
-        )
-        if (count > 0) {
-            Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.labelMedium,
-                color = MeeshyTheme.tokens.textSecondary,
-            )
-        }
+        EngagementIcon(icon = icon, active = active, tint = tint, burst = heart, tilt = heart)
+        EngagementCount(count = count, color = countColor)
     }
 }
 
@@ -131,14 +145,16 @@ private val MIN_ACTION_TARGET = 44.dp
  * and the post detail (iOS `FeedPostActionsBar` repost confirmation).
  */
 @Composable
-private fun RepostStatAction(count: Int, onRepost: () -> Unit, onQuote: () -> Unit) {
+private fun RepostStatAction(count: Int, reposted: Boolean, tint: Color, onRepost: () -> Unit, onQuote: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         StatAction(
             icon = Icons.Filled.Repeat,
             count = count,
             contentDescription = stringResource(R.string.feed_reposts),
-            tint = MeeshyTheme.tokens.textSecondary,
+            tint = if (reposted) MeeshyPalette.Success else tint,
+            active = reposted,
+            countColor = tint,
             onClick = { expanded = true },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

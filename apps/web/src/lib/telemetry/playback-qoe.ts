@@ -1,5 +1,7 @@
 import type { PlaybackExitReason, PlaybackSummary } from '@/lib/api/social-events-v2-types';
 
+import type { PlaybackPageProbe } from './page-vitals';
+
 /**
  * **LA QUALITÉ D'UNE SÉANCE DE LECTURE** (#10504, décision § 4) — le résumé
  * Mux/Conviva d'un `<video>` ou d'un `<audio>` : démarrage, attentes de
@@ -168,11 +170,22 @@ const EVENTS = ['loadstart', 'playing', 'waiting', 'stalled', 'seeking', 'seeked
 /**
  * L'accumulateur branché sur un élément média. `finish` rend le résumé UNE
  * fois (au plus) et retire les écoutes ; un second appel ne fait rien.
+ *
+ * `probe` (W11, #11317) : ouverte avec la séance, fermée avec elle — le tier
+ * de l'appareil, les Web Vitals de la page et les longues images survenues
+ * PENDANT la séance rejoignent le résumé, sans jamais en réécrire un champ.
  */
 export function bindPlaybackQoe(
   media: MediaLike,
-  params: { readonly playbackId: string; readonly mediaId: string; readonly now: () => number; readonly onSummary: (summary: PlaybackSummary) => void },
+  params: {
+    readonly playbackId: string;
+    readonly mediaId: string;
+    readonly now: () => number;
+    readonly probe?: PlaybackPageProbe;
+    readonly onSummary: (summary: PlaybackSummary) => void;
+  },
 ): { readonly finish: (exitReason: PlaybackExitReason) => void } {
+  const page = params.probe?.open();
   const accumulator = createPlaybackAccumulator({ playbackId: params.playbackId, mediaId: params.mediaId, mutedAtStart: media.muted, startedAt: params.now() });
   const handlers = EVENTS.map((name) => {
     const run = (): void => {
@@ -192,7 +205,8 @@ export function bindPlaybackQoe(
       done = true;
       handlers.forEach(([name, run]) => media.removeEventListener(name, run));
       const durationMs = Number.isFinite(media.duration) ? media.duration * 1000 : 0;
-      params.onSummary(accumulator.finish({ at: params.now(), exitReason, durationMs }));
+      const summary = accumulator.finish({ at: params.now(), exitReason, durationMs });
+      params.onSummary(page === undefined ? summary : { ...page.close(), ...summary });
     },
   };
 }

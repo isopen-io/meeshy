@@ -121,6 +121,15 @@ final class PostGalleryLotTests: XCTestCase {
         XCTAssertEqual(Set(lot.attachments.compactMap { lot.scenes[$0.id]?.postId }), ["p1"])
     }
 
+    /// Une scène publiée sans fond se lit, en plein écran comme dans le fil,
+    /// sur le dégradé que la barre des stories donne à son auteur (#14258).
+    func test_chaquePageScene_porteLaCouleurDAuteurDuSolSansFond() {
+        let lot = compose(troisScenes())
+
+        XCTAssertEqual(Set(lot.scenes.values.map(\.sceneFloorHex)),
+                       [DynamicColorGenerator.colorForName("alice")])
+    }
+
     /// `CanvasV3(migrating:)` a gravé `"s1"` en dur pendant tout le corpus legacy :
     /// une page identifiée par le seul id de scène en perdrait une.
     func test_deuxScenesHomonymes_restentDeuxPages() {

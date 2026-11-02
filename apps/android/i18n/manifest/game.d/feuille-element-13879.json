@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.earned_on",
+          "androidName": "game_detail_earned_on",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.locked",
+          "androidName": "game_detail_locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.badge.missing",
+          "androidName": "game_detail_badge_missing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.close",
+          "androidName": "game_detail_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.obtain_label",
+          "androidName": "game_detail_obtain_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.defi.what",
+          "androidName": "game_detail_defi_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.defi.how",
+          "androidName": "game_detail_defi_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.open",
+          "androidName": "game_detail_open",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.counts_label",
+          "androidName": "game_badge_counts_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.stars_label",
+          "androidName": "game_badge_stars_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.material_label",
+          "androidName": "game_badge_material_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.ladder_title",
+          "androidName": "game_badge_ladder_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.reason.none",
+          "androidName": "game_badge_reason_none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.reason.crossed",
+          "androidName": "game_badge_reason_crossed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.reason.served",
+          "androidName": "game_badge_reason_served",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.next",
+          "androidName": "game_badge_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.rung.next",
+          "androidName": "game_badge_rung_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.rung.a11y.reached",
+          "androidName": "game_badge_rung_a11y_reached",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.rung.a11y.reached_on",
+          "androidName": "game_badge_rung_a11y_reached_on",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

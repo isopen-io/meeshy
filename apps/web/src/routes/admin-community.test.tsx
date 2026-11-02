@@ -134,7 +134,8 @@ describe('AdminCommunityPanel — identité, chiffres, description', () => {
     const { host } = await ouvrir();
     const items = [...host.querySelectorAll('nav[aria-label] li')].map((item) => item.textContent?.trim());
     expect(items).toEqual(['Échanges', 'Communautés', 'Club de jazz']);
-    expect(host.querySelector('nav[aria-label] a')?.getAttribute('href')).toBe('/admin/communities');
+    expect(host.querySelector('[data-admin-trail-step="section"] a')?.getAttribute('href')).toBe('/admin/communities');
+    expect(host.querySelector('[data-admin-trail-step="group"] a')?.getAttribute('href')).toBe('/admin?group=exchanges');
   });
 
   test('l’état se dit en badges : « Privée » et « Active »', async () => {

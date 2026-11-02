@@ -84,8 +84,8 @@ final class AudioTapFormatReadinessTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main")
-        return try ["Services/CallTranscriptionService.swift", "Models/TranscriptionError.swift"]
+            .appendingPathComponent("Meeshy/Features")
+        return try ["Call/Services/CallTranscriptionService.swift", "Main/Models/TranscriptionError.swift"]
             .map { try String(contentsOf: url.appendingPathComponent($0), encoding: .utf8) }
             .joined(separator: "\n")
     }

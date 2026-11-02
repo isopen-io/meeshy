@@ -2,8 +2,10 @@ import { useEffect, useRef } from 'react';
 
 import { newEngagementSessionId } from '@/lib/api/social-events';
 import type { EventSurface, EventTargetRef, PlaybackExitReason } from '@/lib/api/social-events-v2-types';
+import { currentDeviceTier } from '@/lib/device/capability-tier';
 import { readingTelemetry } from '@/lib/view/reading-telemetry';
 
+import { pageVitals, playbackPageProbe } from './page-vitals';
 import { bindPlaybackQoe } from './playback-qoe';
 
 /**
@@ -40,6 +42,7 @@ export function usePlaybackTelemetry(params: {
       playbackId: newEngagementSessionId(),
       mediaId,
       now: () => performance.now(),
+      probe: playbackPageProbe({ vitals: pageVitals(), tier: currentDeviceTier }),
       onSummary: (summary) => {
         readingTelemetry.recordV2({ type: 'playback', action: 'session', target: { kind, id }, surface, ...summary });
       },

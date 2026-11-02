@@ -25,6 +25,8 @@ import me.meeshy.sdk.model.SocketStatusReactedData
 import me.meeshy.sdk.model.SocketStatusUnreactedData
 import me.meeshy.sdk.model.SocketStatusUpdatedData
 import me.meeshy.sdk.model.StatusEntry
+import me.meeshy.sdk.model.analytics.ContentSurface
+import me.meeshy.sdk.model.analytics.SocialEvent
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.cache.CacheClock
@@ -62,6 +64,7 @@ class StatusesViewModelTest {
 
     private val repository: StatusRepository = mockk(relaxed = true)
     private val postRepository: PostRepository = mockk(relaxed = true)
+    private val engagement: me.meeshy.sdk.post.FeedEngagementRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
     private val diskCache: StatusBarCacheRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
@@ -109,7 +112,7 @@ class StatusesViewModelTest {
             PrivacyPreferences(allowAnalytics = allowAnalytics),
         )
         return StatusesViewModel(
-            repository, postRepository, session, cache, diskCache, socialSocket, dwellClock, privacyStore,
+            repository, postRepository, session, cache, diskCache, socialSocket, dwellClock, privacyStore, engagement,
         )
     }
 
@@ -301,6 +304,78 @@ class StatusesViewModelTest {
     }
 
     @Test
+    fun `a republication the gateway refuses as wider than its source is announced`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns page(entry("a"), hasMore = false)
+        coEvery { repository.create(any(), any(), any(), any(), any(), any()) } returns
+            NetworkResult.Failure(ApiError("Repost audience PUBLIC is broader", code = "REPOST_AUDIENCE_WIDENING", httpStatus = 403))
+
+        val vm = viewModel()
+        vm.repostAudienceRefused.test {
+            vm.setStatus(emoji = "🔥", repostOfId = "src", visibility = "PUBLIC")
+            awaitItem()
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `any other refusal does not claim the audience was too wide`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns page(entry("a"), hasMore = false)
+        coEvery { repository.create(any(), any(), any(), any(), any(), any()) } returns
+            NetworkResult.Failure(ApiError("nope", code = "FORBIDDEN", httpStatus = 403))
+
+        val vm = viewModel()
+        vm.repostAudienceRefused.test {
+            vm.setStatus(emoji = "🔥", repostOfId = "src")
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a reaction withdrawn from another device can be placed again`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.react("a", "❤️") } returns NetworkResult.Success(Unit)
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.react("a", "❤️")
+        statusUnreactedFlow.emit(SocketStatusUnreactedData(statusId = "a", userId = "me-id", emoji = "❤️"))
+        vm.react("a", "❤️")
+
+        coVerify(exactly = 2) { repository.react("a", "❤️") }
+    }
+
+    @Test
+    fun `a reaction on a status the served bar no longer carries can be placed again once it is back`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returnsMany listOf(
+            page(entry("a", userId = "other"), hasMore = false),
+            page(entry("a", userId = "other"), hasMore = false),
+        )
+        coEvery { repository.react("a", "❤️") } returns NetworkResult.Success(Unit)
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.react("a", "❤️")
+        vm.refresh()
+        vm.react("a", "❤️")
+
+        coVerify(exactly = 2) { repository.react("a", "❤️") }
+    }
+
+    @Test
+    fun `a deleted status forgets the reactions placed on it`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.react("a", "❤️") } returns NetworkResult.Success(Unit)
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.react("a", "❤️")
+        statusDeletedFlow.emit(SocketStatusDeletedData(statusId = "a"))
+        statusCreatedFlow.emit(SocketStatusCreatedData(status = apiStatus(id = "a", userId = "other")))
+        vm.react("a", "❤️")
+
+        coVerify(exactly = 2) { repository.react("a", "❤️") }
+    }
+
+    @Test
     fun `clearStatus optimistically drops the own status and persists it`() = runTest {
         coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
             page(entry("mine", userId = "me-id"), entry("a", userId = "other"), hasMore = false)
@@ -372,7 +447,7 @@ class StatusesViewModelTest {
 
         vm.state.test {
             val s = awaitItem()
-            assertThat(s.statuses.first().reactionSummary).isNull()
+            assertThat(s.statuses.first().reactionSummary.orEmpty()).isEmpty()
             assertThat(s.errorMessage).isEqualTo("rip")
         }
     }
@@ -573,7 +648,7 @@ class StatusesViewModelTest {
             assertThat(awaitItem().statuses.map { it.id }).containsExactly("a", "b").inOrder()
         }
         coVerify(exactly = 1) {
-            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("a", "b") })
+            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("a", "b") }, any())
         }
     }
 
@@ -607,7 +682,7 @@ class StatusesViewModelTest {
         }
         coVerify(exactly = 1) { diskCache.invalidate(StatusFeedMode.FRIENDS) }
         coVerify(exactly = 1) {
-            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("net") })
+            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("net") }, any())
         }
     }
 
@@ -622,7 +697,7 @@ class StatusesViewModelTest {
         vm.setStatus(emoji = "🔥")
 
         coVerify(exactly = 1) {
-            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("new", "a") })
+            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("new", "a") }, any())
         }
     }
 
@@ -636,7 +711,7 @@ class StatusesViewModelTest {
         vm.clearStatus()
 
         coVerify(exactly = 1) {
-            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("a") })
+            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("a") }, any())
         }
     }
 
@@ -653,7 +728,7 @@ class StatusesViewModelTest {
         vm.state.test {
             assertThat(awaitItem().statuses.map { it.id }).containsExactly("mine", "a").inOrder()
         }
-        coVerify(exactly = 0) { diskCache.persistBar(any(), match { it.none { e -> e.id == "mine" } }) }
+        coVerify(exactly = 0) { diskCache.persistBar(any(), match { it.none { e -> e.id == "mine" } }, any()) }
     }
 
     // --- Realtime socket wiring (parity with iOS StatusViewModel.subscribeToSocketEvents) ---
@@ -941,5 +1016,146 @@ class StatusesViewModelTest {
         // The deduplicated view-count credit is not analytics telemetry (iOS fires `viewPost`
         // regardless of consent); only the dwell enrichment is gated.
         coVerify(exactly = 1) { postRepository.viewPost("a") }
+    }
+    @Test
+    fun `a reaction that fails after the account changed does not restore the previous account's bar`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.react("a", "❤️") } coAnswers {
+            every { diskCache.accountChanged(any()) } returns true
+            NetworkResult.Failure(ApiError("rip"))
+        }
+
+        val vm = viewModel()
+        vm.react("a", "❤️")
+
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.statuses.first().reactionSummary).containsExactly("❤️", 1)
+            assertThat(s.errorMessage).isNull()
+        }
+    }
+
+    @Test
+    fun `a status created after the account changed is not inserted into the new account's bar`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a"), hasMore = false)
+        coEvery { repository.create(any(), any(), any(), any(), any(), any()) } coAnswers {
+            every { diskCache.accountChanged(any()) } returns true
+            NetworkResult.Success(entry("new", userId = "me-id", emoji = "🔥"))
+        }
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.setStatus(emoji = "🔥")
+
+        vm.state.test {
+            assertThat(awaitItem().statuses.map { it.id }).containsExactly("a")
+        }
+    }
+
+    @Test
+    fun `a mood seen on the rail is counted once through the impression batch`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        val vm = viewModel()
+
+        vm.trackImpression("a")
+        vm.markStatusViewed("a")
+
+        coVerify(exactly = 1) { postRepository.viewPost("a") }
+    }
+
+    @Test
+    fun `reacting twice with the same emoji bumps once and sends once, the gateway keeping one per emoji`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.react("a", "❤️") } returns NetworkResult.Success(Unit)
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.react("a", "❤️")
+        vm.react("a", "❤️")
+
+        vm.state.test {
+            assertThat(awaitItem().statuses.first().reactionSummary).containsExactly("❤️", 1)
+        }
+        coVerify(exactly = 1) { repository.react("a", "❤️") }
+    }
+
+    @Test
+    fun `a refused reaction withdraws only its own bump, what arrived meanwhile stays`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.react("a", "❤️") } coAnswers {
+            statusReactedFlow.emit(SocketStatusReactedData(statusId = "a", userId = "friend", emoji = "😂"))
+            statusCreatedFlow.emit(SocketStatusCreatedData(status = apiStatus(id = "new", userId = "friend", emoji = "🔥")))
+            NetworkResult.Failure(ApiError("rip"))
+        }
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.react("a", "❤️")
+
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.statuses.map { it.id }).containsExactly("new", "a")
+            assertThat(s.statuses.first { it.id == "a" }.reactionSummary).containsExactly("😂", 1)
+        }
+    }
+
+    @Test
+    fun `a refused reaction is announced once and can be tried again`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.react("a", "❤️") } returnsMany
+            listOf(NetworkResult.Failure(ApiError("rip")), NetworkResult.Success(Unit))
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.reactFailed.test {
+            vm.react("a", "❤️")
+            awaitItem()
+            vm.react("a", "❤️")
+            expectNoEvents()
+        }
+        coVerify(exactly = 2) { repository.react("a", "❤️") }
+        vm.state.test {
+            assertThat(awaitItem().statuses.first().reactionSummary).containsExactly("❤️", 1)
+        }
+    }
+
+    @Test
+    fun `a reaction refused after the account changed announces nothing`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.react("a", "❤️") } coAnswers {
+            every { diskCache.accountChanged(any()) } returns true
+            throw java.io.IOException("offline")
+        }
+
+        val vm = viewModel()
+        vm.reactFailed.test {
+            vm.react("a", "❤️")
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `every appearance of a mood on the rail counts one impression on the story rail surface`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        val vm = viewModel()
+
+        vm.trackImpression("a")
+        vm.trackImpression("a")
+
+        coVerify(timeout = 8_000) {
+            engagement.deliver(
+                match { batch ->
+                    batch.size == 2 && batch.all {
+                        val event = it.event
+                        event is SocialEvent.Impression && event.postId == "a" && event.source == "status" &&
+                            event.surface == ContentSurface.STORY_RAIL
+                    }
+                },
+            )
+        }
     }
 }

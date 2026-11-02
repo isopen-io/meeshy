@@ -22,6 +22,20 @@ const f = {
   'admin.analytics.playback.column.rebuffer.p50': 'Rebuffer p50',
   'admin.analytics.playback.column.rebuffer.p95': 'Rebuffer p95',
   'admin.analytics.playback.column.rebuffered': 'Interrupted sessions',
+  'admin.analytics.playback.vitals.title': 'The web page during playback',
+  'admin.analytics.playback.vitals.hint': 'Page Web Vitals (LCP, CLS, INP) and long animation frames during the session, median (p50) and 95th percentile (p95). Only the web measures them.',
+  'admin.analytics.playback.vitals.column.day': 'Day',
+  'admin.analytics.playback.vitals.column.surface': 'Surface',
+  'admin.analytics.playback.vitals.column.tier': 'Device',
+  'admin.analytics.playback.vitals.column.lcp.p50': 'LCP p50',
+  'admin.analytics.playback.vitals.column.lcp.p95': 'LCP p95',
+  'admin.analytics.playback.vitals.column.cls.p50': 'CLS p50',
+  'admin.analytics.playback.vitals.column.cls.p95': 'CLS p95',
+  'admin.analytics.playback.vitals.column.inp.p50': 'INP p50',
+  'admin.analytics.playback.vitals.column.inp.p95': 'INP p95',
+  'admin.analytics.playback.vitals.column.longFrames.p95': 'Long frames p95',
+  'admin.analytics.playback.vitals.column.longFramesBlocking.p95': 'Blocking time p95',
+  'admin.analytics.playback.vitals.column.longFrameWorst.p95': 'Worst frame p95',
 } satisfies Readonly<Record<PlaybackTextKey, string>>;
 
 export default f;

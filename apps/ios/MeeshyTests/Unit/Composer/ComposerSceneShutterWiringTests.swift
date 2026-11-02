@@ -17,7 +17,7 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/\(nom)")
+            .appendingPathComponent("Meeshy/Features/Composer/\(nom)")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
             .components(separatedBy: .whitespacesAndNewlines).joined()
     }
@@ -98,7 +98,8 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
         XCTAssertTrue(corps.contains("armSceneCamera()"))
         XCTAssertFalse(corps.contains("takeScenePhoto()"), "le premier toucher ne prend plus la photo")
         let hote = try source("MeeshyComposerHost.swift")
-        XCTAssertTrue(hote.contains("funchandleSceneBackgroundTap(){ifhandleSceneQuickTap(){return}"))
+        XCTAssertTrue(hote.contains("ifissue==.armViewfinder,handleSceneQuickTap(){return}"),
+                      "le tap du fond arme le viseur, mais seulement sur le verdict du toucher à vide (#13839, L5)")
     }
 
     /// **Viseur armé : un toucher VISE, deux touchers PHOTOGRAPHIENT** (#9351,

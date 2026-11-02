@@ -30,7 +30,7 @@ call-site edits, `0` new i18n key, `0` new test. Gate = CI `iOS Tests`.
 # Plan — Iteration-186i — VoiceOver structure for CreateShareLinkView
 
 **Date:** 2026-07-20
-**Scope:** iOS only — `apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift`
+**Scope:** iOS only — `apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift`
 **Base:** `main` HEAD `5c55a06`
 **Branch:** `claude/laughing-thompson-u5ule2`
 

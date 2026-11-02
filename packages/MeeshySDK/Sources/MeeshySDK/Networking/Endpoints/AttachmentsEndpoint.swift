@@ -18,6 +18,7 @@ public enum AttachmentsEndpoint: MeeshyEndpoint, Sendable {
     case byAttachmentIdMetadata(attachmentId: String)
     case byAttachmentIdStatus(attachmentId: String)
     case byAttachmentIdStatusDetails(attachmentId: String)
+    case byAttachmentIdSubtitlesByLang(attachmentId: String, lang: String)
     case byAttachmentIdThumbnail(attachmentId: String)
     case byAttachmentIdTranscribe(attachmentId: String)
     case byAttachmentIdTranslate(attachmentId: String)
@@ -35,6 +36,7 @@ public enum AttachmentsEndpoint: MeeshyEndpoint, Sendable {
         case .byAttachmentIdMetadata(let attachmentId): return "/api/v1/attachments/\(attachmentId)/metadata"
         case .byAttachmentIdStatus(let attachmentId): return "/api/v1/attachments/\(attachmentId)/status"
         case .byAttachmentIdStatusDetails(let attachmentId): return "/api/v1/attachments/\(attachmentId)/status-details"
+        case .byAttachmentIdSubtitlesByLang(let attachmentId, let lang): return "/api/v1/attachments/\(attachmentId)/subtitles/\(lang)"
         case .byAttachmentIdThumbnail(let attachmentId): return "/api/v1/attachments/\(attachmentId)/thumbnail"
         case .byAttachmentIdTranscribe(let attachmentId): return "/api/v1/attachments/\(attachmentId)/transcribe"
         case .byAttachmentIdTranslate(let attachmentId): return "/api/v1/attachments/\(attachmentId)/translate"

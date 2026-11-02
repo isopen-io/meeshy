@@ -5,7 +5,6 @@ import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-lis
 import { AdminMomentText } from '@/components/admin/meta';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminListToolbar } from '@/components/admin/list-toolbar';
-import { adminGroupOf } from '@/lib/admin/admin-routes';
 import { COMMUNITY_LIST_SPEC } from '@/lib/admin/community-list';
 import { communityStateOf, communityVisibilityOf } from '@/lib/admin/community-state';
 import { excerptOf } from '@/lib/admin/interpret/labels';
@@ -123,10 +122,7 @@ export function AdminCommunitiesPanel({
         language={language}
         title={translateAdmin(language, 'admin.nav.communities')}
         subtitle={translateAdmin(language, 'admin.community.subtitle')}
-        crumbs={[
-          { label: translateAdmin(language, `admin.group.${adminGroupOf('communities')}`) },
-          { label: translateAdmin(language, 'admin.nav.communities') },
-        ]}
+        place={{ section: 'communities' }}
       />
       <AdminEntityList
         language={language}

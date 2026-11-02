@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_publish_block_caption">التعليق طويل جدًا — اختصره للنشر</string>
+    <string name="composer_publish_block_text">يتسع النص لـ 1000 حرف كحد أقصى — اختصره للنشر</string>
+    <string name="composer_publish_block_texts">أكثر من 50 نصًا في مشهد واحد — احذف بعضها للنشر</string>
+    <string name="composer_publish_block_stickers">أكثر من 50 ملصقًا في مشهد واحد — احذف بعضها للنشر</string>
+    <string name="composer_publish_block_media">أكثر من 50 وسيطًا في مشهد واحد — أزل بعضها للنشر</string>
+    <string name="composer_publish_block_sounds">أكثر من 50 صوتًا في مشهد واحد — أزل بعضها للنشر</string>
+    <string name="composer_publish_block_duration">تدوم القصة أكثر من ساعتين — اختصر شريحة للنشر</string>
+</resources>

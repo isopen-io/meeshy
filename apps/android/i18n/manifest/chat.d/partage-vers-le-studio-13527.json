@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "share.sheet.studio", "androidName": "share_target_studio", "status": "adopted"}
+      ]
+    }
+  }
+}

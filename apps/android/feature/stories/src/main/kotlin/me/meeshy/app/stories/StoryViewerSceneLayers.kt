@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -72,6 +71,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -84,6 +84,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -109,6 +110,7 @@ import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.ui.sticker.StickerTemplateArtwork
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.LanguageQuickOption
@@ -118,19 +120,22 @@ import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.story.canvas.SceneLookChain
 import me.meeshy.ui.theme.hexColor
+import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 
-/** Foreground media renders at this fraction of the canvas width, scaled by the object's own [StoryForegroundMediaView.scale]. */
-private const val FOREGROUND_WIDTH_FRACTION = 0.45f
+/** L'arrondi d'un média de premier plan, en fraction de son petit côté — `StoryMediaLayer.cornerRadiusFraction` (iOS). */
+internal const val FOREGROUND_CORNER_FRACTION = 0.06f
 
 /**
  * A foreground video/image layer positioned at [StoryForegroundMediaView.x]/[y]
- * (canvas-normalised, 0..1) as its center anchor, sized to a fraction of the
- * canvas width scaled by the object's own `scale`. The [playheadSeconds] clock
+ * (canvas-normalised, 0..1) as its center anchor, framed by [ForegroundMediaFrame] (the iOS
+ * `baseMediaDesignSize` envelope, the one the composer paints) scaled by the object's own
+ * `scale`, tilted by its [StoryForegroundMediaView.rotation] and filled like iOS. The [playheadSeconds] clock
  * drives keyframe animation via the pure [StoryForegroundMediaView.animated]:
  * position/scale/opacity follow the clip's keyframes for the current instant, or
- * hold their static base when the clip has none. Rotation and inter-slide
- * transitions are still not applied in this projection.
+ * hold their static base when the clip has none. Inter-slide transitions are still
+ * not applied in this projection.
  */
 @Composable
 internal fun StoryForegroundLayer(
@@ -139,36 +144,62 @@ internal fun StoryForegroundLayer(
     playing: Boolean,
     muted: Boolean,
     modifier: Modifier = Modifier,
+    rewindWhenInactive: Boolean = false,
+    onAudioFocusLost: () -> Unit = {},
+    players: Boolean = true,
 ) {
+    if (media.isVideo && !players && restingPosterKind(media.posterUrl, media.thumbHash) == RestingPosterKind.NONE) return
     val animated = media.animated(playheadSeconds)
+    val layered = animated.layered
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val aspectRatio = animated.aspectRatio.toFloat().takeIf { it > 0f } ?: 1f
-        val targetWidth = maxWidth * FOREGROUND_WIDTH_FRACTION * animated.scale.toFloat().coerceIn(0.2f, 3f)
-        val targetHeight = targetWidth / aspectRatio
+        val frame = ForegroundMediaFrame.renderedSize(
+            aspectRatio = animated.aspectRatio,
+            scale = layered.layout,
+            canvasWidth = maxWidth.value.toDouble(),
+        )
+        val targetWidth = frame.width.toFloat().dp
+        val targetHeight = frame.height.toFloat().dp
         val offsetX = maxWidth * animated.x.toFloat() - targetWidth / 2
         val offsetY = maxHeight * animated.y.toFloat() - targetHeight / 2
         val layerModifier = Modifier
+            .wrapContentSize(Alignment.TopStart, unbounded = true)
             .offset(x = offsetX, y = offsetY)
-            .width(targetWidth)
-            .aspectRatio(aspectRatio)
+            .size(targetWidth, targetHeight)
+            .graphicsLayer {
+                rotationZ = media.rotation.toFloat()
+                scaleX = layered.layerFloat
+                scaleY = layered.layerFloat
+            }
+            .clip(RoundedCornerShape(minOf(targetWidth, targetHeight) * FOREGROUND_CORNER_FRACTION))
             .alpha(animated.opacity.toFloat().coerceIn(0f, 1f))
-        if (media.isVideo) {
+        if (media.isVideo && !players) {
+            StoryRestingPoster(
+                posterUrl = media.posterUrl,
+                thumbHash = media.thumbHash,
+                lookRecipe = media.lookRecipe,
+                modifier = layerModifier,
+            )
+        } else if (media.isVideo) {
             ReelVideoSurface(
                 mediaUrl = media.url,
                 isActive = playing,
-                rewindWhenInactive = false,
+                rewindWhenInactive = rewindWhenInactive,
                 muted = muted,
                 modifier = layerModifier,
                 sourceStartMs = media.sourceWindow?.startMs,
                 sourceEndMs = media.sourceWindow?.endMs,
+                onAudioFocusLost = onAudioFocusLost,
             )
         } else {
-            AsyncImage(
-                model = media.url,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = layerModifier,
-            )
+            Box(layerModifier) {
+                AsyncImage(
+                    model = media.url,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    colorFilter = SceneLookChain.colorFilter(media.lookRecipe),
+                    modifier = Modifier.croppedSource(media.crop),
+                )
+            }
         }
     }
 }
@@ -209,6 +240,9 @@ internal fun StoryTextObjectLayer(
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
+                // iOS mesure le texte à 88 % de la scène de 1080 puis agrandit le calque par transform : la largeur
+                // de mesure suit l'échelle de l'objet, pas les contraintes de l'écran ; la scène rogne (#13582, #14298).
+                .wrapContentSize(Alignment.TopStart, unbounded = true)
                 .onSizeChanged { textSize = it }
                 .offset {
                     IntOffset(
@@ -216,11 +250,25 @@ internal fun StoryTextObjectLayer(
                         (centerYpx - textSize.height / 2f).roundToInt(),
                     )
                 }
-                .graphicsLayer { rotationZ = animated.rotation.toFloat() }
-                .alpha(animated.opacity.toFloat().coerceIn(0f, 1f))
-                .storyTextBacking(animated.background)
-                .padding(horizontal = 6.dp, vertical = 2.dp),
+                .graphicsLayer {
+                    rotationZ = animated.rotation.toFloat()
+                    scaleX = animated.layered.layerFloat
+                    scaleY = animated.layered.layerFloat
+                }
+                .alpha(animated.opacity.toFloat().coerceIn(0f, 1f)),
         ) {
+          FramedTextBox(
+            background = animated.background,
+            frame = animated.frame,
+            pxPerDesign = animated.framePxPerDesign(canvasWidthPx),
+            glyphStyle = TextStyle(
+                fontSize = with(density) { fontSizePx.toSp() },
+                fontWeight = FontWeight(typography.fontWeight),
+                fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
+                fontFamily = typography.family.toFontFamily(),
+                letterSpacing = typography.letterSpacingEm.em,
+            ),
+          ) {
             val outline = animated.outline
             if (outline.isVisible) {
                 // The author's glyph outline, stroked beneath the fill at the composer's
@@ -250,78 +298,65 @@ internal fun StoryTextObjectLayer(
                 // and the two other clients, at the glyphs' real pixel size.
                 style = LocalTextStyle.current.copy(shadow = animated.effect.composeShadow(fontSizePx, color)),
             )
+          }
         }
     }
 }
 
 /**
- * Paints an iOS/web-authored text backing behind the reader's glyphs (glue): a rounded
- * solid fill for [StoryTextBackground.Solid], a translucent frosted scrim approximating the
- * iOS glass blur for [StoryTextBackground.Glass], and nothing for [StoryTextBackground.None].
- * The *choice* of backing is the unit-tested [StoryTextBackground.resolve]; this only renders
- * it, mirroring the composer's own backing so author and reader agree on the look.
- */
-private fun Modifier.storyTextBacking(background: StoryTextBackground): Modifier = when (background) {
-    StoryTextBackground.None -> this
-    is StoryTextBackground.Solid ->
-        this.background(readerBackingColor(background.hex), RoundedCornerShape(10.dp))
-    is StoryTextBackground.Glass ->
-        this.background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(10.dp))
-}
-
-/**
- * Parses a `RRGGBB` or `RRGGBBAA` backing hex (gateway parity, no `#`) into a [Color],
- * honouring the alpha byte so a translucent solid renders as authored. Decays to
- * [Color.Transparent] on anything unexpected so a malformed backing never crashes the canvas.
- */
-private fun readerBackingColor(hex: String): Color = runCatching {
-    val h = hex.removePrefix("#")
-    val argb = when (h.length) {
-        8 -> h.substring(6, 8) + h.substring(0, 6)
-        6 -> "ff$h"
-        else -> return Color.Transparent
-    }
-    Color(argb.toLong(16))
-}.getOrDefault(Color.Transparent)
-
-/**
  * Un sticker posé par l'auteur, centré sur son point normalisé, à son côté projeté
- * ([StoryStickerView.sideFraction] de la largeur, plancher 8 dp comme iOS), incliné de sa
- * rotation et fondu selon son enveloppe. Une image intégrée prime sur l'emoji (iOS
- * `StoryStickerLayer`) ; l'emoji reste dessous tant que l'image charge.
+ * ([StoryStickerView.sideFraction] de la largeur, sans plancher ni plafond : la mise en page s'arrête à quatre
+ * largeurs et le calque agrandit au-delà, #14298), incliné de sa
+ * rotation et fondu selon son enveloppe. Un gabarit connu se dessine ([StickerTemplateArtwork]) ; une image
+ * intégrée prime sur l'emoji (iOS `StoryStickerLayer`), qui ne tient la place que tant qu'elle charge.
  */
 @Composable
 internal fun StoryStickerLayer(sticker: StoryStickerView, playheadSeconds: Float, modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val side = (maxWidth * sticker.sideFraction.toFloat()).coerceAtLeast(MIN_STICKER_SIDE)
+        val drawn = sticker.drawnSide
+        val side = maxWidth * drawn.layout.toFloat()
         val density = LocalDensity.current
         Box(
             modifier = Modifier
+                .wrapContentSize(Alignment.TopStart, unbounded = true)
                 .offset(
                     x = maxWidth * sticker.x.toFloat() - side / 2,
                     y = maxHeight * sticker.y.toFloat() - side / 2,
                 )
                 .size(side)
-                .graphicsLayer { rotationZ = sticker.rotation.toFloat() }
+                .graphicsLayer {
+                    rotationZ = sticker.rotation.toFloat()
+                    scaleX = drawn.layerFloat
+                    scaleY = drawn.layerFloat
+                }
+                .testTag(STORY_STICKER_TAG)
                 .alpha(sticker.opacity(playheadSeconds).toFloat().coerceIn(0f, 1f)),
             contentAlignment = Alignment.Center,
         ) {
-            if (sticker.emoji.isNotBlank()) {
-                Text(
-                    text = sticker.emoji,
-                    fontSize = with(density) { (side * STICKER_GLYPH_FRACTION).toSp() },
-                    maxLines = 1,
-                )
-            }
-            sticker.imageUrl?.let { url ->
-                AsyncImage(
-                    model = url,
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize(),
-                )
+            if (StickerTemplateArtwork.knows(sticker.templateId)) {
+                StickerTemplateArtwork(sticker.templateId, sticker.slots, body = side * StickerArtMetrics.TEMPLATE_BODY_FRACTION)
+            } else {
+                StickerGlyphOrImage(sticker, with(density) { (side * StickerArtMetrics.GLYPH_FRACTION).toSp() })
             }
         }
+    }
+}
+
+/** L'emoji tient la place tant que l'image intégrée charge, puis s'efface : jamais les deux à la fois. */
+@Composable
+private fun StickerGlyphOrImage(sticker: StoryStickerView, glyphSize: androidx.compose.ui.unit.TextUnit) {
+    var imageShown by remember(sticker.imageUrl) { mutableStateOf(false) }
+    if (sticker.emoji.isNotBlank() && !imageShown) {
+        Text(text = sticker.emoji, fontSize = glyphSize, maxLines = 1)
+    }
+    sticker.imageUrl?.let { url ->
+        AsyncImage(
+            model = url,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxSize(),
+            onSuccess = { imageShown = true },
+        )
     }
 }
 
@@ -332,7 +367,7 @@ internal fun StoryStickerLayer(sticker: StoryStickerView, playheadSeconds: Float
  * scène que chez l'auteur.
  */
 @Composable
-internal fun StoryAudioChipLayer(chip: StoryAudioChipView, modifier: Modifier = Modifier) {
+internal fun StoryAudioChipLayer(chip: StoryAudioChipView, modifier: Modifier = Modifier, chipModifier: Modifier = Modifier) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val unit = maxWidth / AUDIO_CHIP_REFERENCE_WIDTH
         val contentWidth = unit * if (chip.credit != null) AUDIO_CHIP_CREDIT_WIDTH else AUDIO_CHIP_WAVE_WIDTH
@@ -346,6 +381,7 @@ internal fun StoryAudioChipLayer(chip: StoryAudioChipView, modifier: Modifier = 
                     y = maxHeight * chip.y.toFloat() - chipHeight / 2,
                 )
                 .size(width = chipWidth, height = chipHeight)
+                .then(chipModifier)
                 .background(Color.Black.copy(alpha = 0.28f), CircleShape)
                 .border(width = unit, color = Color.White.copy(alpha = 0.25f), shape = CircleShape)
                 .padding(horizontal = unit * AUDIO_CHIP_PAD_X, vertical = unit * AUDIO_CHIP_PAD_Y),
@@ -404,8 +440,6 @@ private fun audioChipBars(samples: List<Float>): List<Float> {
     }
 }
 
-private val MIN_STICKER_SIDE = 8.dp
-private const val STICKER_GLYPH_FRACTION = 0.8f
 private const val AUDIO_CHIP_REFERENCE_WIDTH = 390f
 private const val AUDIO_CHIP_PAD_X = 12f
 private const val AUDIO_CHIP_PAD_Y = 8f
@@ -416,3 +450,6 @@ private const val AUDIO_CHIP_CREDIT_WIDTH = 92f
 private const val AUDIO_CHIP_CREDIT_SIZE = 12f
 private const val AUDIO_CHIP_BARS = 9
 private val DEFAULT_WAVE = listOf(0.35f, 0.7f, 0.5f, 0.95f, 0.6f, 0.85f, 0.4f, 0.65f, 0.3f)
+
+/** La boîte d'un sticker du lecteur, pour les témoins qui mesurent sa taille peinte. */
+internal const val STORY_STICKER_TAG = "story-sticker"

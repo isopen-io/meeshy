@@ -35,6 +35,7 @@ const NOW = new Date('2026-09-24T12:00:00.000Z');
 
 const arrival = (overrides: Partial<LinkArrival> = {}): LinkArrival => ({
   displayName: 'Priya',
+  avatar: null,
   isAnonymous: true,
   country: 'IN',
   language: 'en',
@@ -59,6 +60,13 @@ describe('une ligne d’arrivée', () => {
     expect(html).not.toContain('data-link-arrival-anonymous');
     expect(html).not.toContain('role="img"');
     expect(html).not.toContain('data-link-arrival-language');
+  });
+
+  test('la photo de l’arrivant remplace ses initiales (#12571)', () => {
+    const html = renderToStaticMarkup(<ArrivalsList language="fr" arrivals={[arrival({ avatar: '2026/09/priya/photo.png' })]} now={NOW} />);
+    expect(html).toContain('/attachments/file/2026%2F09%2Fpriya%2Fphoto.png');
+    const sans = renderToStaticMarkup(<ArrivalsList language="fr" arrivals={[arrival()]} now={NOW} />);
+    expect(sans).not.toContain('<img');
   });
 
   test('deux homonymes arrivés au même instant restent deux lignes', () => {

@@ -23,6 +23,17 @@ class PostApiRoutesTest {
     }
 
     @Test
+    fun `le post servi se lit sans rabattre son blob storyEffects`() = runTest {
+        val http = RecordingHttp(responseBody = """{"success":true,"data":{"id":"p1","storyEffects":{"v":3,"futureKey":7}}}""")
+
+        val served = posts(http).getPostDocument("p1").data!!
+
+        assertThat(http.only.method).isEqualTo("GET")
+        assertThat(http.only.path).isEqualTo("/api/v1/posts/p1")
+        assertThat(served["storyEffects"].toString()).isEqualTo("""{"v":3,"futureKey":7}""")
+    }
+
+    @Test
     fun `la densite a proximite envoie le pas de grille`() = runTest {
         val http = RecordingHttp(responseBody = """{"success":true,"data":[{"cellLat":48.5,"cellLng":2.5,"count":3}]}""")
 

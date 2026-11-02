@@ -114,4 +114,30 @@ describe('PostService.triggerStoryTextTranslation — caption source-language fi
       `story_context:${POST_ID}`,
     );
   });
+
+  it('ne demande ni ne compte une langue que NLLB-200 ne sert pas (byv)', async () => {
+    const on = jest.fn<(event: string, handler: (event: unknown) => Promise<void>) => void>();
+    const off = jest.fn();
+    jest.spyOn(ZMQSingleton, 'getInstanceSync').mockReturnValue({
+      translateToMultipleLanguages: translateSpy,
+      on,
+      off,
+    } as never);
+    const prisma = buildPrisma(['es', 'byv']);
+    (prisma as unknown as { $runCommandRaw: jest.Mock }).$runCommandRaw = jest.fn(async () => ({}));
+
+    await invoke(prisma, 'Bonjour le monde', 'fr');
+
+    expect(translateSpy).toHaveBeenCalledWith(
+      'Bonjour le monde', 'fr', ['es'], `story:${POST_ID}`, `story_context:${POST_ID}`,
+    );
+    const [scopedEvent, handleResult] = on.mock.calls[0];
+    await handleResult({
+      taskId: 't', targetLanguage: 'es', metadata: {},
+      result: { messageId: `story:${POST_ID}`, translatedText: 'Hola mundo' },
+    });
+    // Toutes les langues SERVIES sont arrivées : l'écouteur part tout de suite,
+    // sans attendre 60 s une langue `byv` que personne n'a demandée.
+    expect(off).toHaveBeenCalledWith(scopedEvent, handleResult);
+  });
 });

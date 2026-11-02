@@ -530,3 +530,38 @@ describe('/world est ouvert à tous : l’entrée ET le fil de l’invité y viv
     });
   }
 });
+
+/**
+ * « MES CONVERSATIONS » DEPUIS L'EN-TÊTE DE meeshy.me (#12500) — le bouton mène
+ * à `/chats` pour TOUS, sans demander qui est là. C'est cette garde qui décide
+ * de la suite : un compte y entre, tout autre visiteur part vers la connexion,
+ * dont la destination par défaut est de nouveau `/chats`
+ * (`routes/login-next.test.tsx`, « sans `next` : la liste »). La clé est
+ * DÉRIVÉE de l'adresse : si `/chats` changeait de clé, la promesse du bouton
+ * rougirait ici.
+ */
+describe('« Mes conversations » depuis l’en-tête : /chats exige un compte, et la connexion y ramène (#12500)', () => {
+  const chatsKey = Object.entries(ROUTES).find(([, route]) => route.pattern === '/chats')?.[0] ?? '';
+
+  test('`/chats` est la liste', () => expect(chatsKey).toBe('list'));
+
+  test('un visiteur sans session ⇒ la connexion, même s’il n’a jamais vu l’accueil', () => {
+    expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: chatsKey })).toBe('redirect-login');
+  });
+
+  test('l’invité d’un lien ⇒ la connexion : la liste exige un compte', () => {
+    expect(resolveRouteAccess({ sessionStatus: 'guest', source: 'gateway', routeKey: chatsKey })).toBe('redirect-login');
+  });
+
+  test('un compte ⇒ ses conversations', () => {
+    expect(resolveRouteAccess({ sessionStatus: 'authenticated', source: 'gateway', routeKey: chatsKey })).toBe('allow');
+  });
+
+  test('la connexion ouverte sans `next` revient sur `/chats`', () => {
+    expect(landingAfterSession(null, ROUTES.list.pattern)).toBe('/chats');
+  });
+
+  test('la page de connexion elle-même reste ouverte au visiteur : aucune boucle', () => {
+    expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'login' })).toBe('allow');
+  });
+});

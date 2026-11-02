@@ -13,9 +13,12 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.MessageSticker
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.session.AccountFence
 
 /**
  * The messages of a conversation, offline-first (ARCHITECTURE.md §4, §5): Room is the single
@@ -46,12 +49,20 @@ class MessageRepository internal constructor(
         syncMetaDao: SyncMetaDao,
         outboxRepository: OutboxRepository,
         clock: CacheClock,
+        /** #13792 — chaque message servi (REST, accusé d'envoi) nourrit le registre des régimes : jamais absent. */
+        regime: EndToEndRegimeKeeper,
+        fence: AccountFence? = null,
     ) : this(
-        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock),
-        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock),
-        mutations = MessageMutationWriter(CachedMessageUpdater(database, messageDao), outboxRepository, clock),
-        enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao), translationApi),
-        receipts = MessageReceiptWriter(database, messageDao),
+        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime),
+        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime),
+        mutations = MessageMutationWriter(
+            CachedMessageUpdater(database, messageDao, fence),
+            outboxRepository,
+            clock,
+            EditRevisionLedger(database.editRevisionDao(), clock, fence),
+        ),
+        enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao, fence), translationApi),
+        receipts = MessageReceiptWriter(database, messageDao, fence),
     )
 
     /**
@@ -67,6 +78,13 @@ class MessageRepository internal constructor(
 
     /** Explicit refresh of a conversation's messages (pull / retry). Throws on failure. */
     suspend fun refresh(conversationId: String) = history.refresh(conversationId)
+
+    /**
+     * Targeted read of one message by its id, merged into Room (#13797) — see
+     * [MessageHistoryReader.refreshMessage]. Never throws; returns whether the row was merged.
+     */
+    suspend fun refreshMessage(conversationId: String, messageId: String): Boolean =
+        history.refreshMessage(conversationId, messageId)
 
     /**
      * Cache-only read of a conversation's [limit] most recent messages, oldest first — a "peek"
@@ -104,6 +122,9 @@ class MessageRepository internal constructor(
         messageType: String = "text",
         attachmentUploadCmids: List<String> = emptyList(),
         attachments: List<ApiMessageAttachment> = emptyList(),
+        location: SharedPlace? = null,
+        forwardedAttachmentIds: List<String>? = null,
+        sticker: MessageSticker? = null,
     ): String = sends.sendOptimistic(
         conversationId = conversationId,
         content = content,
@@ -113,10 +134,13 @@ class MessageRepository internal constructor(
         storyReplyToId = storyReplyToId,
         forwardedFromId = forwardedFromId,
         forwardedFromConversationId = forwardedFromConversationId,
+        forwardedAttachmentIds = forwardedAttachmentIds,
         effects = effects,
         messageType = messageType,
         attachmentUploadCmids = attachmentUploadCmids,
         attachments = attachments,
+        location = location,
+        sticker = sticker,
     )
 
     /**
@@ -126,8 +150,8 @@ class MessageRepository internal constructor(
     suspend fun reconcileSent(cmid: String, serverMessage: ApiMessage) =
         sends.reconcileSent(cmid, serverMessage)
 
-    /** The outbox exhausted its retries — surface the bubble as retryable. */
-    suspend fun markSendFailed(cmid: String) = sends.markSendFailed(cmid)
+    /** The outbox exhausted its retries — surface the bubble as retryable, with the [reason] it says (#13550). */
+    suspend fun markSendFailed(cmid: String, reason: String? = null) = sends.markSendFailed(cmid, reason)
 
     /** User-initiated retry of a failed bubble: back to `SENDING`, its outbox row revived. */
     suspend fun retrySend(cmid: String) = sends.retrySend(cmid)
@@ -139,6 +163,9 @@ class MessageRepository internal constructor(
      */
     suspend fun toggleReactionOptimistic(messageId: String, emoji: String, isAdding: Boolean): Boolean =
         mutations.toggleReactionOptimistic(messageId, emoji, isAdding)
+
+    /** Applies a `message:edited` frame (the full server message) to the cached row. */
+    suspend fun applyServerEdit(message: ApiMessage): Boolean = mutations.applyServerEdit(message)
 
     /** Applies a socket-driven reaction delta to the cache — no outbox involved. */
     suspend fun applyReactionDelta(messageId: String, emoji: String, delta: Int) =

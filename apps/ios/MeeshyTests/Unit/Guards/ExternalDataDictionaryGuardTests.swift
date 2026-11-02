@@ -12,10 +12,10 @@ final class ExternalDataDictionaryGuardTests: XCTestCase {
     private static let externalDataUnits = [
         "Meeshy/Features/Main/ViewModels/GlobalSearchViewModel.swift",
         "Meeshy/Features/Main/ViewModels/ConversationViewModel+StoreObservation.swift",
-        "Meeshy/Features/Main/Focal/Summary/FaceRampRanking.swift",
-        "Meeshy/Features/Main/Focal/Summary/DeterministicDigestBuilder.swift",
+        "Meeshy/Features/Focal/Summary/FaceRampRanking.swift",
+        "Meeshy/Features/Focal/Summary/DeterministicDigestBuilder.swift",
         "Meeshy/Features/Main/Services/PresenceManager.swift",
-        "Meeshy/Features/Main/Focal/Row/FocalAudioBlock.swift",
+        "Meeshy/Features/Focal/Row/FocalAudioBlock.swift",
         "Meeshy/Features/Main/Components/MessageDetail/MessageLanguageDetailView.swift",
     ]
 

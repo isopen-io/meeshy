@@ -21,10 +21,12 @@ import {
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
 import { assertValidObjectId } from '../utils/object-id.js';
+import { notePairInteraction } from './relations/pairInteractionRecorder.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { EngagementService, type EngagementActivityOptions } from './engagement/EngagementService.js';
 import { recordConversationActivity } from './conversations/conversationActivity.js';
+import { conversationRefusesPlainSignal, E2eeSignalChannelRequiredError } from './e2ee/e2ee-signal-channel';
 
 const logger = enhancedLogger.child({ module: 'ReactionService' });
 
@@ -172,6 +174,14 @@ export class ReactionService {
       throw new Error('User is not a participant of this conversation');
     }
 
+    // #13142 — dans une conversation chiffrée de bout en bout, la réaction part en
+    // signal chiffré : la passerelle ne range jamais son emoji en clair. Les quatre
+    // transports convergent ici, le refus aussi (409, code et phrase lisibles),
+    // APRÈS le contrôle du membre : un étranger n'apprend pas le régime.
+    if (conversationRefusesPlainSignal(message.conversation)) {
+      throw new E2eeSignalChannelRequiredError();
+    }
+
     const existingReaction = await this.prisma.reaction.findFirst({
       where: { messageId, participantId, emoji: sanitized }
     });
@@ -223,10 +233,12 @@ export class ReactionService {
     // rang part avec `lastReaction`, `emitConversationActivityUpdate`).
     await recordConversationActivity({ prisma: this.prisma, conversationId: message.conversationId, at: reaction.createdAt });
 
-    this.creditReactor(
-      message.conversation.participants.find((p) => p.id === participantId)?.userId ?? null,
-      message.conversationId,
-    );
+    const reactorUserId = message.conversation.participants.find((p) => p.id === participantId)?.userId ?? null;
+    this.creditReactor(reactorUserId, message.conversationId);
+    // Les cercles (#13932) : réagir au message de l'autre compte pour la paire.
+    if (reactorUserId && message.sender?.userId) {
+      notePairInteraction(this.prisma, { actorId: reactorUserId, otherId: message.sender.userId, nature: 'reaction', at: reaction.createdAt });
+    }
 
     return { reaction: this.mapReactionToData(reaction), unchanged: false };
   }

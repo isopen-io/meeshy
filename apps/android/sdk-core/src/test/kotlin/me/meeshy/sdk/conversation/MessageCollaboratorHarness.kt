@@ -26,7 +26,7 @@ internal class MessageCollaboratorHarness(startMillis: Long = 1_700_000_000_000L
     ).allowMainThreadQueries().build()
     val outbox = OutboxRepository(database, database.outboxDao())
     val clock = MessageTestClock(startMillis)
-    val updater = CachedMessageUpdater(database, database.messageDao())
+    val updater = CachedMessageUpdater(database, database.messageDao(), null)
 
     /** Stores [message] as a server-acked row, the way a sync would have. */
     suspend fun seedSynced(message: ApiMessage) {

@@ -187,7 +187,7 @@ final class FocalPaletteContrastTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Focal/Row")
+            .appendingPathComponent("Meeshy/Features/Focal/Row")
 
         // F-083ter : FocalMetaRow ne porte plus de littéral d'opacité — il
         // lit FocalMetrics.MetaText (garde R15). L'ancre suit : elle

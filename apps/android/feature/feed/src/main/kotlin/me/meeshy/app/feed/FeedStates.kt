@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -38,6 +39,7 @@ internal fun FeedNotice.messageRes(): Int = when (this) {
     FeedNotice.LOAD_FAILED -> R.string.feed_load_error
     FeedNotice.LIKE_FAILED -> R.string.feed_notice_like_failed
     FeedNotice.BOOKMARK_FAILED -> R.string.feed_notice_bookmark_failed
+    FeedNotice.REPOSTED -> R.string.feed_repost_reposted
     FeedNotice.REPOST_FAILED -> R.string.feed_notice_repost_failed
     FeedNotice.PIN_FAILED -> R.string.feed_notice_pin_failed
     FeedNotice.DELETE_FAILED -> R.string.feed_notice_delete_failed
@@ -45,6 +47,7 @@ internal fun FeedNotice.messageRes(): Int = when (this) {
     FeedNotice.REPORTED -> R.string.feed_notice_reported
     FeedNotice.PUBLISH_FAILED -> R.string.feed_notice_publish_failed
     FeedNotice.PUBLISHED -> R.string.feed_notice_published
+    FeedNotice.PUBLISH_QUEUED -> R.string.feed_notice_publish_queued
     FeedNotice.TRANSLATION_FAILED -> R.string.feed_notice_translation_failed
 }
 
@@ -76,8 +79,22 @@ internal fun FeedErrorState(onRetry: () -> Unit, modifier: Modifier = Modifier) 
     )
 }
 
+/** Hors ligne, rien de gardé : un seul état, qui dit pourquoi le fil est vide et quand il se remplira (#14263). */
 @Composable
-private fun FeedStatePane(
+internal fun FeedOfflineEmptyState(onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    FeedStatePane(
+        icon = { Icon(Icons.Outlined.WifiOff, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(48.dp)) },
+        title = stringResource(R.string.feed_offline_empty_title),
+        subtitle = stringResource(R.string.feed_offline_empty_detail),
+        action = {
+            OutlinedButton(onClick = onRetry) { Text(stringResource(R.string.feed_retry)) }
+        },
+        modifier = modifier,
+    )
+}
+
+@Composable
+internal fun FeedStatePane(
     icon: @Composable () -> Unit,
     title: String,
     subtitle: String?,

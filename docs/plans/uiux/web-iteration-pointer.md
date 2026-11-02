@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-to2xb3` |
+| Branche de travail de la session courante | `claude/practical-fermat-js1tyc` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -38,7 +38,53 @@ normal.
 
 | itération | date | branche de travail | PR | état |
 |---|---|---|---|---|
-| **74w** | 2026-10-21 | `claude/practical-fermat-to2xb3` | [#11384](https://github.com/isopen-io/meeshy/pull/11384) → `dev` | ⏳ CI |
+| **74w** | 2026-10-21 | `claude/practical-fermat-to2xb3` | [#11384](https://github.com/isopen-io/meeshy/pull/11384) → `dev` | ✅ mergé |
+| **75w** | 2026-10-24 | `claude/practical-fermat-o9iiqc` | [#12599](https://github.com/isopen-io/meeshy/pull/12599) → `dev` | ✅ mergé |
+| **76w** | 2026-10-25 | `claude/practical-fermat-1peq83` | [#12925](https://github.com/isopen-io/meeshy/pull/12925) → `dev` | ✅ mergé |
+| **77w** | 2026-10-31 | `claude/practical-fermat-95xnj5` | → `dev` | ✅ mergé |
+| **78w** | 2026-11-01 | `claude/practical-fermat-0tzqfi` | [#14198](https://github.com/isopen-io/meeshy/pull/14198) → `dev` | ✅ mergé |
+| **79w** | 2026-11-02 | `claude/practical-fermat-js1tyc` | → `dev` | ⏳ ouverte |
+
+**79w** — i18n / Prisme UI : la pastille d'état « En pause » de la visionneuse vidéo
+(`components/viewer-video-page.tsx`) était écrite EN DUR en français — un texte VISIBLE
+À L'ÉCRAN dans toutes les langues sauf le français, alors que le bouton central voisin
+du même composant servait déjà `translate(language, 'media.video.pause')`. Site unique
+désormais : la clé `media.video.paused` ×7 langues (voisine de `media.video.pause`) +
+`translate` + marqueur `data-viewer-paused-badge` ; témoin `viewer-video-paused-i18n.test.tsx`
+(RED→GREEN). Housekeeping : 78w confirmée mergée (#14198) ; appariement analyses↔plans
+1:1 revérifié (45w→78w). Analyse : `docs/analyses/uiux/2026-11-02-iteration-79w.md`.
+
+**78w** — a11y / i18n : les noms accessibles des pastilles de palier (`TierDots`,
+`routes/progression-parts.tsx`) étaient écrits EN DUR en français — un lecteur d'écran
+EN/ES/PT/DE/IT/AR entendait un `aria-label` mi-anglais mi-français (« Palier 50 atteint
+— earned on september 3, 2026 »). Site unique désormais : `tierListLabel` /
+`tierDotLabel` (`lib/view/progression.ts`) + 4 clés `game.progression.tier.*` (partie
+`concept`) ×7 langues ; témoin `progression-tier-dots-i18n.test.tsx` (RED→GREEN) +
+regex `FRENCH` durcie. Housekeeping : 77w confirmée mergée ; appariement analyses↔plans
+1:1 revérifié. Analyse : `docs/analyses/uiux/2026-11-01-iteration-78w.md`.
+
+**77w** — i18n / Prisme UI : la bande « Hors ligne » de la zone Progression (hub +
+pages dédiées Badges/Défis/Succès) écrivait son texte EN DUR en français — la SEULE
+bande hors-ligne non traduite du produit (le primitif partagé `OfflineNotice` prend
+`children`, pas `language`). Site unique désormais : `ProgressionOfflineNotice({scope})`
+(`progression-shell.tsx`) + 2 clés `game.page.offline_notice[_brief]` en partie `core`
+×7 langues ; témoin `progression-offline-notice.test.tsx` (RED→GREEN). Housekeeping :
+76w confirmée mergée. Analyse : `docs/analyses/uiux/2026-10-31-iteration-77w.md`.
+
+**76w** — cohérence du thème : deux littéraux que le gate d'harmonie (#8879) prenait
+pour du chrome n'en sont pas — le code QR du lien de parrainage
+(`lib/game-photo/referral-qr.ts`, noir-sur-blanc lu par une caméra) et la luminance
+d'un masque SVG (`components/game/author-plate.tsx`, blanc = visible / noir = masqué).
+Marqués `harmony-exempt` motivés ; gate 96 → 92 ; témoin
+`harmony-nonpaint-literals.test.ts`. Housekeeping : 14 analyses web legacy de juin
+2026 annotées CLOS — LEGACY. Analyse : `docs/analyses/uiux/2026-10-25-iteration-76w.md`.
+
+**75w** — cohérence du thème clair/sombre : la vignette « Signature » du sélecteur
+d'apparence (`appearance-picker-sections.tsx`) DÉRIVE désormais des cotes canoniques
+du fond (`backdropStyleVars()` + `withAccent`, dégradé partagé
+`styles/appearance-picker.css`) au lieu d'un dégradé jumeau codé en dur qui restait
+sombre en thème clair. 3 littéraux de couleur retirés, jumelle divergente supprimée.
+Analyse : `docs/analyses/uiux/2026-10-24-iteration-75w.md`.
 
 **74w** — i18n du flux de connexion par lien magique (`magic-link-{validation,
 panel,flow}.tsx`) : 11 clés `magicLink.*` ×7 langues + câblage `translate` +
@@ -52,6 +98,6 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **75w**
-Revue fraîche `apps/web` — voir les pistes 75w+ en pied de
-`docs/analyses/uiux/2026-10-21-iteration-74w.md`.
+## Prochaine itération : **80w**
+Revue fraîche `apps/web` — voir les pistes 80w+ en pied de
+`docs/analyses/uiux/2026-11-02-iteration-79w.md`.

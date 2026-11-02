@@ -40,6 +40,7 @@ const ar = {
   'listFilter.pinned': 'المثبّتة',
   'listFilter.archived': 'المؤرشفة',
   'listRow.muted': 'مكتومة',
+  'listRow.endToEnd': 'مشفّرة تمامًا بين الطرفين',
   'listRow.announce.pin.on': 'تم تثبيت المحادثة',
   'listRow.announce.pin.off': 'تم إلغاء تثبيت المحادثة',
   'listRow.announce.mute.on': 'تم كتم المحادثة',

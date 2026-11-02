@@ -87,8 +87,11 @@ nonisolated enum BubbleDragItemProvider {
         case notCached
     }
 
+    /// `scratch` est le dossier où naissent les copies : le temporaire de l'app,
+    /// qu'une déconnexion vide (`BubbleDragScratch.purge()`).
     static func make(
         _ source: BubbleDragSource,
+        scratch: URL = FileManager.default.temporaryDirectory,
         resolveCachedFile: @escaping @Sendable (String, AttachmentDragKind) async -> URL?
     ) -> NSItemProvider {
         switch source {
@@ -104,7 +107,7 @@ nonisolated enum BubbleDragItemProvider {
                         return
                     }
                     do {
-                        completion(try copy(cached, named: suggestedName), false, nil)
+                        completion(try copy(cached, named: suggestedName, in: scratch), false, nil)
                     } catch {
                         completion(nil, false, error)
                     }
@@ -115,9 +118,9 @@ nonisolated enum BubbleDragItemProvider {
         }
     }
 
-    private static func copy(_ cached: URL, named name: String) throws -> URL {
-        BubbleDragScratch.purge(olderThan: BubbleDragScratch.staleAfter)
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("\(BubbleDragScratch.directoryPrefix)\(UUID().uuidString)", isDirectory: true)
+    private static func copy(_ cached: URL, named name: String, in scratch: URL) throws -> URL {
+        BubbleDragScratch.purge(in: scratch, olderThan: BubbleDragScratch.staleAfter)
+        let directory = scratch.appendingPathComponent("\(BubbleDragScratch.directoryPrefix)\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let destination = directory.appendingPathComponent(name)
         try FileManager.default.copyItem(at: cached, to: destination)

@@ -69,7 +69,8 @@ function Name({ plate, uid }: { readonly plate: AuthorPlateData; readonly uid: s
             {plate.name}
           </text>
           <mask id={`${uid}-scratch`} maskUnits="userSpaceOnUse" x={0} y={0} width={PLATE_BOX.width} height={PLATE_BOX.height}>
-            <rect x={0} y={0} width={PLATE_BOX.width} height={PLATE_BOX.height} fill="white" />
+            {/* le masque de grattage : blanc = visible, noir = masqué (une luminance, pas une couleur) */}
+            <rect x={0} y={0} width={PLATE_BOX.width} height={PLATE_BOX.height} fill="white" />{/* harmony-exempt: luminance de masque SVG, pas une couleur de thème */}
             <path d={SCRATCH_PASSES} stroke="black" strokeWidth={11} strokeLinejoin="round" fill="none" />
           </mask>
           <rect data-plate-scratch="" x={112} y={40} width={204} height={40} rx={6} fill={paintUrl(uid, 'silver')} mask={`url(#${uid}-scratch)`} />

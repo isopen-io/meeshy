@@ -12,6 +12,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -23,15 +24,26 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 private const val RING_COUNT = 4
 private const val RING_MILLIS = 1_200
 private const val RING_STAGGER_MILLIS = 200
+private val AVATAR_SIZE = 110.dp
+private val RING_BASE = 120.dp
+private val RING_STEP = 35.dp
+
+/** L'encombrement des anneaux à leur taille d'origine : le plus grand anneau (iOS `120 + 3 × 35`). */
+internal val IncomingCallRingsFootprint: Dp = RING_BASE + RING_STEP * (RING_COUNT - 1)
+
+/** Le plus petit encombrement consenti sur un écran court : l'avatar reste un visage reconnaissable. */
+internal val IncomingCallRingsMinFootprint: Dp = 72.dp
 
 /**
  * Les quatre anneaux qui s'étendent autour de l'appelant et l'avatar qui rebondit (iOS
- * `IncomingCallView.ringAnimation`). Décoratif, coupé net sous « Réduire les animations ».
+ * `IncomingCallView.ringAnimation`). Décoratif, coupé net sous « Réduire les animations ». Sous une
+ * place plus petite que [IncomingCallRingsFootprint], anneaux et avatar se réduisent ensemble.
  */
 @Composable
 internal fun IncomingCallRings(
@@ -41,11 +53,16 @@ internal fun IncomingCallRings(
     modifier: Modifier = Modifier,
 ) {
     val bounce = if (reduceMotion) 1f else rememberAvatarBounce()
-    Box(modifier = modifier.clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
-        repeat(RING_COUNT) { index -> IncomingRing(index, reduceMotion) }
+    BoxWithConstraints(modifier = modifier.clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
+        val fit = if (constraints.hasBoundedWidth && constraints.hasBoundedHeight) {
+            (minOf(maxWidth, maxHeight) / IncomingCallRingsFootprint).coerceAtMost(1f)
+        } else {
+            1f
+        }
+        repeat(RING_COUNT) { index -> IncomingRing(index, reduceMotion, fit) }
         CallAvatarDisc(
             name = name,
-            size = 110.dp,
+            size = AVATAR_SIZE * fit,
             avatarUrl = peer.avatarUrl,
             ring = peer.ring,
             modifier = Modifier.scale(bounce),
@@ -72,7 +89,7 @@ private fun rememberAvatarBounce(): Float {
 }
 
 @Composable
-private fun IncomingRing(index: Int, reduceMotion: Boolean) {
+private fun IncomingRing(index: Int, reduceMotion: Boolean, fit: Float) {
     val scale = if (reduceMotion) {
         1f
     } else {
@@ -90,7 +107,7 @@ private fun IncomingRing(index: Int, reduceMotion: Boolean) {
     val fade = 1f - index * 0.15f
     Box(
         Modifier
-            .size(120.dp + 35.dp * index)
+            .size((RING_BASE + RING_STEP * index) * fit)
             .scale(scale)
             .graphicsLayer { alpha = (if (reduceMotion) 0.85f else 0.6f) * fade }
             .border(

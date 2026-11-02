@@ -59,7 +59,7 @@ public fun MeeshyPrimaryButton(
                 color = MeeshyPalette.White,
             )
         } else {
-            Text(text = text, color = MeeshyPalette.White, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
+            Text(text = text, color = if (active) MeeshyPalette.White else MeeshyTheme.tokens.textSecondary, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
         }
     }
 }

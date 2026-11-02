@@ -13,7 +13,11 @@ class StickerPackStoreTest {
         var installed: List<StickerPackSummary> = emptyList(),
         var failMutations: Boolean = false,
         var failList: Boolean = false,
+        var shop: List<StickerPackSummary> = emptyList(),
     ) : StickerPackApi {
+        override suspend fun catalogue(): ApiResponse<StickerPackList> =
+            if (failList) throw java.io.IOException("offline") else ApiResponse(success = true, data = StickerPackList(shop))
+
         override suspend fun installed(): ApiResponse<StickerPackList> =
             if (failList) throw java.io.IOException("offline") else ApiResponse(success = true, data = StickerPackList(installed))
 
@@ -74,5 +78,17 @@ class StickerPackStoreTest {
         store.refresh()
         assertThat(store.setInstalled("fruits", install = false)).isTrue()
         assertThat(store.packs.value!!.map { it.slug }).containsExactly("sport")
+    }
+
+    @Test
+    fun `la boutique publie le catalogue et une panne garde le dernier connu`() = runTest {
+        val api = FakeApi(shop = listOf(StickerPackSummary(slug = "fruits", name = "Fruits", author = "Ada")))
+        val store = StickerPackStore(api)
+        assertThat(store.catalogue.value).isNull()
+        store.loadCatalogue()
+        assertThat(store.catalogue.value!!.map { it.slug }).containsExactly("fruits")
+        api.failList = true
+        store.loadCatalogue()
+        assertThat(store.catalogue.value!!.single().author).isEqualTo("Ada")
     }
 }

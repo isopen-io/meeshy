@@ -34,5 +34,6 @@
     <string name="signup_country_picker_title">Elige un país</string>
     <string name="signup_password_too_short">Mínimo 6 caracteres.</string>
     <string name="signup_submit">Crear mi cuenta</string>
+    <string name="signup_display_name_invalid_characters">El nombre solo puede contener letras, espacios, apóstrofos, puntos y guiones.</string>
     <string name="signup_error_invalid_field">Este valor fue rechazado.</string>
 </resources>

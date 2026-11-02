@@ -20,6 +20,7 @@
  * de découpage de 1000 lignes. `check` est REMIS par l'hôte.
  */
 import { awaitCondition } from './await-fact.mjs';
+import { revealRow } from './reveal-row.mjs';
 
 const GROUP = 'c-deploiement';
 /** Le groupe que le lecteur a créé (`READER_CREATED_GROUP_ID`, `fixtures-pagination.ts`) : le seul où il renomme (#11211). */
@@ -28,6 +29,7 @@ const DIRECT = 'c-amina';
 const BUTTON = 'button[aria-label="Actions de conversation"]';
 
 const openMenuOf = async (page, row) => {
+  await revealRow(page, row);
   await page.evaluate(({ row, button }) => document.querySelector(`[data-row="${row}"] ${button}`)?.focus(), { row, button: BUTTON });
   await page.keyboard.press('Enter');
   await page.waitForSelector('[role="menu"]');
@@ -75,6 +77,7 @@ export async function checkRowMenuMore({ browser, base, check }) {
     `un simple membre de « ${GROUP} » n'a pas « Renommer », il a « Quitter » (${JSON.stringify(memberLabels)})`,
   );
   await page.keyboard.press('Escape');
+  await revealRow(page, CREATED_GROUP);
   const nameOf = () => page.$eval(`[data-row="${CREATED_GROUP}"] [data-name]`, (el) => el.textContent);
   const original = await nameOf();
   for (const [typed, expected] of [

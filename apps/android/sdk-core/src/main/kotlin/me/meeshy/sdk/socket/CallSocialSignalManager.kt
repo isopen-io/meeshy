@@ -1,9 +1,7 @@
 package me.meeshy.sdk.socket
 
 import me.meeshy.sdk.model.socket.SocketEventNames
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import me.meeshy.sdk.model.call.CallInviteOutcome
 import me.meeshy.sdk.model.call.CallInviteSettled
 import me.meeshy.sdk.model.call.CallLiveFrameReply
@@ -21,7 +19,10 @@ import me.meeshy.sdk.model.call.CallRecordingSocketEvent
 import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.CallSocialEventParser
 import me.meeshy.sdk.model.call.CallTranscriptionActive
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 import org.json.JSONObject
+import javax.inject.Provider
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -37,75 +38,81 @@ import javax.inject.Singleton
  * Toute émission est ignorable par une passerelle ancienne.
  */
 @Singleton
-class CallSocialSignalManager @Inject constructor(
+class CallSocialSignalManager internal constructor(
     private val socketManager: SocketManager,
+    private val ticket: () -> AccountTicket?,
 ) {
+    /** Le ticket du compte est pris À LA RÉCEPTION de chaque trame (#13588). */
+    @Inject
+    constructor(socketManager: SocketManager, fence: Provider<AccountFence>) :
+        this(socketManager, { fence.get().ticket() })
+
+    constructor(socketManager: SocketManager) : this(socketManager, { null })
+
     private val controls = CallControlsSocket(socketManager)
     private val recording = CallRecordingSocket(socketManager)
     private val liveFrame = CallLiveFrameSocket(controls)
     private val preview = CallPreviewSocket(socketManager)
 
-    private fun <T> hot(buffer: Int = 16) = MutableSharedFlow<T>(replay = 0, extraBufferCapacity = buffer)
+    private val _participantInvited = SocketInboundRoute.subject<CallParticipantInvited>()
+    val participantInvited: SharedFlow<CallParticipantInvited> = _participantInvited.exposed()
 
-    private val _participantInvited = hot<CallParticipantInvited>()
-    val participantInvited: SharedFlow<CallParticipantInvited> = _participantInvited.asSharedFlow()
-
-    private val _inviteSettled = hot<CallInviteSettled>()
+    private val _inviteSettled = SocketInboundRoute.subject<CallInviteSettled>()
 
     /** Refus ou expiration d'une invitation ; [CallInviteSettled.outcome] les distingue. */
-    val inviteSettled: SharedFlow<CallInviteSettled> = _inviteSettled.asSharedFlow()
+    val inviteSettled: SharedFlow<CallInviteSettled> = _inviteSettled.exposed()
 
-    private val _mutedByModerator = hot<CallMutedByModerator>()
-    val mutedByModerator: SharedFlow<CallMutedByModerator> = _mutedByModerator.asSharedFlow()
+    private val _mutedByModerator = SocketInboundRoute.subject<CallMutedByModerator>()
+    val mutedByModerator: SharedFlow<CallMutedByModerator> = _mutedByModerator.exposed()
 
-    private val _reactions = hot<CallReactionReceived>(64)
-    val reactionReceived: SharedFlow<CallReactionReceived> = _reactions.asSharedFlow()
+    private val _reactions = SocketInboundRoute.subject<CallReactionReceived>()
+    val reactionReceived: SharedFlow<CallReactionReceived> = _reactions.exposed()
 
-    private val _recordingEvents = hot<CallRecordingSocketEvent>()
-    val recordingEvents: SharedFlow<CallRecordingSocketEvent> = _recordingEvents.asSharedFlow()
+    private val _recordingEvents = SocketInboundRoute.subject<CallRecordingSocketEvent>()
+    val recordingEvents: SharedFlow<CallRecordingSocketEvent> = _recordingEvents.exposed()
 
-    private val _frameSelected = hot<CallLiveFrameSelected>()
-    val frameSelected: SharedFlow<CallLiveFrameSelected> = _frameSelected.asSharedFlow()
+    private val _frameSelected = SocketInboundRoute.subject<CallLiveFrameSelected>()
+    val frameSelected: SharedFlow<CallLiveFrameSelected> = _frameSelected.exposed()
 
-    private val _previewRequested = hot<CallPreviewRequested>()
-    val previewRequested: SharedFlow<CallPreviewRequested> = _previewRequested.asSharedFlow()
+    private val _previewRequested = SocketInboundRoute.subject<CallPreviewRequested>()
+    val previewRequested: SharedFlow<CallPreviewRequested> = _previewRequested.exposed()
 
-    private val _previewSignals = hot<CallSignalEnvelope>(128)
-    val previewSignals: SharedFlow<CallSignalEnvelope> = _previewSignals.asSharedFlow()
+    private val _previewSignals = SocketInboundRoute.subject<CallSignalEnvelope>()
+    val previewSignals: SharedFlow<CallSignalEnvelope> = _previewSignals.exposed()
 
-    private val _transcriptionActive = hot<CallTranscriptionActive>()
-    val transcriptionActive: SharedFlow<CallTranscriptionActive> = _transcriptionActive.asSharedFlow()
+    private val _transcriptionActive = SocketInboundRoute.subject<CallTranscriptionActive>()
+    val transcriptionActive: SharedFlow<CallTranscriptionActive> = _transcriptionActive.exposed()
 
     fun attach() {
-        route(SocketEventNames.CALL_PARTICIPANT_INVITED) { raw -> CallSocialEventParser.participantInvited(raw)?.let(_participantInvited::tryEmit) }
+        route(SocketEventNames.CALL_PARTICIPANT_INVITED) { raw -> CallSocialEventParser.participantInvited(raw)?.let(_participantInvited::emitArrived) }
         route(SocketEventNames.CALL_INVITE_DECLINED) { raw ->
-            CallSocialEventParser.inviteSettled(raw, CallInviteOutcome.DECLINED)?.let(_inviteSettled::tryEmit)
+            CallSocialEventParser.inviteSettled(raw, CallInviteOutcome.DECLINED)?.let(_inviteSettled::emitArrived)
         }
         route(SocketEventNames.CALL_INVITE_EXPIRED) { raw ->
-            CallSocialEventParser.inviteSettled(raw, CallInviteOutcome.EXPIRED)?.let(_inviteSettled::tryEmit)
+            CallSocialEventParser.inviteSettled(raw, CallInviteOutcome.EXPIRED)?.let(_inviteSettled::emitArrived)
         }
-        route(SocketEventNames.CALL_MUTED_BY_MODERATOR) { raw -> CallSocialEventParser.mutedByModerator(raw)?.let(_mutedByModerator::tryEmit) }
-        route(SocketEventNames.CALL_REACTION_RECEIVED) { raw -> CallSocialEventParser.reactionReceived(raw)?.let(_reactions::tryEmit) }
+        route(SocketEventNames.CALL_MUTED_BY_MODERATOR) { raw -> CallSocialEventParser.mutedByModerator(raw)?.let(_mutedByModerator::emitArrived) }
+        route(SocketEventNames.CALL_REACTION_RECEIVED) { raw -> CallSocialEventParser.reactionReceived(raw)?.let(_reactions::emitArrived) }
         route(SocketEventNames.CALL_RECORDING_REQUESTED) { raw ->
-            CallSocialEventParser.recordingRequested(raw)?.let { _recordingEvents.tryEmit(CallRecordingSocketEvent.Requested(it)) }
+            CallSocialEventParser.recordingRequested(raw)?.let { _recordingEvents.emitArrived(CallRecordingSocketEvent.Requested(it)) }
         }
         route(SocketEventNames.CALL_RECORDING_STARTED) { raw ->
-            CallSocialEventParser.recordingStarted(raw)?.let { _recordingEvents.tryEmit(CallRecordingSocketEvent.Started(it)) }
+            CallSocialEventParser.recordingStarted(raw)?.let { _recordingEvents.emitArrived(CallRecordingSocketEvent.Started(it)) }
         }
         route(SocketEventNames.CALL_RECORDING_STOPPED) { raw ->
-            CallSocialEventParser.recordingStopped(raw)?.let { _recordingEvents.tryEmit(CallRecordingSocketEvent.Stopped(it)) }
+            CallSocialEventParser.recordingStopped(raw)?.let { _recordingEvents.emitArrived(CallRecordingSocketEvent.Stopped(it)) }
         }
-        route(SocketEventNames.CALL_FRAME_SELECTED) { raw -> CallSocialEventParser.frameSelected(raw)?.let(_frameSelected::tryEmit) }
-        route(SocketEventNames.CALL_PREVIEW_REQUESTED) { raw -> CallSocialEventParser.previewRequested(raw)?.let(_previewRequested::tryEmit) }
-        route(SocketEventNames.CALL_PREVIEW_SIGNAL) { raw -> CallSocialEventParser.previewSignal(raw)?.let(_previewSignals::tryEmit) }
-        route(SocketEventNames.CALL_TRANSCRIPTION_ACTIVE) { raw -> CallSocialEventParser.transcriptionActive(raw)?.let(_transcriptionActive::tryEmit) }
+        route(SocketEventNames.CALL_FRAME_SELECTED) { raw -> CallSocialEventParser.frameSelected(raw)?.let(_frameSelected::emitArrived) }
+        route(SocketEventNames.CALL_PREVIEW_REQUESTED) { raw -> CallSocialEventParser.previewRequested(raw)?.let(_previewRequested::emitArrived) }
+        route(SocketEventNames.CALL_PREVIEW_SIGNAL) { raw -> CallSocialEventParser.previewSignal(raw)?.let(_previewSignals::emitArrived) }
+        route(SocketEventNames.CALL_TRANSCRIPTION_ACTIVE) { raw -> CallSocialEventParser.transcriptionActive(raw)?.let(_transcriptionActive::emitArrived) }
     }
 
     private fun route(event: String, handle: (String) -> Unit) {
         socketManager.on(event) { args ->
             val raw = (args.firstOrNull() as? JSONObject)?.toString() ?: return@on
             try {
-                handle(raw)
+                ArrivalStamp.under(runCatching(ticket).getOrNull()) { handle(raw) }
             } catch (error: Exception) {
                 Timber.w(error, "call social event dropped: %s", event)
             }

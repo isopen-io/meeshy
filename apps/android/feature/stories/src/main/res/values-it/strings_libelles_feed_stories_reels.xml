@@ -28,6 +28,11 @@
     <string name="stories_composer_add_slide">Aggiungi diapositiva</string>
     <string name="stories_composer_duplicate_slide">Duplica diapositiva</string>
     <string name="stories_composer_remove_slide">Rimuovi diapositiva</string>
+    <string name="stories_composer_remove_slide_title">Rimuovere questa diapositiva?</string>
+    <string name="stories_composer_remove_slide_message">Tutto ciò che contiene andrà perso.</string>
+    <string name="stories_composer_remove_slide_confirm">Rimuovi</string>
+    <string name="stories_composer_slide_move_earlier">Sposta prima</string>
+    <string name="stories_composer_slide_move_later">Sposta dopo</string>
     <string name="stories_composer_text_placeholder">Scrivi qualcosa…</string>
     <string name="stories_composer_remove_text">Rimuovi testo</string>
     <string name="stories_composer_bg_none">Nessuno sfondo</string>
@@ -35,6 +40,8 @@
     <string name="stories_composer_fade_out">Dissolvenza in uscita del testo</string>
     <string name="stories_composer_timing_start">Inizio del testo</string>
     <string name="stories_composer_timing_duration">Durata di visualizzazione del testo</string>
+    <string name="stories_composer_timing_unset">Non impostato</string>
+    <string name="stories_composer_timing_value">%1$s secondi</string>
     <string name="stories_composer_draw_undo">Annulla tratto</string>
     <string name="stories_composer_draw_done">Fine disegno</string>
     <string name="stories_composer_remove_sticker">Rimuovi sticker</string>

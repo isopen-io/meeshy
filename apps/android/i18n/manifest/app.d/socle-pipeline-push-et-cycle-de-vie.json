@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        { "androidName": "push_channel_social_name", "status": "android-only" },
+        { "androidName": "push_channel_social_description", "status": "android-only" },
+        { "androidName": "push_channel_system_name", "status": "android-only" },
+        { "androidName": "push_channel_system_description", "status": "android-only" },
+        { "androidName": "push_channel_silent_name", "status": "android-only" },
+        { "androidName": "push_channel_silent_description", "status": "android-only" }
+      ]
+    }
+  }
+}

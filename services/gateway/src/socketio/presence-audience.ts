@@ -1,4 +1,6 @@
+import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
+import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 
 /**
  * Qui reçoit une transition de présence (`user:status`), et avec quelle charge.
@@ -11,7 +13,13 @@ import { ROOMS } from '@meeshy/shared/types/socketio-events';
  * de présence. »
  *
  * L'audience est donc faite de RELATIONS, jamais de fils : amis acceptés,
- * administrateurs globaux, et les autres appareils du sujet. Une room
+ * administrateurs globaux, et les autres appareils du sujet.
+ *
+ * L'AMI est BINAIRE (directive porteur 2026-10-31, #13928) : il reçoit « en
+ * ligne » ou rien, jamais `lastActiveAt`. Seuls les PROCHES et au-dessus
+ * reçoivent la présence détaillée. L'audience se scinde donc selon le niveau,
+ * et ce qu'un niveau obtient se demande à la loi partagée
+ * (`resolvePresenceVisibility`), jamais à une comparaison de niveaux ici. Une room
  * `conversation:<id>` n'y a plus sa place — c'était l'adresse qui livrait la
  * présence à un inconnu au seul motif qu'il partageait un salon.
  *
@@ -26,8 +34,8 @@ export type PresenceAudienceInput = {
   /** `User.id` pour un inscrit, `Participant.id` pour un invité de lien. */
   readonly subjectId: string;
   readonly isAnonymous: boolean;
-  /** Amitiés ACCEPTÉES du sujet (`FriendRequest.status = 'accepted'`). */
-  readonly friendIds: readonly string[];
+  /** Amitiés ACCEPTÉES du sujet, avec le NIVEAU effectif de chaque lien. */
+  readonly friendLevels: ReadonlyMap<string, RelationLevel>;
   /** `User.id` des ADMIN/BIGBOSS de la plateforme. */
   readonly adminIds: readonly string[];
 };
@@ -39,10 +47,15 @@ export type PresenceStatusAudience = {
    */
   readonly privilegedRooms: string[];
   /**
-   * Rooms des amis acceptés. Leur charge est gouvernée par
-   * `showOnlineStatus` / `showLastSeen`.
+   * Rooms des AMIS (niveau Ami exactement). Leur charge est « en ligne » sans
+   * dernière connexion, quelles que soient les préférences de la cible.
    */
   readonly friendRooms: string[];
+  /**
+   * Rooms des PROCHES et au-dessus. Leur charge est gouvernée par
+   * `showOnlineStatus` / `showLastSeen`.
+   */
+  readonly closeRooms: string[];
 };
 
 /**
@@ -66,11 +79,27 @@ export function presenceStatusAudience(input: PresenceAudienceInput): PresenceSt
   const alreadyPrivileged = new Set(privileged);
   const friends = input.isAnonymous
     ? []
-    : uniqueIds(input.friendIds).filter((id) => !alreadyPrivileged.has(id));
+    : uniqueIds([...input.friendLevels.keys()]).filter((id) => !alreadyPrivileged.has(id));
+
+  const verdicts = friends.map((id) => ({
+    id,
+    ...resolvePresenceVisibility({
+      isSelf: false,
+      viewerRole: 'USER',
+      relationLevel: input.friendLevels.get(id) ?? 'PUBLIC',
+      targetShowOnlineStatus: true,
+      targetShowLastSeen: true,
+      targetIsDeactivated: false,
+      isBlockedEitherWay: false,
+    }),
+  }));
+  const roomsOf = (keep: (v: (typeof verdicts)[number]) => boolean): string[] =>
+    verdicts.filter(keep).map((v) => ROOMS.user(v.id));
 
   return {
     privilegedRooms: privileged.map(ROOMS.user),
-    friendRooms: friends.map(ROOMS.user),
+    friendRooms: roomsOf((v) => v.showOnline && !v.showLastSeenTimestamp),
+    closeRooms: roomsOf((v) => v.showLastSeenTimestamp),
   };
 }
 
@@ -111,14 +140,33 @@ export type PresenceEmissionInput = PresenceAudienceInput & {
  * qu'une émission a eu lieu.
  */
 export function presenceStatusEmissions(input: PresenceEmissionInput): PresenceStatusEmission[] {
-  const { privilegedRooms, friendRooms } = presenceStatusAudience(input);
+  const { privilegedRooms, friendRooms, closeRooms } = presenceStatusAudience(input);
 
   const privileged: PresenceStatusEmission[] = privilegedRooms.length > 0
     ? [{ rooms: privilegedRooms, lastActiveAt: input.lastActiveAt }]
     : [];
-  const friends: PresenceStatusEmission[] = input.showOnlineStatus && friendRooms.length > 0
-    ? [{ rooms: friendRooms, lastActiveAt: input.showLastSeen ? input.lastActiveAt : null }]
+  if (!input.showOnlineStatus) return privileged;
+
+  const closeSeenAt = input.showLastSeen ? input.lastActiveAt : null;
+  const close: PresenceStatusEmission[] = closeRooms.length > 0
+    ? [{ rooms: closeRooms, lastActiveAt: closeSeenAt }]
+    : [];
+  const friends: PresenceStatusEmission[] = friendRooms.length > 0
+    ? [{ rooms: friendRooms, lastActiveAt: null }]
     : [];
 
-  return [...privileged, ...friends];
+  return [...privileged, ...mergeSamePayload([...close, ...friends])];
 }
+
+/**
+ * Deux sous-ensembles dont la charge est IDENTIQUE partent en une seule
+ * émission : quand la dernière connexion est tue pour les proches
+ * (`showLastSeen = false`), proches et amis reçoivent la même chose.
+ */
+const mergeSamePayload = (emissions: PresenceStatusEmission[]): PresenceStatusEmission[] =>
+  emissions.reduce<PresenceStatusEmission[]>((merged, emission) => {
+    const twin = merged.find((m) => m.lastActiveAt?.getTime() === emission.lastActiveAt?.getTime());
+    return twin
+      ? merged.map((m) => (m === twin ? { rooms: [...m.rooms, ...emission.rooms], lastActiveAt: m.lastActiveAt } : m))
+      : [...merged, emission];
+  }, []);

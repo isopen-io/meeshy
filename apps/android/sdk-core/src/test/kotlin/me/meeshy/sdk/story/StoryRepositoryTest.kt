@@ -16,6 +16,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.Pagination
+import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryItem
@@ -35,6 +36,7 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.outbox.kindEnum
 import org.junit.After
 import org.junit.Before
@@ -257,6 +259,31 @@ class StoryRepositoryTest {
         repo.storiesStream().first().let { (it as CacheResult.Fresh).value.single { post -> post.id == id } }
 
     @Test
+    fun `an announced story unknown to the tray joins the cache`() = runTest {
+        stubList(storyPost("s1"))
+        val repo = repository()
+        repo.refresh()
+
+        val changed = repo.adoptAnnounced(storyPost("s2", authorId = "bob"))
+
+        assertThat(changed).isTrue()
+        assertThat(db.storyDao().observeAll().first().map { it.id }).containsExactly("s1", "s2")
+    }
+
+    @Test
+    fun `an announced story already held keeps the reader's seen state`() = runTest {
+        stubList(storyPost("s1", isViewedByMe = true))
+        val repo = repository()
+        repo.refresh()
+
+        val changed = repo.adoptAnnounced(storyPost("s1", content = "echo", isViewedByMe = null))
+
+        assertThat(changed).isFalse()
+        assertThat(cachedStory(repo, "s1").isViewedByMe).isTrue()
+        assertThat(cachedStory(repo, "s1").content).isEqualTo("Bonjour")
+    }
+
+    @Test
     fun `applyStoryUpdate folds an edit into the cache so the stream repaints`() = runTest {
         stubList(storyPost("s1", content = "Bonjour"))
         val repo = repository()
@@ -363,9 +390,41 @@ class StoryRepositoryTest {
     }
 
     @Test
+    fun `enqueuePublish revives an upload that gave up, the reopened story publishes again without a second upload`() = runTest {
+        val outbox = outbox()
+        outbox.enqueue(OutboxMutation(OutboxKind.UPLOAD_MEDIA, OutboxLanes.MEDIA, "up-1", "{}", cmid = "up-1"))
+        outbox.markExhausted("up-1", "HTTP 500")
+
+        val cmid = repository(outbox).enqueuePublish(CreateStoryRequest(content = "x", mediaIds = listOf("up-1")), dependsOn = listOf("up-1"))
+
+        assertThat(outbox.stateOf("up-1")).isEqualTo(OutboxState.PENDING)
+        assertThat(outbox.row(cmid!!)?.dependsOn).contains("up-1")
+    }
+
+    @Test
     fun `enqueuePublish serializes the request as the row payload`() = runTest {
         val outbox = outbox()
         val request = CreateStoryRequest(content = "bonjour", visibility = "PUBLIC", originalLanguage = "fr")
+
+        repository(outbox).enqueuePublish(request)
+
+        val payload = outbox.deliverable(OutboxLanes.STORY).single().payload
+        assertThat(MeeshyApi.json.decodeFromString<CreateStoryRequest>(payload)).isEqualTo(request)
+    }
+
+    @Test
+    fun `enqueuePublish keeps the whole audience in the durable payload, so a replayed story is not widened`() = runTest {
+        val outbox = outbox()
+        val request = CreateStoryRequest(
+            content = "pour vous",
+            visibility = "ONLY",
+            mediaIds = listOf("photo-1"),
+            visibilityUserIds = listOf("a", "b"),
+            mentions = listOf(PostMentionInput(userId = "u1", username = "ana", display = "NOTE")),
+            allowSoundExtraction = false,
+            mediaAlt = mapOf("photo-1" to "un chat"),
+            mediaCaption = mapOf("photo-1" to "Mon chat"),
+        )
 
         repository(outbox).enqueuePublish(request)
 
@@ -782,5 +841,17 @@ class StoryRepositoryTest {
         )
 
         assertThat(merged).isNull()
+    }
+
+    @Test
+    fun `repost republishes the story as a STORY, the way the iOS rail does`() = runTest {
+        coEvery { api.repost(any(), any()) } returns ApiResponse(success = true, data = ApiPost(id = "rp1", type = "STORY"))
+
+        val result = repository().repost("s1")
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        coVerify(exactly = 1) {
+            api.repost("s1", me.meeshy.sdk.net.api.RepostPostRequest(content = null, isQuote = false, targetType = "STORY"))
+        }
     }
 }

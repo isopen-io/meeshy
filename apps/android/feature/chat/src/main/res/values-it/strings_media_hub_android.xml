@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="media_hub_encrypted_notice">Conversazione cifrata: i file restano sigillati, quindi le loro anteprime non possono essere mostrate qui.</string>
+    <string name="media_hub_encrypted_tile">File cifrato</string>
+</resources>

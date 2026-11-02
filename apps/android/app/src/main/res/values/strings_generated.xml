@@ -1,0 +1,32 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="call_link_confirm_audio">Voice call %1$s?</string>
+    <string name="call_link_confirm_call">Call</string>
+    <string name="call_link_confirm_cancel">Cancel</string>
+    <string name="call_link_confirm_video">Video call %1$s?</string>
+    <string name="call_link_refused_blocked">You\'ve blocked this contact</string>
+    <string name="call_link_refused_unknown">This contact can\'t be found</string>
+    <string name="composer_format_denied_mood">Text only</string>
+    <string name="composer_format_denied_mood_empty">Write something first</string>
+    <string name="composer_format_denied_post">Unavailable for this content</string>
+    <string name="composer_format_denied_reel">Needs a video, a sound or two photos</string>
+    <string name="composer_format_denied_story">Unavailable from this entry</string>
+    <string name="composer_format_post">Post</string>
+    <string name="composer_format_reel">Reel</string>
+    <string name="composer_format_status">Mood</string>
+    <string name="composer_format_story">Story</string>
+    <string name="composer_mosaic_carousel">Image by image</string>
+    <string name="composer_mosaic_hero">One large, the others alongside</string>
+    <string name="composer_mosaic_reel">Continuous scrolling</string>
+    <string name="composer_mosaic_section">Scene layout</string>
+    <string name="composer_mosaic_sine">Zigzag</string>
+    <string name="composer_mosaic_wave">Wave</string>
+    <string name="composer_publish_menu_a11y_hint">Opens the choice of format and layout</string>
+    <string name="composer_publish_menu_title">Publish as</string>
+    <string name="push_action_comment">Comment</string>
+    <string name="push_action_comment_hint">Comment…</string>
+    <string name="upgrade_required_action">Update</string>
+    <string name="upgrade_required_message">This version of Meeshy can no longer talk to the server. Install the latest version to continue.</string>
+    <string name="upgrade_required_min_version">Minimum version: %1$s</string>
+    <string name="upgrade_required_title">Update required</string>
+</resources>

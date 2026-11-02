@@ -61,6 +61,7 @@ struct ComposerToolPanelHost: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.storyLocationPicker) private var locationPicker
+    @Environment(\.composerFormatWording) private var formatWording
 
     /// État local pour piloter le `PhotosPicker` programmatiquement quand on
     /// entre dans l'outil media sur une slide vide. Pendant — comme le
@@ -691,8 +692,7 @@ struct ComposerToolPanelHost: View {
                 if locationPicker != nil {
                     toolIconButton(
                         systemImage: "mappin.circle.fill",
-                        a11y: String(localized: "story.location.add.a11y",
-                                     defaultValue: "Ajouter un lieu à la story", bundle: .module),
+                        a11y: formatWording.addPlace,
                         action: { onOpenLocationPicker?() }
                     )
                 }
@@ -704,9 +704,7 @@ struct ComposerToolPanelHost: View {
                 if viewModel.canAddText {
                     toolIconButton(
                         systemImage: "at",
-                        a11y: String(localized: "story.mention.add.a11y",
-                                     defaultValue: "Mentionner une personne dans la story",
-                                     bundle: .module),
+                        a11y: formatWording.mention,
                         action: { onOpenMentionPicker?() }
                     )
                 }

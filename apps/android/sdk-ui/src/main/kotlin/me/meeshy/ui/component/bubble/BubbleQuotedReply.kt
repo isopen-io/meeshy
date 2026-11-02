@@ -2,6 +2,7 @@ package me.meeshy.ui.component.bubble
 
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.isEndToEndBlob
 import me.meeshy.sdk.model.ApiMessageReplyPreview
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.util.resolveMediaUrl
@@ -49,7 +50,8 @@ internal object BubbleQuotedReplyBuilder {
                 senderName = senderName,
             )
         }
-        val attachments = reply.attachments.orEmpty()
+        // #13106 — un blob chiffré de bout en bout ne se cite ni en vignette ni en fichier.
+        val attachments = reply.attachments.orEmpty().filterNot { it.isEndToEndBlob }
         val representative = representativeOf(reply, attachments)
         if (reply.isProtected) {
             return BubbleQuotedReply(

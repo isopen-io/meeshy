@@ -9,6 +9,7 @@ const itMediaViewer = {
   'media.viewer.react_with': 'Reagisci con {emoji}',
   'media.viewer.reply': 'Rispondi',
   'media.viewer.compose': 'Crea con questo contenuto',
+  'media.viewer.imager': 'Crea immagine',
   'media.viewer.saved': 'Salvato',
   'media.viewer.save_failed': 'Impossibile salvare',
   'media.viewer.offline': 'Offline: riprova quando sei connesso',

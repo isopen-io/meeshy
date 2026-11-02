@@ -169,7 +169,7 @@ final class StoryReaderSceneCardTests: XCTestCase {
 
     /// L'UNITÉ du canvas : la carte du lecteur, ses couches et son cadrage (`StoryReaderCanvasLayout`).
     private static func canvasUnit() throws -> String {
-        try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
-                                alsoIncluding: ["Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"])
+        try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift",
+                                alsoIncluding: ["Meeshy/Features/Stories/Views/StoryReaderCanvasLayout.swift"])
     }
 }

@@ -8,7 +8,7 @@ import type { LensFiles } from './lens-files';
 import type { LutCube } from './lens-lut';
 import type { LutStage } from './lens-lut-stage';
 import { paintLens, type LensPaintEnv } from './lens-paint';
-import { lensLutOf, planLens, type LensDrawOp, type LensLevel } from './lens-plan';
+import { lensLutOf, lensUsesFace, planLens, type LensDrawOp, type LensLevel } from './lens-plan';
 
 /**
  * **L'ÉTAGE LENS D'UNE IMAGE D'APPEL** (W14, #11320) — ce que le moteur des
@@ -17,6 +17,10 @@ import { lensLutOf, planLens, type LensDrawOp, type LensLevel } from './lens-pla
  * canevas ; puis, sur l'image déjà recadrée, le PLAN (`planLens`, sur la boîte
  * du visage que suit le détecteur) et la PEINTURE 2D des cadres, stickers,
  * textes et particules par-dessus.
+ *
+ * Le visage n'est cherché que si une couche s'y ancre (`lensUsesFace`, W15,
+ * #11321) : c'est ce qui fait du modèle à 478 points un chargement « à la
+ * première lens de visage ».
  *
  * Tout ce qui manque se passe en silence : sans WebGL2 ou sans le cube de sa
  * LUT, la lens se joue sans étalonnage ; sans un fichier de sticker, sans ce
@@ -47,6 +51,9 @@ export type LensStage = {
 
 const FROZEN_T = 0;
 
+/* Une lens sans couche de visage ne lit pas la boîte : l'image entière en tient lieu, sans rien importer du moteur des effets (le chunk de l'étage n'en dépend pas). */
+const unusedFace = (frame: FrameSize): Box => ({ x: 0, y: 0, width: frame.width, height: frame.height });
+
 export function createLensStage(env: LensStageEnv): LensStage {
   let lut: LutStage | null | undefined;
   /* Les derniers fichiers remis : l'hôte ne les renvoie pas à chaque réglage (`video-effects-pipeline.ts`),
@@ -57,7 +64,7 @@ export function createLensStage(env: LensStageEnv): LensStage {
   return {
     plan: (settings, source, frame, t) => {
       filesOf(settings);
-      return planLens({ ...settings, frame, face: env.face(source, frame), t: env.reducedMotion?.() === true ? FROZEN_T : t });
+      return planLens({ ...settings, frame, face: lensUsesFace(settings.lens, settings.level) ? env.face(source, frame) : unusedFace(frame), t: env.reducedMotion?.() === true ? FROZEN_T : t });
     },
     grade: (image, settings, frame) => {
       const op = lensLutOf(settings.lens, settings.level);

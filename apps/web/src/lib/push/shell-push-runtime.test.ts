@@ -14,6 +14,7 @@ describe('le tap d’une notification du jeu, dans la coque', () => {
     expect(shellPushUrl(pushTapTarget({ type: 'game_duo_invited', route: 'progression' }))).toBe('/me/progression/ligue');
     expect(shellPushUrl(pushTapTarget({ type: 'game_league_result', route: 'progression' }))).toBe('/me/progression/ligue');
     expect(shellPushUrl(pushTapTarget({ type: 'game_season_step', route: 'progression' }))).toBe('/me/progression/saison');
+    expect(shellPushUrl(pushTapTarget({ type: 'game_photo_moment', route: 'progression' }))).toBe('/me/progression/carnet');
   });
 
   /* Carte de navigation (#9563, amendement n° 4) : un badge ouvre la fiche des Badges, par l'adresse que Progression redirige. */

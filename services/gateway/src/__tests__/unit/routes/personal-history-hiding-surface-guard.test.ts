@@ -381,6 +381,18 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "aucun contenu servi, et la route ne connaît pas le lecteur dont l'historique serait masqué.",
   },
   /**
+   * #13100 — le rattrapage du scellement au repos lit les IDENTIFIANTS des
+   * messages d'une conversation `server`/`hybrid` pour en sceller les pièces.
+   * Il ne sert rien à aucun lecteur : c'est une migration, pas une surface.
+   */
+  'attachments/atRest/atRestBackfill.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Lit seulement les identifiants des messages d'une conversation chiffrée au repos pour en sceller " +
+      'les pièces sur le disque ; aucun lecteur, aucun contenu servi.',
+  },
+  /**
    * #9646 — relit la protection (cinq colonnes) des messages porteurs de pièces
    * DÉJÀ choisies et filtrées par l'appelant (galerie, détail — plancher et
    * masquage appliqués là), pour signer les adresses de celles qui
@@ -466,6 +478,16 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "et de portée globale (`viewOnceBurnAt`) : elle ne sert rien à personne. " +
       "Masquer ou réparer ici laisserait survivre un contenu que tous ont ouvert.",
   },
+  // #11269 — le rattrapage des médias à vue unique lus par tous : même famille
+  // que la purge, dont il ne fait que réarmer l'échéance.
+  'messaging/viewOnceMediaCatchUp.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Rattrapage serveur, sans lecteur et de portée globale (`isViewOnce`), qui " +
+      "réarme l'échéance de purge des vues uniques lues par tous : il ne sert rien " +
+      "à personne. Masquer ici laisserait survivre des octets que tous ont ouverts.",
+  },
   'messaging/freezeMessageStatus.ts': {
     kind: 'exempt',
     reads: 1,
@@ -510,6 +532,15 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "Suggestions d'onboarding (#7729) : ne lit que des `senderId` récents de " +
       'Global pour proposer des personnes à suivre, jamais un contenu servi. ' +
       "Le masquage personnel porte sur l'historique affiché, pas sur qui parle.",
+  },
+  'posts/directContactVisibility.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Lien d'un choisi d'un post ONLY (#14105) : ne lit que les `senderId` des messages qu'il a " +
+      "lui-même écrits dans une conversation directe avec l'auteur, pour décider s'il est prévenu, " +
+      "jamais un contenu servi. Effacer son historique cache ce qu'on a reçu, sans défaire " +
+      "qu'on se soit parlé.",
   },
   'messaging/consumeAfterReadMessages.ts': {
     kind: 'exempt',

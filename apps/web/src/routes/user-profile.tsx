@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { Suspense, lazy, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
@@ -36,6 +36,10 @@ import {
   ProfileStatsSection,
 } from '@/routes/user-profile-sections';
 import { ProfileBodySkeleton, ProfileFailureNotice, ProfileOfflineBanner, ProfileSkeleton } from '@/routes/user-profile-states';
+import { announcementToneOf } from '@/lib/view/announcement-tone';
+
+/* LA LIGNE DU CERCLE (#13940) — chargée à la demande : elle ne pèse sur la fiche que là où un lien peut exister. */
+const ProfileCircleRow = lazy(() => import('@/routes/user-profile-circle').then((m) => ({ default: m.ProfileCircleRow })));
 
 /**
  * **LE PROFIL PUBLIC DE QUELQU'UN** (#7032, complété par #7083) — `/u/$username`,
@@ -144,6 +148,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
     mood,
     relation,
     actions,
+    viewerId,
     signedIn,
     busy,
     onAction,
@@ -282,6 +287,25 @@ export function UserProfileView({ username }: { readonly username: string }) {
                           busy={busy}
                           onAction={onAction}
                           onSignIn={onSignIn}
+                          circle={
+                            signedIn && person !== undefined && (relation.kind === 'friend' || relation.kind === 'none') ? (
+                              <Suspense fallback={null}>
+                                <ProfileCircleRow
+                                  language={language}
+                                  person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
+                                  raisable={relation.kind === 'friend'}
+                                  viewerId={viewerId}
+                                  now={new Date()}
+                                  onOutcome={(outcome) =>
+                                    announce(
+                                      translate(language, outcome === 'done' ? 'discover.announce.sent' : outcome === 'offline' ? 'discover.announce.offline' : 'discover.announce.sendFailed'),
+                                      announcementToneOf(outcome),
+                                    )
+                                  }
+                                />
+                              </Suspense>
+                            ) : null
+                          }
                         />
                       )}
                       {isSelf || !signedIn || !callsAvailable() ? null : (

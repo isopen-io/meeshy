@@ -8,7 +8,7 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4o-mini'),
   ANTHROPIC_API_KEY: z.string().optional(),
-  ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-20250514'),
+  ANTHROPIC_MODEL: z.string().default('claude-sonnet-5-5'),
 
   ZMQ_PULL_PORT: z.coerce.number().int().positive().default(5560),
   ZMQ_PUB_PORT: z.coerce.number().int().positive().default(5561),

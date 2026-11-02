@@ -16,6 +16,8 @@ build/
 
 # Exceptions (keep TypeScript source files)
 !*.ts
+# Scripts de charge k6 (#11257) : des sources, pas des artefacts
+!load/*.js
 
 # Logs
 *.log

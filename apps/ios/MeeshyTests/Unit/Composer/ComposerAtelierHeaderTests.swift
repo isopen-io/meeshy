@@ -229,7 +229,7 @@ final class ComposerAtelierHeaderTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerDescriptionLayer.swift")
         let brut = try String(contentsOf: url, encoding: .utf8)
         XCTAssertGreaterThan(brut.count, 1500, "Source vide — la garde serait verte par omission.")
         return brut
@@ -241,7 +241,7 @@ final class ComposerAtelierHeaderTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneDescriptionEditor.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneDescriptionEditor.swift")
         let brut = try String(contentsOf: url, encoding: .utf8)
         XCTAssertGreaterThan(brut.count, 1500, "Source vide — la garde serait verte par omission.")
         return brut

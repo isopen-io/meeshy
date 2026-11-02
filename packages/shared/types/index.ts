@@ -65,12 +65,14 @@ export * from './playback-qoe.js';
 export * from './message-sticker.js';
 export * from './sticker-definition.js';
 export * from './sticker-pack.js';
+export * from './sticker-pack-asset.js';
 
 // Favori de message (#7377) — étoile personnelle, liste et paramètres
 export * from './message-star.js';
 
 // Export des types unifiés Phase 5 - Attachments
 export * from './attachment.js';
+export * from './upload-limits.js';
 // V2: Remplacé par attachment-audio.js qui utilise JSON intégré dans MessageAttachment
 // export * from './attachment-transcription.js';
 
@@ -88,6 +90,7 @@ export * from './glory-atmospheres.js';
 export * from './content-pack.js';
 export * from './content-pack-index.js';
 export * from './glory-frame-pack.js';
+export * from './glory-frame-atlas.js';
 export * from './pack-ownership.js';
 export * from './pack-availability.js';
 export * from './pack-unlock.js';
@@ -95,6 +98,7 @@ export * from './pack-registry-override.js';
 export * from './pack-presence.js';
 export * from './lens-format.js';
 export * from './lens-pack.js';
+export * from './lens-partner.js';
 
 // Export des types unifiés Phase 7 - Audio Effects Timeline
 export * from './audio-effects-timeline.js';
@@ -726,6 +730,10 @@ export interface CreateConversationRequest {
   readonly participants?: readonly string[]; // Alias pour la rétrocompatibilité
   readonly communityId?: string;
   readonly identifier?: string;
+  /** Tête-à-tête seulement (#12966) : obtenir ou créer celui que le serveur lit, à côté d'un tête-à-tête chiffré de bout en bout. */
+  readonly plaintext?: boolean;
+  /** Le mode de chiffrement choisi à la création ; absent : `server` (le serveur chiffre toujours au repos). */
+  readonly encryptionMode?: 'server' | 'hybrid' | 'e2ee';
 }
 
 /**
@@ -791,6 +799,9 @@ export { AGENT_TYPES, SCAN_STALE_MS, isScanActive } from './agent.js';
 export * from './reading-modes.js';
 export * from './conversation-bridge.js';
 export * from './contact-card.js';
+export * from './relation.js';
+export * from './relation-level-response.js';
+export * from './bring.js';
 
 // ===== LA CAPTURE D'UN CONTENU QUI DISPARAÎT (#9617) =====
 export * from './content-capture.js';

@@ -4,6 +4,7 @@ import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import me.meeshy.sdk.model.DiscoverabilityPrecision
 import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.ApiPost
@@ -15,6 +16,8 @@ import me.meeshy.sdk.model.PublicationModerationReceipt
 import me.meeshy.sdk.model.PostViewersResponse
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.PostStoryEffectsWireSerializer
+import me.meeshy.sdk.model.StoryEditEffectsWireSerializer
 import me.meeshy.sdk.model.StoryEffectsWireSerializer
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -56,8 +59,8 @@ data class CreatePostRequest(
     val mediaAlt: Map<String, String>? = null,
     /** Audience restreinte (`EXCEPT` / `ONLY`) : les ids concernés. */
     val visibilityUserIds: List<String>? = null,
-    /** Scène composée (v1 + canvas v3), absente d'un post sans scène. */
-    @Serializable(with = StoryEffectsWireSerializer::class)
+    /** Scène composée (v1 + canvas v3), absente d'un post sans scène ; un fond seul part en v3 comme iOS (#13575). */
+    @Serializable(with = PostStoryEffectsWireSerializer::class)
     val storyEffects: StoryEffects? = null,
     val allowSoundExtraction: Boolean? = null,
     /** `null` = ne rien déclarer ; jamais `[]` (ne pas effacer). */
@@ -95,6 +98,8 @@ data class CreateStoryRequest(
     val mediaAlt: Map<String, String>? = null,
     val mediaCaption: Map<String, String>? = null,
     val alsoAsReel: Boolean? = null,
+    /** La transcription faite sur l'appareil du premier son du post (même champ qu'iOS) ; absente, la passerelle transcrit. */
+    val mobileTranscription: MobileTranscriptionPayload? = null,
 )
 
 /** Update a post — port of UpdatePostRequest (ServiceModels.swift). */
@@ -107,7 +112,7 @@ data class UpdatePostRequest(
     val originalLanguage: String? = null,
     val type: String? = null,
     val removeMediaIds: List<String>? = null,
-    @Serializable(with = StoryEffectsWireSerializer::class)
+    @Serializable(with = StoryEditEffectsWireSerializer::class)
     val storyEffects: StoryEffects? = null,
     val mediaIds: List<String>? = null,
     /** `null` = clé absente ; [kotlinx.serialization.json.JsonNull] = effacer ; objet = remplacer. */
@@ -125,6 +130,10 @@ data class CreateCommentRequest(
     val content: String,
     val parentId: String? = null,
     val effectFlags: Int? = null,
+    /** La langue dans laquelle le commentaire est écrit ; absente, la passerelle la devine (#12484). */
+    val originalLanguage: String? = null,
+    /** Les médias téléversés sous le contexte `comment` qui partent avec le commentaire (#12972). */
+    val attachmentIds: List<String>? = null,
 )
 
 /** Repost a post — port of RepostRequest (StoryModels.swift). */
@@ -156,13 +165,6 @@ data class PostViewRequest(
 @Serializable
 data class PostLikeRequest(
     val emoji: String,
-)
-
-/** Batch impression-tracking body for a feed slice. */
-@Serializable
-data class PostImpressionsRequest(
-    val postIds: List<String>,
-    val source: String = "feed",
 )
 
 /** Le corps d'un retrait par la modération : `{ "reason": … }` (#11151). */
@@ -285,6 +287,10 @@ interface PostApi {
     @GET("posts/{id}")
     suspend fun getPost(@Path("id") postId: String): ApiResponse<ApiPost>
 
+    /** Le même post, tel que la passerelle le sert, sans le rabattre sur le modèle : la base de l'édition d'une story (#13632). */
+    @GET("posts/{id}")
+    suspend fun getPostDocument(@Path("id") postId: String): ApiResponse<JsonObject>
+
     @POST("posts/{id}/like")
     suspend fun like(@Path("id") postId: String): ApiResponse<Unit>
 
@@ -358,9 +364,6 @@ interface PostApi {
         @Query("cursor") cursor: String? = null,
         @Query("limit") limit: Int? = null,
     ): ApiResponse<List<ApiPost>>
-
-    @POST("posts/impressions/batch")
-    suspend fun recordImpressions(@Body body: PostImpressionsRequest): ApiResponse<Unit>
 
     @GET("posts/{id}/comments")
     suspend fun getComments(
