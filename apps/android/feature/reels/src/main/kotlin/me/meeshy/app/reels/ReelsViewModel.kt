@@ -424,13 +424,16 @@ class ReelsViewModel @Inject constructor(
         }
     }
 
-    /** Repost simple : compteur optimiste, rollback si echec. */
+    /** Repost simple : compteur optimiste, confirmé ou rendu, et l'issue dite (iOS `ReelsViewModel.repost`, #14443). */
     fun repost(reelId: String) {
         val before = _state.value.reels.firstOrNull { it.id == reelId } ?: return
         updateReel(reelId) { it.copy(repostCount = before.repostCount + 1) }
         viewModelScope.launch {
             if (postRepository.repost(reelId) is NetworkResult.Failure) {
                 updateReel(reelId) { it.copy(repostCount = before.repostCount) }
+                toast(R.string.reels_toast_repost_failed, FeedbackKind.Error)
+            } else {
+                toast(R.string.reels_toast_reposted, FeedbackKind.Success)
             }
         }
     }

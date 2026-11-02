@@ -153,19 +153,9 @@ struct RequestsTab: View {
                         .foregroundColor(theme.textMuted)
                 }
 
-                if let message = request.message, !message.isEmpty {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(2)
-                } else {
-                    // Sans message personnalisé, expliciter l'intention pour que la
-                    // ligne se suffise à elle-même (parité avec le sheet profil).
-                    Text(String(localized: "contacts.requests.received.intent", defaultValue: "Souhaite entrer en contact avec vous", bundle: .main))
-                        .font(.footnote)
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(2)
-                }
+                receivedIntent(request)
+
+                levelCaption(for: request, key: String(localized: "circles.requests.incoming", defaultValue: "Demande le niveau %@", bundle: .main))
 
                 Text(request.createdAt.relativeTimeString)
                     .font(.caption2.weight(.medium))
@@ -256,6 +246,8 @@ struct RequestsTab: View {
                         .foregroundColor(theme.textMuted)
                 }
 
+                levelCaption(for: request, key: String(localized: "circles.requests.outgoing", defaultValue: "En attente · %@", bundle: .main))
+
                 Text(request.createdAt.relativeTimeString)
                     .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
@@ -290,6 +282,34 @@ struct RequestsTab: View {
         .padding(.vertical, MeeshySpacing.md)
         .accessibilityElement(children: .combine)
         .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.sentRequests.count)
+    }
+
+    /// Le message de l'expéditeur ; sans message personnalisé, l'intention est explicitée pour que la ligne se
+    /// suffise à elle-même (parité avec le sheet profil).
+    @ViewBuilder
+    private func receivedIntent(_ request: FriendRequest) -> some View {
+        if let message = request.message, !message.isEmpty {
+            Text(message)
+                .font(.footnote)
+                .foregroundColor(theme.textSecondary)
+                .lineLimit(2)
+        } else {
+            Text(String(localized: "contacts.requests.received.intent", defaultValue: "Souhaite entrer en contact avec vous", bundle: .main))
+                .font(.footnote)
+                .foregroundColor(theme.textSecondary)
+                .lineLimit(2)
+        }
+    }
+
+    /// Le cran que vise une demande de montée (#13938) : Connaissance, Proche ou Sang. Une demande d'Ami (le sens
+    /// historique, `targetLevel` absent) ou illisible reste une demande simple — rien n'est ajouté.
+    @ViewBuilder
+    private func levelCaption(for request: FriendRequest, key: String) -> some View {
+        if let level = request.requestedLevel, level != .friend {
+            Text(String(format: key, CircleLevelNames.title(of: level)))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(CircleLevelColor.color(for: level))
+        }
     }
 
     // MARK: - Empty State
