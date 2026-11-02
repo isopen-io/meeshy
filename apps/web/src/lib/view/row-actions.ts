@@ -40,7 +40,8 @@ export type RowActionId =
   | 'adminOpen'
   | 'block'
   | 'leave'
-  | 'delete';
+  | 'delete'
+  | 'obsolete';
 
 export type RowCallActionId = Extract<RowActionId, 'callAudio' | 'callVideo'>;
 
@@ -54,7 +55,7 @@ export type RowIntentActionId = Extract<RowActionId, 'details' | 'rename' | 'blo
 
 /** Les entrées que les RÔLES ouvrent (#11211) : la ligne les route elle-même
  * (la fiche, le départ, l'administration), sans passer par l'écran. */
-export type RowRoleActionId = Extract<RowActionId, 'invite' | 'manageMembers' | 'adminOpen' | 'leave'>;
+export type RowRoleActionId = Extract<RowActionId, 'invite' | 'manageMembers' | 'adminOpen' | 'leave' | 'obsolete'>;
 
 export const isRowFlagAction = (id: RowActionId): id is RowFlagActionId => id === 'pin' || id === 'mute' || id === 'read' || id === 'archive';
 
@@ -238,6 +239,9 @@ export function rowMenuItems(params: {
     ...(more === undefined ? [] : blockItems(more, language)),
     ...(actions?.leave === true && canDelete ? [{ id: 'leave', label: rowMenuText(language, 'rowMenu.leave'), glyph: 'signOut', destructive: true } as const] : []),
     ...(remove ? [{ id: 'delete', label: label('rowActions.delete'), glyph: 'trash', destructive: true } as const] : []),
+    ...(actions?.deleteForAll === true && canDelete
+      ? [{ id: 'obsolete', label: rowMenuText(language, 'rowMenu.obsolete'), glyph: 'trash', destructive: true } as const]
+      : []),
   ];
 }
 
