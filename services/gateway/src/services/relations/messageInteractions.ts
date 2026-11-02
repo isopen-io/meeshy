@@ -58,11 +58,12 @@ type MessageInteractionDb = PairInteractionDb & {
 
 /**
  * #14107 — le destinataire d'une DEMANDE de message qui y répond l'efface
- * (`answerMessageRequest` : sans consentement implicite, audit M3). L'expéditeur
+ * (`answerMessageRequest` : sans consentement implicite, audit M3), dans un
+ * tête-à-tête comme dans un groupe (contre-audit M1). L'expéditeur
  * qui relance n'efface rien (sa ligne ne porte pas de demande).
  */
 const answersOwnRequest = (conversation: { type: string; participants: ReadonlyArray<InteractionParticipant> }, sender: string): boolean =>
-  conversation.type === 'direct' && conversation.participants.some((p) => p.userId === sender && p.messageRequestAt instanceof Date);
+  conversation.participants.some((p) => p.userId === sender && p.messageRequestAt instanceof Date);
 
 async function acceptRequestByReply(prisma: unknown, conversationId: string, userId: string, now: Date): Promise<void> {
   await answerMessageRequest(prisma as MessageRequestDb, { conversationId, userId, now });

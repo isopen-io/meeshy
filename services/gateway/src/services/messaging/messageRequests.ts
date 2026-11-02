@@ -17,23 +17,24 @@
  * - **Aucune issue ne distingue un mineur** (audit B1, B2) : la porte répond
  *   pareil ; le score ne part jamais sur le fil (`withoutRequestColumns`). Vers un
  *   mineur hors Connaissance, la demande est CONTENUE en aval (RG-21) : score
- *   plafond (rangée filtrée), aucune notification ni mention, aucun appel, et
- *   l'expéditeur naît sans média (transferts compris).
+ *   plafond (rangée filtrée), aucune notification ni mention, aucun appel.
  * - **Score de risque** (MIN-03) : âge du compte expéditeur, rafale de
  *   conversations ouvertes en 24 h, absence de communauté commune, renforcé quand
  *   le destinataire est mineur. Au-delà du seuil, la demande est FILTRÉE.
- * - **Accepter** (le geste explicite) relève l'expéditeur au moins en
- *   Connaissance des deux côtés et lui rend ses médias. **Répondre** efface la
- *   demande sans consentement implicite (`answerMessageRequest`, audit M3).
+ * - **Médias** : l'expéditeur d'un tête-à-tête en demande n'en envoie aucun,
+ *   QUEL QUE SOIT l'âge du destinataire (contre-audit C1), jusqu'à « Accepter ».
+ * - **Accepter** (le geste explicite) relève au moins en Connaissance, des deux
+ *   côtés, le lien avec CELUI qui a fait entrer (`messageRequestFromId`, E1), et
+ *   ne rouvre que ses médias fermés — jamais les droits d'un autre membre.
+ *   **Répondre** efface seulement la demande (`answerMessageRequest`).
  * - **Ignorer** = masquer pour soi (`delete-for-me`), silencieux.
  */
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { isBlockedBetween } from '../../utils/blocking';
-import { FOUNDING_MEMBER_PERMISSIONS } from '../participantRights';
 import { pairAccessAmong, type PairAccessDb } from '../relations/pairAccess';
-import { recordAcquaintance, recordLevel, type UserRelationDb } from '../relations/userRelationWriter';
+import { recordLevel, type UserRelationDb } from '../relations/userRelationWriter';
 
 export type MessageRequestDb = PairAccessDb & Pick<PrismaClient, 'participant' | 'conversation'>;
 
@@ -149,17 +150,29 @@ export async function decideDirectOpening(
   return openings.get(params.recipientId) ?? DIRECT;
 }
 
-/** Les colonnes que la ligne `Participant` du DESTINATAIRE reçoit à l'ouverture. */
-export const requestRecipientFields = (
-  opening: DirectOpening,
-  now: Date,
-): { messageRequestAt: Date; messageRequestRisk: number } | Record<string, never> =>
-  opening.kind === 'request' ? { messageRequestAt: now, messageRequestRisk: opening.risk } : {};
+type RequestColumns = { messageRequestAt: Date | null; messageRequestRisk: number | null; messageRequestFromId: string | null };
 
-/** Les droits de l'EXPÉDITEUR : vers un mineur, aucun média tant que la demande n'est pas acceptée. */
+/**
+ * Les colonnes que la ligne `Participant` du DESTINATAIRE reçoit à l'ouverture —
+ * et qui l'a fait entrer (`fromId`, audit E1). Une entrée DIRECTE les écrit à
+ * `null` : un retour (rejoin) ne garde pas une demande d'un passage précédent (F1).
+ */
+export const requestRecipientFields = (opening: DirectOpening, now: Date, fromId: string): RequestColumns =>
+  opening.kind === 'request'
+    ? { messageRequestAt: now, messageRequestRisk: opening.risk, messageRequestFromId: fromId }
+    : { messageRequestAt: null, messageRequestRisk: null, messageRequestFromId: null };
+
+const MEDIA_RIGHTS = ['canSendFiles', 'canSendImages', 'canSendVideos', 'canSendAudios'] as const;
+
+/**
+ * Les droits de l'EXPÉDITEUR d'un tête-à-tête : aucun média tant que la demande
+ * n'est pas ACCEPTÉE, quel que soit l'âge du destinataire (audit #14107, C1) —
+ * une règle qui dépendrait de l'âge se lirait dans les droits servis et dans le
+ * refus d'envoyer une image. Même règle que `mediaBlurred`, servi pour toute demande.
+ */
 export const requesterPermissionsFor = (opening: DirectOpening, base: Readonly<ParticipantPermissions>): ParticipantPermissions =>
-  opening.kind === 'request' && opening.recipientMinor
-    ? { ...base, canSendFiles: false, canSendImages: false, canSendVideos: false, canSendAudios: false }
+  opening.kind === 'request'
+    ? { ...base, ...Object.fromEntries(MEDIA_RIGHTS.map((right) => [right, false])) }
     : { ...base };
 
 /**
@@ -168,9 +181,15 @@ export const requesterPermissionsFor = (opening: DirectOpening, base: Readonly<P
  * ligne remise telle quelle à quelqu'un d'autre (réponse de création, socket)
  * porterait la date et le score, et le score dit l'âge.
  */
-export const withoutRequestColumns = <T extends object>(rows: readonly T[]): Array<Omit<T, 'messageRequestAt' | 'messageRequestRisk'>> =>
+export const withoutRequestColumns = <T extends object>(
+  rows: readonly T[],
+): Array<Omit<T, 'messageRequestAt' | 'messageRequestRisk' | 'messageRequestFromId'>> =>
   rows.map((row) => {
-    const { messageRequestAt: _at, messageRequestRisk: _risk, ...rest } = row as T & { messageRequestAt?: unknown; messageRequestRisk?: unknown };
+    const { messageRequestAt: _at, messageRequestRisk: _risk, messageRequestFromId: _from, ...rest } = row as T & {
+      messageRequestAt?: unknown;
+      messageRequestRisk?: unknown;
+      messageRequestFromId?: unknown;
+    };
     return rest;
   });
 
@@ -233,16 +252,11 @@ export async function acceptMessageRequest(
   const now = params.now ?? new Date();
   const own = await prisma.participant.findFirst({
     where: { conversationId: params.conversationId, userId: params.userId, isActive: true, messageRequestAt: { not: null } },
-    select: { id: true },
+    select: { id: true, messageRequestFromId: true },
   });
   if (!own) return NOT_PENDING;
-
-  const requester = await prisma.participant.findFirst({
-    where: { conversationId: params.conversationId, isActive: true, userId: { not: params.userId } },
-    select: { id: true, userId: true },
-  });
-  if (!requester?.userId) return NOT_PENDING;
-  if (await isBlockedBetween(prisma, params.userId, requester.userId)) return NOT_PENDING;
+  const requester = await requesterOf(prisma, { conversationId: params.conversationId, userId: params.userId, fromId: own.messageRequestFromId ?? null });
+  if (!requester || (await isBlockedBetween(prisma, params.userId, requester.userId))) return NOT_PENDING;
 
   const outcome = await recordLevel(prisma as unknown as UserRelationDb, {
     userA: params.userId,
@@ -253,14 +267,16 @@ export async function acceptMessageRequest(
   });
   const cleared = await prisma.participant.updateMany({
     where: { id: own.id, messageRequestAt: { not: null } },
-    data: { messageRequestAt: null, messageRequestRisk: null },
+    data: { messageRequestAt: null, messageRequestRisk: null, messageRequestFromId: null },
   });
   if (cleared.count === 0) return NOT_PENDING;
 
-  await prisma.participant.updateMany({
-    where: { id: requester.id },
-    data: { permissions: { ...FOUNDING_MEMBER_PERMISSIONS } },
-  });
+  if (requester.direct) {
+    await prisma.participant.updateMany({
+      where: { id: requester.id },
+      data: { permissions: { ...requester.permissions, ...Object.fromEntries(MEDIA_RIGHTS.map((right) => [right, true])) } },
+    });
+  }
   // La ligne de liste change de boîte : la synchronisation delta (`updatedSince`) doit la revoir.
   await prisma.conversation.updateMany({ where: { id: params.conversationId }, data: { updatedAt: now } });
   return {
@@ -271,15 +287,36 @@ export async function acceptMessageRequest(
   };
 }
 
+type Requester = { readonly id: string; readonly userId: string; readonly direct: boolean; readonly permissions: Record<string, unknown> };
+
+/**
+ * QUI a fait entrer le lecteur (audit E1) : le compte gravé à l'ouverture, et lui
+ * seul. Une ligne antérieure à cette colonne ne vaut que dans un tête-à-tête,
+ * où l'autre membre est forcément l'expéditeur ; dans un groupe, personne.
+ */
+async function requesterOf(
+  prisma: MessageRequestDb,
+  params: { readonly conversationId: string; readonly userId: string; readonly fromId: string | null },
+): Promise<Requester | null> {
+  const conversation = await prisma.conversation.findUnique({ where: { id: params.conversationId }, select: { type: true } });
+  const direct = conversation?.type === 'direct';
+  if (!params.fromId && !direct) return null;
+  const row = await prisma.participant.findFirst({
+    where: { conversationId: params.conversationId, isActive: true, userId: params.fromId ?? { not: params.userId } },
+    select: { id: true, userId: true, permissions: true },
+  });
+  if (!row?.userId || row.userId === params.userId) return null;
+  return { id: row.id, userId: row.userId, direct, permissions: { ...((row.permissions ?? {}) as Record<string, unknown>) } };
+}
+
 /**
  * Le destinataire RÉPOND à une demande sans l'accepter d'un geste (audit #14107,
- * M3) : un ancien client, qui ne connaît pas la boîte, reste fonctionnel — la
- * demande s'efface (la conversation retrouve son son). Mais une réponse n'est
- * pas un consentement :
- * - le lien ne monte à Connaissance que si aucune baisse volontaire n'est gravée
- *   (RG-07, `recordAcquaintance` la respecte sans condition de date) ;
- * - un MINEUR qui répond ne fait monter aucun lien et ne rouvre aucun média :
- *   seul le geste explicite « Accepter » le fait.
+ * M3, contre-audit M1 et M2) : un ancien client, qui ne connaît pas la boîte,
+ * reste fonctionnel — la demande s'efface et la conversation retrouve son son,
+ * dans un tête-à-tête comme dans un groupe. Une réponse n'est pas un
+ * consentement : elle ne relève AUCUN lien et ne rouvre AUCUN média, pour
+ * personne, quel que soit l'âge — seul « Accepter » le fait. La même règle pour
+ * tous : rien d'observable ne distingue la réponse d'un mineur.
  * L'expéditeur qui relance n'efface rien (sa ligne ne porte pas de demande).
  */
 export async function answerMessageRequest(
@@ -287,24 +324,9 @@ export async function answerMessageRequest(
   params: { readonly conversationId: string; readonly userId: string; readonly now?: Date },
 ): Promise<{ readonly answered: boolean }> {
   const now = params.now ?? new Date();
-  const own = await prisma.participant.findFirst({
-    where: { conversationId: params.conversationId, userId: params.userId, isActive: true, messageRequestAt: { not: null } },
-    select: { id: true },
-  });
-  if (!own) return { answered: false };
-  const requester = await prisma.participant.findFirst({
-    where: { conversationId: params.conversationId, isActive: true, userId: { not: params.userId } },
-    select: { userId: true },
-  });
-  if (!requester?.userId || (await isBlockedBetween(prisma, params.userId, requester.userId))) return { answered: false };
-
-  const replier = await prisma.user.findUnique({ where: { id: params.userId }, select: { birthDate: true } });
-  if (declaredAgeClass(replier?.birthDate ?? null, now) !== 'minor') {
-    await recordAcquaintance(prisma as unknown as UserRelationDb, { userA: params.userId, userB: requester.userId, at: now });
-  }
   const cleared = await prisma.participant.updateMany({
-    where: { id: own.id, messageRequestAt: { not: null } },
-    data: { messageRequestAt: null, messageRequestRisk: null },
+    where: { conversationId: params.conversationId, userId: params.userId, isActive: true, messageRequestAt: { not: null } },
+    data: { messageRequestAt: null, messageRequestRisk: null, messageRequestFromId: null },
   });
   if (cleared.count === 0) return { answered: false };
   await prisma.conversation.updateMany({ where: { id: params.conversationId }, data: { updatedAt: now } });
