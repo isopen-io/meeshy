@@ -6,11 +6,13 @@ import me.meeshy.sdk.model.playback.MediaResumeMerge.StampedPosition
 
 /** Un lecteur factice : enregistre les ordres et laisse le test jouer le rôle du matériel. */
 internal class FakeAudioPlayerPort : AudioPlayerPort {
+    @set:JvmName("assignListener")
     var listener: AudioPlayerPort.Listener? = null
     val loads = mutableListOf<Triple<AudioSource, Int, Float>>()
     val seeks = mutableListOf<Long>()
     var playing = false
     var position = 0L
+    @set:JvmName("assignSpeed")
     var speed = 1f
     var stops = 0
     var failNextLoad = false
