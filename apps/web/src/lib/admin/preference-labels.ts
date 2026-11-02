@@ -106,6 +106,7 @@ const PRIVACY: Kinds<PrivacyPreference> = {
   blockScreenshots: 'flag',
   hideProfileFromSearch: 'flag',
   notifyContactsOnReturn: 'flag',
+  autoAcquaintance: 'flag',
   encryptionPreference: { choice: 'encryption' },
   autoEncryptNewConversations: 'flag',
   showEncryptionStatus: 'flag',

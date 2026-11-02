@@ -85,6 +85,7 @@ const f = {
   'admin.people.pref.privacy.blockScreenshots': 'Bloquear las capturas de pantalla',
   'admin.people.pref.privacy.hideProfileFromSearch': 'Ocultar el perfil de la búsqueda',
   'admin.people.pref.privacy.notifyContactsOnReturn': 'Avisar a mis contactos cuando vuelvo',
+  'admin.people.pref.privacy.autoAcquaintance': 'Crear Conocidos automáticamente',
   'admin.people.pref.privacy.encryptionPreference': 'Preferencia de cifrado',
   'admin.people.pref.privacy.autoEncryptNewConversations': 'Cifrar automáticamente las conversaciones nuevas',
   'admin.people.pref.privacy.showEncryptionStatus': 'Mostrar el estado del cifrado',

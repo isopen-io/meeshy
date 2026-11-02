@@ -88,6 +88,7 @@ const f = {
   'admin.people.pref.privacy.blockScreenshots': 'Bloquer les captures d’écran',
   'admin.people.pref.privacy.hideProfileFromSearch': 'Masquer le profil de la recherche',
   'admin.people.pref.privacy.notifyContactsOnReturn': 'Prévenir mes contacts à mon retour',
+  'admin.people.pref.privacy.autoAcquaintance': 'Créer des Connaissances automatiquement',
   'admin.people.pref.privacy.encryptionPreference': 'Préférence de chiffrement',
   'admin.people.pref.privacy.autoEncryptNewConversations': 'Chiffrer automatiquement les nouvelles conversations',
   'admin.people.pref.privacy.showEncryptionStatus': 'Afficher l’état du chiffrement',
