@@ -401,7 +401,10 @@ private fun visibilityLabel(visibility: StatusVisibility): String = stringResour
     when (visibility) {
         StatusVisibility.PUBLIC -> R.string.status_composer_visibility_public
         StatusVisibility.COMMUNITY -> R.string.status_composer_visibility_community
+        StatusVisibility.ACQUAINTANCES -> R.string.status_composer_visibility_acquaintances
         StatusVisibility.FRIENDS -> R.string.status_composer_visibility_friends
+        StatusVisibility.CLOSE -> R.string.status_composer_visibility_close
+        StatusVisibility.BLOOD -> R.string.status_composer_visibility_blood
         StatusVisibility.PRIVATE -> R.string.status_composer_visibility_private
     },
 )
