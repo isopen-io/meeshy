@@ -26,7 +26,11 @@ abstract class DeviceTranslationModule {
             @ApplicationContext context: Context,
             mlKit: Provider<MlKitTranslationEngine>,
         ): DeviceTranslationEngine =
-            if (PlayServicesPresence.isInstalled(context)) mlKit.get() else UnavailableDeviceTranslationEngine()
+            if (PlayServicesPresence.isInstalled(context)) {
+                EntityShieldedDeviceTranslationEngine(mlKit.get())
+            } else {
+                UnavailableDeviceTranslationEngine()
+            }
 
         @Provides @Singleton
         fun prompter(): DeviceTranslationDownloadPrompter = DeviceTranslationDownloadPrompter.Declining

@@ -9,8 +9,9 @@ import { registerStoryAudioRoutes } from '../audio';
  *
  * Le retrait est LOGIQUE (`Sound.deletedAt`) : le son quitte toutes les listes
  * et ne s'emprunte plus, mais les posts déjà publiés continuent de le jouer —
- * ceux des autres compris. La garde est fail-closed : l'auteur, ADMIN et
- * BIGBOSS, personne d'autre.
+ * ceux des autres compris. La garde est fail-closed : l'auteur et les rôles
+ * de plateforme privilégiés (MODERATOR, ADMIN, BIGBOSS — décision porteur
+ * #11217, « privilégié partout »), personne d'autre.
  */
 
 const ID = '507f1f77bcf86cd799439011';
@@ -89,7 +90,7 @@ describe('DELETE /sounds/:id — autorisation', () => {
     expect(Object.keys(call.data)).toEqual(['deletedAt']);
   });
 
-  it.each<Role>(['ADMIN', 'BIGBOSS'])('test_deleteSound_by%s_isAllowed', async (role) => {
+  it.each<Role>(['MODERATOR', 'ADMIN', 'BIGBOSS'])('test_deleteSound_by%s_isAllowed', async (role) => {
     const prisma = soundPrisma(ownSound);
     const res = await (await buildApp(prisma, auth('moderation-1', role)))
       .inject({ method: 'DELETE', url: `/sounds/${ID}` });
@@ -97,7 +98,7 @@ describe('DELETE /sounds/:id — autorisation', () => {
     expect(prisma.sound.updateMany).toHaveBeenCalledTimes(1);
   });
 
-  it.each<Role>(['USER', 'MODERATOR', 'AUDIT', 'ANALYST'])(
+  it.each<Role>(['USER', 'AUDIT', 'ANALYST'])(
     'test_deleteSound_byAnother%s_isRefusedAndWritesNothing',
     async (role) => {
       const prisma = soundPrisma(ownSound);

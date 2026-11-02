@@ -1,4 +1,5 @@
 import type { CanvasV3, SceneV3, ObjectV3, AudioVariantV3 } from '@meeshy/shared/types/canvas-v3';
+import { mappedMediaUrl } from './mediaUrlLookup';
 
 /**
  * ÉCRITURE / VALIDATION — « ce blob est-il EXACTEMENT la v3 que je sais
@@ -550,7 +551,8 @@ export function unclaimedCanvasMediaIds(
  */
 export function remapCanvasV3MediaIds(
   blob: CanvasV3,
-  idMap: Readonly<Record<string, string>>
+  idMap: Readonly<Record<string, string>>,
+  urlMap: Readonly<Record<string, string>> = {}
 ): { blob: CanvasV3; changed: boolean } {
   let changed = false;
   const scenes = (blob.scenes ?? []).map((scene) => ({
@@ -565,6 +567,12 @@ export function remapCanvasV3MediaIds(
           nextPayload[key] = idMap[id];
           objectChanged = true;
         }
+      }
+      const url = payload.mediaURL;
+      const mappedUrl = typeof url === 'string' ? mappedMediaUrl(urlMap, url) : undefined;
+      if (mappedUrl !== undefined && mappedUrl !== url) {
+        nextPayload.mediaURL = mappedUrl;
+        objectChanged = true;
       }
       if (!objectChanged) return object;
       changed = true;

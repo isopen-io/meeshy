@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:profile": {
+      "resDir": "feature/profile/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "profile.save.error", "status": "adopted"},
+        {"androidName": "profile_own_saved_offline", "status": "android-only"}
+      ]
+    }
+  }
+}

@@ -88,6 +88,9 @@ public protocol ConversationServiceProviding: Sendable {
     func deleteForMe(conversationId: String) async throws
     func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation]
     func findDirectWith(userId: String) async throws -> APIConversation?
+    /// Les tête-à-tête existants avec `userId`, le plus récent d'abord : le
+    /// choix du chiffré revient à l'appelant, qui a la mémoire (#13006).
+    func findDirectsWith(userId: String) async throws -> [APIConversation]
     func removeParticipant(conversationId: String, key: String) async throws
     func updateParticipantRole(conversationId: String, userId: String, role: String) async throws
     func update(
@@ -190,7 +193,20 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
     }
 
     public func create(type: String, title: String? = nil, participantIds: [String]) async throws -> CreateConversationResponse {
-        let body = CreateConversationRequest(type: type, title: title, participantIds: participantIds)
+        try await create(type: type, title: title, participantIds: participantIds, encryptionMode: nil)
+    }
+
+    /// La création qui porte le mode choisi sur l'écran de création ; `nil`
+    /// n'envoie rien et la passerelle pose `server`.
+    public func create(
+        type: String,
+        title: String? = nil,
+        participantIds: [String],
+        encryptionMode: ConversationCreationEncryption.Mode?
+    ) async throws -> CreateConversationResponse {
+        let body = CreateConversationRequest(
+            type: type, title: title, participantIds: participantIds, encryptionMode: encryptionMode
+        )
         let response: APIResponse<CreateConversationResponse> = try await api.post(ConversationsEndpoint.root, body: body)
         return response.data
     }
@@ -476,17 +492,32 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
         return response.data
     }
 
-    /// Finds the most recent existing direct conversation with a given user, or nil if none exists.
+    /// Le tête-à-tête existant avec `userId`, ou `nil` : le chiffré de bout en
+    /// bout d'abord, sinon le plus récent (#13006, même règle que
+    /// `POST /conversations`, #12966). La liste ne trie que par activité : une
+    /// page d'un seul rendait le tête-à-tête lisible dès qu'il était le plus
+    /// récent.
     public func findDirectWith(userId: String) async throws -> APIConversation? {
+        DirectPairChoice.preferred(among: try await findDirectsWith(userId: userId))
+    }
+
+    public func findDirectsWith(userId: String) async throws -> [APIConversation] {
         let response: APIResponse<[APIConversation]> = try await api.request(
             ConversationsEndpoint.root,
             queryItems: [
                 URLQueryItem(name: "type", value: "direct"),
                 URLQueryItem(name: "withUserId", value: userId),
-                URLQueryItem(name: "limit", value: "1")
+                URLQueryItem(name: "limit", value: "\(DirectPairChoice.candidateLimit)")
             ]
         )
-        return response.data.first
+        return response.data
+    }
+}
+
+public extension ConversationServiceProviding {
+    /// Un service qui ne sait rendre qu'un tête-à-tête n'en rend qu'un.
+    func findDirectsWith(userId: String) async throws -> [APIConversation] {
+        try await findDirectWith(userId: userId).map { [$0] } ?? []
     }
 }
 

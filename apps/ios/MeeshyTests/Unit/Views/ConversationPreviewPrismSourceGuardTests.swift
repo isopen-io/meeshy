@@ -240,7 +240,7 @@ final class ConversationPreviewPrismSourceGuardTests: XCTestCase {
     func test_canonicalReaders_stillResolveThroughThePrism() throws {
         let expectations = [
             ("Features/Main/Views/ThemedConversationRow.swift", "ConversationPreviewLine("),
-            ("Features/Main/Lentille/Row/LentilleConversationRow.swift", "ConversationPreviewLine("),
+            ("Features/Lens/Row/LentilleConversationRow.swift", "ConversationPreviewLine("),
             ("Features/Main/Views/ConversationPreviewLine.swift", "ConversationPreviewComposer.compose("),
             ("Features/Main/ViewModels/GlobalSearchViewModel.swift", "OutsidePreview.lastMessage("),
             ("Features/Main/Models/Message.swift", "resolvedLastMessagePreview"),

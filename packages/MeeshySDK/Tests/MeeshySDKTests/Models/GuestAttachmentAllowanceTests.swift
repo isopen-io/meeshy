@@ -12,6 +12,13 @@ struct GuestAttachmentAllowanceTests {
 
     // MARK: - Lecture tolérante des termes servis
 
+    /// #12526 — en E2EE, la tuile « Lieu » disparaît : un lieu partirait en
+    /// clair à côté du chiffré, et l'appareil ne sait pas encore le sceller.
+    @Test func boutEnBout_retireLaTuileLieuEtContacts() {
+        #expect(GuestAttachmentAllowance.unrestricted.sealing(.contentUnsealable).offersContactsAndPlaces == false)
+        #expect(GuestAttachmentAllowance.unrestricted.sealing(nil).offersContactsAndPlaces)
+    }
+
     @Test func lesFamillesInconnues_sontIgnorees_dansLOrdreCanonique() {
         let kinds = GuestAttachmentKind.knownKinds(from: ["audio", "video", "text", "audio"])
         #expect(kinds == [.text, .audio])

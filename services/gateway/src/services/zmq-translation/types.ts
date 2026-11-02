@@ -14,6 +14,8 @@ export interface TranslationRequest {
   targetLanguages: string[];
   conversationId: string;
   modelType?: string;
+  /** #12822 — texte chiffré au repos : le translator ne le met pas en cache et ne le journalise pas. */
+  atRest?: boolean;
 }
 
 export interface TranslationResult {
@@ -49,12 +51,20 @@ export interface TranslationCompletedEvent {
   metadata?: any;
 }
 
+/**
+ * Code d'un refus TERMINAL du translator : la paire n'a pas de code NLLB-200
+ * (#3659). Il vise UNE langue (`targetLanguage`) et ne se relance jamais.
+ */
+export const UNSUPPORTED_LANGUAGE_ERROR_CODE = 'UNSUPPORTED_LANGUAGE';
+
 export interface TranslationErrorEvent {
   type: 'translation_error';
   taskId: string;
   messageId: string;
   error: string;
   conversationId: string;
+  errorCode?: string;
+  targetLanguage?: string;
   metadata?: any;
 }
 
@@ -117,6 +127,8 @@ export interface AudioProcessRequest {
   targetLanguages: string[];
   generateVoiceClone: boolean;
   modelType: string;
+  /** #13102 — rien de cette tâche ne se range au translator (cache, journaux). */
+  atRest?: boolean;
   originalSenderId?: string;
   existingVoiceProfile?: {
     profileId: string;
@@ -221,6 +233,8 @@ export interface TranscriptionOnlyRequest {
   audioData?: string;
   audioFormat?: string;
   binaryFrames?: BinaryFrameInfo;
+  /** #13102 — rien de cette tâche ne se range au translator (cache, journaux). */
+  atRest?: boolean;
   mobileTranscription?: {
     text: string;
     language: string;
@@ -554,7 +568,28 @@ export interface StoryTextObjectTranslationCompletedEvent {
 export type StoryEvent = StoryTextObjectTranslationCompletedEvent;
 
 // ═══════════════════════════════════════════════════════════════
+// CACHE FORGET (#13102)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * L'oubli : la passerelle demande au translator d'effacer ce qu'il a rangé
+ * pour des pièces ou des messages effacés. Des IDENTIFIANTS seulement.
+ */
+export interface CacheForgetRequest {
+  readonly requestId: string;
+  readonly attachmentIds: readonly string[];
+  readonly messageIds: readonly string[];
+}
+
+/** L'acquittement d'un oubli, même `requestId`. */
+export interface CacheForgetDoneEvent {
+  type: 'cache_forget_done';
+  requestId: string;
+  deleted: number;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // COMBINED EVENT TYPE
 // ═══════════════════════════════════════════════════════════════
 
-export type ZMQEvent = TranslationEvent | AudioEvent | VoiceEvent | TranscriptionEvent | StoryEvent;
+export type ZMQEvent = TranslationEvent | AudioEvent | VoiceEvent | TranscriptionEvent | StoryEvent | CacheForgetDoneEvent;

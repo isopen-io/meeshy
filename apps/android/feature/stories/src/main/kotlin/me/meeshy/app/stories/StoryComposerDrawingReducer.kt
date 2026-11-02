@@ -16,6 +16,7 @@ internal object StoryComposerDrawingReducer {
         selectedTextElementId = null,
         selectedStickerId = null,
         elementMenuId = null,
+        stickerMenuId = null,
     )
 
     fun exited(state: StoryComposerUiState): StoryComposerUiState =

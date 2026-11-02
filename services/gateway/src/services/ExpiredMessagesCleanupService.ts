@@ -347,6 +347,7 @@ export class ExpiredMessagesCleanupService {
       now: this.now(),
       attachmentRemover: this.attachmentRemover,
       onError: (messageId, err) => log.warn('view-once purge failed', { messageId, err }),
+      onPurged: ({ id, ...entry }) => log.info('view-once purged', { messageId: id, ...entry }),
       announce: (purged) => {
         this.resolveManager()
           ?.getIO()

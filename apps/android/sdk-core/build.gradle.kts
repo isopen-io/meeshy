@@ -31,6 +31,13 @@ android {
             isReturnDefaultValues = true
         }
     }
+    // Les illustrations des cadres d'appel (#13695) : les MÊMES fichiers que iOS et le web, versés tels quels
+    // dans les actifs (`call-frames/<nom>.webp`), sans copie dans le dépôt Android.
+    sourceSets["main"].assets.srcDir(
+        generateSequence(projectDir) { it.parentFile }
+            .map { File(it, "packages/shared/design/call-capture-frames/assets") }
+            .first { it.isDirectory },
+    )
 }
 
 dependencies {
@@ -38,6 +45,7 @@ dependencies {
     api(project(":core:network"))
     implementation(project(":core:common"))
     implementation(project(":core:datastore"))
+    implementation(project(":core:crypto"))
     implementation(project(":core:database"))
 
     implementation(libs.androidx.core.ktx)
@@ -48,6 +56,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.androidx.media3.common)
     implementation(libs.androidx.media3.transformer)
+    implementation(libs.androidx.media3.muxer)
     implementation(libs.androidx.media3.effect)
     implementation(libs.datastore.preferences)
     implementation(libs.room.ktx)
@@ -58,6 +67,10 @@ dependencies {
     implementation(libs.timber)
     implementation(libs.mlkit.translate)
     implementation(libs.mlkit.language.id)
+    implementation(libs.mlkit.segmentation.selfie)
+    implementation(libs.mlkit.face.detection)
+    // « Détourer le sujet d'une photo » en sticker (#13847) : module Play Services téléchargé à la demande.
+    implementation(libs.mlkit.subject.segmentation)
     ksp(libs.hilt.compiler)
     ksp(libs.hilt.work.compiler)
 
@@ -76,4 +89,6 @@ dependencies {
     // deliberately — production code here never touches retrofit2 types directly,
     // routing through NetworkResult/createSession — so this stays test-scoped only.
     testImplementation(libs.retrofit)
+    // Test-only: SceneAssetFetcherTest serves a media file over a local socket.
+    testImplementation(libs.okhttp.mockwebserver)
 }

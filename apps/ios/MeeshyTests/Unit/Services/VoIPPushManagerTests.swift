@@ -340,12 +340,12 @@ final class VoIPPushManagerTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/VoIPPushManager.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/VoIPPushManager.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_duplicatePushPhantomPath_passesCallIdToReportPhantomVoIPCall() throws {
@@ -370,7 +370,7 @@ final class VoIPPushManagerTests: XCTestCase {
         }
         let precedingBody = String(source[..<malformedRange.lowerBound].suffix(400))
         XCTAssertTrue(
-            precedingBody.contains("reportPhantomVoIPCall(uuid: phantomUUID, update: update)") &&
+            precedingBody.contains("reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: nil)") &&
             !precedingBody.contains("callId: callId"),
             "The malformed-payload path never inserted into the dedup ring, so it must not pass a callId " +
             "(there's nothing to evict)."

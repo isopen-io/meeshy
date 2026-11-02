@@ -129,7 +129,7 @@ extension MessageRecord {
             messageType: msgType,
             messageSource: msgSource,
             isEdited: isEdited,
-            editedAt: editedAt,
+            editedAt: editedAt, editedById: editedById,
             deletedAt: deletedAt,
             replyToId: replyToId,
             storyReplyToId: storyReplyToId,
@@ -169,7 +169,7 @@ extension MessageRecord {
             callSummary: uiCallSummary,
             joinNotice: systemNotice.join,
             captureNotice: systemNotice.capture,
-            arrivalsNotice: systemNotice.arrivals,
+            arrivalsNotice: systemNotice.arrivals, encryptionSwitchNotice: systemNotice.encryptionSwitch,
             location: uiLocation,
             sticker: uiSticker
         )

@@ -26,14 +26,24 @@ BACKUP_NAME="attachments-pre-migration-${TIMESTAMP}"
 
 if [ "$ENVIRONMENT" = "staging" ]; then
   DB_HOST="database-staging"
+  DB_CONTAINER="meeshy-database-staging"
   DB_NAME="meeshy"
 else
   DB_HOST="meeshy-database"
+  DB_CONTAINER="meeshy-database"
   DB_NAME="meeshy"
 fi
 
+# Le réseau de la base de CET environnement, lu sur l'hôte (#11451) : meeshy_meeshy-data
+# après la séparation des réseaux de la production, meeshy_meeshy-network avant.
+DB_NETWORK=$(ssh $REMOTE_HOST "docker inspect -f '{{range \$k, \$v := .NetworkSettings.Networks}}{{\$k}} {{end}}' $DB_CONTAINER" | tr ' ' '\n' | grep -E '^(meeshy_meeshy-data|meeshy-staging-network|meeshy_meeshy-network)$' | head -1)
+if [ -z "$DB_NETWORK" ]; then
+  echo "❌ Réseau de $DB_CONTAINER introuvable sur $REMOTE_HOST" >&2
+  exit 1
+fi
+
 ssh $REMOTE_HOST "docker run --rm \
-  --network=meeshy_meeshy-network \
+  --network=$DB_NETWORK \
   -v $BACKUP_DIR:/backup \
   mongo:8.0 \
   mongodump \
@@ -152,7 +162,7 @@ echo "📁 Backup disponible: $BACKUP_DIR/$BACKUP_NAME"
 echo ""
 echo "Pour restaurer en cas de problème:"
 echo "  ssh $REMOTE_HOST \"docker run --rm \\"
-echo "    --network=meeshy_meeshy-network \\"
+echo "    --network=$DB_NETWORK \\"
 echo "    -v $BACKUP_DIR:/backup \\"
 echo "    mongo:8.0 \\"
 echo "    mongorestore \\"

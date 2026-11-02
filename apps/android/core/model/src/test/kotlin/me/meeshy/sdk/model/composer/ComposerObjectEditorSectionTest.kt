@@ -114,4 +114,11 @@ class ComposerObjectEditorSectionTest {
         assertThat(ComposerObjectEditorSection.Tool(TextEditTool.STYLE).identifier).isEqualTo("tool.style")
         assertThat(ComposerObjectEditorSection.Media(MediaEditTool.ALT_TEXT).identifier).isEqualTo("media.altText")
     }
+
+    @Test
+    fun `filtres et cadres de l appel ouvrent les outils d un media, comme iOS`() {
+        assertThat(MediaEditTool.LOOK.raw).isEqualTo("look")
+        assertThat(MediaEditTool.served.first()).isEqualTo(MediaEditTool.LOOK)
+        assertThat(ComposerObjectEditorSection.Media(MediaEditTool.LOOK).identifier).isEqualTo("media.look")
+    }
 }

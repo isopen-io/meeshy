@@ -231,6 +231,12 @@ class StoryComposerDraftSnapshotTest {
     }
 
     @Test
+    fun `a changed set of checked formats is different content`() {
+        val a = sample().copy(format = "POST", formats = listOf("POST", "STORY"))
+        assertThat(a.sameContentAs(a.copy(formats = listOf("POST", "STORY", "REEL")))).isFalse()
+    }
+
+    @Test
     fun `a changed visibility is different content`() {
         val a = sample()
         assertThat(a.sameContentAs(a.copy(visibility = "PUBLIC"))).isFalse()
@@ -581,5 +587,51 @@ class StoryComposerDraftSnapshotTest {
         )
         val b = a.copy(slides = a.slides.map { it.copy(stickers = listOf(sticker())) })
         assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `a draft stored by a build that did not await publications decodes as a draft being composed`() {
+        val legacy = """{"slides":[{"id":"s1","text":"avant"}],"selectedId":"s1","visibility":"PUBLIC"}"""
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
+
+        assertThat(decoded.awaitingPublication).isEmpty()
+        assertThat(decoded.isAwaitingPublication).isFalse()
+        assertThat(decoded.isWorthRestoring).isTrue()
+    }
+
+    @Test
+    fun `a draft awaiting its stories round-trips the rows it waits for`() {
+        val awaiting = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "en route")),
+            selectedId = "s1",
+            awaitingPublication = listOf("cmid_a", "cmid_b"),
+        )
+
+        val decoded = json.decodeFromString(
+            StoryComposerDraftSnapshot.serializer(),
+            json.encodeToString(StoryComposerDraftSnapshot.serializer(), awaiting),
+        )
+
+        assertThat(decoded.awaitingPublication).containsExactly("cmid_a", "cmid_b").inOrder()
+        assertThat(decoded.isAwaitingPublication).isTrue()
+    }
+
+    @Test
+    fun `a drawing survives the round-trip and is content worth restoring on its own`() {
+        val stroke = StoryDrawingStroke(id = "st1", colorHex = "FFFFFF", width = 6.0, points = listOf(StoryDrawingStrokePoint(0.1, 0.2)))
+        val drawn = StoryComposerDraftSnapshot(slides = listOf(StoryDraftSlideSnapshot(id = "s1", strokes = listOf(stroke))), selectedId = "s1")
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), json.encodeToString(StoryComposerDraftSnapshot.serializer(), drawn))
+
+        assertThat(decoded.slides.single().strokes).containsExactly(stroke)
+        assertThat(decoded.isWorthRestoring).isTrue()
+    }
+
+    @Test
+    fun `a slide written before drawings were kept reads as drawing nothing`() {
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), """{"slides":[{"id":"s1","text":"a"}],"selectedId":"s1"}""")
+
+        assertThat(decoded.slides.single().strokes).isEmpty()
     }
 }

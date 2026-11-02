@@ -85,7 +85,7 @@ final class QuickActionDoorsOnBothRootsTests: XCTestCase {
     /// Le drapeau n'est REMIS À PLAT qu'au site unique — sinon deux racines
     /// divergent à nouveau, chacune avec sa propre façon d'oublier.
     func test_theFlagIsLoweredOnlyBySingleSite() throws {
-        let router = try source("Meeshy/Features/Main/Navigation/Router.swift")
+        let router = try source("Meeshy/Features/Navigation/Router.swift")
         XCTAssertTrue(router.contains("func consumePendingFeedComposer() -> Bool"))
 
         for hôte in ["Meeshy/Features/Main/Views/RootViewComponents.swift",

@@ -19,20 +19,52 @@ internal fun PostCard(
     onFlagTap: (String) -> Unit,
     onClick: () -> Unit,
     onOpenPost: (String) -> Unit,
+    onOpenReel: (String) -> Unit = onOpenPost,
     onImageTap: (Int) -> Unit,
     isOwn: Boolean = false,
     onShare: () -> Unit = {},
+    onSend: (() -> Unit)? = null,
     onCopyLink: () -> Unit = {},
+    onCopyText: () -> Unit = {},
+    onOpenProfile: ((String) -> Unit)? = null,
     onRepost: () -> Unit = {},
     onQuote: () -> Unit = {},
     onPin: () -> Unit = {},
     onReport: () -> Unit = {},
     onDelete: () -> Unit = {},
     onComments: () -> Unit = onClick,
+    onOpenHashtag: (String) -> Unit = {},
+    translatingCodes: Set<String> = emptySet(),
+    onSelectLanguage: (String) -> Unit = onFlagTap,
+    modifier: Modifier = Modifier,
 ) {
+    val reelCover = post.reelCover?.takeIf { post.showsReelCard }
+    if (reelCover != null) {
+        ReelPostCard(
+            post = post,
+            cover = reelCover,
+            onOpenReel = onOpenReel,
+            modifier = modifier,
+            isOwn = isOwn,
+            onLike = onLike,
+            onBookmark = onBookmark,
+            onComments = onComments,
+            onRepost = onRepost,
+            onQuote = onQuote,
+            onShare = onShare,
+            onSend = onSend,
+            onCopyLink = onCopyLink,
+            onCopyText = onCopyText,
+            onPin = onPin,
+            onReport = onReport,
+            onDelete = onDelete,
+            onOpenProfile = onOpenProfile,
+        )
+        return
+    }
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.xl),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
@@ -42,6 +74,8 @@ internal fun PostCard(
                 isOwn = isOwn,
                 onShare = onShare,
                 onCopyLink = onCopyLink,
+                onCopyText = onCopyText,
+                onOpenProfile = onOpenProfile,
                 onRepost = onRepost,
                 onQuote = onQuote,
                 onBookmark = onBookmark,
@@ -49,8 +83,14 @@ internal fun PostCard(
                 onReport = onReport,
                 onDelete = onDelete,
             )
-            FeedPostCardBody(post = post, onFlagTap = onFlagTap)
-            FeedPostCardMediaSlot(post = post, onImageTap = onImageTap, onOpenPost = onOpenPost)
+            FeedPostCardBody(
+                post = post,
+                onFlagTap = onFlagTap,
+                onOpenHashtag = onOpenHashtag,
+                translatingCodes = translatingCodes,
+                onSelectLanguage = onSelectLanguage,
+            )
+            FeedPostCardMediaSlot(post = post, onImageTap = onImageTap, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
             FeedPostCardFooter(
                 post = post,
                 onLike = onLike,
@@ -58,7 +98,9 @@ internal fun PostCard(
                 onComments = onComments,
                 onRepost = onRepost,
                 onQuote = onQuote,
+                onSend = onSend,
             )
+            post.commentsPreview?.let { FeedCommentsPreview(preview = it, onOpen = onComments) }
         }
     }
 }

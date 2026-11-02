@@ -10,6 +10,8 @@ import type {
 import {
   ENCRYPTION_ENVELOPE_SHAPE,
   noSilentDowngrade,
+  libsignalSendComplete,
+  LIBSIGNAL_SEND_ISSUE,
   NO_SILENT_DOWNGRADE_ISSUE,
 } from './encryption-envelope.js';
 import { MENTIONED_USER_IDS_SHAPE } from './mention-list.js';
@@ -17,6 +19,7 @@ import { EPHEMERAL_DURATION_SHAPE } from './ephemeral-duration';
 import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import { MAX_CONTENT_BYTES } from './content-limits.js';
 import { FORWARDED_ATTACHMENT_IDS_SHAPE } from './forwarded-attachments.js';
+import { clientMessageTypeSchema } from './client-message-type.js';
 
 const mongoId = z
   .string()
@@ -46,7 +49,7 @@ export const SocketMessageSendSchema = z.object({
   conversationId: z.string().min(1).max(255),
   content: z.string().max(MAX_CONTENT_BYTES),
   originalLanguage: z.string().optional(),
-  messageType: z.string().optional(),
+  messageType: clientMessageTypeSchema.optional(),
   replyToId: mongoId.optional(),
   attachmentReplyTo: attachmentReplyToSchema.optional(),
   storyReplyToId: mongoId.optional(),
@@ -98,7 +101,7 @@ export const SocketMessageSendSchema = z.object({
   // jamais la base sur le chemin d'envoi PRIMAIRE. Voir l'unité pour le récit
   // complet du défaut.
   ...ENCRYPTION_ENVELOPE_SHAPE,
-}).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE);
+}).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE).refine(libsignalSendComplete, LIBSIGNAL_SEND_ISSUE);
 
 export type SocketMessageSendData = z.infer<typeof SocketMessageSendSchema>;
 
@@ -143,7 +146,7 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   // schéma-ci ne la portait pas davantage : une pièce jointe envoyée dans une
   // conversation chiffrée perdait son chiffré exactement de la même façon.
   ...ENCRYPTION_ENVELOPE_SHAPE,
-}).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE);
+}).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE).refine(libsignalSendComplete, LIBSIGNAL_SEND_ISSUE);
 
 export type SocketMessageSendWithAttachmentsData = z.infer<typeof SocketMessageSendWithAttachmentsSchema>;
 

@@ -7,6 +7,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.collectArrived
 import me.meeshy.sdk.socket.PreferencesSocketManager
 
 /**
@@ -48,7 +49,7 @@ internal class ConversationListRealtimeBinder(
         scope.launch {
             // Preferences changees sur un AUTRE appareil (#4127) : l'ecriture Room
             // suffit a repeindre, aucune relecture reseau n'est demandee.
-            preferencesSocketManager.conversationPreferencesUpdated.collect { event ->
+            preferencesSocketManager.conversationPreferencesUpdated.collectArrived { event ->
                 repository.applyRemoteConversationPreferences(event)
             }
         }
@@ -78,6 +79,23 @@ internal class ConversationListRealtimeBinder(
             launch {
                 messageSocketManager.participantLeft.collect { event ->
                     ConversationPurge.onParticipantLeft(event, currentUserId())?.let(::purge)
+                }
+            }
+            // L'effectif suit une adhésion (#13795, iOS `participantJoined`) : l'absolu servi se pose, le +1 n'est qu'un
+            // repli. Mon PROPRE arrivage s'écarte, `conversation:new` le compte déjà. Chaque écriture se juge sous le
+            // compte auquel l'événement est arrivé.
+            launch {
+                messageSocketManager.participantJoined.collectArrived { event ->
+                    if (event.userId != null && event.userId == currentUserId()) return@collectArrived
+                    repository.applyMembership(event.conversationId, event.memberCount, event.memberCountCapped, delta = +1)
+                }
+            }
+            // Symétrique : l'appartenance n'est rendue que si le bannissement l'avait prise (absent = rendue). Un effectif
+            // servi tranche de lui-même, comme à iOS (`memberCount != nil || didRestoreMembership`).
+            launch {
+                messageSocketManager.participantUnbanned.collectArrived { event ->
+                    if (event.memberCount == null && event.membershipRestored == false) return@collectArrived
+                    repository.applyMembership(event.conversationId, event.memberCount, event.memberCountCapped, delta = +1)
                 }
             }
         }

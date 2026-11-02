@@ -14,7 +14,7 @@ class EmojiPickerLayoutTest {
     @Test
     fun `the height never leaves the floor and the ceiling`() {
         assertThat(EmojiPickerLayout.currentHeight(340f, 200f, 800f)).isEqualTo(340f)
-        assertThat(EmojiPickerLayout.currentHeight(340f, -900f, 800f)).isEqualTo(680f)
+        assertThat(EmojiPickerLayout.currentHeight(340f, -900f, 800f)).isEqualTo(620f)
         assertThat(EmojiPickerLayout.currentHeight(400f, 20f, 800f)).isEqualTo(380f)
     }
 

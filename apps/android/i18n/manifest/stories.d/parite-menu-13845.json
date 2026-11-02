@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_clear_all_cancel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_clear_all_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_clear_all_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_media_from_files",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_media_from_library",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_media_sources",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_more_clear_all",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_more_pick_background",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_more_preview",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_more_remove_background",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_preview_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_preview_next",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_preview_previous",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

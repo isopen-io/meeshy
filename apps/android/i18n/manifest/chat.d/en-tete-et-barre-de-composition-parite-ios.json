@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "androidName": "chat_conversation_info_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_back_unread",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_call",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_call_group",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_call_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_call_video",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_call_voice",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_collapse",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_encryption_e2ee",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_encryption_server",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_expand",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_menu_conversation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_menu_profile",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_search",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_view_conversation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_header_view_profile_of",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_unread_separator_count",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_fold",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_quick_emoji_send",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_show_keyboard",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_unfold",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

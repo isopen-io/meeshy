@@ -1,6 +1,7 @@
 import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 import { act, type ReactElement } from 'react';
+import { usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
 
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminUserDetailQueryKey, decodeAdminUserDetail, type AdminUserDetail } from '@/lib/api/admin-user-detail';
@@ -185,6 +186,31 @@ describe('une information s’édite là où elle s’affiche, et part seule', (
     await mounter.settle();
     expect(calls().filter((request) => request.method === 'PATCH').map((request) => request.body)).toEqual([{ username: 'bob' }, { username: 'bob7' }]);
     expect(cached()?.username).toBe('bob7');
+  });
+});
+
+describe('le plancher d\'une identité modifiée (#13825)', () => {
+  const REFUSED = [
+    ['firstName', 'A', '2 caractères au moins.'],
+    ['lastName', 'B', '2 caractères au moins.'],
+    ['displayName', 'C', '2 caractères au moins.'],
+    ['username', 'Al', `${usernameMinLength} caractères au moins.`],
+  ] as const;
+  for (const [id, typed, expected] of REFUSED) {
+    test(`« ${id} » = « ${typed} » ne part pas : le minimum se dit sous le champ, le cache ne bouge pas`, async () => {
+      const { host, calls } = await open(member(), { replies: [patch('', (body) => ({ ok: true, data: served(body) }))] });
+      const before = cached();
+      await commit(host, id, typed);
+      expect(calls().filter((request) => request.method === 'PATCH')).toEqual([]);
+      expect(textOf(host.querySelector(`[data-admin-inline="${id}"] [role="alert"]`))).toBe(expected);
+      expect(cached()).toEqual(before);
+    });
+  }
+
+  test('« Al » passe comme prénom : le champ part', async () => {
+    const { host, calls } = await open(member(), { replies: [patch('', (body) => ({ ok: true, data: served(body) }))] });
+    await commit(host, 'firstName', 'Al');
+    expect(calls().find((request) => request.method === 'PATCH')?.body).toEqual({ firstName: 'Al' });
   });
 });
 

@@ -163,7 +163,7 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
     /// légitime — c'est-à-dire une convergence défaite sans mise à jour de ce
     /// garde-fou.
     func test_shareSheetIsTheSoleBridgeToUIActivityViewController() throws {
-        for converged in ["Features/Main/Views/StoryExportShareSheet.swift",
+        for converged in ["Features/Stories/Views/StoryExportShareSheet.swift",
                           "Features/Main/Components/MediaSaveFlowHost.swift"] {
             let code = strippingComments(
                 try String(contentsOf: appRoot.appendingPathComponent(converged), encoding: .utf8)
@@ -175,7 +175,10 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
         }
 
         let expectedBridges: Set<String> = [
-            "ConversationMediaViews.swift"   // définit ShareSheet — LE pont légitime
+            "ConversationMediaViews.swift",   // définit ShareSheet — LE pont légitime
+            // L'écran de partage unique est AUSSI compilé dans l'extension de
+            // partage, qui n'a pas le `ShareSheet` de l'app (#12644).
+            "ShareSheetView+Actions.swift",
         ]
 
         var offenders: Set<String> = []

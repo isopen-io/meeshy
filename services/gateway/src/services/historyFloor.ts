@@ -44,7 +44,8 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { hasMinimumMemberRole, isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { hasMinimumMemberRole } from '@meeshy/shared/types/role-types';
+import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
 import { logger } from '../utils/logger';
 import type { ParticipantRightsOverride } from './participantRights';
 
@@ -63,10 +64,10 @@ export type HistoryFloorJoin = {
   readonly anonymousSession?: { readonly rights?: ParticipantRightsOverride | null } | null;
   /**
    * Le rôle PLATEFORME du compte (`User.role`) — distinct de `role`, le rang
-   * DANS cette conversation. Décision porteur (2026-08-27, #3892) : un
-   * ADMIN/BIGBOSS de la plateforme bypasse le plancher même sans rang élevé
-   * ICI, même patron que la présence (`PresenceVisibilityService`, qui voit
-   * déjà ADMIN/BIGBOSS). `undefined` = appelant qui n'a pas chargé la
+   * DANS cette conversation. Décisions porteur (2026-08-27, #3892 ; 2026-10-24,
+   * #11217) : un rôle de plateforme PRIVILÉGIÉ (`PRIVILEGED_PLATFORM_ROLES` :
+   * MODERATOR, ADMIN, BIGBOSS) bypasse le plancher même sans rang élevé ICI,
+   * comme il agit avec les droits du créateur. `undefined` = appelant qui n'a pas chargé la
    * colonne, `null` = participant sans compte (anonyme) — les deux se
    * comportent comme avant, sans bypass.
    */
@@ -88,7 +89,7 @@ export type ShareLinkHistoryGrant = { readonly allowViewHistory: boolean } | nul
  *
  * `anonymousSession` est réduit à `rights` : le reste de la session (hash du
  * jeton, IP, empreinte) n'entre pas dans la question. `user` est réduit à
- * `role` — le rôle PLATEFORME, pour le bypass ADMIN/BIGBOSS (#3892) ; `null`
+ * `role` — le rôle PLATEFORME, pour le bypass privilégié (#3892, #11217) ; `null`
  * pour un participant sans compte, jamais chargé pour rien d'autre.
  */
 export const HISTORY_FLOOR_PARTICIPANT_SELECT = {
@@ -113,9 +114,10 @@ type FloorVerdict =
 function settleBeforeLink(join: HistoryFloorJoin): FloorVerdict {
   if (hasMinimumMemberRole(join.role ?? 'member', 'admin')) return { kind: 'settled', floor: null };
   // Bypass PLATEFORME (#3892) — même rang que le (i) ci-dessus, avant tout ce
-  // qui suit : un ADMIN/BIGBOSS lit tout, y compris quand un octroi par date
+  // qui suit : un rôle de plateforme privilégié (MODERATOR, ADMIN, BIGBOSS —
+  // #11217) lit tout, y compris quand un octroi par date
   // ou un droit figé plus restrictif existe sur SA propre ligne.
-  if (join.user?.role && isGlobalAdmin(join.user.role)) return { kind: 'settled', floor: null };
+  if (isPrivilegedPlatformRole(join.user?.role)) return { kind: 'settled', floor: null };
   if (join.historyVisibleFrom) return { kind: 'settled', floor: join.historyVisibleFrom };
 
   // Le droit figé au join, et la surcharge de l'hôte lue en premier — `??`

@@ -643,6 +643,25 @@ class StoryViewerViewModelTest {
         assertThat(vm.state.value.currentStoryId).isEqualTo("b1")
     }
 
+    /** #13849, iOS `composableSlide` : « Composer » n'existe que sur une story que le composeur saura reprendre. */
+    @Test
+    fun `Compose is offered on a story the composer can take back, never on one carrying an image sticker`() = runTest {
+        val vm = viewModel(
+            startUserId = "b",
+            posts = listOf(
+                storyPost("b1", "b", hoursAgo = 3),
+                storyPost("b2", "b", hoursAgo = 2, storyEffects = StoryEffects(stickerObjects = listOf(me.meeshy.sdk.model.StorySticker(id = "k", postMediaId = "img")))),
+            ),
+        )
+
+        assertThat(vm.state.value.canCompose).isTrue()
+
+        vm.advance()
+
+        assertThat(vm.state.value.currentStoryId).isEqualTo("b2")
+        assertThat(vm.state.value.canCompose).isFalse()
+    }
+
     @Test
     fun `isOwnStory is true only on the current user's own group`() = runTest {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
@@ -657,6 +676,30 @@ class StoryViewerViewModelTest {
         vm.advance() // → group b (someone else's story)
 
         assertThat(vm.state.value.isOwnStory).isFalse()
+    }
+
+    @Test
+    fun `the header carries the author's served presence, never one's own`() = runTest {
+        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
+        every { session.currentUserId } returns "a"
+        val online = { post: ApiPost -> post.copy(author = post.author?.copy(isOnline = true, lastActiveAt = isoAgo(0))) }
+        coEvery { storyRepository.list(any(), any()) } returns NetworkResult.Success(twoAuthors().map(online))
+        coEvery { storyRepository.markViewed(any()) } returns NetworkResult.Success(Unit)
+        val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to "a"))
+        val vm = StoryViewerViewModel(storyRepository, postRepository, session, socialSocket, config, reportRepository, dwellClock, InMemoryPrivacyPreferencesStore(), handle)
+
+        assertThat(vm.state.value.authorPresence).isNull()
+
+        vm.advance()
+
+        assertThat(vm.state.value.authorPresence?.isOnline).isTrue()
+    }
+
+    @Test
+    fun `an author served without presence gives the header nothing to fabricate`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+
+        assertThat(vm.state.value.authorPresence).isNull()
     }
 
     private fun imagePost(id: String, authorId: String, hoursAgo: Long, imageUrl: String) =
@@ -732,6 +775,60 @@ class StoryViewerViewModelTest {
 
         assertThat(vm.state.value.current?.imageUrl).isEqualTo("http://cdn/photo.jpg")
         assertThat(vm.state.value.current?.backgroundVideoUrl).isNull()
+    }
+
+    @Test
+    fun `un fond sans adresse lit la piece que son identifiant designe, jamais la premiere de la story`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(id = "m1", fileUrl = "http://cdn/first.jpg", mimeType = "image/jpeg"),
+                ApiPostMedia(id = "m2", fileUrl = "http://cdn/designated.jpg", mimeType = "image/jpeg"),
+            ),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(id = "up-1", postMediaId = "m2", mediaURL = null, mediaType = "image", isBackground = true, x = 0.7, scale = 1.5),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.imageUrl).isEqualTo("http://cdn/designated.jpg")
+        assertThat(vm.state.value.current?.backgroundTransform?.scaleX).isWithin(1e-6f).of(1.5f)
+    }
+
+    @Test
+    fun `un fond video sans adresse lit sa piece et garde le cadrage de l auteur`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(id = "m1", fileUrl = "http://cdn/other.mp4", mimeType = "video/mp4"),
+                ApiPostMedia(id = "m2", fileUrl = "http://cdn/bg.mp4", mimeType = "video/mp4"),
+            ),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(id = "up-1", postMediaId = "m2", mediaURL = null, mediaType = "video", isBackground = true, loop = false, x = 0.7, scale = 2.0),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/bg.mp4")
+        assertThat(vm.state.value.current?.backgroundLoop).isFalse()
+        assertThat(vm.state.value.current?.backgroundTransform?.scaleX).isWithin(1e-6f).of(2.0f)
+    }
+
+    @Test
+    fun `un fond qui ne designe aucune piece de la story ne prete pas son cadrage a une autre`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/first.jpg", mimeType = "image/jpeg")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(id = "up-1", postMediaId = "up-1", mediaURL = null, mediaType = "image", isBackground = true, x = 0.7, scale = 1.5),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundTransform?.isIdentity).isTrue()
     }
 
     @Test
@@ -850,16 +947,16 @@ class StoryViewerViewModelTest {
 
     @Test
     fun `a background VIDEO object without its own url does not project framing from a fallback video`() = runTest {
-        // The framing rides only on the object's OWN mediaURL. A modern isBackground
-        // object with a null mediaURL but a matching fallback video item must NOT
-        // steal that item's pixels to reframe with an unrelated object's transform.
+        // The framing rides only on the object's OWN address — its mediaURL or the piece
+        // its postMediaId names. An object naming a piece the story does not carry must
+        // NOT reframe the fallback video with an unrelated object's transform.
         val post = storyPost("a1", "a", hoursAgo = 1).copy(
             media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/fallback.mp4", mimeType = "video/mp4")),
             storyEffects = StoryEffects(
                 mediaObjects = listOf(
                     StoryMediaObject(
                         id = "obj1",
-                        postMediaId = "m1",
+                        postMediaId = "unrelated",
                         mediaURL = null,
                         mediaType = "video",
                         isBackground = true,
@@ -1091,6 +1188,42 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `a sound borrowed from the library plays from its mediaURL, resolved against the gateway origin`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                audioPlayerObjects = listOf(
+                    StoryAudioPlayerObject(
+                        id = "borrowed-s1",
+                        postMediaId = "",
+                        isBackground = true,
+                        mediaURL = "/api/v1/static/s1.m4a",
+                        soundId = "s1",
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundAudioUrl).isEqualTo("https://gate.meeshy.me/api/v1/static/s1.m4a")
+    }
+
+    @Test
+    fun `an author-written mediaURL outside the library route never plays, so the reader's identity never follows it`() = runTest {
+        listOf("/api/v1/users/me", "/api/v1/static/../conversations", "https://evil.example/api/v1/static/s.m4a").forEach { hostile ->
+            val post = storyPost("a1", "a", hoursAgo = 1).copy(
+                storyEffects = StoryEffects(
+                    audioPlayerObjects = listOf(
+                        StoryAudioPlayerObject(id = "b", postMediaId = "", isBackground = true, mediaURL = hostile, soundId = "s1"),
+                    ),
+                ),
+            )
+            val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+            assertThat(vm.state.value.current?.backgroundAudioUrl).isNull()
+        }
+    }
+
+    @Test
     fun `a non-background audioPlayerObject is exposed as foregroundAudioUrl`() = runTest {
         val post = storyPost("a1", "a", hoursAgo = 1).copy(
             media = listOf(ApiPostMedia(id = "voice", fileUrl = "http://cdn/voice.mp3", mimeType = "audio/mp4")),
@@ -1268,6 +1401,69 @@ class StoryViewerViewModelTest {
         vm.toggleLanguageOverride("es")
         assertThat(vm.state.value.current?.text).isEqualTo("hola")
         assertThat(vm.state.value.languageOverride).isEqualTo("es")
+    }
+
+    @Test
+    fun `selecting the Original entry shows the source text and never announces the sentinel as a language`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "es"),
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        assertThat(vm.state.value.current?.text).isEqualTo("hola")
+
+        vm.selectLanguage(StoryLanguageOverride.ORIGINAL)
+
+        assertThat(vm.state.value.current?.text).isEqualTo("text-s1")
+        assertThat(vm.state.value.current?.languageCode).isNull()
+        assertThat(vm.state.value.activeLanguageCode).isNull()
+    }
+
+    @Test
+    fun `selecting a language twice keeps it - the explorer never toggles back`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        vm.selectLanguage("es")
+        vm.selectLanguage("es")
+
+        assertThat(vm.state.value.current?.text).isEqualTo("hola")
+        assertThat(vm.state.value.activeLanguageCode).isEqualTo("es")
+    }
+
+    @Test
+    fun `the explorer is built only while it is open and follows the served language`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        assertThat(vm.state.value.languageExplorer).isNull()
+
+        vm.openLanguageExplorer()
+        vm.selectLanguage("es")
+
+        val explorer = vm.state.value.languageExplorer!!
+        assertThat(explorer.current?.text).isEqualTo("hola")
+        assertThat(explorer.rows.first { it.isSelected }.code).isEqualTo("es")
+
+        vm.closeLanguageExplorer()
+        assertThat(vm.state.value.languageExplorer).isNull()
     }
 
     @Test

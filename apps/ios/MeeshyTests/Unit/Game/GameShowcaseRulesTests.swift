@@ -71,11 +71,11 @@ final class GameShowcaseRulesTests: XCTestCase {
     func test_theContactStrip_mountsNoConstellation() throws {
         let iosRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let strip = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Wave2/GameProfileViews.swift"),
+        let strip = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Game/Wave2/GameProfileViews.swift"),
                                encoding: .utf8)
         XCTAssertTrue(strip.contains("struct GameContactStrip"))
         XCTAssertFalse(strip.lowercased().contains("constellation"), "la bande ne lit ni ne peint la constellation d'un autre")
-        let showcase = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Wave2/GameShowcaseViews.swift"),
+        let showcase = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Game/Wave2/GameShowcaseViews.swift"),
                                   encoding: .utf8)
         XCTAssertFalse(showcase.contains("init(stars:"), "plus aucune fiche ne monte la constellation d'un visiteur")
     }

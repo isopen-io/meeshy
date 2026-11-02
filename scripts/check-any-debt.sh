@@ -357,7 +357,7 @@ readonly SHARED_BASELINE=0
 #
 # 497 → 496 (#11260 : le chemin TUS et le multipart partagent une fabrique de rendus) :
 # un `any` a quitté la passerelle avec la convergence des deux chemins d'upload.
-readonly GATEWAY_BASELINE=496
+readonly GATEWAY_BASELINE=494
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO

@@ -33,7 +33,7 @@ final class ConversationStickerSendGuardTests: XCTestCase {
                       "la barre déclare la porte, avec `nil` pour défaut : un hôte qui ne la câble pas n'a pas de tuile")
 
         let door = try appSource("Meeshy/Features/Main/Components/UniversalComposerBar+Toolbar.swift")
-        XCTAssertTrue(door.contains("if let openStickers = onRequestStickerPicker {"),
+        XCTAssertTrue(door.contains("if let openStickers = resolvedOnStickerPicker {"),
                       "la porte est GATÉE sur le rappel — loi 4, une porte sans effet n'est pas rendue")
         XCTAssertTrue(door.contains("symbol: \"rectangle.portrait.on.rectangle.portrait.angled\""),
                       "même glyphe que `ComposerRailDoor.sticker` et que l'en-tête de la palette — pas un smiley")

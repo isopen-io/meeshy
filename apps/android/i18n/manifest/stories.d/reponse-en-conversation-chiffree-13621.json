@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {"androidName": "stories_reply_encrypted", "status": "android-only"}
+      ]
+    }
+  }
+}

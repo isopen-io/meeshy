@@ -61,6 +61,53 @@ public enum SceneAudioStageRule {
     public static func stagedAudios(in audios: [StoryAudioPlayerObject]) -> [StoryAudioPlayerObject] {
         audios.filter(isStaged)
     }
+
+    // MARK: - Le rang d'une pastille parmi les objets de la scène (#13901)
+
+    /// **Une pastille se peint à son RANG** (#13901, R7) : comme Android
+    /// (`StorySceneStack`), texte, média posé, sticker, lieu et pastille de son
+    /// partagent un seul ordre, le `zIndex`. Une pastille est ENFOUIE quand un
+    /// autre objet de premier plan, d'une autre famille, a un rang plus haut :
+    /// le moteur de scène la peint alors dans son arbre de calques, à sa place,
+    /// et la surcouche ne la peint pas une seconde fois.
+    ///
+    /// Une pastille sans rang (`zIndex == nil`, brouillon ou story d'avant le
+    /// rang) n'est jamais enfouie : elle reste au-dessus de tout, comme avant.
+    /// À rang égal, la pastille passe devant, comme l'objet ajouté le dernier.
+    public static func isBuried(_ audio: StoryAudioPlayerObject, in effects: StoryEffects) -> Bool {
+        guard isStaged(audio), let rang = audio.zIndex else { return false }
+        return effects.sceneObjects.contains { objet in
+            objet.kind != .audio && !objet.isBackground && objet.zIndex > rang
+        }
+    }
+
+    /// Les pastilles que le moteur de scène peint dans son arbre, à leur rang.
+    public static func buriedAudios(in effects: StoryEffects) -> [StoryAudioPlayerObject] {
+        (effects.audioPlayerObjects ?? []).filter { isBuried($0, in: effects) }
+    }
+
+    /// Les pastilles que la surcouche peint par-dessus la scène, de la plus
+    /// basse à la plus haute : celles qui n'ont aucun autre objet au-dessus
+    /// d'elles, puis celles sans rang, dans l'ordre du document.
+    public static func overlaidAudios(in effects: StoryEffects) -> [StoryAudioPlayerObject] {
+        stagedAudios(in: effects.audioPlayerObjects ?? [])
+            .filter { !isBuried($0, in: effects) }
+            .enumerated()
+            .sorted { ($0.element.zIndex ?? .max, $0.offset) < ($1.element.zIndex ?? .max, $1.offset) }
+            .map(\.element)
+    }
+
+    /// **L'empilement d'une scène, du plus bas au plus haut** (#14181) : les
+    /// objets de premier plan dans l'ordre du moteur de scène (`sceneObjects`),
+    /// les pastilles ENFOUIES à leur rang parmi eux. Les autres pastilles n'y
+    /// sont pas : elles se peignent au-dessus de tout (`overlaidAudios`). Une
+    /// vignette qui peint dans cet ordre rend l'empilement du lecteur.
+    public static func stackedObjects(in effects: StoryEffects) -> [MeeshySceneObject] {
+        effects.sceneObjects.filter { objet in
+            guard case .audio(let son) = objet else { return !objet.isBackground }
+            return isBuried(son, in: effects)
+        }
+    }
 }
 
 // MARK: - Le visuel d'un réel dont le média est un son

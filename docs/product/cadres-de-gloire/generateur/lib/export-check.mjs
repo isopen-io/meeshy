@@ -1,12 +1,16 @@
 // Juge un export (lot L1) : rouge tant qu'une couche peinte par le générateur porte du texte ou un oiseau, qu'une
 // fenêtre photo est voilée par le décor ou trop voilée par le grade, que la bande du bandeau n'est pas pleine, qu'un
 // emplacement de texte n'a pas de contraste mesuré, qu'une plaque dessinée n'a pas ses deux variantes (plain et message,
-// la seconde sans changer le décor), ou qu'un fichier déclaré ne correspond pas à ses octets.
-// Usage : node lib/export-check.mjs [export] [--reference ../reference/sha256.json] [--partial : n'exige pas les 191 cadres]
+// la seconde sans changer le décor), qu'un fichier déclaré ne correspond pas à ses octets, ou que le chemin de la
+// fenêtre (`window.path`, #10254) ne rend pas son masque au pixel près, ou qu'un texte de décor n'est ni traduit, ni
+// déclaré neutre (cuit dans le décor), ni vivant dans la table du tri (#10256, lib/decor-sorts.mjs).
+// Usage : node lib/export-check.mjs [export] [--reference ../reference/sha256.json] [--decor-texts <table>] [--partial : n'exige pas les 191 cadres]
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { DECOR_TEXTS_FILE, decorTextFailures, readDecorTexts } from './decor-sorts.mjs';
 import sharp from './sharp.mjs';
+import { WINDOW_PATH_PATTERN, rasterizeWindowPath } from './window-path.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const arg = (name, fallback) => {
@@ -15,6 +19,7 @@ const arg = (name, fallback) => {
 };
 const root = path.resolve(process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : path.join(HERE, '../export'));
 const referencePath = path.resolve(arg('--reference', path.join(HERE, '../../reference/sha256.json')));
+const decorTexts = readDecorTexts(path.resolve(arg('--decor-texts', DECOR_TEXTS_FILE)));
 
 export const LIMITS = {
   veilMaxAlpha: 0,
@@ -39,8 +44,21 @@ async function alphaPlane(dir, layer) {
   return { data, info, box: layer.box };
 }
 
-async function checkFrame(dir, frame) {
+// Les pixels où le chemin de la fenêtre et son masque (alpha ≥ 128) diffèrent ; `null` pour un chemin absent ou hors
+// de la grammaire fermée.
+function pathStrayPixels(d, win) {
+  if (typeof d !== 'string' || !WINDOW_PATH_PATTERN.test(d)) return null;
+  const [bx, by] = win.box;
+  const { width, height } = win.info;
+  const raster = rasterizeWindowPath(d, { origin: [bx, by], width, height });
+  let strayed = 0;
+  for (let i = 0; i < width * height; i++) if (raster[i] !== (win.data[i * 4 + 3] >= 128 ? 1 : 0)) strayed++;
+  return strayed;
+}
+
+async function checkFrame(dir, collection, frame) {
   const id = frame.frame;
+  decorTextFailures(frame, collection, decorTexts).forEach((why) => failures.push(why));
   for (const kind of PAINTED) {
     const inv = frame.inventory?.[kind];
     if (!inv) continue;
@@ -69,6 +87,9 @@ async function checkFrame(dir, frame) {
   };
   const [wx, wy, ww, wh] = frame.window.box;
   if (!(ww > 0 && wh > 0)) { fail(id, 'aucune fenêtre photo'); return; }
+  const strayed = pathStrayPixels(frame.window.path, win);
+  if (strayed === null) fail(id, 'fenêtre sans chemin vectoriel lisible (window.path)');
+  else if (strayed > 0) fail(id, `le chemin de la fenêtre s'écarte de son masque : ${strayed} px`);
   let inside = 0, veiled = 0;
   for (let y = wy; y < wy + wh; y++) {
     for (let x = wx; x < wx + ww; x++) {
@@ -103,7 +124,7 @@ for (const collection of index?.collections ?? []) {
   const doc = JSON.parse(fs.readFileSync(path.join(dir, 'export.json'), 'utf8'));
   for (const frame of doc.frames) {
     seen.add(frame.frame);
-    await checkFrame(dir, frame);
+    await checkFrame(dir, collection, frame);
   }
 }
 const partial = process.argv.includes('--partial');
@@ -115,4 +136,4 @@ if (failures.length) {
   if (failures.length > 60) console.error(`  … et ${failures.length - 60} autres`);
   process.exit(1);
 }
-console.log(`VERT — ${seen.size}/${expected.length} cadres : décor sans texte ni oiseau, fenêtres nettes, bande pleine, contrastes mesurés, plaques en deux variantes, octets conformes.`);
+console.log(`VERT — ${seen.size}/${expected.length} cadres : décor sans texte ni oiseau, fenêtres nettes, bande pleine, contrastes mesurés, textes de décor triés (neutres cuits hors de la fenêtre), plaques en deux variantes, chemins de fenêtre au pixel, octets conformes.`);

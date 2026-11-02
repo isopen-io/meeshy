@@ -12,7 +12,13 @@ data class CallPeerVisual(
     val avatarUrl: String? = null,
     val bannerUrl: String? = null,
     val ring: AvatarRingDesign? = null,
+    /** Mon nom et ma photo de session : la pastille locale les porte au lieu de l'initiale du mot « Vous ». */
+    val selfName: String? = null,
+    val selfAvatarUrl: String? = null,
 ) {
+    /** Le nom de la pastille locale : mon nom de session, sinon le mot de repli. Pur. */
+    fun localBadgeName(fallback: String): String = selfName?.takeIf { it.isNotBlank() } ?: fallback
+
     /** Le fond plein écran : la bannière d'abord, l'avatar en repli, rien sinon (dégradé seul). */
     val backdropUrl: String? get() = bannerUrl ?: avatarUrl
 

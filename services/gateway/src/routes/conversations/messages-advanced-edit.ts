@@ -21,18 +21,21 @@ import { messageValidationHook } from '../../middleware/rate-limiter';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { editedMessageResponseSchema, patchedMessageResponseSchema } from './messages-advanced-shared';
 import { reconcileEditedMentions } from '../../services/messaging/messageMentions';
-import {
-  reconcileEditedLinks,
-  mergeTrackingLinksIntoMetadata,
-} from '../../services/messaging/messageLinks';
+import { mergeTrackingLinksIntoMetadata } from '../../services/messaging/messageLinks';
+import { editedLinksFor, editSealsAtRest, gatewayEditCrypto, prepareEditedText, servedEditedRow } from '../../services/messaging/atRestEdit';
 import {
   admitMessageEdit,
   isEditRefused,
   describeEditRefusalForSocket,
   editRefusalCode,
+  isContentEditRefusal,
+  editAttributionOf,
   CONVERSATION_CLOSED_EDIT_MESSAGE,
 } from '../../services/messaging/messageEditAdmission';
+import { editAttributionReaderOf } from '../../services/messaging/editAttributionReader';
+import { withServedEditAttribution } from '@meeshy/shared/utils/message-edit-attribution';
 import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
+import { attachmentProtectionSelect } from '../../services/attachments/attachmentIncludes';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import {
   admitEditedContent,
@@ -42,6 +45,7 @@ import {
 import { emitMentionCreated } from '../../socketio/emitMentionCreated';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
+import { isServerAtRestUnavailable, queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
 import { buildMessageEditedCore } from '../../socketio/messageEditedPayload';
 import type {
   ConversationParams,
@@ -49,6 +53,7 @@ import type {
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
+import { refuserCommeIntrouvable } from './utils/access-control';
 import { servedQuotedMessage, withSealedQuote } from '../../services/messaging/servedQuotedMessage';
 import { loadSealedQuoteAudience } from '../../socketio/quotedEphemeralAudience';
 import { z } from 'zod';
@@ -174,7 +179,7 @@ export function registerEditMessagePutRoute(
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       // Vérifier que le message existe
@@ -191,8 +196,9 @@ export function registerEditMessagePutRoute(
             },
             // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
             // colonnes sur une lecture déjà là : aucun aller-retour de plus.
-            conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true } },
-            attachments: { select: { id: true } }
+            conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true, serverEncryptionKeyId: true } },
+            // #12792 — la protection PROPRE de chaque pièce, lue par `admitMessageEdit`.
+            attachments: { select: { id: true, mimeType: true, ...attachmentProtectionSelect } }
           }
         })
       );
@@ -217,6 +223,11 @@ export function registerEditMessagePutRoute(
           createdAt: existingMessage.createdAt,
           messageType: existingMessage.messageType,
           metadata: existingMessage.metadata,
+          isViewOnce: existingMessage.isViewOnce,
+          effectFlags: existingMessage.effectFlags,
+          isEncrypted: existingMessage.isEncrypted,
+          encryptionMode: existingMessage.encryptionMode,
+          attachments: existingMessage.attachments,
         },
         onError: (err) => logger.error('Edit - admission lookup failed', err),
       });
@@ -228,8 +239,11 @@ export function registerEditMessagePutRoute(
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
         }
-        if (admission.reason === 'end-to-end-encrypted') {
+        if (editRefusalCode(admission.reason) !== undefined) {
           return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
+        }
+        if (isContentEditRefusal(admission.reason)) {
+          return sendForbidden(reply, describeEditRefusalForSocket(admission.reason));
         }
         if (admission.reason === 'minor-global') {
           return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
@@ -259,7 +273,11 @@ export function registerEditMessagePutRoute(
       // BRUTES (`metadata.trackingLinks`), n'était recomposée par AUCUN
       // transport : elle n'existait qu'à la création. Les deux sont désormais
       // soudées dans une unité que tous les écrivains appellent.
-      const editedLinks = await reconcileEditedLinks({
+      //
+      // Décision 2026-11-01 — au repos (`server`/`hybrid`), aucune adresse ne se
+      // range en clair à côté du chiffré, et le texte modifié se SCELLE avant
+      // l'écriture (`atRestEdit`) : une clé absente échoue ici, rien d'écrit.
+      const editedLinks = await editedLinksFor(editSealsAtRest(existingMessage), {
         linkService: trackingLinkService,
         message: { id: messageId, conversationId, sender: existingMessage.sender },
         content: editedContent.content,
@@ -267,6 +285,8 @@ export function registerEditMessagePutRoute(
         onError: (err) => logger.error('Error processing tracking links in edit', err),
       });
       const processedContent = editedLinks.processedContent;
+      const editCrypto = gatewayEditCrypto(prisma);
+      const preparedText = await prepareEditedText({ crypto: editCrypto, row: existingMessage, text: processedContent });
 
       // `metadata` est un blob PARTAGÉ (`postReplyTo`, `location`) : fusion, pas
       // affectation. Et il n'est réécrit que si la réconciliation a établi
@@ -298,13 +318,15 @@ export function registerEditMessagePutRoute(
       // `applyMessageEditEffects` : la version de source d'une traduction
       // partagée en est l'ISO, et un second `new Date()` désignerait une autre.
       const editedAt = new Date();
-      const updatedMessage = await prisma.message.update({
+      const writtenMessage = await prisma.message.update({
         where: { id: messageId, deletedAt: null },
         data: {
-          content: processedContent,
+          ...preparedText.columns,
           ...(claimedCanonicalLanguage === undefined ? {} : { originalLanguage: claimedCanonicalLanguage }),
           isEdited: true,
           editedAt,
+          // #11375 — le tiers modérateur est enregistré ; l'auteur efface la mention.
+          ...editAttributionOf(admission, userId),
           translations: null,
           ...nextMetadata
         },
@@ -355,6 +377,9 @@ export function registerEditMessagePutRoute(
           }
         }
       });
+      // La ligne écrite porte le chiffré au repos : elle part avec le texte
+      // modifié en clair, citation ouverte, sans chiffré sur le fil.
+      const updatedMessage = await servedEditedRow(writtenMessage, { prepared: preparedText, text: processedContent }, editCrypto);
 
       // Ce que ce message doit à ceux qu'il NOMME, après édition : le lot de
       // mentions doit être RECOMPOSÉ, pas complété. Le corps vivait ici, en
@@ -458,7 +483,7 @@ export function registerEditMessagePutRoute(
         conversationId,
         senderId: existingMessage.senderId,
         senderUserId: existingMessage.sender?.userId ?? null,
-        previousContent: existingMessage.content,
+        previousContent: preparedText.previousContent,
         content: processedContent,
         editedAt,
       });
@@ -471,7 +496,10 @@ export function registerEditMessagePutRoute(
       // reflète cet état : `[]`. Cette phrase désignait auparavant la retraduction qui SUIT, qui invalidait
       // trop tard pour la charge déjà composée.
       const messageResponse = {
-        ...updatedMessage,
+        // #11375 — les colonnes de l'éditeur tiers ne partent jamais brutes : ce
+        // lecteur reçoit ce que `servedEditAttribution` lui accorde, et la
+        // diffusion (le noyau, étalé après) la mention seule.
+        ...withServedEditAttribution(updatedMessage, editAttributionReaderOf(authRequest.authContext)),
         conversationId,
         // #7927 — la citation passe par la garde UNIQUE : l'`include` sert la
         // ligne CITÉE entière, texte d'un parent supprimé ou protégé compris,
@@ -506,6 +534,7 @@ export function registerEditMessagePutRoute(
         actorUserId: userId,
         eventType: 'edited',
         messageId,
+        atRest: queuedEventSealsAtRest(existingMessage),
         sealedQuoteAudience,
         // Le NOYAU du contrat vient de `buildMessageEditedCore` (voir le
         // sibling `PUT /messages/:messageId`) : le `as unknown as
@@ -533,6 +562,10 @@ export function registerEditMessagePutRoute(
       // Même traduction que sur le sibling `PATCH /messages/:messageId`.
       if ((error as { code?: string })?.code === 'P2025') {
         return sendNotFound(reply, 'Message not found');
+      }
+      // Décision 2026-11-01 — sans clé maîtresse, un texte au repos ne se rescelle pas : refusé, jamais écrit en clair.
+      if (isServerAtRestUnavailable(error)) {
+        return sendError(reply, 503, error.message, { code: error.code });
       }
       logger.error('Error updating message', error);
       sendInternalError(reply, 'Erreur lors de la modification du message');
@@ -634,7 +667,8 @@ export function registerEditMessagePatchRoute(
               },
               // Sans elles, la garde de vacuité ne peut pas trancher : c'est la
               // pièce jointe qui autorise un texte vide (retrait de légende).
-              attachments: { select: { id: true } }
+              // #12792 — et leur protection PROPRE, lue par `admitMessageEdit`.
+              attachments: { select: { id: true, mimeType: true, ...attachmentProtectionSelect } }
             }
           })
       );
@@ -666,6 +700,11 @@ export function registerEditMessagePatchRoute(
           createdAt: message.createdAt,
           messageType: message.messageType,
           metadata: message.metadata,
+          isViewOnce: message.isViewOnce,
+          effectFlags: message.effectFlags,
+          isEncrypted: message.isEncrypted,
+          encryptionMode: message.encryptionMode,
+          attachments: message.attachments,
         },
         onError: (err) => logger.error('Patch edit - admission lookup failed', err),
       });
@@ -674,8 +713,11 @@ export function registerEditMessagePatchRoute(
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
         }
-        if (admission.reason === 'end-to-end-encrypted') {
+        if (editRefusalCode(admission.reason) !== undefined) {
           return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
+        }
+        if (isContentEditRefusal(admission.reason)) {
+          return sendForbidden(reply, describeEditRefusalForSocket(admission.reason));
         }
         if (admission.reason === 'minor-global') {
           return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
@@ -707,7 +749,7 @@ export function registerEditMessagePatchRoute(
       // celui du client ANDROID (`OutboxFlushWorker`, lane `EDIT_MESSAGE`) : il
       // écrivait les crochets en dur, pour toujours, là où le même texte ENVOYÉ
       // produit un lien.
-      const patchedLinks = await reconcileEditedLinks({
+      const patchedLinks = await editedLinksFor(editSealsAtRest(message), {
         linkService: trackingLinkService,
         message: { id: messageId, conversationId: message.conversationId, sender: message.sender },
         content: editedContent.content,
@@ -715,6 +757,9 @@ export function registerEditMessagePatchRoute(
         onError: (err) => logger.error('Error processing tracking links in patch edit', err),
       });
       const processedContent = patchedLinks.processedContent;
+      // Décision 2026-11-01 — le texte modifié au repos se scelle AVANT l'écriture (`atRestEdit`).
+      const editCrypto = gatewayEditCrypto(prisma);
+      const preparedText = await prepareEditedText({ crypto: editCrypto, row: message, text: processedContent });
       const patchedMetadata = patchedLinks.reconciled
         ? { metadata: mergeTrackingLinksIntoMetadata(message.metadata, patchedLinks.trackingLinks) }
         : {};
@@ -727,12 +772,14 @@ export function registerEditMessagePatchRoute(
       // accepte un filtre non-unique aux côtés de l'id et lève P2025 quand rien
       // ne matche — traduit en 404 plus bas, pas en 500.
       const editedAt = new Date();
-      const updatedMessage = await prisma.message.update({
+      const writtenMessage = await prisma.message.update({
         where: { id: messageId, deletedAt: null },
         data: {
-          content: processedContent,
+          ...preparedText.columns,
           isEdited: true,
           editedAt,
+          // #11375 — le tiers modérateur est enregistré ; l'auteur efface la mention.
+          ...editAttributionOf(admission, userId),
           translations: null,
           ...patchedMetadata
         },
@@ -749,6 +796,7 @@ export function registerEditMessagePatchRoute(
           }
         }
       });
+      const updatedMessage = await servedEditedRow(writtenMessage, { prepared: preparedText, text: processedContent }, editCrypto);
 
       // Les effets DURABLES de l'édition — l'écart de mots et de caractères sur
       // les compteurs. Même unité que les trois autres transports.
@@ -757,7 +805,7 @@ export function registerEditMessagePatchRoute(
         conversationId: message.conversationId,
         senderId: message.senderId,
         senderUserId: message.sender?.userId ?? null,
-        previousContent: message.content,
+        previousContent: preparedText.previousContent,
         content: processedContent,
         editedAt,
       });
@@ -822,7 +870,10 @@ export function registerEditMessagePatchRoute(
       }
 
       const messageResponse = {
-        ...updatedMessage,
+        // #11375 — les colonnes de l'éditeur tiers ne partent jamais brutes : ce
+        // lecteur reçoit ce que `servedEditAttribution` lui accorde, et la
+        // diffusion (le noyau, étalé après) la mention seule.
+        ...withServedEditAttribution(updatedMessage, editAttributionReaderOf(authRequest.authContext)),
         conversationId: message.conversationId,
         translations: transformTranslationsToArray(
           messageId,
@@ -839,6 +890,7 @@ export function registerEditMessagePatchRoute(
         actorUserId: userId,
         eventType: 'edited',
         messageId,
+        atRest: queuedEventSealsAtRest(message),
         // Même noyau, même raison que sur les deux siblings d'édition : ce
         // transport est celui du client ANDROID, et il servait lui aussi le
         // `Participant.id` en guise de `senderId`.
@@ -862,6 +914,9 @@ export function registerEditMessagePatchRoute(
       // le rendre en 500 ferait retenter un client qui n'a rien à retenter.
       if ((error as { code?: string })?.code === 'P2025') {
         return sendNotFound(reply, 'Message introuvable');
+      }
+      if (isServerAtRestUnavailable(error)) {
+        return sendError(reply, 503, error.message, { code: error.code });
       }
       logger.error('Error updating message', error);
       sendInternalError(reply, 'Erreur lors de la modification du message');

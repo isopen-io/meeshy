@@ -41,12 +41,12 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
         // ET leurs extractions sont donc balayés ENSEMBLE — l'appel interdit se
         // logerait précisément dans la moitié qui a bougé.
         let surfaces = [
-            "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift",
-            "Meeshy/Features/Main/Views/StoryViewerView+Header.swift",
-            "Meeshy/Features/Main/Views/StoryViewerView.swift",
+            "Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift",
+            "Meeshy/Features/Stories/Views/StoryViewerView+Header.swift",
+            "Meeshy/Features/Stories/Views/StoryViewerView.swift",
             // La découpe par cohésion a rangé la lecture du contenu sous son nom : même garde.
-            "Meeshy/Features/Main/Views/StoryViewerView+ReaderState.swift",
-            "Meeshy/Features/Main/Views/StoryReaderContentRules.swift",
+            "Meeshy/Features/Stories/Views/StoryViewerView+ReaderState.swift",
+            "Meeshy/Features/Stories/Views/StoryReaderContentRules.swift",
             "Meeshy/Features/Main/Views/FeedPostCard.swift",
             "Meeshy/Features/Main/Views/FeedPostCard+Header.swift",
             "Meeshy/Features/Main/Views/ReelsPlayerView.swift",
@@ -67,7 +67,7 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
 
     func test_storyHeader_mountsBackgroundSoundBadge() throws {
         // #4084 — l'en-tête a quitté `+Sidebar` pour son propre fichier.
-        let text = try source("Meeshy/Features/Main/Views/StoryViewerView+Header.swift")
+        let text = try source("Meeshy/Features/Stories/Views/StoryViewerView+Header.swift")
         XCTAssertTrue(
             text.contains("BackgroundSoundBadge("),
             "Le header de story doit monter BackgroundSoundBadge — la vue commune E1."
@@ -82,7 +82,7 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
     /// un blanc à opacité fixe pour cette raison — le badge doit suivre la même
     /// convention plutôt que `group.avatarColor`.
     func test_storyHeader_backgroundSoundBadge_usesFixedWhiteNotAvatarColor() throws {
-        let text = try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        let text = try source("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift")
         XCTAssertFalse(
             text.contains("accentHex: group.avatarColor"),
             "Sur le fond arbitraire d'une story (photo/vidéo), une couleur " +
@@ -92,7 +92,7 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
     }
 
     func test_storyHeader_noLongerBuildsAdHocAudioDisplay() throws {
-        let text = try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        let text = try source("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift")
         XCTAssertFalse(
             text.contains("switch headerAudioDisplay.display"),
             "Le header ne doit plus fabriquer son propre affichage sonore ad hoc — il délègue " +
@@ -154,7 +154,7 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
     }
 
     func test_storyViewer_resolvesAnnouncementThroughSharedHelper() throws {
-        let text = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let text = try source("Meeshy/Features/Stories/Views/StoryViewerView.swift")
         XCTAssertTrue(
             text.contains("BackgroundSoundBadge.announcement(for:"),
             "Le viewer story doit résoudre l'annonce via le résolveur PARTAGÉ, pas en " +

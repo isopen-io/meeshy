@@ -156,7 +156,7 @@ corrects). Ce correctif profite automatiquement à `StoryThumbHashEnricher.enric
 
 ### 4.3 Couverture de publication (contenu personnel, pixel-parfait)
 
-Fichier : `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`, 3 sites qui
+Fichier : `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift`, 3 sites qui
 produisent aujourd'hui la cover optimiste locale via `StorySlideRenderer.renderComposite` :
 - `insertOptimisticOfflineStories` (ligne ~1545)
 - publish en ligne, boucle par slide (ligne ~2030)
@@ -198,7 +198,7 @@ suffit que le prochain autosave débouncé rattrape la cover.
 
 ### 4.5 Lecture par la grille — `MyStoriesView` / `MyStoryCard`
 
-Fichier : `apps/ios/Meeshy/Features/Main/Views/MyStoryCard.swift`.
+Fichier : `apps/ios/Meeshy/Features/Stories/Views/MyStoryCard.swift`.
 
 **Published** (`MyStoriesView.publishedCardModel`, ligne ~358-374) : aujourd'hui ne lit que
 `story.storyEffects?.thumbHash` et `story.media.first?.thumbnailUrl` — **ne consulte jamais**

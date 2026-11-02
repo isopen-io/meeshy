@@ -50,7 +50,7 @@ extension BubbleStandardLayout {
                 : [],
             showsTranslate: showTranslation,
             sendStartedAt: message.createdAt, retryBandShown: retryBandShown,
-            edit: BubbleEditMark.resolve(editedAt: content.editedAt, isSaving: content.isEditSaving)
+            edit: BubbleEditMark.resolve(editedAt: content.editedAt, isSaving: content.isEditSaving, byModerator: content.editedByModerator)
         )
 
         // Le tap sur les coches n'a de sens que sur les messages envoyes

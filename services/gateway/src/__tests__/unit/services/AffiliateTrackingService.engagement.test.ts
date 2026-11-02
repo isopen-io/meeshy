@@ -25,6 +25,10 @@ jest.mock('../../../services/engagement/EngagementService', () => ({
 import { AffiliateTrackingService } from '../../../services/AffiliateTrackingService';
 
 const makePrisma = (existingRelation: { id: string; status: string } | null) => ({
+  user: {
+    findUnique: jest.fn(async () => ({ id: 'newcomer-1', createdAt: new Date() })),
+    findFirst: jest.fn(async () => null),
+  },
   affiliateToken: {
     findUnique: jest.fn(async () => ({
       id: 'tok-1', token: 'aff_X', isActive: true, createdBy: 'inviter-1', expiresAt: null, maxUses: null, currentUses: 0,

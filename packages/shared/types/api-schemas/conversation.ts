@@ -639,6 +639,9 @@ export const conversationMinimalSchema = {
       nullable: true,
       description: 'Encryption mode (null = not encrypted)'
     },
+    // #11380 — l'activation du chiffrement : le client y date l'historique en
+    // clair (antérieur, légitime) et les messages en clair à signaler (postérieurs).
+    encryptionEnabledAt: { type: 'string', format: 'date-time', nullable: true, description: 'Encryption enabled timestamp (null = never enabled)' },
     userPreferences: {
       type: 'array',
       items: {

@@ -16,7 +16,6 @@ import type { Post } from '@meeshy/shared/prisma/client';
 import type { MentionService } from '../../services/MentionService';
 import type { ThreadAudience } from '../../services/posts/commentHome';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sliceCodePointsOrUndefined } from '@meeshy/shared/utils/text-truncate';
 
 type CommentedPost = Pick<Post, 'authorId' | 'type' | 'createdAt' | 'expiresAt' | 'visibility' | 'visibilityUserIds'>;
 
@@ -43,6 +42,14 @@ export async function notifyCommentAdded(params: {
   // répondre à un commentaire EN mentionnant son auteur lui envoyait DEUX
   // notifications (user_mentioned + comment_reply) au lieu de la seule mention.
   let mentionedUserIds: string[] = [];
+  // Le commentaire parent est lu AVANT les mentions : son auteur est prévenu de
+  // cette réponse quoi qu'il arrive, le nommer n'est donc pas pousser une
+  // notification à un inconnu (#14168).
+  const parentComment = parentId && notifService
+    ? await fastify.prisma?.postComment
+        ?.findUnique({ where: { id: parentId }, select: { authorId: true, content: true } })
+        .catch(() => null)
+    : null;
   // `post` conditionne le lot : c'est lui qui porte l'audience. Sans lui, on
   // ne peut pas établir qui a le droit d'être prévenu — donc on ne prévient
   // personne, plutôt que de pousser un extrait à l'aveugle.
@@ -63,7 +70,7 @@ export async function notifyCommentAdded(params: {
           postId,
           commenterId,
           mentionedUserIds,
-          commentExcerpt: sliceCodePointsOrUndefined(content, 100),
+          commentExcerpt: content || undefined,
           // Discriminant d'entité → surface ouverte au tap côté client.
           postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
           // Un commentaire n'a pas d'audience propre : il hérite de celle du
@@ -73,6 +80,9 @@ export async function notifyCommentAdded(params: {
           postAuthorId: post.authorId,
           visibility: post.visibility,
           visibilityUserIds: post.visibilityUserIds ?? [],
+          directlyAddressedUserIds: parentId
+            ? (parentComment?.authorId ? [parentComment.authorId] : [])
+            : [post.authorId],
         }).catch(err => enhancedLogger.error('comment mention notification failed', err));
       }
     }
@@ -86,10 +96,6 @@ export async function notifyCommentAdded(params: {
       // Reply to a comment — notify the parent comment author. Le contenu
       // du commentaire parent voyage en subtitle (« En réponse à « … » »)
       // pour que le destinataire sache À QUOI on lui répond.
-      const parentComment = await fastify.prisma?.postComment?.findUnique({
-        where: { id: parentId },
-        select: { authorId: true, content: true },
-      });
       if (parentComment?.authorId && !mentionedUserIds.includes(parentComment.authorId) && (await mayReceive(parentComment.authorId))) {
         notifService.createCommentReplyNotification({
           actorId: commenterId,
@@ -98,7 +104,7 @@ export async function notifyCommentAdded(params: {
           commentId,
           parentCommentId: parentId,
           replyPreview: content,
-          parentCommentPreview: sliceCodePointsOrUndefined(parentComment.content, 80),
+          parentCommentPreview: parentComment.content ?? undefined,
           // Précise « sur votre story/réel/… » + date côté client (du JJ/MM/AAAA HH:MM).
           postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
           postCreatedAt: post?.createdAt ?? undefined,
@@ -125,18 +131,18 @@ export async function notifyCommentAdded(params: {
   }
 
   // Story comment fan-out notifications (Phase 1D)
-  // excludeUserIds: skip users who already received user_mentioned (higher priority)
+  // mentionedUserIds: ceux que la mention prévient réellement ne reçoivent qu'elle (#14168)
   if (notifService && post?.authorId && !parentId && audience === null) {
     notifService.createStoryCommentNotificationsBatch({
       postId,
       commentId,
       storyAuthorId: post.authorId,
       commenterId,
-      commentExcerpt: sliceCodePointsOrUndefined(content, 100),
+      commentExcerpt: content || undefined,
       postType: post.type as 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL',
       postCreatedAt: post.createdAt ?? undefined,
       postExpiresAt: post.expiresAt ?? undefined,
-      excludeUserIds: mentionedUserIds,
+      mentionedUserIds,
       // Passée BRUTE : un `?? 'PUBLIC'` ici rétablirait, un étage plus haut
       // et hors de vue du build, le défaut permissif que le paramètre vient
       // de perdre. Une visibilité absente doit restreindre, pas ouvrir.

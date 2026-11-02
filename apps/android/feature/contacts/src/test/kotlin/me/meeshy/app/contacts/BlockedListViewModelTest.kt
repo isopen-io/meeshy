@@ -65,6 +65,19 @@ class BlockedListViewModelTest {
     }
 
     @Test
+    fun `pull to refresh re-reads the blocklist from the network and settles`() = runTest {
+        coEvery { repository.listBlocked() } returns NetworkResult.Success(listOf(user("u1")))
+        val vm = viewModel()
+        vm.load()
+        coEvery { repository.listBlocked() } returns NetworkResult.Success(listOf(user("u1"), user("u2")))
+
+        vm.refresh()
+
+        assertThat(vm.state.value.blocked.map { it.id }).containsExactly("u1", "u2")
+        assertThat(vm.state.value.isRefreshing).isFalse()
+    }
+
+    @Test
     fun `load with nobody blocked settles into the empty state`() = runTest {
         coEvery { repository.listBlocked() } returns NetworkResult.Success(emptyList())
         val vm = viewModel()
@@ -262,7 +275,7 @@ class BlockedListViewModelTest {
         vm.load()
 
         coVerify {
-            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u1", "u2") })
+            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u1", "u2") }, any())
         }
     }
 
@@ -276,7 +289,7 @@ class BlockedListViewModelTest {
         vm.unblock("u1")
 
         coVerify {
-            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u2") })
+            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u2") }, any())
         }
     }
 
@@ -290,7 +303,7 @@ class BlockedListViewModelTest {
         vm.unblock("u1")
 
         coVerify {
-            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u1", "u2") })
+            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u1", "u2") }, any())
         }
     }
 }

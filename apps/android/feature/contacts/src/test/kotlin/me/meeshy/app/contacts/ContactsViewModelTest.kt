@@ -11,9 +11,14 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendRequestListRepository
 import me.meeshy.sdk.friend.FriendshipCache
+import me.meeshy.sdk.friend.PersistedFriendCaches
+import me.meeshy.sdk.net.SessionTransitionFlags
+import me.meeshy.sdk.outbox.OutboxOwnerSource
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.friend.FriendshipStatus
 import me.meeshy.sdk.net.ApiError
@@ -67,6 +72,134 @@ class ContactsViewModelTest {
         assertThat(vm.state.value.receivedRequests).hasSize(1)
         assertThat(vm.state.value.sentRequests).hasSize(2)
         assertThat(vm.state.value.isLoadingRequests).isFalse()
+    }
+
+    @Test
+    fun `a blocked person is absent from both request lists and from the friendship cache`() = runTest {
+        val blocks = BlockCache().apply { setBlocked("bob", true) }
+        val cache = FriendshipCache()
+        coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Success(
+            listOf(FriendRequest(id = "r1", status = "pending", senderId = "bob"), FriendRequest(id = "r2", status = "pending", senderId = "carol")),
+        )
+        coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(
+            listOf(FriendRequest(id = "s1", status = "pending", receiverId = "bob"), FriendRequest(id = "s2", status = "pending", receiverId = "dave")),
+        )
+        coEvery { requestListRepository.cachedReceived() } returns null
+        coEvery { requestListRepository.cachedSent() } returns null
+
+        val vm = ContactsViewModel(repository, requestListRepository, cache, blocks)
+
+        assertThat(vm.state.value.receivedRequests.map { it.id }).containsExactly("r2")
+        assertThat(vm.state.value.sentRequests.map { it.id }).containsExactly("s2")
+        assertThat(cache.currentSentPendingReceiverIds).doesNotContain("bob")
+        assertThat(cache.currentReceivedPendingSenderIds).doesNotContain("bob")
+    }
+
+    @Test
+    fun `a friend graph fetched under A and answered after B signed in never reaches B's friendship cache (#13577)`() = runTest {
+        val owner = object : OutboxOwnerSource {
+            var id: String? = "A"
+            override fun currentOwnerId(): String? = id
+        }
+        val transition = SessionTransitionFlags()
+        val fence = AccountFence(owner, transition)
+        val cache = FriendshipCache(PersistedFriendCaches.None, fence)
+        val answered = CompletableDeferred<Unit>()
+        coEvery { requestListRepository.ticket() } answers { fence.ticket() }
+        coEvery { requestListRepository.cachedReceived() } returns null
+        coEvery { requestListRepository.cachedSent() } returns null
+        coEvery { repository.receivedRequests(any(), any()) } coAnswers {
+            answered.await()
+            NetworkResult.Success(listOf(FriendRequest(id = "r1", status = "accepted", senderId = "ami-de-A")))
+        }
+        coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
+        ContactsViewModel(repository, requestListRepository, cache)
+
+        owner.id = null
+        transition.bumpGeneration()
+        fence.close { cache.clear() }
+        owner.id = "B"
+        transition.bumpGeneration()
+        answered.complete(Unit)
+
+        assertThat(cache.currentFriendIds).isEmpty()
+    }
+
+    @Test
+    fun `a request received live refetches both lists and paints it without any gesture`() = runTest {
+        val cache = FriendshipCache()
+        val vm = viewModel(cache = cache)
+        coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Success(
+            listOf(FriendRequest(id = "r9", status = "pending", senderId = "alice")),
+        )
+
+        cache.didReceiveRequest("alice", "r9")
+
+        assertThat(vm.state.value.receivedRequests.map { it.id }).containsExactly("r9")
+        coVerify(exactly = 2) { repository.receivedRequests(any(), any()) }
+    }
+
+    @Test
+    fun `answering a request here moves the cache without a second refetch`() = runTest {
+        val cache = FriendshipCache()
+        val vm = viewModel(
+            received = listOf(FriendRequest(id = "r1", status = "pending", senderId = "alice")),
+            cache = cache,
+        )
+        coEvery { repository.respond("r1", true) } returns NetworkResult.Success(request("r1", "accepted"))
+
+        vm.acceptRequest("r1")
+
+        coVerify(exactly = 1) { repository.receivedRequests(any(), any()) }
+    }
+
+    @Test
+    fun `a request received live while a fetch is in flight is fetched again rather than erased by that fetch`() = runTest {
+        val cache = FriendshipCache()
+        val vm = viewModel(cache = cache)
+        val stale = CompletableDeferred<NetworkResult<List<FriendRequest>>>()
+        coEvery { repository.receivedRequests(any(), any()) } coAnswers { stale.await() }
+        vm.refresh()
+
+        cache.didReceiveRequest("alice", "r9")
+        coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Success(
+            listOf(FriendRequest(id = "r9", status = "pending", senderId = "alice")),
+        )
+        stale.complete(NetworkResult.Success(emptyList()))
+
+        assertThat(vm.state.value.receivedRequests.map { it.id }).containsExactly("r9")
+        assertThat(cache.currentReceivedPendingSenderIds).containsExactly("alice")
+    }
+
+    @Test
+    fun `a request received live while an answer is in flight appears once the answer settles`() = runTest {
+        val cache = FriendshipCache()
+        val vm = viewModel(
+            received = listOf(FriendRequest(id = "r1", status = "pending", senderId = "bob")),
+            cache = cache,
+        )
+        val answer = CompletableDeferred<NetworkResult<FriendRequest>>()
+        coEvery { repository.respond("r1", true) } coAnswers { answer.await() }
+        vm.acceptRequest("r1")
+
+        cache.didReceiveRequest("alice", "r9")
+        coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Success(
+            listOf(FriendRequest(id = "r9", status = "pending", senderId = "alice")),
+        )
+        assertThat(vm.state.value.receivedRequests).isEmpty()
+
+        answer.complete(NetworkResult.Success(request("r1", "accepted")))
+
+        assertThat(vm.state.value.receivedRequests.map { it.id }).containsExactly("r9")
+    }
+
+    @Test
+    fun `refresh asks the network again even when both lists are on screen`() = runTest {
+        val vm = viewModel(received = listOf(request("r1")))
+
+        vm.refresh()
+
+        coVerify(exactly = 2) { repository.receivedRequests(any(), any()) }
     }
 
     @Test
@@ -298,10 +431,10 @@ class ContactsViewModelTest {
         viewModel(received = listOf(request("r1")), sent = listOf(request("s1")))
 
         coVerify {
-            requestListRepository.persistReceived(match { it.map(FriendRequest::id) == listOf("r1") })
+            requestListRepository.persistReceived(match { it.map(FriendRequest::id) == listOf("r1") }, any())
         }
         coVerify {
-            requestListRepository.persistSent(match { it.map(FriendRequest::id) == listOf("s1") })
+            requestListRepository.persistSent(match { it.map(FriendRequest::id) == listOf("s1") }, any())
         }
     }
 
@@ -314,7 +447,7 @@ class ContactsViewModelTest {
 
         assertThat(vm.state.value.receivedRequests.map { it.id }).containsExactly("r2")
         coVerify {
-            requestListRepository.persistReceived(match { it.map(FriendRequest::id) == listOf("r2") })
+            requestListRepository.persistReceived(match { it.map(FriendRequest::id) == listOf("r2") }, any())
         }
     }
 
@@ -326,7 +459,7 @@ class ContactsViewModelTest {
         vm.acceptRequest("r1")
 
         coVerify {
-            requestListRepository.persistReceived(match { it.map(FriendRequest::id) == listOf("r1") })
+            requestListRepository.persistReceived(match { it.map(FriendRequest::id) == listOf("r1") }, any())
         }
     }
 
@@ -339,7 +472,7 @@ class ContactsViewModelTest {
 
         assertThat(vm.state.value.sentRequests.map { it.id }).containsExactly("s2")
         coVerify {
-            requestListRepository.persistSent(match { it.map(FriendRequest::id) == listOf("s2") })
+            requestListRepository.persistSent(match { it.map(FriendRequest::id) == listOf("s2") }, any())
         }
     }
 }

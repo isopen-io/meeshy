@@ -113,7 +113,8 @@ public enum ReaderKeyframeResolver {
         return CGPoint(x: x ?? CGFloat(media.x), y: y ?? CGFloat(media.y))
     }
 
-    /// Returns the interpolated scale at `currentTime`, or `nil` if no keyframes.
+    /// Returns the interpolated scale FACTOR at `currentTime` — it multiplies
+    /// the object's scale (#14316) — or `nil` if no keyframes.
     public nonisolated static func resolvedScale(
         keyframes: [StoryKeyframe]?,
         currentTime: Float

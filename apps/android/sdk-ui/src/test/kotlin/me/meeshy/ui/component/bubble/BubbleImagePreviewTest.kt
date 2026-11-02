@@ -68,6 +68,25 @@ class BubbleImagePreviewTest {
     )
 
     @Test
+    fun `an optimistic image still on the device paints its local file, never a gateway route built from it`() {
+        val local = "file:///data/user/0/me.meeshy.app/cache/sticker-1.png"
+        val image = BubbleContentBuilder.build(
+            message = ApiMessage(
+                id = "cid-1",
+                conversationId = "c1",
+                senderId = "me",
+                attachments = listOf(ApiMessageAttachment(id = "cmid-1", mimeType = "image/png", fileUrl = local, width = 512, height = 512)),
+            ),
+            currentUserId = "me",
+            preferences = French,
+            mediaBaseUrl = "https://gate.staging.meeshy.me/api/v1",
+            displayDensity = BubbleContentBuilder.DEFAULT_DISPLAY_DENSITY,
+        ).images.single()
+
+        assertThat(image.url).isEqualTo(local)
+    }
+
+    @Test
     fun `a single image previews the smallest variant that covers its 252 dp cell`() {
         val image = build(photo()).images.single()
 
@@ -182,5 +201,28 @@ class BubbleImagePreviewTest {
     @Test
     fun `a message without attachments is untouched`() {
         assertThat(build().images).isEmpty()
+    }
+    @Test
+    fun `les reactions d'une piece se lisent sur sa tuile, les plus posees d'abord, avec le total`() {
+        val image = build(photo().copy(reactionSummary = mapOf("😂" to 1, "👍" to 2, "❤️" to 1, "🔥" to 1))).images.single()
+
+        // À égalité, l'ordre est celui des emojis : la bande ne saute pas d'un rendu à l'autre.
+        assertThat(image.reactionLabel).isEqualTo("👍❤️🔥 5")
+    }
+
+    @Test
+    fun `une seule reaction n'affiche que son emoji, aucune reaction aucune etiquette`() {
+        assertThat(build(photo().copy(reactionSummary = mapOf("👍" to 1))).images.single().reactionLabel).isEqualTo("👍")
+        assertThat(build(photo().copy(reactionSummary = mapOf("👍" to 0))).images.single().reactionLabel).isNull()
+        assertThat(build(photo()).images.single().reactionLabel).isNull()
+    }
+
+    @Test
+    fun `une piece protegee ou un message floute ne montre aucune reaction`() {
+        val reactions = mapOf("👍" to 2)
+
+        assertThat(build(photo().copy(reactionSummary = reactions, isBlurred = true)).images.single().reactionLabel).isNull()
+        assertThat(build(photo().copy(reactionSummary = reactions, isViewOnce = true)).images.single().reactionLabel).isNull()
+        assertThat(build(photo().copy(reactionSummary = reactions), effectFlags = MessageEffectFlags.BLURRED.toInt()).images.single().reactionLabel).isNull()
     }
 }

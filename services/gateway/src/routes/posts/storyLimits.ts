@@ -1,0 +1,148 @@
+import { z } from 'zod';
+import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
+
+/**
+ * Les plafonds LARGES d'une story (décision porteur 2026-10-28, #13590) : assez hauts pour ne refuser aucun
+ * contenu réaliste, assez bas pour qu'une scène reste lisible par les lecteurs.
+ *
+ * Le refus reste un 400 `VALIDATION_ERROR` ; la borne dépassée voyage à côté, à la racine de l'enveloppe
+ * (`storyLimit` = l'un des `STORY_LIMIT_*` ci-dessous, `limit` = le maximum), pour que les clients l'expliquent.
+ * Codes stables : STORY_LIMIT_STICKERS · _IMAGES · _TEXTS · _AUDIOS · _VIDEOS (par scène) · _DURATION (secondes,
+ * durée totale de la story) · _TEXT_LENGTH (caractères, création seulement) · _MEDIA (`mediaIds` d'un post STORY, création et édition).
+ *
+ * Le plafond de texte ne s'applique qu'à la CRÉATION : une story déjà stockée reste modifiable, et les
+ * traductions, écrites par le serveur, ne sont jamais bornées par lui.
+ */
+export const STORY_OBJECTS_PER_FAMILY_MAX = 50;
+export const STORY_TOTAL_SECONDS_MAX = 7200;
+export const STORY_TEXT_CREATE_MAX = 1000;
+/**
+ * `mediaIds` d'un post STORY : les familles qui consomment un média téléversé (images, vidéos, sons, stickers),
+ * 50 chacune. Les composeurs publient un post par scène avec TOUS ces médias dans `mediaIds` ; les autres types
+ * de post gardent `MAX_POST_MEDIA`. Dérivé de la borne par famille : une seule source.
+ */
+export const STORY_MEDIA_IDS_MAX = 4 * STORY_OBJECTS_PER_FAMILY_MAX;
+
+export type StoryLimitCode =
+  | 'STORY_LIMIT_STICKERS' | 'STORY_LIMIT_IMAGES' | 'STORY_LIMIT_TEXTS' | 'STORY_LIMIT_AUDIOS'
+  | 'STORY_LIMIT_VIDEOS' | 'STORY_LIMIT_DURATION' | 'STORY_LIMIT_TEXT_LENGTH' | 'STORY_LIMIT_MEDIA';
+
+export type StoryLimit = { code: StoryLimitCode; max: number };
+
+type Bag = Record<string, unknown>;
+type Family = 'stickers' | 'images' | 'texts' | 'audios' | 'videos';
+
+const isBag = (v: unknown): v is Bag => typeof v === 'object' && v !== null && !Array.isArray(v);
+const bags = (v: unknown): Bag[] => (Array.isArray(v) ? v.filter(isBag) : []);
+const codeOf = (family: Family) => `STORY_LIMIT_${family.toUpperCase()}` as StoryLimitCode;
+const mediaFamily = (mediaType: unknown): Family => (mediaType === 'video' ? 'videos' : 'images');
+const isBackgroundPayload = (o: Bag): boolean => isBag(o.payload) && o.payload.isBackground === true;
+
+/**
+ * Le fond d'une scène ne compte pas parmi les objets POSÉS — mais le drapeau vient du client : seul le PREMIER
+ * objet de chaque forme de fond est exempté, tout fond supplémentaire compte dans sa famille. Formes produites
+ * par les composeurs : le fond de couleur ou de média `plane: 'bg'`, le fond image/vidéo `plane: 'content'` +
+ * `payload.isBackground` (iOS, web), le son de fond `payload.isBackground` ; en v1, `mediaObjects[].isBackground`
+ * et `audioPlayerObjects[].isBackground`.
+ */
+const withoutFirst = (items: Bag[], isExempt: (o: Bag) => boolean): Bag[] => {
+  const index = items.findIndex(isExempt);
+  return index < 0 ? items : [...items.slice(0, index), ...items.slice(index + 1)];
+};
+
+const withoutExemptBackgrounds = (items: Bag[], forms: ReadonlyArray<(o: Bag) => boolean>): Bag[] =>
+  forms.reduce(withoutFirst, items);
+
+const tally = (families: Family[]): Record<Family, number> =>
+  families.reduce<Record<Family, number>>(
+    (acc, f) => ({ ...acc, [f]: acc[f] + 1 }),
+    { stickers: 0, images: 0, texts: 0, audios: 0, videos: 0 },
+  );
+
+const v1Families = (effects: Bag): Family[] => [
+  ...bags(effects.stickerObjects).map((): Family => 'stickers'),
+  ...bags(effects.textObjects).map((): Family => 'texts'),
+  ...withoutExemptBackgrounds(bags(effects.audioPlayerObjects), [(a) => a.isBackground === true]).map((): Family => 'audios'),
+  ...withoutExemptBackgrounds(bags(effects.mediaObjects), [(m) => m.isBackground === true]).map((m) => mediaFamily(m.mediaType)),
+];
+
+const v3ObjectFamily = (o: Bag): Family | null => {
+  if (o.kind === 'sticker') return 'stickers';
+  if (o.kind === 'text') return 'texts';
+  if (o.kind === 'audio') return 'audios';
+  if (o.kind === 'media') return mediaFamily(isBag(o.payload) ? o.payload.mediaType : undefined);
+  return null;
+};
+
+const V3_BACKGROUND_FORMS: ReadonlyArray<(o: Bag) => boolean> = [
+  (o) => o.kind === 'media' && o.plane === 'bg',
+  (o) => o.kind === 'media' && o.plane !== 'bg' && isBackgroundPayload(o),
+  (o) => o.kind === 'audio' && isBackgroundPayload(o),
+];
+
+const v3SceneFamilies = (scene: Bag): Family[] =>
+  withoutExemptBackgrounds(bags(scene.objects), V3_BACKGROUND_FORMS)
+    .flatMap((o) => { const f = v3ObjectFamily(o); return f ? [f] : []; });
+
+const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+
+const exceeded = (counts: Record<Family, number>): Family[] =>
+  (Object.keys(counts) as Family[]).filter((f) => counts[f] > STORY_OBJECTS_PER_FAMILY_MAX);
+
+const durationExceeded = (effects: Bag): boolean => {
+  const sceneTotal = bags(effects.scenes).reduce((sum, s) => sum + num(s.timelineDuration), 0);
+  return [num(effects.slideDuration), num(effects.timelineDuration), sceneTotal].some((d) => d > STORY_TOTAL_SECONDS_MAX);
+};
+
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+const lengthOf = (v: unknown): number => (typeof v === 'string' ? Array.from(graphemes.segment(v)).length : 0);
+
+const createTextTooLong = (effects: Bag): boolean => {
+  const v1 = bags(effects.textObjects).some((t) => lengthOf(t.text) > STORY_TEXT_CREATE_MAX || lengthOf(t.content) > STORY_TEXT_CREATE_MAX);
+  const v3 = bags(effects.scenes).some((s) =>
+    bags(s.objects).some((o) => o.kind === 'text' && isBag(o.payload) && lengthOf(o.payload.text) > STORY_TEXT_CREATE_MAX));
+  return v1 || v3;
+};
+
+const flag = (ctx: z.RefinementCtx, code: StoryLimitCode, max: number) =>
+  ctx.addIssue({ code: 'custom', message: code, params: { storyLimit: code, limit: max } });
+
+/** Nombre par famille et par scène, durée totale : s'applique à la création ET à l'édition. */
+export const enforceStoryLimits = (effects: object, ctx: z.RefinementCtx): void => {
+  const bag = effects as Bag;
+  const perScene = [v1Families(bag), ...bags(bag.scenes).map(v3SceneFamilies)];
+  const families = new Set(perScene.flatMap((families) => exceeded(tally(families))));
+  families.forEach((f) => flag(ctx, codeOf(f), STORY_OBJECTS_PER_FAMILY_MAX));
+  if (durationExceeded(bag)) flag(ctx, 'STORY_LIMIT_DURATION', STORY_TOTAL_SECONDS_MAX);
+};
+
+/** Longueur d'un texte : création seulement. */
+export const enforceStoryTextLengthOnCreate = (effects: object, ctx: z.RefinementCtx): void => {
+  if (createTextTooLong(effects as Bag)) flag(ctx, 'STORY_LIMIT_TEXT_LENGTH', STORY_TEXT_CREATE_MAX);
+};
+
+/** La première borne nommée d'un refus Zod, ou null quand le refus n'en nomme aucune. */
+export const storyLimitFromIssues = (issues: ReadonlyArray<object>): StoryLimit | null => {
+  const named = issues
+    .map((i) => (i as { params?: unknown }).params)
+    .find((p): p is { storyLimit: StoryLimitCode; limit: number } => isBag(p) && typeof p.storyLimit === 'string');
+  return named ? { code: named.storyLimit, max: named.limit } : null;
+};
+
+/** Le plafond de `mediaIds` selon le type du post : une story porte les médias de sa scène, les autres types dix. */
+export const mediaIdsMaxFor = (type: string | undefined): number =>
+  type === 'STORY' ? STORY_MEDIA_IDS_MAX : MAX_POST_MEDIA;
+
+/** `mediaIds` à la création : borne selon le type ; une story nomme `STORY_LIMIT_MEDIA`. */
+export const enforceMediaIdsOnCreate = (data: { type?: string; mediaIds?: readonly string[] }, ctx: z.RefinementCtx): void => {
+  const count = data.mediaIds?.length ?? 0;
+  const max = mediaIdsMaxFor(data.type);
+  if (count <= max) return;
+  if (data.type === 'STORY') return flag(ctx, 'STORY_LIMIT_MEDIA', max);
+  ctx.addIssue({ code: 'too_big', origin: 'array', maximum: max, inclusive: true, path: ['mediaIds'], message: `mediaIds: at most ${max}` });
+};
+
+/** `mediaIds` à l'édition : le type du post n'est pas dans le corps, le plafond le plus large est tenu ici, la route resserre pour les non-stories. */
+export const enforceMediaIdsOnUpdate = (data: { mediaIds?: readonly string[] }, ctx: z.RefinementCtx): void => {
+  if ((data.mediaIds?.length ?? 0) > STORY_MEDIA_IDS_MAX) flag(ctx, 'STORY_LIMIT_MEDIA', STORY_MEDIA_IDS_MAX);
+};

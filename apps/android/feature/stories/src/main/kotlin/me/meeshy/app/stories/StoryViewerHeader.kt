@@ -1,10 +1,11 @@
 package me.meeshy.app.stories
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -17,7 +18,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -25,9 +25,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.theme.MeeshyPalette
@@ -46,9 +47,12 @@ private val HEADER_AVATAR_SIZE = 32.dp
  */
 @Composable
 internal fun StoryAuthorIdentity(
+    onClick: (() -> Unit)?,
     name: String,
     avatarUrl: String?,
     accentHex: String,
+    authorUserId: String?,
+    authorPresence: UserPresence?,
     createdAtMillis: Long?,
     repostAttribution: StoryRepostAttribution?,
     modifier: Modifier = Modifier,
@@ -56,18 +60,18 @@ internal fun StoryAuthorIdentity(
     val profileLabel = stringResource(R.string.stories_viewer_profile_of, name)
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.semantics(mergeDescendants = true) { contentDescription = profileLabel },
+        modifier = modifier
+            .clip(RoundedCornerShape(MeeshySpacing.sm))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .semantics(mergeDescendants = true) { contentDescription = profileLabel },
     ) {
-        if (avatarUrl != null) {
-            AsyncImage(
-                model = avatarUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(HEADER_AVATAR_SIZE).clip(CircleShape),
-            )
-        } else {
-            MeeshyAvatar(name = name, size = HEADER_AVATAR_SIZE, containerColor = hexColor(accentHex))
-        }
+        MeeshyAvatar(
+            name = name,
+            size = HEADER_AVATAR_SIZE,
+            containerColor = hexColor(accentHex),
+            imageUrl = avatarUrl,
+            presence = rememberPresence(authorUserId, authorPresence),
+        )
         Column(modifier = Modifier.padding(start = MeeshySpacing.sm)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

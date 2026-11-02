@@ -61,6 +61,14 @@ class CompactCountFormatTest {
         assertThat(CompactCountFormat.text(Double.POSITIVE_INFINITY, Locale.ENGLISH)).isEqualTo("0")
     }
 
+    @Test fun `la precision du jeu garde une decimale a tous les paliers`() {
+        val en = Locale.forLanguageTag("en")
+        assertThat(text(12_340, "en")).isEqualTo("12K")
+        assertThat(CompactCountFormat.text(12_340, en, CompactPrecision.UP_TO_ONE_DECIMAL)).isEqualTo("12.3K")
+        assertThat(CompactCountFormat.text(10_000, en, CompactPrecision.UP_TO_ONE_DECIMAL)).isEqualTo("10K")
+        assertThat(CompactCountFormat.text(999_999, en, CompactPrecision.UP_TO_ONE_DECIMAL)).isEqualTo("1M")
+    }
+
     @Test fun `langue inconnue retombe sur l anglais`() {
         assertThat(text(1_500, "ja")).isEqualTo("1.5K")
     }

@@ -40,6 +40,7 @@ const it = {
   'listFilter.pinned': 'Fissate',
   'listFilter.archived': 'Archiviate',
   'listRow.muted': 'Silenziata',
+  'listRow.endToEnd': 'Crittografata end-to-end',
   'listRow.announce.pin.on': 'Conversazione fissata',
   'listRow.announce.pin.off': 'Conversazione non più fissata',
   'listRow.announce.mute.on': 'Conversazione silenziata',

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { uploadPostMedia, type PostMediaUploadParams } from './post-media-upload';
+import { uploadMessageAttachment, uploadPostMedia, type PostMediaUploadParams } from './post-media-upload';
 
 const REGISTERED = { kind: 'registered', token: 'jwt-abc' } as const;
 
@@ -362,5 +362,59 @@ describe('uploadPostMedia — la source fixtures ne touche jamais le réseau', (
       expect(result.data.mimeType).toBe('image/png');
     }
     expect(calls).toBe(0);
+  });
+});
+
+describe('uploadMessageAttachment — la reprise d’une PIÈCE JOINTE de message (#12974)', () => {
+  test('crée la session SANS contexte de publication et rend l’identifiant de la pièce', async () => {
+    const recorded: Recorded[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      recorded.push({ method: init?.method ?? 'GET', url: String(input), headers: headersOf(init) });
+      if (init?.method === 'POST') return new Response(null, { status: 201, headers: { Location: '/api/v1/uploads/up-9' } });
+      return new Response(finalBody('att-9'), { status: 200, headers: { 'Upload-Offset': '4' } });
+    }) as typeof fetch;
+    const { uploadContext: _ignored, ...rest } = baseParams({ fetchImpl, checkpoints: null });
+    const result = await uploadMessageAttachment(rest);
+    expect(result).toEqual({ ok: true, data: { attachmentId: 'att-9' } });
+    expect(decodeMetadata(recorded[0]!.headers['Upload-Metadata']!)).toEqual({ filename: 'scene.png', filetype: 'image/png' });
+  });
+
+  test('un invité (jeton de session) téléverse une pièce jointe — seul un média de PUBLICATION exige un compte', async () => {
+    const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? new Response(null, { status: 201, headers: { Location: '/api/v1/uploads/up-9' } })
+        : new Response(finalBody('att-g'), { status: 200, headers: { 'Upload-Offset': '4' } })) as typeof fetch;
+    const { uploadContext: _ignored, ...rest } = baseParams({ fetchImpl, checkpoints: null, credential: () => ({ kind: 'anonymous', sessionToken: 'sess' }) });
+    expect(await uploadMessageAttachment(rest)).toEqual({ ok: true, data: { attachmentId: 'att-g' } });
+  });
+});
+
+describe('le débit de la passerelle (429) ralentit la montée, il ne l’arrête pas (#12974)', () => {
+  test('une tranche refusée en 429 attend `Retry-After` puis repart du même offset', async () => {
+    const waits: number[] = [];
+    let patches = 0;
+    const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') return new Response(null, { status: 201, headers: { Location: '/api/v1/uploads/up-1' } });
+      patches += 1;
+      if (patches === 1) return new Response('Too Many Requests', { status: 429, headers: { 'Retry-After': '7' } });
+      return new Response(finalBody('pm-1'), { status: 200, headers: { 'Upload-Offset': '4' } });
+    }) as typeof fetch;
+    const result = await uploadPostMedia(baseParams({ fetchImpl, checkpoints: null, sleep: async (ms) => void waits.push(ms) }));
+    expect(result.ok).toBe(true);
+    expect(waits).toEqual([7000]);
+    expect(patches).toBe(2);
+  });
+
+  test('l’attente est bornée, et un débit qui ne se rouvre jamais rend la main en 429', async () => {
+    const waits: number[] = [];
+    const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? new Response(null, { status: 201, headers: { Location: '/api/v1/uploads/up-1' } })
+        : new Response('Too Many Requests', { status: 429, headers: { 'Retry-After': '3600' } })) as typeof fetch;
+    const result = await uploadPostMedia(baseParams({ fetchImpl, checkpoints: null, sleep: async (ms) => void waits.push(ms) }));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(429);
+    expect(waits.length).toBeGreaterThan(0);
+    expect(Math.max(...waits)).toBeLessThanOrEqual(60_000);
   });
 });

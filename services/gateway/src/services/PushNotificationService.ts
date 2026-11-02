@@ -9,20 +9,19 @@
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import {
-  NOTIFICATION_PREFERENCE_DEFAULTS,
-  type NotificationPreference as NotifPrefs,
-} from '@meeshy/shared/types/preferences';
-import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { CALL_PUSH_TTL_MS } from '@meeshy/shared/types/call-rules';
 import { enhancedLogger, performanceLogger } from '../utils/logger-enhanced';
 import { CircuitBreaker, circuitBreakerManager } from '../utils/circuitBreaker';
 import { webPushFor } from './web-push-config';
 import { androidNotificationConfig } from './android-push-config';
+import { withRecipient } from './push-recipient';
 import {
   isNotificationRevocationPush,
   NOTIFICATION_REVOCATION_TTL_MS,
 } from './notifications/notificationRevocationPush';
+import { applyUserPreferences, isCallPushDataType } from './push-delivery-preferences';
+import { pushRoutingClientOf, tokenRoutesPushType } from './push-type-routing';
+import { apnsThreadIdOf } from './notifications/push-thread';
 
 const pushLogger = enhancedLogger.child({ module: 'PushNotificationService' });
 
@@ -69,13 +68,33 @@ export interface PushNotificationPayload {
   sound?: string;
   // For iOS
   category?: string;
+  /** Le fil d'une conversation : iOS empile, Android et le web en font le `tag` qui remplace (`push-thread.ts`). */
   threadId?: string;
+  /** Le fil lu par iOS SEUL (`aps.thread-id`), qui regroupe sans remplacer : le jeu (`push-thread.ts`). */
+  apnsThreadId?: string;
   // For VoIP calls
   callId?: string;
   callerName?: string;
   callerAvatar?: string;
   // APNs collapse-id: allows replacing an existing notification in Notification Center
   collapseId?: string;
+  /**
+   * iOS `aps.interruption-level` (iOS 15+). `time-sensitive` passe les modes de
+   * concentration que l'utilisateur a ouverts à Meeshy, jamais le bouton
+   * silencieux ; `critical` exige l'entitlement Critical Alerts ET l'autorisation
+   * `.criticalAlert` de l'utilisateur. Absent = `active` (le défaut d'Apple).
+   */
+  interruptionLevel?: 'passive' | 'active' | 'time-sensitive' | 'critical';
+  /** Son CRITIQUE (`aps.sound = { critical: 1, name, volume }`), avec `interruptionLevel: 'critical'` seulement. */
+  criticalSound?: { volume: number };
+  /** Durée de vie du push : expiration APNs et TTL FCM Android — une sonnerie périmée ne doit pas sonner. */
+  ttlMs?: number;
+  /**
+   * FCM Android en DATA-ONLY : le client rend lui-même (service au premier plan,
+   * flux alarme). Un bloc `notification` serait rendu par le système et le
+   * gestionnaire du client ne tournerait jamais app fermée (le Bring, #13936).
+   */
+  dataOnlyOnAndroid?: boolean;
 }
 
 export interface PushResult {
@@ -174,15 +193,14 @@ const PUSH_RETRY_MAX_ATTEMPTS = 2;
 const PUSH_RETRY_BASE_DELAY_MS = 200;
 
 /**
- * Les types de données des pushes d'APPEL : la sonnerie et ses deux stop-ring.
- * C'est le TYPE qui classe un push en appel — pas `silent`, qu'un second
- * producteur (`notification_revoked`) pose désormais aussi, et qui n'a ni la
- * fenêtre de sonnerie ni sa préférence `callsEnabled`.
+ * Le son APNs : le nom, ou le dictionnaire CRITIQUE quand le producteur l'a
+ * demandé avec le niveau `critical` — jamais l'un sans l'autre.
  */
-const CALL_PUSH_DATA_TYPES: ReadonlySet<string> = new Set(['call', 'call_cancel', 'call_answered_elsewhere']);
-
-function isCallPushDataType(type: string | undefined): boolean {
-  return type !== undefined && CALL_PUSH_DATA_TYPES.has(type);
+function apnsSoundOf(payload: PushNotificationPayload): string | { critical: 1; name: string; volume: number } {
+  const name = payload.sound || 'default';
+  return payload.criticalSound && payload.interruptionLevel === 'critical'
+    ? { critical: 1, name, volume: Math.min(1, Math.max(0, payload.criticalSound.volume)) }
+    : name;
 }
 
 // ============================================
@@ -322,95 +340,6 @@ export class PushNotificationService {
   }
 
   /**
-   * GW6 — a call push is any send targeting a `voip` token OR carrying a
-   * call-management data type (`call` ring, `call_cancel` / `call_answered_elsewhere`
-   * stop-ring). `missed_call` is deliberately NOT in this set: it is a regular
-   * notification governed by missedCallEnabled/pushEnabled.
-   */
-  private isCallRelatedPush(options: SendPushOptions): boolean {
-    if (options.types?.includes('voip')) return true;
-    return isCallPushDataType(options.payload.data?.type);
-  }
-
-  /**
-   * Charge UserPreferences.notification fusionnées avec les défauts.
-   * Fail open : sur erreur DB, tout est considéré activé (défauts).
-   */
-  private async loadNotifPrefs(userId: string): Promise<NotifPrefs> {
-    try {
-      const userPrefs = await this.prisma.userPreferences.findUnique({
-        where: { userId },
-        select: { notification: true },
-      });
-      const raw = (userPrefs?.notification ?? {}) as Record<string, unknown>;
-      return { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...raw };
-    } catch {
-      return { ...NOTIFICATION_PREFERENCE_DEFAULTS };
-    }
-  }
-
-  /**
-   * Vérifie si les push sont autorisés selon UserPreferences.notification
-   */
-  private isPushAllowed(prefs: NotifPrefs, bypassDnd = false, isCallPush = false): boolean {
-    // GW6 — call pushes are a dedicated category: only `callsEnabled`
-    // governs them. Neither pushEnabled:false nor the DND window applies
-    // (calls ring through DND — producers also set bypassDnd:true).
-    if (isCallPush) return prefs.callsEnabled ?? true;
-
-    if (!prefs.pushEnabled) return false;
-
-    // Vérifier DND — GW7 : helper PARTAGÉ tz-aware `isWithinDnd`
-    // (packages/shared), même implémentation que
-    // NotificationService.isDNDActive. La fenêtre est évaluée dans l'heure
-    // locale utilisateur (dndUtcOffsetMinutes, 0 = UTC historique).
-    if (!bypassDnd && isWithinDnd(prefs)) return false;
-
-    return true;
-  }
-
-  /**
-   * GW8 — applique les préférences de LIVRAISON au chokepoint transport,
-   * pour couvrir tous les producteurs sans exception :
-   *   - `soundEnabled:false`   → bannière sans son (`muted`)
-   *   - `notificationBadgeEnabled:false` → `aps.badge` forcé à 0 (miroir du
-   *     gate icône de NotificationCoordinator iOS ; `data.unreadCount` reste
-   *     intact pour le widget, qui garde le vrai total)
-   *   - `groupNotifications:false` → `threadId` retiré (plus d'empilement
-   *     par conversation)
-   * Jamais appliqué aux pushes d'appel (data-only, sonnerie à part entière).
-   */
-  private applyDeliveryPreferences(payload: PushNotificationPayload, prefs: NotifPrefs): PushNotificationPayload {
-    const out: PushNotificationPayload = { ...payload };
-    if (prefs.soundEnabled === false) out.muted = true;
-    if (prefs.notificationBadgeEnabled === false && out.badge !== undefined) out.badge = 0;
-    if (prefs.groupNotifications === false) delete out.threadId;
-    return out;
-  }
-
-  /**
-   * Les préférences de l'utilisateur, appliquées au chokepoint : `null` quand
-   * elles bloquent l'envoi, sinon la charge à livrer (GW8 : sons, badge,
-   * regroupement).
-   *
-   * Un push de RÉVOCATION (`notification_revoked`) n'est gouverné par AUCUNE
-   * préférence — DND et `pushEnabled` compris — et n'en lit même pas. C'est un
-   * signal de contrôle qui RETIRE une bannière, jamais un contenu : le bloquer
-   * laisserait sur l'écran verrouillé une notification que le serveur a
-   * supprimée, y compris quand l'opt-out a été posé APRÈS sa livraison.
-   */
-  private async applyUserPreferences(options: SendPushOptions): Promise<PushNotificationPayload | null> {
-    const { userId, payload, bypassDnd } = options;
-    if (isNotificationRevocationPush(payload)) return payload;
-
-    const isCallPush = this.isCallRelatedPush(options);
-    const notifPrefs = await this.loadNotifPrefs(userId);
-    if (!this.isPushAllowed(notifPrefs, bypassDnd, isCallPush)) return null;
-
-    return isCallPush ? payload : this.applyDeliveryPreferences(payload, notifPrefs);
-  }
-
-  /**
    * Send push notification to a user
    */
   async sendToUser(options: SendPushOptions): Promise<PushResult[]> {
@@ -422,7 +351,7 @@ export class PushNotificationService {
 
     const { userId, types, platforms } = options;
 
-    const effectivePayload = await this.applyUserPreferences(options);
+    const effectivePayload = await applyUserPreferences(this.prisma, options);
     if (!effectivePayload) {
       pushLogger.info('Push blocked by user preferences', { userId });
       return [];
@@ -454,7 +383,7 @@ export class PushNotificationService {
     }
 
     // Get user's active push tokens
-    const tokens = await this.prisma.pushToken.findMany({
+    const activeTokens = await this.prisma.pushToken.findMany({
       where: whereClause,
       select: {
         id: true,
@@ -463,11 +392,16 @@ export class PushNotificationService {
         platform: true,
         bundleId: true,
         apnsEnvironment: true,
+        appVersion: true,
       },
     });
 
+    // #10267 — un type neuf ne part que vers les appareils qui savent l'ouvrir (`push-type-routing.ts`).
+    const pushType = effectivePayload.data?.type;
+    const tokens = activeTokens.filter((token) => tokenRoutesPushType(token, pushType));
+
     if (tokens.length === 0) {
-      pushLogger.debug('No active tokens found for user', { userId });
+      pushLogger.debug('No active tokens found for user', { userId, pushType, excluded: activeTokens.length });
       return [];
     }
 
@@ -483,7 +417,7 @@ export class PushNotificationService {
           let result: PushResult;
 
           if (tokenRecord.type === 'fcm') {
-            result = await this.sendViaFCM(tokenRecord, effectivePayload);
+            result = await this.sendViaFCM(tokenRecord, withRecipient(effectivePayload, userId));
           } else if (tokenRecord.type === 'apns') {
             result = await this.sendViaAPNS(tokenRecord, effectivePayload, false);
           } else if (tokenRecord.type === 'voip') {
@@ -533,7 +467,7 @@ export class PushNotificationService {
    * Send notification via Firebase Cloud Messaging
    */
   private async sendViaFCM(
-    tokenRecord: { id: string; token: string; platform: string },
+    tokenRecord: { id: string; token: string; platform: string; bundleId?: string | null },
     payload: PushNotificationPayload
   ): Promise<PushResult> {
     if (!this.firebaseMessaging) {
@@ -555,7 +489,9 @@ export class PushNotificationService {
       // l'utilisateur (Prisme).
       const isCallPush = isCallPushDataType(payload.data?.type);
       const dataOnly =
-        payload.silent === true || ((tokenRecord.platform === 'android' || tokenRecord.platform === 'web') && isCallPush);
+        payload.silent === true ||
+        ((tokenRecord.platform === 'android' || tokenRecord.platform === 'web') && isCallPush) ||
+        (tokenRecord.platform === 'android' && payload.dataOnlyOnAndroid === true);
 
       const message: any = dataOnly
         ? {
@@ -599,9 +535,10 @@ export class PushNotificationService {
         // one as APNs honours the more specific payload.
         const apsBase: Record<string, unknown> = {
           badge: payload.badge,
-          ...(payload.muted ? {} : { sound: payload.sound || 'default' }),
+          ...(payload.muted ? {} : { sound: apnsSoundOf(payload) }),
+          ...(payload.interruptionLevel ? { 'interruption-level': payload.interruptionLevel } : {}),
           category: payload.category,
-          'thread-id': payload.threadId,
+          'thread-id': apnsThreadIdOf(payload),
           'mutable-content': 1,
           'content-available': 1,
         };
@@ -640,11 +577,14 @@ export class PushNotificationService {
           ? {
               priority: 'high',
               ...(isCallPush ? { ttl: CALL_PUSH_TTL_MS } : {}),
+              ...(payload.ttlMs !== undefined && !isCallPush ? { ttl: payload.ttlMs } : {}),
               ...(isNotificationRevocationPush(payload) ? { ttl: NOTIFICATION_REVOCATION_TTL_MS } : {}),
             }
           : {
               priority: 'high',
-              notification: androidNotificationConfig(payload),
+              notification: androidNotificationConfig(payload, {
+                client: pushRoutingClientOf({ platform: tokenRecord.platform, bundleId: tokenRecord.bundleId ?? null }),
+              }),
             };
       } else if (tokenRecord.platform === 'web') {
         Object.assign(message, webPushFor(payload, { isCallPush, dataOnly, callTtlMs: CALL_PUSH_TTL_MS }));
@@ -776,7 +716,10 @@ export class PushNotificationService {
         // GW8 — `muted` = bannière visible sans son : la clé `sound` doit être
         // ABSENTE du payload compilé (une valeur vide/inconnue rejouerait le
         // son par défaut côté APNs).
-        notification.sound = payload.muted ? (undefined as never) : (payload.sound || 'default');
+        notification.sound = payload.muted ? (undefined as never) : apnsSoundOf(payload);
+        if (payload.interruptionLevel) {
+          notification.aps = { ...notification.aps, 'interruption-level': payload.interruptionLevel };
+        }
       }
       notification.topic = isVoIP
         ? config.apns.voipBundleId
@@ -802,14 +745,17 @@ export class PushNotificationService {
       const isCallPush = isVoIP || isCallPushDataType(payload.data?.type);
       if (isCallPush) {
         notification.expiry = Math.floor(Date.now() / 1000) + CALL_PUSH_TTL_MS / 1000;
+      } else if (payload.ttlMs !== undefined) {
+        notification.expiry = Math.floor((Date.now() + payload.ttlMs) / 1000);
       }
 
       if (payload.category) {
         (notification as any).category = payload.category;
       }
 
-      if (payload.threadId) {
-        notification.threadId = payload.threadId;
+      const threadId = apnsThreadIdOf(payload);
+      if (threadId) {
+        notification.threadId = threadId;
       }
 
       // mutable-content routes ALERT pushes through the Notification Service

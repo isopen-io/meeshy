@@ -8,8 +8,8 @@
  *
  * UNE porte : `TrophyService.showcaseFor` → `GameProfileService.facetVisibleTo`.
  * Dans l'ordre : le blocage (deux comptes qui se sont bloqués ne se voient jamais,
- * même sur « tout le monde »), puis soi / ADMIN-BIGBOSS / ami accepté (la loi de
- * présence, jamais une co-appartenance), puis le réglage du membre plafonné par
+ * même sur « tout le monde »), puis soi / ADMIN-BIGBOSS / le cercle (la loi des
+ * cercles, `GameProfileService.viewerReach` : Ami et au-dessus pour « amis », #13930), puis le réglage du membre plafonné par
  * « caché de la recherche » et « Jeu masqué ».
  *
  * Un refus rend `visible: false` avec des listes VIDES — jamais un 403 ni un 404,
@@ -78,7 +78,7 @@ export async function userGameShowcaseRoutes(fastify: FastifyInstance, options: 
       config: { rateLimit: gameRateLimitConfig('user-game', 120, false) },
       schema: {
         description:
-          "Le jeu d'un membre selon SES réglages (#9481) : niveau et palier, étoiles de Prestige, forme de la Flamme, rang de Gloire et division, " +
+          "Le jeu d'un membre selon SES réglages, plafonnés par le cercle (#9481, #13930) : niveau et palier, étoiles de Prestige, rang de Gloire et division ; forme de la Flamme, étincelles et Gloire à Proche et au-dessus ; " +
           "palier du trésor — jamais un compte exact, jamais une date, jamais une présence. Un refus (réglage, blocage, « Jeu masqué », compte inconnu) " +
           'rend `visible: false` et deux blocs nuls : la même réponse qu\'un compte qui n\'existe pas.',
         tags: ['users', 'game'],

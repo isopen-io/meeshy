@@ -228,7 +228,7 @@ final class CodecPreferencesTests: XCTestCase {
         // Source-level guard: P2PWebRTCClient.startLocalMedia must use
         // addTransceiver(of: .audio, init:) instead of add(track:streamIds:).
         // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.8 + §7 E9/E12
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
 
         XCTAssertFalse(
             source.contains("peerConnection?.add(audioTrack, streamIds:"),
@@ -244,7 +244,7 @@ final class CodecPreferencesTests: XCTestCase {
     func test_p2pClient_appliesAudioCodecPreferences() throws {
         // Source-level guard: must call applyAudioCodecPreferences after
         // creating the audio transceiver, with Opus + RED codec order.
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
 
         XCTAssertTrue(
             source.contains("applyAudioCodecPreferences"),
@@ -257,7 +257,7 @@ final class CodecPreferencesTests: XCTestCase {
     }
 
     func test_p2pClient_uses_addTransceiver_video() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
 
         XCTAssertFalse(
             source.contains("peerConnection?.add(videoTrack, streamIds:"),
@@ -270,7 +270,7 @@ final class CodecPreferencesTests: XCTestCase {
     }
 
     func test_p2pClient_appliesVideoCodecPreferences() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
 
         XCTAssertTrue(
             source.contains("applyVideoCodecPreferences"),
@@ -299,8 +299,8 @@ final class CodecPreferencesTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
 
         XCTAssertTrue(
             source.contains("encoding.maxBitrateBps = NSNumber(value: QualityThresholds.defaultBitrate)"),
@@ -333,7 +333,7 @@ final class CodecPreferencesTests: XCTestCase {
     }
 
     func test_p2pClient_removesAudioRedundancyMunging() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
 
         // The static func addAudioRedundancy may exist or be removed — but it
         // MUST NOT be called (commented out in 9e663039 due to PT/PT bug;
@@ -350,7 +350,7 @@ final class CodecPreferencesTests: XCTestCase {
     }
 
     func test_configure_closesAnyPreExistingPeerConnection() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
 
         guard let range = source.range(of: "func configure(iceServers: [IceServer]) throws {") else {
             XCTFail("configure(iceServers:) not found"); return

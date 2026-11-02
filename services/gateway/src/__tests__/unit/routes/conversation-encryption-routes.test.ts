@@ -16,15 +16,16 @@
  *     - anonymous user → 403
  *     - invalid mode → 400
  *     - conversation not found → 404
- *     - already encrypted → 400
- *     - not a member → 403
+ *     - not a member → the 404 of an unknown conversation (#12563)
+ *     - already encrypted → 400 ENCRYPTION_ALREADY_ENABLED (#12522)
  *     - group + no moderator role → 403
- *     - group creator / platform ADMIN|BIGBOSS member → allowed (#11218)
- *     - direct conversation → skips role check
+ *     - only a platform ADMIN|BIGBOSS member may activate, every mode (#12517)
  *     - mode=e2ee → no server key
  *     - mode=server → getOrCreateConversationKey called
  *     - senderParticipant found → message created
  *     - senderParticipant null → no message
+ *     - the notice is broadcast (message:new + conversation:updated), detached
+ *       from the response, which survives a failing or hanging emission (#11416)
  *     - throws → 500
  *
  * @jest-environment node
@@ -35,11 +36,12 @@ import Fastify, { FastifyInstance } from 'fastify';
 
 // ─── Module-level mock controls ───────────────────────────────────────────────
 
+// #12822 (M1) — l'activation passe par `activationKeyId`, qui reprend la clé déjà désignée.
 const mockGetOrCreateConversationKey = jest.fn<any>().mockResolvedValue('server-key-id');
 
 jest.mock('../../../services/EncryptionService', () => ({
   getEncryptionService: jest.fn().mockResolvedValue({
-    getOrCreateConversationKey: (...a: unknown[]) => mockGetOrCreateConversationKey(...a),
+    activationKeyId: (...a: unknown[]) => mockGetOrCreateConversationKey(...a),
   }),
 }));
 
@@ -83,6 +85,15 @@ const CONV_ID = '507f1f77bcf86cd799439013';
 const PARTICIPANT_ID = '507f1f77bcf86cd799439014';
 const AUTH = { authorization: 'Bearer valid-token' };
 
+const NOTICE = {
+  id: '507f1f77bcf86cd799439015',
+  conversationId: CONV_ID,
+  senderId: PARTICIPANT_ID,
+  messageType: 'system',
+  metadata: { kind: 'encryption-enabled', mode: 'e2ee' },
+  createdAt: new Date('2026-10-24T10:00:00.000Z'),
+};
+
 // ─── Prisma factory ───────────────────────────────────────────────────────────
 
 type ConvShape = {
@@ -91,17 +102,28 @@ type ConvShape = {
   encryptionEnabledBy?: string | null;
   participants?: Array<{ userId: string; role?: string; user?: { role: string } | null }>;
   type?: string;
+  serverEncryptionKeyId?: string | null;
 } | null;
+
+/**
+ * #12966 — un tête-à-tête a DEUX membres : l'autre membre, inscrit et sans
+ * rôle, s'ajoute aux participants que le cas déclare (un tête-à-tête ne se
+ * chiffre de bout en bout qu'entre deux personnes).
+ */
+const DIRECT_PEER = { userId: '507f1f77bcf86cd7994390d0', role: 'member', user: { role: 'USER' } };
 
 function makeConversation(conv: ConvShape) {
   if (!conv) return null;
+  const type = conv.type ?? 'group';
+  const declared = conv.participants ?? [{ userId: USER_ID, role: 'MEMBER' }];
   return {
     id: CONV_ID,
     encryptionEnabledAt: conv.encryptionEnabledAt ?? null,
     encryptionMode: conv.encryptionMode ?? null,
     encryptionEnabledBy: conv.encryptionEnabledBy ?? null,
-    participants: conv.participants ?? [{ userId: USER_ID, role: 'MEMBER' }],
-    type: conv.type ?? 'group',
+    participants: type === 'direct' && declared.length === 1 ? [...declared, DIRECT_PEER] : declared,
+    type,
+    serverEncryptionKeyId: conv.serverEncryptionKeyId ?? null,
   };
 }
 
@@ -116,6 +138,9 @@ function makePrisma(opts: {
       findUnique: conversationFindError
         ? jest.fn().mockRejectedValue(conversationFindError)
         : jest.fn().mockResolvedValue(makeConversation(conversation)),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      // #12966 — la paire n'a pas d'autre tête-à-tête.
+      findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue({
         id: CONV_ID,
         encryptionEnabledAt: new Date(),
@@ -128,16 +153,22 @@ function makePrisma(opts: {
       findFirst: jest.fn().mockResolvedValue(senderParticipant),
     },
     message: {
-      create: jest.fn().mockResolvedValue({}),
+      create: jest.fn().mockResolvedValue(NOTICE),
     },
   };
 }
 
 // ─── App builder ─────────────────────────────────────────────────────────────
 
-async function buildApp(prismaOpts: Parameters<typeof makePrisma>[0] = {}): Promise<FastifyInstance> {
+async function buildApp(
+  prismaOpts: Parameters<typeof makePrisma>[0] = {},
+  broadcastMessage?: jest.Mock<(message: unknown, conversationId: string) => Promise<void>>,
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.decorate('prisma', makePrisma(prismaOpts) as unknown);
+  if (broadcastMessage) {
+    app.decorate('socketIOHandler', { getManager: () => ({ broadcastMessage }) } as unknown);
+  }
   await app.register(encryptionRoutes);
   await app.ready();
   return app;
@@ -254,23 +285,38 @@ describe('POST /conversations/:conversationId/encryption', () => {
     await app.close();
   });
 
-  it('returns 400 when encryption is already enabled', async () => {
+  it('returns 400 ENCRYPTION_ALREADY_ENABLED when the same mode is already enabled', async () => {
     const app = await buildApp({
       conversation: {
-        participants: [{ userId: USER_ID, role: 'admin' }],
+        participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }],
+        encryptionEnabledAt: new Date(),
+        encryptionMode: 'e2ee',
+      },
+    });
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ code: 'ENCRYPTION_ALREADY_ENABLED' });
+    await app.close();
+  });
+
+  it('returns 409 E2EE_IRREVERSIBLE when another mode is asked for an e2ee conversation (#12949)', async () => {
+    const app = await buildApp({
+      conversation: {
+        participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }],
         encryptionEnabledAt: new Date(),
         encryptionMode: 'e2ee',
       },
     });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'server' } });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ success: false, code: 'E2EE_IRREVERSIBLE' });
     await app.close();
   });
 
-  it('returns 403 when user is not a member', async () => {
+  it('returns the 404 of an unknown conversation when user is not a member (#12563)', async () => {
     const app = await buildApp({ conversation: { participants: [{ userId: OTHER_ID, role: 'admin' }] } });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     await app.close();
   });
 
@@ -284,25 +330,94 @@ describe('POST /conversations/:conversationId/encryption', () => {
   });
 
   it.each([
-    ['le créateur du groupe', { role: 'creator', user: { role: 'USER' } }],
-    ['un administrateur du groupe', { role: 'admin', user: { role: 'USER' } }],
-    ['un modérateur du groupe, rang en majuscules', { role: 'MODERATOR', user: { role: 'USER' } }],
-    ['un ADMIN de plateforme membre', { role: 'member', user: { role: 'ADMIN' } }],
-    ['un BIGBOSS de plateforme membre', { role: 'member', user: { role: 'BIGBOSS' } }],
-  ])('active le chiffrement d’un groupe pour %s (#11218)', async (_label, member) => {
-    const app = await buildApp({ conversation: { participants: [{ userId: USER_ID, ...member }], type: 'group' } });
+    ['un ADMIN de plateforme membre d’un groupe', { role: 'member', user: { role: 'ADMIN' } }, 'group'],
+    ['un BIGBOSS de plateforme membre d’un groupe', { role: 'member', user: { role: 'BIGBOSS' } }, 'group'],
+    ['un MODERATOR de plateforme simple membre d’un groupe — privilégié comme ADMIN (#11217)', { role: 'member', user: { role: 'MODERATOR' } }, 'group'],
+    ['un ADMIN de plateforme dans un tête-à-tête, rôle en minuscules', { role: 'member', user: { role: 'admin' } }, 'direct'],
+    ['un BIGBOSS de plateforme créateur du groupe', { role: 'creator', user: { role: 'BIGBOSS' } }, 'group'],
+    ['un MODERATOR de plateforme dans un tête-à-tête', { role: 'member', user: { role: 'MODERATOR' } }, 'direct'],
+    ['un MODERATOR de plateforme dans un tête-à-tête, rôle en minuscules', { role: 'member', user: { role: 'moderator' } }, 'direct'],
+    ['un MODERATOR de plateforme créateur du groupe', { role: 'creator', user: { role: 'MODERATOR' } }, 'group'],
+    ['un MODERATOR de plateforme modérateur du groupe', { role: 'moderator', user: { role: 'Moderator' } }, 'group'],
+    ['un AUDIT de plateforme dans un tête-à-tête', { role: 'member', user: { role: 'AUDIT' } }, 'direct'],
+    ['un AUDIT de plateforme créateur du groupe, rôle en minuscules', { role: 'creator', user: { role: 'audit' } }, 'group'],
+    ['un ANALYST de plateforme dans un tête-à-tête', { role: 'member', user: { role: 'ANALYST' } }, 'direct'],
+    ['un ANALYST de plateforme créateur du groupe, rôle en minuscules', { role: 'creator', user: { role: 'analyst' } }, 'group'],
+  ])('active le chiffrement pour %s (#12517, #12588)', async (_label, member, type) => {
+    const app = await buildApp({ conversation: { participants: [{ userId: USER_ID, ...member }], type } });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
     expect(res.statusCode).toBe(200);
     await app.close();
   });
 
   it.each([
-    ['un MODERATOR de plateforme simple membre (participant ordinaire)', { role: 'member', user: { role: 'MODERATOR' } }],
-    ['un rang illisible (owner) — fermé par défaut', { role: 'owner', user: { role: 'USER' } }],
-  ])('refuse le chiffrement d’un groupe à %s (#11218)', async (_label, member) => {
-    const app = await buildApp({ conversation: { participants: [{ userId: USER_ID, ...member }], type: 'group' } });
+    ['le créateur USER d’un groupe', { role: 'creator', user: { role: 'USER' } }, 'group'],
+    ['un administrateur USER du groupe', { role: 'admin', user: { role: 'USER' } }, 'group'],
+    ['un modérateur USER du groupe', { role: 'MODERATOR', user: { role: 'USER' } }, 'group'],
+    ['un AUDIT de plateforme simple membre d’un groupe — rang de conversation insuffisant', { role: 'member', user: { role: 'AUDIT' } }, 'group'],
+    ['un ANALYST de plateforme simple membre d’un groupe — rang de conversation insuffisant', { role: 'member', user: { role: 'ANALYST' } }, 'group'],
+    ['un USER dans un tête-à-tête', { role: 'member', user: { role: 'USER' } }, 'direct'],
+    ['un rôle de plateforme absent dans un tête-à-tête — fermé par défaut', { role: 'member', user: null }, 'direct'],
+    ['un rang illisible (owner) — fermé par défaut', { role: 'owner', user: { role: 'USER' } }, 'group'],
+  ])('refuse le chiffrement à %s tant que l’E2EE n’est pas opérationnel (#12517)', async (_label, member, type) => {
+    const prisma = makePrisma({ conversation: { participants: [{ userId: USER_ID, ...member }], type } });
+    const app = Fastify({ logger: false });
+    app.decorate('prisma', prisma as unknown);
+    await app.register(encryptionRoutes);
+    await app.ready();
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
     expect(res.statusCode).toBe(403);
+    expect(prisma.conversation.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it.each([
+    ['e2ee', 'MODERATOR'],
+    ['server', 'moderator'],
+    ['hybrid', 'Moderator'],
+    ['e2ee', 'AUDIT'],
+    ['server', 'audit'],
+    ['hybrid', 'Audit'],
+    ['e2ee', 'ANALYST'],
+    ['server', 'analyst'],
+    ['hybrid', 'Analyst'],
+  ])('un rôle de plateforme ANALYST ou supérieur active le mode %s (rôle %s, #12588)', async (mode, role) => {
+    const app = await buildApp({ conversation: { participants: [{ userId: USER_ID, role: 'member', user: { role } }], type: 'direct' } });
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode } });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it.each(['MODERATOR', 'AUDIT', 'ANALYST', 'ADMIN'])('un %s de plateforme étranger à la conversation reste refusé, du 404 d’un identifiant inconnu (#12588, #12563)', async (role) => {
+    testAuthContext = { isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID, role } };
+    const prisma = makePrisma({ conversation: { participants: [{ userId: OTHER_ID, role: 'creator', user: { role: 'USER' } }], type: 'direct' } });
+    const app = Fastify({ logger: false });
+    app.decorate('prisma', prisma as unknown);
+    await app.register(encryptionRoutes);
+    await app.ready();
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
+    expect(res.statusCode).toBe(404);
+    expect(prisma.conversation.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it.each([
+    ['e2ee', 'USER'],
+    ['server', 'user'],
+    ['hybrid', 'AGENT'],
+  ])('la restriction couvre le mode %s pour %s et porte un code lisible (#12517, #12588)', async (mode, role) => {
+    const app = await buildApp({ conversation: { participants: [{ userId: USER_ID, role: 'creator', user: { role } }], type: 'group' } });
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ success: false, code: 'ENCRYPTION_ACTIVATION_RESTRICTED' });
+    await app.close();
+  });
+
+  it.each(['e2ee', 'server', 'hybrid'])('la restriction couvre le mode %s et porte un code lisible (#12517)', async (mode) => {
+    const app = await buildApp({ conversation: { participants: [{ userId: USER_ID, role: 'creator', user: { role: 'USER' } }], type: 'group' } });
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ success: false, code: 'ENCRYPTION_ACTIVATION_RESTRICTED' });
     await app.close();
   });
 
@@ -318,9 +433,9 @@ describe('POST /conversations/:conversationId/encryption', () => {
     await app.close();
   });
 
-  it('returns 200 for direct conversation regardless of role (e2ee, no server key)', async () => {
+  it('returns 200 for a platform admin in a direct conversation (e2ee, no server key)', async () => {
     const app = await buildApp({
-      conversation: { participants: [{ userId: USER_ID, role: 'MEMBER' }], type: 'direct' },
+      conversation: { participants: [{ userId: USER_ID, role: 'MEMBER', user: { role: 'ADMIN' } }], type: 'direct' },
       senderParticipant: { id: PARTICIPANT_ID },
     });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
@@ -331,18 +446,30 @@ describe('POST /conversations/:conversationId/encryption', () => {
 
   it('returns 200 for server mode (calls getOrCreateConversationKey)', async () => {
     const app = await buildApp({
-      conversation: { participants: [{ userId: USER_ID, role: 'admin' }], type: 'group' },
+      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'group' },
       senderParticipant: { id: PARTICIPANT_ID },
     });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'server' } });
     expect(res.statusCode).toBe(200);
     expect(mockGetOrCreateConversationKey).toHaveBeenCalledTimes(1);
+    expect(mockGetOrCreateConversationKey).toHaveBeenCalledWith(CONV_ID, null);
+    await app.close();
+  });
+
+  it('reprend la clé que la conversation désigne déjà (désactivée puis réactivée, #12822)', async () => {
+    const app = await buildApp({
+      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'group', serverEncryptionKeyId: 'legacy-key-id' },
+      senderParticipant: { id: PARTICIPANT_ID },
+    });
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'server' } });
+    expect(res.statusCode).toBe(200);
+    expect(mockGetOrCreateConversationKey).toHaveBeenCalledWith(CONV_ID, 'legacy-key-id');
     await app.close();
   });
 
   it('returns 200 for hybrid mode (calls getOrCreateConversationKey)', async () => {
     const app = await buildApp({
-      conversation: { participants: [{ userId: USER_ID, role: 'MODERATOR' }], type: 'group' },
+      conversation: { participants: [{ userId: USER_ID, role: 'MODERATOR', user: { role: 'BIGBOSS' } }], type: 'group' },
       senderParticipant: { id: PARTICIPANT_ID },
     });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'hybrid' } });
@@ -353,20 +480,20 @@ describe('POST /conversations/:conversationId/encryption', () => {
 
   it("pose une clé localisable sur l'avis système, jamais seulement le texte anglais (#7545)", async () => {
     const app = await buildApp({
-      conversation: { participants: [{ userId: USER_ID, role: 'admin' }], type: 'group' },
+      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'group' },
       senderParticipant: { id: PARTICIPANT_ID },
     });
     const create = (app as unknown as { prisma: { message: { create: jest.Mock } } }).prisma.message.create;
     await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ messageType: 'system', metadata: { kind: 'encryption-enabled', mode: 'e2ee' } }),
+      data: expect.objectContaining({ messageType: 'system', metadata: expect.objectContaining({ kind: 'encryption-enabled', mode: 'e2ee' }) }),
     }));
     await app.close();
   });
 
   it('skips system message creation when senderParticipant is null', async () => {
     const app = await buildApp({
-      conversation: { participants: [{ userId: USER_ID, role: 'admin' }], type: 'group' },
+      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'group' },
       senderParticipant: null,
     });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
@@ -379,5 +506,98 @@ describe('POST /conversations/:conversationId/encryption', () => {
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
     expect(res.statusCode).toBe(500);
     await app.close();
+  });
+  describe("diffusion de l'avis aux membres (#11416)", () => {
+    const ADMIN_GROUP = {
+      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'group' },
+      senderParticipant: { id: PARTICIPANT_ID },
+    };
+    const enable = (app: FastifyInstance) =>
+      app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
+
+    it("diffuse l'avis par le chemin ordinaire des messages (message:new + conversation:updated)", async () => {
+      const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockResolvedValue(undefined);
+      const app = await buildApp(ADMIN_GROUP, broadcastMessage);
+      const res = await enable(app);
+      expect(res.statusCode).toBe(200);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(broadcastMessage).toHaveBeenCalledTimes(1);
+      expect(broadcastMessage).toHaveBeenCalledWith(NOTICE, CONV_ID);
+      await app.close();
+    });
+
+    it("fait de l'avis le dernier message du fil : l'horloge avance sur son createdAt", async () => {
+      const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockResolvedValue(undefined);
+      const app = await buildApp(ADMIN_GROUP, broadcastMessage);
+      const update = (app as unknown as { prisma: { conversation: { update: jest.Mock } } }).prisma.conversation.update;
+      await enable(app);
+      expect(update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: CONV_ID },
+        data: { lastMessageAt: NOTICE.createdAt },
+      }));
+      await app.close();
+    });
+
+    it("pose l'avis comme message système, sa clé localisable et son texte de repli anglais (rétrocompatible)", async () => {
+      const app = await buildApp(ADMIN_GROUP, jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockResolvedValue(undefined));
+      const create = (app as unknown as { prisma: { message: { create: jest.Mock } } }).prisma.message.create;
+      await enable(app);
+      expect(create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          conversationId: CONV_ID,
+          senderId: PARTICIPANT_ID,
+          messageType: 'system',
+          messageSource: 'system',
+          originalLanguage: 'en',
+          content: expect.stringContaining('End-to-end encryption enabled'),
+          metadata: expect.objectContaining({ kind: 'encryption-enabled', mode: 'e2ee' }),
+        }),
+      }));
+      await app.close();
+    });
+
+    it("une diffusion qui échoue ne fait pas échouer l'activation", async () => {
+      const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockRejectedValue(new Error('socket down'));
+      const unhandled: unknown[] = [];
+      const onUnhandled = (reason: unknown) => unhandled.push(reason);
+      process.on('unhandledRejection', onUnhandled);
+      const app = await buildApp(ADMIN_GROUP, broadcastMessage);
+      const res = await enable(app);
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+      process.off('unhandledRejection', onUnhandled);
+      expect(res.statusCode).toBe(200);
+      expect(broadcastMessage).toHaveBeenCalledTimes(1);
+      expect(unhandled).toEqual([]);
+      await app.close();
+    });
+
+    it("une diffusion qui lève de façon synchrone ne fait pas échouer l'activation", async () => {
+      const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockImplementation(() => {
+        throw new Error('encoder crash');
+      });
+      const app = await buildApp(ADMIN_GROUP, broadcastMessage);
+      const res = await enable(app);
+      expect(res.statusCode).toBe(200);
+      await app.close();
+    });
+
+    it("la réponse n'attend pas la diffusion : une émission qui ne finit jamais ne la retient pas", async () => {
+      const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockReturnValue(new Promise<void>(() => undefined));
+      const app = await buildApp(ADMIN_GROUP, broadcastMessage);
+      const res = await enable(app);
+      expect(res.statusCode).toBe(200);
+      expect(broadcastMessage).toHaveBeenCalledTimes(1);
+      await app.close();
+    });
+
+    it("n'écrit ni ne diffuse aucun avis quand l'acteur n'a pas de ligne Participant active", async () => {
+      const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockResolvedValue(undefined);
+      const app = await buildApp({ ...ADMIN_GROUP, senderParticipant: null }, broadcastMessage);
+      const res = await enable(app);
+      expect(res.statusCode).toBe(200);
+      expect(broadcastMessage).not.toHaveBeenCalled();
+      await app.close();
+    });
   });
 });

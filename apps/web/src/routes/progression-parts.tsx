@@ -30,6 +30,8 @@ import {
   generatedAchievementLabel,
   nextStepLabel,
   reachedAtLabel,
+  tierDotLabel,
+  tierListLabel,
   type ProgressionGlyph,
 } from '@/lib/view/progression';
 import {
@@ -116,23 +118,18 @@ export function SectionTitle({ glyph, title, tint, trailing, id }: { glyph: Glyp
 /** Les cinq pastilles d'un axe — une par palier, pleine quand il est atteint, datée quand il a été gravé. */
 export function TierDots({ tiers, tint, axisLabel }: { tiers: readonly EngagementTier[]; tint: string; axisLabel: string }) {
   return (
-    <ol className="flex items-center gap-1" aria-label={`Paliers de ${axisLabel}`}>
-      {tiers.map((tier) => {
-        const dated = reachedAtLabel(tier.reachedAt);
-        return (
-          <li
-            key={tier.threshold}
-            className="size-2.5 rounded-chip"
-            style={{
-              backgroundColor: tier.reached ? tint : 'transparent',
-              boxShadow: `inset 0 0 0 1.5px ${tier.reached ? tint : 'color-mix(in srgb, var(--color-ios-ink-3) 55%, transparent)'}`,
-            }}
-            aria-label={
-              tier.reached ? `Palier ${tier.threshold} atteint${dated ? ` — ${dated.toLowerCase()}` : ''}` : `Palier ${tier.threshold} à atteindre`
-            }
-          />
-        );
-      })}
+    <ol className="flex items-center gap-1" aria-label={tierListLabel(axisLabel)}>
+      {tiers.map((tier) => (
+        <li
+          key={tier.threshold}
+          className="size-2.5 rounded-chip"
+          style={{
+            backgroundColor: tier.reached ? tint : 'transparent',
+            boxShadow: `inset 0 0 0 1.5px ${tier.reached ? tint : 'color-mix(in srgb, var(--color-ios-ink-3) 55%, transparent)'}`,
+          }}
+          aria-label={tierDotLabel(tier)}
+        />
+      ))}
     </ol>
   );
 }

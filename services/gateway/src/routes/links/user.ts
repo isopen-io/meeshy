@@ -14,7 +14,7 @@ import {
 } from '../../utils/response.js';
 import { validatePagination, buildCursorPaginationMeta } from '../../utils/pagination';
 import { MemberRole } from '@meeshy/shared/types/role-types';
-import { actorHasMinimumRole } from '../../utils/conversation-authority';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import { depreciee } from '../../utils/deprecation';
 import {
   parseFieldList,

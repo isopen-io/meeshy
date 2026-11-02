@@ -4,6 +4,8 @@
 process.env.DATABASE_URL = 'mongodb://mock';
 process.env.OPENAI_API_KEY = 'mock-key';
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { loadEnv } from '../../env';
 
 const baseEnv = (): NodeJS.ProcessEnv =>
@@ -48,4 +50,30 @@ describe('loadEnv', () => {
       expect(result.message).toContain('DATABASE_URL');
     }
   });
+});
+
+describe('modèle Anthropic de secours par défaut', () => {
+  const SERVED_MODEL = 'claude-sonnet-5-5';
+
+  it("vise un modèle servi quand ANTHROPIC_MODEL n'est pas fourni", () => {
+    const result = loadEnv({ ...baseEnv(), ANTHROPIC_API_KEY: 'sk-ant-test' } as NodeJS.ProcessEnv);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.env.ANTHROPIC_MODEL).toBe(SERVED_MODEL);
+    }
+  });
+
+  it.each(['docker-compose.prod.yml', 'docker-compose.staging.yml'])(
+    '%s porte le même défaut que l\'agent, sans guillemets',
+    (file) => {
+      const compose = readFileSync(
+        resolve(__dirname, '../../../../../infrastructure/docker/compose', file),
+        'utf8',
+      );
+
+      expect(compose).toContain(`- ANTHROPIC_MODEL=\${ANTHROPIC_MODEL:-${SERVED_MODEL}}`);
+      expect(compose).not.toContain('claude-3-5-sonnet-20240620');
+    },
+  );
 });

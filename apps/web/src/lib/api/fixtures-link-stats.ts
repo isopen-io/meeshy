@@ -59,6 +59,7 @@ export function fixtureShareLinkArrivals(linkId: string, cursor: string | null):
     const [country, language] = FIXTURE_ORIGINS[rank % FIXTURE_ORIGINS.length] ?? [null, null];
     return {
       displayName: `${FIXTURE_NAMES[rank % FIXTURE_NAMES.length] ?? 'Invité'} ${rank + 1}`,
+      avatar: null,
       isAnonymous: rank % 3 !== 1,
       country,
       language,

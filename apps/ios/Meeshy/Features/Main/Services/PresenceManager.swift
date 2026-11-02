@@ -237,11 +237,16 @@ final class PresenceManager: ObservableObject {
     /// conversation) : elle date l'activité, rien de plus (#11412). Le pair est
     /// vert (≤ 60 s) puis décroît orange → gris → rien ; `isOnline` reste ce que
     /// le serveur a dit — le poser à `true` donnait 5 min de vert puis plus rien.
-    /// Sa propre activité n'écrit jamais la carte.
+    /// Sa propre activité n'écrit jamais la carte. Un « en ligne » servi sans
+    /// date (l'Ami, #13928) est tenu par le serveur jusqu'à son `user:status` :
+    /// le dater le livrait à la garde anti-stale, qui l'éteignait 5 min plus
+    /// tard alors que le serveur le servait toujours en ligne.
     func noteActivity(userId: String) {
         guard !userId.isEmpty, userId != AuthManager.shared.currentUser?.id else { return }
+        let known = presenceMap[userId]
+        guard !(known?.isOnline == true && known?.lastActiveAt == nil) else { return }
         presenceMap[userId] = UserPresence(
-            isOnline: presenceMap[userId]?.isOnline ?? false,
+            isOnline: known?.isOnline ?? false,
             lastActiveAt: Date()
         )
     }
@@ -459,8 +464,7 @@ final class PresenceManager: ObservableObject {
     }
 
     private nonisolated static func writeToDisk(_ map: [String: UserPresence]) {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         guard let data = encoder.encodeOrLog(map, field: "presence map", logger: Logger.presence) else { return }
         do {
             try data.write(to: persistURL, options: .atomic)
@@ -479,8 +483,7 @@ final class PresenceManager: ObservableObject {
             Logger.presence.error("Presence snapshot present but unreadable: \(error.localizedDescription, privacy: .public)")
             return [:]
         }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         guard let map = decoder.decodeOrLog([String: UserPresence].self, from: data, field: "presence map", logger: Logger.presence) else { return [:] }
         // Drop entries older than 24h — claiming someone is online based on
         // day-old data would be actively wrong, but a 15-min gap is fine and

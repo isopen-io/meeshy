@@ -142,7 +142,7 @@ struct RootNotificationNavigator {
                 }
                 return
             }
-            CallManager.shared.handleIncomingCallAlertTap(
+            CallManager.shared.incomingRing.handleIncomingCallAlertTap(
                 callId: callId,
                 fromUserId: ctx.callerUserId ?? "",
                 fromUsername: ctx.callerName ?? ctx.senderUsername ?? "",

@@ -24,8 +24,10 @@ import type {
   AudioProcessRequest,
   TranscriptionOnlyRequest,
   VoiceAPIRequest,
-  VoiceProfileRequest
+  VoiceProfileRequest,
+  CacheForgetRequest
 } from './types';
+import { UNSUPPORTED_LANGUAGE_ERROR_CODE } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { guardedInterval, guardedTimeout } from '../../utils/guarded-timer';
 // Logger dédié pour ZmqTranslationClient
@@ -319,6 +321,17 @@ export class ZmqTranslationClient extends EventEmitter {
     });
 
     this.messageHandler.on('translationError', (event) => {
+      // Une langue sans code NLLB-200 ne se servira JAMAIS : la relancer cinq
+      // fois puis annoncer l'échec (`translation:failed`) était l'incident du
+      // 2026-11-01. Seule SA langue se solde, sans compter d'échec au disjoncteur ;
+      // son lecteur reçoit l'original.
+      if (event.errorCode === UNSUPPORTED_LANGUAGE_ERROR_CODE && event.targetLanguage) {
+        const settled = this.requestSender.settleTranslationLanguage(event.taskId, event.targetLanguage);
+        if (settled === null || settled.remaining.length === 0) this.retryCount.delete(event.taskId);
+        this.emit('translationUnsupported', event);
+        return;
+      }
+
       this.stats.errors_received++;
       this._cbRecordError();
 
@@ -457,6 +470,10 @@ export class ZmqTranslationClient extends EventEmitter {
     });
 
     // Story text object translation events
+    this.messageHandler.on('cacheForgetDone', (event) => {
+      this.emit('cacheForgetDone', event);
+    });
+
     this.messageHandler.on('storyTextObjectTranslationCompleted', (event) => {
       this.emit('storyTextObjectTranslationCompleted', event);
     });
@@ -747,6 +764,11 @@ export class ZmqTranslationClient extends EventEmitter {
     };
 
     return await this.sendTranslationRequest(request);
+  }
+
+  /** #13102 — demande au translator d'oublier des pièces ou des messages effacés. */
+  sendCacheForget(request: CacheForgetRequest): Promise<void> {
+    return this.requestSender.sendCacheForgetRequest(request);
   }
 
   /**

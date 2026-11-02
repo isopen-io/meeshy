@@ -53,6 +53,8 @@ extension StoryCanvasUIView: UIGestureRecognizerDelegate {
     /// scale aussi le viewport.
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                                    shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        if StoryCanvasBackgroundLongPress.excludesEachOther(gestureRecognizer, other, tap: singleTapRecognizer,
+                                                            longPress: backgroundLongPressRecognizer) { return false }
         let isPanA = gestureRecognizer === panRecognizer
         let isPanB = other === panRecognizer
         if isPanA || isPanB { return false }

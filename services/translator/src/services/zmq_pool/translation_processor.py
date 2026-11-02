@@ -15,6 +15,8 @@ from typing import List, Callable, Optional, Any
 
 # Import local
 from ..zmq_models import TranslationTask
+from services.task_privacy import task_scope
+from config.settings import LANGUAGE_MAPPINGS
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,60 @@ logger = logging.getLogger(__name__)
 INFERENCE_TIMEOUT_BASE_S = 45.0
 INFERENCE_TIMEOUT_PER_500_CHARS_S = 45.0
 INFERENCE_TIMEOUT_MAX_S = 360.0
+
+
+def _is_at_rest(task: Any) -> bool:
+    """#12822 — un texte chiffré au repos par la passerelle ne se pose sur aucun cache."""
+    return getattr(task, 'at_rest', False) is True
+
+
+def _structure_kwargs(task: Any) -> dict:
+    """Le choix de cache transmis au service ML : absent pour un texte ordinaire (signature d'avant)."""
+    return {'use_cache': False} if _is_at_rest(task) else {}
+
+
+UNSUPPORTED_LANGUAGE = 'UNSUPPORTED_LANGUAGE'
+
+
+def unsupported_language(source_language: str, target_language: str) -> Optional[str]:
+    """La langue de la paire que NLLB-200 ne connaît pas, ou None.
+
+    Juge contre `LANGUAGE_MAPPINGS`, la table même que lit `TranslatorEngine`
+    (#3659) : `byv`, `bas`, `dua`, `ewo`, `fan`, `ksf`, `nnh` sont offertes au
+    produit et jamais traduites. `auto` est laissé à la détection.
+    """
+    if source_language != 'auto' and source_language not in LANGUAGE_MAPPINGS:
+        return source_language
+    if target_language not in LANGUAGE_MAPPINGS:
+        return target_language
+    return None
+
+
+def refusal_is_understood(task: Any) -> bool:
+    """La passerelle a-t-elle annoncé lire `UNSUPPORTED_LANGUAGE` ?
+
+    Une passerelle plus ancienne compterait le refus comme une erreur ordinaire
+    — huit en 30 s ouvrent son disjoncteur et coupent TOUTES les traductions —
+    et, sur `[en, byv]`, solderait la tâche entière, deadman `en` compris. Elle
+    garde donc le sort d'avant ce lot : le silence.
+    """
+    return UNSUPPORTED_LANGUAGE in getattr(task, 'accepted_error_codes', ())
+
+
+def _create_unsupported_result(task: Any, target_language: str, language: str) -> dict:
+    """Réponse TERMINALE d'une paire intraduisible : l'original, l'erreur, son code.
+
+    Sans elle, l'échec ressemblait à un modèle pas encore chargé, la publication
+    le jetait comme tout résultat en `error`, et la passerelle relançait cinq
+    fois un travail qui ne pourra jamais se faire (incident 2026-11-01).
+    """
+    return {
+        **_create_error_result(
+            task, target_language, f"Langue '{language}' sans code NLLB-200 (#3659)"
+        ),
+        'errorCode': UNSUPPORTED_LANGUAGE,
+        'conversationId': task.conversation_id,
+    }
 
 
 def inference_timeout_for(text_length: int) -> float:
@@ -75,14 +131,22 @@ async def process_single_translation(
         # CHAQUE langue pendant l'attente des autres — un texte long
         # multi-langues expirait alors toutes ses langues d'un coup.
         for target_language in task.target_languages:
+            refused = unsupported_language(task.source_language, target_language)
+            if refused is not None:
+                if refusal_is_understood(task):
+                    await publish_func(
+                        task.task_id, _create_unsupported_result(task, target_language, refused), target_language
+                    )
+                continue
             try:
-                result = await _translate_single_language(
-                    task=task,
-                    target_language=target_language,
-                    worker_name=worker_name,
-                    translation_service=translation_service,
-                    translation_cache=translation_cache
-                )
+                with task_scope(_is_at_rest(task), task.message_id):
+                    result = await _translate_single_language(
+                        task=task,
+                        target_language=target_language,
+                        worker_name=worker_name,
+                        translation_service=translation_service,
+                        translation_cache=translation_cache
+                    )
 
                 # Ajouter métadonnées
                 result['poolType'] = 'any' if task.conversation_id == 'any' else 'normal'
@@ -149,6 +213,13 @@ async def process_batch_translation(
 
         # Pour chaque langue cible
         for target_lang in target_langs:
+            refused = unsupported_language(source_lang, target_lang)
+            if refused is not None:
+                for task in filter(refusal_is_understood, tasks):
+                    await publish_func(
+                        task.task_id, _create_unsupported_result(task, target_lang, refused), target_lang
+                    )
+                continue
             try:
                 # Utiliser le batch translation du service ML — budget = somme
                 # des budgets individuels (proportionnels à la longueur).
@@ -172,19 +243,21 @@ async def process_batch_translation(
                     # Fallback: traduire un par un
                     translated_texts = []
                     item_failed = []
-                    for text in texts:
+                    for task, text in zip(tasks, texts):
                         single_budget = inference_timeout_for(len(text))
                         try:
-                            result = await asyncio.wait_for(
-                                translation_service.translate_with_structure(
-                                    text=text,
-                                    source_language=source_lang,
-                                    target_language=target_lang,
-                                    model_type=model_type,
-                                    source_channel='zmq_batch'
-                                ),
-                                timeout=single_budget
-                            )
+                            with task_scope(_is_at_rest(task), task.message_id):
+                                result = await asyncio.wait_for(
+                                    translation_service.translate_with_structure(
+                                        text=text,
+                                        source_language=source_lang,
+                                        target_language=target_lang,
+                                        model_type=model_type,
+                                        source_channel='zmq_batch',
+                                        **_structure_kwargs(task)
+                                    ),
+                                    timeout=single_budget
+                                )
                         except asyncio.TimeoutError:
                             logger.error(f"⏱️ [BATCH] Single inference timeout ({single_budget:.0f}s, {len(text)} chars) {source_lang}→{target_lang}")
                             raise
@@ -266,7 +339,8 @@ async def _translate_single_language(
         # ═══════════════════════════════════════════════════════════════════
         # ÉTAPE 1: Vérifier le cache
         # ═══════════════════════════════════════════════════════════════════
-        if translation_cache:
+        use_cache = translation_cache is not None and not _is_at_rest(task)
+        if use_cache:
             cached = await translation_cache.get_translation(
                 text=task.text,
                 source_lang=task.source_language,
@@ -307,7 +381,8 @@ async def _translate_single_language(
                         source_language=task.source_language,
                         target_language=target_language,
                         model_type=task.model_type,
-                        source_channel='zmq'
+                        source_channel='zmq',
+                        **_structure_kwargs(task)
                     ),
                     timeout=inference_budget
                 )
@@ -327,8 +402,8 @@ async def _translate_single_language(
                 raise Exception("Translation service returned None")
 
             if not isinstance(result, dict) or 'translated_text' not in result:
-                logger.error(f"Invalid result for {worker_name}: {result}")
-                raise Exception(f"Invalid translation result: {result}")
+                logger.error(f"Invalid result for {worker_name}: {type(result).__name__}")
+                raise Exception(f"Invalid translation result: {type(result).__name__}")
 
             # `error` marque un texte de REPLI (`_fallback_translate`) — pas une
             # traduction ML. Un échec est un échec : jamais mis en cache (#3663),
@@ -339,13 +414,14 @@ async def _translate_single_language(
             # ═══════════════════════════════════════════════════════════════════
             # ÉTAPE 3: Mettre en cache la nouvelle traduction (jamais un repli)
             # ═══════════════════════════════════════════════════════════════════
-            if translation_cache and not translation_failed:
+            if use_cache and not translation_failed:
                 await translation_cache.set_translation(
                     text=task.text,
                     source_lang=task.source_language,
                     target_lang=target_language,
                     translated_text=result['translated_text'],
-                    model_type=task.model_type
+                    model_type=task.model_type,
+                    message_id=task.message_id
                 )
 
             return {

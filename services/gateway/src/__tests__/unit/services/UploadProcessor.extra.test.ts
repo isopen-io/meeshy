@@ -328,7 +328,7 @@ describe('UploadProcessor – extra coverage', () => {
         .mockResolvedValueOnce({ width: 1280, height: 720, duration: 5000, fps: 30, videoCodec: 'h264', bitrate: 3000 })
         .mockResolvedValueOnce({ width: 1280, height: 720, duration: 5000, fps: 30, videoCodec: 'h264', bitrate: 1500 });
 
-      const file = makeFile({ buffer: Buffer.alloc(102400, 1), size: 102400 });
+      const file = makeFile({ buffer: Buffer.concat([SIGNATURE_BYTES_BY_MIME_TYPE['video/mp4'], Buffer.alloc(102400 - SIGNATURE_BYTES_BY_MIME_TYPE['video/mp4'].length, 1)]), size: 102400 });
       await processor.uploadFile(file, USER_ID, false, MSG_ID);
 
       // extractMetadata called twice: initial + re-probe after transcode
@@ -350,7 +350,7 @@ describe('UploadProcessor – extra coverage', () => {
         .mockResolvedValueOnce({ width: 1280, height: 720 })
         .mockRejectedValueOnce(new Error('re-probe failed'));
 
-      const file = makeFile({ buffer: Buffer.alloc(102400, 1), size: 102400 });
+      const file = makeFile({ buffer: Buffer.concat([SIGNATURE_BYTES_BY_MIME_TYPE['video/mp4'], Buffer.alloc(102400 - SIGNATURE_BYTES_BY_MIME_TYPE['video/mp4'].length, 1)]), size: 102400 });
       // Should not throw even when re-probe fails
       const result = await processor.uploadFile(file, USER_ID, false, MSG_ID);
       expect(result).toBeDefined();

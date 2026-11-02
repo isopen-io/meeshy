@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 
 /// Gardes contre la RÉAPPARITION des trois ruptures qui rendaient l'extension
 /// de partage inerte tout en paraissant fonctionnelle :
@@ -90,8 +91,9 @@ final class ShareExtensionSourceGuardTests: XCTestCase {
     /// fichiers. L'ancienne version de ce garde ne vérifiait PAS
     /// `…SupportsFileWithMaxCount` — la troisième clé serait passée sans le
     /// faire rougir. Les trois valeurs sont vérifiées, pas seulement la
-    /// présence des clés : c'est le plafond 20 qui contient le seau de rate
-    /// limiting PLATEFORME (300 req/min/IP, Fastify sans `trustProxy`).
+    /// présence des clés : chacune vaut `ShareLimits.maxFiles` (100 depuis le
+    /// 2026-10-25, #12974) — iOS n'offre pas Meeshy au-delà, et en deçà l'écran
+    /// annoncerait un plafond que la feuille système n'atteint jamais.
     func test_infoPlist_advertisesTextURLImageMovieAndFile() throws {
         let plist = try String(
             contentsOf: extensionDirectory.appendingPathComponent("Info.plist"),
@@ -107,10 +109,10 @@ final class ShareExtensionSourceGuardTests: XCTestCase {
             "NSExtensionActivationSupportsFileWithMaxCount"
         ] {
             XCTAssertEqual(
-                Self.integerValue(of: key, in: plist), 20,
-                "\(key) doit valoir 20 — sans la clé Meeshy n'apparaît pas dans la feuille "
-                + "de partage correspondante ; au-delà de 20 le seau de rate limiting "
-                + "plateforme rend le partage inatteignable"
+                Self.integerValue(of: key, in: plist), ShareLimits.maxFiles,
+                "\(key) doit valoir ShareLimits.maxFiles — sans la clé Meeshy n'apparaît pas "
+                + "dans la feuille de partage correspondante, et une autre valeur contredirait "
+                + "le plafond que l'écran unique annonce"
             )
         }
 

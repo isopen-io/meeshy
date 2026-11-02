@@ -32,8 +32,15 @@ let package = Package(
     defaultLocalization: "fr",
     platforms: [.iOS(.v16)],
     products: [
+        // #13137 — le noyau LÉGER : ce que l'extension de notification lie,
+        // sans Socket.IO ni WebRTC. MeeshySDK le ré-exporte.
+        .library(name: "MeeshyCore", targets: ["MeeshyCore"]),
         .library(name: "MeeshySDK", targets: ["MeeshySDK"]),
         .library(name: "MeeshyUI", targets: ["MeeshyUI"]),
+        // #12536 — l'E2EE libsignal (AGPL-3.0, avis juridique #11548 avant la
+        // production). Produit À PART : seules l'app et l'extension de
+        // notification le lient, jamais les widgets ni le partage.
+        .library(name: "MeeshyE2EE", targets: ["MeeshyE2EE"]),
     ],
     dependencies: [
         .package(url: "https://github.com/socketio/socket.io-client-swift", exact: "16.1.1"),
@@ -43,11 +50,18 @@ let package = Package(
         // Le moteur Lottie des stickers, fonds, contours et bannières (#10638) :
         // un XCFramework précompilé, lié à MeeshyUI seul — jamais aux extensions.
         .package(url: "https://github.com/airbnb/lottie-spm.git", exact: "4.6.1"),
+        // libsignal au tag épinglé de packages/LibSignalClient/LIBSIGNAL_VERSION.
+        .package(path: "../LibSignalClient"),
     ],
     targets: [
         .target(
+            name: "MeeshyCore",
+            swiftSettings: coreSwiftSettings
+        ),
+        .target(
             name: "MeeshySDK",
             dependencies: [
+                "MeeshyCore",
                 .product(name: "SocketIO", package: "socket.io-client-swift"),
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "WebRTC", package: "WebRTC"),
@@ -69,6 +83,15 @@ let package = Package(
             ],
             swiftSettings: uiSwiftSettings
         ),
+        .target(
+            name: "MeeshyE2EE",
+            dependencies: [
+                "MeeshySDK",
+                .product(name: "LibSignalClient", package: "LibSignalClient"),
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ],
+            swiftSettings: coreSwiftSettings
+        ),
         // #10854 — le sceau réseau de CHAQUE bundle de test du package. Cible
         // de support : dépendance des seules cibles de test, jamais d'un
         // produit livré. Le chargeur C pose un constructeur qui s'exécute au
@@ -84,7 +107,7 @@ let package = Package(
         ),
         .testTarget(
             name: "MeeshySDKTests",
-            dependencies: ["MeeshySDK", "MeeshyTestSupport"],
+            dependencies: ["MeeshySDK", "MeeshyE2EE", "MeeshyTestSupport"],
             swiftSettings: coreSwiftSettings
         ),
         .testTarget(

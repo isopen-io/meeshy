@@ -17,16 +17,18 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
+import me.meeshy.sdk.friend.FriendshipPages
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.PresenceSnapshotEvent
 import me.meeshy.sdk.model.StatusEntry
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.model.friend.ContactFilter
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
-import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import org.junit.After
@@ -67,12 +69,11 @@ class ContactsListViewModelTest {
     private fun session(id: String? = "me"): SessionRepository =
         mockk<SessionRepository> { every { currentUserId } returns id }
 
-    private val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
-    private val presenceSnapshotFlow = MutableSharedFlow<PresenceSnapshotEvent>()
+    private val presenceEntries = kotlinx.coroutines.flow.MutableStateFlow<Map<String, UserPresence>>(emptyMap())
 
-    private fun socketManager(): MessageSocketManager = mockk<MessageSocketManager> {
-        every { userStatus } returns userStatusFlow
-        every { presenceSnapshot } returns presenceSnapshotFlow
+    private fun socketManager(): PresenceStore = mockk<PresenceStore> {
+        every { entries } returns presenceEntries
+        every { entriesNow() } answers { presenceEntries.value }
     }
 
     private fun user(
@@ -109,43 +110,128 @@ class ContactsListViewModelTest {
         session: SessionRepository = session(),
         cached: List<FriendRequestUser>? = null,
         statuses: StatusBarCache = statusBarCache(),
-        socket: MessageSocketManager = socketManager(),
+        socket: PresenceStore = socketManager(),
     ): ContactsListViewModel {
-        coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Success(received)
-        coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(sent)
+        coEvery { repository.friendshipGraph(any()) } returns
+            NetworkResult.Success(FriendshipPages(sent = sent, received = received))
         coEvery { listRepository.cachedSnapshot() } returns cached
         return ContactsListViewModel(repository, listRepository, cache, session, statuses, socket)
     }
 
     @Test
-    fun `a live user status event updates the friend's presence without a full reload`() = runTest {
+    fun `a live presence entry updates the friend's presence without a full reload`() = runTest {
         val vm = viewModel(received = listOf(accepted("r1", sender = user("alice", isOnline = false))))
         assertThat(vm.state.value.friends.single().isOnline).isFalse()
 
-        userStatusFlow.emit(UserStatusEvent(userId = "alice", isOnline = true, lastActiveAt = "2026-08-11T20:00:00.000Z"))
+        presenceEntries.value = mapOf("alice" to UserPresence(true, "2026-08-11T20:00:00.000Z"))
 
         assertThat(vm.state.value.friends.single().isOnline).isTrue()
         assertThat(vm.state.value.friends.single().lastActiveAt).isEqualTo("2026-08-11T20:00:00.000Z")
-        coVerify(exactly = 1) { repository.receivedRequests(any(), any()) }
+        coVerify(exactly = 1) { repository.friendshipGraph(any()) }
     }
 
     @Test
-    fun `a presence snapshot updates matching friends without a full reload`() = runTest {
-        val vm = viewModel(received = listOf(accepted("r1", sender = user("alice", isOnline = false))))
+    fun `a presence the map retires leaves the contact book and its filters, back on what the server served`() = runTest {
+        val vm = viewModel(received = listOf(accepted("r1", sender = user("u1", isOnline = false, lastActiveAt = "2026-01-01T00:00:00.000Z"))))
+        presenceEntries.value = mapOf("u1" to UserPresence(true, "2026-08-11T20:00:00.000Z"))
+        assertThat(vm.state.value.filterCounts.online).isEqualTo(1)
 
-        presenceSnapshotFlow.emit(PresenceSnapshotEvent(users = listOf(UserStatusEvent(userId = "alice", isOnline = true))))
+        presenceEntries.value = emptyMap()
+
+        val friend = vm.state.value.friends.single()
+        assertThat(friend.isOnline).isFalse()
+        assertThat(friend.lastActiveAt).isEqualTo("2026-01-01T00:00:00.000Z")
+        assertThat(vm.state.value.filterCounts.online).isEqualTo(0)
+        assertThat(vm.state.value.filterCounts.offline).isEqualTo(1)
+        vm.setFilter(me.meeshy.sdk.model.friend.ContactFilter.Online)
+        assertThat(vm.state.value.visibleFriends).isEmpty()
+        vm.setFilter(me.meeshy.sdk.model.friend.ContactFilter.Offline)
+        assertThat(vm.state.value.visibleFriends.map { it.id }).containsExactly("u1")
+    }
+
+    @Test
+    fun `a live presence is never written to the cache - only the list the server served`() = runTest {
+        val written = mutableListOf<List<FriendRequestUser>>()
+        coEvery { listRepository.persist(capture(written), any()) } returns Unit
+        val cache = FriendshipCache()
+        val vm = viewModel(
+            received = listOf(
+                accepted("r1", sender = user("u1", isOnline = false, lastActiveAt = "2026-01-01T00:00:00.000Z")),
+                accepted("r2", sender = user("u2", isOnline = false)),
+            ),
+            cache = cache,
+        )
+        presenceEntries.value = mapOf("u1" to UserPresence(true, "2026-08-11T20:00:00.000Z"))
+        assertThat(vm.state.value.friends.first { it.id == "u1" }.isOnline).isTrue()
+
+        cache.didRemoveFriend("u2")
+        presenceEntries.value = emptyMap()
+
+        assertThat(written).isNotEmpty()
+        written.forEach { roster ->
+            val u1 = roster.first { it.id == "u1" }
+            assertThat(u1.isOnline).isFalse()
+            assertThat(u1.lastActiveAt).isEqualTo("2026-01-01T00:00:00.000Z")
+        }
+        assertThat(written.last().map { it.id }).containsExactly("u1")
+    }
+
+    @Test
+    fun `after a restart the cold paint does not bring back a presence the map had retired`() = runTest {
+        val written = mutableListOf<List<FriendRequestUser>>()
+        coEvery { listRepository.persist(capture(written), any()) } returns Unit
+        val cache = FriendshipCache()
+        viewModel(
+            received = listOf(
+                accepted("r1", sender = user("u1", isOnline = false, lastActiveAt = "2026-01-01T00:00:00.000Z")),
+                accepted("r2", sender = user("u2", isOnline = false)),
+            ),
+            cache = cache,
+        )
+        presenceEntries.value = mapOf("u1" to UserPresence(true, "2026-08-11T20:00:00.000Z"))
+        cache.didRemoveFriend("u2")
+        presenceEntries.value = emptyMap()
+        val persisted = written.last()
+
+        coEvery { repository.friendshipGraph(any()) } returns NetworkResult.Failure(ApiError("boom"))
+        coEvery { listRepository.cachedSnapshot() } returns persisted
+        val restarted = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache(), socketManager())
+
+        val friend = restarted.state.value.friends.single()
+        assertThat(friend.isOnline).isFalse()
+        assertThat(friend.lastActiveAt).isEqualTo("2026-01-01T00:00:00.000Z")
+    }
+
+    @Test
+    fun `a roster loaded AFTER the snapshot already carries the live presence`() = runTest {
+        presenceEntries.value = mapOf("alice" to UserPresence(true, null))
+
+        val vm = viewModel(received = listOf(accepted("r1", sender = user("alice", isOnline = false))))
 
         assertThat(vm.state.value.friends.single().isOnline).isTrue()
-        coVerify(exactly = 1) { repository.receivedRequests(any(), any()) }
     }
 
     @Test
-    fun `a status event for a user not in the roster is a no-op`() = runTest {
+    fun `an entry for a user not in the roster is a no-op`() = runTest {
         val vm = viewModel(received = listOf(accepted("r1", sender = user("alice", isOnline = false))))
 
-        userStatusFlow.emit(UserStatusEvent(userId = "ghost", isOnline = true))
+        presenceEntries.value = mapOf("ghost" to UserPresence(true, null))
 
         assertThat(vm.state.value.friends.single().isOnline).isFalse()
+    }
+
+    @Test
+    fun `pull to refresh re-reads the friend graph from the network and settles`() = runTest {
+        val vm = viewModel(received = listOf(accepted("r1", sender = user("alice"))))
+        coEvery { repository.friendshipGraph(any()) } returns NetworkResult.Success(
+            FriendshipPages(sent = emptyList(), received = listOf(accepted("r1", sender = user("alice")), accepted("r2", sender = user("bob")))),
+        )
+
+        vm.refresh()
+
+        assertThat(vm.state.value.friends.map { it.id }).containsExactly("alice", "bob")
+        assertThat(vm.state.value.isRefreshing).isFalse()
+        coVerify(exactly = 2) { repository.friendshipGraph(any()) }
     }
 
     @Test
@@ -172,6 +258,24 @@ class ContactsListViewModelTest {
         assertThat(vm.state.value.friends.map { it.id }).containsExactly("alice")
     }
 
+    @Suppress("DEPRECATION")
+    @Test
+    fun `lists an accepted friend whose request the user RECEIVED, read from the accepted listing`() = runTest {
+        val cache = FriendshipCache()
+        val vm = viewModel(
+            received = listOf(accepted("in", sender = user("alice"), receiver = user("me"))),
+            sent = listOf(accepted("out", sender = user("me"), receiver = user("bob"))),
+            cache = cache,
+            session = session("me"),
+        )
+
+        assertThat(vm.state.value.friends.map { it.id }).containsExactly("alice", "bob")
+        assertThat(cache.currentFriendIds).containsExactly("alice", "bob")
+        coVerify(exactly = 1) { repository.friendshipGraph("me") }
+        coVerify(exactly = 0) { repository.receivedRequests(any(), any()) }
+        coVerify(exactly = 0) { repository.sentRequests(any(), any()) }
+    }
+
     @Test
     fun `hydrates the friendship cache from the fetched requests`() = runTest {
         val cache = FriendshipCache()
@@ -181,9 +285,8 @@ class ContactsListViewModelTest {
     }
 
     @Test
-    fun `both fetches failing on a cold list surfaces the error`() = runTest {
-        coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Failure(ApiError("boom"))
-        coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Failure(ApiError("nope"))
+    fun `the friend read failing on a cold list surfaces the error`() = runTest {
+        coEvery { repository.friendshipGraph(any()) } returns NetworkResult.Failure(ApiError("boom"))
         coEvery { listRepository.cachedSnapshot() } returns null
 
         val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache(), socketManager())
@@ -245,8 +348,7 @@ class ContactsListViewModelTest {
 
     @Test
     fun `dismissError clears the error message`() = runTest {
-        coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Failure(ApiError("boom"))
-        coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Failure(ApiError("boom"))
+        coEvery { repository.friendshipGraph(any()) } returns NetworkResult.Failure(ApiError("boom"))
         coEvery { listRepository.cachedSnapshot() } returns null
         val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache(), socketManager())
 
@@ -257,10 +359,9 @@ class ContactsListViewModelTest {
 
     @Test
     fun `paints the cached roster instantly before the network answers`() = runTest {
-        val gate = CompletableDeferred<NetworkResult<List<FriendRequest>>>()
+        val gate = CompletableDeferred<NetworkResult<FriendshipPages>>()
         coEvery { listRepository.cachedSnapshot() } returns listOf(user("cachedFriend"))
-        coEvery { repository.receivedRequests(any(), any()) } coAnswers { gate.await() }
-        coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
+        coEvery { repository.friendshipGraph(any()) } coAnswers { gate.await() }
 
         val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache(), socketManager())
 
@@ -269,7 +370,7 @@ class ContactsListViewModelTest {
         assertThat(vm.state.value.friends.map { it.id }).containsExactly("cachedFriend")
         assertThat(vm.state.value.isLoading).isFalse()
 
-        gate.complete(NetworkResult.Success(listOf(accepted("r1", sender = user("networkFriend")))))
+        gate.complete(NetworkResult.Success(FriendshipPages(sent = emptyList(), received = listOf(accepted("r1", sender = user("networkFriend"))))))
 
         assertThat(vm.state.value.friends.map { it.id }).containsExactly("networkFriend")
     }
@@ -277,8 +378,7 @@ class ContactsListViewModelTest {
     @Test
     fun `keeps the cached roster and shows no error when the refresh fails`() = runTest {
         coEvery { listRepository.cachedSnapshot() } returns listOf(user("alice"), user("bob"))
-        coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Failure(ApiError("offline"))
-        coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Failure(ApiError("offline"))
+        coEvery { repository.friendshipGraph(any()) } returns NetworkResult.Failure(ApiError("offline"))
 
         val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache(), socketManager())
 
@@ -289,17 +389,16 @@ class ContactsListViewModelTest {
 
     @Test
     fun `a cold empty cache shows the skeleton until the network answers`() = runTest {
-        val gate = CompletableDeferred<NetworkResult<List<FriendRequest>>>()
+        val gate = CompletableDeferred<NetworkResult<FriendshipPages>>()
         coEvery { listRepository.cachedSnapshot() } returns null
-        coEvery { repository.receivedRequests(any(), any()) } coAnswers { gate.await() }
-        coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
+        coEvery { repository.friendshipGraph(any()) } coAnswers { gate.await() }
 
         val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session(), statusBarCache(), socketManager())
 
         assertThat(vm.state.value.friends).isEmpty()
         assertThat(vm.state.value.showSkeleton).isTrue()
 
-        gate.complete(NetworkResult.Success(emptyList()))
+        gate.complete(NetworkResult.Success(FriendshipPages(sent = emptyList(), received = emptyList())))
 
         assertThat(vm.state.value.showSkeleton).isFalse()
     }
@@ -314,8 +413,26 @@ class ContactsListViewModelTest {
         )
 
         coVerify {
-            listRepository.persist(match { it.map(FriendRequestUser::id) == listOf("online", "offline") })
+            listRepository.persist(match { it.map(FriendRequestUser::id) == listOf("online", "offline") }, any())
         }
+    }
+
+    @Test
+    fun `a cross-screen unfriend keeps the pruned roster under the account it happened in (#13560)`() = runTest {
+        val ticketOfA = me.meeshy.sdk.session.AccountTicket(ownerId = "me", generation = 1)
+        coEvery { listRepository.ticket() } returns ticketOfA
+        val cache = FriendshipCache()
+        viewModel(
+            received = listOf(
+                accepted("r1", sender = user("alice")),
+                accepted("r2", sender = user("bob")),
+            ),
+            cache = cache,
+        )
+
+        cache.didRemoveFriend("bob")
+
+        coVerify { listRepository.persist(match { it.map(FriendRequestUser::id) == listOf("alice") }, ticketOfA) }
     }
 
     @Test
@@ -332,8 +449,8 @@ class ContactsListViewModelTest {
         cache.didRemoveFriend("bob")
 
         assertThat(vm.state.value.friends.map { it.id }).containsExactly("alice")
-        coVerify { listRepository.persist(match { it.map(FriendRequestUser::id) == listOf("alice") }) }
-        coVerify(exactly = 1) { repository.receivedRequests(any(), any()) }
+        coVerify { listRepository.persist(match { it.map(FriendRequestUser::id) == listOf("alice") }, any()) }
+        coVerify(exactly = 1) { repository.friendshipGraph(any()) }
     }
 
     @Test
@@ -351,7 +468,7 @@ class ContactsListViewModelTest {
         cache.didRemoveFriend("bob")
 
         assertThat(vm.state.value.friends.map { it.id }).containsExactly("alice")
-        coVerify(exactly = 1) { repository.receivedRequests(any(), any()) }
+        coVerify(exactly = 1) { repository.friendshipGraph(any()) }
     }
 
     @Test
@@ -365,7 +482,7 @@ class ContactsListViewModelTest {
         // bob has no user record in the (unchanged) fetch, so the list stays alice-only,
         // but the addition provoked one—and only one—background refetch.
         assertThat(vm.state.value.friends.map { it.id }).containsExactly("alice")
-        coVerify(exactly = 2) { repository.receivedRequests(any(), any()) }
+        coVerify(exactly = 2) { repository.friendshipGraph(any()) }
     }
 
     @Test

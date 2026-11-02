@@ -5,13 +5,13 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 141664,
+  "windowPx": 141704,
   "layout": "perches",
   "verdict": "ok"
  },
  {
   "file": "tresor-bourse-b",
-  "overlap": 110,
+  "overlap": 112,
   "face": 0,
   "depth": 3,
   "bbox": [
@@ -20,7 +20,7 @@
    442,
    707
   ],
-  "windowPx": 134902,
+  "windowPx": 134976,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -35,13 +35,13 @@
    152,
    643
   ],
-  "windowPx": 104372,
+  "windowPx": 104499,
   "layout": "pied",
   "verdict": "ok"
  },
  {
   "file": "tresor-coffre-b",
-  "overlap": 36,
+  "overlap": 38,
   "face": 0,
   "depth": 5,
   "bbox": [
@@ -50,7 +50,7 @@
    119,
    718
   ],
-  "windowPx": 147515,
+  "windowPx": 147497,
   "layout": "ruban",
   "verdict": "ok"
  },
@@ -60,7 +60,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 166638,
+  "windowPx": 166949,
   "layout": "perches",
   "verdict": "ok"
  },
@@ -76,7 +76,7 @@
  },
  {
   "file": "tresor-coffret-b",
-  "overlap": 87,
+  "overlap": 89,
   "face": 0,
   "depth": 5,
   "bbox": [
@@ -85,7 +85,7 @@
    446,
    480
   ],
-  "windowPx": 121079,
+  "windowPx": 121195,
   "layout": "cotes",
   "verdict": "ok"
  },
@@ -95,7 +95,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 138445,
+  "windowPx": 138544,
   "layout": "ruban",
   "verdict": "ok"
  },
@@ -105,7 +105,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 137057,
+  "windowPx": 137132,
   "layout": "libre",
   "verdict": "ok"
  },
@@ -115,13 +115,13 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 135507,
+  "windowPx": 135550,
   "layout": "libre",
   "verdict": "ok"
  },
  {
   "file": "tresor-reserve-b",
-  "overlap": 128,
+  "overlap": 133,
   "face": 0,
   "depth": 4,
   "bbox": [
@@ -130,7 +130,7 @@
    448,
    684
   ],
-  "windowPx": 146535,
+  "windowPx": 146656,
   "layout": "libre",
   "verdict": "ok"
  },
@@ -145,13 +145,13 @@
    437,
    713
   ],
-  "windowPx": 138514,
+  "windowPx": 138699,
   "layout": "selfie",
   "verdict": "ok"
  },
  {
   "file": "tresor-tresor-a",
-  "overlap": 58,
+  "overlap": 59,
   "face": 0,
   "depth": 4,
   "bbox": [
@@ -160,22 +160,22 @@
    439,
    378
   ],
-  "windowPx": 136056,
+  "windowPx": 136095,
   "layout": "libre",
   "verdict": "ok"
  },
  {
   "file": "tresor-tresor-b",
-  "overlap": 96,
+  "overlap": 91,
   "face": 0,
-  "depth": 5,
+  "depth": 4,
   "bbox": [
    98,
    424,
    443,
    490
   ],
-  "windowPx": 145368,
+  "windowPx": 145399,
   "layout": "cotes",
   "verdict": "ok"
  }

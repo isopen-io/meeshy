@@ -16,13 +16,26 @@ export const PNG_SIGNATURE_BYTES = Buffer.concat([
 ]);
 export const MP3_SIGNATURE_BYTES = Buffer.from('ID3\x03\x00\x00\x00\x00\x00\x00', 'binary');
 export const PDF_SIGNATURE_BYTES = Buffer.from('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n', 'binary');
+export const MP4_VIDEO_SIGNATURE_BYTES = Buffer.concat([
+  Buffer.from([0x00, 0x00, 0x00, 0x20]),
+  Buffer.from('ftypisom', 'latin1'),
+  Buffer.from([0x00, 0x00, 0x02, 0x00]),
+  Buffer.from('isomiso2avc1mp41', 'latin1'),
+]);
+export const WEBM_VIDEO_SIGNATURE_BYTES = Buffer.concat([
+  Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01, 0x42, 0x82, 0x84]),
+  Buffer.from('webm', 'latin1'),
+]);
 
 /** Choisit la bonne fixture selon le mimeType déclaré ; sinon un texte inerte
- * (sûr pour toute famille non vérifiée par `verifyDeclaredMimeType` — vidéo,
- * texte, code…). */
+ * (sûr pour toute famille non vérifiée par `verifyDeclaredMimeType` — texte,
+ * code… ; la vidéo l'est depuis #11266). */
 export const SIGNATURE_BYTES_BY_MIME_TYPE: Record<string, Buffer> = {
   'image/jpeg': JPEG_SIGNATURE_BYTES,
   'image/png': PNG_SIGNATURE_BYTES,
   'audio/mpeg': MP3_SIGNATURE_BYTES,
   'application/pdf': PDF_SIGNATURE_BYTES,
+  'video/mp4': MP4_VIDEO_SIGNATURE_BYTES,
+  'video/quicktime': MP4_VIDEO_SIGNATURE_BYTES,
+  'video/webm': WEBM_VIDEO_SIGNATURE_BYTES,
 };

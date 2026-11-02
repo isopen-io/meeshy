@@ -20,6 +20,7 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseGloryDecorTextTable, sortGloryDecorTexts, type GloryDecorTextTable } from '../types/glory-frame-decor.js';
 import { parseGloryFrameCollection, type GloryFrameCollection } from '../types/glory-frames.js';
 import {
   COLLECTION_ATMOSPHERES,
@@ -45,7 +46,7 @@ const readJson = <T>(path: string): T => JSON.parse(readFileSync(path, 'utf8')) 
 
 export const jsonText = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
 
-function importCollection(collection: string): { readonly frames: number; readonly copied: number } {
+function importCollection(collection: string, decorTexts: GloryDecorTextTable): { readonly frames: number; readonly copied: number } {
   const exported = readJson<{ readonly frames: readonly RawExportFrame[] }>(join(EXPORT_DIR, collection, 'export.json'));
   const manifest = readJson<readonly ManifestEntry[]>(join(MANIFESTS_DIR, `${collection}.json`));
   const entryOf = (frame: string): ManifestEntry => {
@@ -55,7 +56,7 @@ function importCollection(collection: string): { readonly frames: number; readon
   };
   const ordered = manifest.map((entry) => exported.frames.find((frame) => `${frame.frame}.jpg` === entry.file)).filter((frame): frame is RawExportFrame => frame !== undefined);
   if (ordered.length !== exported.frames.length) throw new Error(`${collection} : l'export et le manifeste ne listent pas les mêmes cadres`);
-  const frames = ordered.map((raw) => normalizeFrame(collection, raw, entryOf(raw.frame)));
+  const frames = ordered.map((raw) => sortGloryDecorTexts(normalizeFrame(collection, raw, entryOf(raw.frame)), decorTexts));
   const document = { generated: GENERATED_NOTICE, schema: 1, collection, atmosphere: COLLECTION_ATMOSPHERES[collection] ?? null, frames };
   const parsed = parseGloryFrameCollection(document);
   if (parsed === null || parsed.rejected > 0) throw new Error(`${collection} : ${parsed?.rejected ?? 'tous les'} cadre(s) refusé(s) par le schéma`);
@@ -98,8 +99,10 @@ function main(argv: readonly string[]): void {
   mkdirSync(GLORY_FRAMES_DIR, { recursive: true });
   mkdirSync(PACK_ASSETS_DIR, { recursive: true });
   const wanted = argv.length > 0 ? argv : exportedCollections();
+  const decorTexts = parseGloryDecorTextTable(JSON.parse(readFileSync(join(GLORY_FRAMES_DIR, 'decor-texts.json'), 'utf8')) as unknown);
+  if (decorTexts === null) throw new Error('decor-texts.json illisible');
   for (const collection of wanted) {
-    const { frames, copied } = importCollection(collection);
+    const { frames, copied } = importCollection(collection, decorTexts);
     process.stdout.write(`${collection} : ${frames} cadres, ${copied} fichier(s) neuf(s) dans le magasin\n`);
   }
 }

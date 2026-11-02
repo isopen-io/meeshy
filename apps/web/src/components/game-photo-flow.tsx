@@ -247,14 +247,19 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
   const [message, setMessage] = useState<string | null>(retake?.recipe.message ?? null);
   const messageSupported = tileOf(gloryChoice.offer, gloryChoice.choice.frame)?.message === true;
   const writtenMessage = messageSupported ? message : null;
-  /* La version que l'aperçu ANNONCE : le cadre dont la scène est ouverte (ou la carte simple) et la pose — ce
-     qui, en changeant sur le résultat, recompose l'image (#10164). La scène compte, pas le seul choix : un
-     cadre choisi mais pas encore prêt se compose en carte simple, puis se recompose quand il arrive. */
-  const previewVersion = composedVersionOf({ frameId: glory === null ? null : glory.frame.id, pose: chosenPose, message: writtenMessage, momentId: moment.id });
+  /* La version que l'aperçu ANNONCE : le cadre dont la scène est ouverte (ou la carte simple) et la pose avec
+     laquelle ELLE s'est ouverte — ce qui, en changeant sur le résultat, recompose l'image (#10164). La scène
+     compte, pas le seul choix : un cadre choisi mais pas encore prêt se compose en carte simple, puis se
+     recompose quand il arrive ; une scène en route vers le choix suivant n'annonce rien de neuf. */
+  const previewVersion = composedVersionOf({ frameId: glory === null ? null : glory.frame.id, pose: gloryChoice.scenePose, message: writtenMessage, momentId: moment.id });
   const previewVersionRef = useRef(previewVersion);
   previewVersionRef.current = previewVersion;
+  const previewSettledRef = useRef(gloryChoice.settled);
+  previewSettledRef.current = gloryChoice.settled;
   const composedVersion = useRef(previewVersion);
   const gloryRecipe = useMemo((): GloryRecipe => ({ pose: chosenPose, message: writtenMessage, crop: { dx: 0, dy: 0, zoom: 1 }, showFlame: withFlame, showLink: withLink }), [chosenPose, writtenMessage, withFlame, withLink]);
+  /* L'aperçu peint la scène montrée dans SA pose, le temps que celle du choix s'ouvre. */
+  const previewRecipe = useMemo((): GloryRecipe => ({ ...gloryRecipe, pose: gloryChoice.scenePose }), [gloryRecipe, gloryChoice.scenePose]);
   const rtl = interfaceDirection(currentInterfaceLanguage()) === 'rtl';
   const gloryBanner = useMemo(() => (glory === null || referral === null ? null : photoBannerOf(referral, glory.bannerLayout(rtl))), [glory, referral, rtl]);
   const gloryOverlay = useMemo((): GloryFrameOverlay | null => (glory === null ? null : { crest: glory.crest, qr: glory.bannerLayout(rtl)?.qr ?? null }), [glory, rtl]);
@@ -400,7 +405,9 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
         }
         setComposition(rendered);
         setComposedReferral(banner);
-        composedVersion.current = previewVersionRef.current;
+        /* La version que l'aperçu annonce à la fin de la frappe ; s'il est en route vers un autre choix, celle
+           que la prise a composée (ce choix) : l'arrivée de sa scène ne recompose pas la même image. */
+        composedVersion.current = previewSettledRef.current ? previewVersionRef.current : versionOf(rendered);
         galleryOnCompose.current = strikingZone === 'frame';
         dispatch({ type: 'composed', frame: versionOf(rendered), format: formatAtCompose.current });
       })
@@ -595,10 +602,12 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
   /* TOUT SE CHANGE APRÈS (#10164) : sur le résultat, un autre cadre ou une autre pose recompose l'image depuis
      la même photo, sans reprendre ; c'est une autre version pour la loi d'enregistrement, « Enregistrer » revient.
      La version se nomme par ce qui a été COMPOSÉ, une fois l'image rendue : tant qu'elle ne l'est pas, l'image
-     affichée est l'ancienne, et son état d'enregistrement reste le sien. */
+     affichée est l'ancienne, et son état d'enregistrement reste le sien. Et rien ne se recompose tant que la
+     scène d'aperçu est EN ROUTE vers le choix : son transit n'est pas un choix, une seule composition par geste. */
   const atResult = state.step === 'result';
+  const previewSettled = gloryChoice.settled;
   useEffect(() => {
-    if (!atResult || composedVersion.current === previewVersion) return;
+    if (!atResult || !previewSettled || composedVersion.current === previewVersion) return;
     composedVersion.current = previewVersion;
     let live = true;
     void recompose(composedReferral).then((rendered) => {
@@ -610,7 +619,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
       live = false;
     };
     /* Le bandeau composé, `recompose` et `versionOf` suivent la clé : ils ne relancent rien d'eux-mêmes. */
-  }, [atResult, previewVersion]);
+  }, [atResult, previewSettled, previewVersion]);
 
   /* Une prise par la case du cadre part dans la galerie dès qu'elle est composée, puis le résultat
      s'affiche sans « Enregistrer » (l'état l'y a déjà rangée avec ce cadre). */
@@ -819,7 +828,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
             ) : null}
             {stageMode === 'gallery' && galleryUrl !== null ? <img src={galleryUrl} alt="" className="absolute inset-0 size-full object-cover" /> : null}
             {glory !== null && gloryKit !== null ? (
-              <GamePhotoGloryCanvas scene={glory} kit={gloryKit} source={glorySource} banner={gloryBanner} recipe={gloryRecipe} />
+              <GamePhotoGloryCanvas scene={glory} kit={gloryKit} source={glorySource} banner={gloryBanner} recipe={previewRecipe} />
             ) : null}
             <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" author={author} referral={referral} glory={gloryKit === null ? null : gloryOverlay} />
           </div>

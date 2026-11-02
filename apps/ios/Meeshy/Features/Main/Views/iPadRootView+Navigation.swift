@@ -247,9 +247,7 @@ extension iPadRootView {
 
     func handleSendMessageToUser(_ notification: Notification) {
         guard let targetUserId = notification.object as? String else { return }
-        if let existingConv = conversationViewModel.conversations.first(where: {
-            $0.type == .direct && $0.participantUserId == targetUserId
-        }) {
+        if let existingConv = DirectConversationResolver.loaded(with: targetUserId, in: conversationViewModel.conversations) {
             openConversation(existingConv)
             return
         }
@@ -387,7 +385,7 @@ extension iPadRootView {
                 }
                 return
             }
-            CallManager.shared.handleIncomingCallAlertTap(
+            CallManager.shared.incomingRing.handleIncomingCallAlertTap(
                 callId: callId,
                 fromUserId: ctx.callerUserId ?? "",
                 fromUsername: ctx.callerName ?? ctx.senderUsername ?? "",
@@ -484,7 +482,7 @@ extension iPadRootView {
                 } catch {
                     Logger.messages.error("[iPadRootView] navigateToConversationById attempt=\(attempt) id=\(conversationId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
                     if attempt == 0 {
-                        try? await Task.sleep(nanoseconds: 600_000_000)
+                        _ = await cancellableSleep(for: .milliseconds(600))
                     }
                 }
             }

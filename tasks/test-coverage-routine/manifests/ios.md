@@ -104,7 +104,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/ios/Meeshy/Features/Main/Models/MessageModels.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Models/Models.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Models/PostModels.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Models/StoryModels.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Models/StoryModels.swift`
 
 ## Features/Main/Navigation  (1/3 have a test)
 
@@ -163,9 +163,9 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/ios/Meeshy/Features/Main/Services/Sleeping.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Services/StarredMessagesStore.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Services/StatusBubbleController.swift`
-- [~] `apps/ios/Meeshy/Features/Main/Services/StoryInteractionService.swift`
-- [~] `apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift`
-- [~] `apps/ios/Meeshy/Features/Main/Services/StoryVideoExportService.swift`
+- [~] `apps/ios/Meeshy/Features/Stories/Services/StoryInteractionService.swift`
+- [~] `apps/ios/Meeshy/Features/Stories/Services/StoryPublishService.swift`
+- [~] `apps/ios/Meeshy/Features/Stories/Services/StoryVideoExportService.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Services/TaskTimeout.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Services/ThermalStateMonitor.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Services/ThreadRepliesLoader.swift`
@@ -192,7 +192,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## Features/Main/ViewModels  (21/28 have a test)
 
-- [~] `apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsViewModel.swift`
+- [~] `apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsViewModel.swift`
 - [~] `apps/ios/Meeshy/Features/Main/ViewModels/BookmarksViewModel.swift`
 - [~] `apps/ios/Meeshy/Features/Main/ViewModels/ConnectionStatusViewModel.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/ViewModels/Conversation/ConversationCommandHandler.swift`
@@ -213,27 +213,27 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/ios/Meeshy/Features/Main/ViewModels/ReelsViewModel.swift`
 - [~] `apps/ios/Meeshy/Features/Main/ViewModels/SharePickerViewModel.swift`
 - [~] `apps/ios/Meeshy/Features/Main/ViewModels/StatusViewModel.swift`
-- [~] `apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift`
-- [~] `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`
+- [~] `apps/ios/Meeshy/Features/Stories/ViewModels/StoryExportShareViewModel.swift`
+- [~] `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/ViewModels/SyncPillViewModel.swift`
-- [~] `apps/ios/Meeshy/Features/Main/ViewModels/TwoFactorViewModel.swift`
-- [~] `apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift`
-- [~] `apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileManageViewModel.swift`
-- [~] `apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileWizardViewModel.swift`
+- [~] `apps/ios/Meeshy/Features/Settings/ViewModels/TwoFactorViewModel.swift`
+- [~] `apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift`
+- [~] `apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileManageViewModel.swift`
+- [~] `apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileWizardViewModel.swift`
 
 ## Features/Main/Views  (12/161 have a test)
 
-- [ ] `apps/ios/Meeshy/Features/Main/Views/AboutView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/AchievementBadgeView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/AboutView.swift`
+- [ ] `apps/ios/Meeshy/Features/Profile/Views/AchievementBadgeView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/ActiveSessionsView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/AdaptiveRootView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/AffiliateCreateView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift`
+- [ ] `apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift`
+- [ ] `apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/AudioAvailabilityResolver.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/AudioEffectsPanel.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/AudioFullscreenView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/AudioPostComposerView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/BlockedUsersView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/BlockedUsersView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/BookmarksView.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Views/Bubble/AudioBubbleRouter.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/Bubble/AudioCarouselView.swift`
@@ -272,11 +272,11 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/ios/Meeshy/Features/Main/Views/Cells/ReplyCell.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/Cells/TextPostCell.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/Cells/TopLevelCommentCell.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/CommentListView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/CommentListViewController.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/CommunityLinkDetailView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/CommunityLinksView.swift`
+- [ ] `apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift`
+- [ ] `apps/ios/Meeshy/Features/Links/Views/CommunityLinksView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ContextActionMenu.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ConversationAnimatedBackground.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ConversationBackgroundComponents.swift`
@@ -294,11 +294,11 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ConversationView+MessageRow.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ConversationView+ScrollIndicators.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ConversationView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/DataExportView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/DataStorageView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/DeleteAccountView.swift`
+- [ ] `apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift`
+- [ ] `apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/DataExportView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/DataStorageView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/DeleteAccountView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/DiffableTypes.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/EditProfileView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/EmojiPickerSheet.swift`
@@ -314,11 +314,11 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/ios/Meeshy/Features/Main/Views/GlobalSearchView.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Views/GuestConversationContainer.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/IncomingCallView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/LicensesView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/LinksHubView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/LoginView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/LicensesView.swift`
+- [ ] `apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift`
+- [ ] `apps/ios/Meeshy/Features/Auth/Views/LoginView.swift`
+- [ ] `apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/MessageContextOverlay.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Views/MessageFrameTracker.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/MessageListView.swift`
@@ -326,57 +326,57 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/ios/Meeshy/Features/Main/Views/MessageOverlayLayoutEngine.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Views/MessageRowEnvelope.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/NewConversationView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/OnboardingView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/OverlayMenu.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ParticipantsView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/PostDetailView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/PostTranslationSheet.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/PrivacyPolicyView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/PrivacyPolicyView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift`
+- [ ] `apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ReplyContextCleaner.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ReplyThreadOverlay.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ReportUserView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/RootView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/RootViewComponents.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/SecurityView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/ShareLinksView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift`
+- [ ] `apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailView.swift`
+- [ ] `apps/ios/Meeshy/Features/Links/Views/ShareLinksView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/SharePickerView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonFeedPost.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonProfileHeader.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonStoryThumb.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonVisibilityResolver.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StatsTimelineChart.swift`
+- [ ] `apps/ios/Meeshy/Features/Profile/Views/StatsTimelineChart.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/StatusBarView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/StatusComposerView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/SupportView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/TermsOfServiceView.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryExportShareSheet.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/SupportView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ThemedMessageBubble.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ThreadView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/TrackingLinksView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/TwoFactorSetupView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/UserStatsView.swift`
+- [ ] `apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift`
+- [ ] `apps/ios/Meeshy/Features/Links/Views/TrackingLinksView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/TwoFactorSetupView.swift`
+- [ ] `apps/ios/Meeshy/Features/Profile/Views/UserStatsView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/VideoAvailabilityResolver.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/VideoFilterControlView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/VideoFiltersPanel.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/VideoLegacySupport.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/VoiceProfileWizardView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift`
+- [ ] `apps/ios/Meeshy/Features/Settings/Views/VoiceProfileWizardView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/WebRTCVideoView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/WidgetPreviewView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/iPadRootView+Navigation.swift`

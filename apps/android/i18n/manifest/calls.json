@@ -251,18 +251,6 @@
           "status": "candidate"
         },
         {
-          "androidName": "call_screen_share_channel",
-          "status": "android-only"
-        },
-        {
-          "androidName": "call_screen_share_notification_text",
-          "status": "android-only"
-        },
-        {
-          "androidName": "call_screen_share_notification_title",
-          "status": "android-only"
-        },
-        {
           "androidName": "call_spoken_hours",
           "status": "android-only"
         },

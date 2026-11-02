@@ -9,6 +9,8 @@ import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { createStudioDraftStore, type StudioDraftSnapshot, type StudioPageSnapshot, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
+import { memoryDeviceRecords } from '@/lib/send/send-queue';
+import { createStudioOutbox, type StudioOutbox } from '@/lib/stories/studio-outbox';
 import StoryComposeScreen, { type StoryStudioDeps } from '@/routes/story-compose';
 import type { StudioEdit } from '@/routes/use-studio-edit';
 
@@ -237,6 +239,9 @@ export function harness(options: {
    * — la requête est ENREGISTRÉE (`posts`) dès son émission. */
   readonly postsHold?: () => boolean;
   readonly drafts?: StudioDraftStore;
+  /** Les publications non envoyées de l'appareil (#13416) — une par banc, sauf
+   * à rejouer un rechargement en passant la même. */
+  readonly outbox?: StudioOutbox;
   /** Le statut des `PUT /posts/:id` (#9317) — 200 par défaut. */
   readonly putsStatus?: () => number;
 }): Harness {
@@ -304,6 +309,7 @@ export function harness(options: {
       api: { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: postsFetch }) },
       upload: { source: 'gateway', base: 'https://gate.test', credential: () => ({ kind: 'registered', token: 't' }), fetchImpl: uploadsFetch },
       drafts: options.drafts ?? createStudioDraftStore(null),
+      outbox: options.outbox ?? createStudioOutbox(memoryDeviceRecords()),
       // Les miniatures d'effet liraient le fond par le RÉSEAU réel (#9828) : le
       // banc rend aussitôt « pas de rendu réduit », la tuile peint le fond lui-même.
       thumbnails: async () => null,

@@ -184,6 +184,41 @@ class OutboxRepositoryTest {
         assertThat(repository.observeAll().first().map { it.cmid }).containsExactly("m1")
     }
 
+    @Test
+    fun `retrying a publication revives the exhausted uploads it waits on, so it can run again`() = runTest {
+        repository.enqueue(OutboxMutation(OutboxKind.UPLOAD_MEDIA, OutboxLanes.MEDIA, "u1", "", cmid = "u1"))
+        repository.enqueue(OutboxMutation(OutboxKind.UPLOAD_MEDIA, OutboxLanes.MEDIA, "u2", "", cmid = "u2"))
+        repository.enqueue(
+            OutboxMutation(OutboxKind.CREATE_POST, OutboxLanes.POST, "p", "{}", dependsOn = setOf("u1", "u2"), cmid = "p"),
+        )
+        repository.markExhausted("u1", "HTTP 415")
+        repository.markExhausted("p", "Prerequisite(s) failed: u1")
+
+        assertThat(repository.retryWithPrerequisites("p")).isTrue()
+
+        assertThat(repository.stateOf("p")).isEqualTo(OutboxState.PENDING)
+        assertThat(repository.stateOf("u1")).isEqualTo(OutboxState.PENDING)
+        assertThat(repository.stateOf("u2")).isEqualTo(OutboxState.PENDING)
+        assertThat(repository.row("u1")?.attempts).isEqualTo(0)
+    }
+
+    @Test
+    fun `retrying a publication that is gone revives nothing`() = runTest {
+        assertThat(repository.retryWithPrerequisites("missing")).isFalse()
+        assertThat(repository.row("missing")).isNull()
+    }
+
+    @Test
+    fun `an upload landing after its publication gave up still grafts the real id into it`() = runTest {
+        repository.enqueue(rowDependingOn("p1", "u", "old1"))
+        repository.markExhausted("p1", "no author")
+
+        val changed = repository.rewriteDependents("u") { "new:$it" }
+
+        assertThat(changed).isEqualTo(1)
+        assertThat(repository.row("p1")?.payload).isEqualTo("new:old1")
+    }
+
     private fun rowDependingOn(cmid: String, prereq: String, payload: String) = OutboxMutation(
         kind = OutboxKind.SEND_MESSAGE,
         lane = "lane-$cmid",

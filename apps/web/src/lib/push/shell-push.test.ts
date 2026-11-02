@@ -11,7 +11,6 @@ import type { SessionState } from '@/lib/api/session';
 import { pushTapTarget, type PushTapTarget } from '@/lib/notifications/target';
 
 import {
-  SHELL_PUSH_CHANNEL_ID,
   shellPushTargetInput,
   startShellPush,
   type ShellPushPermission,
@@ -29,7 +28,6 @@ type Handlers = Record<string, (event: never) => void>;
 function fakePlugin(options: { readonly permission?: ShellPushPermission; readonly afterRequest?: ShellPushPermission } = {}) {
   const handlers: Handlers = {};
   const calls: string[] = [];
-  const channels: string[] = [];
   let tokenSeq = 0;
   const plugin: ShellPushPlugin = {
     checkPermissions: async () => ({ receive: options.permission ?? 'granted' }),
@@ -45,16 +43,13 @@ function fakePlugin(options: { readonly permission?: ShellPushPermission; readon
     unregister: async () => {
       calls.push('unregister');
     },
-    createChannel: async (channel) => {
-      channels.push(channel.id);
-    },
     addListener: (async (eventName: string, listener: (event: never) => void) => {
       handlers[eventName] = listener;
       return { remove: async () => undefined };
     }) as ShellPushPlugin['addListener'],
   };
   const fire = (eventName: string, event: unknown): void => handlers[eventName]?.(event as never);
-  return { plugin, calls, channels, fire };
+  return { plugin, calls, fire };
 }
 
 const authenticated = (id: string): SessionState => ({
@@ -98,13 +93,6 @@ function harness(
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('startShellPush — le jeton FCM de la coque part sous le compte courant (#7307)', () => {
-  test('crée le canal que la passerelle nomme, sans quoi Android jette la bannière en silence', async () => {
-    const h = harness(anonymous);
-    await h.start();
-    expect(h.channels).toEqual([SHELL_PUSH_CHANNEL_ID]);
-    expect(SHELL_PUSH_CHANNEL_ID).toBe('meeshy_notifications');
-  });
-
   test('une session enregistrée enregistre le jeton par le port d’iOS, en android/fcm', async () => {
     const h = harness(authenticated('u1'));
     await h.start();
@@ -113,7 +101,7 @@ describe('startShellPush — le jeton FCM de la coque part sous le compte couran
       {
         method: 'POST',
         path: '/api/v1/users/register-device-token',
-        body: { token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12' },
+        body: { token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12', bundleId: 'me.meeshy.webapp' },
         credential: { kind: 'registered', token: 'jwt-u1' },
       },
     ]);
@@ -189,6 +177,7 @@ describe('le jeton part avec l’identité de l’appareil (#10858)', () => {
         platform: 'android',
         type: 'fcm',
         appVersion: '2.0.12',
+        bundleId: 'me.meeshy.webapp',
         deviceId: 'a1b2c3d4e5f60718',
         deviceName: 'Pixel 8',
       },
@@ -199,12 +188,12 @@ describe('le jeton part avec l’identité de l’appareil (#10858)', () => {
     const bodies = await registeredBody(async () => {
       throw new Error('not implemented');
     });
-    expect(bodies).toEqual([{ token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12' }]);
+    expect(bodies).toEqual([{ token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12', bundleId: 'me.meeshy.webapp' }]);
   });
 
   test('ce que le pont rend d’inattendu ne part pas', async () => {
     const bodies = await registeredBody(async () => ({ deviceId: '', deviceName: 42, extra: 'x' }));
-    expect(bodies).toEqual([{ token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12' }]);
+    expect(bodies).toEqual([{ token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12', bundleId: 'me.meeshy.webapp' }]);
   });
 });
 
@@ -277,6 +266,15 @@ describe('la coque accuse la remise d’un message reçu UNE fois, en natif (#11
     const received = service.slice(service.indexOf('public void onMessageReceived('), service.indexOf('private void acknowledgeDelivery('));
     expect(received).toContain('forward("sendRemoteMessage"');
     expect(received).toContain('acknowledgeDelivery(PushDeliveryReceipt.of(');
+  });
+
+  test('l’accusé part hors du fil des pushs, comme `accuserRemise` en parallèle de la bannière (#12623)', () => {
+    const service = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../../../android/app/src/main/java/me/meeshy/app/MeeshyMessagingService.java'),
+      'utf8',
+    );
+    const acknowledge = service.slice(service.indexOf('private void acknowledgeDelivery('), service.indexOf('public void onNewToken('));
+    expect(acknowledge).toContain('ReceiptDispatch.run(');
   });
 });
 

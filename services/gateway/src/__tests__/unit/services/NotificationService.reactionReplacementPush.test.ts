@@ -29,6 +29,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { NotificationService } from '../../../services/notifications/NotificationService';
+import { aliveAndUnblocked } from '../../helpers/linked-to-everyone';
 import {
   REPLACES_ACTOR_SUBJECT_FIELD,
   REPLACES_ACTOR_SUBJECT_VALUE,
@@ -62,7 +63,7 @@ function permissivePrisma(overrides: Record<string, Record<string, unknown>>): u
 function harness() {
   const pushed: PushedPayload[] = [];
   const prisma = permissivePrisma({
-    user: { findUnique: async () => ({ username: 'kwame', displayName: 'Kwame', avatar: null, systemLanguage: 'fr' }) },
+    user: { findUnique: async () => ({ username: 'kwame', displayName: 'Kwame', avatar: null, systemLanguage: 'fr' }), findMany: aliveAndUnblocked() },
     notification: { create: async (args: { data: Record<string, unknown> }) => ({ id: 'n-new', ...args.data, createdAt: new Date() }) },
     post: { findFirst: async () => ({ authorId: AUTHOR_ID, visibility: 'PUBLIC', visibilityUserIds: [] }) },
     conversation: { findUnique: async () => ({ title: null, type: 'direct' }) },

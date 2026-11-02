@@ -337,9 +337,9 @@ final class ComposerCaptureTakesTests: XCTestCase {
 
     /// L'écriture appartient à la session, jamais au viseur : elle ne le retient pas.
     func test_galleryWrites_holdTheSessionWeakly() throws {
-        let prises = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift")
+        let prises = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession+Takes.swift")
         XCTAssertEqual(prises.components(separatedBy: "galleryChain = Task { @MainActor [weak self] in").count - 1, 2)
-        let edition = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift")
+        let edition = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession+Edit.swift")
         XCTAssertTrue(edition.contains("takeWrite = tache"), "l'écriture de la flèche est détenue par la session")
     }
 
@@ -352,14 +352,14 @@ final class ComposerCaptureTakesTests: XCTestCase {
 
     func test_hostsNoLongerObserveTheCamera_theSessionDoes() throws {
         for fichier in ["ComposerViewfinder.swift", "MeeshyComposerHost+Surfaces.swift"] {
-            let code = try Self.code("Meeshy/Features/Main/Composer/\(fichier)")
+            let code = try Self.code("Meeshy/Features/Composer/\(fichier)")
             XCTAssertFalse(code.contains("$capturedPhotoId"), "\(fichier) : la session reçoit les prises, une fois")
             XCTAssertFalse(code.contains("$capturedVideoId"), "\(fichier)")
         }
-        let prises = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift")
+        let prises = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession+Takes.swift")
         XCTAssertTrue(prises.contains("camera.$capturedPhotoId"))
         XCTAssertTrue(prises.contains("camera.$capturedVideoId"))
-        let machine = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
+        let machine = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession.swift")
         XCTAssertTrue(machine.contains("noteRecordingStarted()"), "chaque enregistrement PARTI fige son intention")
     }
 
@@ -599,7 +599,7 @@ final class ComposerCaptureTakesTests: XCTestCase {
     /// n-5 : au-delà de la borne, le renoncement se dit — une haptique
     /// d'avertissement et une annonce VoiceOver.
     func test_awaitPreviousTake_renouncing_warnsAndAnnounces() throws {
-        let corps = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift")
+        let corps = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession+Takes.swift")
         XCTAssertTrue(corps.contains("HapticFeedback.warning()"))
         XCTAssertTrue(corps.contains("argument: ComposerSceneCameraCopy.previousTakeStillSaving"))
         XCTAssertFalse(ComposerSceneCameraCopy.previousTakeStillSaving.isEmpty)
@@ -793,6 +793,7 @@ final class MockComposerGallery: ComposerGalleryProviding, @unchecked Sendable {
     private var videos = 0
     private var enCours = 0
     private var pointe = 0
+    private var derniere: Data?
 
     nonisolated deinit {}
 
@@ -802,6 +803,8 @@ final class MockComposerGallery: ComposerGalleryProviding, @unchecked Sendable {
     }
 
     var saveImageCount: Int { verrou.withLock { images } }
+    /// Les octets de la dernière image reçue (#12591).
+    var lastSavedImageData: Data? { verrou.withLock { derniere } }
     var saveVideoCount: Int { verrou.withLock { videos } }
     /// Le plus grand nombre d'enregistrements vus EN MÊME TEMPS.
     var maxConcurrentSaves: Int { verrou.withLock { pointe } }
@@ -812,6 +815,7 @@ final class MockComposerGallery: ComposerGalleryProviding, @unchecked Sendable {
             images += 1
             enCours += 1
             pointe = max(pointe, enCours)
+            derniere = data
         }
         try? await Task.sleep(nanoseconds: 50_000_000)
         verrou.withLock { enCours -= 1 }

@@ -383,7 +383,7 @@ export const gameStandingSchema = z.object({
   /** Le niveau max à vie (#10846) — suit le réglage « rang », comme le niveau. Absent devant un serveur antérieur. */
   levelMaxLifetime: z.number().int().min(1).optional(),
   prestige: z.number().int().min(0).max(5),
-  /** `null` : pas de Flamme allumée — ou celle-ci n'est pas à montrer. */
+  /** `null` : pas de Flamme allumée — ou celle-ci n'est pas à montrer (servie à Proche et au-dessus, GAM-01, #13930). */
   flame: enumOf(FLAME_FORMS.map((form) => form.key)).nullable(),
   rank: enumOf<(typeof GLORY_RANKS)[number]['key'] | 'mythe'>([...GLORY_RANKS.map((r) => r.key), 'mythe']),
   /** Projection héritée (III, II, I), `null` pour Mythe. */
@@ -393,18 +393,18 @@ export const gameStandingSchema = z.object({
   /** La place du Mythe et son numéro (la Signature unique en dérive), `null` hors du Mythe — #9636. */
   mythic: mythicSeatSchema.nullable().optional(),
   /**
-   * Ses points et le nombre de ses trophées — servis aux AMIS seulement (décision porteur 2026-10-06, #9541),
-   * jamais à un autre lecteur : absents, le client n'affiche rien. Optionnels, car un ancien serveur n'en sert pas.
+   * Ses points — servis à PROCHE et au-dessus (GAM-02, #13930) — et le nombre de ses trophées — servi aux AMIS et au-dessus
+   * (#9541) —, jamais à un autre lecteur : absents, le client n'affiche rien. Optionnels, car un ancien serveur n'en sert pas.
    */
   points: z.number().int().min(0).optional(),
   trophyCount: z.number().int().min(0).optional(),
   /**
-   * Ses étincelles (#10846) — la même visibilité que `points` (soi et les amis) : la poche, et le total accumulé à vie.
+   * Ses étincelles (#10846) — la même visibilité que `points` (soi, Proche et au-dessus) : la poche, et le total accumulé à vie.
    * `points` reste servi, aligné sur la poche. Des nombres JSON entiers, jamais une chaîne.
    */
   sparks: z.number().int().min(0).optional(),
   sparksLifetime: z.number().int().min(0).optional(),
-  /** Sa Gloire totale (#10913) — la même visibilité que `points` (soi et les amis). Absente devant un serveur antérieur. */
+  /** Sa Gloire totale (#10913) — la même visibilité que `points` (soi, Proche et au-dessus). Absente devant un serveur antérieur. */
   glory: z.number().int().min(0).optional(),
 });
 

@@ -219,14 +219,12 @@ describe('zmq-helpers', () => {
       expect(result!.buffer).toEqual(fakeContent);
     });
 
-    it('reports size from statSync (not buffer.length)', async () => {
-      // statSync reports 512; readFile returns a buffer of different length
-      const statSize = 512;
+    it('reports the size of the bytes it sends, not the stored file size (#13100: a sealed file is larger than its plaintext)', async () => {
       mockExistsSync.mockReturnValue(true);
-      mockStatSync.mockReturnValue({ size: statSize });
-      mockReadFile.mockResolvedValue(Buffer.alloc(100)); // mismatch is irrelevant
+      mockStatSync.mockReturnValue({ size: 512 });
+      mockReadFile.mockResolvedValue(Buffer.alloc(100));
       const result = await loadAudioAsBinary('/tmp/size-check.wav');
-      expect(result!.size).toBe(statSize);
+      expect(result!.size).toBe(100);
     });
   });
 

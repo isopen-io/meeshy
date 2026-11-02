@@ -46,6 +46,7 @@ jest.mock('../../../utils/logger', () => ({
   logError: jest.fn(),
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
+jest.mock('../../../services/EncryptionService', () => jest.requireActual<typeof import('../../helpers/server-key-stub')>('../../helpers/server-key-stub').serverKeyStub());
 
 jest.mock('../../../middleware/auth', () => ({ UnifiedAuthRequest: {} }));
 
@@ -100,7 +101,7 @@ const DB_CONVERSATION = {
 
 function makePrisma() {
   return {
-    user: { findUnique: jest.fn().mockResolvedValue(DB_USER) },
+    user: { findUnique: jest.fn().mockResolvedValue(DB_USER), findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
     friendRequest: {
       findFirst: jest.fn().mockResolvedValue(null),
       // Même distinction qu'ailleurs dans le dépôt (#4162) : `select` → lecture
@@ -115,8 +116,19 @@ function makePrisma() {
       findMany: jest.fn().mockResolvedValue([DB_FRIEND_REQUEST]),
       count: jest.fn().mockResolvedValue(1),
       update: jest.fn().mockResolvedValue({ ...DB_FRIEND_REQUEST, status: 'accepted' }),
-      delete: jest.fn().mockResolvedValue({}),
+      deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
+    // Depuis les crans (#13933), un envoi est jugé sur le lien de la paire : par défaut, les
+    // deux sont déjà Connaissances, le cran qui précède Ami.
+    userRelation: {
+      findUnique: jest.fn().mockResolvedValue({
+        id: 'aa0000000000000000000099', userLowId: USER_ID, userHighId: RECEIVER_ID,
+        grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE', transitions: [],
+      }),
+      findMany: jest.fn().mockResolvedValue([]),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    pairInteractionDay: { findMany: jest.fn().mockResolvedValue([]) },
     notification: { findMany: jest.fn().mockResolvedValue([]), update: jest.fn().mockResolvedValue({}) },
     conversation: {
       findFirst: jest.fn().mockResolvedValue(null),

@@ -26,7 +26,8 @@ final class MessageMenuKeyboardDismissTests: XCTestCase {
         AppSourceGuard.stripComments(try AppSourceGuard.unit(relativePath))
     }
 
-    private static let list = "Meeshy/Features/Main/Views/MessageListView.swift"
+    private static let swipeContainer = "Meeshy/Features/Main/Views/BubbleSwipeContainer.swift"
+    private static let previewContainer = "Meeshy/Features/Main/Views/MessageMenuPreviewContainer.swift"
     private static let helper = "Meeshy/Features/Main/Views/MessageMenuKeyboard.swift"
 
     func test_leSiteDeFermeture_existe_etRelacheLePremierRepondeur() throws {
@@ -45,7 +46,7 @@ final class MessageMenuKeyboardDismissTests: XCTestCase {
     }
 
     func test_cheminCustom_avantIOS26_fermeLeClavierAvantDOuvrirSonMenu() throws {
-        let src = try source(Self.list)
+        let src = try source(Self.swipeContainer)
         let corps = try Self.corpsDe("struct ConditionalBubbleLongPress", dans: src)
 
         XCTAssertTrue(
@@ -56,7 +57,7 @@ final class MessageMenuKeyboardDismissTests: XCTestCase {
     }
 
     func test_cheminNatif_iOS26_fermeLeClavierQuandLApercuParait() throws {
-        let src = try source(Self.list)
+        let src = try source(Self.previewContainer)
         let corps = try Self.corpsDe("struct MessageMenuPreviewContainer", dans: src)
 
         XCTAssertTrue(

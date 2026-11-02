@@ -1,4 +1,4 @@
-import type { PostVisibility } from '../types/post.js';
+import { POST_VISIBILITIES, type PostVisibility } from '../types/post.js';
 
 /**
  * Loi d'audience de la republication : **même audience, ou plus restreinte,
@@ -59,19 +59,36 @@ import type { PostVisibility } from '../types/post.js';
  * d'audience du composeur : c'est une affordance, jamais la garantie.
  */
 
-const ALL_VISIBILITIES: readonly PostVisibility[] = [
-  'PUBLIC',
-  'COMMUNITY',
-  'FRIENDS',
-  'EXCEPT',
-  'ONLY',
-  'PRIVATE',
-];
+const ALL_VISIBILITIES: readonly PostVisibility[] = POST_VISIBILITIES;
+
+/**
+ * Les audiences de CERCLE se rétrécissent vers un cercle plus étroit (#13931,
+ * RG-18) : chacune est « le niveau effectif atteint AU MOINS tel cran », donc
+ * Proches ⊆ Connaissances et Sang ⊆ Proches, toujours, quel que soit le graphe.
+ *
+ * `FRIENDS` n'est PAS sous `ACQUAINTANCES` : son admission historique est « amis
+ * ∪ contacts de message direct » (`postAudience.ts`), et un contact de message
+ * direct n'est pas forcément une Connaissance. Repartager un contenu
+ * Connaissances en Amis l'ouvrirait donc à des gens qui ne le voyaient pas — le
+ * même piège que `COMMUNITY` ↔ `FRIENDS`. En revanche Proches et Sang sont sous
+ * `FRIENDS` (un Proche est un ami ; aucun contact DM n'entre dans un cercle).
+ *
+ * Un contenu `BLOOD` n'est JAMAIS repartageable (RG-18) : aucune audience ne lui
+ * est permise, pas même `PRIVATE`.
+ */
+const NARROWER_CIRCLES: Readonly<Partial<Record<PostVisibility, readonly PostVisibility[]>>> = {
+  ACQUAINTANCES: ['ACQUAINTANCES', 'CLOSE', 'BLOOD'],
+  FRIENDS: ['FRIENDS', 'CLOSE', 'BLOOD'],
+  CLOSE: ['CLOSE', 'BLOOD'],
+};
 
 /** Audiences qu'un republieur peut choisir, l'original étant donné. */
 export function allowedRepostVisibilities(original: PostVisibility): PostVisibility[] {
   if (original === 'PUBLIC') return [...ALL_VISIBILITIES];
+  if (original === 'BLOOD') return [];
   if (original === 'PRIVATE') return ['PRIVATE'];
+  const narrower = NARROWER_CIRCLES[original];
+  if (narrower) return [...narrower, 'PRIVATE'];
   return [original, 'PRIVATE'];
 }
 

@@ -189,6 +189,57 @@ final class OutboxFlusherTests: XCTestCase {
         XCTAssertEqual(after.attempts, 1, "il ne doit pas brûler le budget de tentatives pour finir au même endroit")
     }
 
+    /// #13414 — un média refusé en 415 APRÈS le repli JPEG ne passera jamais :
+    /// la publication sort tout de suite en échec (gardée sur l'appareil),
+    /// au lieu d'envoyer cinq fois les mêmes octets.
+    func test_flush_createPost_unsupportedImageFormat_deadLettersImmediately_withoutBurningBudget() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "post-415", kind: .createPost, conversationId: "",
+                clientMessageId: "cid_post_415",
+                payload: Data(), status: .pending, attempts: 0, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        let flusher = OutboxFlusher(pool: pool, dispatcher: MockOutboxDispatcher(failure: UnsupportedImageFormatRefusal(statusCode: 415)!))
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "post-415")!
+        }
+        XCTAssertEqual(after.status, .exhausted, "un format refusé après repli ne se rejoue pas")
+        XCTAssertEqual(after.attempts, 1, "il ne brûle pas cinq tentatives identiques")
+    }
+
+    func test_flush_createPost_bare415_deadLettersImmediately() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "post-415-bare", kind: .createPost, conversationId: "",
+                clientMessageId: "cid_post_415_bare",
+                payload: Data(), status: .pending, attempts: 0, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        let flusher = OutboxFlusher(pool: pool, dispatcher: MockOutboxDispatcher(failure: MeeshyError.server(statusCode: 415, message: "Unsupported Media Type")))
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "post-415-bare")!
+        }
+        XCTAssertEqual(after.status, .exhausted)
+        XCTAssertEqual(after.attempts, 1)
+    }
+
     func test_flush_corruptPayloadRejection_deadLettersImmediately_withoutBurningBudget() async throws {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)

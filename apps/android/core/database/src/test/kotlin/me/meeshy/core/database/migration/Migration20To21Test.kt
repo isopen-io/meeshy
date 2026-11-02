@@ -12,6 +12,9 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class Migration20To21Test {
 
+    // validateDroppedTables = false: Room's helper would flag the raw-SQL search index as an unexpected
+    // table; strayTables() keeps the same check for every table outside that index.
+
     @get:Rule
     val helper = MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), MeeshyDatabase::class.java)
 
@@ -22,7 +25,8 @@ class Migration20To21Test {
             DURABLE_QUERIES.map(db::rows)
         }
 
-        helper.runMigrationsAndValidate(TEST_DB, 21, true, *MeeshyMigrations.all).use { db ->
+        helper.runMigrationsAndValidate(TEST_DB, 21, false, *MeeshyMigrations.all).use { db ->
+            assertThat(db.strayTables()).isEmpty()
             assertThat(DURABLE_QUERIES.map(db::rows)).isEqualTo(before)
             assertThat(db.rows("SELECT id FROM messages")).containsExactly(listOf("m1"))
             assertThat(db.rows("SELECT id FROM conversations")).containsExactly(listOf("conv1"))
@@ -33,7 +37,8 @@ class Migration20To21Test {
     fun `20 vers 21 cree les index de recherche et leurs declencheurs`() {
         helper.createDatabase(TEST_DB, 20).close()
 
-        helper.runMigrationsAndValidate(TEST_DB, 21, true, *MeeshyMigrations.all).use { db ->
+        helper.runMigrationsAndValidate(TEST_DB, 21, false, *MeeshyMigrations.all).use { db ->
+            assertThat(db.strayTables()).isEmpty()
             val names = db.rows("SELECT name FROM sqlite_master WHERE name LIKE '%fts%'").flatten()
             assertThat(names).containsAtLeast(
                 "message_fts",
@@ -54,7 +59,8 @@ class Migration20To21Test {
             )
         }
 
-        helper.runMigrationsAndValidate(TEST_DB, 21, true, *MeeshyMigrations.all).use { db ->
+        helper.runMigrationsAndValidate(TEST_DB, 21, false, *MeeshyMigrations.all).use { db ->
+            assertThat(db.strayTables()).isEmpty()
             assertThat(db.rows("SELECT docid FROM message_fts WHERE message_fts MATCH 'bonjour*'")).hasSize(1)
         }
     }

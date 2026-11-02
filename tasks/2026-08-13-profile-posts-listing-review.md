@@ -1,6 +1,6 @@
 # Revue — listing des postes d'un profil (iOS)
 
-Périmètre : `apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift`
+Périmètre : `apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift`
 (vue + `ProfileUserPostsViewModel`), injecté dans l'onglet « Postes » de
 `UserProfileSheet`. Objectif : coût énergétique, fluidité du défilement,
 et synchronisation des actions de carte avec les compteurs serveur.

@@ -2,6 +2,7 @@ package me.meeshy.sdk.outbox
 
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.net.NetworkResult
 
 /**
@@ -33,11 +34,32 @@ public interface OutboxKindHandler : MutationSender {
 
 /**
  * The delivery contract shared by every handler until the flusher classifies
- * statuses (persist-outbox-flusher-classifie): any failed call is retryable.
+ * statuses (persist-outbox-flusher-classifie): a failed call is retryable — except a
+ * gesture the gateway refuses in clear for an end-to-end conversation ([SignalChannelRefusal]),
+ * which would be refused identically forever. A handler that knows the row's
+ * [conversationId] lets the [ledger] learn it, so no later row leaves in clear.
  */
-internal fun NetworkResult<*>.toSendResult(): SendResult = when (this) {
+internal fun NetworkResult<*>.toSendResult(
+    conversationId: String? = null,
+    ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
+): SendResult = when (this) {
     is NetworkResult.Success -> SendResult.Success
-    is NetworkResult.Failure -> SendResult.TransientFailure
+    is NetworkResult.Failure -> SignalChannelRefusal.of(this, conversationId, ledger) ?: SendResult.TransientFailure
+}
+
+/**
+ * #13790 — `409 E2EE_SIGNAL_CHANNEL_REQUIRED` (`services/gateway/src/services/e2ee/e2ee-signal-channel.ts`) : réagir,
+ * épingler ou supprimer pour tous y voyage en signal chiffré, que cet appareil ne sait pas sceller. Le refus est DÉFINITIF —
+ * le rejouer renverrait le geste en clair à chaque essai —, la ligne s'épuise et son effet optimiste se défait.
+ */
+internal object SignalChannelRefusal {
+    const val CODE: String = "E2EE_SIGNAL_CHANNEL_REQUIRED"
+
+    fun of(failure: NetworkResult.Failure, conversationId: String?, ledger: EndToEndRegimeLedger): SendResult? {
+        if (failure.error.code != CODE) return null
+        conversationId?.takeIf { it.isNotBlank() }?.let(ledger::learn)
+        return SendResult.PermanentFailure(OutboxPlaintextAdmission.REASON_SIGNAL_CHANNEL_REQUIRED)
+    }
 }
 
 /**

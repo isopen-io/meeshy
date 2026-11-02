@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { registerRequestSchema } from '@meeshy/shared/types/api-schemas/auth';
+import { nameMinLength, registerRequestSchema, usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
 
 import {
   PASSWORD_MIN,
@@ -18,6 +18,7 @@ import {
   effectiveUsername,
   isIdentityDefined,
   usernameFieldRefusal,
+  displayNameFieldRefusal,
   USERNAME_MAX,
   type SignupFormState,
 } from './signup-form';
@@ -177,7 +178,8 @@ describe('composeRegisterBody — sans nom affiché TAPÉ (#6441, révisé #6479
   });
 
   test('la borne du serveur refuserait la chaîne vide — ce que l’omission évite', () => {
-    expect(registerRequestSchema.properties.displayName.minLength).toBe(1);
+    expect(registerRequestSchema.properties.displayName.minLength).toBe(nameMinLength);
+    expect(nameMinLength).toBeGreaterThan(0);
   });
 
   test('le reste de la charge est intact', () => {
@@ -356,5 +358,72 @@ describe('le pseudo tapé tient la borne du schéma partagé', () => {
     const message = usernameRefusalMessage('fr', 'too-long');
     expect(message).toContain(String(USERNAME_MAX));
     expect(message).not.toMatch(/réessayez/i);
+  });
+});
+
+/**
+ * LE PLANCHER DES NOMS ET DU PSEUDO (#13825, directive porteur 2026-10-30) —
+ * « A » ou « B » ne sont ni un nom ni un pseudo ; « Al », « Li », « Ly » et
+ * « Sy » passent. Jugé sur la saisie ROGNÉE, avant l'envoi.
+ */
+describe('le nom affiché tapé a au moins deux caractères', () => {
+  test('« A » est refusé, le bouton reste inactif', () => {
+    const form = baseForm({ displayName: 'A' });
+    expect(isDisplayNameValid('A')).toBe(false);
+    expect(displayNameFieldRefusal(form)).toBe('too-short');
+    expect(canSubmit(form)).toBe(false);
+    expect(isIdentityDefined(form)).toBe(false);
+  });
+
+  test('« Al » passe', () => {
+    const form = baseForm({ displayName: 'Al' });
+    expect(isDisplayNameValid('Al')).toBe(true);
+    expect(displayNameFieldRefusal(form)).toBeNull();
+    expect(canSubmit(form)).toBe(true);
+  });
+
+  test('les espaces ne comptent pas : « A » entouré d\'espaces reste refusé, « Al » rogné passe', () => {
+    expect(isDisplayNameValid('  A  ')).toBe(false);
+    expect(isDisplayNameValid('  Al  ')).toBe(true);
+  });
+
+  test('la longueur est celle que la passerelle VOIT : « É » décomposé vaut un caractère, « Ét » deux', () => {
+    expect(isDisplayNameValid('E\u0301')).toBe(false);
+    expect(displayNameFieldRefusal(baseForm({ displayName: 'E\u0301' }))).toBe('too-short');
+    expect(isDisplayNameValid('E\u0301t')).toBe(true);
+  });
+
+  test('un champ vide ou jamais touché n\'est PAS refusé : la passerelle le dérive de l\'adresse', () => {
+    expect(displayNameFieldRefusal(baseForm({ displayName: null }))).toBeNull();
+    expect(displayNameFieldRefusal(baseForm({ displayName: '   ' }))).toBeNull();
+  });
+
+  test('un nom DÉRIVÉ d\'une lettre n\'est pas envoyé comme s\'il suffisait', () => {
+    const muette = baseForm({ displayName: null, email: 'a@exemple.com', username: 'ada' });
+    expect(isIdentityDefined(muette)).toBe(false);
+  });
+});
+
+describe('le pseudo tapé a au moins trois caractères', () => {
+  test('la borne est celle du schéma partagé', () => {
+    const court = baseForm({ username: 'a'.repeat(usernameMinLength - 1) });
+    expect(usernameFieldRefusal(court)).toBe('too-short');
+    expect(canSubmit(court)).toBe(false);
+    expect(usernameFieldRefusal(baseForm({ username: 'a'.repeat(usernameMinLength) }))).toBeNull();
+  });
+
+  test('« Al » est refusé comme pseudo, « Ali » passe (attend usernameMinLength = 3 du lot partagé)', () => {
+    expect(usernameFieldRefusal(baseForm({ username: 'Al' }))).toBe('too-short');
+    expect(canSubmit(baseForm({ username: 'Al' }))).toBe(false);
+    expect(usernameFieldRefusal(baseForm({ username: 'Ali' }))).toBeNull();
+  });
+
+  test('« Al » entouré d\'espaces est rogné avant d\'être jugé', () => {
+    expect(usernameFieldRefusal(baseForm({ username: '  Al  ' }))).toBe('too-short');
+    expect(usernameFieldRefusal(baseForm({ username: '  Ali  ' }))).toBeNull();
+  });
+
+  test('le message affiche le minimum', () => {
+    expect(usernameRefusalMessage('fr', 'too-short')).toContain(String(usernameMinLength));
   });
 });

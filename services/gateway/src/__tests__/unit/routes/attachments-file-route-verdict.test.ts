@@ -58,6 +58,7 @@ type Carrier = {
   deletedAt?: Date | null;
   expiresAt?: Date | null;
   viewOnceBurnAt?: Date | null;
+  viewOnceBurnedAt?: Date | null;
   isViewOnce?: boolean;
 };
 
@@ -174,6 +175,8 @@ describe.each(MOUNTS)('#9315 — %s : un fichier de message suit son porteur', (
     ['rappelé (supprimé)', { deletedAt: PAST() }],
     ['éphémère expiré', { expiresAt: PAST() }],
     ['vue unique consommée (sursis de purge écoulé)', { isViewOnce: true, viewOnceBurnAt: PAST() }],
+    // #11269 — l'ancienne purge remettait l'échéance à null même quand une pièce résistait.
+    ['vue unique purgée dont une pièce a survécu (estampille, échéance nulle)', { isViewOnce: true, viewOnceBurnAt: null, viewOnceBurnedAt: PAST() }],
   ])('refuse en 404 le fichier d’un message %s', async (_l, lifecycle) => {
     const { prisma } = makePrisma([photoRow('m1')], [{ id: 'm1', ...lifecycle }]);
     const app = await buildApp(prisma);

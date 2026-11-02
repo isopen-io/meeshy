@@ -6,6 +6,9 @@ import { sendSuccess, sendError, sendNotFound, sendForbidden, sendBadRequest } f
 import type { UnifiedAuthRequest } from '../middleware/auth';
 import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
+import { gatewayKeyring, SERVER_AT_REST_UNREADABLE_TRANSLATION_MESSAGE, translationSourceOf } from '../services/messaging/atRestTranslationSource';
+import { SERVER_AT_REST_UNREADABLE } from '../services/messaging/serverAtRest';
+import { resolveServerTargetLanguages } from '../services/message-translation/serverTargetLanguages';
 
 // Schémas de validation
 const TranslateRequestSchema = z.object({
@@ -305,18 +308,26 @@ export async function translationRoutes(fastify: FastifyInstance) {
 
         conversationId = existingMessage.conversationId;
 
+        // #11381 — un message `server`/`hybrid` se traduit depuis son CLAIR, jamais depuis `content: ''`.
+        const source = await translationSourceOf(existingMessage, gatewayKeyring(fastify.prisma));
+        if (!source.readable) {
+          return sendError(reply, 409, SERVER_AT_REST_UNREADABLE_TRANSLATION_MESSAGE, { code: SERVER_AT_REST_UNREADABLE });
+        }
+
         // Utiliser le texte du message existant si pas fourni
-        const messageText = validatedData.text || existingMessage.content;
+        const messageText = validatedData.text || source.row.content;
         const messageSourceLanguage = validatedData.source_language || existingMessage.originalLanguage;
 
-        // OPTIMISATION: Éviter la traduction si source = target (après récupération du message)
-        if (messageSourceLanguage && messageSourceLanguage !== 'auto' &&
-            messageSourceLanguage === validatedData.target_language) {
+        // Rien à demander au translator : la source égale la cible, ou la paire
+        // n'a pas de code NLLB-200 (#3659). Le lecteur reçoit l'ORIGINAL, dans
+        // sa langue (règle 1 du Prisme) — jamais « [BYV] <texte> » après dix
+        // secondes d'attente d'une traduction que personne n'a demandée.
+        if (resolveServerTargetLanguages(messageSourceLanguage, [validatedData.target_language]).length === 0) {
           return sendSuccess(reply, {
             message_id: validatedData.message_id,
             translated_text: messageText,
-            source_language: messageSourceLanguage,
-            target_language: validatedData.target_language,
+            source_language: messageSourceLanguage || 'auto',
+            target_language: messageSourceLanguage || 'auto',
             confidence: 1.0,
             processing_time: 0,
             model: 'none', // Pas de traduction nécessaire

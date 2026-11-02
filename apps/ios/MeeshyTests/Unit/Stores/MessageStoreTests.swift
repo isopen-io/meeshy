@@ -289,7 +289,7 @@ final class MessageStoreTests: XCTestCase {
         // 905 résultats dont un recouvrement de pages : « S0 » revient au-delà
         // du premier paquet de 900.
         let ids = (0..<905).map { "S\($0)" } + ["S0", "S3"]
-        let chunks = MessageStore.searchIdChunks(ids)
+        let chunks = MessageRepository.searchIdChunks(ids)
         let flat = chunks.flatMap { $0 }
         XCTAssertEqual(flat.count, Set(flat).count, "un même id dans deux paquets ramène la même ligne deux fois")
         XCTAssertEqual(flat.count, 905)
@@ -297,8 +297,8 @@ final class MessageStoreTests: XCTestCase {
     }
 
     func test_searchIdChunks_emptyOrTinySize_staysWellFormed() {
-        XCTAssertEqual(MessageStore.searchIdChunks([]), [])
-        XCTAssertEqual(MessageStore.searchIdChunks(["a", "b", "a"], size: 0), [["a"], ["b"]])
+        XCTAssertEqual(MessageRepository.searchIdChunks([]), [])
+        XCTAssertEqual(MessageRepository.searchIdChunks(["a", "b", "a"], size: 0), [["a"], ["b"]])
     }
 
     // MARK: - Duplicate server-id collapse (publish-boundary guard)

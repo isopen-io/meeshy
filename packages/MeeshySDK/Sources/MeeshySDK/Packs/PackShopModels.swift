@@ -30,6 +30,9 @@ public struct ShopPack: InstallablePack {
     public var names: [String: PackLocalizedName]
     /// Où les cadres d'un pack de cadres servent (#10711) ; `nil` hors cadres ou illisible.
     public var usage: FrameUsage?
+    /// Ce qui reste à débloquer, et comment (S21, #11276) : servi pour un pack du registre NON possédé qui
+    /// se gagne ou qui a une fenêtre. Absent d'un ancien serveur, d'un pack possédé ou libre ⇒ `nil`.
+    public var requirementPreview: PackRequirementPreview?
 
     public var id: String { slug }
     public var isBundled: Bool { isBuiltin || origin == .builtin }
@@ -45,15 +48,23 @@ public struct ShopPack: InstallablePack {
     public var coverFile: PackAssetFile? { PackAssetFile(servedPath: coverUrl) }
 
     /// La règle unique de possession : un pack gratuit est possédé par tout
-    /// compte ; un pack payant l'est quand le serveur le dit.
-    public var isOwned: Bool { owned ?? (price == nil) }
+    /// compte ; un pack payant l'est quand le serveur le dit. Un pack à GAGNER (il porte un aperçu) n'est
+    /// jamais possédé d'office parce qu'il est sans prix : le serveur le dit, ou il ne l'est pas.
+    public var isOwned: Bool { owned ?? (price == nil && requirementPreview == nil) }
+    /// Le serveur dit que le pack n'est pas encore débloqué : ni « Installer » ni « Acheter » — il refuserait.
+    public var isLocked: Bool { requirementPreview.map { !$0.met } ?? false }
+    /// Le sélecteur du profil ne propose que ce qui est installé, possédé — acheté ou gagné par le jeu — et
+    /// débloqué : équiper ce que le serveur refuserait (`not-owned`) rendrait un échec au toucher.
+    public var isEquipableOnProfile: Bool { installed && isOwned && !isLocked }
     /// Payant et pas encore à moi : le geste est « Acheter », pas « Installer ».
     public var needsPurchase: Bool { price != nil && !isOwned }
 
     public init(slug: String, name: String, description: String = "", author: String = "",
                 isBuiltin: Bool = false, origin: PackOrigin = .official, coverUrl: String? = nil,
                 installed: Bool = false, installCount: Int = 0, price: Int? = nil, owned: Bool? = nil,
-                removable: Bool = true, names: [String: PackLocalizedName] = [:], usage: FrameUsage? = nil) {
+                removable: Bool = true, names: [String: PackLocalizedName] = [:], usage: FrameUsage? = nil,
+                requirementPreview: PackRequirementPreview? = nil) {
+        self.requirementPreview = requirementPreview
         self.names = names
         self.usage = usage
         self.slug = slug
@@ -72,7 +83,7 @@ public struct ShopPack: InstallablePack {
 
     enum CodingKeys: String, CodingKey {
         case slug, name, description, author, origin, coverUrl, installed, installCount, price, owned, removable
-        case names, usage
+        case names, usage, requirementPreview
         case isBuiltin = "builtin"
     }
 
@@ -92,6 +103,7 @@ public struct ShopPack: InstallablePack {
         removable = (try? c.decodeIfPresent(Bool.self, forKey: .removable)) ?? true
         names = Self.lossyNames(c)
         usage = try? c.decodeIfPresent(FrameUsage.self, forKey: .usage)
+        requirementPreview = try? c.decodeIfPresent(PackRequirementPreview.self, forKey: .requirementPreview)
     }
 
     /// Une langue illisible tombe seule : les autres noms restent.
@@ -308,7 +320,7 @@ public struct PackShopState: Equatable, Sendable {
     public func purchasing(_ domain: PackDomain, _ slug: String,
                            makeRequestId: () -> String) -> (state: PackShopState, requestId: String)? {
         let key = Self.key(domain, slug)
-        guard !pending.contains(key), let current = pack(domain, slug), current.needsPurchase,
+        guard !pending.contains(key), let current = pack(domain, slug), current.needsPurchase, !current.isLocked,
               let price = current.price else { return nil }
         var bought = current
         bought.owned = true
@@ -351,10 +363,12 @@ public struct PackShopState: Equatable, Sendable {
     }
 
     /// Installer ou retirer À L'INSTANT un pack POSSÉDÉ (gratuit ou déjà acheté).
-    /// `nil` s'il faut l'acheter d'abord, ou si un geste est en vol.
+    /// `nil` s'il faut l'acheter d'abord, s'il n'est pas encore débloqué (le serveur refuserait), ou si un
+    /// geste est en vol. Un pack déjà installé se retire toujours.
     public func togglingInstall(_ domain: PackDomain, _ slug: String) -> PackShopState? {
         let key = Self.key(domain, slug)
-        guard !pending.contains(key), let current = pack(domain, slug), !current.needsPurchase else { return nil }
+        guard !pending.contains(key), let current = pack(domain, slug), !current.needsPurchase,
+              current.installed || !current.isLocked else { return nil }
         var flipped = current
         flipped.installed.toggle()
         flipped.installCount = max(0, current.installCount + (flipped.installed ? 1 : -1))

@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { NotificationType } from '@meeshy/shared/types/notification';
 import type { NotificationService } from '../NotificationService';
+import type { RelayThrottle } from '../fanout/activity-relay';
 
 /**
  * Ce qu'un BÂTISSEUR de notification emprunte à l'instance — résolu à l'APPEL,
@@ -48,4 +49,6 @@ export type NotificationBuilderDependencies = {
     conversationId: string,
     type: NotificationType
   ) => Promise<boolean>;
+  /** Le « une fois par (acteur, contenu) » du relais à l'entourage ; absent ⇒ le cache partagé. */
+  readonly relayThrottle?: RelayThrottle;
 };

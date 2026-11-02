@@ -87,6 +87,12 @@ export function placePopoverVertical(input: VerticalPopoverPlacement): VerticalP
   return { top: Math.max(input.margin, input.viewportHeight - input.estimatedHeight - input.margin) };
 }
 
+/** La bulle d'une rangée en Bulles, en coordonnées d'écran (#12635). */
+export type MessageMenuBubbleSpan = { readonly left: number; readonly right: number };
+
+/** Le bord de la rangée que l'aperçu tient (#12635). */
+export type PreviewEdge = 'left' | 'right';
+
 /**
  * LE CLUSTER DU MENU DU MESSAGE (#5814) — port de
  * `MessageOverlayMenu.swift:230-289` : rail de réactions AU-DESSUS, aperçu
@@ -106,6 +112,16 @@ export function placePopoverVertical(input: VerticalPopoverPlacement): VerticalP
  * `anchorX` suit le bord de l'ancre selon `isMine`, comme
  * `MessageOverlayMenu.swift:255-257` (`isMe ? maxX - w/2 : minX + w/2`). Un
  * rail absent (réagir refusé) se déclare par `railHeight: 0, railGap: 0`.
+ *
+ * EN BULLES, L'ANCRE EST LA BULLE (#12635) — `MessageOverlayMenu.swift:321-334` :
+ * une rangée `[data-row]` occupe toute la largeur, et la liste d'un message
+ * envoyé tombait au centre de l'écran, à gauche de sa bulle. `bubble` (le
+ * rectangle MESURÉ de la bulle dans la rangée) fait de son centre l'ancre
+ * horizontale ; absente (Focal, Script, rangée de liste), rien ne change. Le
+ * bord que la bulle TIENT se lit sur la mesure — le plus proche des deux
+ * bords de la rangée — et non sur `isMine` : en RTL, une bulle envoyée vit à
+ * gauche, et c'est ce bord que l'aperçu tient (`previewEdge`, origine de la
+ * réduction et du FLIP de `message-menu-lift.ts`).
  */
 export type MessageMenuClusterInput = {
   readonly anchor: {
@@ -130,6 +146,8 @@ export type MessageMenuClusterInput = {
   readonly previewScaleFloor: number;
   /** Hauteur visible minimale d'un aperçu tronqué (`PREVIEW_MIN_VISIBLE`). */
   readonly previewMinHeight: number;
+  /** La bulle mesurée dans la rangée, en coordonnées d'écran ; absente : rangée plate. */
+  readonly bubble?: MessageMenuBubbleSpan;
 };
 
 export type MessageMenuClusterPlacement = {
@@ -158,12 +176,45 @@ export type MessageMenuClusterPlacement = {
    * clavier et la souris atteignent aussi.
    */
   readonly menuMaxHeight: number;
+  /** Le bord que l'aperçu TIENT : l'origine de sa réduction et du FLIP (#12635). */
+  readonly previewEdge: PreviewEdge;
 };
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
+const edgeOf = (anchor: MessageMenuClusterInput['anchor'], bubble: MessageMenuBubbleSpan | undefined, isMine: boolean): PreviewEdge => {
+  if (bubble === undefined) return isMine ? 'right' : 'left';
+  return anchor.right - bubble.right <= bubble.left - anchor.left ? 'right' : 'left';
+};
+
+/**
+ * LE CENTRE DE LA BULLE DANS L'APERÇU, avant réduction — la bulle garde sa
+ * distance au bord qu'elle tient ; une rangée reflue à l'écran moins deux
+ * marges (#11206) la ramène dans l'aperçu, jamais au-delà de son bord opposé.
+ */
+const bubbleCenterInPreview = ({
+  anchor,
+  bubble,
+  edge,
+  previewLeft,
+  previewWidth,
+}: {
+  readonly anchor: MessageMenuClusterInput['anchor'];
+  readonly bubble: MessageMenuBubbleSpan;
+  readonly edge: PreviewEdge;
+  readonly previewLeft: number;
+  readonly previewWidth: number;
+}): number => {
+  const width = clamp(bubble.right - bubble.left, 0, previewWidth);
+  const slack = previewWidth - width;
+  return edge === 'right'
+    ? previewLeft + previewWidth - clamp(anchor.right - bubble.right, 0, slack) - width / 2
+    : previewLeft + clamp(bubble.left - anchor.left, 0, slack) + width / 2;
+};
+
 export function placeMessageMenuCluster(input: MessageMenuClusterInput): MessageMenuClusterPlacement {
-  const { anchor, viewport, safe, menuHeight, isMine } = input;
+  const { anchor, viewport, safe, menuHeight, isMine, bubble } = input;
+  const previewEdge = edgeOf(anchor, bubble, isMine);
   const { railHeight, railGap, menuGap, sidePadding, menuWidth, railWidth, previewScaleFloor, previewMinHeight } = input;
 
   // `nlAvailTop` / `nlAvailBottom` / `nlAvailable` (:242-244).
@@ -188,13 +239,16 @@ export function placeMessageMenuCluster(input: MessageMenuClusterInput): Message
   const previewHeight = Math.min(scaledHeight, visibleCeiling);
   const previewClipHeight = scaledHeight > visibleCeiling ? visibleCeiling / previewScale : null;
   const previewLeft = Math.round(
-    clamp(isMine ? anchor.right - previewWidth : anchor.left, sidePadding, viewport.width - sidePadding - previewWidth),
+    clamp(previewEdge === 'right' ? anchor.right - previewWidth : anchor.left, sidePadding, viewport.width - sidePadding - previewWidth),
   );
-  const scaledWidth = previewWidth * previewScale;
   const clusterHeight = railHeight + railGap + previewHeight + menuGap + menuHeight;
 
-  // `nlAnchorX` (:255-257).
-  const anchorX = Math.round(isMine ? previewLeft + previewWidth - scaledWidth / 2 : previewLeft + scaledWidth / 2);
+  // `nlAnchorX` (:255-257, :321-334) — le centre de la bulle, sinon de l'aperçu,
+  // réduit depuis le bord tenu.
+  const origin = previewEdge === 'right' ? previewLeft + previewWidth : previewLeft;
+  const center =
+    bubble === undefined ? previewLeft + previewWidth / 2 : bubbleCenterInPreview({ anchor, bubble, edge: previewEdge, previewLeft, previewWidth });
+  const anchorX = Math.round(origin + (center - origin) * previewScale);
 
   // `nlDesiredTop` / `nlClusterTop` (:258-259).
   const desiredTop = anchor.top - railHeight - railGap;
@@ -222,5 +276,6 @@ export function placeMessageMenuCluster(input: MessageMenuClusterInput): Message
     railLeft,
     menuHiddenHeight: menuTop + menuHeight - availBottom,
     menuMaxHeight: Math.min(menuHeight, Math.max(0, availBottom - menuTop)),
+    previewEdge,
   };
 }

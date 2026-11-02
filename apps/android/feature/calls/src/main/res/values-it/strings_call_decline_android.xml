@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_decline_end_to_end_refused">Messaggio non inviato: questa conversazione è crittografata end-to-end. Rispondi dall’app Meeshy su iPhone.</string>
+</resources>

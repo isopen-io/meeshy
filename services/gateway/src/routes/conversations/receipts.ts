@@ -44,7 +44,7 @@ import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesServ
 import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 import { broadcastReadStatus } from '../../socketio/broadcastReadStatus';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
-import { CONVERSATION_INTROUVABLE, resolveCallerParticipant } from './utils/access-control';
+import { CONVERSATION_INTROUVABLE, refuserCommeIntrouvable, resolveCallerParticipant } from './utils/access-control';
 import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
 import { MarkReadBodySchema } from '../../validation/messages-schemas';
 import {
@@ -141,6 +141,7 @@ const failure = (status: 400 | 403 | 404, reason: string): ReceiptFailure =>
 
 /** Le seul site où un échec de garde devient une réponse HTTP. */
 export function sendReceiptFailure(reply: FastifyReply, result: ReceiptFailure): void {
+  if (result.status === 404 && result.reason === CONVERSATION_INTROUVABLE) return refuserCommeIntrouvable(reply);
   if (result.status === 404) return sendNotFound(reply, result.reason);
   if (result.status === 403) return sendForbidden(reply, result.reason);
   return sendBadRequest(reply, result.reason);

@@ -11,9 +11,9 @@ _Tout le noyau auth : MeeshyApp.swift, AuthManager.swift, APIClient.swift, Meesh
 - [P1] Cold start avec JWT expiré + réseau dégradé : splash bloqué jusqu'à 60s derrière refreshSession awaité sur le chemin critique alors que session+liste sont en cache. Borner (race timeout 3-5s) ou détacher le refresh proactif.
   fichiers: packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift (area auth-session)
 - [P1] Systémique : les catch `APIError.serverError` ne matchent JAMAIS (APIClient ne lance que MeeshyError) — flush handler MeeshyApp:281 (4xx rejoué à l'infini), SecurityView:1034/957/1006 (messages serveur perdus, code SMS incorrect illisible), UserProfileViewModel:80 (isBlockedByTarget jamais posé), AuthManager:254 et 5 autres sites (code mort). Matcher MeeshyError.server partout.
-  fichiers: apps/ios/Meeshy/MeeshyApp.swift, apps/ios/Meeshy/Features/Main/Views/SecurityView.swift, apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift, packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift (area auth-session)
+  fichiers: apps/ios/Meeshy/MeeshyApp.swift, apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift, apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift, packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift (area auth-session)
 - [P1] UserProfileViewModel:43 lit l'état 'bloqué' depuis le snapshot de login (currentUser.blockedUserIds) au lieu de BlockService (source canonique injectée mais inutilisée) — un blocage en session s'affiche non-bloqué à la réouverture.
-  fichiers: apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift (area settings-profile)
+  fichiers: apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift (area settings-profile)
 - [P2] AuthManager hygiène : (a) logout serveur D5 — token lu APRÈS suspension, retries systématiquement sans Authorization → capturer token avant le wipe ; (b) revalidation background appelle AuthService.shared.me() en dur au lieu du seam authService injectable.
   fichiers: packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift (area auth-session)
 - [P2] `_ = try? await OfflineQueue.bootRecovery()` au boot : si ça lève, les lignes outbox .inflight post-crash restent invisibles du flush pour toujours, sans log. do/catch + retry au foreground.
@@ -24,15 +24,15 @@ _Chaîne complète d'édition de profil : upload avatar, save online/offline, di
 - [P0] Changer d'avatar échoue TOUJOURS : AttachmentUploader décode une clé `url` alors que le gateway renvoie `fileUrl`. Décoder fileUrl ou réutiliser UserService.uploadImage.
   fichiers: apps/ios/Meeshy/Features/Main/Services/AttachmentUploader.swift (area settings-profile)
 - [P0] Édition de profil offline enfilée vers `/users/me/profile` (route inexistante, la vraie est /users/me) → 404 rejoué à l'infini, queue settings bloquée, UI optimiste ment ('sera synchronisée').
-  fichiers: apps/ios/Meeshy/Features/Main/Views/ProfileView.swift (area settings-profile)
+  fichiers: apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift (area settings-profile)
 - [P1] PATCH /users/me de l'outbox envoie une clé `avatar` que le Zod .strict() du gateway rejette (400) — dispatcher vers PATCH /users/me/avatar ou étendre le schema.
   fichiers: apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher.swift (area settings-profile)
 - [P1] Impossible d'effacer langue régionale/custom/bio : '' converti en nil (= champ omis) côté requête ET optimiste — distinguer 'inchangé' (nil) de 'effacé' (envoyer '').
-  fichiers: apps/ios/Meeshy/Features/Main/Views/ProfileView.swift, apps/ios/Meeshy/Features/Main/ViewModels/EditProfileViewModel.swift (area settings-profile)
+  fichiers: apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift, apps/ios/Meeshy/Features/Main/ViewModels/EditProfileViewModel.swift (area settings-profile)
 - [P2] SettingsActionQueue : un item définitivement en échec bloque à jamais tout le pipeline (FIFO break, ni attempts ni TTL) — ajouter maxAttempts + drop comme OutboxFlusher.
   fichiers: packages/MeeshySDK/Sources/MeeshySDK/Persistence/SettingsActionQueue.swift (area settings-profile)
 - [P2] Chemin offline du save profil : try? JSONEncoder().encode silencieux — pas d'enqueue, pas de toast, pas de rollback de l'optimiste déjà appliqué.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/ProfileView.swift (area settings-profile)
+  fichiers: apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift (area settings-profile)
 
 ## LANE: Liste conversations — données, sync & cache
 _Tous les défauts data de la liste vivent dans ConversationListViewModel.swift + CoreModels.swift + GRDBCacheStore.swift (l'item .expired s'y greffe car sa branche VM est dans le même fichier). Les défauts purement vue sont dans une lane séparée à fichiers disjoints._
@@ -90,21 +90,21 @@ _FeedPostCard/FeedViewModel/FeedModels/FeedView/PostDetailViewModel/FeedComments
 ## LANE: Stories — interactions, modèle & publication
 _Viewer, VM, modèles et service d'interaction stories : fichiers Story* exclusifs à cette lane. StatusEntry.timeAgo s'y greffe (même fichier StoryModels.swift que le merge lossy)._
 - [P1] Réaction story : changement d'emoji = 409 REACTION_LIMIT_REACHED jamais géré (catch avaleur) — UI optimiste garde l'emoji refusé et gonfle le compteur sans rollback. Remonter un Result + snapshot/rollback.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift, apps/ios/Meeshy/Features/Main/Services/StoryInteractionService.swift (area stories)
+  fichiers: apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift, apps/ios/Meeshy/Features/Stories/Services/StoryInteractionService.swift (area stories)
 - [P1] Commentaires/réactions story en fire-and-forget sans OfflineQueue ni rollback (offline : succès affiché puis perte silencieuse) + échec d'upload du média de commentaire avalé par try? (commentaire publié sans média). Router par OfflineQueue + do/catch avec rollback du temp_.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift (area stories)
+  fichiers: apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift (area stories)
 - [P2] mergingTextObjectTranslations reconstruit StoryItem en droppant viewedAt/updatedAt/impressionCount — perte persistée en cache à chaque story:translation-updated, régresse le curseur delta R8. Passer les 3 champs + test round-trip complet.
   fichiers: packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift (area stories)
 - [P2] StatusEntry.timeAgo re-forge un temps relatif français non localisé et timeRemaining retourne 'expired' anglais en dur — utiliser RelativeTimeFormatter (même module, déjà utilisé par StoryItem).
   fichiers: packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift (area sdk-purity)
 - [P2] Publish : un média foreground sans asset chargé est silencieusement sauté (ni log ni garde) → calque invisible chez tous les viewers. Symétriser avec la branche audio (log + throw/retrait de l'objet).
-  fichiers: apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift (area stories)
+  fichiers: apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift (area stories)
 - [P2] Realtime asymétrique : reactionCount se re-dérive mid-slide mais pas commentCount, et l'overlay ouvert ne reçoit jamais les commentaires socket. Ajouter l'adaptiveOnChange miroir + onReceive(commentAdded).
-  fichiers: apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift, apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift (area stories)
+  fichiers: apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift, apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift (area stories)
 - [P2] Notification story tapée hors-ligne → écran 'story expirée' pour une simple erreur réseau. Discriminer 404 vs erreur réseau (état offline + retry).
   fichiers: apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationTargetViewModel.swift (area stories)
 - [P3] Trois pipelines de publication morts et piégés : cover repost-composer (repostOfId perdu, slideImages mal keyés), publishStory/publishStorySingle (bypassent E5, nullifieraient les médias), handlePublishTap/StubOnlinePublisher/StoryVisibility divergent du gateway. Supprimer ou aligner.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift, apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift, packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+OfflinePublish.swift (area stories)
+  fichiers: apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift, apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift, packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+OfflinePublish.swift (area stories)
 
 ## LANE: Réels & moteur vidéo partagé
 _SharedAVPlayerManager + ses surfaces (ReelFeedVideoSurface, ReelsPlayerView, ConversationMediaGalleryView, ReelsViewModel) partagent l'état global player/session/mute : impossible de les séparer sans conflit. L'élection autoplay (FeedView) est en lane Feed._
@@ -183,7 +183,7 @@ _Écrans satellites tous violant cache-first/OfflineQueue : chacun est un fichie
 - [P1] OutboxKind .sendFriendRequest mort (dispatcher prêt, 0 enqueue) : Discover/ConnectionActionView font du REST direct — offline la demande échoue avec toast. Router par la queue avec flip optimiste (corrige aussi le haptic success prématuré de DiscoverViewModel). Portions UserProfileSheet/NewConversationViewModel traitées dans leurs lanes.
   fichiers: apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift, packages/MeeshySDK/Sources/MeeshyUI/Profile/ConnectionActionView.swift, packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxRecord.swift (area offline-instant)
 - [P1] BlockedUsersView (Réglages) : network-only ignorant le store blockedUsers ET échec silencieux routé vers 'Aucun utilisateur bloqué' (faux offline) — réutiliser BlockedViewModel cache-first + état d'erreur.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/BlockedUsersView.swift (area offline-instant)
+  fichiers: apps/ios/Meeshy/Features/Settings/Views/BlockedUsersView.swift (area offline-instant)
 - [P2] Détail des réactions : fetch network-only, aucun seed depuis message.reactions déjà affichées — offline l'écran dit 'Aucune réaction' sous une bulle qui en montre. Seeder + conserver le seed sur échec.
   fichiers: apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift (area offline-instant)
 - [P2] SharePickerViewModel.send et ForwardPickerSheet.forwardTo : envoi REST direct sans OfflineQueue ni optimiste — contenu partagé perdu offline. Router par l'outbox.
@@ -194,17 +194,17 @@ _Écrans satellites tous violant cache-first/OfflineQueue : chacun est un fichie
 ## LANE: Réglages & préférences (placebo, langue UI, sync)
 _SettingsView/PrivacySettingsView/NotificationSettingsView/UserPreferencesManager : toggles inopérants et sync bidirectionnelle. Le moteur auto-download mort s'y greffe (même fichier UserPreferencesManager)._
 - [P1] 5 toggles de confidentialité placebo (hideProfileFromSearch, blockScreenshots, allowCallsFromNonContacts, saveMediaToGallery, shareUsageData) : persistés/synchronisés mais appliqués nulle part (ni iOS ni gateway) — faux sentiment de confidentialité. Appliquer ou griser 'Bientôt disponible'.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift (area settings-profile)
+  fichiers: apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift (area settings-profile)
 - [P1] Picker 'Langue de l'interface' sans effet : interfaceLanguage écrit mais jamais lu (aucun .environment(locale)) — appliquer à la racine ou retirer le picker.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/SettingsView.swift (area settings-profile)
+  fichiers: apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift (area settings-profile)
 - [P1] applyRemote 'server wins' écrase les modifications locales en attente de sync (fenêtre debounce 1s) puis PATCHe la valeur périmée — skipper les catégories dirty/syncTask pendant.
   fichiers: packages/MeeshySDK/Sources/MeeshySDK/Services/UserPreferencesManager.swift (area settings-profile)
 - [P2] Second moteur auto-download MORT et divergent dans UserPreferencesManager (shouldAutoDownloadMedia, 0 appelant prod, ignore autoDownloadOnWifi) — supprimer ou déléguer à MediaDownloadPolicyEngine, statuer sur les champs serveur autoDownload*.
   fichiers: packages/MeeshySDK/Sources/MeeshySDK/Services/UserPreferencesManager.swift (area sdk-purity)
 - [P2] Heures 'Ne pas déranger' en TextField libre : tout format ≠ HH:mm désactive silencieusement la fenêtre DnD (parseTime strict) — DatePicker .hourAndMinute.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift (area settings-profile)
+  fichiers: apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift (area settings-profile)
 - [P3] Sync thème unidirectionnelle : application.theme poussé au backend mais jamais relu vers ThemeManager (divergence multi-device silencieuse) — mapper au applyRemote/login ou cesser de le synchroniser.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/SettingsView.swift (area settings-profile)
+  fichiers: apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift (area settings-profile)
 
 ## LANE: Appels — retry, fin d'appel & privacy
 _CallManager/CallView/FloatingCallPillView/BubbleCallNoticeView : états de fin d'appel, retry, signaux — fortement couplés, fichiers exclusifs._
@@ -346,7 +346,7 @@ _Workflow CI, meeshy.sh et artefacts de tests morts — fichiers disjoints de la
 ## TOP RISKS
 - P0 apps/ios/Meeshy/MeeshyApp.swift:152 — Magic link tapé en étant déjà connecté : applySession(B) sans aucun teardown → caches, sockets (JWT de A) et clés E2EE du compte A exposés sous la session B. Fuite de données inter-comptes.
 - P0 apps/ios/Meeshy/Features/Main/Services/AttachmentUploader.swift:105 — Changer d'avatar échoue TOUJOURS : décodage d'une clé `url` alors que le gateway renvoie `fileUrl`. Fonctionnalité de base 100% cassée.
-- P0 apps/ios/Meeshy/Features/Main/Views/ProfileView.swift:803 — Édition de profil offline enfilée vers /users/me/profile (route inexistante) : 404 rejoué à l'infini, et la SettingsActionQueue (FIFO stop-on-failure, sans maxAttempts) est bloquée à jamais pour TOUTES les actions settings suivantes.
+- P0 apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift:803 — Édition de profil offline enfilée vers /users/me/profile (route inexistante) : 404 rejoué à l'infini, et la SettingsActionQueue (FIFO stop-on-failure, sans maxAttempts) est bloquée à jamais pour TOUTES les actions settings suivantes.
 - P1 apps/ios/Meeshy/Features/Main/Services/E2ESessionManager.swift:233 — clearSessions au logout avec account:nil (currentUser déjà nil) : les clés de session E2EE survivent, une nouvelle identity key est régénérée au re-login → DMs indéchiffrables. Perte de données chiffrées.
 - P1 apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift:1352 — pullToRefresh détruit L1+L2 (conversations, messages, stories, profils…) AVANT le fetch : un pull-to-refresh offline/échoué vide tous les caches → cold start offline = app vide. Violation frontale d'Offline Graceful Degradation.
 

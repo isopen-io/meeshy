@@ -40,6 +40,8 @@ internal class CallDataChannelController(private val engine: WebRtcEngine) {
         when (val inbound = DataChannelCodec.decode(bytes)) {
             is DataChannelInbound.Bye -> onRemoteBye(inbound.reason)
             is DataChannelInbound.Caption -> _captions.tryEmit(inbound.segment)
+            // L'entrée de journal de l'iPhone est lue par CallCaptionsController, qui écoute le même canal (#13333).
+            is DataChannelInbound.TranscriptEntry -> Unit
             DataChannelInbound.Ignored -> Unit
         }
     }

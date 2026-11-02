@@ -1,11 +1,12 @@
 package me.meeshy.app.conversations
 
-import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -36,30 +37,35 @@ import me.meeshy.ui.theme.MeeshyTheme
 @Composable
 internal fun SkeletonList() {
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         repeat(ConversationSkeletonMetrics.ROW_COUNT) { index -> ConversationSkeletonRow(index) }
     }
 }
 
+/** Hauteur de la carte d'état dans la liste : une ligne comme les autres, sous la tête (iOS `ConversationListEmptyState`). */
+private val EMPTY_STATE_HEIGHT = 360.dp
+
 /**
- * Renders the branch [content] with an opacity transition between branches (iOS
- * `.transition(.opacity)`); the populated list is supplied by the caller.
+ * Les lignes de la branche [content], à la suite de la tête dans la MÊME liste : squelette, carte d'état ou, peuplée,
+ * les lignes que [populated] ajoute. Une seule colonne défilante pour tous les états — la tête ne change jamais de
+ * place (iOS `VStack` du `ScrollView`).
  */
-@Composable
-internal fun ConversationListStateHost(
+internal fun LazyListScope.conversationListStateItems(
     content: ConversationListContent,
     onRetry: () -> Unit,
     onNewConversation: () -> Unit,
-    populated: @Composable () -> Unit,
+    populated: LazyListScope.() -> Unit,
 ) {
-    Crossfade(targetState = content, label = "conversation-list-branch") { branch ->
-        when (branch) {
-            ConversationListContent.Skeleton -> SkeletonList()
-            ConversationListContent.Populated -> populated()
-            else -> EmptyStateVisual.of(branch)?.let { visual ->
-                EmptyStateCard(visual = visual, onRetry = onRetry, onNewConversation = onNewConversation)
+    when (content) {
+        ConversationListContent.Skeleton -> item(key = "list-skeleton", contentType = "skeleton") { SkeletonList() }
+        ConversationListContent.Populated -> populated()
+        else -> EmptyStateVisual.of(content)?.let { visual ->
+            item(key = "list-empty-state", contentType = "empty-state") {
+                Box(Modifier.fillParentMaxWidth().height(EMPTY_STATE_HEIGHT)) {
+                    EmptyStateCard(visual = visual, onRetry = onRetry, onNewConversation = onNewConversation)
+                }
             }
         }
     }

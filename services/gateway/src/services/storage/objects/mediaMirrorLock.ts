@@ -1,5 +1,6 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { guardedInterval, type TimerErrorLogger } from '../../../utils/guarded-timer.js';
 
 type LockContent = { readonly owner: string; readonly expiresAt: string };
 
@@ -63,5 +64,27 @@ export async function withMirrorLock<T>(options: LockOptions, run: (renew: () =>
     return { kind: 'ran', value: await run(renew) };
   } finally {
     await unlink(resolved.file).catch(() => undefined);
+  }
+}
+
+type HeartbeatOptions = {
+  readonly renew: () => Promise<void>;
+  readonly everyMs: number;
+  readonly logger: TimerErrorLogger;
+};
+
+/**
+ * Repousse l'échéance du verrou tant que `run` tourne : une passe complète
+ * peut dépasser l'échéance. Un renouvellement raté se dit au journal (minuterie
+ * gardée, #9480) — avalé, il laissait le passage continuer sur un verrou
+ * qu'un autre processus pouvait reprendre à l'échéance.
+ */
+export async function withLockHeartbeat<T>({ renew, everyMs, logger }: HeartbeatOptions, run: () => Promise<T>): Promise<T> {
+  const heartbeat = guardedInterval({ name: 'media-mirror-lock-renew', run: renew, everyMs, logger });
+  heartbeat.unref();
+  try {
+    return await run();
+  } finally {
+    clearInterval(heartbeat);
   }
 }

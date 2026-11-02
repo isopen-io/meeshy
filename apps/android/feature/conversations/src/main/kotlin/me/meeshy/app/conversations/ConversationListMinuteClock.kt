@@ -7,10 +7,10 @@ import kotlinx.coroutines.delay
 
 /**
  * The list's wall clock, ticking on each minute boundary (iOS `LentilleConversationRow`'s
- * `TimelineView(.periodic(every: 60))` and `PresenceRefreshSignal`): « 2 min » becomes
- * « 3 min », a presence dot decays and a heat fades without anything else changing. Rows
- * read the time from their model, never from `System.currentTimeMillis()` at composition,
- * so only the tick recomposes them.
+ * `TimelineView(.periodic(every: 60))`): « 2 min » becomes « 3 min », a story ring expires and
+ * a heat fades without anything else changing. Rows read the time from their model, never from
+ * `System.currentTimeMillis()` at composition, so only the tick recomposes them. The presence
+ * dot is NOT on this clock: the avatar cell reads it from the shared 15 s decay tick.
  */
 internal object ConversationListMinuteClock {
     const val MINUTE_MILLIS: Long = 60_000L

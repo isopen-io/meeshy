@@ -1,6 +1,6 @@
 import Foundation
 import os
-import MeeshySDK
+import MeeshyCore
 
 /// Lightweight data sync for the Notification Service Extension.
 ///
@@ -18,7 +18,7 @@ import MeeshySDK
 /// - Auth token read from shared Keychain (same access group)
 enum NSEDataSync {
 
-    private static let appGroupId = "group.me.meeshy.apps"
+    private static let appGroupId = AppGroupPreferences.suiteName
     private static let pendingDirName = "nse_pending_messages"
     private static let pendingPostsDirName = "nse_pending_posts"
     private static let snapshotsKey = "conversation_snapshots"

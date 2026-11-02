@@ -1,6 +1,8 @@
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { truncateByCodePoints } from '../../utils/truncate-text';
+import { textSynthesis } from '../notifications/content-synthesis';
 import { protectedPreview } from '../notifications/notification-preview';
+import { editedMessageBody, editedReactionBody } from '../notifications/edited-synthesis';
+import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs } from '../../utils/recipient-language';
 import type {
   ReproducedNotification,
   ReproducedNotificationAnnouncer,
@@ -67,13 +69,6 @@ const PREVIEW_METADATA_KEY: Readonly<Record<string, string>> = {
 /** Les types dont `content` EST l'extrait (éventuellement suivi de badges). */
 const BODY_DERIVES_FROM_MESSAGE = new Set(['new_message', 'user_mentioned', 'message_reply']);
 
-/**
- * Longueur d'extrait. Même valeur que `createReactionNotification`, qui est le
- * seul producteur à tronquer lui-même : un extrait laissé entier gonflerait la
- * ligne à chaque édition d'un long message.
- */
-const PREVIEW_MAX_LENGTH = 100;
-
 interface NotificationRow {
   readonly id: string;
   readonly userId: string;
@@ -109,6 +104,13 @@ export interface EditedMessageNotificationPrisma {
         createdAt: true;
       };
     }): Promise<ProtectionFlagsRow | null>;
+  };
+  /** #14309 — la langue de CADRAGE de chaque destinataire, dans laquelle sa synthèse est écrite. */
+  user: {
+    findMany(args: {
+      where: { id: { in: string[] } };
+      select: typeof RECIPIENT_LANG_SELECT & { id: true };
+    }): Promise<ReadonlyArray<RecipientLanguagePrefs & { readonly id: string }>>;
   };
   notification: {
     // Le `select` est typé LITTÉRALEMENT (`true`, pas `boolean`) : c'est ce qui
@@ -176,27 +178,24 @@ function asBlob(value: unknown): Record<string, unknown> {
 }
 
 /**
- * Le corps d'un `new_message` n'est PAS l'extrait : c'est ce que
- * `buildMessageNotificationBodyI18n` en a fait — l'extrait SUIVI des badges de
- * pièces jointes (« 📎 2 fichiers »). Remplacer `content` par le seul nouvel
- * extrait détruirait ces badges.
- *
- * On ne remplace donc que le PRÉFIXE, et l'ancien extrait — lisible dans
- * `metadata` — donne sa longueur. Le suffixe est reconduit tel quel, ce qui
- * évite d'avoir à re-résoudre la langue du destinataire (les badges sont
- * localisés) et à reconstruire la liste des pièces jointes, dont la ligne ne
- * garde qu'un résumé.
- *
- * Quand l'ancien extrait était VIDE, le corps est entièrement dérivé des pièces
- * jointes (« Photo · 📎 2 fichiers ») : il n'y a pas de préfixe à remplacer, et
- * on le laisse tel quel. C'est le seul cas approximatif — le libellé de pièce
- * jointe reste EXACT, il ne devient pas mensonger, il ignore juste la légende
- * que l'édition vient d'ajouter.
+ * #14309 — la langue de CADRAGE de chaque destinataire, lue une fois pour
+ * toutes les lignes. Best-effort : une lecture qui tombe retombe sur le repli,
+ * la synthèse ne porte aucun texte du message quelle que soit sa langue.
  */
-function rewriteBody(previousBody: string, previousPreview: string, nextPreview: string): string {
-  if (previousPreview === '') return previousBody;
-  if (!previousBody.startsWith(previousPreview)) return nextPreview;
-  return nextPreview + previousBody.slice(previousPreview.length);
+async function framingLanguages(
+  prisma: EditedMessageNotificationPrisma,
+  userIds: readonly string[]
+): Promise<ReadonlyMap<string, string>> {
+  try {
+    const users = await prisma.user.findMany({
+      where: { id: { in: [...new Set(userIds)] } },
+      select: { ...RECIPIENT_LANG_SELECT, id: true },
+    });
+    return new Map(users.map((user) => [user.id, recipientLanguage(user, 'fr')]));
+  } catch (error) {
+    log.warn('message edit: recipient language read failed — fallback language', { error });
+    return new Map();
+  }
 }
 
 export async function reproduceEditedMessageNotifications(
@@ -210,8 +209,6 @@ export async function reproduceEditedMessageNotifications(
   // message à pièce jointe — et non un « rien à faire » : la copie dénormalisée
   // doit bien perdre l'ancien texte. Seul `null` (aucune écriture de contenu)
   // se lit comme une chaîne vide, ce que le producteur faisait déjà.
-  const nextPreview = truncateByCodePoints(edited.content ?? '', PREVIEW_MAX_LENGTH, '…');
-
   const rows = await prisma.notification.findMany({
     where: { messageId: edited.messageId },
     select: { id: true, userId: true, type: true, content: true, context: true, metadata: true },
@@ -234,6 +231,7 @@ export async function reproduceEditedMessageNotifications(
   if (await isProtectedMessage(prisma, edited.messageId)) return 0;
 
   const reproduced: ReproducedNotification[] = [];
+  const languages = await framingLanguages(prisma, rows.map((row) => row.userId));
 
   for (const row of rows) {
     const previewKey = PREVIEW_METADATA_KEY[row.type];
@@ -247,7 +245,7 @@ export async function reproduceEditedMessageNotifications(
       ? (metadata[previewKey] as string)
       : '';
 
-    metadata[previewKey] = nextPreview;
+    const lang = languages.get(row.userId) ?? 'fr';
 
     // L'édition PURGE `Message.translations` (le pipeline retraduit le nouveau
     // texte). La traduction embarquée ici décrit donc l'ANCIEN texte — et c'est
@@ -258,10 +256,13 @@ export async function reproduceEditedMessageNotifications(
     delete context['translatedContent'];
     delete context['translatedLanguage'];
 
-    const data: Record<string, unknown> = { metadata, context };
-    if (BODY_DERIVES_FROM_MESSAGE.has(row.type)) {
-      data['content'] = rewriteBody(row.content ?? '', previousPreview, nextPreview);
-    }
+    // #14309 — le corps est une SYNTHÈSE : seule la longueur du texte change,
+    // et l'aperçu persisté (que les clients in-app préfèrent au corps) le suit.
+    const content = BODY_DERIVES_FROM_MESSAGE.has(row.type)
+      ? editedMessageBody({ lang, body: row.content ?? '', previousPreview, nextText: edited.content ?? '' })
+      : editedReactionBody({ lang, body: row.content ?? '', nextText: edited.content ?? '' });
+    metadata[previewKey] = BODY_DERIVES_FROM_MESSAGE.has(row.type) ? content : textSynthesis(lang, edited.content);
+    const data: Record<string, unknown> = { metadata, context, content };
 
     try {
       await prisma.notification.update({ where: { id: row.id }, data });

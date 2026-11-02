@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.tool.frame",
+          "androidName": "composer_column_text_frame",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.tool.language",
+          "androidName": "composer_column_text_language",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.plan",
+          "androidName": "composer_column_text_plan",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.frame.rounded",
+          "androidName": "composer_text_frame_rounded",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.frame.pill",
+          "androidName": "composer_text_frame_pill",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.frame.rectangle",
+          "androidName": "composer_text_frame_rectangle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.frame.diamond",
+          "androidName": "composer_text_frame_diamond",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.frame.cloud",
+          "androidName": "composer_text_frame_cloud",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.frame.speech",
+          "androidName": "composer_text_frame_speech",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

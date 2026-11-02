@@ -25,6 +25,16 @@ public struct StoryExportIntroContent: Sendable {
     public let moodMessage: String?
     /// Hex "RRGGBB" — teinte de repli quand aucune bannière n'est fournie.
     public let accentColorHex: String
+    /// Le contour équipé de l'auteur, déjà résolu (`ProfileDecorResolver.ring`) — celui que
+    /// la carte d'identité de la visionneuse pose autour de l'avatar. `nil` ⇒ l'avatar nu,
+    /// rendu historique.
+    public let avatarRing: AvatarRingDesign?
+    /// La présence de l'auteur telle que le serveur l'a SERVIE (#13997), projetée par l'app.
+    /// Un point sur le bord de l'avatar ; `nil` ⇒ aucun point (pas ami, hors ligne, non servie).
+    public let presence: StoryExportPresence?
+    /// Le logo du cercle de l'auteur (🔥 Proche, 🩸 Sang), déjà résolu par `RelationExportBadge`,
+    /// peint à droite du nom. `nil` ⇒ rien — Ami et en dessous, sa propre story.
+    public let relationLogo: String?
 
     public init(displayName: String,
                 username: String,
@@ -32,7 +42,10 @@ public struct StoryExportIntroContent: Sendable {
                 banner: CGImage? = nil,
                 moodEmoji: String? = nil,
                 moodMessage: String? = nil,
-                accentColorHex: String) {
+                accentColorHex: String,
+                avatarRing: AvatarRingDesign? = nil,
+                presence: StoryExportPresence? = nil,
+                relationLogo: String? = nil) {
         self.displayName = displayName
         self.username = username
         self.avatar = avatar
@@ -40,6 +53,9 @@ public struct StoryExportIntroContent: Sendable {
         self.moodEmoji = moodEmoji
         self.moodMessage = moodMessage
         self.accentColorHex = accentColorHex
+        self.avatarRing = avatarRing
+        self.presence = presence
+        self.relationLogo = relationLogo
     }
 }
 
@@ -166,30 +182,42 @@ public enum StoryExportIntro {
                                 y: size.height * 0.5 - avatarSide * 0.9,
                                 width: avatarSide,
                                 height: avatarSide)
+        // Sous un contour, l'avatar se ramène au trou (rayon 42 du viewBox 100)
+        // et le contour occupe la boîte — la géométrie de `avatarRingWithin` :
+        // le nom et le pseudo ne bougent pas. Sans contour, la boîte entière.
+        let discRect = content.avatarRing == nil ? avatarRect : ringHole(of: avatarRect)
         cg.saveGState()
-        cg.addEllipse(in: avatarRect)
+        cg.addEllipse(in: discRect)
         cg.clip()
         if let avatar = content.avatar {
             // Même raison que la bannière : passer par UIKit pour respecter le
             // repère haut-gauche du renderer. Le clip circulaire posé sur `cg`
             // reste actif — `UIImage.draw` peint dans le contexte courant.
-            UIImage(cgImage: avatar).draw(in: avatarRect)
+            UIImage(cgImage: avatar).draw(in: discRect)
         } else {
             cg.setFillColor(UIColor(Color(hex: content.accentColorHex)).cgColor)
-            cg.fill(avatarRect)
+            cg.fill(discRect)
         }
         cg.restoreGState()
 
         // Fallback initials, centred in the vibrant disc when no avatar image.
         if content.avatar == nil {
             drawCentredInRect(makeInitials(content.displayName),
-                              fontSize: avatarSide * 0.38, weight: .bold,
-                              color: .white, in: avatarRect)
+                              fontSize: discRect.width * 0.38, weight: .bold,
+                              color: .white, in: discRect)
+        }
+
+        if let ring = content.avatarRing {
+            drawRing(ring, in: avatarRect)
+        }
+        if let presence = content.presence {
+            StoryExportIdentityBadges.drawPresenceDot(presence, avatarBox: avatarRect, in: cg)
         }
 
         let nameSize = size.width * 0.058
         let handleSize = size.width * 0.036
-        drawCentred(content.displayName,
+        drawCentred(StoryExportIdentityBadges.nameLine(displayName: content.displayName,
+                                                       logo: content.relationLogo),
                     fontSize: nameSize, weight: .bold,
                     color: .white, alpha: 1,
                     y: avatarRect.maxY + nameSize * 0.9, in: size)
@@ -203,6 +231,41 @@ public enum StoryExportIntro {
             drawMoodCapsule(emoji: emoji, message: content.moodMessage,
                             centreY: handleY + handleSize * 2.6, in: cg, size: size)
         }
+    }
+
+    /// Le trou d'un contour posé sur `box` : le disque de l'avatar, concentrique.
+    private static func ringHole(of box: CGRect) -> CGRect {
+        let inset = box.width * (1 - AvatarRingGeometry.holeFraction) / 2
+        return box.insetBy(dx: inset, dy: inset)
+    }
+
+    /// Le dernier contour peint, en image. La carte de fin redessine l'identité
+    /// à CHAQUE image (fondu d'entrée) : sans ce tampon, chaque image relirait
+    /// tous les chemins d'ornement (jusqu'à ~20 Ko de données SVG). Une seule
+    /// place — un export ne peint qu'un auteur, à une seule taille.
+    private struct RingStamp {
+        let design: AvatarRingDesign
+        let side: Int
+        let image: CGImage
+    }
+
+    private static var ringStamp: RingStamp?
+
+    /// Le contour FIXE (`AvatarRingRenderer`, le dessin de `AvatarRingView`) sur
+    /// la boîte de l'avatar. Mouvements et couche Lottie n'ont pas d'image fixe :
+    /// un export porte le trait et l'ornement au repos.
+    private static func drawRing(_ design: AvatarRingDesign, in box: CGRect) {
+        let side = Int(box.width.rounded(.up))
+        let image: CGImage
+        if let stamp = ringStamp, stamp.side == side, stamp.design == design {
+            image = stamp.image
+        } else {
+            guard let rendered = AvatarRingRenderer.stillImage(design, side: side) else { return }
+            ringStamp = RingStamp(design: design, side: side, image: rendered)
+            image = rendered
+        }
+        // UIKit, comme l'avatar : le repère haut-gauche du renderer.
+        UIImage(cgImage: image).draw(in: box)
     }
 
     /// First letter of up to two words, uppercased — mirrors `MeeshyAvatar`.
@@ -483,13 +546,13 @@ public enum StoryExportIntro {
         videoComposition.frameDuration = StoryExportFrameRate.frameDuration
         videoComposition.renderSize = renderSize
 
-        // Audio — la signature sonore s'estompe sur le fondu (pas de bascule
-        // sonore brutale) ; le son PROPRE de la story démarre plein à `holdDuration`
-        // (jamais atténué — c'est le contenu de l'auteur).
+        // Audio — la signature sonore joue EN ENTIER ; le son de la story lui
+        // fait place et monte sous sa queue (`StoryExportJingleMix`).
         let audioMix = AVMutableAudioMix()
-        let jingleParams = AVMutableAudioMixInputParameters(track: jingleAudio)
-        jingleParams.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fadeRange)
-        audioMix.inputParameters = [jingleParams]
+        let storyParams = AVMutableAudioMixInputParameters(track: storyAudio)
+        StoryExportBranding.applyStoryEnvelope(to: storyParams, story: CMTimeRange(start: storyStart, duration: storyDuration),
+                                               introJingleEnd: jingleDuration)
+        audioMix.inputParameters = [storyParams]
 
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("meeshy-story-\(UUID().uuidString).mp4")

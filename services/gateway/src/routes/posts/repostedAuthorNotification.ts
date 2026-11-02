@@ -13,6 +13,7 @@
  * tranche, fail-closed, sur l'audience de la republication elle-même.
  */
 import type { NotificationService } from '../../services/notifications/NotificationService';
+import { notePairInteraction, type PairInteractionDb } from '../../services/relations/pairInteractionRecorder';
 
 type RepostedKind = 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
 
@@ -58,9 +59,30 @@ export function repostedAuthorToNotify(source: RepostedSource | null, actorId: s
   return source !== null && source.authorId !== actorId ? source.authorId : null;
 }
 
+/**
+ * Les cercles (#13932) : republier le contenu de l'autre est un PARTAGE qui
+ * compte pour la paire. Même site que la notification, donc les mêmes deux
+ * portes ; rien à attendre, rien qui jette.
+ */
+export function noteRepostInteraction(
+  prisma: PairInteractionDb,
+  params: { readonly actorId: string; readonly source: RepostedSource | null },
+): void {
+  const authorId = repostedAuthorToNotify(params.source, params.actorId);
+  if (authorId === null) return;
+  notePairInteraction(prisma, { actorId: params.actorId, otherId: authorId, nature: 'share' });
+}
+
 export async function notifyRepostedAuthor(
   notifier: Pick<NotificationService, 'createPostRepostNotification'> | null | undefined,
-  params: { readonly actorId: string; readonly source: RepostedSource | null; readonly sourcePostId: string; readonly repostId: string },
+  params: {
+    readonly actorId: string;
+    readonly source: RepostedSource | null;
+    readonly sourcePostId: string;
+    readonly repostId: string;
+    /** La porte a lancé l'éventail `friend_new_post` (`POST /posts`) : l'entourage du republieur sait déjà. */
+    readonly reposterEntourageNotified?: boolean;
+  },
 ): Promise<void> {
   const authorId = repostedAuthorToNotify(params.source, params.actorId);
   if (!notifier || authorId === null || params.source === null) return;
@@ -72,5 +94,6 @@ export async function notifyRepostedAuthor(
     postType: params.source.type,
     postCreatedAt: params.source.createdAt,
     postExpiresAt: params.source.expiresAt,
+    reposterEntourageNotified: params.reposterEntourageNotified === true,
   });
 }

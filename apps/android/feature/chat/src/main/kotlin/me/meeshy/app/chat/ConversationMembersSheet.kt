@@ -54,6 +54,9 @@ import me.meeshy.sdk.model.PaginatedParticipant
 import me.meeshy.sdk.model.displayLabel
 import me.meeshy.sdk.model.role
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.sdk.model.UserPresence
+import me.meeshy.ui.component.rememberConversationHere
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -73,6 +76,22 @@ internal fun ConversationMembersSheet(
     conversationId: String,
     accentColor: Color,
     onDismiss: () -> Unit,
+    viewModel: ConversationMembersViewModel = hiltViewModel(),
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MeeshyTheme.tokens.backgroundPrimary,
+    ) {
+        ConversationMembersContent(conversationId, accentColor, viewModel = viewModel)
+    }
+}
+
+/** La liste des membres et sa modération, montée par la feuille ou par l'onglet Membres de la fiche (#13785). */
+@Composable
+internal fun ConversationMembersContent(
+    conversationId: String,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
     viewModel: ConversationMembersViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -106,14 +125,11 @@ internal fun ConversationMembersSheet(
             displayName = member.displayLabel,
             accentColor = accentColor,
             onDismiss = { openProfileFor = null },
+            avatarUrl = member.avatar,
         )
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = MeeshyTheme.tokens.backgroundPrimary,
-    ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = MeeshySpacing.lg)) {
+        Column(modifier = modifier.fillMaxWidth().padding(bottom = MeeshySpacing.lg)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -181,6 +197,7 @@ internal fun ConversationMembersSheet(
                         }
                         MemberRow(
                             member = member,
+                            conversationId = conversationId,
                             isSelf = state.isSelf(member),
                             accentColor = accentColor,
                             roleActions = state.roleActions(member),
@@ -198,7 +215,6 @@ internal fun ConversationMembersSheet(
                 }
             }
         }
-    }
 
     val removalTarget = pendingRemoval
     if (removalTarget != null) {
@@ -276,8 +292,9 @@ internal fun ConversationMembersSheet(
 }
 
 @Composable
-private fun MemberRow(
+internal fun MemberRow(
     member: PaginatedParticipant,
+    conversationId: String,
     isSelf: Boolean,
     accentColor: Color,
     roleActions: List<MemberRoleAction>,
@@ -300,7 +317,18 @@ private fun MemberRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        MeeshyAvatar(name = name, size = 40.dp, containerColor = accentColor)
+        MeeshyAvatar(
+            name = name,
+            size = 40.dp,
+            containerColor = accentColor,
+            imageUrl = member.avatar,
+            presence = rememberPresence(
+                member.userId,
+                UserPresence.served(member.isOnline, member.lastActiveAt),
+            ),
+            // Le compte courant n'a jamais de point : le serveur n'annonce que les autres.
+            here = rememberConversationHere(member.userId.takeUnless { isSelf }, conversationId),
+        )
 
         Column(modifier = Modifier.weight(1f)) {
             Row(

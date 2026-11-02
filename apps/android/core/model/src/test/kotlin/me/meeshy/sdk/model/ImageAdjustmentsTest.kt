@@ -80,3 +80,21 @@ class ImageAdjustmentsTest {
         assertThat(json.encodeToString(StoryMediaObject.serializer(), regle)).contains("\"adjustments\":{\"contrast\":1.2}")
     }
 }
+
+class ImageAdjustmentsFamilyTest {
+    private val mixed = ImageAdjustments().with(AdjustmentKind.CONTRAST, 1.2f).with(AdjustmentKind.BLOOM, 0.4f)
+
+    @Test
+    fun `le compte d un sous-outil ignore l autre`() {
+        assertThat(mixed.activeCount(AdjustmentFamily.TONE)).isEqualTo(1)
+        assertThat(mixed.activeCount(AdjustmentFamily.EFFECT)).isEqualTo(1)
+    }
+
+    @Test
+    fun `remettre un sous-outil au neutre garde les valeurs de l autre`() {
+        val tone = mixed.resetting(AdjustmentFamily.TONE)
+        assertThat(tone[AdjustmentKind.CONTRAST]).isEqualTo(1f)
+        assertThat(tone[AdjustmentKind.BLOOM]).isEqualTo(0.4f)
+        assertThat(tone.resetting(AdjustmentFamily.EFFECT).isNeutral).isTrue()
+    }
+}

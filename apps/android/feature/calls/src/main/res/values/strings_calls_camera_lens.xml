@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_camera_state_on">Camera on</string>
+    <string name="call_camera_state_off">Camera off</string>
+    <string name="call_camera_toggle_off">Turn camera off</string>
+    <string name="call_camera_toggle_on">Turn camera on</string>
+</resources>

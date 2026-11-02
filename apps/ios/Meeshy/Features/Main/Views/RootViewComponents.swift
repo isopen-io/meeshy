@@ -592,43 +592,7 @@ struct ThemedFeedOverlay: View {
                         showStatusComposer = true
                     })
 
-                    // Composer placeholder — tap to open full composer
-                    Button {
-                        showFullComposer = true
-                        HapticFeedback.light()
-                    } label: {
-                        HStack(spacing: MeeshySpacing.md) {
-                            MeeshyAvatar(
-                                name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
-                                context: .feedComposer,
-                                avatarURL: AuthManager.shared.currentUser?.avatar,
-                                thumbHash: AuthManager.shared.currentUser?.avatarThumbHash,
-                                ring: AuthManager.shared.currentUser?.profileDecor?.avatarRing
-                            )
-
-                            Text(String(localized: "composer.placeholder.share", defaultValue: "Partager quelque chose", bundle: .main))
-                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                                .foregroundColor(theme.textMuted)
-
-                            Spacer()
-
-                            Image(systemName: "photo.on.rectangle.angled")
-                                .font(MeeshyFont.relative(MeeshyIconSize.md))
-                                .foregroundColor(MeeshyColors.indigo400)
-                        }
-                        .padding(MeeshySpacing.md)
-                        .background(
-                            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                                .fill(theme.inputBackground)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                                        .stroke(theme.inputBorder, lineWidth: 1)
-                                )
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .accessibilityIdentifier("feed.composer.placeholder")
+                    composerPlaceholder
 
                     // Cache vide et chargement en cours : des cartes fantômes de
                     // la hauteur des vraies, jamais du fond nu. Même loi que
@@ -900,6 +864,57 @@ struct ThemedFeedOverlay: View {
                     quoteOriginalPost = nil
                 }
             )
+        }
+    }
+}
+
+// MARK: - Composer placeholder
+
+extension ThemedFeedOverlay {
+    /// La porte du composeur — et, juste dessous, les publications encore sur
+    /// l'appareil (#13415). Sortie de `body` pour qu'il reste lisible.
+    var composerPlaceholder: some View {
+        Group {
+            // Composer placeholder — tap to open full composer
+            Button {
+                showFullComposer = true
+                HapticFeedback.light()
+            } label: {
+                HStack(spacing: MeeshySpacing.md) {
+                    MeeshyAvatar(
+                        name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
+                        context: .feedComposer,
+                        avatarURL: AuthManager.shared.currentUser?.avatar,
+                        thumbHash: AuthManager.shared.currentUser?.avatarThumbHash,
+                        ring: AuthManager.shared.currentUser?.profileDecor?.avatarRing
+                    )
+
+                    Text(String(localized: "composer.placeholder.share", defaultValue: "Partager quelque chose", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                        .foregroundColor(theme.textMuted)
+
+                    Spacer()
+
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(MeeshyFont.relative(MeeshyIconSize.md))
+                        .foregroundColor(MeeshyColors.indigo400)
+                }
+                .padding(MeeshySpacing.md)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        .fill(theme.inputBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                                .stroke(theme.inputBorder, lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .accessibilityIdentifier("feed.composer.placeholder")
+
+            // #13415 — les publications encore sur l'appareil, et leur reprise.
+            UnsentPublicationsEntry(openComposer: { showFullComposer = true })
         }
     }
 }

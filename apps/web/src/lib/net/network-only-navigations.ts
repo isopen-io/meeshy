@@ -44,7 +44,11 @@ export const NETWORK_ONLY_NAVIGATIONS: readonly RegExp[] = [
   /^\/u\/[^/?#]+\/[^/?#]/,
   /^\/users\//,
   /^\/\.well-known\//,
-  /^\/(?:robots\.txt|sitemap\.xml|manifest\.json|android-chrome-512x512\.png)(?:\?|$)/,
+  /* `build-info.json` et `config.js` (#12654) : la révision et la configuration
+     du CONTENEUR. Ouverts dans la barre d'adresse, le repli de navigation
+     servait la coque — la page « introuvable » de l'application à la place du
+     fichier que l'on vient vérifier. */
+  /^\/(?:robots\.txt|sitemap\.xml|manifest\.json|android-chrome-512x512\.png|build-info\.json|config\.js)(?:\?|$)/,
   /* La RACINE parrainée, et elle seule : nginx route sur le chemin, et c'est
      la seule adresse dont la redirection dépend de la requête. */
   /^\/\?(?:[^#]*&)?affiliate=/,

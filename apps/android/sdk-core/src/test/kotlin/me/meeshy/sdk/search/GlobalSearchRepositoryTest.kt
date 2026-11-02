@@ -129,6 +129,21 @@ class GlobalSearchRepositoryTest {
     }
 
     @Test
+    fun `a message found on the network carries the conversation it was found in`() = runTest {
+        val found = conversation("c1").copy(avatar = "2026/09/c1/photo.png")
+        val remote = Remote().apply {
+            serving(conversations = listOf(found))
+            coEvery { messageApi.search("c1", any(), any(), any()) } returns ApiResponse(
+                success = true,
+                data = listOf(ApiMessage(id = "m1", conversationId = "c1")),
+            )
+        }
+        val settled = repository(remote).search("bel").toList().last()
+
+        assertThat(settled.messages.items.single().conversation).isEqualTo(found)
+    }
+
+    @Test
     fun `when every message leg fails and nothing is local the messages pane reports the failure`() = runTest {
         val remote = Remote().apply {
             serving(conversations = listOf(conversation("c1")))

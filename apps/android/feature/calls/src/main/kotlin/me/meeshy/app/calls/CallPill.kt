@@ -3,13 +3,10 @@ package me.meeshy.app.calls
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
@@ -23,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -30,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.theme.DynamicColorGenerator
+import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -88,7 +87,8 @@ enum class CallBackAction { Inert, Minimize, Close }
  *
  * Pure glue: every value is derived from the immutable [state]; the accent is
  * resolved from the peer identity for colour coherence (the conversation-accent
- * rule).
+ * rule). [peerAvatarUrl] is the peer's photo ([CallPeerVisual.avatarUrl]): like iOS,
+ * the pill shows the real avatar, its initials only standing in while it loads (#12569).
  */
 @Composable
 fun CallPill(
@@ -98,6 +98,7 @@ fun CallPill(
     onToggleSpeaker: () -> Unit,
     onHangUp: () -> Unit,
     modifier: Modifier = Modifier,
+    peerAvatarUrl: String? = null,
 ) {
     val accent = hexColor(DynamicColorGenerator.colorForName(state.peerName))
     val ongoingLabel = stringResource(R.string.call_pill_ongoing, state.peerName)
@@ -123,20 +124,14 @@ fun CallPill(
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md, Alignment.Start),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(accent),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = state.peerName.take(1).uppercase(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
+            // Decorative: the identity row's label already names the peer.
+            MeeshyAvatar(
+                name = state.peerName,
+                size = 40.dp,
+                containerColor = accent,
+                imageUrl = peerAvatarUrl,
+                modifier = Modifier.clearAndSetSemantics { },
+            )
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(

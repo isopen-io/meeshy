@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #13913 : le compositeur nomme le format qu'il compose — les variantes post et réel (ou story) des libellés qui le nomment. -->
+<resources>
+    <string name="stories_composer_canvas_post">Lienzo de la publicación: pellizca para acercar, arrastra para mover</string>
+    <string name="stories_composer_canvas_reel">Lienzo del reel: pellizca para acercar, arrastra para mover</string>
+    <string name="story_sound_sheet_title_post">Sonido de la publicación</string>
+    <string name="story_sound_sheet_title_reel">Sonido del reel</string>
+    <string name="story_sound_library_emptyMine_post">Tus sonidos aparecerán aquí en cuanto hagas una publicación con audio original.</string>
+    <string name="story_sound_library_emptyMine_reel">Tus sonidos aparecerán aquí en cuanto publiques un reel con audio original.</string>
+    <string name="story_media_soundExtraction_caption_story">Otras personas podrán reutilizar la banda sonora de los vídeos de esta historia.</string>
+    <string name="story_media_soundExtraction_caption_reel">Otras personas podrán reutilizar la banda sonora de los vídeos de este reel.</string>
+    <string name="story_media_soundExtraction_a11yHint_story">Otras personas podrán reutilizar la banda sonora de los vídeos de esta historia en sus propias publicaciones.</string>
+    <string name="story_media_soundExtraction_a11yHint_reel">Otras personas podrán reutilizar la banda sonora de los vídeos de este reel en sus propias publicaciones.</string>
+    <string name="composer_post_text_reel">Texto del reel</string>
+</resources>

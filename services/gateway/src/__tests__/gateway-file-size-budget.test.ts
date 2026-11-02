@@ -171,6 +171,11 @@ const MAX_LINES = 1000;
  * avant que la garde des destinataires (`services/email/recipient-policy.ts`)
  * n'entre dans `sendEmail`.
  *
+ * `services/PushNotificationService.ts` : SORTI (1032 → 933, #10267, 2026-10-25).
+ * Les préférences de livraison appliquées au chokepoint sont parties vers
+ * `services/push-delivery-preferences.ts` avant que le filtre de routage par
+ * version (`services/push-type-routing.ts`) n'entre dans `sendToUser`.
+ *
  * `services/AuthService.ts` : SORTI (1324 → 945, #8238, 2026-09-27). La
  * vérification du numéro par SMS est partie vers `services/auth/phone-verification.ts`
  * avant que la loi du délai de grâce (`services/auth/account-activation.ts`)
@@ -188,7 +193,6 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'server.ts': 1406,
   'services/PostFeedService.ts': 1199,
   'services/messaging/MessageProcessor.ts': 1110,
-  'services/PushNotificationService.ts': 1032,
   'dma-interoperability/signal-protocol/SignalProtocolEngine.ts': 1027,
   'services/AudioTranslateService.ts': 1017,
 };

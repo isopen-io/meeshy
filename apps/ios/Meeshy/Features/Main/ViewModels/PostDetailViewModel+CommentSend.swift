@@ -33,25 +33,12 @@ extension PostDetailViewModel {
         let cmid = ClientMutationId.generate()
         let snapshotCount = self.post?.commentCount ?? 0
         let currentUser = AuthManager.shared.currentUser
-        let optimistic = FeedComment(
-            id: cmid,
-            author: currentUser?.displayName ?? currentUser?.username ?? "",
-            authorId: currentUser?.id ?? "",
-            authorUsername: currentUser?.username,
-            authorAvatarURL: currentUser?.avatar,
-            content: content,
-            timestamp: Date(),
-            likes: 0,
-            replies: 0,
-            effectFlags: effectFlags ?? 0,
-            originalLanguage: originalLanguage, location: location,
-            // #6578 — la ligne optimiste CITE tout de suite. Sans cela elle ne
-            // cite rien pendant la traversée réseau puis se met à citer quand
-            // l'écho arrive : un changement de ligne que personne n'a demandé,
-            // sur le contenu qu'on vient soi-même d'écrire.
-            quotedMedia: quoted
-        )
-        comments.insert(optimistic, at: 0)
+        // #6578 — la ligne optimiste CITE tout de suite : sans cela elle se
+        // mettrait à citer à l'arrivée de l'écho, un changement que personne
+        // n'a demandé sur le contenu qu'on vient soi-même d'écrire.
+        commentThreadModel.insertOptimistic(.optimistic(
+            id: cmid, by: currentUser, content: content, parentId: nil, effectFlags: effectFlags,
+            originalLanguage: originalLanguage, location: location, quoted: quoted))
         self.post?.commentCount = snapshotCount + 1
         let payload = CreateCommentPayload(
             clientMutationId: cmid, postId: post.id,
@@ -100,28 +87,9 @@ extension PostDetailViewModel {
         let snapshotExpanded = expandedThreads.contains(parentId)
         let snapshotCount = self.post?.commentCount ?? 0
         let currentUser = AuthManager.shared.currentUser
-        let optimistic = FeedComment(
-            id: cmid,
-            author: currentUser?.displayName ?? currentUser?.username ?? "",
-            authorId: currentUser?.id ?? "",
-            authorUsername: currentUser?.username,
-            authorAvatarURL: currentUser?.avatar,
-            content: content,
-            timestamp: Date(),
-            likes: 0,
-            replies: 0,
-            parentId: parentId,
-            effectFlags: effectFlags ?? 0,
-            originalLanguage: originalLanguage, location: location,
-            quotedMedia: quoted
-        )
-        var existing = repliesMap[parentId] ?? []
-        existing.insert(optimistic, at: 0)
-        repliesMap[parentId] = existing
-        expandedThreads.insert(parentId)
-        if let idx = comments.firstIndex(where: { $0.id == parentId }) {
-            comments[idx].replies += 1
-        }
+        commentThreadModel.insertOptimistic(.optimistic(
+            id: cmid, by: currentUser, content: content, parentId: parentId, effectFlags: effectFlags,
+            originalLanguage: originalLanguage, location: location, quoted: quoted))
         self.post?.commentCount = snapshotCount + 1
         let payload = CreateCommentPayload(
             clientMutationId: cmid, postId: post.id,
@@ -155,47 +123,22 @@ extension PostDetailViewModel {
         replyingTo = nil
     }
 
-    /// Retire le commentaire optimiste `cmid` — et lui seul (`OptimisticRollback`) : ce qui est arrivé
-    /// par socket ou par pagination pendant l'attente reste. Les compteurs suivent la ligne retirée.
+    /// Retire le commentaire optimiste `cmid` — et lui seul (`FeedCommentThread.withdrawingOptimistic`) :
+    /// ce qui est arrivé par socket ou par pagination pendant l'attente reste. Le total suit la ligne retirée.
     func withdrawOptimisticComment(_ cmid: String, parentId: String?) {
-        let removed: Bool
-        if let parentId {
-            let result = OptimisticRollback.withdrawing(cmid, from: repliesMap[parentId] ?? [])
-            repliesMap[parentId] = result.items
-            removed = result.removed
-            if removed, let idx = comments.firstIndex(where: { $0.id == parentId }) {
-                comments[idx].replies = OptimisticRollback.decremented(comments[idx].replies, removed: true)
-            }
-        } else {
-            let result = OptimisticRollback.withdrawing(cmid, from: comments)
-            comments = result.items
-            removed = result.removed
-        }
+        let removed = commentThreadModel.withdrawOptimistic(cmid, parentId: parentId)
         if let count = post?.commentCount {
             post?.commentCount = OptimisticRollback.decremented(count, removed: removed)
         }
     }
 
     /// Pose une traduction de commentaire fraîchement arrivée (racine ou
-    /// réponse) — uniquement si la langue est préférée, qu'aucune traduction
-    /// n'est déjà affichée, ET que la langue d'origine du commentaire n'occupe
-    /// pas déjà un rang au moins aussi prioritaire dans le Prisme (#6531,
-    /// jumelle de `FeedViewModel.applyCommentTranslation` — même garde).
+    /// réponse) — la règle unique du fil (`FeedCommentThread`) : elle rejoint
+    /// la carte du commentaire, l'affichage se re-résout par le Prisme (#6531).
     func applyCommentTranslationUpdate(commentId: String, language: String, text: String) {
-        // Même règle que `FeedViewModel.applyCommentTranslation` : la
-        // traduction rejoint le dictionnaire, l'affichage se re-résout.
-        let langs = preferredLanguages
-        if let idx = comments.firstIndex(where: { $0.id == commentId }) {
-            comments[idx] = comments[idx].mergingTranslation(text, language: language, preferredLanguages: langs)
-            return
-        }
-        for (key, var replies) in repliesMap {
-            if let idx = replies.firstIndex(where: { $0.id == commentId }) {
-                replies[idx] = replies[idx].mergingTranslation(text, language: language, preferredLanguages: langs)
-                repliesMap[key] = replies
-                return
-            }
-        }
+        commentThread = commentThread.mergingTranslation(
+            text, commentId: commentId, language: language, preferredLanguages: preferredLanguages
+        )
     }
 
     /// Envoi d'un commentaire (top-level OU réponse) portant ses médias
@@ -211,28 +154,10 @@ extension PostDetailViewModel {
         // et un retry REST après timeout est dédoublonné serveur (MutationLog).
         let tempId = ClientMutationId.generate()
         let me = AuthManager.shared.currentUser
-        let optimistic = FeedComment(
-            id: tempId,
-            author: me?.displayName ?? me?.username ?? "",
-            authorId: me?.id ?? "",
-            authorUsername: me?.username,
-            authorAvatarURL: me?.avatar,
-            content: content, timestamp: Date(),
-            likes: 0, replies: 0, parentId: parentId,
-            effectFlags: effectFlags ?? 0,
-            originalLanguage: originalLanguage, media: pendingMedia.map(\.optimistic),
-            quotedMedia: quoted
-        )
+        commentThreadModel.insertOptimistic(.optimistic(
+            id: tempId, by: me, content: content, parentId: parentId, effectFlags: effectFlags,
+            originalLanguage: originalLanguage, media: pendingMedia.map(\.optimistic), quoted: quoted))
         let snapshotCount = post.commentCount
-        if let parentId {
-            var existing = repliesMap[parentId] ?? []
-            existing.insert(optimistic, at: 0)
-            repliesMap[parentId] = existing
-            expandedThreads.insert(parentId)
-            if let idx = comments.firstIndex(where: { $0.id == parentId }) { comments[idx].replies += 1 }
-        } else {
-            comments.insert(optimistic, at: 0)
-        }
         self.post?.commentCount = snapshotCount + 1
 
         // La charge est bâtie UNE fois, avec son auteur relevé avant toute
@@ -243,59 +168,29 @@ extension PostDetailViewModel {
             location: location, effectFlags: effectFlags,
             quotedPostMediaId: quoted?.postMediaId,
             mobileTranscription: pendingMedia.first?.mobileTranscription)
-        do {
-            guard let apiComment = try await CommentPublisher.live.publish(payload, pieces: CommentPublisher.pieces(pendingMedia)) else {
-                CommentMediaUploader.discardLocalFiles(pendingMedia)
-                return true
-            }
-            let server = FeedComment(
-                id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
-                authorUsername: apiComment.author.username,
-                authorAvatarURL: apiComment.author.avatar,
-                content: apiComment.content, timestamp: apiComment.createdAt,
-                likes: 0, replies: 0, parentId: parentId,
-                effectFlags: apiComment.effectFlags ?? effectFlags ?? 0,
-                originalLanguage: apiComment.originalLanguage, media: (apiComment.media ?? []).map { $0.toFeedMedia() },
-                // La citation SERVIE, pas celle qu'on a envoyée : le serveur
-                // relit le média et peut n'en rendre que l'ancre s'il a disparu
-                // entre la désignation et l'envoi. Recopier la nôtre ferait
-                // afficher une vignette que le serveur vient de retenir.
-                quotedMedia: apiComment.quotedCitation ?? quoted
-            )
-            if let parentId {
-                var existing = repliesMap[parentId] ?? []
-                if let idx = existing.firstIndex(where: { $0.id == tempId }) { existing[idx] = server }
-                else if !existing.contains(where: { $0.id == server.id }) { existing.insert(server, at: 0) }
-                repliesMap[parentId] = existing
-            } else if let idx = comments.firstIndex(where: { $0.id == tempId }) {
-                comments[idx] = server
-            } else if !comments.contains(where: { $0.id == server.id }) {
-                comments.insert(server, at: 0)
-            }
-            CommentMediaUploader.discardLocalFiles(pendingMedia)
+        switch await commentThreadModel.deliver(payload, media: pendingMedia, quoted: quoted) {
+        case .delivered:
             await bestEffort("postDetailViewModelCommentSend.comments.savePreservingFreshness.4", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)") }
             return true
-        } catch {
-            let rollback = { self.withdrawOptimisticComment(tempId, parentId: parentId) }
-            // La limite du jour est un refus : la ligne part, avec sa raison.
-            let cause = (error as? CommentPublisher.Interrupted)?.underlying ?? error
-            guard !DailyGestureLimitNotice.surface(cause) else { rollback(); return false }
-            // **Sinon le commentaire rejoint la file AVEC ses pièces** (#9743) :
-            // il était retiré de l'écran et son média perdu. La ligne optimiste
-            // reste ; l'écho `comment:added` la réconcilie au rejeu, et
-            // `CommentUnsentBadge` la marque relançable si la file renonce.
-            do {
-                try await CommentMediaDelivery.entrust(payload, medias: pendingMedia,
-                                                       acquired: CommentMediaDelivery.acquired(from: error))
-                return true
-            } catch {
-                // Ni envoyé ni confié à la file : le commentaire n'est écrit
-                // nulle part ailleurs, l'appelant le rend au composeur.
-                rollback()
-                FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
-                return false
-            }
+        case .entrusted:
+            return true
+        case .refused(let cause):
+            decrementCommentCount()
+            if !DailyGestureLimitNotice.surface(cause) { showSendError() }
+            return false
+        case .unqueued:
+            decrementCommentCount()
+            showSendError()
+            return false
         }
+    }
+
+    private func decrementCommentCount() {
+        if let count = post?.commentCount { post?.commentCount = OptimisticRollback.decremented(count, removed: true) }
+    }
+
+    private func showSendError() {
+        FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
     }
 
     /// L'auteur renonce à un commentaire non envoyé (#9743) : sa ligne part.

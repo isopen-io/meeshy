@@ -115,79 +115,79 @@
     },
     "preview": null,
     "contract": {
-      "src": "b9b7392e7d283e2a.json",
-      "bytes": 328,
-      "sha256": "b9b7392e7d283e2a5a55fa138b30de2b1f63210657d5d59bed3684ca6f387454"
+      "src": "10a21e62a40c6c25.json",
+      "bytes": 952,
+      "sha256": "10a21e62a40c6c25e266c37f3d6e07ad6ce84bf88438564aab090db9d2964b9b"
     },
     "strings": {
       "fr": {
-        "src": "e1c17dc55b522cef.json",
-        "bytes": 29,
-        "sha256": "e1c17dc55b522cef04004ae813a0033ccd46996815829634cf6a83d1399b5410"
+        "src": "f54a92ae87b9bd38.json",
+        "bytes": 81,
+        "sha256": "f54a92ae87b9bd38b1d343f39b7db4182a5574e4ca404cfb2d59f36e6cca6813"
       },
       "en": {
-        "src": "b6fe496462d63f63.json",
-        "bytes": 30,
-        "sha256": "b6fe496462d63f63ffd02b8083e21613a6aeca94266f8f68f4ba136e9704ec77"
+        "src": "3fc40ef5dbe21d43.json",
+        "bytes": 83,
+        "sha256": "3fc40ef5dbe21d4350f5038338d529207e0f675907ca68fac232c4ae633c9f54"
       },
       "es": {
-        "src": "9df01473aedf2e9d.json",
-        "bytes": 30,
-        "sha256": "9df01473aedf2e9dcc7c386c8254d224b83c38aef58f2dd4e904939a7955fa2f"
+        "src": "f204477f88ae0b22.json",
+        "bytes": 80,
+        "sha256": "f204477f88ae0b221d9c919c68f82dc1819fcb63be1fd284be6fe3c920899c23"
       },
       "pt": {
-        "src": "f6173646923084e4.json",
-        "bytes": 31,
-        "sha256": "f6173646923084e4aa16aa96ea8c7c9fc3de811c8b847cceae6f40205dc89fb0"
+        "src": "0bfb9553fd337d36.json",
+        "bytes": 81,
+        "sha256": "0bfb9553fd337d36b67d568d3481c118fd49a2f85d92ad248d8e326af3567896"
       },
       "de": {
-        "src": "6cfc10666ad5f4a5.json",
-        "bytes": 32,
-        "sha256": "6cfc10666ad5f4a526bea0f34a537a7a4a9e0a0980541460517d0377f9418630"
+        "src": "7cc8761882301708.json",
+        "bytes": 89,
+        "sha256": "7cc876188230170870898426a1154c8fc469f5651485e9469b3ed07522ef2c8d"
       },
       "it": {
-        "src": "6c28b8c99b27899e.json",
-        "bytes": 31,
-        "sha256": "6c28b8c99b27899e2df9eceab2301df7f53bf81cebc1616caa1b56a2cdf70fa0"
+        "src": "f8f999d6dd4c2825.json",
+        "bytes": 81,
+        "sha256": "f8f999d6dd4c28252b94ba43662f5f63ec343d495592b9a0aedf96f64a074689"
       },
       "ar": {
-        "src": "09b25472ef37d77e.json",
-        "bytes": 38,
-        "sha256": "09b25472ef37d77e0efa35df840794a9b99530b5abc8b4c6135d708de1be2b8d"
+        "src": "8e395e1c65872833.json",
+        "bytes": 100,
+        "sha256": "8e395e1c65872833cfd532222326d437de3e99d265627f53f7d04387f2f4efc3"
       }
     },
     "downloadBytes": {
-      "story": 328,
+      "story": 952,
       "square": null
     },
     "names": {
       "fr": {
         "name": "Contours animés",
-        "description": "Un arc doré fait le tour de l’avatar."
+        "description": "Un halo doré, un prisme qui tourne, une onde qui bat."
       },
       "en": {
         "name": "Animated rings",
-        "description": "A golden arc travels around the avatar."
+        "description": "A golden halo, a turning prism, a pulsing ripple."
       },
       "es": {
         "name": "Contornos animados",
-        "description": "Un arco dorado rodea el avatar."
+        "description": "Un halo dorado, un prisma que gira, una onda que late."
       },
       "pt": {
         "name": "Contornos animados",
-        "description": "Um arco dourado contorna o avatar."
+        "description": "Um halo dourado, um prisma que gira, uma onda que pulsa."
       },
       "de": {
         "name": "Animierte Konturen",
-        "description": "Ein goldener Bogen umkreist den Avatar."
+        "description": "Ein goldener Halo, ein kreisendes Prisma, eine pulsierende Welle."
       },
       "it": {
         "name": "Contorni animati",
-        "description": "Un arco dorato gira attorno all’avatar."
+        "description": "Un alone dorato, un prisma che gira, un’onda che pulsa."
       },
       "ar": {
         "name": "إطارات متحركة",
-        "description": "قوس ذهبي يدور حول الصورة الرمزية."
+        "description": "هالة ذهبية، ومنشور يدور، وتموّج ينبض."
       }
     },
     "usage": {
@@ -881,6 +881,996 @@
       "ar": {
         "name": "إطار سلتي",
         "description": "ضفيرة لا تنتهي وتريسكيل حلزونية."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-illustres",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 9,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "aaea7c5492142cb7.webp",
+      "bytes": 10312,
+      "sha256": "aaea7c5492142cb7bed84711ee4440694118043d12a65d959623519a5ac16d1f"
+    },
+    "preview": null,
+    "contract": {
+      "src": "7c8c0050d5fa2b4f.json",
+      "bytes": 10999,
+      "sha256": "7c8c0050d5fa2b4ffad61bc9f710c72d52f6294dceca64b1e6d69a40da606805"
+    },
+    "strings": {
+      "fr": {
+        "src": "9c35d1c2d6a33c28.json",
+        "bytes": 217,
+        "sha256": "9c35d1c2d6a33c2889bbbd86a1fdfb83c0d06f113a6331d01135d2c56f211501"
+      },
+      "en": {
+        "src": "bae9935e7e2e3fea.json",
+        "bytes": 193,
+        "sha256": "bae9935e7e2e3fea800a34a498540854a0092465232d73cac595afc75531f737"
+      },
+      "es": {
+        "src": "fffaacdb0668fe8d.json",
+        "bytes": 212,
+        "sha256": "fffaacdb0668fe8d9b75f15b77482741be7d1f29aa19b259a5c5a206162e0468"
+      },
+      "pt": {
+        "src": "84ac7d797903e287.json",
+        "bytes": 215,
+        "sha256": "84ac7d797903e28728957ff13f037237f41b75d2182bf96b2f86d196d64cb4e2"
+      },
+      "de": {
+        "src": "72c0b4de231cdec1.json",
+        "bytes": 202,
+        "sha256": "72c0b4de231cdec120ba906c094652c16cc13bd01cf1423dcd0da52d32bf532e"
+      },
+      "it": {
+        "src": "751d8b6db55e9778.json",
+        "bytes": 209,
+        "sha256": "751d8b6db55e9778091339e69b8b6e4c4a7bdb0dbeaf6f1fd3a3005dc3136d0f"
+      },
+      "ar": {
+        "src": "827e4483814ee1bd.json",
+        "bytes": 254,
+        "sha256": "827e4483814ee1bd798ac25909fa41e2e1a1354400ff48622502d0803a3356c2"
+      }
+    },
+    "downloadBytes": {
+      "story": 10999,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres illustrés",
+        "description": "Six cadres qui débordent de l’avatar : un masque aux yeux qui rougissent, une toile et son araignée, des ailes d’ange, un cercle runique, des griffes d’os, des ailes de démon."
+      },
+      "en": {
+        "name": "Illustrated frames",
+        "description": "Six frames that spill past your avatar: a mask whose eyes turn red, a web and its spider, angel wings, a runic circle, bone claws and demon wings."
+      },
+      "es": {
+        "name": "Marcos ilustrados",
+        "description": "Seis marcos que desbordan tu avatar: una máscara de ojos que enrojecen, una telaraña con su araña, alas de ángel, un círculo rúnico, garras de hueso y alas de demonio."
+      },
+      "pt": {
+        "name": "Molduras ilustradas",
+        "description": "Seis molduras que transbordam do teu avatar: uma máscara de olhos que ficam vermelhos, uma teia e a sua aranha, asas de anjo, um círculo rúnico, garras de osso e asas de demônio."
+      },
+      "de": {
+        "name": "Illustrierte Rahmen",
+        "description": "Sechs Rahmen, die über deinen Avatar hinausragen: eine Maske mit rot glühenden Augen, ein Netz samt Spinne, Engelsflügel, ein Runenkreis, Knochenkrallen und Dämonenflügel."
+      },
+      "it": {
+        "name": "Cornici illustrate",
+        "description": "Sei cornici che escono dal tuo avatar: una maschera dagli occhi che diventano rossi, una ragnatela col suo ragno, ali d’angelo, un cerchio runico, artigli d’osso e ali di demone."
+      },
+      "ar": {
+        "name": "إطارات مرسومة",
+        "description": "ستة إطارات تتجاوز صورتك الرمزية: قناع تحمرّ عيناه، وشبكة وعنكبوتها، وجناحا ملاك، ودائرة رموز، ومخالب عظمية، وجناحا شيطان."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-asiatiques",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 10,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "abd216ffdf4918ea.webp",
+      "bytes": 10030,
+      "sha256": "abd216ffdf4918ea03a25fde74f70107a4334c4e7ab266a9d96dfaea8d16c501"
+    },
+    "preview": null,
+    "contract": {
+      "src": "13161bf317a4a8d3.json",
+      "bytes": 5601,
+      "sha256": "13161bf317a4a8d35f0668c061dec50e3fb4472c978e59f7daa606a5ee545a1b"
+    },
+    "strings": {
+      "fr": {
+        "src": "79adca1379b403d2.json",
+        "bytes": 115,
+        "sha256": "79adca1379b403d2139c537ab8965fd19945f0793a09d27344484bcd4b76069a"
+      },
+      "en": {
+        "src": "62e3c8ecbb83f74f.json",
+        "bytes": 104,
+        "sha256": "62e3c8ecbb83f74f9523a0123f2edb728e24f06a71d305035ba0083904ab273b"
+      },
+      "es": {
+        "src": "b5d48b103c36a5da.json",
+        "bytes": 115,
+        "sha256": "b5d48b103c36a5daed10a739f38fd1515bec482c833f9de1d33dc197b9f02538"
+      },
+      "pt": {
+        "src": "f244f7372671efd7.json",
+        "bytes": 115,
+        "sha256": "f244f7372671efd7e52513f886ae24ffc7f2acd155d26d85ba78fffb95591edf"
+      },
+      "de": {
+        "src": "ce16d858232bf6bc.json",
+        "bytes": 104,
+        "sha256": "ce16d858232bf6bc4a902f46321be8fe06f1b8f9ef069e7a54d6257762073fa1"
+      },
+      "it": {
+        "src": "653656ff974579db.json",
+        "bytes": 113,
+        "sha256": "653656ff974579db6d2ef6a3b57c410f6905ad1e20ef51365cceb71e9dcc81b7"
+      },
+      "ar": {
+        "src": "2e787f75f0e35a96.json",
+        "bytes": 131,
+        "sha256": "2e787f75f0e35a9676dea9610de9df2d70bb40d9eae22a31caa3439b61b118f9"
+      }
+    },
+    "downloadBytes": {
+      "story": 5601,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres d’Asie",
+        "description": "Trois cadres inspirés de l’Asie : un dragon de jade qui ondule autour de l’avatar, des nuages de soie qui dérivent, des lanternes de papier qui se balancent."
+      },
+      "en": {
+        "name": "Asian frames",
+        "description": "Three frames inspired by Asia: a jade dragon coiling around your avatar, drifting silk clouds and swaying paper lanterns."
+      },
+      "es": {
+        "name": "Marcos de Asia",
+        "description": "Tres marcos inspirados en Asia: un dragón de jade que ondula alrededor de tu avatar, nubes de seda a la deriva y farolillos de papel que se mecen."
+      },
+      "pt": {
+        "name": "Molduras da Ásia",
+        "description": "Três molduras inspiradas na Ásia: um dragão de jade que ondula à volta do teu avatar, nuvens de seda à deriva e lanternas de papel que balançam."
+      },
+      "de": {
+        "name": "Asiatische Rahmen",
+        "description": "Drei von Asien inspirierte Rahmen: ein Jadedrache, der sich um deinen Avatar windet, treibende Seidenwolken und schaukelnde Papierlaternen."
+      },
+      "it": {
+        "name": "Cornici d’Asia",
+        "description": "Tre cornici ispirate all’Asia: un drago di giada che si snoda attorno al tuo avatar, nuvole di seta alla deriva e lanterne di carta che dondolano."
+      },
+      "ar": {
+        "name": "إطارات آسيوية",
+        "description": "ثلاثة إطارات مستوحاة من آسيا: تنين من اليشم يتموّج حول صورتك الرمزية، وغيوم حريرية تنساب، وفوانيس ورقية تتأرجح."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-africains",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 11,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "cdaba34eb700750a.webp",
+      "bytes": 10734,
+      "sha256": "cdaba34eb700750abac8a2262783a710a741aca4ad18c6327d2bd0bba6b093e3"
+    },
+    "preview": null,
+    "contract": {
+      "src": "1ab56fb985920005.json",
+      "bytes": 7381,
+      "sha256": "1ab56fb985920005c37108f55020f2d7d410be0ae2bee1e51278a17b3b2c4daf"
+    },
+    "strings": {
+      "fr": {
+        "src": "f69f27e39b1ed6d4.json",
+        "bytes": 120,
+        "sha256": "f69f27e39b1ed6d4320c6deee9e5215580c5b428fd8922015444e7b5888eda54"
+      },
+      "en": {
+        "src": "68d9b739d01ab322.json",
+        "bytes": 104,
+        "sha256": "68d9b739d01ab322fb2134b12ceaa7da43f32aba3f5911d72720107449476c4b"
+      },
+      "es": {
+        "src": "ce011f71f0107dc6.json",
+        "bytes": 119,
+        "sha256": "ce011f71f0107dc6c74b3e7a0b327926dac9f0bbc60d3516e026ee965e26b748"
+      },
+      "pt": {
+        "src": "a02c5547c695d455.json",
+        "bytes": 117,
+        "sha256": "a02c5547c695d4552cbebc408439f69a8c4ae41e528744f73c38ce9e2be33bd0"
+      },
+      "de": {
+        "src": "2ad8f55eb8dd2cba.json",
+        "bytes": 104,
+        "sha256": "2ad8f55eb8dd2cbaff3014cc3159232984c2310b847f37bfc977e7c6e2e3993b"
+      },
+      "it": {
+        "src": "ce945b7e0776a29c.json",
+        "bytes": 117,
+        "sha256": "ce945b7e0776a29ccc6e61aa02469b998f37ac981b45a7aded4950a0705ac4a5"
+      },
+      "ar": {
+        "src": "0c9d0674f8ba3bba.json",
+        "bytes": 133,
+        "sha256": "0c9d0674f8ba3bbab2173fea383f97d9569df4e54b967c06ee5ef9ada5c2dc78"
+      }
+    },
+    "downloadBytes": {
+      "story": 7381,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres d’Afrique",
+        "description": "Trois cadres inspirés de l’Afrique : un masque d’ébène aux yeux qui s’illuminent devant un soleil de savane, des bandes tissées qui ondulent, un collier de perles qui roule."
+      },
+      "en": {
+        "name": "African frames",
+        "description": "Three frames inspired by Africa: an ebony mask whose eyes light up before a savanna sun, rippling woven bands and a rolling bead necklace."
+      },
+      "es": {
+        "name": "Marcos de África",
+        "description": "Tres marcos inspirados en África: una máscara de ébano cuyos ojos se iluminan ante un sol de sabana, bandas tejidas que ondulan y un collar de cuentas que gira."
+      },
+      "pt": {
+        "name": "Molduras de África",
+        "description": "Três molduras inspiradas em África: uma máscara de ébano cujos olhos se iluminam diante de um sol de savana, faixas tecidas que ondulam e um colar de contas que gira."
+      },
+      "de": {
+        "name": "Afrikanische Rahmen",
+        "description": "Drei von Afrika inspirierte Rahmen: eine Ebenholzmaske, deren Augen vor einer Savannensonne aufleuchten, wogende Webbänder und eine rollende Perlenkette."
+      },
+      "it": {
+        "name": "Cornici d’Africa",
+        "description": "Tre cornici ispirate all’Africa: una maschera d’ebano dagli occhi che si accendono davanti a un sole di savana, bande tessute che ondeggiano e una collana di perle che ruota."
+      },
+      "ar": {
+        "name": "إطارات أفريقية",
+        "description": "ثلاثة إطارات مستوحاة من أفريقيا: قناع من الأبنوس تتوهّج عيناه أمام شمس السافانا، وأشرطة منسوجة تتموّج، وعقد من الخرز يدور."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-celtes",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 12,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "2f6d57afe0c31a22.webp",
+      "bytes": 11228,
+      "sha256": "2f6d57afe0c31a22ab9b78a7c8c68a212a2fd3ac175464f92ff35e0ef83e25f6"
+    },
+    "preview": null,
+    "contract": {
+      "src": "3e5448ec7f1b81e7.json",
+      "bytes": 6387,
+      "sha256": "3e5448ec7f1b81e787c6c7355254527f4054b1ada863c2aced79243c38da8e5f"
+    },
+    "strings": {
+      "fr": {
+        "src": "6947256943ea2b5b.json",
+        "bytes": 124,
+        "sha256": "6947256943ea2b5b44afce90b1b17295b4b8bf4ecc9441f849862e5b8b8e3e6a"
+      },
+      "en": {
+        "src": "83ec761085cb1ec1.json",
+        "bytes": 113,
+        "sha256": "83ec761085cb1ec14741922baa3e91864227b921416aabaeb68db1490b0e28ee"
+      },
+      "es": {
+        "src": "93818be8100ef575.json",
+        "bytes": 120,
+        "sha256": "93818be8100ef5754c679645d4022ab116dd33e8855b365975a5adf48fa17953"
+      },
+      "pt": {
+        "src": "e4d08d2c2493a3ae.json",
+        "bytes": 118,
+        "sha256": "e4d08d2c2493a3ae6caf324b0f7d0bb3b24db682f3ef79bb0f74ae14be2433e1"
+      },
+      "de": {
+        "src": "f460c6c1aecede8f.json",
+        "bytes": 112,
+        "sha256": "f460c6c1aecede8f330da27328e54c67431515a4a6ee14fb5fb1de0f9cb70798"
+      },
+      "it": {
+        "src": "5b11ff661110b78a.json",
+        "bytes": 118,
+        "sha256": "5b11ff661110b78a8c8704b67becc2ac2adc61e4827f8d02ac6ccdfcfa39d09a"
+      },
+      "ar": {
+        "src": "b7e74f8caca12f8a.json",
+        "bytes": 163,
+        "sha256": "b7e74f8caca12f8a3dc3418bd8b01770e3998900b6ff9d3181da0bdf76afc1d0"
+      }
+    },
+    "downloadBytes": {
+      "story": 6387,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres celtes",
+        "description": "Trois cadres inspirés des entrelacs celtes : un nœud entrelacé qui s’efface puis se retrace, une spirale triple qui tourne, un lierre d’émeraude dont les feuilles frémissent."
+      },
+      "en": {
+        "name": "Celtic frames",
+        "description": "Three frames inspired by Celtic interlace: a knot that fades and redraws itself, a turning triple spiral and an emerald ivy whose leaves quiver."
+      },
+      "es": {
+        "name": "Marcos celtas",
+        "description": "Tres marcos inspirados en los entrelazados celtas: un nudo que se borra y se vuelve a trazar, una espiral triple que gira y una hiedra esmeralda de hojas que tiemblan."
+      },
+      "pt": {
+        "name": "Molduras celtas",
+        "description": "Três molduras inspiradas nos entrelaçados celtas: um nó que se apaga e se volta a traçar, uma espiral tripla que gira e uma hera esmeralda de folhas que estremecem."
+      },
+      "de": {
+        "name": "Keltische Rahmen",
+        "description": "Drei von keltischen Flechtmustern inspirierte Rahmen: ein Knoten, der verblasst und sich neu zeichnet, eine kreisende Dreifachspirale und smaragdgrüner Efeu mit zitternden Blättern."
+      },
+      "it": {
+        "name": "Cornici celtiche",
+        "description": "Tre cornici ispirate agli intrecci celtici: un nodo che svanisce e si ridisegna, una spirale tripla che gira e un’edera smeraldo dalle foglie che fremono."
+      },
+      "ar": {
+        "name": "إطارات سلتية",
+        "description": "ثلاثة إطارات مستوحاة من الزخارف السلتية المتشابكة: عقدة تمّحي ثم تُرسم من جديد، ولولب ثلاثي يدور، ولبلاب زمرّدي ترتعش أوراقه."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-nordiques",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 13,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "50c75c96d2170339.webp",
+      "bytes": 9576,
+      "sha256": "50c75c96d217033910e78a28491189cee8c435ac9069e87a6660723eee885666"
+    },
+    "preview": null,
+    "contract": {
+      "src": "a6ef258ac7ee97eb.json",
+      "bytes": 7042,
+      "sha256": "a6ef258ac7ee97eb229e174ed7f6a1d71435da3e4e0e803351c5409413814284"
+    },
+    "strings": {
+      "fr": {
+        "src": "da3350313e54e21e.json",
+        "bytes": 181,
+        "sha256": "da3350313e54e21e6539625ab60a1b003585559e52243e37ea3b5f63c23ddb34"
+      },
+      "en": {
+        "src": "c5f7d58fddb241c7.json",
+        "bytes": 165,
+        "sha256": "c5f7d58fddb241c7cad80a1e58f19e5e89d5d0137e6774b5b6373de12eb539f7"
+      },
+      "es": {
+        "src": "ae6a17f21a907963.json",
+        "bytes": 175,
+        "sha256": "ae6a17f21a907963f0c6944074d14abb3724a283b63fd75a09b8b84ceb923f47"
+      },
+      "pt": {
+        "src": "f36e5f30928a9f4a.json",
+        "bytes": 173,
+        "sha256": "f36e5f30928a9f4a9fea9a94187c92af4c3581de8c8b5beced0a3c30025848d1"
+      },
+      "de": {
+        "src": "a1a268569087e68e.json",
+        "bytes": 167,
+        "sha256": "a1a268569087e68ed8aefe144fe9b1ee5f069199fcb259392a8663585cacc760"
+      },
+      "it": {
+        "src": "bbb0d6af076fb960.json",
+        "bytes": 170,
+        "sha256": "bbb0d6af076fb960d8ec850e9e5b0492415de8856fe43918fcb8bee67694dab3"
+      },
+      "ar": {
+        "src": "d9ccd15e7939aeda.json",
+        "bytes": 212,
+        "sha256": "d9ccd15e7939aeda1e288837a5d39c0bb3a3f51eaa0042beedee66abc0bb1e58"
+      }
+    },
+    "downloadBytes": {
+      "story": 7042,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres nordiques",
+        "description": "Quatre cadres venus du grand Nord : des corbeaux qui tournoient, une aurore boréale qui ondule, un anneau de pierre gravée qui s’allume, une proue sculptée sur les vagues."
+      },
+      "en": {
+        "name": "Nordic frames",
+        "description": "Four frames from the far North: circling ravens, a rippling northern aurora, a carved stone ring that lights up and a carved prow riding the waves."
+      },
+      "es": {
+        "name": "Marcos nórdicos",
+        "description": "Cuatro marcos del gran Norte: cuervos que giran, una aurora boreal que ondula, un anillo de piedra grabada que se ilumina y una proa tallada sobre las olas."
+      },
+      "pt": {
+        "name": "Molduras nórdicas",
+        "description": "Quatro molduras do grande Norte: corvos que rodopiam, uma aurora boreal que ondula, um anel de pedra gravada que se acende e uma proa esculpida sobre as ondas."
+      },
+      "de": {
+        "name": "Nordische Rahmen",
+        "description": "Vier Rahmen aus dem hohen Norden: kreisende Raben, ein wogendes Nordlicht, ein gravierter Steinring, der aufleuchtet, und ein geschnitzter Bug auf den Wellen."
+      },
+      "it": {
+        "name": "Cornici nordiche",
+        "description": "Quattro cornici dal grande Nord: corvi che volteggiano, un’aurora boreale che ondeggia, un anello di pietra incisa che si illumina e una prua scolpita sulle onde."
+      },
+      "ar": {
+        "name": "إطارات شمالية",
+        "description": "أربعة إطارات من أقصى الشمال: غربان تحلّق في دوائر، وشفق قطبي يتموّج، وحلقة من الحجر المنقوش تضيء، ومقدّمة سفينة منحوتة فوق الأمواج."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-egyptiens",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 14,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "f35cb6670b3d7003.webp",
+      "bytes": 10024,
+      "sha256": "f35cb6670b3d7003949c1691a6e7962e79d091de6165f323fa9fa8ff922ecfdc"
+    },
+    "preview": null,
+    "contract": {
+      "src": "a7463868ca9ca6e8.json",
+      "bytes": 6933,
+      "sha256": "a7463868ca9ca6e8b343b8d3659d7204f53ea26e954cd7a6e40f8aeaf4228211"
+    },
+    "strings": {
+      "fr": {
+        "src": "3910d32ff7d463c3.json",
+        "bytes": 146,
+        "sha256": "3910d32ff7d463c30dade92bb4f8d66197095c23563c727012561906029056bc"
+      },
+      "en": {
+        "src": "040259621587e80c.json",
+        "bytes": 135,
+        "sha256": "040259621587e80c0712fa78f5acc4a6cd86e485c5000b1aff991c7ff4aefd28"
+      },
+      "es": {
+        "src": "f7b8373834d377f0.json",
+        "bytes": 147,
+        "sha256": "f7b8373834d377f07ffd1808686bf3cadfadba50722b0297be35fab440e82752"
+      },
+      "pt": {
+        "src": "2707240c325e757f.json",
+        "bytes": 147,
+        "sha256": "2707240c325e757f3cf7f14d0ea4330b17569b7e5aec50290a3d2ad35e2cf3c7"
+      },
+      "de": {
+        "src": "e009190490559ab5.json",
+        "bytes": 147,
+        "sha256": "e009190490559ab57d56ca35b7f09cdcf722f28ba1eba1cc69737a873a2ccb51"
+      },
+      "it": {
+        "src": "5ee60ad6bc7b1fb3.json",
+        "bytes": 146,
+        "sha256": "5ee60ad6bc7b1fb333d52f0c3200d0c5097e3be388e977018eb8269b2331ba33"
+      },
+      "ar": {
+        "src": "564c59254d574a92.json",
+        "bytes": 188,
+        "sha256": "564c59254d574a929945b6ae9f32077b6e1603038513ff35021271cec5bab4bb"
+      }
+    },
+    "downloadBytes": {
+      "story": 6933,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres égyptiens",
+        "description": "Quatre cadres d’or et de lapis : un cobra qui se dresse, un scarabée qui ouvre ses ailes, un soleil du désert au grand collier, des lotus du Nil qui s’ouvrent."
+      },
+      "en": {
+        "name": "Egyptian frames",
+        "description": "Four frames of gold and lapis: a rising cobra, a scarab opening its wings, a desert sun with a broad collar and Nile lotuses that bloom."
+      },
+      "es": {
+        "name": "Marcos egipcios",
+        "description": "Cuatro marcos de oro y lapislázuli: una cobra que se yergue, un escarabajo que abre sus alas, un sol del desierto con gran collar y lotos del Nilo que se abren."
+      },
+      "pt": {
+        "name": "Molduras egípcias",
+        "description": "Quatro molduras de ouro e lápis-lazúli: uma naja que se ergue, um escaravelho que abre as asas, um sol do deserto com grande colar e lótus do Nilo que se abrem."
+      },
+      "de": {
+        "name": "Ägyptische Rahmen",
+        "description": "Vier Rahmen aus Gold und Lapislazuli: eine sich aufrichtende Kobra, ein Skarabäus, der die Flügel öffnet, eine Wüstensonne mit breitem Halskragen und aufblühende Nil-Lotusblüten."
+      },
+      "it": {
+        "name": "Cornici egizie",
+        "description": "Quattro cornici d’oro e lapislazzuli: un cobra che si erge, uno scarabeo che apre le ali, un sole del deserto dal grande collare e loti del Nilo che sbocciano."
+      },
+      "ar": {
+        "name": "إطارات مصرية",
+        "description": "أربعة إطارات من الذهب واللازورد: كوبرا تنتصب، وجُعَل يفتح جناحيه، وشمس الصحراء بقلادة عريضة، وزهور لوتس النيل تتفتّح."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-mayas",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 15,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "cfa30485857caae4.webp",
+      "bytes": 7838,
+      "sha256": "cfa30485857caae49a3173dc125b3a35d19af17e8a86b008ffb5b7925595bd58"
+    },
+    "preview": null,
+    "contract": {
+      "src": "823b2e7ea0aa8b34.json",
+      "bytes": 8030,
+      "sha256": "823b2e7ea0aa8b34c2c53b2ada09bf45231512aae8e1cefacc721bfb9486b64f"
+    },
+    "strings": {
+      "fr": {
+        "src": "12437034f5491e7d.json",
+        "bytes": 177,
+        "sha256": "12437034f5491e7d339467fe9b614c05354f42034e4821f7eff2386d609e7712"
+      },
+      "en": {
+        "src": "5617c3b15cc18469.json",
+        "bytes": 161,
+        "sha256": "5617c3b15cc184692877ad7f110481e2e6896fd7f1369b84fe0fe3370d3aa162"
+      },
+      "es": {
+        "src": "70597c8aac9fb2b3.json",
+        "bytes": 176,
+        "sha256": "70597c8aac9fb2b3160508a8553a66585167568f22f6a2601f1d765cfad98235"
+      },
+      "pt": {
+        "src": "b8bddefeaa9d2cf4.json",
+        "bytes": 172,
+        "sha256": "b8bddefeaa9d2cf43de02d3b210079cda4354447fe2663ca8d181334f94bbccf"
+      },
+      "de": {
+        "src": "e2adc6bc5afb6ebf.json",
+        "bytes": 161,
+        "sha256": "e2adc6bc5afb6ebfa379843e4e56b9de6b77354ad0916733712ccd417393769f"
+      },
+      "it": {
+        "src": "3ba3657e67559f8a.json",
+        "bytes": 178,
+        "sha256": "3ba3657e67559f8afbc86b725b9b0322093ae948f5a6db428daf32d380fd0a85"
+      },
+      "ar": {
+        "src": "611cbaaea300e8ce.json",
+        "bytes": 202,
+        "sha256": "611cbaaea300e8ce630496cf874212e5a9f792e930af6776691f76dabbe39329"
+      }
+    },
+    "downloadBytes": {
+      "story": 8030,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres mayas",
+        "description": "Quatre cadres de pierre et de jade : un serpent de jade à crête de plumes, des cartouches de glyphes qui s’allument, une frise à gradins sous un soleil levant, un jaguar caché dans la jungle."
+      },
+      "en": {
+        "name": "Maya frames",
+        "description": "Four frames of stone and jade: a jade serpent with a feathered crest, glyph cartouches that light up, a stepped frieze under a rising sun and a jaguar hiding in the jungle."
+      },
+      "es": {
+        "name": "Marcos mayas",
+        "description": "Cuatro marcos de piedra y jade: una serpiente de jade con cresta de plumas, cartuchos de glifos que se iluminan, un friso escalonado bajo un sol naciente y un jaguar escondido en la selva."
+      },
+      "pt": {
+        "name": "Molduras maias",
+        "description": "Quatro molduras de pedra e jade: uma serpente de jade com crista de penas, cartuchos de glifos que se acendem, um friso em degraus sob um sol nascente e um jaguar escondido na selva."
+      },
+      "de": {
+        "name": "Maya-Rahmen",
+        "description": "Vier Rahmen aus Stein und Jade: eine Jadeschlange mit Federkamm, aufleuchtende Glyphenkartuschen, ein Stufenfries unter aufgehender Sonne und ein im Dschungel verborgener Jaguar."
+      },
+      "it": {
+        "name": "Cornici maya",
+        "description": "Quattro cornici di pietra e giada: un serpente di giada dalla cresta piumata, cartigli di glifi che si illuminano, un fregio a gradoni sotto il sole nascente e un giaguaro nascosto nella giungla."
+      },
+      "ar": {
+        "name": "إطارات مايا",
+        "description": "أربعة إطارات من الحجر واليشم: ثعبان من اليشم بعُرف من الريش، وخراطيش رموز تضيء، وإفريز مدرّج تحت شمس مشرقة، ونمر أمريكي يختبئ في الأدغال."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-indiens",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 16,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "80d08c10bad75c17.webp",
+      "bytes": 9684,
+      "sha256": "80d08c10bad75c1755b6d0c8687a6dce3d877cccfd943ef14da325229ac5785f"
+    },
+    "preview": null,
+    "contract": {
+      "src": "8d04133361adb640.json",
+      "bytes": 6971,
+      "sha256": "8d04133361adb6405ad2f9426570420f83b993f6f537c5577658e39723041055"
+    },
+    "strings": {
+      "fr": {
+        "src": "0843812b93767810.json",
+        "bytes": 123,
+        "sha256": "0843812b93767810093e1e218c31b34e1b6a7f0a2587a869398948ee2366402e"
+      },
+      "en": {
+        "src": "7e376864478a655e.json",
+        "bytes": 114,
+        "sha256": "7e376864478a655e0604e3ffa5374865f04fe1fdd37706db18c3f471d53a4d8a"
+      },
+      "es": {
+        "src": "032d572a5084142b.json",
+        "bytes": 127,
+        "sha256": "032d572a5084142be140699d98a6f7be82387e01824701c5d61f03eee2378638"
+      },
+      "pt": {
+        "src": "3c14a8e19621851d.json",
+        "bytes": 116,
+        "sha256": "3c14a8e19621851d5836e64edbcaa5e884466fe5d18f0e2f9c02980667aaa561"
+      },
+      "de": {
+        "src": "30f5d244f970d559.json",
+        "bytes": 121,
+        "sha256": "30f5d244f970d559eaf9105ec261cd29f4b5f503d6d93f41ab9c3a17a9309d41"
+      },
+      "it": {
+        "src": "0b99c2c8d539a35d.json",
+        "bytes": 129,
+        "sha256": "0b99c2c8d539a35d93f8a6c775ee3c1baadfe5d5f5ba72f736594a1e7a385342"
+      },
+      "ar": {
+        "src": "51471f8a9bef1d9a.json",
+        "bytes": 147,
+        "sha256": "51471f8a9bef1d9a2683c055e600de006782b7d61baaa9fe714db6585cfefea7"
+      }
+    },
+    "downloadBytes": {
+      "story": 6971,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres indiens",
+        "description": "Trois cadres inspirés des motifs de l’Inde : un mandala floral qui s’ouvre, un paon qui fait la roue, une guirlande de soucis et de jasmin qui se balance."
+      },
+      "en": {
+        "name": "Indian frames",
+        "description": "Three frames inspired by Indian motifs: a floral mandala that unfolds, a peacock fanning its tail, a swaying garland of marigolds and jasmine."
+      },
+      "es": {
+        "name": "Marcos indios",
+        "description": "Tres marcos inspirados en los motivos de la India: un mandala floral que se abre, un pavo real que despliega la cola y una guirnalda de caléndulas y jazmín que se balancea."
+      },
+      "pt": {
+        "name": "Molduras indianas",
+        "description": "Três molduras inspiradas nos motivos da Índia: uma mandala floral que se abre, um pavão que abre a cauda e uma grinalda de cravos-de-defunto e jasmim que balança."
+      },
+      "de": {
+        "name": "Indische Rahmen",
+        "description": "Drei Rahmen nach indischen Motiven: ein florales Mandala, das sich öffnet, ein Pfau, der ein Rad schlägt, und eine schwingende Girlande aus Ringelblumen und Jasmin."
+      },
+      "it": {
+        "name": "Cornici indiane",
+        "description": "Tre cornici ispirate ai motivi dell’India: un mandala floreale che si apre, un pavone che fa la ruota e una ghirlanda di calendule e gelsomino che ondeggia."
+      },
+      "ar": {
+        "name": "إطارات هندية",
+        "description": "ثلاثة إطارات مستوحاة من زخارف الهند: ماندالا زهرية تتفتح، وطاووس يفرد ذيله، وإكليل من القطيفة والياسمين يتمايل."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-amerindiens",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 17,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "211989d8c5e80470.webp",
+      "bytes": 9432,
+      "sha256": "211989d8c5e8047000bbb9cdf21c6068c041ccb2e8f4143a651ff34f7d86e004"
+    },
+    "preview": null,
+    "contract": {
+      "src": "99fceb6579610113.json",
+      "bytes": 5747,
+      "sha256": "99fceb6579610113f22865d2b39718b042b87b8bbc8bd0ce0d93ca9ceb56ed79"
+    },
+    "strings": {
+      "fr": {
+        "src": "21e405a1386425fb.json",
+        "bytes": 141,
+        "sha256": "21e405a1386425fb4a335e8be6285d89c0dfe3ad9e2c3bce0804e6516bff6ab4"
+      },
+      "en": {
+        "src": "f0ed8d82d3a5c157.json",
+        "bytes": 131,
+        "sha256": "f0ed8d82d3a5c1571d23268386e73bd479c8675d11915305a469e9a2a607cc9d"
+      },
+      "es": {
+        "src": "80b26fe662201370.json",
+        "bytes": 135,
+        "sha256": "80b26fe662201370dbec2cb94a08944d118db029e8bb5f04f37710cb9feb1ca3"
+      },
+      "pt": {
+        "src": "c489df268e675108.json",
+        "bytes": 137,
+        "sha256": "c489df268e675108e3f4d2c2d5436552266b39bf0400ac3f28958dcf35969e26"
+      },
+      "de": {
+        "src": "b91b2a42d43d5cb6.json",
+        "bytes": 126,
+        "sha256": "b91b2a42d43d5cb6be8c6232b582f76c3562e6c306f7871fb8a4c329254f3a32"
+      },
+      "it": {
+        "src": "88401f013af3584b.json",
+        "bytes": 138,
+        "sha256": "88401f013af3584bfb7cdc9fdffd9f21e93e1e2b97c9640f74a7231bcb1ed44a"
+      },
+      "ar": {
+        "src": "29b76ebfddd13090.json",
+        "bytes": 155,
+        "sha256": "29b76ebfddd130907c5ae8f1aca26500cdea294eee3cbc11b0905e84fddf8c55"
+      }
+    },
+    "downloadBytes": {
+      "story": 5747,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres amérindiens",
+        "description": "Trois cadres inspirés du tissage et du perlage : un cercle tissé dont les plumes stylisées se balancent, un perlage de losanges qui tourne, un soleil en escalier sur des montagnes et leur rivière."
+      },
+      "en": {
+        "name": "Native American frames",
+        "description": "Three frames inspired by weaving and beadwork: a woven hoop with swaying stylised feathers, a turning band of beaded diamonds, a stepped sun over mountains and their river."
+      },
+      "es": {
+        "name": "Marcos amerindios",
+        "description": "Tres marcos inspirados en el tejido y el abalorio: un aro tejido con plumas estilizadas que se mecen, una banda de rombos de cuentas que gira y un sol escalonado sobre montañas y su río."
+      },
+      "pt": {
+        "name": "Molduras ameríndias",
+        "description": "Três molduras inspiradas na tecelagem e no trabalho de miçangas: um aro tecido com penas estilizadas que balançam, uma faixa de losangos de miçangas que gira e um sol em degraus sobre montanhas e o seu rio."
+      },
+      "de": {
+        "name": "Indigene amerikanische Rahmen",
+        "description": "Drei Rahmen nach Web- und Perlenmustern: ein gewebter Reif mit schwingenden stilisierten Federn, ein drehendes Perlenband aus Rauten und eine gestufte Sonne über Bergen und ihrem Fluss."
+      },
+      "it": {
+        "name": "Cornici amerindie",
+        "description": "Tre cornici ispirate alla tessitura e alle perline: un cerchio intrecciato con piume stilizzate che ondeggiano, una fascia di rombi di perline che gira e un sole a gradini sopra montagne e il loro fiume."
+      },
+      "ar": {
+        "name": "إطارات أمريكية أصلية",
+        "description": "ثلاثة إطارات مستوحاة من النسيج والخرز: طوق منسوج تتمايل منه ريش مبسّط، وشريط معيّنات من الخرز يدور، وشمس مدرّجة فوق الجبال ونهرها."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-australs",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 18,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "3e5295a081ea712c.webp",
+      "bytes": 6618,
+      "sha256": "3e5295a081ea712c027dcfcf75e4024e447fd3ed15ec9dcf555df415fd8ed1e9"
+    },
+    "preview": null,
+    "contract": {
+      "src": "f70546c36c087b51.json",
+      "bytes": 7003,
+      "sha256": "f70546c36c087b519d1414427122125974d8107a6f8c1db225f0c10093ea25b9"
+    },
+    "strings": {
+      "fr": {
+        "src": "1f557fd2840b62e2.json",
+        "bytes": 111,
+        "sha256": "1f557fd2840b62e2b269cee0168dd202b2a21c8d5cc9e9e4fb885971b18ed83e"
+      },
+      "en": {
+        "src": "4ba432d56366e411.json",
+        "bytes": 104,
+        "sha256": "4ba432d56366e4119520198151bfeac0efe5f12418f536b5497565d2580e48dc"
+      },
+      "es": {
+        "src": "9e109d8149259189.json",
+        "bytes": 114,
+        "sha256": "9e109d81492591892de0cf70d5a986ee28266ca239af8f59e8f0cb5e4d0e2978"
+      },
+      "pt": {
+        "src": "178fea53e943e5b5.json",
+        "bytes": 120,
+        "sha256": "178fea53e943e5b5a90f7f53d7d9ed0df293ce725ab876cb266d2ffc9b8fcb01"
+      },
+      "de": {
+        "src": "d00765b037407da7.json",
+        "bytes": 115,
+        "sha256": "d00765b037407da7bcbdecfe928f2a5386c57365785c0cf390305410af264fc2"
+      },
+      "it": {
+        "src": "ff282ac064c3e5bf.json",
+        "bytes": 113,
+        "sha256": "ff282ac064c3e5bf7364a7bb5c5e6b73d4f06375821a980a1c7020ab9fd46c9a"
+      },
+      "ar": {
+        "src": "6266fd48cb96670b.json",
+        "bytes": 136,
+        "sha256": "6266fd48cb96670b9df52e944cb5ab765f76f70ecebbb0ce99f06cc94c71d4d2"
+      }
+    },
+    "downloadBytes": {
+      "story": 7003,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres australs",
+        "description": "Trois cadres inspirés de la peinture de points et du ciel austral : des cercles de points qui scintillent, une tortue marine qui nage autour de l’avatar, la Croix du Sud qui brille."
+      },
+      "en": {
+        "name": "Southern frames",
+        "description": "Three frames inspired by dot painting and the southern sky: twinkling circles of dots, a sea turtle swimming around your avatar, and the shining Southern Cross."
+      },
+      "es": {
+        "name": "Marcos australes",
+        "description": "Tres marcos inspirados en la pintura de puntos y el cielo austral: círculos de puntos que centellean, una tortuga marina que nada alrededor del avatar y la Cruz del Sur que brilla."
+      },
+      "pt": {
+        "name": "Molduras austrais",
+        "description": "Três molduras inspiradas na pintura de pontos e no céu austral: círculos de pontos que cintilam, uma tartaruga marinha que nada à volta do avatar e o Cruzeiro do Sul a brilhar."
+      },
+      "de": {
+        "name": "Südliche Rahmen",
+        "description": "Drei Rahmen nach Punktmalerei und südlichem Himmel: funkelnde Punktkreise, eine Meeresschildkröte, die um deinen Avatar schwimmt, und das leuchtende Kreuz des Südens."
+      },
+      "it": {
+        "name": "Cornici australi",
+        "description": "Tre cornici ispirate alla pittura a punti e al cielo australe: cerchi di punti che scintillano, una tartaruga marina che nuota intorno all’avatar e la Croce del Sud che brilla."
+      },
+      "ar": {
+        "name": "إطارات جنوبية",
+        "description": "ثلاثة إطارات مستوحاة من الرسم بالنقاط والسماء الجنوبية: دوائر نقاط تتلألأ، وسلحفاة بحرية تسبح حول صورتك الرمزية، وصليب الجنوب يلمع."
       }
     },
     "usage": {

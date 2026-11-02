@@ -199,33 +199,6 @@ class MentionComposerTest {
         assertThat(state2.draftMentions.keys).containsExactly("bob", "alice")
     }
 
-    // --- shouldQueryRemote gate ---
-
-    @Test
-    fun `shouldQueryRemote is false for a query shorter than two characters`() {
-        assertThat(MentionComposer.shouldQueryRemote("a")).isFalse()
-    }
-
-    @Test
-    fun `shouldQueryRemote is false for an empty query`() {
-        assertThat(MentionComposer.shouldQueryRemote("")).isFalse()
-    }
-
-    @Test
-    fun `shouldQueryRemote ignores surrounding whitespace when measuring length`() {
-        assertThat(MentionComposer.shouldQueryRemote("  a  ")).isFalse()
-    }
-
-    @Test
-    fun `shouldQueryRemote is true from two significant characters`() {
-        assertThat(MentionComposer.shouldQueryRemote("ab")).isTrue()
-    }
-
-    @Test
-    fun `shouldQueryRemote trims before measuring a longer query`() {
-        assertThat(MentionComposer.shouldQueryRemote("  ali  ")).isTrue()
-    }
-
     // --- mergeSuggestions ---
 
     @Test

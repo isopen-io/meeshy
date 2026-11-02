@@ -14,6 +14,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { SessionLoginMethod } from '@meeshy/shared/utils/client-session';
 import { RequestContext } from './GeoIPService';
 import { adoptionDeadlineOf, openingExpiry } from './auth/session-adoption';
+import { retireDevicesAfterSessionEnd, type SessionEndScope } from './e2ee/device-retirement';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'SessionService' });
@@ -39,6 +40,11 @@ const ACTIVE_SESSION_FILTER = {
     { invalidatedAt: { isSet: false } }
   ]
 };
+
+/** #12543 — l'appareil chiffré qu'une session avait enrôlé ne lui survit pas. */
+function retireEncryptedDevices(db: PrismaClient, scope: SessionEndScope): Promise<void> {
+  return retireDevicesAfterSessionEnd(db, scope, (error) => logger.warn('e2ee devices not retired at session end; the sweep will', { error }));
+}
 
 /**
  * Initialize the session service with a prisma client
@@ -320,6 +326,7 @@ export async function invalidateSession(
         invalidatedReason: reason,
       },
     });
+    if (count > 0) await retireEncryptedDevices(db, { sessionId });
     return count > 0;
   } catch {
     return false;
@@ -353,6 +360,7 @@ export async function invalidateAllSessions(
       invalidatedReason: reason,
     },
   });
+  if (result.count > 0) await retireEncryptedDevices(db, { userId });
 
   return result.count;
 }
@@ -399,6 +407,7 @@ export async function logout(token: string): Promise<boolean> {
       invalidatedReason: 'logout',
     },
   });
+  if (result.count > 0) await retireEncryptedDevices(db, { sessionToken });
 
   return result.count > 0;
 }
@@ -418,7 +427,8 @@ export async function endCurrentSession(
   const clauses = currentSessionClauses(current);
   if (clauses.length === 0) return 0;
 
-  const result = await getPrisma().userSession.updateMany({
+  const db = getPrisma();
+  const result = await db.userSession.updateMany({
     where: { userId, isValid: true, OR: clauses },
     data: {
       isValid: false,
@@ -426,6 +436,7 @@ export async function endCurrentSession(
       invalidatedReason: reason,
     },
   });
+  if (result.count > 0) await retireEncryptedDevices(db, { userId });
   return result.count;
 }
 

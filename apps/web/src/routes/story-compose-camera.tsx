@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
@@ -14,7 +14,11 @@ import { cameraFlashPlan, quickCaptureArmedHold, quickCaptureArmedTap, quickCapt
 import { appSettingsOpener } from '@/lib/view/settings-recovery';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { StudioCameraFlash } from '@/routes/story-compose-camera-flash';
+import type { StudioCameraFramesDeps, StudioCameraFramesHandle } from '@/routes/story-compose-camera-frames';
 import { ROUND_GLASS } from '@/routes/story-compose-chrome';
+
+/** La famille « Cadres » (#10190) : chargée au premier toucher, jamais avec la caméra. */
+const StudioCameraFrames = lazy(() => import('@/routes/story-compose-camera-frames'));
 
 /**
  * `arm` : ouverte par un toucher (#8711) — le viseur s'ouvre ARMÉ, rien n'est
@@ -94,6 +98,9 @@ function directionOf(element: Element | null): LayoutDirection {
  *    viseur pendant un film mains libres ;
  *  - LE CURSEUR DU FLASH : flash activé et sol blanc, un curseur de verre
  *    s'allonge collé au bouton et règle l'intensité du blanc.
+ *  - LES CADRES (#10190) : « Cadres », du côté de début du déclencheur,
+ *    ouvre la bande des cadres de capture (`story-compose-camera-frames`) ;
+ *    un cadre choisi, l'aperçu, la photo et la vidéo passent par son peintre.
  *
  * Ce qu'elle rend est POSÉ dans la scène par l'hôte (`onTake`) : la caméra
  * est une ENTRÉE, pas un mode.
@@ -110,6 +117,7 @@ export function StudioCamera({
   holdDrag,
   engine: injected,
   preopened,
+  frames,
   onTake,
   onClose,
 }: {
@@ -132,6 +140,8 @@ export function StudioCamera({
    * Pris UNE fois (`null` ensuite) : la caméra le reprend au lieu d'en
    * redemander un, et le possède dès lors. */
   readonly preopened?: () => Promise<CameraOpenResult> | null;
+  /** Injectable pour les témoins : l'atelier, la toile et le développement des cadres. */
+  readonly frames?: StudioCameraFramesDeps;
   readonly onTake: (file: File) => void;
   readonly onClose: () => void;
 }) {
@@ -178,6 +188,12 @@ export function StudioCamera({
   const holdingRef = useRef(holding);
   holdingRef.current = holding;
   const [engine] = useState(() => injected ?? createBrowserCameraEngine());
+  const [framesOpen, setFramesOpen] = useState(false);
+  const [frameId, setFrameId] = useState<string | null>(null);
+  const [windowHost, setWindowHost] = useState<HTMLDivElement | null>(null);
+  const framed = useRef<StudioCameraFramesHandle | null>(null);
+  const filmRef = useRef<(() => void) | null>(null);
+  const digitalZoom = () => (zoomRangeRef.current.mode === 'hardware' ? 1 : zoomRef.current);
   const photoFirst = kind !== 'REEL' && intent !== 'film';
 
   const releaseStream = () => {
@@ -187,6 +203,8 @@ export function StudioCamera({
     handoffRef.current = null;
     if (stream !== null) engine.release(stream);
     if (handoff !== null) engine.release(handoff);
+    filmRef.current?.();
+    filmRef.current = null;
     restoreRef.current?.();
     restoreRef.current = null;
   };
@@ -347,7 +365,7 @@ export function StudioCamera({
     busyRef.current = true;
     await lightOn('full');
     if (plan() !== 'off') await engine.lit();
-    const file = await engine.photo(video, zoomRangeRef.current.mode === 'hardware' ? 1 : zoomRef.current);
+    const file = await (framed.current === null ? engine.photo(video, digitalZoom()) : framed.current.still(video, digitalZoom()));
     await lightOff();
     busyRef.current = false;
     finish(file);
@@ -371,7 +389,10 @@ export function StudioCamera({
       return;
     }
     const video = videoRef.current;
-    engine.startRecording(stream, zoomRangeRef.current.mode === 'recorded' && video !== null ? { video, zoom: () => zoomRef.current } : null);
+    const film = framed.current?.film(stream) ?? null;
+    filmRef.current = film?.release ?? null;
+    if (film !== null) engine.startRecording(film.stream, null);
+    else engine.startRecording(stream, zoomRangeRef.current.mode === 'recorded' && video !== null ? { video, zoom: () => zoomRef.current } : null);
     startedRef.current = true;
   };
 
@@ -385,6 +406,8 @@ export function StudioCamera({
     if (!startedRef.current) return;
     startedRef.current = false;
     const file = await engine.stopRecording();
+    filmRef.current?.();
+    filmRef.current = null;
     await lightOff();
     resetZoom();
     finish(file);
@@ -556,6 +579,7 @@ export function StudioCamera({
           vidéo DANS elle, jamais par-dessus l'anneau blanc du flash. */}
       <div
         aria-hidden="true"
+        ref={setWindowHost}
         data-story-camera-window
         className="absolute overflow-hidden"
         style={{ ...windowBox(floor), visibility: floor === 'full' ? 'hidden' : 'visible' }}
@@ -637,24 +661,57 @@ export function StudioCamera({
             ) : null}
           </div>
         ) : null}
+        {framesOpen || frameId !== null ? (
+          <Suspense fallback={null}>
+            <StudioCameraFrames
+              lang={lang}
+              open={framesOpen}
+              frameId={frameId}
+              onChoose={setFrameId}
+              recording={recording !== null}
+              video={() => videoRef.current}
+              zoom={digitalZoom}
+              previewHost={windowHost}
+              handle={framed}
+              deps={frames}
+            />
+          </Suspense>
+        ) : null}
         <p aria-hidden="true" data-story-camera-hint className="text-center text-caption" style={floor === 'off' ? { color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 2px rgba(0,0,0,0.6)' } : { color: '#111' }}>
           {translate(lang, hintKey)}
         </p>
         <div className="mb-4 flex w-full items-center justify-center gap-10">
           {/* LE CADENAS — pendant l'appui long qui filme, du côté de début
               du déclencheur ; il grandit à mesure que le doigt s'approche. */}
-          <span
-            aria-hidden="true"
-            data-story-camera-lock={recording === 'hold' ? (lockProgress > 0 ? 'near' : 'shown') : undefined}
-            className="glass grid size-11 place-items-center rounded-full motion-safe:transition-transform"
-            style={
-              recording === 'hold'
-                ? { color: 'var(--color-ios-ink)', transform: `scale(${1 + lockProgress * 0.25})` }
-                : { visibility: 'hidden' }
-            }
-          >
-            <GlyphSvg glyph={GLYPHS.lock} size={20} />
-          </span>
+          {recording === null ? (
+            <button
+              type="button"
+              data-story-camera-frames-toggle
+              aria-label={translate(lang, 'story.studio.camera.frames')}
+              aria-expanded={framesOpen}
+              onClick={() => setFramesOpen((shown) => !shown)}
+              className={ROUND_GLASS}
+              style={{ outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)', ...(frameId !== null ? { boxShadow: '0 0 0 2px var(--color-ios-brand)' } : {}) }}
+            >
+              <svg aria-hidden="true" width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <rect x="7" y="7" width="10" height="10" rx="1" />
+              </svg>
+            </button>
+          ) : (
+            <span
+              aria-hidden="true"
+              data-story-camera-lock={recording === 'hold' ? (lockProgress > 0 ? 'near' : 'shown') : undefined}
+              className="glass grid size-11 place-items-center rounded-full motion-safe:transition-transform"
+              style={
+                recording === 'hold'
+                  ? { color: 'var(--color-ios-ink)', transform: `scale(${1 + lockProgress * 0.25})` }
+                  : { visibility: 'hidden' }
+              }
+            >
+              <GlyphSvg glyph={GLYPHS.lock} size={20} />
+            </span>
+          )}
           <button
             type="button"
             data-story-camera-shutter

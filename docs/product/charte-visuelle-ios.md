@@ -19,7 +19,7 @@ Ces fichiers sont hors codemod (liste `exemptPaths` de la table du lot) ; dans l
 | Dessin | `Story/Drawing/**`, `Story/DrawingEditToolOptions.swift`, `Story/DrawingStrokeList.swift`, `Story/StoryDrawingToolbar.swift` | palette et épaisseurs de trait |
 | Stickers et cadres à mots | `Story/Sticker*.swift`, `Components/ComposerTextStickerSheet.swift`, `Views/Bubble/MessageStickerArtwork.swift`, `Lentille/Chrome/LentilleSticker.swift` | gabarits, couleurs de gabarit |
 | Palettes proposées à l'utilisateur | `Components/BackgroundColorPalette.swift`, `MeeshyUI/Community/CommunitySettingsView.swift` | nuanciers de fond et de communauté |
-| Cadres d'appel | `Features/Main/Services/CallFrames/**`, `Features/Main/Models/CallFrames/**` | dégradés et ornements choisis |
+| Cadres d'appel | `Features/Call/Services/CallFrames/**`, `Features/Call/Models/CallFrames/**` | dégradés et ornements choisis |
 | Cartes de message exportées | `MeeshyUI/MessageCard/**`, `Export/MessageCardThumbnails.swift`, `Export/MessageCardExportGallery.swift` | thèmes de carte |
 | Filtres et effets | `Views/VideoFiltersPanel.swift`, `Views/VideoFilterControlView.swift`, `Media/VideoEditor/VideoFilterPreviewer.swift`, `Views/ReelAudioBackdrop.swift`, `Components/MessageEffectModifiers.swift` | teintes d'effet, fond audio d'un réel |
 | Couleur CALCULÉE d'une entité | `accentColor`, `colorPalette`, `DynamicColorGenerator` (cœur `Theme/ColorGeneration.swift`), `Primitives/TagInputView.swift` (couleur hachée d'un tag) | tout site qui reçoit `accentColor` / une couleur d'expéditeur la garde |

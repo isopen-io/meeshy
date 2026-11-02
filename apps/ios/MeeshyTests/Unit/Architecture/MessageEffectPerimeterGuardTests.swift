@@ -52,7 +52,7 @@ final class MessageEffectPerimeterGuardTests: XCTestCase {
         try AppSourceGuard.text(at: appRoot().appendingPathComponent(relativePath))
     }
 
-    private static let focalRow = "Features/Main/Focal/Row/FocalRow.swift"
+    private static let focalRow = "Features/Focal/Row/FocalRow.swift"
 
     // MARK: - L'ordre : l'effet avant l'étirement
 

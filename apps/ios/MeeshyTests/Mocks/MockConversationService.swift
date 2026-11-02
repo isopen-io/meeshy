@@ -32,6 +32,8 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
     )
     /// `nil` par défaut : aucune conversation directe existante.
     var findDirectWithResult: Result<APIConversation?, Error> = .success(nil)
+    /// `nil` ⇒ les tête-à-tête se déduisent de `findDirectWithResult`.
+    var findDirectsWithResult: Result<[APIConversation], Error>?
     var lastFindDirectWithUserId: String?
     var deleteResult: Result<Void, Error> = .success(())
     var markReadResult: Result<Void, Error> = .success(())
@@ -251,6 +253,15 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
     nonisolated func findDirectWith(userId: String) async throws -> APIConversation? {
         await MainActor.run { lastFindDirectWithUserId = userId }
         return try findDirectWithResult.get()
+    }
+
+    nonisolated func findDirectsWith(userId: String) async throws -> [APIConversation] {
+        let stubbed = await MainActor.run { () -> Result<[APIConversation], Error>? in
+            lastFindDirectWithUserId = userId
+            return findDirectsWithResult
+        }
+        if let stubbed { return try stubbed.get() }
+        return try findDirectWithResult.get().map { [$0] } ?? []
     }
 
     nonisolated func removeParticipant(conversationId: String, key: String) async throws {

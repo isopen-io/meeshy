@@ -160,7 +160,7 @@ final class MessageMenuFollowupsTests: XCTestCase {
     // MARK: - #11224 — la Rivière ouvre le menu unifié
 
     func test_river_hasNoMenuOfItsOwn() throws {
-        let bubble = try source("Features/Main/Riviere/View/RiverBubbleView.swift")
+        let bubble = try source("Features/River/View/RiverBubbleView.swift")
         XCTAssertFalse(bubble.contains(".contextMenu"), "la Rivière ne compose plus son propre menu à trois actions")
         XCTAssertTrue(bubble.contains("MessagePressClaim.rowMinimumDuration"), "l'appui long d'une bulle dure ce que dure celui d'une rangée")
         XCTAssertTrue(bubble.contains("onLongPress(content.bubble.messageId)"), "l'appui long rend la main à l'hôte")
@@ -169,15 +169,15 @@ final class MessageMenuFollowupsTests: XCTestCase {
     func test_river_longPressReachesTheSinglePresentation() throws {
         let layer = try source("Features/Main/Views/ConversationView+ReaderLayers.swift")
         XCTAssertTrue(layer.contains("onLongPress:"), "la couche Rivière branche l'appui long")
-        XCTAssertTrue(layer.contains("presentMenu(msg)"), "la couche Rivière présente le menu par l'hôte")
+        XCTAssertTrue(layer.contains("presentMenu(msg, pressed)"), "la couche Rivière présente le menu par l'hôte, avec la bulle pressée")
         XCTAssertTrue(layer.contains("overlayState.longPressEnabled"), "mêmes gardes que la liste")
         let host = try source("Features/Main/Views/ConversationView.swift")
-        XCTAssertTrue(host.contains("presentMenu: { presentLongPressMenu(for: $0, cellFrame: nil) }"),
-                      "la Rivière ouvre le menu par `presentLongPressMenu`, le point d'entrée unique")
+        XCTAssertTrue(host.contains("presentMenu: { presentLongPressMenu(for: $0, cellFrame: $1.windowFrame, riverFace: $1.face) }"),
+                      "la Rivière ouvre le menu par `presentLongPressMenu`, le point d'entrée unique, à la place de la bulle (#12630)")
     }
 
     func test_river_isReadableWithoutTheLongPress_byVoiceOver() throws {
-        let bubble = try source("Features/Main/Riviere/View/RiverBubbleView.swift")
+        let bubble = try source("Features/River/View/RiverBubbleView.swift")
         XCTAssertTrue(bubble.contains("\"a11y.message.actions.long_press\""),
                       "VoiceOver ouvre le menu de la bulle par une action nommée, comme la rangée du Fil")
     }

@@ -508,7 +508,9 @@ public final class SharedAVPlayerManager: ObservableObject {
         tearDown()
         // Désactivation via la source unique (call-aware) : ne coupe rien pendant
         // un appel — la session appartient alors à l'appel (RTCAudioSession).
-        MediaSessionCoordinator.shared.deactivatePlaybackSync()
+        // Hors du fil principal : `setActive(false)` attend l'arrêt des E/S du
+        // lecteur et figeait la fermeture de la galerie (#12423).
+        MediaSessionCoordinator.shared.deactivatePlaybackDeferred()
     }
 
     /// Arrête la vidéo parce qu'un AUTRE lecteur prend la main (voice note,
@@ -523,7 +525,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         let heldPlayback = player != nil || !activeURL.isEmpty
         tearDown()
         guard Self.shouldReleaseSessionOnHandoff(heldPlayback: heldPlayback) else { return }
-        MediaSessionCoordinator.shared.deactivatePlaybackSync()
+        MediaSessionCoordinator.shared.deactivatePlaybackDeferred()
     }
 
     /// Pure, testable decision behind `stopForHandoff()`: the session is only

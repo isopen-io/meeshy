@@ -118,7 +118,7 @@ const runReply = async (opts: Scenario) => {
     conversationId: CONVERSATION_ID,
     messagePreview: 'Hello',
   });
-  return { notification, data: servedPushData(sendToUser), push: servedPush(sendToUser), prisma };
+  return { notification, data: servedPushData(sendToUser), push: servedPush(sendToUser), prisma, prism: notification?.context };
 };
 
 const runMention = async (opts: Scenario) => {
@@ -130,7 +130,7 @@ const runMention = async (opts: Scenario) => {
     conversationId: CONVERSATION_ID,
     messagePreview: 'Hello',
   });
-  return { notification, data: servedPushData(sendToUser), push: servedPush(sendToUser), prisma };
+  return { notification, data: servedPushData(sendToUser), push: servedPush(sendToUser), prisma, prism: notification?.context };
 };
 
 describe.each([
@@ -138,75 +138,78 @@ describe.each([
   ['createMentionNotification', runMention],
 ] as const)('%s — le Prisme de la bannière DESCEND les rangs', (_name, run) => {
   it('pousse la traduction du rang 1 quand elle existe', async () => {
-    const { data } = await run({
+    const { data, prism } = await run({
       recipient: { systemLanguage: 'fr', regionalLanguage: 'es' },
       translations: { fr: { text: 'Bonjour' }, es: { text: 'Hola' } },
       originalLanguage: 'en',
     });
 
-    expect(data?.translatedContent).toBe('Bonjour');
-    expect(data?.translatedLanguage).toBe('fr');
+    expect(prism?.translatedContent).toBe('Bonjour');
+    expect(prism?.translatedLanguage).toBe('fr');
+    // #14319 — servie dans le corps, gardée au contexte, jamais sur le fil.
+    expect(data).not.toHaveProperty('translatedContent');
+    expect(data).not.toHaveProperty('translatedLanguage');
   });
 
   it('DESCEND au rang 2 quand le rang 1 n\'a pas de traduction', async () => {
-    const { data } = await run({
+    const { data, prism } = await run({
       recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
       translations: { es: { text: 'Hola' } },
       originalLanguage: 'en',
     });
 
-    expect(data?.translatedContent).toBe('Hola');
-    expect(data?.translatedLanguage).toBe('es');
+    expect(prism?.translatedContent).toBe('Hola');
+    expect(prism?.translatedLanguage).toBe('es');
   });
 
   it('DESCEND jusqu\'à la locale appareil — le rang 4 du Prisme', async () => {
     // Cas NOMINAL depuis l'extension du Prisme (2026-05-26).
-    const { data } = await run({
+    const { data, prism } = await run({
       recipient: { systemLanguage: 'de', deviceLocale: 'pt-BR' },
       translations: { pt: { text: 'Olá' } },
       originalLanguage: 'en',
     });
 
-    expect(data?.translatedContent).toBe('Olá');
-    expect(data?.translatedLanguage).toBe('pt');
+    expect(prism?.translatedContent).toBe('Olá');
+    expect(prism?.translatedLanguage).toBe('pt');
   });
 
   it('ne pousse AUCUNE traduction quand la langue d\'origine gagne avant elle', async () => {
     // Règle critique #3 — garde le mode d'échec du CORRECTIF : une descente
     // naïve servirait « Bonjour » là où le message est déjà écrit dans la
     // langue de rang 2 du lecteur.
-    const { data } = await run({
+    const { data, prism } = await run({
       recipient: { systemLanguage: 'de', regionalLanguage: 'en', customDestinationLanguage: 'fr' },
       translations: { fr: { text: 'Bonjour' } },
       originalLanguage: 'en',
     });
 
-    expect(data?.translatedContent).toBeUndefined();
-    expect(data?.translatedLanguage).toBeUndefined();
+    expect(prism?.translatedContent).toBeUndefined();
+    expect(prism?.translatedLanguage).toBeUndefined();
   });
 
   it('ne retombe sur AUCUNE traduction quand rien ne matche le prisme (règle #1)', async () => {
-    const { data } = await run({
+    const { data, prism } = await run({
       recipient: { systemLanguage: 'de' },
       translations: { es: { text: 'Hola' }, it: { text: 'Ciao' } },
       originalLanguage: 'en',
     });
 
-    expect(data?.translatedContent).toBeUndefined();
+    expect(prism?.translatedContent).toBeUndefined();
   });
 
   it('ne pousse jamais une traduction CHIFFRÉE, et descend au rang suivant', async () => {
-    const { data } = await run({
+    const { data, prism } = await run({
       recipient: { systemLanguage: 'fr', regionalLanguage: 'es' },
       translations: { fr: { text: 'U2FsdGVk…', isEncrypted: true }, es: { text: 'Hola' } },
       originalLanguage: 'en',
     });
 
-    expect(data?.translatedContent).toBe('Hola');
-    expect(data?.translatedLanguage).toBe('es');
+    expect(prism?.translatedContent).toBe('Hola');
+    expect(prism?.translatedLanguage).toBe('es');
   });
 
-  it('RÉÉCRIT le corps servi : c\'est le seul texte qu\'un lecteur voit', async () => {
+  it('le corps servi est la SYNTHÈSE (#14309) — il ne cite pas la traduction', async () => {
     // Ce témoin a d'abord gelé l'inverse (« le corps original reste le corps »)
     // sur deux prémisses, mesurées depuis :
     //
@@ -222,24 +225,24 @@ describe.each([
     //
     // Les deux champs de service restent poussés : ils ne coûtent rien et
     // deviendront lisibles le jour où un client s'en saisira.
-    const { data, push } = await run({
+    const { data, push, prism } = await run({
       recipient: { systemLanguage: 'es' },
       translations: { es: { text: 'Hola' } },
       originalLanguage: 'en',
     });
 
-    expect(data?.translatedContent).toBe('Hola');
-    expect(push?.body).toBe('Hola');
+    expect(prism?.translatedContent).toBe('Hola');
+    expect(push?.body).toBe('Una palabra');
   });
 
   it('tronque la traduction poussée à 200 caractères, quel que soit son rang', async () => {
-    const { data } = await run({
+    const { data, prism } = await run({
       recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
       translations: { es: { text: 'á'.repeat(400) } },
       originalLanguage: 'en',
     });
 
-    expect((data?.translatedContent as string)?.length).toBe(200);
+    expect((prism?.translatedContent as string)?.length).toBe(200);
   });
 
   it('survit à un message VOLATILISÉ : la bannière part, sans traduction', async () => {
@@ -313,13 +316,13 @@ describe('createMentionNotification — CADRAGE et CONTENU sont deux résolution
     // localiserait la bannière en espagnol pour un lecteur dont l'application
     // est en allemand. Le témoin porte sur le SOUS-TITRE réellement remis à
     // APNs — « te mencionó » si les deux fusionnaient.
-    const { push, data } = await runMention({
+    const { push, data, prism } = await runMention({
       recipient: { systemLanguage: 'de', deviceLocale: 'es-ES' },
       translations: { es: { text: 'Hola' } },
       originalLanguage: 'en',
     });
 
-    expect(data?.translatedContent).toBe('Hola');
+    expect(prism?.translatedContent).toBe('Hola');
     expect(push?.subtitle).toBe('hat dich erwähnt');
   });
 
@@ -374,10 +377,14 @@ describe('createMentionNotificationsBatch — une seule relecture pour tout l\'�
 
     expect(count).toBe(2);
     const served = new Map(
-      sendToUser.mock.calls.map((call: any) => [call[0]?.userId, call[0]?.payload?.data])
+      (prisma.notification.create as jest.Mock).mock.calls.map((call: any) => [call[0]?.data?.userId, call[0]?.data?.context])
     );
     expect(served.get(RECIPIENT_ID)?.translatedContent).toBe('Hola');
     expect(served.get(OTHER_ID)?.translatedContent).toBe('Olá');
+    for (const call of sendToUser.mock.calls as any[]) {
+      expect(call[0]?.payload?.data).not.toHaveProperty('translatedContent');
+      expect(call[0]?.payload?.data).not.toHaveProperty('translatedLanguage');
+    }
   });
 
   it('ne relit le message QU\'UNE fois pour tout l\'éventail', async () => {
@@ -413,7 +420,7 @@ describe('createMentionNotificationsBatch — une seule relecture pour tout l\'�
 /**
  * Cycle 122 — le CORPS servi, et non les seuls champs de service.
  *
- * `translatedContent` / `translatedLanguage` voyagent sur le fil push et aucun
+ * `translatedContent` / `translatedLanguage` voyageaient sur le fil push (jusqu'à #14319) et aucun
  * client ne les lit. Le seul texte que les trois plateformes rendent est
  * `payload.body` : tant qu'il porte l'aperçu original, la descente ci-dessus
  * n'atteint aucun lecteur.
@@ -443,24 +450,24 @@ describe.each([
     return { notification, push: servedPush(sendToUser) };
   };
 
-  it('compose la bannière avec la traduction du rang atteint', async () => {
+  it('ne compose plus la bannière avec la traduction du rang atteint (#14309)', async () => {
     const { push } = await runServed({
       recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
       translations: { es: { text: 'Hola' } },
       originalLanguage: 'en',
     });
 
-    expect(push?.body).toBe('Hola');
+    expect(push?.body).toBe('Ein Wort');
   });
 
-  it('DESCEND jusqu\'à la locale appareil — le rang 4', async () => {
+  it('la locale appareil ne fait pas parler le corps — la langue de CADRAGE reste le rang 1', async () => {
     const { push } = await runServed({
       recipient: { systemLanguage: 'de', deviceLocale: 'pt-BR' },
       translations: { pt: { text: 'Olá' } },
       originalLanguage: 'en',
     });
 
-    expect(push?.body).toBe('Olá');
+    expect(push?.body).toBe('Ein Wort');
   });
 
   it('persiste dans la ligne in-app le MÊME texte que la bannière', async () => {
@@ -470,18 +477,18 @@ describe.each([
       originalLanguage: 'en',
     });
 
-    expect((notification as any)?.content).toBe('Bonjour');
-    expect(push?.body).toBe('Bonjour');
+    expect((notification as any)?.content).toBe('Petit mot reçu');
+    expect(push?.body).toBe('Petit mot reçu');
   });
 
-  it('sert l\'ORIGINAL quand la langue d\'origine gagne à son rang (règle #3)', async () => {
+  it('ne sert pas l\'original quand la langue d\'origine gagne à son rang — la synthèse', async () => {
     const { push } = await runServed({
       recipient: { systemLanguage: 'de', regionalLanguage: 'en', customDestinationLanguage: 'fr' },
       translations: { fr: { text: 'Bonjour' } },
       originalLanguage: 'en',
     });
 
-    expect(push?.body).toBe('Hello');
+    expect(push?.body).toBe('Ein Wort');
   });
 
   it('ne substitue JAMAIS dans un aperçu PROTÉGÉ', async () => {
@@ -506,7 +513,7 @@ describe.each([
    * rendait la moitié de la règle inobservable (leçon 266).
    */
   it('ne TRANSPORTE pas non plus la traduction d\'un aperçu protégé', async () => {
-    const { push } = await runServed({
+    const { push, prism } = await runServed({
       recipient: { systemLanguage: 'fr' },
       translations: { fr: { text: 'Bonjour, mon secret' } },
       originalLanguage: 'en',
@@ -514,8 +521,8 @@ describe.each([
       previewBasis: { kind: 'protected-placeholder' },
     });
 
-    expect(push?.data?.translatedContent).toBeUndefined();
-    expect(push?.data?.translatedLanguage).toBeUndefined();
+    expect(push?.prism?.translatedContent).toBeUndefined();
+    expect(push?.prism?.translatedLanguage).toBeUndefined();
   });
 });
 
@@ -557,14 +564,14 @@ describe.each([
     // étiquette ; la traduction a déjà `translatedContent` et son rang. Écrire
     // le texte servi ici produirait un enregistrement cohérent mais FAUX sur sa
     // propre sémantique — un message espagnol enregistré comme français.
-    const { data } = await run({
+    const { data, prism } = await run({
       recipient: { systemLanguage: 'fr' },
       translations: { fr: { text: 'Bonjour' } },
       originalLanguage: 'es',
     });
 
-    expect(data?.translatedContent).toBe('Bonjour');
-    expect(data?.translatedLanguage).toBe('fr');
+    expect(prism?.translatedContent).toBe('Bonjour');
+    expect(prism?.translatedLanguage).toBe('fr');
     expect(data?.content).toBe('Hello');
     expect(data?.originalLanguage).toBe('es');
   });

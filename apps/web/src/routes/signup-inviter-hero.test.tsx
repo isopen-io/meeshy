@@ -95,7 +95,7 @@ describe('arriver par un lien d’affiliation montre qui invite', () => {
     expect(frame.querySelector('[data-signup-inviter-banner]')?.getAttribute('data-signup-inviter-banner')).toBe('image');
     expect(frame.querySelector<HTMLImageElement>('[data-signup-inviter-banner] img')?.getAttribute('src')).toContain('/banners/amani.jpg');
     expect(frame.querySelector<HTMLImageElement>('[data-signup-inviter-banner] img')?.getAttribute('alt')).toBe('');
-    expect(frame.querySelector<HTMLImageElement>('img[alt="Amani Diallo"]')?.getAttribute('src')).toContain('/avatars/amani.png');
+    expect(frame.querySelector<HTMLImageElement>('[role="img"][aria-label="Amani Diallo"] img')?.getAttribute('src')).toContain('/avatars/amani.png');
     const form = el.querySelector('#signup-form') as HTMLElement;
     expect(frame.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });

@@ -28,7 +28,7 @@
 #   (passerelle et agent ensemble, toujours : l'hôte refuse l'un sans l'autre — #10290)
 # =============================================================================
 
-name: Promote to production
+name: Production · promotion et retour arrière
 
 on:
   workflow_dispatch:

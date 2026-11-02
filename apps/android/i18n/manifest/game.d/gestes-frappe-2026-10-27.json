@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.mint.next_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.mint.sentence",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.mint.missing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mint.chip.glory",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mint.action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mint.minting",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mint.offline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mint.minted_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.mint.mee.next_gold",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.mint.mee.next_prism",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.mint.mee.gold",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.mint.mee.prism",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.mint.mee.wait",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mint.blocked.debt",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mint.blocked.reserve",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.meesh.mint_error",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

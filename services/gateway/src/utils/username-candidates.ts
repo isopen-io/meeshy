@@ -23,9 +23,21 @@
  * @module utils/username-candidates
  */
 
+import { usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
+
 /** Combien de candidats tester — en UNE requête, pas dix. */
 const CANDIDATS_TESTES = 6;
 
+/** Un pseudo que l'inscription refuserait pour sa longueur (#13825) n'est jamais « disponible ». */
+export function pseudoSousLePlancher(pseudo: string): boolean {
+  return pseudo.trim().length < usernameMinLength;
+}
+
+/**
+ * Un candidat sous la borne basse du pseudo (#13825) ne se propose pas : la
+ * passerelle le refuserait à l'envoi. Une base d'une lettre (un compte hérité
+ * `a`) ne garde donc que ses candidats d'au moins `usernameMinLength`.
+ */
 export function candidatsDePseudo(base: string): string[] {
   const racine = base.trim();
   return [
@@ -35,5 +47,7 @@ export function candidatsDePseudo(base: string): string[] {
     `${racine}26`,
     `${racine}${racine.length}`,
     `the${racine}`,
-  ].slice(0, CANDIDATS_TESTES);
+  ]
+    .filter((candidat) => candidat.length >= usernameMinLength)
+    .slice(0, CANDIDATS_TESTES);
 }

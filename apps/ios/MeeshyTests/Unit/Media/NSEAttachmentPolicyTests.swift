@@ -81,6 +81,43 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         XCTAssertFalse(NSEAttachmentPolicy.isRenderableFamily("videoimage/mp4"))
     }
 
+    // MARK: - #11328 — la NSE n'attache que ce qu'elle sait décoder
+
+    /// **Le serveur fabrique des rendus AVIF** (#11262). Un AVIF qu'on
+    /// attacherait sans le décoder ne produit aucune image sur l'écran
+    /// verrouillé : la notification part sans enrichissement, sans rien dire.
+    func test_unAvif_estRefuse_quelleQueSoitSaTailleOuSaFacon() {
+        XCTAssertFalse(NSEAttachmentPolicy.mayAttach(mimeType: "image/avif", fileSize: 240_000))
+        XCTAssertFalse(NSEAttachmentPolicy.mayAttach(mimeType: "image/avif", fileSize: nil))
+        XCTAssertFalse(NSEAttachmentPolicy.mayAttach(mimeType: "IMAGE/AVIF; charset=binary", fileSize: 240_000))
+    }
+
+    /// Une image que la NSE ne sait pas ouvrir n'a rien à faire dans
+    /// l'enveloppe : la liste blanche refuse ce qu'elle ne nomme pas.
+    func test_unFormatImageQueLaNSENeSaitPasDecoder_estRefuse() {
+        XCTAssertFalse(NSEAttachmentPolicy.mayAttach(mimeType: "image/svg+xml", fileSize: 4_000))
+        XCTAssertFalse(NSEAttachmentPolicy.mayAttach(mimeType: "image/bmp", fileSize: 240_000))
+        XCTAssertFalse(NSEAttachmentPolicy.mayAttach(mimeType: "image/tiff", fileSize: nil))
+    }
+
+    /// Les formats que la NSE décode restent attachables, casse et paramètres
+    /// de type compris : la liste blanche ne doit pas casser ce qui marche.
+    func test_lesFormatsImageQueLaNSEDecode_sontAcceptes() {
+        for mimeType in ["image/jpeg", "image/png", "image/gif", "image/webp", "image/heic"] {
+            XCTAssertTrue(NSEAttachmentPolicy.mayAttach(mimeType: mimeType, fileSize: 240_000), mimeType)
+        }
+        XCTAssertTrue(NSEAttachmentPolicy.mayAttach(mimeType: "Image/WebP; codecs=vp8", fileSize: nil))
+    }
+
+    /// Le serveur ACCEPTE `image/jpg` et le range tel quel (il n'est pas dans
+    /// les formats qu'il convertit), et les pièces jointes `image/heif`
+    /// antérieures à la conversion (#11263) sont toujours en base : la liste
+    /// blanche ne doit pas retirer l'aperçu d'une photo que la NSE décode.
+    func test_lesAliasDeFormatsDecodes_restentAttachables() {
+        XCTAssertTrue(NSEAttachmentPolicy.mayAttach(mimeType: "image/jpg", fileSize: 240_000))
+        XCTAssertTrue(NSEAttachmentPolicy.mayAttach(mimeType: "IMAGE/HEIF", fileSize: nil))
+    }
+
     // MARK: - La taille telle qu'elle voyage
 
     /// Le gateway sérialise les nombres de sa charge `data` en CHAÎNES (cf.
@@ -197,5 +234,345 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         let source = try nseSource()
         XCTAssertTrue(source.contains("NSEAttachmentPolicy.declaresProtection"),
                       "La branche du média du message doit refuser un message protégé.")
+    }
+
+    // MARK: - #11387 — une conversation verrouillée par PIN ne livre rien
+
+    /// Le verrou PIN protège le CONTENU (décision porteur 2026-10-24) : la
+    /// notification d'une conversation verrouillée DÉCLARE une protection, et
+    /// tous les seconds verrous (média, détail, vignette, lecteur audio) la
+    /// lisent sans qu'aucun n'ait à connaître le PIN.
+    func test_lockedConversation_declaresProtection_andKeepsTheRoutingKeys() {
+        let payload: [AnyHashable: Any] = [
+            "conversationId": "c1", "messageId": "m1",
+            "attachmentUrl": "https://cdn/x.jpg", "attachmentMimeType": "image/jpeg",
+        ]
+        let sealed = NSEAttachmentPolicy.sealingLockedConversation(payload, isLocked: true)
+
+        XCTAssertTrue(NSEAttachmentPolicy.declaresProtection(userInfo: sealed))
+        XCTAssertEqual(sealed["notificationLocKey"] as? String, NSEAttachmentPolicy.lockedConversationLocKey)
+        XCTAssertEqual(sealed["conversationId"] as? String, "c1", "le toucher route toujours vers la conversation (et son PIN)")
+        XCTAssertEqual(sealed["messageId"] as? String, "m1")
+    }
+
+    // MARK: - Le scellé ne garde que ce qui ROUTE (#12655)
+
+    /// Ce qui ROUTE : le toucher de la bannière, l'appel à décrocher, et la
+    /// déclaration de protection que le scellé pose. Écrit ICI, sans lire la
+    /// constante de production : un oracle qui la lirait se validerait
+    /// lui-même. `test_theSealedKeys_areExactlyTheRoutingOracle` tient les deux
+    /// listes égales, et rougit d'un écart dans un sens comme dans l'autre.
+    private static let routingKeys: Set<String> = [
+        "type", "notificationId", "conversationId", "conversationTitle", "conversationType", "messageId",
+        "postId", "postType", "commentId", "parentCommentId", "friendRequestId", "route",
+        "contentId", "contentType",
+        "senderId", "senderUsername", "senderDisplayName", "senderAvatar", "imageURL",
+        "unreadCount", "badge", "createdAt", "ephemeralDuration", "effectFlags", "replacesActorSubject",
+        "callType", "isVideo", "callBackLabel", "callId", "callerUserId", "callerName", "callerAvatar",
+        "iceServers",
+        "isEncrypted", "apiBaseURL",
+        "notificationLocKey",
+    ]
+
+    /// Une clé admise par la production sans figurer à l'oracle laisse partir
+    /// ce que personne n'a classé ; une clé de l'oracle absente de la
+    /// production casse le toucher ou l'appel.
+    func test_theSealedKeys_areExactlyTheRoutingOracle() {
+        XCTAssertEqual(
+            NSEAttachmentPolicy.sealedConversationKeys.subtracting(Self.routingKeys), [],
+            "admises par le scellé sans être classées de routage"
+        )
+        XCTAssertEqual(
+            Self.routingKeys.subtracting(NSEAttachmentPolicy.sealedConversationKeys), ["notificationLocKey"],
+            "attendues par l'oracle et retirées par le scellé"
+        )
+    }
+
+    /// Ce qui DÉCRIT le contenu : le texte et ses traductions, le chiffré, la
+    /// pièce jointe, le détail (position, contact, invitation, lien, vignette),
+    /// la réaction, le type de message, le motif d'un retrait, les libellés
+    /// d'action qui nomment le contenu.
+    private static let contentKeys: Set<String> = [
+        "content", "originalLanguage", "translatedContent", "translatedLanguage", "encryptedContent",
+        "reactionEmoji", "messageType", "reason", "contentActionLabel", "replyActionLabel",
+        "attachmentUrl", "attachmentMimeType", "attachmentDurationMs", "attachmentFileSize",
+        "attachmentId", "attachmentLanguage",
+        "locationLat", "locationLon", "locationName", "locationAddress", "contactName",
+        "inviteUrl", "inviteConversationTitle", "inviteMemberCount", "linkUrl", "linkDomain",
+        "thumbnailUrl", "storyReply",
+    ]
+
+    /// Les clés que la passerelle pose dans `data` (`createNotification`) et
+    /// dans ses champs composés, LUES dans ses sources : une clé ajoutée là
+    /// sans être classée ici fait rougir le témoin.
+    private func gatewayServiceSource(_ relative: String) throws -> String {
+        let services = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("services/gateway/src/services")
+        return try String(contentsOf: services.appendingPathComponent(relative), encoding: .utf8)
+    }
+
+    private func matches(_ pattern: String, in text: Substring) throws -> Set<String> {
+        let regex = try NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines])
+        let string = String(text)
+        return Set(regex.matches(in: string, range: NSRange(string.startIndex..., in: string)).compactMap {
+            Range($0.range(at: 1), in: string).map { String(string[$0]) }
+        })
+    }
+
+    private func between(_ text: String, _ from: String, _ to: String) throws -> Substring {
+        let start = try XCTUnwrap(text.range(of: from), from)
+        let end = try XCTUnwrap(text.range(of: to, range: start.upperBound..<text.endIndex), to)
+        return text[start.upperBound..<end.lowerBound]
+    }
+
+    /// Les clés de la charge `data` d'un APPEL ENTRANT
+    /// (`buildIncomingCallPushes`), que l'alerte APNs porte telle quelle à un
+    /// appareil sans jeton VoIP (Chine, ou VoIP inactif) — LUES dans la source.
+    private func incomingCallPushDataKeys() throws -> Set<String> {
+        let producer = try gatewayServiceSource("call-incoming-push.ts")
+        return try matches(#"^\s+(\w+):"#, in: try between(producer, "const data = {", "};"))
+    }
+
+    private func gatewayPushDataKeys() throws -> Set<String> {
+        func source(_ name: String) throws -> String {
+            try gatewayServiceSource("notifications/" + name)
+        }
+        let service = try source("NotificationService.ts")
+        let payload = try between(service, "const pushPayload = {", "const boundedPayload")
+        let dataStart = try XCTUnwrap(payload.range(of: "data: {"))
+        let data = payload[dataStart.upperBound...]
+        let code = data.split(separator: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .map { $0.components(separatedBy: " // ")[0] }
+            .joined(separator: "\n")
+        let direct = try matches(#"(?:^|[{\s,(])([a-z][A-Za-z]*):\s"#, in: Substring(code))
+            .subtracting(["metadata", "language", "detail"])
+        let detail = try between(try source("content-detail.ts"), "export function contentDetailPushFields", "\n}\n")
+        return direct
+            .union(try matches(#"^\s+readonly (\w+): string;"#, in: Substring(try source("push-media-fields.ts"))))
+            .union(try matches(#"\['(\w+)',"#, in: detail))
+            .union(try matches(#"(\w+)\?: string"#, in: Substring(try source("ephemeralPushFields.ts"))))
+            .union(try matches(#"readonly (\w+)\?:"#, in: Substring(try source("callBackPushFields.ts"))))
+            .union(try matches(#"readonly (\w+)\?: string"#, in: Substring(try source("contentActionPushFields.ts"))))
+            .union(try matches(#"(\w+): (?:pickMetadataString|params\.showPreview)"#,
+                               in: Substring(try source("push-metadata-fields.ts"))))
+            .union(["replacesActorSubject"])
+    }
+
+    func test_everyKeyTheGatewayPushes_isClassifiedAsRoutingOrContent() throws {
+        let callKeys = try incomingCallPushDataKeys()
+        let keys = try gatewayPushDataKeys().union(callKeys)
+
+        XCTAssertTrue(keys.isSuperset(of: ["conversationId", "attachmentUrl", "locationName", "linkUrl", "content"]),
+                      "la lecture des sources de la passerelle a changé de forme : \(keys.sorted())")
+        XCTAssertTrue(callKeys.isSuperset(of: ["callId", "callerUserId", "iceServers"]),
+                      "la lecture de l'appel entrant a changé de forme : \(callKeys.sorted())")
+        XCTAssertEqual(keys.subtracting(Self.routingKeys).subtracting(Self.contentKeys), [],
+                       "une clé de la passerelle n'est ni de routage ni de contenu : la classer")
+        XCTAssertTrue(Self.routingKeys.isDisjoint(with: Self.contentKeys))
+    }
+
+    /// La charge livrée reste dans le Centre de notifications et se relit par
+    /// quiconque l'énumère : sous PIN, elle n'y garde QUE ce qui route. La
+    /// charge du témoin porte TOUTES les clés que la passerelle émet, et
+    /// l'alerte APNs, dont le corps est l'aperçu du message.
+    func test_lockedConversation_sealing_keepsOnlyRoutingKeys() throws {
+        let emitted = try gatewayPushDataKeys()
+            .union(try incomingCallPushDataKeys())
+            .union(Self.routingKeys.subtracting(["notificationLocKey"]))
+            .union(NSEAttachmentPolicy.sealedConversationKeys)
+        var payload = Dictionary(uniqueKeysWithValues: emitted.map { (AnyHashable($0), "secret-\($0)" as Any) })
+        payload["aps"] = ["alert": ["title": "Alice", "body": "le secret"], "mutable-content": 1] as [String: Any]
+
+        let sealed = NSEAttachmentPolicy.sealingLockedConversation(payload, isLocked: true)
+
+        let survivors = Set(sealed.keys.compactMap { $0 as? String })
+        XCTAssertEqual(survivors, Self.routingKeys, "chaque clé admise survit, et elle seule")
+        XCTAssertTrue(survivors.isDisjoint(with: Self.contentKeys), "le scellé laisse partir du contenu")
+        XCTAssertNil(sealed["aps"], "l'alerte APNs porte l'aperçu du message")
+        XCTAssertEqual(sealed["conversationId"] as? String, "secret-conversationId", "le toucher route encore")
+        XCTAssertEqual(sealed["notificationLocKey"] as? String, NSEAttachmentPolicy.lockedConversationLocKey)
+    }
+
+    /// Un appel entrant vers une conversation sous PIN (ou dont le verrou est
+    /// inconnu) se scelle aussi : décrocher depuis la bannière exige encore
+    /// les serveurs ICE (TURN) et l'avatar de l'appelant, que la passerelle
+    /// pose dans `data`. Sans eux, l'appel s'établit sans relais.
+    func test_aSealedIncomingCall_keepsWhatAnswersTheCall() throws {
+        let callKeys = try incomingCallPushDataKeys()
+        let payload = Dictionary(uniqueKeysWithValues: callKeys.map { (AnyHashable($0), "valeur-\($0)" as Any) })
+
+        let sealed = NSEAttachmentPolicy.sealingLockedConversation(payload, isLocked: true)
+
+        let survivors = Set(sealed.keys.compactMap { $0 as? String })
+        XCTAssertEqual(callKeys.subtracting(survivors), [], "l'appel perd ce qui le décroche")
+        XCTAssertEqual(sealed["iceServers"] as? String, "valeur-iceServers")
+        XCTAssertEqual(sealed["callerAvatar"] as? String, "valeur-callerAvatar")
+    }
+
+    func test_unlockedConversation_payloadIsUntouched() {
+        let payload: [AnyHashable: Any] = ["conversationId": "c1", "attachmentMimeType": "image/jpeg"]
+        let served = NSEAttachmentPolicy.sealingLockedConversation(payload, isLocked: false)
+
+        XCTAssertFalse(NSEAttachmentPolicy.declaresProtection(userInfo: served))
+        XCTAssertNil(served["notificationLocKey"])
+    }
+
+    // MARK: - #11387 — l'ordre de préparation d'une bannière
+
+    /// Scellée AVANT toute décision (catégorie, préférences, média) : sinon la
+    /// catégorie et l'enrichissement liraient une charge non protégée.
+    func test_plan_lockedConversation_sealsBeforeEveryDecision() {
+        let plan = NSEPreparationStep.plan(isLockedConversation: true)
+        XCTAssertEqual(plan.first, .sealLockedConversation)
+    }
+
+    /// Le corps est remplacé EN DERNIER : aucune réécriture (déchiffrement,
+    /// repli audio, détail, échéance) ne remet du contenu sous le verrou.
+    func test_plan_lockedConversation_replacesTheBodyAfterEveryRewrite() throws {
+        let plan = NSEPreparationStep.plan(isLockedConversation: true)
+        XCTAssertEqual(plan.last, .replaceBodyWithLockLabel)
+        let replace = try XCTUnwrap(plan.firstIndex(of: .replaceBodyWithLockLabel))
+        for rewrite in [NSEPreparationStep.rewriteBody, .applyEphemeralDeadline] {
+            let index = try XCTUnwrap(plan.firstIndex(of: rewrite), "\(rewrite) reste au plan")
+            XCTAssertLessThan(index, replace, "\(rewrite) avant le scellé du corps")
+        }
+    }
+
+    /// « Aucun préchargement ne met en cache les messages d'une conversation
+    /// verrouillée » (décision porteur 2026-10-24) : l'extension ne télécharge
+    /// ni ne pré-enregistre le message.
+    func test_plan_lockedConversation_stagesNothingOfTheMessage() {
+        let plan = NSEPreparationStep.plan(isLockedConversation: true)
+        XCTAssertFalse(plan.contains(.syncMessage))
+        XCTAssertFalse(plan.contains(.prePersistMessage))
+    }
+
+    /// Avant le premier déverrouillage, une conversation peut-être sous PIN :
+    /// aucun corps en clair, rien du message déposé ni pré-enregistré.
+    func test_plan_forAnUnknownLock_sealsFirst_stagesNothing_andReplacesTheBodyLast() {
+        let plan = NSEPreparationStep.plan(for: .unknown)
+
+        XCTAssertEqual(plan.first, .sealLockedConversation)
+        XCTAssertEqual(plan.last, .replaceBodyWithLockLabel)
+        XCTAssertFalse(plan.contains(.syncMessage))
+        XCTAssertFalse(plan.contains(.prePersistMessage))
+    }
+
+    func test_plan_forAKnownLock_isTheLockedPlan_andForAnOpenOne_theHistoricalPipeline() {
+        XCTAssertEqual(NSEPreparationStep.plan(for: .locked), NSEPreparationStep.plan(isLockedConversation: true))
+        XCTAssertEqual(NSEPreparationStep.plan(for: .open), NSEPreparationStep.plan(isLockedConversation: false))
+        XCTAssertEqual(NSEPreparationStep.plan(for: .noConversation), NSEPreparationStep.plan(isLockedConversation: false))
+    }
+
+    func test_plan_openConversation_isTheHistoricalPipeline() {
+        XCTAssertEqual(NSEPreparationStep.plan(isLockedConversation: false), [
+            .applyCategory, .applyBadge, .applyThreading, .applyPreferences, .updateUnreadCount,
+            .syncMessage, .prefetchSocial, .prePersistMessage,
+            .postDeliveryReceipt, .rewriteBody, .applyEphemeralDeadline, .sweepExpiredBanners,
+        ])
+    }
+
+    /// L'extension EXÉCUTE le plan — jamais une séquence recopiée à la main
+    /// qui pourrait s'en écarter — et lit le verrou au miroir complet.
+    func test_extension_executesThePlan_andReadsTheMirror() throws {
+        let source = try nseSource()
+        XCTAssertTrue(source.contains("NSEPreparationStep.plan(for: lock)"))
+        XCTAssertTrue(source.contains("NSELockedConversationMirror.conversationLock("))
+        XCTAssertTrue(source.contains("NSELockedConversationMirror.readFile(at:"))
+    }
+
+    // MARK: - #12655 — une conversation sous PIN n'accepte aucune action depuis l'écran verrouillé
+
+    private let conversationCategories = [
+        "MEESHY_MESSAGE", "MEESHY_MENTION", "MEESHY_AUDIO", "MEESHY_EPHEMERAL",
+        "MEESHY_LOCATION", "MEESHY_CONTACT", "MEESHY_INVITE",
+    ]
+
+    /// Un verrou INCONNU (avant le premier déverrouillage) scelle le contenu
+    /// ET retire les actions rapides : la conversation est peut-être sous PIN
+    /// (fail-closed).
+    func test_anUnknownLock_sealsTheContent_andOffersNoQuickAction() {
+        XCTAssertTrue(NSEConversationLock.unknown.sealsContent)
+        XCTAssertTrue(NSEConversationLock.locked.sealsContent)
+        XCTAssertFalse(NSEConversationLock.open.sealsContent)
+        XCTAssertFalse(NSEConversationLock.noConversation.sealsContent)
+        XCTAssertFalse(NSEConversationLock.unknown.offersQuickActions)
+        XCTAssertFalse(NSEConversationLock.locked.offersQuickActions)
+        XCTAssertTrue(NSEConversationLock.open.offersQuickActions)
+        XCTAssertTrue(NSEConversationLock.noConversation.offersQuickActions)
+    }
+
+    /// Le témoin de la décision : la charge SCELLÉE d'une conversation sous
+    /// PIN prend la catégorie sans action, quelle que soit celle choisie avant.
+    func test_aSealedPayload_getsTheCategoryWithoutAnyAction() {
+        let sealed = NSEAttachmentPolicy.sealingLockedConversation(
+            ["type": "new_message", "conversationId": "c1", "messageId": "m1"], isLocked: true
+        )
+
+        for chosen in conversationCategories {
+            XCTAssertEqual(
+                NSEAttachmentPolicy.category(chosen, under: .locked, userInfo: sealed),
+                NSEAttachmentPolicy.lockedConversationCategory, chosen
+            )
+        }
+    }
+
+    func test_aSealedPayload_losesItsActions_evenWhenTheMirrorSaysOpen() {
+        let sealed = NSEAttachmentPolicy.sealingLockedConversation(["conversationId": "c1"], isLocked: true)
+
+        XCTAssertEqual(
+            NSEAttachmentPolicy.category("MEESHY_MESSAGE", under: .open, userInfo: sealed),
+            NSEAttachmentPolicy.lockedConversationCategory
+        )
+    }
+
+    func test_anUnknownLock_fallsBackToTheCategoryWithoutAnyAction() {
+        let payload: [AnyHashable: Any] = ["type": "mention", "conversationId": "c1"]
+
+        XCTAssertEqual(
+            NSEAttachmentPolicy.category("MEESHY_MENTION", under: .unknown, userInfo: payload),
+            NSEAttachmentPolicy.lockedConversationCategory
+        )
+    }
+
+    func test_anOpenConversation_keepsItsCategory() {
+        let payload: [AnyHashable: Any] = ["type": "new_message", "conversationId": "c1"]
+
+        for chosen in conversationCategories {
+            XCTAssertEqual(NSEAttachmentPolicy.category(chosen, under: .open, userInfo: payload), chosen)
+        }
+        XCTAssertEqual(
+            NSEAttachmentPolicy.category("MEESHY_SOCIAL", under: .noConversation, userInfo: [:]), "MEESHY_SOCIAL"
+        )
+    }
+
+    func test_callsAndUncategorizedBanners_areLeftAsTheyAre() {
+        for chosen in ["MEESHY_CALL_INCOMING", "MEESHY_CALL_MISSED", "MEESHY_CALL", ""] {
+            XCTAssertEqual(NSEAttachmentPolicy.category(chosen, under: .locked, userInfo: [:]), chosen)
+        }
+    }
+
+    /// L'extension applique la loi à la catégorie qu'elle VIENT de choisir, avec
+    /// le verrou qui a décidé du plan. Garde de SOURCE, et seulement parce que
+    /// ce câblage n'a pas d'autre témoin : une extension de notification n'a
+    /// pas d'hôte de test, et la loi elle-même s'éprouve par comportement
+    /// ci-dessus (`category(_:under:userInfo:)`).
+    func test_extension_gatesTheCategoryItChose_rightAfterChoosingIt_underThePlansLock() throws {
+        let code = AppSourceGuard.stripComments(try nseSource())
+        let branch = try XCTUnwrap(code.range(of: "case .applyCategory:"), "l'étape de catégorie a changé de forme")
+        let next = try XCTUnwrap(code.range(of: "case .", range: branch.upperBound..<code.endIndex))
+        let body = code[branch.upperBound..<next.lowerBound]
+        let choose = try XCTUnwrap(body.range(of: "applyCategory(to: content)"))
+        let gate = try XCTUnwrap(body.range(of: "content.categoryIdentifier = NSEAttachmentPolicy.category("),
+                                 "la catégorie choisie doit passer par la loi du verrou")
+
+        XCTAssertLessThan(choose.lowerBound, gate.lowerBound, "la loi s'applique APRÈS le choix, sinon il l'écrase")
+        XCTAssertTrue(body.contains("content.categoryIdentifier, under: lock"))
+        XCTAssertTrue(code.contains("NSEPreparationStep.plan(for: lock)"))
+        XCTAssertTrue(code.contains("perform(step, on: content, lock: lock)"),
+                      "le verrou qui choisit le plan est celui qui garde la catégorie")
     }
 }

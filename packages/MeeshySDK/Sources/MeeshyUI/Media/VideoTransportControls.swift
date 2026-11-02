@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import AVKit
 
 // MARK: - Shared Video Transport Controls
@@ -226,7 +227,7 @@ public struct VideoTransportControls: View {
     /// pas décoratif non plus — sans lui, les chiffres changent de largeur en
     /// défilant et la ligne tressaute à chaque seconde.
     private func timeLabel(_ seconds: Double) -> some View {
-        Text(formatMediaDuration(seconds))
+        Text(MediaFormat.duration(seconds))
             .font(.system(size: MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
             .foregroundColor(.white.opacity(MeeshyOpacity.intense))
             .lineLimit(1)

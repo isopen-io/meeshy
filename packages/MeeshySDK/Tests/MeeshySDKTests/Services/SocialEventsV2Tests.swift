@@ -200,6 +200,24 @@ struct SocialEventsV2OutboxTests {
         #expect(await outbox.pendingCount(owner: "u1") == 0)
     }
 
+    @Test func transientFailures_followTheSocialEventsSchedule() async {
+        let clock = SyncBox(Self.epoch)
+        let outbox = SocialEventsV2Outbox(dbPath: nil, clock: { clock.value })
+        await outbox.enqueue([event("e-1")], owner: "u1")
+        await outbox.flush(owner: "u1") { _ in .transient }
+
+        var elapsed: TimeInterval = 0
+        for delay in [10.0, 20, 40, 80, 160, 300, 300] {
+            elapsed += delay
+            clock.mutate { $0 = Self.epoch.addingTimeInterval(elapsed - 1) }
+            let early = await outbox.flush(owner: "u1") { _ in .transient }
+            #expect(early == nil, "not ready 1 s before the \(delay) s step")
+            clock.mutate { $0 = Self.epoch.addingTimeInterval(elapsed) }
+            let due = await outbox.flush(owner: "u1") { _ in .transient }
+            #expect(due == .transient, "ready once the \(delay) s step elapses")
+        }
+    }
+
     @Test func enqueue_twiceTheSameEventId_keepsOneRow() async {
         let outbox = SocialEventsV2Outbox(dbPath: nil, clock: { Self.epoch })
         await outbox.enqueue([event("e-1")], owner: "u1")

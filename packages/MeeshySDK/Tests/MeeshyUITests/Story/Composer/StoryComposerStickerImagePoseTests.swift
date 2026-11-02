@@ -21,8 +21,8 @@ final class StoryComposerStickerImagePoseTests: XCTestCase {
         let emojiPose = StoryComposerViewModel()
         let imagePose = StoryComposerViewModel()
 
-        let emojiSticker = emojiPose.addSticker(emoji: "\u{1F30D}")
-        let imageSticker = imagePose.addSticker(image: Self.pixel(), provider: StoryStickerLibraryItem.provider)
+        let emojiSticker = emojiPose.addSticker(emoji: "\u{1F30D}")!
+        let imageSticker = imagePose.addSticker(image: Self.pixel(), provider: StoryStickerLibraryItem.provider)!
 
         XCTAssertEqual(imageSticker.x, emojiSticker.x)
         XCTAssertEqual(imageSticker.y, emojiSticker.y)
@@ -41,7 +41,7 @@ final class StoryComposerStickerImagePoseTests: XCTestCase {
         let vm = StoryComposerViewModel()
         let image = Self.pixel()
 
-        let sticker = vm.addSticker(image: image, provider: StoryStickerLibraryItem.provider)
+        let sticker = vm.addSticker(image: image, provider: StoryStickerLibraryItem.provider)!
 
         XCTAssertTrue(vm.loadedImages[sticker.id] === image)
         // Sans ce bump le canvas garde son reader périmé : le sticker posé
@@ -54,7 +54,7 @@ final class StoryComposerStickerImagePoseTests: XCTestCase {
     func test_addStickerImage_fillsAFallbackEmojiAtPoseTime() throws {
         let vm = StoryComposerViewModel()
 
-        let sticker = vm.addSticker(image: Self.pixel(), provider: StoryStickerLibraryItem.provider)
+        let sticker = vm.addSticker(image: Self.pixel(), provider: StoryStickerLibraryItem.provider)!
 
         let stored = try XCTUnwrap(vm.currentEffects.stickerObjects?.first { $0.id == sticker.id })
         XCTAssertFalse(stored.emoji.isEmpty)
@@ -67,7 +67,7 @@ final class StoryComposerStickerImagePoseTests: XCTestCase {
     func test_addStickerImage_leavesPostMediaIdEmptyAndRecordsItsOrigin() throws {
         let vm = StoryComposerViewModel()
 
-        let sticker = vm.addSticker(image: Self.pixel(), provider: StoryStickerLibraryItem.provider)
+        let sticker = vm.addSticker(image: Self.pixel(), provider: StoryStickerLibraryItem.provider)!
 
         XCTAssertTrue(sticker.postMediaId.isEmpty)
         XCTAssertEqual(sticker.provider, "library")
@@ -79,8 +79,8 @@ final class StoryComposerStickerImagePoseTests: XCTestCase {
         let vm = StoryComposerViewModel()
         let image = Self.pixel()
 
-        let first = vm.addSticker(image: image, provider: StoryStickerLibraryItem.provider)
-        let second = vm.addSticker(image: image, provider: StoryStickerLibraryItem.provider)
+        let first = vm.addSticker(image: image, provider: StoryStickerLibraryItem.provider)!
+        let second = vm.addSticker(image: image, provider: StoryStickerLibraryItem.provider)!
 
         XCTAssertNotEqual(first.id, second.id)
         XCTAssertEqual(vm.currentEffects.stickerObjects?.count, 2)
@@ -93,7 +93,7 @@ final class StoryComposerStickerImagePoseTests: XCTestCase {
     func test_addStickerEmoji_carriesNoImageAndNoProvider() throws {
         let vm = StoryComposerViewModel()
 
-        let sticker = vm.addSticker(emoji: "\u{1F525}")
+        let sticker = vm.addSticker(emoji: "\u{1F525}")!
 
         XCTAssertEqual(sticker.emoji, "\u{1F525}")
         XCTAssertTrue(sticker.postMediaId.isEmpty)

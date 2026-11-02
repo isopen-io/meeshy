@@ -196,9 +196,16 @@ struct MessageActionPolicyVectorTests {
             "hybride-photo-ne-se-transfere-pas",
             "serveur-photo-chiffree-par-le-message-ne-se-transfere-pas",
             "hybride-texte-se-transfere",
+            "serveur-auteur-texte-se-modifie",
+            "hybride-moderator-plateforme-modifie",
+            "serveur-ligne-servie-scellee-ne-se-modifie-pas",
             "vocal-en-conversation-serveur-transcriptible",
             "e2ee-texte-d-autrui-se-traduit-sur-l-appareil",
             "non-membre-supprimer-pour-moi-refuse",
+            "membre-actif-supprimer-pour-moi",
+            "ancien-membre-supprimer-pour-moi-refuse",
+            "ancien-membre-son-propre-message-ne-se-supprime-plus-pour-moi",
+            "ancien-membre-message-supprime-ne-se-masque-plus",
         ]
         for label in required {
             #expect(labels.contains(label), "\(label)")
@@ -224,5 +231,36 @@ struct MessageActionPolicyVectorTests {
         #expect(verdicts("hybride-texte-se-transfere")?.forward == true)
         #expect(verdicts("vocal-en-conversation-serveur-transcriptible")?.transcribe == true)
         #expect(verdicts("non-membre-supprimer-pour-moi-refuse")?.deleteForMe == false)
+    }
+
+    /// Décision porteur 2026-11-01 — un régime au repos (`server`/`hybrid`) garde « Modifier » : la passerelle
+    /// rescelle le texte modifié. Une ligne servie scellée (aucune clé ne l'a ouverte) reste non modifiable.
+    @Test func editingIsOfferedAtRest_butNeverOnASealedRow() throws {
+        let byLabel = Dictionary(uniqueKeysWithValues: try vectors().map { ($0.label, $0) })
+        let edit = { (label: String) -> MessageActionPolicy.EditVerdict?? in
+            byLabel[label].map { MessageActionPolicy.actions(for: $0.input.policyInput).verdicts.edit }
+        }
+        #expect(edit("serveur-auteur-texte-se-modifie")??.asModerator == false)
+        #expect(edit("hybride-moderator-plateforme-modifie")??.asModerator == true)
+        #expect(edit("serveur-ligne-servie-scellee-ne-se-modifie-pas") == .some(nil))
+    }
+
+    /// #11415 — « Supprimer pour moi » n'est offert qu'à un participant ACTIF,
+    /// comme `DELETE /messages/:id/delete-for-me` : un ancien membre qui relit
+    /// son historique en cache ne se voit pas offrir un geste que la passerelle
+    /// refuse en 403.
+    @Test func deleteForMeIsOfferedOnlyToAnActiveParticipant() throws {
+        let all = try vectors()
+        let departed = all.filter { !$0.input.viewer.isActiveMember }
+        #expect(departed.count >= 4)
+        for vector in departed {
+            let result = MessageActionPolicy.actions(for: vector.input.policyInput)
+            #expect(result.verdicts.deleteForMe == false, "\(vector.label)")
+            #expect(!result.groups.destructive.contains(.deleteForMe), "\(vector.label)")
+        }
+        let active = try #require(all.first { $0.label == "membre-actif-supprimer-pour-moi" })
+        let kept = MessageActionPolicy.actions(for: active.input.policyInput)
+        #expect(kept.verdicts.deleteForMe)
+        #expect(kept.groups.destructive.contains(.deleteForMe))
     }
 }

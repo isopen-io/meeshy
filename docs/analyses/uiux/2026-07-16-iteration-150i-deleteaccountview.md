@@ -2,7 +2,7 @@
 
 **Date** : 2026-07-16
 **Piste** : iOS (suffixe `i`).
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/DeleteAccountView.swift`
+**Surface** : `apps/ios/Meeshy/Features/Settings/Views/DeleteAccountView.swift`
 **Base** : `main` HEAD (`60503a1`)
 **Branche** : `claude/laughing-thompson-11e8cz`
 **Gate** : CI `iOS Tests`

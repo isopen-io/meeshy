@@ -208,21 +208,18 @@ extension FeedPostCard {
                 } label: {
                     Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
                 }
-                Button {
-                    if canSaveMedia {
-                        requestSaveMedia()
-                    } else {
+                PostSaveMenuItems(
+                    title: canSaveMedia
+                        ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
+                        : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
+                    systemImage: canSaveMedia ? "arrow.down.to.line" : "bookmark",
+                    save: {
+                        guard !canSaveMedia else { return requestSaveMedia() }
                         onBookmark?(post.id)
                         HapticFeedback.light()
-                    }
-                } label: {
-                    Label(
-                        canSaveMedia
-                            ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
-                            : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
-                        systemImage: canSaveMedia ? "arrow.down.to.line" : "bookmark"
-                    )
-                }
+                    },
+                    imager: imagerAction
+                )
                 if canListViewers {
                     PublicationViewersMenuButton { showViewersSheet = true }
                 }
@@ -282,8 +279,17 @@ struct PostDateWithPoints<DateLabel: View>: View {
     let postId: String
     let seed: Int?
     let color: Color
-    @ObservedObject var store: PostViewerPointsStore = .shared
+    @ObservedObject var store: PostViewerPointsStore
     @ViewBuilder let date: () -> DateLabel
+
+    init(postId: String, seed: Int?, color: Color, store: PostViewerPointsStore = .shared,
+         @ViewBuilder date: @escaping () -> DateLabel) {
+        self.postId = postId
+        self.seed = seed
+        self.color = color
+        self.store = store
+        self.date = date
+    }
 
     var body: some View {
         HStack(spacing: MeeshySpacing.xxs) {

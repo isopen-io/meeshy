@@ -57,10 +57,12 @@ function downloadThroughAnchor(
   return 'delivered';
 }
 
+export type FileShareOutcome = 'delivered' | 'cancelled' | 'expired' | 'refused';
+
 /** `refused` — aucune porte, ou un refus qui n'est ni une annulation ni une
  * expiration d'activation : ces deux-là se disent au lecteur (`cancelled`,
  * `expired`), `refused` seul retombe sur l'ancre quand elle existe. */
-async function shareFile(host: FileDeliveryHost, file: File): Promise<'delivered' | 'cancelled' | 'expired' | 'refused'> {
+async function shareFile(host: FileDeliveryHost, file: File): Promise<FileShareOutcome> {
   if (host.canShareFiles === undefined || host.shareFiles === undefined || !host.canShareFiles({ files: [file] })) return 'refused';
   try {
     await host.shareFiles({ files: [file] });
@@ -71,6 +73,18 @@ async function shareFile(host: FileDeliveryHost, file: File): Promise<'delivered
     if (error.name === 'NotAllowedError') return 'expired';
     return 'refused';
   }
+}
+
+/**
+ * LE PARTAGE SEUL, SANS REPLI (#13881) — « Partager » d'une story composée
+ * veut la feuille du système, pas un téléchargement : quand l'activation du
+ * geste a expiré pendant le rendu (`expired`), l'appelant offre un toucher
+ * neuf plutôt que de retomber sur l'ancre. Le partage est APPELÉ sans rien
+ * attendre avant lui : posé dans un gestionnaire de clic, il garde son
+ * activation.
+ */
+export function shareFileOnce(host: FileDeliveryHost, blob: Blob, fileName: string, mimeType: string): Promise<FileShareOutcome> {
+  return shareFile(host, new File([blob], fileName, { type: mimeType }));
 }
 
 export function fileDeliveryPortal(host: FileDeliveryHost): FileDeliveryPortal | null {

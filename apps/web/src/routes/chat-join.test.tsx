@@ -2,6 +2,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
+
 import type { ApiResult } from '@/lib/api/http';
 import type { GuestJoinBody, LinkGuestJoined, LinkInvitation, LinkJoined } from '@/lib/api/link-join';
 import { sessionStore, type GuestIdentity } from '@/lib/api/session';
@@ -652,6 +654,32 @@ describe('un visiteur SANS session REJOINT EN INVITÉ', () => {
     expect(nicknameField(el)?.getAttribute('aria-invalid')).toBe('true');
     const described = nicknameField(el)?.getAttribute('aria-describedby') ?? '';
     expect(text(el.querySelector(`#${described.split(' ')[0]}`))).toContain('Choisis un prénom');
+  });
+
+  /**
+   * LE PLANCHER DU PSEUDO D'INVITÉ (#13825) — « Al » ne part pas : le refus se
+   * pose sous le champ avec le minimum, le focus y mène. « Ali » entre.
+   */
+  test('un pseudo trop court : RIEN ne part, le refus DIT le minimum sous son champ', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await fillAndSubmit(el, 'Al');
+
+    expect(recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.getAttribute('aria-invalid')).toBe('true');
+    const described = nicknameField(el)?.getAttribute('aria-describedby') ?? '';
+    const message = text(el.querySelector(`#${described.split(' ')[0]}`));
+    expect(message).toContain(String(usernameMinLength));
+    expect(message).not.toContain('Choisis un prénom');
+    expect(document.activeElement).toBe(nicknameField(el));
+  });
+
+  test('« Ali », même entouré d’espaces, entre', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await fillAndSubmit(el, '  Ali ');
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'fr', nickname: 'Ali' }]]);
   });
 
   test('pseudo PRIS : le formulaire est GARDÉ, la suggestion pré-remplie, et on peut réessayer', async () => {

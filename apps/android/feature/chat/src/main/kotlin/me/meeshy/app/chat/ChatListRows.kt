@@ -52,10 +52,20 @@ internal fun ChatListRow(
     actions: ChatMessageRowActions,
     audioPlayer: ChatAudioPlayer? = null,
     isGroup: Boolean = true,
+    canWrite: Boolean = true,
+    /** Script / Focal : la rangée plate au lieu de la bulle. */
+    flat: Boolean = false,
+    metaAlpha: () -> Float = { 0f },
+    /** Focal : cette rangée est l'élue de la scène, sa loupe vaut [focalScale]. */
+    focalElected: Boolean = false,
+    focalScale: Float = 1f,
+    /** Le mode sélection est ouvert (#13294) ; [selectedIds] est lu pour CETTE rangée seule. */
+    selecting: Boolean = false,
+    selectedIds: Set<String> = emptySet(),
 ) {
     when (item) {
         is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
-        is ChatListItem.UnreadSeparator -> UnreadSeparatorRow(accentColor)
+        is ChatListItem.UnreadSeparator -> UnreadSeparatorRow(item.count)
         is ChatListItem.EncryptionNotice -> EncryptionNoticeRow(accentColor)
         is ChatListItem.Message -> ChatMessageRow(
             bubble = item.bubble.inConversation(isGroup),
@@ -67,6 +77,13 @@ internal fun ChatListRow(
             linkPreviewCache = linkPreviewCache,
             actions = actions,
             audioPlayer = audioPlayer,
+            canWrite = canWrite,
+            flat = flat,
+            metaAlpha = metaAlpha,
+            focalElected = focalElected,
+            focalScale = focalScale,
+            selecting = selecting,
+            selected = selecting && item.bubble.messageId in selectedIds,
         )
     }
 }

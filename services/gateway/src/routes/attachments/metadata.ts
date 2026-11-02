@@ -17,14 +17,15 @@ import type {
 } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response.js';
+import { sendSuccess, sendError, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response.js';
+import { messageRefusesPlainErasure, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { createHash } from 'crypto';
 import { signAttachmentsForReader } from '../../services/attachments/signServedAttachments';
 import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, applyHistoryFloor } from '../../services/historyFloor';
 import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../../services/personalHistoryFilter';
-import { carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
+import { CARRIER_LIFECYCLE_SELECT, carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
 import { READER_LIFECYCLE_MESSAGE_SELECT, readerStillReadsBytes } from '../../services/attachments/readerAttachmentLifecycle';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { RECIPIENT_LANG_SELECT, recipientLanguages } from '../../utils/recipient-language';
@@ -34,6 +35,9 @@ import {
   subtitleSourceSelect,
   type SubtitleCarrier,
 } from '../../services/attachments/servedSubtitles';
+import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
+import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { AttachmentDeletedEventData } from '@meeshy/shared/types/socketio-events/attachment';
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
 
@@ -121,6 +125,64 @@ const conversationAttachmentListItemSchema = {
   },
 } as const;
 
+/**
+ * #13608 — la suppression d'une pièce se voit chez tous les membres. Charge
+ * minimale (jamais le contenu de la pièce) ; un échec de diffusion ne défait pas
+ * une suppression déjà faite.
+ */
+async function broadcastAttachmentDeleted(
+  fastify: FastifyInstance,
+  prisma: PrismaClient,
+  target: { messageId: string | null; attachmentId: string }
+): Promise<void> {
+  if (!target.messageId) return;
+  try {
+    const io = fastify.socketIOHandler?.getManager()?.getIO();
+    if (!io) return;
+    const message = await prisma.message.findUnique({
+      where: { id: target.messageId },
+      select: { conversationId: true },
+    });
+    if (!message) return;
+    const payload: AttachmentDeletedEventData = {
+      conversationId: message.conversationId,
+      messageId: target.messageId,
+      attachmentId: target.attachmentId,
+    };
+    io.to(ROOMS.conversation(message.conversationId)).emit(SERVER_EVENTS.ATTACHMENT_DELETED, payload);
+  } catch (error: unknown) {
+    logger.warn('attachment:deleted broadcast failed', { error });
+  }
+}
+
+const OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
+
+/**
+ * #13608 — un téléversement pose `uploadedBy = User.id`, mais une copie transférée
+ * le pose à `Participant.id` de l'expéditeur. Le propriétaire est donc reconnu
+ * sous les DEUX identifiants, et seulement s'il s'agit de SON participant :
+ * l'identifiant d'un participant d'autrui, anonyme ou inconnu ne donne rien.
+ */
+async function ownsAsUploader(
+  prisma: PrismaClient,
+  uploadedBy: string | null | undefined,
+  userId: string
+): Promise<boolean> {
+  if (!uploadedBy) return false;
+  if (uploadedBy === userId) return true;
+  if (!OBJECT_ID_PATTERN.test(uploadedBy)) return false;
+  try {
+    const participant = await prisma.participant.findUnique({
+      where: { id: uploadedBy },
+      select: { userId: true },
+    });
+    return participant?.userId === userId;
+  } catch (error: unknown) {
+    logger.warn('uploader participant lookup failed', { error });
+    return false;
+  }
+}
+
 export async function registerMetadataRoutes(
   fastify: FastifyInstance,
   authOptional: any,
@@ -158,7 +220,7 @@ export async function registerMetadataRoutes(
     const message = await prisma.message.findUnique({
       where: { id: attachment.messageId },
       select: {
-        id: true, conversationId: true, deletedAt: true, viewOnceBurnAt: true, ...READER_LIFECYCLE_MESSAGE_SELECT,
+        id: true, conversationId: true, ...CARRIER_LIFECYCLE_SELECT, ...READER_LIFECYCLE_MESSAGE_SELECT,
         isBlurred: true, isEncrypted: true, encryptionMode: true,
       },
     });
@@ -445,6 +507,10 @@ export async function registerMetadataRoutes(
             description: 'Attachment not found',
             ...errorResponseSchema
           },
+          409: {
+            description: 'End-to-end encrypted message: erase it through the encrypted signal channel',
+            ...errorResponseSchema
+          },
           500: {
             description: 'Internal server error',
             ...errorResponseSchema
@@ -478,17 +544,31 @@ export async function registerMetadataRoutes(
         if (isAnonymous) {
           hasPermission = attachment.uploadedBy === userId && attachment.isAnonymous;
         } else {
-          const isAdmin = authContext.registeredUser?.role === 'ADMIN' ||
-                         authContext.registeredUser?.role === 'BIGBOSS';
-
-          hasPermission = attachment.uploadedBy === userId || isAdmin;
+          // Retirer le média d'autrui est un geste de modération de contenu :
+          // la table des rôles de plateforme privilégiés le gouverne (#11217).
+          hasPermission = isPrivilegedPlatformRole(authContext.registeredUser?.role) ||
+            await ownsAsUploader(prisma, attachment.uploadedBy, userId);
         }
 
         if (!hasPermission) {
           return sendForbidden(reply, 'Insufficient permissions - You can only delete your own attachments');
         }
 
+        const messageId = attachment.messageId ?? null;
+        // #13802 — la pièce d'un message scellé au serveur s'efface comme lui
+        // (#13142), par signal chiffré ; jugée sur la LIGNE de son message,
+        // après le contrôle du droit.
+        const carrier = messageId
+          ? await prisma.message.findUnique({
+              where: { id: messageId },
+              select: { conversationId: true, isEncrypted: true, encryptionMode: true },
+            })
+          : null;
+        if (carrier && await messageRefusesPlainErasure(prisma, carrier)) {
+          return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
+        }
         await attachmentService.deleteAttachment(attachmentId);
+        await broadcastAttachmentDeleted(fastify, prisma, { messageId, attachmentId });
 
         return sendSuccess(reply, { message: 'Attachment deleted successfully' });
       } catch (error: unknown) {

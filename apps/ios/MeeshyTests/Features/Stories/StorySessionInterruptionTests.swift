@@ -96,7 +96,7 @@ final class StorySessionInterruptionTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         let hold = AppSourceGuard.stripComments(try String(
-            contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+PlaybackHold.swift"),
+            contentsOf: root.appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+PlaybackHold.swift"),
             encoding: .utf8))
         XCTAssertTrue(hold.contains("StorySessionInterruption()"))
         XCTAssertTrue(hold.contains("MediaSessionCoordinator.shared.events"))

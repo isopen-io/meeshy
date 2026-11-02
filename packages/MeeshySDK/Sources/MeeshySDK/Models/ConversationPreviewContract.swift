@@ -154,6 +154,24 @@ public struct LastMessageNature: Codable, Sendable, Hashable {
         )
     }
 
+    /// La même nature, son résumé de pièces remplacé — une pièce retirée laisse le reste du message tel quel.
+    public func replacingAttachmentSummary(_ summary: LastMessageAttachmentSummary?) -> LastMessageNature {
+        LastMessageNature(
+            messageType: messageType, effectFlags: effectFlags, ephemeralDuration: ephemeralDuration,
+            isEncrypted: isEncrypted, isForwarded: isForwarded, systemEvent: systemEvent,
+            callSummary: callSummary, attachmentSummary: summary, sticker: sticker
+        )
+    }
+
+    /// La même nature, déclarée chiffrée de bout en bout (#12999).
+    public var sealedEndToEnd: LastMessageNature {
+        LastMessageNature(
+            messageType: messageType, effectFlags: effectFlags, ephemeralDuration: ephemeralDuration,
+            isEncrypted: true, isForwarded: isForwarded, systemEvent: systemEvent,
+            callSummary: callSummary, attachmentSummary: attachmentSummary, sticker: sticker
+        )
+    }
+
     /// `nil` quand le fil ne dit RIEN de la nature — un serveur antérieur à
     /// #7545. Une nature vide n'est pas une information : la garder distincte
     /// de « texte simple » évite de peindre en texte ce qu'on ne connaît pas.

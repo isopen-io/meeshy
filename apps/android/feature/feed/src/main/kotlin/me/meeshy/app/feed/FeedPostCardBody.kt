@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,23 +13,30 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.text.HashtagLink
 import me.meeshy.ui.component.bubble.LanguageChip
+import me.meeshy.ui.component.bubble.RichMessageText
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -41,22 +49,59 @@ import me.meeshy.ui.theme.hexColor
 internal fun FeedPostCardBody(
     post: FeedPostPresentation,
     onFlagTap: (String) -> Unit,
+    onOpenHashtag: (String) -> Unit = {},
+    translatingCodes: Set<String> = emptySet(),
+    onSelectLanguage: (String) -> Unit = onFlagTap,
 ) {
-    if (post.content.isNotBlank()) {
-        Spacer(Modifier.height(MeeshySpacing.md))
-        SelectionContainer {
-            Text(
-                text = post.content,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MeeshyTheme.tokens.textPrimary,
+    var explorerOpen by rememberSaveable(post.id) { mutableStateOf(false) }
+    post.languageExplorer?.takeIf { explorerOpen }?.let { explorer ->
+        PostTranslationSheet(
+            explorer = explorer,
+            translating = translatingCodes,
+            onSelectLanguage = onSelectLanguage,
+            onDismiss = { explorerOpen = false },
+        )
+    }
+    Column {
+        if (post.content.isNotBlank()) {
+            Spacer(Modifier.height(MeeshySpacing.md))
+            HashtagAwareLinks(onOpenHashtag) {
+                SelectionContainer {
+                    RichMessageText(
+                        text = post.content,
+                        color = MeeshyTheme.tokens.textPrimary,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
+
+        if (post.languageStrip.isNotEmpty() || post.languageExplorer != null) {
+            Spacer(Modifier.height(MeeshySpacing.xs))
+            PostLanguageStripRow(
+                chips = post.languageStrip,
+                onChipTap = onFlagTap,
+                onOpenExplorer = post.languageExplorer?.let { { explorerOpen = true } },
             )
         }
     }
+}
 
-    if (post.languageStrip.isNotEmpty()) {
-        Spacer(Modifier.height(MeeshySpacing.xs))
-        PostLanguageStripRow(chips = post.languageStrip, onChipTap = onFlagTap)
+/**
+ * Un toucher sur un `#tag` du texte ouvre ses résultats (iOS `Route.hashtagResults`) ; tout
+ * autre lien garde le gestionnaire du système.
+ */
+@Composable
+internal fun HashtagAwareLinks(onOpenHashtag: (String) -> Unit, content: @Composable () -> Unit) {
+    val system = LocalUriHandler.current
+    val handler = remember(system, onOpenHashtag) {
+        object : UriHandler {
+            override fun openUri(uri: String) {
+                HashtagLink.tagFrom(uri)?.let(onOpenHashtag) ?: system.openUri(uri)
+            }
+        }
     }
+    CompositionLocalProvider(LocalUriHandler provides handler, content = content)
 }
 
 /**
@@ -72,17 +117,13 @@ internal fun FeedPostCardBody(
 internal fun PostLanguageStripRow(
     chips: List<LanguageChip>,
     onChipTap: (String) -> Unit,
+    onOpenExplorer: (() -> Unit)? = null,
 ) {
     FlowRow(
         verticalArrangement = Arrangement.Center,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        Icon(
-            imageVector = Icons.Filled.Translate,
-            contentDescription = stringResource(R.string.feed_translated),
-            tint = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.size(14.dp),
-        )
+        PostTranslationsBadge(onOpenExplorer)
         chips.forEach { chip ->
             val info = chip.info
             val accent = info?.colorHex

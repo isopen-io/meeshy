@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// #5086 (vue `4c`) — **la montée commence à la POSE, pas au publish.**
@@ -104,11 +105,14 @@ final class ComposerPreUploadTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/ViewModels/StoryViewModel+PublicationUpload.swift")
         let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
             .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(code.contains("wheremediaObjects[i].postMediaId.isEmpty"),
+        XCTAssertTrue(code.contains("whereStoryPublicationLookBake.needsUpload(mediaObjects[i])"),
                       "c'est cette clause, et elle seule, qui rend le repli automatique")
+        XCTAssertFalse(StoryPublicationLookBake.needsUpload(
+            StoryMediaObject(id: "m", postMediaId: "pre-monte", kind: .image, aspectRatio: 1)),
+                       "un média pré-monté sans look ne repart pas (#13840 : seul un look le fait repartir cuit)")
     }
 
     // MARK: - Le balayage du document
@@ -168,7 +172,7 @@ final class ComposerPreUploadTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Intake.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/MeeshyComposerHost+Intake.swift")
         let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
             .components(separatedBy: .whitespacesAndNewlines).joined()
         guard let debut = code.range(of: "funcsyncPostMediaIntoSlides(){"),
@@ -192,12 +196,12 @@ final class ComposerPreUploadTests: XCTestCase {
     }
 
     func test_leBalayage_neMonteRienPourUnFormatPublieParLeDocument_etRepartQuandLeFormatChange() throws {
-        let preUpload = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Composer/MeeshyComposerHost+PreUpload.swift"))
+        let preUpload = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Composer/MeeshyComposerHost+PreUpload.swift"))
         XCTAssertTrue(preUpload.contains("guard ComposerPreUploadPolicy.pays(for: selectedFormat) else { return }"),
                       "le balayage se tait quand le format choisi ne référencera pas la pré-montée")
         // Le changement de format relance la dérivation, qui finit par le balayage
         // (`test_leBalayage_estAppeleEnFinDeDerivation`) : passer en story après avoir posé les médias les pré-monte.
-        let host = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+        let host = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Composer/MeeshyComposerHost.swift"))
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(host.contains(".adaptiveOnChange(of:selectedFormat,initial:true){_,_insyncPostMediaIntoSlides()"),
                       "passer en story après avoir posé les médias doit les pré-monter")

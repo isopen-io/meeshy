@@ -23,8 +23,8 @@ import {
 import { consumeAfterReadMessages } from '../../services/messaging/consumeAfterReadMessages';
 import { EphemeralRecipientExpiryService } from '../../services/EphemeralRecipientExpiryService';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
-import { canAccessConversation, resolveCallerParticipant } from './utils/access-control';
-import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { canAccessConversation, resolveCallerParticipant, refuserCommeIntrouvable } from './utils/access-control';
+import { sendSuccess, sendBadRequest, sendForbidden, sendInternalError } from '../../utils/response.js';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
 
@@ -79,7 +79,7 @@ export function registerMessageAfterReadRoutes(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);

@@ -20,16 +20,26 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.card.PostCommentCardSubject
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
+ * « Imager » un commentaire (#13922, iOS `CommentMenuPolicy`) : [cardOf] compose sa carte — `null` : rien ne s'image, et
+ * l'entrée n'existe pas — et [open] monte l'atelier dessus.
+ */
+internal class CommentImaging(
+    val cardOf: (commentId: String) -> PostCommentCardSubject?,
+    val open: (commentId: String, card: PostCommentCardSubject) -> Unit,
+)
+
+/**
  * The « … » of a comment (iOS `CommentMoreMenu`): a 44 dp target that opens Copy text for
- * every comment and Delete for one's own. Replaces the 16 dp trash icon that deleted on the
- * first touch.
+ * every comment, Imager when the comment composes a card, and Delete for one's own — in iOS's
+ * order. Replaces the 16 dp trash icon that deleted on the first touch.
  */
 @Composable
-internal fun CommentMoreMenu(comment: CommentPresentation, onDelete: (String) -> Unit) {
+internal fun CommentMoreMenu(comment: CommentPresentation, onDelete: (String) -> Unit, imaging: CommentImaging? = null) {
     var expanded by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
     Box {
@@ -49,6 +59,16 @@ internal fun CommentMoreMenu(comment: CommentPresentation, onDelete: (String) ->
                     clipboard.setText(AnnotatedString(comment.content))
                 },
             )
+            val card = imaging?.cardOf?.invoke(comment.id)
+            if (imaging != null && card != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.feed_comment_imagine)) },
+                    onClick = {
+                        expanded = false
+                        imaging.open(comment.id, card)
+                    },
+                )
+            }
             if (comment.isOwn) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.post_comments_delete_action), color = MeeshyPalette.Error) },

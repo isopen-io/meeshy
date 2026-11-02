@@ -2,8 +2,9 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import {
-  sendSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError, sendGone,
+  sendSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError, sendGone, sendError,
 } from '../../utils/response';
+import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { errorResponseSchema, friendRequestSchema, userMinimalSchema } from '@meeshy/shared/types/api-schemas';
 import { createCustomRateLimiter, type RateLimiter } from '../../utils/rate-limiter.js';
 import { callerRateKey } from '../../utils/client-rate-key';
@@ -79,6 +80,12 @@ export const demandeAvecPresenceSchema = {
   ...friendRequestSchema,
   properties: {
     ...friendRequestSchema.properties,
+    targetLevel: {
+      type: 'string',
+      nullable: true,
+      enum: ['ACQUAINTANCE', 'FRIEND', 'CLOSE', 'BLOOD', null],
+      description: 'The relation level the request aims at — null reads FRIEND (rows older than the circles)',
+    },
     sender: { ...partieAvecPresenceSchema, description: 'Sender user info' },
     receiver: { ...partieAvecPresenceSchema, description: 'Receiver user info' },
   },
@@ -123,6 +130,9 @@ export const demandeAvecConversationSchema = {
 const corpsEnvoi = z.object({
   receiverId: z.string().min(1),
   message: z.string().max(200).optional(),
+  // Lu par la loi des crans, qui refuse tout ce qui n'en est pas un : le corps ne le
+  // filtre pas, il le laisse dire `RELATION_LEVEL_INVALID` plutôt qu'un 400 muet.
+  targetLevel: z.unknown().optional(),
 });
 
 const corpsAction = z.object({
@@ -131,7 +141,8 @@ const corpsAction = z.object({
 
 function repondre<T>(reply: FastifyReply, resultat: Resultat<T>): unknown {
   if ('valeur' in resultat) return sendSuccess(reply, resultat.valeur);
-  const { code, message } = resultat.refus;
+  const { code, message, codeMetier } = resultat.refus;
+  if (codeMetier) return sendError(reply, code, message, { code: codeMetier });
   if (code === 400) return sendBadRequest(reply, message);
   if (code === 409) return sendConflict(reply, message);
   return sendNotFound(reply, message);
@@ -288,7 +299,7 @@ export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
 
   fastify.post('/friend-requests', {
     onRequest: [fastify.authenticate],
-    preHandler: [parEnvoi.middleware()],
+    preHandler: [appVersionFloorPreHandler, parEnvoi.middleware()],
     schema: {
       description: 'Send a friend request. Carries the union of both former families\' guards, plus the blocking check.',
       tags: ['directory'],
@@ -299,6 +310,7 @@ export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
         properties: {
           receiverId: { type: 'string' },
           message: { type: 'string', maxLength: 200 },
+          targetLevel: { type: 'string', description: 'ACQUAINTANCE | FRIEND | CLOSE | BLOOD — absent reads FRIEND' },
         },
       },
       response: {
@@ -334,6 +346,7 @@ export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
         emetteurId,
         receveurId: body.receiverId,
         message: body.message,
+        targetLevel: body.targetLevel,
       });
 
       if ('refus' in resultat) return repondre(reply, resultat);
@@ -357,7 +370,7 @@ export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { id: string } }>('/friend-requests/:id', {
     onRequest: [fastify.authenticate],
-    preHandler: [parAction.middleware()],
+    preHandler: [appVersionFloorPreHandler, parAction.middleware()],
     schema: {
       description: 'Act on a friend request: accept, reject, cancel or dismiss. Replaces the two PATCH and the DELETE.',
       tags: ['directory'],
@@ -380,6 +393,7 @@ export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
         400: errorResponseSchema,
         401: errorResponseSchema,
         404: errorResponseSchema,
+        409: errorResponseSchema,
         429: errorResponseSchema,
         500: errorResponseSchema,
       },

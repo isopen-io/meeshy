@@ -44,7 +44,7 @@ import {
 import { registerShareRoutes } from './share';
 import { viewerListRequest, viewerListRefused } from './viewerListRequest';
 import { viewerListCounts } from '../../services/posts/viewerEngagement';
-import { notifyRepostedAuthor, readRepostedSource } from './repostedAuthorNotification';
+import { noteRepostInteraction, notifyRepostedAuthor, readRepostedSource } from './repostedAuthorNotification';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -960,10 +960,11 @@ export function registerInteractionRoutes(
       // Site UNIQUE partagé avec `POST /posts { repostOfId }` (#10525).
       const notifService = fastify.notificationService;
       const sourcePostId = repost.repostOfId;
-      if (notifService && sourcePostId && isFreshRepost) {
+      if (sourcePostId && isFreshRepost) {
         const actorId = authContext.registeredUser.id;
         void (async () => {
           const source = await readRepostedSource((id, viewer) => postService.getPostById(id, viewer), sourcePostId, actorId);
+          noteRepostInteraction(fastify.prisma, { actorId, source });
           await notifyRepostedAuthor(notifService, { actorId, source, sourcePostId, repostId: repost.id });
         })().catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: notify post repost failed', { err }));
       }

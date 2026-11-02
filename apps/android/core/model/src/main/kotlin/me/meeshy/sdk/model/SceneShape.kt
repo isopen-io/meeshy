@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
+import me.meeshy.sdk.model.scene.SceneObjectScalePolicy
 
 /** Un rectangle en fractions de la scène (0…1) ; pur, sans dépendance graphique. */
 data class SceneRect(val left: Double, val top: Double, val right: Double, val bottom: Double) {
@@ -101,7 +102,7 @@ object SceneShape {
         } else {
             o.anchor.x to o.anchor.y
         }
-        val facteur = o.transform.scale.coerceIn(0.5, 3.0)
+        val facteur = SceneObjectScalePolicy.served(o.transform.scale)
         val marge = OBJECT_PADDING * facteur
         val demiLargeur = max(marge, paintHalfWidth(o))
         val demiHauteur = marge / ASPECT

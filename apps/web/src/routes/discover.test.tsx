@@ -112,9 +112,10 @@ describe('le geste qu’une ligne de recherche offre — `ConnectionActionView`'
 });
 
 describe('les onglets', () => {
-  test('trois onglets dans l’ordre d’iOS, l’actif se dit choisi', () => {
+  test('quatre onglets — ceux de `PeopleDiscoveryView`, puis « Cercles » (#13938) —, l’actif se dit choisi', () => {
     const html = renderToStaticMarkup(<DiscoverTabBar language="fr" selected="requests" received={0} onSelect={noop} />);
-    expect([...html.matchAll(/data-discover-tab="(\w+)"/g)].map((m) => m[1])).toEqual(['discover', 'requests', 'blocked']);
+    expect([...html.matchAll(/data-discover-tab="(\w+)"/g)].map((m) => m[1])).toEqual(['discover', 'requests', 'blocked', 'circles']);
+    expect(html).toContain('Cercles');
     expect(html).toMatch(/aria-selected="true"[^>]*data-discover-tab="requests"/);
     expect(html).not.toContain('data-discover-tab-count');
   });
@@ -263,15 +264,15 @@ describe('DiscoverTabBar — les flèches du clavier (#6422)', () => {
     mount();
     act(() => tab('discover').focus());
     press(tab('discover'), 'ArrowLeft');
-    expect(document.activeElement).toBe(tab('blocked'));
+    expect(document.activeElement).toBe(tab('circles'));
   });
 
   test('End puis Home vont au dernier puis au premier onglet', () => {
     mount();
     act(() => tab('discover').focus());
     press(tab('discover'), 'End');
-    expect(document.activeElement).toBe(tab('blocked'));
-    press(tab('blocked'), 'Home');
+    expect(document.activeElement).toBe(tab('circles'));
+    press(tab('circles'), 'Home');
     expect(document.activeElement).toBe(tab('discover'));
   });
 

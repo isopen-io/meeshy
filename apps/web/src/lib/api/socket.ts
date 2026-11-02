@@ -10,6 +10,7 @@ import type { TypingActionData, TypingEvent } from '@meeshy/shared/types/socketi
 import type { PostRoomActionData } from '@meeshy/shared/types/socketio-events/social';
 
 import type { ConversationStoreState } from '@/lib/conversation-store';
+import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 import { noteGalleryReception } from '@/lib/gallery/auto-save-runtime';
 import type { SocketAuth, SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
@@ -21,8 +22,10 @@ import { attachmentStatusDetailsQueryKey } from './attachments';
 import { guestAccessEndOfSocketError, type GuestAccessEnd } from './guest-access-end';
 import { CONVERSATION_CATEGORIES_QUERY_KEY, CONVERSATIONS_QUERY_KEY } from './conversations';
 import { messagesQueryKey } from './messages';
+import { applyAttachmentDeleted, decodeAttachmentDeletedEvent } from './realtime-attachment-deleted';
 import { applyAttachmentReactionUpdate, isAttachmentReactionUpdate } from './realtime-attachment-reactions';
 import { applyCitedPostWithdrawn, isCitedPostWithdrawnEvent } from './realtime-cited-post';
+import { applyEncryptionChanged, isEncryptionChanged } from './realtime-encryption-changed';
 import {
   applyMessageDeleted,
   applyMessageEdited,
@@ -30,6 +33,7 @@ import {
   isMessageEditedEvent,
 } from './realtime-message-mutations';
 import { applyMessageHiddenForMe, isMessageHiddenForMeEvent } from './realtime-message-hidden';
+import { applyViewerMembershipEnded, viewerMembershipEndedOf } from './realtime-membership-ended';
 import { applyMessagePinnedEvent, applyMessageUnpinnedEvent, isMessagePinnedEvent, isMessageUnpinnedEvent } from './realtime-message-pin';
 import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
 import {
@@ -449,6 +453,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     applyAttachmentReactionUpdate(deps.queryClient, payload);
   };
 
+  /** `attachment:deleted` (#13611) — une pièce retirée par un membre quitte le fil, l'écran des médias et la ligne de liste. Règle : `realtime-attachment-deleted.ts`. */
+  const onAttachmentDeleted = (payload: unknown): void => {
+    const data = decodeAttachmentDeletedEvent(payload);
+    if (data !== null) applyAttachmentDeleted(deps.queryClient, data);
+  };
+
   /** `reaction:added|removed` (#5863) — le compte ABSOLU d'un emoji ; « ma réaction » ne suit que MON geste. Règle : `realtime-message-reactions.ts`. */
   const onMessageReactionChanged = (payload: unknown): void => {
     if (!isMessageReactionUpdate(payload)) return;
@@ -478,6 +488,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   /** `message:hidden-for-me` (#10587) — masqué pour moi sur un autre appareil : la rangée quitte le fil. Règle : `realtime-message-hidden.ts`. */
   const onMessageHiddenForMe = (payload: unknown): void => {
     if (isMessageHiddenForMeEvent(payload)) applyMessageHiddenForMe(deps.queryClient, payload, deps.viewerId());
+  };
+
+  /** `conversation:participant-left` / `-banned` qui nomment le lecteur (#11415) : il n'y est plus membre. Règle : `realtime-membership-ended.ts`. */
+  const onParticipantDeparture = (payload: unknown): void => {
+    const ended = viewerMembershipEndedOf(payload, deps.viewerId());
+    if (ended !== null) applyViewerMembershipEnded(deps.queryClient, ended);
   };
 
   /** `message:cited-post-withdrawn` (#7969) — la story citée est retirée : la carte passe « Story indisponible ». Règle : `realtime-cited-post.ts`. */
@@ -988,12 +1004,18 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     void deps.queryClient.invalidateQueries({ queryKey: STARRED_MESSAGES_QUERY_ROOT });
   };
 
+  /** `conversation:encryption-changed` — pour fermer, jamais pour rouvrir le clair (#12949). */
+  const onEncryptionChanged = (payload: unknown): void => {
+    if (isEncryptionChanged(payload)) applyEncryptionChanged(deps.queryClient, endToEndRegimeLedger, payload);
+  };
+
   socket.on<unknown>(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_NEW, onMessageNew);
   socket.on<unknown>(SERVER_EVENTS.TYPING_START, onTypingStart);
   socket.on<unknown>(SERVER_EVENTS.TYPING_STOP, onTypingStop);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, onUnreadUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, onEncryptionChanged);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
@@ -1001,6 +1023,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, onAttachmentReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, onAttachmentReactionChanged);
+  socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_DELETED, onAttachmentDeleted);
   socket.on<unknown>(SERVER_EVENTS.REACTION_ADDED, onMessageReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
@@ -1008,6 +1031,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_PINNED, onMessagePinned);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_UNPINNED, onMessageUnpinned);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantDeparture);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantDeparture);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
@@ -1085,6 +1110,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.TYPING_STOP, onTypingStop);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, onUnreadUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, onEncryptionChanged);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
@@ -1092,6 +1118,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, onAttachmentReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, onAttachmentReactionChanged);
+      socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_DELETED, onAttachmentDeleted);
       socket.off<unknown>(SERVER_EVENTS.REACTION_ADDED, onMessageReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
@@ -1099,6 +1126,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_PINNED, onMessagePinned);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_UNPINNED, onMessageUnpinned);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantDeparture);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantDeparture);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);

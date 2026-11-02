@@ -299,16 +299,6 @@ export interface ReadStatus {
 }
 
 /**
- * Permissions disponibles pour un message
- */
-export interface MessagePermissions {
-  readonly canEdit: boolean;
-  readonly canDelete: boolean;
-  readonly canTranslate: boolean;
-  readonly canReply: boolean;
-}
-
-/**
  * Message enrichi pour l'interface utilisateur
  * Utilisé par BubbleMessage pour affichage avec états visuels
  */

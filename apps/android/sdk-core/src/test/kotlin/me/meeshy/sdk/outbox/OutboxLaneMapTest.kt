@@ -80,6 +80,8 @@ class OutboxLaneMapTest {
         // Privacy sync shares the settings lane but is a distinct kind (independent coalescing).
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_PRIVACY_SETTINGS))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS))
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_AUDIO_SETTINGS))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS))
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.PUBLISH_STORY))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.STORY))
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPLOAD_MEDIA))
@@ -139,5 +141,13 @@ class OutboxLaneMapTest {
             assertThat(lane).doesNotContain("message:")
             assertThat(lane).isNotEmpty()
         }
+    }
+
+    @Test
+    fun `a post publication drains on its own lane, never behind a story or a like`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.CREATE_POST))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.POST))
+        assertThat(OutboxLaneMap.sharedDrainLanes).contains(OutboxLanes.POST)
+        assertThat(OutboxLocalTargets.isRouteAddressed(OutboxKind.CREATE_POST)).isFalse()
     }
 }

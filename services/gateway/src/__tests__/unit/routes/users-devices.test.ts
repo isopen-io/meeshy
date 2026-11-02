@@ -179,6 +179,8 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     user: {
       findUnique: jest.fn<any>().mockResolvedValue(makeUser()),
+      // #13298 — « qui a bloqué l'acteur ? », lu par la clause des listes.
+      findMany: jest.fn<any>().mockResolvedValue([]),
     },
     userPreferences: {
       findUnique: jest.fn<any>().mockResolvedValue(null),

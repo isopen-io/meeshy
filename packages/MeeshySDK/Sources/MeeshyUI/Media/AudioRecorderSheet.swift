@@ -208,7 +208,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
-        DurationFormat.clock(seconds)
+        MediaFormat.duration(seconds)
     }
 
     // MARK: - Language strip

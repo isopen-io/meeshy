@@ -136,3 +136,10 @@ declare const __APP_VERSION__: string;
 
 /** `__API_PROXY_TARGET__` — la passerelle du proxy de dev (#8287), `vite.config.ts`. */
 declare const __API_PROXY_TARGET__: string;
+
+/**
+ * `__BUILD_COMMIT__` — la révision (`VCS_REF`) gravée au build par
+ * `vite.config.ts` (#12654) ; `null` hors CI. Le contrôleur de mise à jour la
+ * compare à `/build-info.json`, écrit par le Dockerfile depuis la MÊME variable.
+ */
+declare const __BUILD_COMMIT__: string | null;

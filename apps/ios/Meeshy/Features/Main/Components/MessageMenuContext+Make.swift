@@ -19,8 +19,15 @@ struct ConversationMenuAuthority: Equatable {
 
     /// Les rôles voyagent tels que servis ; un invité est lu à sa session,
     /// jamais à son absence de rôle. `isDeclaredMinor` n'est pas servi à
-    /// l'app : la passerelle garde seule ce refus.
-    static func make(conversation: Conversation?, currentUser: MeeshyUser?, guest: AnonymousSessionContext?) -> ConversationMenuAuthority {
+    /// l'app : la passerelle garde seule ce refus. `membershipLost` : la
+    /// passerelle a dit que le lecteur n'est plus participant actif (#11415)
+    /// — accès révoqué, ou départ / bannissement reçus fil ouvert.
+    static func make(
+        conversation: Conversation?,
+        currentUser: MeeshyUser?,
+        guest: AnonymousSessionContext?,
+        membershipLost: Bool = false
+    ) -> ConversationMenuAuthority {
         let viewer = ConversationViewerAuthority(
             id: guest?.participantId ?? currentUser?.id ?? "",
             participantId: guest?.participantId,
@@ -28,11 +35,38 @@ struct ConversationMenuAuthority: Equatable {
             isAnonymous: guest != nil || currentUser?.isAnonymous == true,
             platformRoleRaw: guest == nil ? currentUser?.role : nil,
             conversationRoleRaw: conversation?.currentUserRole,
-            isActiveMember: conversation != nil,
+            isActiveMember: isActiveMember(conversation: conversation, membershipLost: membershipLost),
             canSendMessages: guest?.permissions.canSendMessages ?? true,
             isDeclaredMinor: declaresMinor(conversation)
         )
         return ConversationMenuAuthority(viewer: viewer, conversation: policyConversation(of: conversation))
+    }
+
+    /// **L'autorité du fil OUVERT** — le lecteur tel que son modèle le connaît
+    /// (compte, session invitée) et son appartenance PERDUE par l'une des deux
+    /// voies servies : la révocation (403/404 de l'historique,
+    /// `conversation:join-error`), qui ferme la vue, et la fin d'appartenance
+    /// reçue fil ouvert (`ConversationSocketHandler.membershipEnded`), qui la
+    /// laisse montée. Site UNIQUE de `ConversationView.menuAuthority`.
+    static func make(conversation: Conversation?, viewModel: ConversationViewModel) -> ConversationMenuAuthority {
+        make(
+            conversation: conversation,
+            currentUser: viewModel.authManager.currentUser,
+            guest: viewModel.anonymousSession,
+            membershipLost: viewModel.accessRevoked || viewModel.socketHandler?.membershipEnded == true
+        )
+    }
+
+    /// **Le lecteur est-il un participant ACTIF ?** (#11415) — la passerelle
+    /// ne sert l'historique qu'à un participant actif (`verdictAccesConversation`)
+    /// et exige la même chose de « Supprimer pour moi », de la réaction et du
+    /// signalement. Sans conversation, l'appartenance est inconnue : fermée.
+    /// Une fin d'appartenance servie (403/404 de l'historique,
+    /// `conversation:join-error`, ou `conversation:participant-left` /
+    /// `participant-banned` nommant le lecteur, fil ouvert) l'emporte sur le
+    /// cache qu'on relit encore.
+    nonisolated static func isActiveMember(conversation: Conversation?, membershipLost: Bool) -> Bool {
+        conversation != nil && !membershipLost
     }
 
     /// **Le lecteur est-il mineur DANS cette conversation ?** La passerelle le

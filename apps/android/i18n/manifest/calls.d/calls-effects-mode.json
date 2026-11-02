@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "androidName": "call_control_effects",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_category_face",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_category_color",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_face_none",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_face_smoothing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_face_toad",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_face_angel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_face_demon",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_face_volcano",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_preset_natural",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_preset_warm",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_preset_cool",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_preset_vivid",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_preset_muted",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_settings",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_settings_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_validate",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_validate_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_quit",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_quit_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_blur",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_smoothing_strength",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_brightness",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_percent",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_next",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_previous",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

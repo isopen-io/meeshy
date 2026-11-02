@@ -1,6 +1,7 @@
 import { planShare, type ShareAction, type ShareDestination, type ShareEntry, type SharePlan } from '@meeshy/shared/utils/share-plan';
 
 import type { PublishFormat } from '@/lib/api/share-publish';
+import { canSendPlaintext } from '@/lib/end-to-end-regime-ledger';
 
 import type { SendPayload } from './send-sheet-plan';
 
@@ -30,10 +31,17 @@ const OCTET_STREAM = 'application/octet-stream';
  * UNE CONVERSATION CHIFFRÉE, au sens où la passerelle la juge (D7) : un mode de
  * chiffrement, quel qu'il soit, ou une date d'activation. C'est la règle de
  * `forwardAdmission` (fermée sur la projection) ; le web la lit pour la source
- * et pour chaque destinataire, ici seulement.
+ * et pour chaque destinataire, ici seulement. Une conversation que ce
+ * navigateur a VUE chiffrée de bout en bout l'est encore, même servie sans
+ * mode (#12949, `end-to-end-regime-ledger.ts`).
  */
-export const conversationEncrypted = (conversation: { readonly encryptionMode?: string | null; readonly encryptionEnabledAt?: Date | string | null } | undefined): boolean =>
-  conversation !== undefined && (conversation.encryptionMode != null || conversation.encryptionEnabledAt != null);
+export const conversationEncrypted = (
+  conversation: { readonly id?: string; readonly encryptionMode?: string | null; readonly encryptionEnabledAt?: Date | string | null } | undefined,
+): boolean =>
+  conversation !== undefined &&
+  (conversation.encryptionMode != null ||
+    conversation.encryptionEnabledAt != null ||
+    (conversation.id !== undefined && !canSendPlaintext({ conversationId: conversation.id })));
 
 const POST_KIND = { POST: 'post', STORY: 'story', REEL: 'reel' } as const satisfies Readonly<Record<PublishFormat, 'post' | 'story' | 'reel'>>;
 

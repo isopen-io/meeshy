@@ -3,7 +3,7 @@ import { lazyLensStage } from '@/lib/meeshy-lens/lens-lazy';
 import { currentDeviceTier } from '../device/capability-tier';
 
 import { browserReducedMotion, createFaceLayer } from './face-effects-draw';
-import { browserFaceDetector, createFaceTracker, type FaceTracker } from './face-tracker';
+import { browserFaceDetector, createFaceTracker, type FaceDetectorPort } from './face-tracker';
 import { createSegmentedBlur, segmentIntervalFor, type SegmenterPort } from './video-effects-blur';
 import { createBlurCompositor } from './video-effects-compositor';
 import type { Box } from './face-effects';
@@ -55,11 +55,15 @@ export function browserBlur(): BlurStage | null {
   }
 }
 
-/** Le visage que suit l'étage des lens : son propre détecteur, bâti à la première image qui porte une lens. */
-function lensFace(): (source: CanvasImageSource, frame: { readonly width: number; readonly height: number }) => Box {
-  const state: { tracker: FaceTracker | null; frame: number } = { tracker: null, frame: 0 };
+/**
+ * Le suiveur du visage que l'étage des lens interroge — son propre suiveur,
+ * sur le détecteur que l'étage lui remet : à 478 points sur un appareil de
+ * palier A (`lens-browser.ts`, W15 #11321), sinon celui du navigateur.
+ * L'étage ne le bâtit qu'à une lens ancrée au visage (`lensUsesFace`).
+ */
+function trackFace(detector: FaceDetectorPort): (source: CanvasImageSource, frame: { readonly width: number; readonly height: number }) => Box {
+  const state = { tracker: createFaceTracker(detector), frame: 0 };
   return (source, frame) => {
-    state.tracker ??= createFaceTracker(browserFaceDetector());
     state.frame += 1;
     return state.tracker.next(source, frame, state.frame - 1);
   };
@@ -67,9 +71,9 @@ function lensFace(): (source: CanvasImageSource, frame: { readonly width: number
 
 export function browserFrameEnv(options: { readonly reducedMotion?: () => boolean } = {}): LocalFrameEnv {
   const face = createFaceLayer(browserFaceDetector(), options.reducedMotion === undefined ? {} : { reducedMotion: options.reducedMotion });
-  const trackedFace = lensFace();
+  const lensFace = { track: trackFace, browserDetector: browserFaceDetector, tier: currentDeviceTier, now };
   const lens = lazyLensStage(() =>
-    import('@/lib/meeshy-lens/lens-browser').then((module) => module.browserLensStage({ face: trackedFace, ...(options.reducedMotion === undefined ? {} : { reducedMotion: options.reducedMotion }) })),
+    import('@/lib/meeshy-lens/lens-browser').then((module) => module.browserLensStage({ face: lensFace, ...(options.reducedMotion === undefined ? {} : { reducedMotion: options.reducedMotion }) })),
   );
   return { surface: offscreen2d, now, face, blur: browserBlur, lens, frameFrom: (canvas, init) => new VideoFrame(canvas, init) };
 }

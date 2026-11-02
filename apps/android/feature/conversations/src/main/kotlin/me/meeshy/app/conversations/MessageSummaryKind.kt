@@ -13,6 +13,10 @@ import me.meeshy.sdk.model.media.MediaKindStrings
  * Priority order — first match wins — mirrors iOS exactly:
  *   1. `expiresAt <= now`   → [EXPIRED] (the content is gone; every other flag
  *                             loses to it).
+ *   1 bis. `isEncrypted`     → [ENCRYPTED] (#13110) — Android-only arm: the native app
+ *                             opens no end-to-end message yet (#13015), the gateway
+ *                             serves no text, and the row says so instead of « no
+ *                             message yet ».
  *   2. `isBlurred`           → [HIDDEN] (moderation/blur outranks an active
  *                             ephemeral so blurred content never leaks).
  *   3. `isViewOnce`          → [VIEW_ONCE].
@@ -29,6 +33,7 @@ enum class MessageSummaryKind {
     VIEW_ONCE,
     EPHEMERAL_ACTIVE,
     EXPIRED,
+    ENCRYPTED,
     ;
 
     companion object {
@@ -36,6 +41,7 @@ enum class MessageSummaryKind {
             if (message == null) return STANDARD
             val expiresAt = isoToEpochMillisOrNull(message.expiresAt)
             if (expiresAt != null && expiresAt <= nowMillis) return EXPIRED
+            if (message.isEncrypted == true) return ENCRYPTED
             if (message.isBlurred) return HIDDEN
             if (message.isViewOnce) return VIEW_ONCE
             if (expiresAt != null) return EPHEMERAL_ACTIVE

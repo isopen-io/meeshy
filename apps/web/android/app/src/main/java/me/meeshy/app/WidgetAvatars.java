@@ -51,7 +51,7 @@ final class WidgetAvatars {
         if (!WidgetAvatarRules.isFetchable(url, debug)) return null;
         File file = new File(dir(context), key(url) + ".png");
         if (file.exists()) {
-            Bitmap cached = BitmapFactory.decodeFile(file.getAbsolutePath());
+            Bitmap cached = decodeCached(file, sizePx);
             if (cached != null) {
                 file.setLastModified(System.currentTimeMillis());
                 return cached;
@@ -124,6 +124,18 @@ final class WidgetAvatars {
         if (decoded == null) return null;
         int side = Math.min(decoded.getWidth(), decoded.getHeight());
         return Bitmap.createBitmap(decoded, (decoded.getWidth() - side) / 2, (decoded.getHeight() - side) / 2, side, side);
+    }
+
+    /** #12447 — le cache est relu sous-echantillonne, comme le telechargement. */
+    private static Bitmap decodeCached(File file, int sizePx) {
+        String path = file.getAbsolutePath();
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(path, bounds);
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null;
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inSampleSize = WidgetAvatarRules.sampleSize(bounds.outWidth, bounds.outHeight, sizePx);
+        return BitmapFactory.decodeFile(path, options);
     }
 
     private static void save(Context context, File file, Bitmap bitmap) {

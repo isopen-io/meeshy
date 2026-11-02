@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_live_frame_suspended_device">Cadre en pause : l’appareil se protège (chaleur ou économie d’énergie)</string>
+    <string name="call_live_frame_suspended_motion">Ce cadre est animé : il reste masqué tant que « Supprimer les animations » est activé</string>
+    <string name="call_live_frame_declination_state">Version %1$d sur %2$d</string>
+    <string name="call_live_frame_declination_next">Version suivante</string>
+    <string name="call_live_frame_declination_previous">Version précédente</string>
+</resources>

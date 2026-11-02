@@ -27,22 +27,21 @@ public actor SocialEventsV2Outbox {
     private let now: @Sendable () -> Date
     private static let logger = MeeshyLog.logger(.socialEventsV2Outbox, subsystem: .legacySDK)
 
-    private static func backoff(attempts: Int) -> TimeInterval {
-        min(300, pow(2.0, Double(max(0, attempts))) * 5)
-    }
+    private let retryPolicy: RetryPolicy
 
     public init() {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         self.init(storage: ResilientDatabaseQueue.open(path: dir.appendingPathComponent("meeshy_social_events_v2.db").path))
     }
 
-    public init(dbPath: String?, clock: @escaping @Sendable () -> Date = { Date() }) {
-        self.init(storage: ResilientDatabaseQueue.open(path: dbPath), clock: clock)
+    public init(dbPath: String?, clock: @escaping @Sendable () -> Date = { Date() }, retryPolicy: RetryPolicy = .socialEvents) {
+        self.init(storage: ResilientDatabaseQueue.open(path: dbPath), clock: clock, retryPolicy: retryPolicy)
     }
 
-    init(storage opened: OpenedDatabaseQueue, clock: @escaping @Sendable () -> Date = { Date() }) {
+    init(storage opened: OpenedDatabaseQueue, clock: @escaping @Sendable () -> Date = { Date() }, retryPolicy: RetryPolicy = .socialEvents) {
         self.storage = Self.prepare(opened)
         self.now = clock
+        self.retryPolicy = retryPolicy
     }
 
     private static func prepare(_ opened: OpenedDatabaseQueue) -> DatabaseQueue? {
@@ -171,6 +170,7 @@ public actor SocialEventsV2Outbox {
         guard !ready.isEmpty, !Task.isCancelled else { return nil }
         let outcome = await dispatch(ready.map(\.1))
         let ids = ready.map(\.0)
+        let policy = retryPolicy
         do {
             try await db.write { db in
                 switch outcome {
@@ -182,7 +182,7 @@ public actor SocialEventsV2Outbox {
                     for (id, _, attempts) in ready {
                         try db.execute(
                             sql: "UPDATE social_events_v2 SET attempts = attempts + 1, next_retry_at = ? WHERE event_id = ?",
-                            arguments: [nowTs + Self.backoff(attempts: attempts + 1), id])
+                            arguments: [nowTs + policy.delay(afterFailure: attempts + 1), id])
                     }
                 }
             }

@@ -24,7 +24,12 @@ internal object RetrofitRouteSources {
 
     private const val API_SOURCES = "src/main/kotlin/me/meeshy/sdk/net/api"
 
-    private val verbAnnotation = Regex("""@(GET|POST|PUT|PATCH|DELETE|HEAD)\(\s*"([^"]*)"\s*\)""")
+    private const val ROUTE_SOURCES = "src/main/kotlin/me/meeshy/sdk/net/routes"
+
+    private val verbAnnotation =
+        Regex("""@(GET|POST|PUT|PATCH|DELETE|HEAD)\(\s*(?:"([^"]*)"|(ApiRoutes\w+\.\w+))\s*\)""")
+    private val generatedObject = Regex("""object\s+(ApiRoutes\w+)""")
+    private val generatedConstant = Regex("""const\s+val\s+(\w+)\s*:\s*String\s*=\s*"([^"]*)"""")
     private val httpAnnotation = Regex("""@HTTP\(([^)]*)\)""")
     private val httpMethod = Regex("""method\s*=\s*"([A-Za-z]+)"""")
     private val httpPath = Regex("""path\s*=\s*"([^"]*)"""")
@@ -39,6 +44,32 @@ internal object RetrofitRouteSources {
         return fromRepoRoot
     }
 
+    private fun routeSourceDirectory(): File {
+        val fromModule = File(ROUTE_SOURCES)
+        if (fromModule.isDirectory) return fromModule
+        val fromRepoRoot = File("core/network/$ROUTE_SOURCES")
+        check(fromRepoRoot.isDirectory) {
+            "sources des routes générées introuvables depuis ${fromModule.absolutePath}"
+        }
+        return fromRepoRoot
+    }
+
+    /**
+     * Les constantes du catalogue généré (`ApiRoutesX.NOM` → chemin) : une interface qui les cite au lieu
+     * d'écrire le chemin DÉCLARE la même route, et la garde ne doit pas la lire comme absente.
+     */
+    fun generatedPaths(): Map<String, String> =
+        routeSourceDirectory().listFiles { file: File -> file.isFile && file.name.startsWith("ApiRoutes") }
+            .orEmpty()
+            .flatMap { file ->
+                val text = file.readText()
+                val owner = generatedObject.find(text)?.groupValues?.get(1)
+                generatedConstant.findAll(text).mapNotNull { match ->
+                    owner?.let { "$it.${match.groupValues[1]}" to match.groupValues[2] }
+                }.toList()
+            }
+            .toMap()
+
     fun apiSourceFiles(): List<File> =
         apiSourceDirectory().listFiles { file: File -> file.isFile && file.name.endsWith("Api.kt") }
             ?.sortedBy { it.name }
@@ -52,7 +83,16 @@ internal object RetrofitRouteSources {
 
     fun routesOf(file: File): List<DeclaredRoute> {
         val text = code(file.readText())
-        val simple = verbAnnotation.findAll(text).map { DeclaredRoute(file.name, it.groupValues[1], it.groupValues[2]) }
+        val generated = generatedPaths()
+        val simple = verbAnnotation.findAll(text).map { match ->
+            val reference = match.groupValues[3]
+            val path = if (reference.isEmpty()) {
+                match.groupValues[2]
+            } else {
+                checkNotNull(generated[reference]) { "${file.name} cite $reference, absent du catalogue généré" }
+            }
+            DeclaredRoute(file.name, match.groupValues[1], path)
+        }
         val custom = httpAnnotation.findAll(text).mapNotNull { match ->
             val verb = httpMethod.find(match.groupValues[1])?.groupValues?.get(1)?.uppercase()
             val path = httpPath.find(match.groupValues[1])?.groupValues?.get(1)

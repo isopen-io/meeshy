@@ -53,6 +53,23 @@ final class LocationPickerModelTests: XCTestCase {
         XCTAssertNil(place?.category)
     }
 
+    /// #13320 — le chemin réel : un lieu nommé choisi dans la recherche, confirmé à ~100 m.
+    func test_sharedPlace_around_unLieuNommeNeLivreNiSonNomNiSaRueNiSaCategorie() {
+        let sut = makeSUT()
+        sut.selectedCoordinate = CLLocationCoordinate2D(latitude: 48.85837, longitude: 2.29448)
+        sut.selectedName = "Chez Marcel"
+        sut.addressString = "12 rue Cler, 75007 Paris"
+        sut.selectedCategory = "restaurant"
+        sut.selectedCoarseNames = PlaceCoarseNames(subLocality: "Gros-Caillou", locality: "Paris", country: "France")
+
+        let place = sut.sharedPlace(at: .around)
+
+        XCTAssertEqual(place?.latitude ?? 0, 48.858, accuracy: 1e-9)
+        XCTAssertEqual(place?.name, "Gros-Caillou")
+        XCTAssertEqual(place?.address, "Paris, France")
+        XCTAssertNil(place?.category)
+    }
+
     func test_sharedPlace_sansComposantsGeocodes_neGardeQueLesCoordonnees() {
         let sut = makeSUT()
         sut.selectedCoordinate = CLLocationCoordinate2D(latitude: 20.00004, longitude: -0.00006)

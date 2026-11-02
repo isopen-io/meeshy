@@ -10,6 +10,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { GameBird } from '@/components/game';
 import { GamePhotoFlow } from '@/components/game-photo-flow';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from '@/components/game-surface';
+import { appPhotoAlerts } from '@/lib/game-photo/app-alerts';
 import { appPhotoEnv } from '@/lib/game-photo/app-env';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import {
@@ -29,7 +30,9 @@ import { useObjectUrl } from '@/lib/game-photo/use-object-url';
 import { useAtmosphereGate } from '@/lib/game/use-atmosphere-gate';
 import type { GameCatalogKey } from '@/lib/i18n-game-catalog';
 import { gameText } from '@/lib/view/game-copy';
+import { followNotificationsOfTypeReadAction } from '@/lib/view/use-notifications';
 import { ProgressionShell } from '@/routes/progression-shell';
+import { useViewerId } from '@/routes/game-friends';
 
 /**
  * LE CARNET DE PROGRESSION (#9382) — conception, partie VI : « le carnet de
@@ -314,7 +317,9 @@ export function CarnetBody({
   const kept = entries
     .filter((entry) => entry.status === 'kept')
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  const catchUp = game === null ? [] : catchUpMoments(photoCatchUp(catchUpStandingOf(game), kept.map((entry) => entry.momentId)));
+  /* Une étape immortalisée sur un AUTRE appareil (`keptAt`, D22 b) sort de « À rattraper » : sa photo n'est pas ici, son identifiant si. */
+  const keptElsewhere = (game?.photo?.moments ?? []).filter((moment) => moment.keptAt !== null).map((moment) => moment.stepId);
+  const catchUp = game === null ? [] : catchUpMoments(photoCatchUp(catchUpStandingOf(game), [...kept.map((entry) => entry.momentId), ...keptElsewhere]));
   const pending = pendingOf(entries);
 
   return (
@@ -400,6 +405,12 @@ export default function ProgressionCarnetScreen() {
   suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   /* Le bloc du jeu (Flamme du bandeau, étapes à rattraper) : lu dans le cache de Progression, jamais redemandé. */
   const game = useQueryClient().getQueryData<EngagementWithGame>(ENGAGEMENT_PROGRESS_QUERY_KEY)?.game ?? null;
+  /* La pastille s'éteint dès l'ouverture du carnet (#10174), même avec douze étapes ouvertes. */
+  const userId = useViewerId() ?? 'anonymous';
+  useEffect(() => appPhotoAlerts.carnetVisited(userId), [userId]);
+  /* La ligne « moments à immortaliser » de la cloche passe lue quand le carnet s'ouvre, et celle qui arrive pendant
+     qu'il est ouvert aussi (#10175, § 5.16.4). */
+  useEffect(() => followNotificationsOfTypeReadAction('game_photo_moment'), []);
   return (
     <ProgressionShell title={gameText('game.notebook.page_title')}>
       <CarnetBody env={appPhotoEnv()} flameDays={game?.flame.days ?? null} game={game} />

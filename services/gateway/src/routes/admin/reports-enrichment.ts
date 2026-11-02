@@ -46,7 +46,7 @@ import {
 
 const EXCERPT_LENGTH = 120;
 const POST_KINDS: ReadonlySet<string> = new Set(['post', 'story', 'reel', 'status']);
-const RESTRICTED_AUDIENCES: ReadonlySet<string> = new Set(['PRIVATE', 'ONLY', 'EXCEPT']);
+const RESTRICTED_AUDIENCES: ReadonlySet<string> = new Set(['PRIVATE', 'ONLY', 'EXCEPT', 'CLOSE', 'BLOOD']);
 
 export type ReportedEntity = {
   readonly type: string;

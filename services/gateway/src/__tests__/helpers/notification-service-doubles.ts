@@ -28,6 +28,7 @@
 import { jest } from '@jest/globals';
 
 const PRISMA_SURFACE: Readonly<Record<string, readonly string[]>> = {
+  communityMember: ['findMany'],
   conversation: ['findUnique'],
   friendRequest: ['findMany'],
   message: ['findUnique'],
@@ -43,15 +44,16 @@ const PRISMA_SURFACE: Readonly<Record<string, readonly string[]>> = {
     'updateMany',
   ],
   notificationPreference: ['findUnique'],
-  participant: ['count', 'findUnique'],
+  participant: ['count', 'findMany', 'findUnique'],
   postComment: ['findMany'],
   postMedia: ['findFirst'],
   postReaction: ['findMany'],
   pushToken: ['deleteMany', 'findMany', 'findUnique', 'update'],
-  user: ['findMany', 'findUnique'],
+  user: ['findFirst', 'findMany', 'findUnique'],
   userConversationPreferences: ['findMany'],
   userEventSeq: ['findUnique', 'upsert'],
   userPreferences: ['findUnique'],
+  userRelation: ['findMany', 'findUnique'],
 };
 
 export type PrismaModelDouble = Record<string, jest.Mock>;

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { conversationStore } from '@/lib/conversation-store';
+import { discardSend, type DiscardOutcome } from '@/lib/send/discard-send';
 import { performSend, retrySend, type Draft } from '@/lib/send/perform-send';
 import { outboxStore } from '@/lib/send/outbox-store';
 import { notePublicationParticipation } from '@/lib/view/publication-participation';
@@ -329,6 +330,9 @@ function isRefusal(error: unknown): boolean {
  * depuis la Lentille) ne change pas de clé : `conversation.data.id === id`,
  * aucune requête de plus.
  */
+/** #12992 — le fil montré scelle les clairs forgés après l'activation du bout en bout (`lib/view/use-sealed-thread.ts`). */
+export { useSealedThread } from '@/lib/view/use-sealed-thread';
+
 export function useThreadData(id: string) {
   const conversation = useConversation(id);
   const conversationId = conversation.data?.id ?? id;
@@ -455,6 +459,11 @@ export function retrySendAction(params: {
     clientMessageId,
     deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online },
   });
+}
+
+/** `discardSendAction` (#12632) — même motif : lié à `appQueryClient` et à `outboxStore`. `null` : rien à abandonner. */
+export function discardSendAction(params: { readonly conversationId: string; readonly clientMessageId: string }): DiscardOutcome | null {
+  return discardSend({ ...params, deps: { queryClient: appQueryClient, outbox: outboxStore } });
 }
 
 /**

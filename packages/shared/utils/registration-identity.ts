@@ -30,7 +30,8 @@
  * @module utils/registration-identity
  */
 
-import { usernameMaxLength, usernameMinLength } from '../types/api-schemas/auth.js';
+import { nameMinLength, usernameMaxLength, usernameMinLength } from '../types/api-schemas/auth.js';
+import { visibleNameLength } from './visible-name-length.js';
 
 /**
  * Capitalise un nom en respectant les composés — la MÊME fonction que
@@ -73,13 +74,27 @@ export type DerivedNames = {
  *
  * Les espaces multiples sont réduits AVANT le découpage : « Ana   María » a
  * deux mots, pas quatre dont deux vides.
+ *
+ * **Un mot plus court qu'un nom (`nameMinLength`) ne se stocke pas seul**
+ * (#13825) : il se fond dans son voisin. « Jo B » rend le prénom « Jo B »,
+ * « J Dupont » (ancien client) le prénom « J Dupont », « Jean P Dupont » le
+ * prénom « Jean P » et le nom « Dupont » — jamais un prénom ni un nom d'un
+ * seul caractère, que la passerelle refuse à toute saisie. Seul un nom affiché
+ * d'un seul caractère en tout rendrait un prénom d'un caractère, et la borne
+ * du nom affiché le refuse en amont.
  */
 export function derivedNames(displayName: string): DerivedNames {
   const mots = displayName.trim().split(/\s+/).filter((mot) => mot !== '');
+  const groupes = mots.reduce<readonly string[]>((acc, mot) => {
+    const precedent = acc[acc.length - 1];
+    const seFond = precedent !== undefined
+      && (visibleNameLength(mot) < nameMinLength || visibleNameLength(precedent) < nameMinLength);
+    return seFond ? [...acc.slice(0, -1), `${precedent} ${mot}`] : [...acc, mot];
+  }, []);
 
   return {
-    firstName: capitalizeName(mots[0] ?? ''),
-    lastName: capitalizeName(mots.slice(1).join(' ')),
+    firstName: capitalizeName(groupes[0] ?? ''),
+    lastName: capitalizeName(groupes.slice(1).join(' ')),
   };
 }
 
@@ -180,16 +195,18 @@ export function slugDAdresse(email: string | undefined): string {
  * Les CHIFFRES séparent comme `.`, `-` et `_` (#7912) : le nom part au serveur,
  * dont `personNamePatternSource` refuse tout chiffre — `jean42@…` rend `Jean`.
  *
+ * Un mot plus court que `nameMinLength` ne passe pas (#13825) : l'initiale de
+ * `j.dupont@…` deviendrait un prénom d'une lettre, que la passerelle refuse à
+ * toute saisie. `j.dupont@…` rend `Dupont`. La borne est celle d'un NOM, pas
+ * celle d'un pseudo : `al@…` rend encore `Al`.
+ *
  * Rend `''` — jamais un nom inventé — quand rien ne se tire de l'adresse.
  * L'appelant DEMANDE alors, il ne fabrique pas.
  */
 export function displayNameDepuisEmail(email: string | undefined): string {
-  const slug = slugDAdresse(email);
-  if (slug.length < PSEUDO_MIN) return '';
-
-  return slug
+  return slugDAdresse(email)
     .split(/[^a-z]+/)
-    .filter((mot) => mot !== '')
+    .filter((mot) => mot.length >= nameMinLength)
     .map((mot) => capitalizeName(mot))
     .join(' ');
 }

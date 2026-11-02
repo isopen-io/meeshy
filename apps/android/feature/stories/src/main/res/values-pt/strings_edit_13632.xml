@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_edit_unavailable">Não é possível reabrir esta história</string>
+    <string name="story_edit_one_slide">Uma história publicada tem um único slide: remova os outros para salvá-la</string>
+    <string name="story_edit_no_add_slide">Uma story publicada tem apenas um slide: não é possível adicionar outro</string>
+</resources>

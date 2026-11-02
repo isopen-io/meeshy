@@ -269,7 +269,7 @@ Chunk: `/tmp/chunks/chunk-03.txt` (34 files). Covers Main feature **Components**
 
 ---
 
-## apps/ios/Meeshy/Features/Main/Models/StoryModels.swift
+## apps/ios/Meeshy/Features/Stories/Models/StoryModels.swift
 
 **Purpose:** Documentation-only shim — `StoryEffects`, `StoryItem`, `StoryGroup`, `StatusEntry`, `ReplyContext`, `ReactionRequest`, `RepostRequest`, `StatusCreateRequest`, `StoryViewRequest`, and conversions (`[APIPost].toStoryGroups()`, `APIPost.toStatusEntry()`) all in `MeeshySDK/Models/StoryModels.swift`.
 

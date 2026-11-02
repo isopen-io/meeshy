@@ -50,7 +50,7 @@
 |------|------------|
 | `apps/ios/Meeshy/Features/Main/Navigation/Router.swift` | + 1 case `storyNotificationTarget(storyId, intent, context)` |
 | `apps/ios/Meeshy/Features/Main/Views/RootView.swift` | + destination handler ; + mapping `.storyReaction`/`.postComment` (postType==STORY) → push nouvelle route |
-| `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` | + paramètre `initialAction: InitialAction? = nil` ; déclenche `showCommentsOverlay` ou `showViewersSheet` au `onAppear` |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` | + paramètre `initialAction: InitialAction? = nil` ; déclenche `showCommentsOverlay` ou `showViewersSheet` au `onAppear` |
 | `apps/ios/Meeshy/Features/Stories/Models/StoryViewerRequest.swift` (à localiser) | + `initialAction: StoryViewerInitialAction?` |
 | `packages/MeeshySDK/Sources/MeeshySDK/Services/StoryService.swift` | + `func cachedPost(id: String) -> APIPost?` ; + `func fetchPost(id: String) async throws -> APIPost` |
 | `packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift` | + extension `Color.luminance` |
@@ -1510,7 +1510,7 @@ git commit -m "feat(ios): add initialAction to StoryViewerRequest for notificati
 ## Task F.2 — Modifier StoryViewerView pour réagir à initialAction
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift`
 
 - [ ] **Step 1 : Ajouter le paramètre + le déclenchement**
 
@@ -1568,7 +1568,7 @@ Si le param `initialAction` a une valeur par défaut `nil`, aucun changement req
 
 ```bash
 ./apps/ios/meeshy.sh build
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
 git commit -m "feat(ios): support initialAction in StoryViewerView (auto-open comments/viewers)"
 ```
 

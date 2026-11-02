@@ -1,3 +1,4 @@
+import { remainingStoryDuration } from '@meeshy/shared/utils/story-limits';
 import type { StudioPage } from './studio-page';
 import type { StudioTiming } from './studio-text';
 
@@ -129,4 +130,27 @@ export function draggedTiming(timing: StudioTiming, grip: StudioTrackGrip, delta
   }
   if (grip === 'start') return { start: round(Math.max(0, Math.min(timing.start + step, timing.end - minimum))), end: timing.end };
   return { start: timing.start, end: round(Math.min(total, Math.max(timing.end + step, timing.start + minimum))) };
+}
+
+/**
+ * **LES DEUX HEURES DE LA STORY ENTIÈRE** (#13590) — les durées des pages sont
+ * bornées dans l'ordre : chacune ne prend que ce qu'il reste après les
+ * précédentes. Aucune interface n'en pose plus de quelques secondes aujourd'hui ;
+ * ce plafond tient le document lui-même, quel que soit le chemin qui l'a rempli
+ * (réouverture d'une publication, import). Les pages statiques comptent pour
+ * rien, et le tableau rendu est le MÊME quand rien ne dépasse.
+ */
+export function pagesWithinStoryDuration(pages: readonly StudioPage[]): readonly StudioPage[] {
+  let used = 0;
+  let changed = false;
+  const bounded = pages.map((page) => {
+    if (page.duration === undefined) return page;
+    const allowed = remainingStoryDuration(used);
+    const duration = Math.min(page.duration, allowed);
+    used += duration;
+    if (duration === page.duration) return page;
+    changed = true;
+    return { ...page, duration };
+  });
+  return changed ? bounded : pages;
 }

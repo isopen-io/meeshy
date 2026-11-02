@@ -13,6 +13,7 @@ import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.provider.Settings;
@@ -20,11 +21,13 @@ import android.util.Rational;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.GeolocationPermissions;
+import android.webkit.MimeTypeMap;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
+import androidx.activity.EdgeToEdge;
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultLauncher;
@@ -269,12 +272,24 @@ public class MainActivity extends BridgeActivity {
         String route = savedInstanceState == null ? null : savedInstanceState.getString(ShellRoute.KEY);
         if (route != null) setIntent(new Intent(Intent.ACTION_VIEW, Uri.parse(route)));
         super.onCreate(savedInstanceState);
+        // #12447 — bord a bord a toute version, comme Android 15 l'impose :
+        // une seule geometrie d'ecran, et plus d'API de barres obsoletes.
+        // APRES `super.onCreate` : `enable` installe la fenetre, et avant le
+        // `setTheme(AppTheme_NoActionBar)` de `BridgeActivity` elle garderait
+        // la barre d'action du theme de l'application.
+        EdgeToEdge.enable(this);
         // #10375 — les touches de volume reglent les medias, comme dans Chrome,
         // et non la sonnerie ; un appel les rend a la voix (`MeeshyCallPlugin`).
         setVolumeControlStream(VolumeStreamRules.stream(false));
         suivreTailleDuTexte(getResources().getConfiguration());
+        MessageNotificationChannel.ensure(ShellLocale.wrap(this));
         SilentNotificationChannel.ensure(ShellLocale.wrap(this));
+        GameNotificationChannel.ensure(ShellLocale.wrap(this));
         photoPicker = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::photosPicked);
+        // #12744 — Capacitor garde chaque prise de l'appareil photo ; la nouvelle
+        // WebView ne tient plus les precedentes, la creation les balaie.
+        new Thread(() -> CaptureSweepRules.sweep(getExternalFilesDir(Environment.DIRECTORY_PICTURES), System.currentTimeMillis()),
+            "MeeshyCaptureSweep").start();
         // #8547 — sans `poster`, le web montre le fond du `<video>` jusqu'a sa
         // premiere image ; la WebView dessine son icone « lecture » grise si
         // son client ne fournit pas d'apercu. On garde le client de Capacitor
@@ -293,7 +308,8 @@ public class MainActivity extends BridgeActivity {
             @Override
             @SuppressLint("NewApi")
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> callback, FileChooserParams params) {
-                String type = PhotoPickRules.pickerType(Build.VERSION.SDK_INT, params.getAcceptTypes(), params.isCaptureEnabled());
+                String type = PhotoPickRules.pickerType(Build.VERSION.SDK_INT, params.getAcceptTypes(), params.isCaptureEnabled(),
+                    MimeTypeMap.getSingleton()::getMimeTypeFromExtension);
                 if (type == null) return super.onShowFileChooser(webView, callback, params);
                 Intent pick = new Intent(MediaStore.ACTION_PICK_IMAGES);
                 if (!PhotoPickRules.BOTH.equals(type)) pick.setType(type);

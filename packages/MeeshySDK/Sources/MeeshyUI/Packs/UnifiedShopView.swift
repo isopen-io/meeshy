@@ -112,16 +112,21 @@ public struct UnifiedShopView: View {
     private let focusedSlug: String?
     private let language: String
     private let usageText: ((FrameUsage) -> String)?
+    private let rankName: ((GloryRank) -> String)?
 
     /// `language` nomme les packs dans la langue du lecteur ; `usageText` traduit la loi d'usage
     /// d'un cadre (« Rang Ambassadeur uniquement ») — l'app la possède, la vitrine l'affiche (#10711).
+    /// `rankName` nomme un rang du jeu pour « ce qui reste à débloquer » (#11306) ; sans lui, la ligne dit
+    /// la Gloire manquante sans le rang.
     @MainActor
     public init(initialDomain: PackDomain? = nil, domains: [PackDomain] = PackDomain.allCases,
                 focusedSlug: String? = nil, language: String = "fr",
-                usageText: ((FrameUsage) -> String)? = nil, store: PackShopStore? = nil) {
+                usageText: ((FrameUsage) -> String)? = nil, rankName: ((GloryRank) -> String)? = nil,
+                store: PackShopStore? = nil) {
         self.focusedSlug = focusedSlug
         self.language = language
         self.usageText = usageText
+        self.rankName = rankName
         let offered = domains.filter { $0 != .unknown }
         self.domains = offered
         _store = StateObject(wrappedValue: store ?? PackShopStore())
@@ -220,7 +225,7 @@ public struct UnifiedShopView: View {
                 .foregroundStyle(.secondary)
         } else {
             let domain = selected
-            PackShopView(rows: store.state.packs(in: domain)?.map { Self.row($0, language: language, usageText: usageText) },
+            PackShopView(rows: store.state.packs(in: domain)?.map { Self.row($0, language: language, usageText: usageText, rankName: rankName) },
                          pending: pendingSlugs(in: domain),
                          showsFailure: store.state.failure != nil,
                          failureText: failureText,
@@ -238,7 +243,8 @@ public struct UnifiedShopView: View {
     /// Un pack de la vitrine en rangée de Boutique : nommé dans la langue du lecteur, avec la loi
     /// d'usage d'un cadre quand l'app sait la dire.
     public static func row(_ pack: ShopPack, language: String = "fr",
-                           usageText: ((FrameUsage) -> String)? = nil) -> PackRow {
+                           usageText: ((FrameUsage) -> String)? = nil,
+                           rankName: ((GloryRank) -> String)? = nil) -> PackRow {
         let cover: PackCover
         if MeeStickerCatalog.cast(forPackSlug: pack.slug) != nil {
             cover = .mee(slug: pack.slug)
@@ -251,7 +257,10 @@ public struct UnifiedShopView: View {
                        description: pack.localizedDescription(language: language),
                        installed: pack.installed, removable: pack.removable, cover: cover,
                        usageText: pack.usage.flatMap { usage in usageText.map { $0(usage) } },
-                       price: pack.price, owned: pack.isOwned)
+                       price: pack.price, owned: pack.isOwned, locked: pack.isLocked,
+                       unlockText: pack.requirementPreview.flatMap {
+                           PackUnlockCopy.line($0, language: language, rankName: rankName)
+                       })
     }
 
     /// Le nom d'un domaine, tel que les puces et les réglages le disent.

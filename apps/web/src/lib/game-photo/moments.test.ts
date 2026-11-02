@@ -130,6 +130,13 @@ describe('chaque moment porte son identité, son emblème et ses mots', () => {
     expect(dayMoment('2026-13-01')).toBeNull();
     expect(dayMoment('hier')).toBeNull();
   });
+
+  test('une clé en forme de date qui n’en est pas une (`2026-02-30`, `2026-02-29`) n’a pas de moment : `null`, jamais une levée', () => {
+    expect(() => dayMoment('2026-02-30')).not.toThrow();
+    expect(dayMoment('2026-02-30')).toBeNull();
+    expect(dayMoment('2026-02-29')).toBeNull();
+    expect(dayMoment('2028-02-29')?.kicker).toBe('Réalisation du jour · Jour 60');
+  });
 });
 
 describe('momentPlate — ce que la PLAQUE grave quand le cadre lui réserve `plate.1` (L14, #10167)', () => {

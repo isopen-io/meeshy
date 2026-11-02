@@ -47,10 +47,13 @@ public enum LocationPrecision: String, Codable, CaseIterable, Sendable {
     ///
     /// Arrondir les coordonnées ne suffit pas : envoyer
     /// « 12 rue de la Paix, Paris » avec une position à ±10 km annulerait
-    /// l'arrondi. Aux deux paliers grossiers, le nom et l'adresse sont donc
+    /// l'arrondi. À TOUT palier non exact, le nom et l'adresse sont donc
     /// REMPLACÉS par le composant géographique de granularité correspondante,
     /// et la catégorie POI est vidée — « restaurant » à ±10 km reste une fuite
-    /// sur ce que fait la personne.
+    /// sur ce que fait la personne. Cela vaut dès `.around` (#13320) : une rue
+    /// ou un nom de commerce situe le point à quelques mètres et annulerait
+    /// l'arrondi à ~100 m. Seul `.exact` transmet le point choisi tel quel.
+    /// Miroir Kotlin : `LocationPrecision.coarsen` (`apps/android/core/model`).
     ///
     /// Quand aucun composant n'est disponible (plein océan, désert), le
     /// résultat ne porte que les coordonnées arrondies. C'est une dégradation
@@ -67,12 +70,7 @@ public enum LocationPrecision: String, Codable, CaseIterable, Sendable {
             // garde ci-dessus a déjà rendu. Le cas reste requis par
             // l'exhaustivité du `switch`.
             return place
-        case .around:
-            return SharedPlace(
-                latitude: latitude, longitude: longitude,
-                name: place.name, address: place.address, category: place.category
-            )
-        case .neighborhood:
+        case .around, .neighborhood:
             let name = names.subLocality ?? names.locality
             return SharedPlace(
                 latitude: latitude, longitude: longitude,

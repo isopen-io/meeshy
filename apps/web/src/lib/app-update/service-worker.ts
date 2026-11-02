@@ -53,6 +53,9 @@ import { SW_UPDATE_AVAILABLE_EVENT } from './event';
 
 export const SW_SCRIPT_URL = '/sw.js';
 
+/** La révision servie par le conteneur, écrite par `apps/web/Dockerfile`. */
+export const BUILD_INFO_URL = '/build-info.json';
+
 /* RÉEXPORTÉ pour que ce module reste l'API lisible du legacy ; il VIT dans
    `event.ts`, sans dépendance — voir son doc-comment (chunks séparés). */
 export { SW_UPDATE_AVAILABLE_EVENT };
@@ -128,6 +131,10 @@ export type AppUpdateEnvironment = {
   readonly setInterval: (handler: () => void, ms: number) => void;
   readonly setTimeout: (handler: () => void, ms: number) => void;
   readonly onError: (error: unknown) => void;
+  /** La révision gravée dans CE bundle au build (`VCS_REF`) — `null` hors CI. */
+  readonly bundleRevision: string | null;
+  /** La révision que le serveur sert (`/build-info.json`), `null` si illisible. */
+  readonly servedRevision: () => Promise<string | null>;
 };
 
 export type AppUpdateController = {
@@ -184,13 +191,39 @@ export function createAppUpdateController(env: AppUpdateEnvironment): AppUpdateC
     env.reload();
   };
 
+  /**
+   * LA RÉVISION SERVIE CONTRE CELLE EN CACHE (#12654). Le cycle du worker ne
+   * voit une version neuve que si `sw.js` a changé ET qu'il a su l'installer ;
+   * un worker bloqué, un précache incomplet ou une installation ratée laissaient
+   * l'ancienne application servie sans que rien ne le dise. `/build-info.json`
+   * porte la révision du conteneur : si elle diffère de celle de ce bundle et
+   * qu'aucun worker neuf n'est en route (qui annoncera lui-même), la bannière
+   * s'affiche — une fois par révision servie. Son clic purge et recharge.
+   */
+  let announcedRevision: string | null = null;
+  const compareRevisions = async (owner: RegistrationLike): Promise<void> => {
+    if (env.bundleRevision === null) return;
+    let served: string | null;
+    try {
+      served = await env.servedRevision();
+    } catch {
+      return;
+    }
+    if (served === null || served === env.bundleRevision || served === announcedRevision) return;
+    if (owner.installing !== null || owner.waiting !== null) return;
+    announcedRevision = served;
+    announce(env, owner);
+  };
+
   const check = async (): Promise<void> => {
     if (registration === null) return;
+    const owner = registration;
     try {
-      await registration.update();
+      await owner.update();
     } catch (error) {
       env.onError(error);
     }
+    await compareRevisions(owner);
   };
 
   const watchInstalling = (worker: WorkerLike, owner: RegistrationLike): void => {
@@ -304,7 +337,23 @@ export function browserAppUpdateEnvironment(): AppUpdateEnvironment {
     onError: (error) => {
       console.warn('[app-update]', error);
     },
+    bundleRevision: __BUILD_COMMIT__,
+    servedRevision: readServedRevision,
   };
+}
+
+/** `/build-info.json`, jamais depuis un cache — `{ build: { commit } }` (Dockerfile). */
+export async function readServedRevision(): Promise<string | null> {
+  const response = await fetch(BUILD_INFO_URL, { cache: 'no-store' });
+  if (!response.ok) return null;
+  return commitOf(await response.json());
+}
+
+export function commitOf(body: unknown): string | null {
+  if (typeof body !== 'object' || body === null || !('build' in body)) return null;
+  const build = body.build;
+  if (typeof build !== 'object' || build === null || !('commit' in build)) return null;
+  return typeof build.commit === 'string' && build.commit !== '' ? build.commit : null;
 }
 
 let shared: AppUpdateController | null = null;

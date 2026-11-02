@@ -2,7 +2,7 @@ package me.meeshy.sdk.model
 
 /**
  * Les quatre onglets de « Mes stories » — port de `MyStoriesTab` / `MyStoriesTabResolver`
- * (apps/ios/Meeshy/Features/Main/Views/MyStoriesTab.swift). Chaque onglet reste
+ * (apps/ios/Meeshy/Features/Stories/Views/MyStoriesTab.swift). Chaque onglet reste
  * complètement distinct : Publiées = stories actives, File = travail réseau (envois
  * actifs ou échecs), Brouillons = contenu local jamais envoyé, Archive = stories expirées.
  */

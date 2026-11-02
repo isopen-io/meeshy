@@ -28,7 +28,8 @@ public object OutboxLocalTargets {
      *   locally; the message's OWN local id is the row key (`cid_`), carried in the body as
      *   `clientMessageId`, and that is exactly what the gateway is meant to receive;
      * - `PUBLISH_STORY` — its `pending_<uuid>` target is only a coalescing/optimism handle, the
-     *   route (`POST /posts`) never reads it;
+     *   route (`POST /posts`) never reads it; `CREATE_POST` likewise — its `cmid_` target only names
+     *   the post until [OutboxRepository.resolveLocalId] gives it the server's id;
      * - `UPLOAD_MEDIA`, `UPDATE_PROFILE`, `UPDATE_SETTINGS`, `UPDATE_PRIVACY_SETTINGS` — their
      *   routes address the caller (the profile and preference endpoints), not the target.
      *
@@ -53,6 +54,9 @@ public object OutboxLocalTargets {
         OutboxKind.UNBLOCK_USER,
         OutboxKind.SEND_FRIEND_REQUEST,
         OutboxKind.RESPOND_FRIEND_REQUEST,
+        OutboxKind.CREATE_COMMENT,
+        OutboxKind.CONSUME_AFTER_READ,
+        OutboxKind.CONSUME_VIEW_ONCE,
     ).map { it.name }.toSet()
 
     /** Whether [kind] sends its row's `targetId` to the server as a resource key. */

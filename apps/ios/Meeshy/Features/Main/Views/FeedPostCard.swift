@@ -715,7 +715,7 @@ struct FeedPostCard: View {
                     onRepost: onRepost,
                     onQuote: onQuote,
                     onBookmark: onBookmark,
-                    onShare: onShare
+                    sendSubject: .publication(post)
                 )
                 .equatable()
             }
@@ -779,7 +779,7 @@ struct FeedPostCard: View {
                     }, onOpenReel: { reel, reels in
                         ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil }
                     }))
-                }
+                }, dependencies: .live
             )
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
@@ -831,6 +831,7 @@ struct FeedPostCard: View {
     var canSaveMedia: Bool {
         PostSaveAction.route(for: post, coordinator: mediaSaveCoordinator) != .unavailable
     }
+    var imagerAction: (() -> Void)? { PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator) }
 
 
     // MARK: - Repost View

@@ -40,7 +40,7 @@ class StarredMessagesSyncTest {
         source.message = msg(translations = listOf(ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour")))
         source.conversation = ApiConversation(id = "c1")
 
-        sync.onStarred(MessageStarredEvent("m1", "c1", true, "2026-10-01T10:00:00.000Z"))
+        sync.onStarred(MessageStarredEvent("m1", "c1", true, "2026-10-01T10:00:00.000Z"), null)
 
         val star = store.starred.value.items.single()
         assertThat(star.contentPreview).isEqualTo("Bonjour")
@@ -52,7 +52,7 @@ class StarredMessagesSyncTest {
     fun `a message absent from the cache composes no snapshot`() = runTest {
         val (store, _, sync) = fixture()
 
-        sync.onStarred(MessageStarredEvent("m1", "c1", true, null))
+        sync.onStarred(MessageStarredEvent("m1", "c1", true, null), null)
 
         assertThat(store.starred.value.items).isEmpty()
     }
@@ -63,7 +63,7 @@ class StarredMessagesSyncTest {
         val (store, source, sync) = fixture(InMemoryStarredMessagesStore(StarredMessages(listOf(existing))))
         source.message = msg(content = "other")
 
-        sync.onStarred(MessageStarredEvent("m1", "c1", true, null))
+        sync.onStarred(MessageStarredEvent("m1", "c1", true, null), null)
 
         assertThat(store.starred.value.items.single().contentPreview).isEqualTo("mine")
     }
@@ -73,7 +73,7 @@ class StarredMessagesSyncTest {
         val star = StarredMessage(messageId = "m1", conversationId = "c1")
         val (store, _, sync) = fixture(InMemoryStarredMessagesStore(StarredMessages(listOf(star, star.copy(messageId = "m2")))))
 
-        sync.onStarred(MessageStarredEvent("m1", "c1", false, null))
+        sync.onStarred(MessageStarredEvent("m1", "c1", false, null), null)
         sync.onGone("m2")
 
         assertThat(store.starred.value.items).isEmpty()
@@ -84,8 +84,8 @@ class StarredMessagesSyncTest {
         val star = StarredMessage(messageId = "m1", conversationId = "c1", contentPreview = "old")
         val (store, _, sync) = fixture(InMemoryStarredMessagesStore(StarredMessages(listOf(star))))
 
-        sync.onEdited(msg("m1", "new"))
-        sync.onEdited(msg("m9", "ignored"))
+        sync.onEdited(msg("m1", "new"), null)
+        sync.onEdited(msg("m9", "ignored"), null)
 
         assertThat(store.starred.value.items.map { it.contentPreview }).containsExactly("new")
     }

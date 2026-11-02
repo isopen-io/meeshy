@@ -130,9 +130,11 @@ export const shareLinkStatsJsonSchema = {
 /**
  * LA LISTE COMPLÈTE DES ARRIVÉES D'UN LIEN (#7813) — `GET
  * /api/v1/links/:linkId/arrivals?cursor=&limit=`, mêmes lecteurs que les
- * statistiques. Une arrivée n'y porte QUE ce que la ligne affiche : nom, badge
- * « sans compte », pays, langue et date. Ni identifiant, ni visage, ni
- * présence : la liste se lit, elle n'ouvre aucun profil.
+ * statistiques. Une arrivée n'y porte QUE ce que la ligne affiche : nom, visage,
+ * badge « sans compte », pays, langue et date. Ni identifiant ni présence : la
+ * liste se lit, elle n'ouvre aucun profil. Le visage (`avatar`, #12571) est AJOUTÉ
+ * à la page — additif, un ancien client l'ignore — pour que la liste complète
+ * montre la photo que les arrivées récentes montraient déjà, aux mêmes lecteurs.
  *
  * Le curseur est opaque et stable (`joinedAt` puis identifiant, décroissants) :
  * une arrivée nouvelle pendant le défilement ne décale aucune page.
@@ -142,6 +144,8 @@ export const SHARE_LINK_ARRIVALS_PAGE_MAX = 100;
 
 export const shareLinkArrivalEntrySchema = z.object({
   displayName: z.string(),
+  /** Une référence de média (`resolveParticipantAvatar`), ou `null` sans photo. */
+  avatar: z.string().nullable(),
   isAnonymous: z.boolean(),
   /** ISO 3166-1 alpha-2, majuscules — `null` si inconnu. */
   country: z.string().nullable(),
@@ -169,9 +173,10 @@ export const shareLinkArrivalsPageJsonSchema = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['displayName', 'isAnonymous', 'country', 'language', 'joinedAt'],
+        required: ['displayName', 'avatar', 'isAnonymous', 'country', 'language', 'joinedAt'],
         properties: {
           displayName: { type: 'string' },
+          avatar: { type: 'string', nullable: true, description: 'Media reference of the participant picture, null without one' },
           isAnonymous: { type: 'boolean' },
           country: { type: 'string', nullable: true, description: 'ISO 3166-1 alpha-2' },
           language: { type: 'string', nullable: true },
