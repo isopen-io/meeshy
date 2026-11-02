@@ -145,4 +145,5 @@ internal fun lastMessagePreviewLabels(): LastMessagePreviewLabels =
         hidden = stringResource(R.string.conversations_preview_hidden),
         viewOnce = stringResource(R.string.conversations_preview_view_once),
         encrypted = stringResource(R.string.conversations_preview_end_to_end),
+        sticker = stringResource(R.string.conversations_preview_sticker),
     ).withMediaKinds(rememberMediaKindStrings())
