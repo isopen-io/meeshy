@@ -90,6 +90,7 @@
     <string name="conversations_preview_hidden">Mensaje oculto</string>
     <string name="conversations_preview_loading">Cargando…</string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
+    <string name="conversations_preview_sticker">Sticker</string>
     <string name="conversations_preview_typing">%1$s está escribiendo</string>
     <string name="conversations_preview_view_once">Mensaje de una sola vista</string>
     <string name="conversations_preview_you">Tú</string>

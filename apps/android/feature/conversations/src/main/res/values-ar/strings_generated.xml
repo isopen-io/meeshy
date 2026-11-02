@@ -90,6 +90,7 @@
     <string name="conversations_preview_hidden">رسالة مخفية</string>
     <string name="conversations_preview_loading">جارٍ التحميل…</string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
+    <string name="conversations_preview_sticker">ملصق</string>
     <string name="conversations_preview_typing">%1$s يكتب</string>
     <string name="conversations_preview_view_once">رسالة للعرض مرة واحدة</string>
     <string name="conversations_preview_you">أنت</string>

@@ -397,6 +397,7 @@ struct ComposerPublishMenu<Etiquette: View>: View {
             label()
         }
         .menuIndicator(.hidden)
+        .staysOpenWhileChecking()
     }
 
     @ViewBuilder
@@ -440,6 +441,19 @@ struct ComposerPublishMenu<Etiquette: View>: View {
     /// disposition. Toucher une entrée déjà cochée la réarme, rien d'autre.
     private func choosing(_ choice: ComposerPublishChoice, isChecked: Bool) -> Binding<Bool> {
         Binding(get: { isChecked }, set: { _ in onChoose(choice) })
+    }
+}
+
+private extension View {
+    /// Les formats se cochent menu OUVERT, comme Android : une coche ne
+    /// referme pas le menu, l'auteur en coche plusieurs d'un seul déploiement.
+    @ViewBuilder
+    func staysOpenWhileChecking() -> some View {
+        if #available(iOS 16.4, *) {
+            menuActionDismissBehavior(.disabled)
+        } else {
+            self
+        }
     }
 }
 
@@ -534,6 +548,35 @@ nonisolated struct ComposerSeveralFormats: Equatable {
             document: canal { if case .document = $0 { return true } else { return false } },
             refused: canal { $0 == .unsupported }.flatMap(\.formats)
         )
+    }
+
+    /// **Ce que le geste laisse derrière lui** : tout est parti ⇒ le compositeur
+    /// se ferme ; sinon il reste, et seuls les formats qui ne sont pas partis
+    /// restent cochés — le prochain appui ne republie pas ce qui l'est déjà.
+    enum Outcome: Equatable {
+        case published
+        case remains(ComposerPublishChoice)
+    }
+
+    static func outcome(of choice: ComposerPublishChoice, refused: [ComposerFormat]) -> Outcome {
+        ComposerPublishChoice(formats: refused, layout: choice.layout).map(Outcome.remains) ?? .published
+    }
+
+    /// **L'ordre d'un geste** : les publications DOCUMENT d'abord, une à une et
+    /// attendues, pendant que le compositeur est encore là pour garder ce
+    /// qu'elles refusent ; puis celles qui partent sur-le-champ (la scène,
+    /// l'atelier), dont la porte peut refermer le compositeur. `sendNow` reçoit
+    /// ce qui est déjà refusé, et rend ce qu'il refuse à son tour.
+    @MainActor
+    static func run(_ plan: ComposerSeveralFormats,
+                    sendDocument: @MainActor (ComposerPublishChoice) async -> Bool,
+                    sendNow: @MainActor ([ComposerFormat]) -> [ComposerFormat]) async -> [ComposerFormat] {
+        var refuses = plan.refused
+        for leg in plan.document {
+            let parti = await sendDocument(leg)
+            if !parti { refuses += leg.formats }
+        }
+        return refuses + sendNow(refuses)
     }
 
     /// **Ce que publie UNE remise de l'atelier** : la file du geste quand elle

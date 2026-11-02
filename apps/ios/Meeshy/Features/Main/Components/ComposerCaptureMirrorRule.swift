@@ -74,6 +74,8 @@ nonisolated enum ComposerCaptureHorizonRule {
 final class ComposerCaptureHorizon {
     nonisolated deinit {}
 
+    nonisolated deinit {}
+
     private var coordinator: AnyObject?
     private var lastAngle: CGFloat = ComposerCaptureMirrorRule.portraitAngle
     private var readsDeviceOrientation = false

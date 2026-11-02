@@ -48,6 +48,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import me.meeshy.feature.profile.R
+import me.meeshy.sdk.model.relation.ProfileCircle
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.profile.ProfileActionPlan
@@ -168,6 +169,7 @@ internal fun ProfileSheetLoadedContent(
                                     accent = accent,
                                     plan = plan,
                                     isOpeningConversation = actionsState.isOpeningConversation,
+                                    circle = actionsState.circle?.takeIf { actionsState.userId == profile.id },
                                     isInteractionDisabled = isBlockedByMe || state.isBlockedByTarget,
                                     environment = environment,
                                     actions = actions,
@@ -233,6 +235,7 @@ private fun ProfileSheetTabContent(
     accent: Color,
     plan: ProfileActionPlan?,
     isOpeningConversation: Boolean,
+    circle: ProfileCircle?,
     isInteractionDisabled: Boolean,
     environment: ProfileSheetEnvironment,
     actions: ProfileActionCallbacks,
@@ -244,7 +247,7 @@ private fun ProfileSheetTabContent(
         ProfileTab.DETAILS -> ProfileDetailsTab(
             details = details,
             accent = accent,
-            actions = profileActionsSlot(plan, state.isSelf, header.displayName, isOpeningConversation, actions),
+            actions = profileActionsSlot(plan, state.isSelf, header.displayName, isOpeningConversation, actions, circle),
         )
     }
 }
@@ -256,6 +259,7 @@ private fun profileActionsSlot(
     displayName: String,
     isOpeningConversation: Boolean,
     callbacks: ProfileActionCallbacks,
+    circle: ProfileCircle?,
 ): (@Composable () -> Unit)? {
     val shown = plan?.takeIf { !isSelf && it.layout != ProfileLayout.CLOSED } ?: return null
     return {
@@ -264,6 +268,7 @@ private fun profileActionsSlot(
             displayName = displayName,
             isOpeningConversation = isOpeningConversation,
             callbacks = callbacks,
+            circle = circle,
         )
     }
 }

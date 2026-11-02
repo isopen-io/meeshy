@@ -102,6 +102,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.StoryRepostAudience
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
@@ -116,6 +117,7 @@ import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.story.canvas.SceneLookChain
 import me.meeshy.ui.component.EmojiQuickStrip
+import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.LanguageQuickOption
 import me.meeshy.ui.component.LanguageQuickStrip
 import me.meeshy.ui.component.audio.AudioTrackSurface
@@ -136,7 +138,6 @@ import me.meeshy.ui.theme.hexColor
 @Composable
 fun StoryViewerScreen(
     onClose: () -> Unit,
-    onRepost: (String) -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
     onEditStory: ((String) -> Unit)? = null,
     /** « Composer » (#13849, iOS `message.compose.title`) : une scène NEUVE semée de celle de la story, pour toute story. */
@@ -190,6 +191,8 @@ fun StoryViewerScreen(
     var flightSerial by remember { mutableIntStateOf(0) }
     var heartBouncePulse by remember { mutableIntStateOf(0) }
     var boxOriginInRoot by remember { mutableStateOf(Offset.Zero) }
+    var headerHeightPx by remember { mutableIntStateOf(0) }
+    var composerHeightPx by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     val meeshyHaptics = rememberMeeshyHaptics()
     // Le doigt déplace la carte en phase de DESSIN (graphicsLayer) : aucune recomposition
@@ -211,6 +214,7 @@ fun StoryViewerScreen(
         canReply = StoryReplyRules.canReply(state.isOwnStory, state.currentStoryId, state.authorUserId),
         canCompose = onComposeStory != null && state.canCompose,
         commentCount = commentCount,
+        isRepublishable = StoryRepostAudience.isRepublishable(currentItem?.visibility),
     )
     val cover = StoryViewerCover(
         sheet = showViewers || showComments || showReply || showSendTo || state.languageExplorer != null,
@@ -229,6 +233,12 @@ fun StoryViewerScreen(
             messageText = shareContext.getString(R.string.share_story_text, state.authorName, ShareCards.storyUrl(storyId)),
             isPublic = currentItem?.visibility.equals(PUBLIC_STORY_VISIBILITY, ignoreCase = true),
         )
+    }
+
+    // « Republier » (#14443) : un geste publie, comme le rail iOS ; le lecteur reste ouvert et dit l'issue.
+    fun repost() {
+        meeshyHaptics.light()
+        viewModel.repostCurrentStory()
     }
 
     // « Envoyer » (#14315) : la feuille Meeshy, qui frappe le lien de l'utilisateur pour une story publique.
@@ -495,13 +505,15 @@ fun StoryViewerScreen(
 
         if (slide != null) StorySceneAudio(slide = slide, playing = playing, muted = state.isMuted)
 
+        val composerPinned = commentThread != null && railPlan.pinsCommentComposer && slide != null && !state.isDismissed &&
+            (!state.isPaused || cover.composing)
         Column(Modifier.align(Alignment.BottomStart).fillMaxWidth()) {
             if (slide != null && slide.text.isNotBlank()) {
                 StoryCaptionOverlay(text = slide.text, storyId = slide.id)
             }
             // #14313 — le composeur de commentaire épinglé sous la story d'autrui (iOS `composerLayer`).
-            if (commentThread != null && railPlan.pinsCommentComposer && slide != null && !state.isDismissed && (!state.isPaused || cover.composing)) {
-                StoryPinnedCommentComposer(thread = commentThread)
+            if (composerPinned && commentThread != null) {
+                StoryPinnedCommentComposer(thread = commentThread, modifier = Modifier.onSizeChanged { composerHeightPx = it.height })
                 StoryCommentSentFeedback(thread = commentThread)
             }
         }
@@ -509,6 +521,7 @@ fun StoryViewerScreen(
         if (!state.isPaused) Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .onSizeChanged { headerHeightPx = it.height }
                 .statusBarsPadding()
                 .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.sm),
         ) {
@@ -602,13 +615,13 @@ fun StoryViewerScreen(
                                     },
                                 )
                             } else {
-                                state.currentStoryId?.let { storyId ->
+                                if (railPlan.showsRepost) {
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.stories_action_repost)) },
                                         leadingIcon = { Icon(MeeshyIcons.Repeat, contentDescription = null) },
                                         onClick = {
                                             showOptions = false
-                                            onRepost(storyId)
+                                            repost()
                                         },
                                     )
                                 }
@@ -635,18 +648,20 @@ fun StoryViewerScreen(
         }
 
         val languageBadge = state.activeLanguageCode
+        val railFrame = StoryRailFrame.of(headerHeightPx, composerHeightPx, composerPinned, with(density) { MeeshySpacing.sm.roundToPx() })
         if (slide != null && !state.isDismissed && !state.isPaused && !keyboardVisible) {
             StoryActionRail(
                 plan = railPlan,
                 counts = StoryRailCounts(
                     comments = commentCount,
                     shares = currentItem?.shareCount ?: 0,
-                    reposts = currentItem?.repostCount ?: 0,
+                    reposts = state.repostCount,
+                    reposted = state.hasReposted,
                     views = currentItem?.viewCount ?: 0,
                 ),
                 taps = StoryRailTaps(
                     onSend = { closeRailBars(); meeshyHaptics.light(); openSendTo() },
-                    onRepost = { closeRailBars(); state.currentStoryId?.let(onRepost) },
+                    onRepost = { closeRailBars(); repost() },
                     onViews = { closeRailBars(); meeshyHaptics.light(); showViewers = true },
                     onCompose = { closeRailBars(); meeshyHaptics.light(); state.currentStoryId?.let { id -> onComposeStory?.invoke(id) } },
                     onComments = { closeRailBars(); meeshyHaptics.light(); showComments = true },
@@ -671,6 +686,7 @@ fun StoryViewerScreen(
                 onLanguageBounds = { languageButtonBounds = it },
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
+                    .padding(top = with(density) { railFrame.topPx.toDp() }, bottom = with(density) { railFrame.bottomPx.toDp() })
                     .padding(end = MeeshySpacing.sm),
             )
         }
@@ -747,6 +763,10 @@ fun StoryViewerScreen(
                 modifier = Modifier.align(Alignment.Center),
             )
         }
+        FeedbackToastHost(
+            toasts = viewModel.toasts,
+            modifier = Modifier.padding(bottom = with(density) { (if (composerPinned) composerHeightPx else 0).toDp() }),
+        )
     }
     }
 

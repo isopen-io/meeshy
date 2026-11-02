@@ -36,7 +36,7 @@ data class MoodBubbleModel(
                     .map { MoodReactionChip(it.key, it.value) }
                     .sortedWith(compareByDescending<MoodReactionChip> { it.count }.thenBy { it.emoji }),
                 canReact = !isOwn,
-                canRepublish = !isOwn,
+                canRepublish = !isOwn && StatusRepostAudience.isRepublishable(entry.visibility),
                 canReply = !isOwn,
             )
         }

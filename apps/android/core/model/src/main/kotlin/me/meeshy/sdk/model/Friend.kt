@@ -16,6 +16,8 @@ data class FriendRequest(
     val respondedAt: String? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
+    /** Le cran visé (#13933) : `null` = Ami, le sens historique d'une demande sans niveau. */
+    val targetLevel: String? = null,
 )
 
 /**
@@ -45,6 +47,8 @@ data class FriendRequestUser(
 data class SendFriendRequest(
     val receiverId: String,
     val message: String? = null,
+    /** Le cran visé (`ACQUAINTANCE|FRIEND|CLOSE|BLOOD`, #13938) ; `null` est omis du corps : une demande simple part comme avant. */
+    val targetLevel: String? = null,
 )
 
 /**

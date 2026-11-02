@@ -423,7 +423,7 @@ internal fun ChatComposer(
                             null
                         },
                         accentColor = accentColor,
-                        onFold = if (foldable && ConversationComposerFold.offersFoldButton(minimized, isComposing)) fold else null,
+                        onFold = if (foldable && configuration.offersFold(minimized, isComposing)) fold else null,
                         configuration = configuration,
                         onSticker = openStickers,
                     )

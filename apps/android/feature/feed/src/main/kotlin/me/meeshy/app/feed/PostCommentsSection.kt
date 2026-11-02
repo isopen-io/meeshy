@@ -225,6 +225,9 @@ fun PostCommentsComposerBar(
             onRemovePiece = viewModel::removeMedia,
             onSubmit = viewModel::submit,
             onCancelReply = viewModel::cancelReply,
+            languageCode = state.composerLanguageCode,
+            onPickLanguage = viewModel::onComposerLanguagePicked,
+            onQuickEmoji = viewModel::sendQuickEmoji,
         )
     }
 }
@@ -536,10 +539,10 @@ private fun CommentLikeButton(comment: CommentPresentation, onToggleLike: (Strin
 }
 
 /**
- * **LE COMPOSEUR DES COMMENTAIRES EST CELUI DES CONVERSATIONS** (#14265, iOS `UniversalComposerBar(mode: .comment)`) :
- * réglé pour un commentaire, il offre texte, emoji, vocal, photothèque et caméra ; ce qu'on joint rejoint le bandeau,
- * se téléverse aussitôt, et part avec le commentaire. Au-dessus de la saisie : les mentions, la cible de la réponse et
- * les pièces en attente.
+ * **LE COMPOSEUR DES COMMENTAIRES EST CELUI DES CONVERSATIONS** (#14265, #14384, iOS `UniversalComposerBar(mode: .comment)`
+ * + `foldableComment`) : la géométrie de la barre de message — pastille de langue, sticker, photothèque, caméra et ⌄ ;
+ * emojis rapides, vocal et envoi dans la rangée de saisie. Ce qu'on joint rejoint le bandeau, se téléverse aussitôt, et
+ * part avec le commentaire. Au-dessus de la saisie : les mentions, la cible de la réponse et les pièces en attente.
  */
 @Composable
 private fun CommentComposer(
@@ -556,6 +559,9 @@ private fun CommentComposer(
     onRemovePiece: (String) -> Unit,
     onSubmit: () -> Unit,
     onCancelReply: () -> Unit,
+    languageCode: String,
+    onPickLanguage: (String) -> Unit,
+    onQuickEmoji: (String) -> Unit,
 ) {
     val composer = LocalUniversalComposer.current ?: return
     val intake = rememberComposerMediaIntake(onAttach)
@@ -575,6 +581,10 @@ private fun CommentComposer(
             focusTrigger = focusTrigger,
             onAttachUris = intake.onUris.takeIf { canAttach },
             onAttachFile = intake.onFile.takeIf { canAttach },
+            languageCode = languageCode,
+            onPickLanguage = onPickLanguage,
+            onQuickEmoji = onQuickEmoji,
+            foldable = true,
             topSlot = {
                 MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected)
                 if (replyTarget != null) ReplyTargetChip(target = replyTarget, onCancelReply = onCancelReply)
