@@ -50,7 +50,7 @@ class PostDetailRepostTest {
         Dispatchers.resetMain()
     }
 
-    private val repository: PostRepository = mockk(relaxed = true)
+    private val repository: PostRepository = mockk<PostRepository>(relaxed = true).also { coEvery { it.knownPost(any()) } returns null }
     private val session: SessionRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
     private val clock = object : CacheClock {
