@@ -151,7 +151,7 @@ internal fun rememberBackgroundEditing(
 internal fun SceneBackgroundColumn(background: BackgroundEditing, tools: BackgroundTools) {
     Column(
         modifier = Modifier.testTag(EDITING_RAIL_TAG).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        verticalArrangement = Arrangement.spacedBy(LocalComposerRailSize.current.gap),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         BackgroundToolItems(tools, wide = false)

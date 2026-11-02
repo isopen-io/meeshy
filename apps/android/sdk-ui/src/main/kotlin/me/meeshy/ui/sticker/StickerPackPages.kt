@@ -31,7 +31,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 internal val StickerArtCellSize = 76.dp
-private val StickerArtSize = 64.dp
+internal val StickerArtSize = 64.dp
 
 /** Une grille de cases d'art de 76 dp, adaptée à la largeur, sous l'en-tête des pages de la feuille. */
 @Composable

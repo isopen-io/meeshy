@@ -196,6 +196,12 @@ function makePrisma(opts: PrismaOpts = {}) {
     ),
     // La télémétrie d'appel (#11277) : un compte qui n'a jamais appelé.
     callParticipant: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    // Les cercles (#14400) : aucun lien, aucun échange, aucun consentement.
+    ...Object.fromEntries(
+      ['userRelation', 'pairInteractionDay', 'relationFeatureSetting'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]) }],
+      ),
+    ),
   };
 }
 

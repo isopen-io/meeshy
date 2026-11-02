@@ -54,7 +54,8 @@ nonisolated struct StoryActionRailPlan: Equatable {
         hasAudibleSound: Bool,
         commentCount: Int,
         hasTranslatableContent: Bool,
-        canCompose: Bool = false
+        canCompose: Bool = false,
+        isRepublishable: Bool = true
     ) -> StoryActionRailPlan {
         StoryActionRailPlan(
             showsReact: !isOwnStory,
@@ -67,7 +68,7 @@ nonisolated struct StoryActionRailPlan: Equatable {
             // le choix, plus l'appartenance au rail. Gater ici sur
             // `isPublicStory` rendait la règle inatteignable : le bouton
             // n'existait pas pour les seules stories qu'elle concerne.
-            showsRepost: !isOwnStory,
+            showsRepost: !isOwnStory && isRepublishable,
             showsViews: isOwnStory,
             showsExport: isOwnStory,
             showsSound: hasAudibleSound,
@@ -79,6 +80,10 @@ nonisolated struct StoryActionRailPlan: Equatable {
             showsTranslations: hasTranslatableContent,
             showsCompose: !isOwnStory && canCompose
         )
+    }
+
+    static func isRepublishable(visibility: String?) -> Bool {
+        !StoryRepostAudience.allowed(fromRawValue: visibility).isEmpty
     }
 }
 
@@ -316,7 +321,8 @@ struct StoryActionSidebarView: View {
             hasAudibleSound: storyHasAudibleSound,
             commentCount: currentStory?.commentCount ?? 0,
             hasTranslatableContent: storyHasTranslatableContent,
-            canCompose: composeTarget != nil
+            canCompose: composeTarget != nil,
+            isRepublishable: StoryActionRailPlan.isRepublishable(visibility: currentStory?.visibility)
         )
     }
 
@@ -577,16 +583,21 @@ struct StoryActionSidebarView: View {
         // qu'apparaître, jamais disparaître.
         .adaptiveOnChange(of: storyCommentCountReconciledPulse) { _, _ in
             guard !railPlan.showsComments else { return }
-            frozenRailPlan = StoryActionRailPlan.resolve(
-                isOwnStory: isOwnStory,
-                canReply: onReplyToStory != nil,
-                isPublicStory: currentStory?.isPublic == true,
-                hasAudibleSound: storyHasAudibleSound,
-                commentCount: storyCommentCount,
-                hasTranslatableContent: storyHasTranslatableContent,
-                canCompose: railPlan.showsCompose
-            )
+            frozenRailPlan = railPlanAfterCommentsReconciled
         }
+    }
+
+    private var railPlanAfterCommentsReconciled: StoryActionRailPlan {
+        StoryActionRailPlan.resolve(
+            isOwnStory: isOwnStory,
+            canReply: onReplyToStory != nil,
+            isPublicStory: currentStory?.isPublic == true,
+            hasAudibleSound: storyHasAudibleSound,
+            commentCount: storyCommentCount,
+            hasTranslatableContent: storyHasTranslatableContent,
+            canCompose: railPlan.showsCompose,
+            isRepublishable: StoryActionRailPlan.isRepublishable(visibility: currentStory?.visibility)
+        )
     }
 
     @ViewBuilder

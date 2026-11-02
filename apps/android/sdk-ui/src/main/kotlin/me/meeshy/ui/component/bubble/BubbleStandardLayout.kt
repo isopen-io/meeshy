@@ -137,7 +137,12 @@ internal fun BubbleStandardLayout(
                 )
             }
             BubbleReactionsAnchor(content = content, accent = options.accentColor, callbacks = callbacks) {
-                if (isVisualMediaOnly(content)) {
+                val sticker = content.sticker
+                if (sticker != null && !content.isDeleted) {
+                    BubbleBlurRevealBoundary(messageId = content.messageId, spec = content.blurReveal) {
+                        BubbleStickerBody(content = content, sticker = sticker, onLongPress = callbacks.onLongPress)
+                    }
+                } else if (isVisualMediaOnly(content)) {
                     VisualMediaBody(content = content, callbacks = callbacks)
                 } else if (isFreeEmoji && content.blurReveal == null) {
                     // La story citée reste au-dessus de l'emoji, hors de tout fond (iOS

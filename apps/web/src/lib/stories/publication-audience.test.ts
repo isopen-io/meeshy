@@ -8,23 +8,43 @@ import {
   offeredAudiences,
   requestedAudienceFromSearch,
   seededAudience,
+  servedAudience,
+  shownAudience,
   STUDIO_AUDIENCES,
 } from './publication-audience';
 
-describe('STUDIO_AUDIENCES — l’ordre d’iOS (PostVisibility.swift:48-50)', () => {
-  test('les six, dans l’ordre du composeur', () => {
-    expect(STUDIO_AUDIENCES).toEqual(['PUBLIC', 'COMMUNITY', 'FRIENDS', 'EXCEPT', 'ONLY', 'PRIVATE']);
+describe('STUDIO_AUDIENCES — l’ordre d’iOS (`PostVisibility.composerSelectableCases`, #13939)', () => {
+  test('l’échelle des cercles, du plus large au plus étroit, puis les nominatifs et le privé', () => {
+    expect(STUDIO_AUDIENCES).toEqual(['PUBLIC', 'COMMUNITY', 'ACQUAINTANCES', 'FRIENDS', 'CLOSE', 'BLOOD', 'EXCEPT', 'ONLY', 'PRIVATE']);
+  });
+});
+
+describe('servedAudience — une audience SERVIE se lit fail-closed (`PostVisibility(served:)`, #13939)', () => {
+  test('les neuf valeurs connues se lisent telles quelles, quelle que soit la casse', () => {
+    for (const visibility of STUDIO_AUDIENCES) expect(servedAudience(visibility)).toBe(visibility);
+    expect(servedAudience('close')).toBe('CLOSE');
+  });
+
+  test('une valeur inconnue se lit RESTREINTE, jamais Public', () => {
+    expect(servedAudience('ATOM')).toBe('RESTRICTED');
+    expect(servedAudience('FAMILY')).toBe('RESTRICTED');
+    expect(servedAudience(3)).toBe('RESTRICTED');
+  });
+
+  test('absente, elle reste absente : la passerelle n’a rien dit', () => {
+    expect(servedAudience(null)).toBeNull();
+    expect(servedAudience(undefined)).toBeNull();
   });
 });
 
 describe('offeredAudiences — la loi D-100 importée, jamais recopiée', () => {
-  test('aucune republication ⇒ les six', () => {
+  test('aucune republication ⇒ les neuf', () => {
     expect(offeredAudiences({ repostOfId: null })).toEqual(STUDIO_AUDIENCES);
   });
 
-  test('une republication ⇒ quatre, sans EXCEPT ni ONLY (repostVisibilityInheritsAudienceList)', () => {
+  test('une republication ⇒ sans EXCEPT ni ONLY (repostVisibilityInheritsAudienceList)', () => {
     const offered = offeredAudiences({ repostOfId: 'p1' });
-    expect(offered).toEqual(['PUBLIC', 'COMMUNITY', 'FRIENDS', 'PRIVATE']);
+    expect(offered).toEqual(['PUBLIC', 'COMMUNITY', 'ACQUAINTANCES', 'FRIENDS', 'CLOSE', 'BLOOD', 'PRIVATE']);
   });
 });
 
@@ -34,16 +54,16 @@ describe('audienceAvailability — grisé AVEC sa raison, jamais absent (loi 4)'
     expect(audienceAvailability('EXCEPT')).toEqual({ choosable: false, reasonKey: 'story.studio.audience.refusal.people' });
   });
 
-  test('les quatre autres sont choisissables, et le verdict porte l’audience rétrécie', () => {
-    for (const visibility of ['PUBLIC', 'COMMUNITY', 'FRIENDS', 'PRIVATE'] as const) {
+  test('les sept autres — cercles compris — sont choisissables, et le verdict porte l’audience rétrécie', () => {
+    for (const visibility of ['PUBLIC', 'COMMUNITY', 'ACQUAINTANCES', 'FRIENDS', 'CLOSE', 'BLOOD', 'PRIVATE'] as const) {
       expect(audienceAvailability(visibility)).toEqual({ choosable: true, audience: visibility });
     }
   });
 });
 
 describe('isRememberableAudience — jamais EXCEPT/ONLY (StoryVisibilityPreferenceStore.isRememberable)', () => {
-  test('FRIENDS est mémorisable', () => {
-    expect(isRememberableAudience('FRIENDS')).toBe(true);
+  test('FRIENDS et les trois cercles sont mémorisables : le dernier choix reste l’audience par défaut', () => {
+    for (const visibility of ['FRIENDS', 'ACQUAINTANCES', 'CLOSE', 'BLOOD'] as const) expect(isRememberableAudience(visibility)).toBe(true);
   });
 
   test('ONLY et EXCEPT ne le sont pas', () => {
@@ -97,7 +117,7 @@ describe('audienceLabelKey — une entrée par audience, toutes distinctes', () 
     for (const visibility of STUDIO_AUDIENCES) expect(audienceLabelKey(visibility)).toBeTruthy();
   });
 
-  test('les six libellés sont distincts', () => {
+  test('les neuf libellés sont distincts', () => {
     expect(new Set(STUDIO_AUDIENCES.map(audienceLabelKey)).size).toBe(STUDIO_AUDIENCES.length);
   });
 });
@@ -122,5 +142,23 @@ describe('seededAudience — l’audience demandée passe AVANT la mémoire, jam
 
   test('sans demande, la mémoire', () => {
     expect(seededAudience({ draftVisibility: null, requestedVisibility: null, memoryVisibility: 'PRIVATE' })).toBe('PRIVATE');
+  });
+});
+
+describe('shownAudience — ce que la pastille DIT, jamais un défaut à la place d’une audience servie (#13939)', () => {
+  test('un choix fait se dit choisi', () => {
+    expect(shownAudience({ chosen: 'CLOSE', served: 'CLOSE', fallback: 'PUBLIC' })).toEqual({ value: 'CLOSE', source: 'chosen' });
+  });
+
+  test('rien choisi, rien servi : le défaut de la passerelle', () => {
+    expect(shownAudience({ chosen: null, served: null, fallback: 'PUBLIC' })).toEqual({ value: 'PUBLIC', source: 'default' });
+  });
+
+  test('l’édition d’une publication à l’audience inconnue dit « Restreinte », jamais « Public · par défaut »', () => {
+    expect(shownAudience({ chosen: null, served: servedAudience('FAMILY'), fallback: 'PUBLIC' })).toEqual({ value: 'RESTRICTED', source: 'served' });
+  });
+
+  test('l’édition d’une publication nominative dit son mode servi, sans le rendre choisissable', () => {
+    expect(shownAudience({ chosen: null, served: 'ONLY', fallback: 'FRIENDS' })).toEqual({ value: 'ONLY', source: 'served' });
   });
 });

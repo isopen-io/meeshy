@@ -21,21 +21,20 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
     }
 
     private func portesAuRepos(_ format: ComposerFormat)
-        -> (colonne: [ComposerRailDoor], plus: [ComposerRailDoor], socle: [ComposerRailDoor]) {
+        -> (colonne: [ComposerRailDoor], plus: [ComposerRailDoor]) {
         let portes = offertes(format)
         let colonne = ComposerRestChrome.tools(offered: portes).compactMap(\.door)
         let plus = ComposerMoreMenuPolicy.entries(.init(addsSlides: true, backgroundMedia: nil,
                                                         offeredDoors: portes, overflow: []))
         let parPlus = plus.compactMap(\.door)
-        let socle: [ComposerRailDoor] = ComposerPostTextPill.shows(format: format, sceneMounted: true) ? [.content] : []
-        return (colonne, parPlus, socle)
+        return (colonne, parPlus)
     }
 
     func test_chaquePorteOfferte_aUnChemin_surChaqueFormat() {
         for format in ComposerFormat.allComposable {
-            let (colonne, plus, socle) = portesAuRepos(format)
+            let (colonne, plus) = portesAuRepos(format)
             for porte in offertes(format) where porte != .description {
-                XCTAssertTrue(colonne.contains(porte) || plus.contains(porte) || socle.contains(porte),
+                XCTAssertTrue(colonne.contains(porte) || plus.contains(porte),
                               "\(format) : \(porte.rawValue) n'a plus aucun chemin au repos")
             }
         }
@@ -43,9 +42,8 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
 
     func test_aucunePorte_nADeuxChemins() {
         for format in ComposerFormat.allComposable {
-            let (colonne, plus, socle) = portesAuRepos(format)
+            let (colonne, plus) = portesAuRepos(format)
             XCTAssertTrue(Set(colonne).isDisjoint(with: Set(plus)), "\(format)")
-            XCTAssertTrue(Set(colonne + plus).isDisjoint(with: Set(socle)), "\(format)")
         }
     }
 
@@ -60,17 +58,18 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
     /// Fond, Mention et Lieu rejoignent la colonne en entrées directes
     /// (porteur 2026-10-31, #14050) ; seul le hashtag reste dans ⋯.
     func test_ceQuiSePose_etFondMentionLieu_dansLaColonne_leHashtag_dansPlus() {
-        let (colonne, plus, _) = portesAuRepos(.story)
+        let (colonne, plus) = portesAuRepos(.story)
         XCTAssertEqual(colonne, [.text, .media, .sticker, .sound, .drawing, .background, .mention, .place])
         XCTAssertEqual(Set(plus), [.hashtag])
     }
 
-    func test_leTexteDuPost_passeParLeSocle_enPostEtEnReel() {
+    /// « Texte du post » quitte le socle pour le rail (#14457) : le socle ne
+    /// dépend plus du format, et la scène ne se réduit plus en cochant Post.
+    func test_leTexteDuPost_estUneOptionDuRail_enPostEtEnReel() {
         for format in [ComposerFormat.post, .reel] {
-            let (colonne, plus, socle) = portesAuRepos(format)
-            XCTAssertFalse(colonne.contains(.content))
-            XCTAssertFalse(plus.contains(.content), "« Texte du post » vit au socle (#13864), plus dans ⋯")
-            XCTAssertEqual(socle, [.content])
+            let (colonne, plus) = portesAuRepos(format)
+            XCTAssertTrue(colonne.contains(.content), "\(format)")
+            XCTAssertFalse(plus.contains(.content), "« Texte du post » est au rail, jamais dans ⋯")
         }
     }
 

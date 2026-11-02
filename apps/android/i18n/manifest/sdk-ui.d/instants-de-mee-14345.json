@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {"catalog": "ui", "iosKey": "sticker.sheet.instants.title", "androidName": "sticker_sheet_instants_title", "status": "adopted"},
+        {"catalog": "ui", "iosKey": "sticker.sheet.instants.hint", "androidName": "sticker_sheet_instants_hint", "status": "adopted"}
+      ]
+    }
+  }
+}

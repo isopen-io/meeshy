@@ -3,9 +3,10 @@ import Foundation
 /// **Un bouton de la colonne posée sur la scène** (#13839, #14050).
 ///
 /// Dans l'ordre de la maquette : ce qu'on pose SUR la scène, puis Fond,
-/// Mention et Lieu en entrées directes (#14050), puis ⋯ qui porte
-/// le reste. Chacun ouvre la même porte que le rail d'avant, par le même
-/// `handleRailDoor` — seule la géographie a changé.
+/// Mention et Lieu en entrées directes (#14050), puis « Texte du post » quand
+/// le format en écrit un (#14457), puis ⋯ qui porte le reste. Chacun ouvre la
+/// même porte que le rail d'avant, par le même `handleRailDoor` — seule la
+/// géographie a changé.
 nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
     case text
     case media
@@ -15,6 +16,7 @@ nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
     case background
     case mention
     case place
+    case postText
     case more
 
     var door: ComposerRailDoor? {
@@ -27,6 +29,7 @@ nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
         case .background: return .background
         case .mention: return .mention
         case .place: return .place
+        case .postText: return .content
         case .more: return nil
         }
     }
@@ -73,8 +76,11 @@ nonisolated enum ComposerRestChrome {
         case editBackground
     }
 
+    /// « Texte du post » n'est offert qu'au post et au réel (`ComposerRailDoor
+    /// .removedFromFormat`) : c'est la seule option qui varie d'un format à
+    /// l'autre, au pied de la colonne, et le socle ne bouge pas (#14457).
     private static let sceneTools: [ComposerRestTool] = [.text, .media, .sticker, .sound, .drawing,
-                                                         .background, .mention, .place]
+                                                         .background, .mention, .place, .postText]
 
     /// Un fond MÉDIA retire la porte de la palette (`sceneDoors`), jamais
     /// l'entrée « Fond » : elle SÉLECTIONNE alors le fond, dont les outils à
@@ -140,6 +146,7 @@ nonisolated enum ComposerRestChromeCopy {
         if tool == .background, backgroundIsMedia {
             return String(localized: "composer.more.background", defaultValue: "Fond", bundle: .main)
         }
+        if tool == .postText { return ComposerPostTextPill.label }
         guard let door = tool.door else { return ComposerOverflowCopy.menu }
         return ComposerRailCopy.label(door)
     }

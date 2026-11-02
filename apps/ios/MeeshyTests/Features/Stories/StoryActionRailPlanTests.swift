@@ -95,6 +95,23 @@ final class StoryActionRailPlanTests: XCTestCase {
         XCTAssertFalse(plan.showsExport)
     }
 
+    /// RG-18 (#13939) : une story de Sang ne se repartage pas — la loi d'audience n'offre rien, le bouton disparaît.
+    func test_resolve_aBloodStory_offersNoRepost() {
+        let plan = StoryActionRailPlan.resolve(
+            isOwnStory: false,
+            canReply: true,
+            isPublicStory: false,
+            hasAudibleSound: false,
+            commentCount: 0,
+            hasTranslatableContent: false,
+            isRepublishable: StoryActionRailPlan.isRepublishable(visibility: "BLOOD")
+        )
+
+        XCTAssertFalse(plan.showsRepost)
+        XCTAssertTrue(StoryActionRailPlan.isRepublishable(visibility: "CLOSE"))
+        XCTAssertTrue(StoryActionRailPlan.isRepublishable(visibility: nil))
+    }
+
     func test_resolve_commentsMembership_decidedByEntryCount_only() {
         let without = StoryActionRailPlan.resolve(
             isOwnStory: false, canReply: false, isPublicStory: false,

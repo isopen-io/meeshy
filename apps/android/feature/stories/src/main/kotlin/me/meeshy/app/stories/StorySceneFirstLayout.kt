@@ -59,6 +59,9 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import me.meeshy.sdk.model.composer.ComposerRailSizing
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.width
 import me.meeshy.sdk.model.composer.ComposerSceneArrangement
 import androidx.compose.ui.unit.dp
@@ -126,6 +129,8 @@ internal fun StorySceneFirstLayout(
         val onRails = rails != null && arrangement == ComposerSceneArrangement.RAILS
         val railsServe = typing == null && sheet == null
         val busy = incoming != null
+        val railSize = ComposerRailSizing.of(maxWidth.value, maxHeight.value)
+        CompositionLocalProvider(LocalComposerRailSize provides railSize) {
         Row(Modifier.fillMaxSize()) {
             if (onRails) LabeledRailSlot(busy) { if (railsServe) rails?.leading?.invoke(this) }
             Box(Modifier.weight(1f).fillMaxHeight().padding(top = if (onRails) RAIL_MARGIN else 0.dp)) {
@@ -151,6 +156,7 @@ internal fun StorySceneFirstLayout(
                 )
             }
             if (onRails) LabeledRailSlot(busy) { if (railsServe) rails?.trailing?.invoke(this) }
+        }
         }
     }
 }
@@ -380,9 +386,9 @@ private fun SceneOverlays(
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
             Spacer(Modifier.weight(1f))
             Column(
-                modifier = Modifier.fillMaxHeight().padding(top = MeeshySpacing.xs).onGloballyPositioned { onTrailingLeft(it.positionInRoot().x) },
+                modifier = Modifier.fillMaxHeight().padding(top = MeeshySpacing.xs).testTag(SCENE_RAIL_LANE_TAG).onGloballyPositioned { onTrailingLeft(it.positionInRoot().x) },
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                verticalArrangement = Arrangement.spacedBy(LocalComposerRailSize.current.gap),
                 content = slots.trailing,
             )
         }
@@ -436,6 +442,9 @@ private fun SheetDismissCatcher(onSheetDismiss: () -> Unit) {
 private const val SHEET_MAX_FRACTION = 0.55f
 
 private val OVERLAY_INSET = 10.dp
+
+/** Le couloir des rails posé sur la scène : la colonne d'outils, ou les options de ce qu'on édite. */
+internal const val SCENE_RAIL_LANE_TAG = "scene-rail-lane"
 
 /** Entre le rail et la scène qui lui cède son couloir : sans elle, une option semblerait posée sur la scène. */
 private val LANE_GUTTER = 8.dp
