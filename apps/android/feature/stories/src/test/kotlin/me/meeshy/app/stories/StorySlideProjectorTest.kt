@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.StoryMediaObject
 import org.junit.Test
 
@@ -91,5 +92,23 @@ class StorySlideProjectorTest {
         )
 
         assertThat(project(item).backgroundVideoUrl).isEqualTo("https://cdn.meeshy.me/fond")
+    }
+
+    @Test
+    fun `un fond image recadre au carre depuis une photo portrait remplit la scene sans etre etire`() {
+        val portrait = media("fond", FeedMediaType.IMAGE).copy(width = 900, height = 1600)
+        val carre = StoryMediaCrop(x = 0.0, y = 0.21875, width = 1.0, height = 0.5625)
+        val item = StoryItem(
+            id = "s",
+            media = listOf(portrait),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(StoryMediaObject(id = "o1", postMediaId = "fond", isBackground = true, crop = carre)),
+            ),
+        )
+
+        val transform = project(item).backgroundTransform
+
+        assertThat(transform.scaleX).isEqualTo(transform.scaleY)
+        assertThat(transform.scaleX.toDouble()).isWithin(1e-4).of(16.0 / 9.0)
     }
 }
