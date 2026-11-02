@@ -2725,6 +2725,12 @@ model Report {
   updatedAt        DateTime  @updatedAt
   /// Date de résolution
   resolvedAt       DateTime?
+  /// Priorité de modération (#14110, MIN-04) : 1 = en tête de file — le
+  /// signalement implique un mineur déclaré, une position ou un lien Sang ;
+  /// 0 ou absent = ordinaire. Calculée à la création, jamais servie au signalé.
+  priority         Int       @default(0)
+  /// Pourquoi il est en tête : `minor` | `location` | `blood`.
+  priorityReasons  String[]  @default([])
 
   /// Relations
   reporter  User? @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: SetNull)
@@ -2737,6 +2743,7 @@ model Report {
   @@index([reportType])
   @@index([createdAt])
   @@index([resolvedAt])
+  @@index([status, priority, createdAt])
 }
 
 // ============================================
