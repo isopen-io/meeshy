@@ -42,7 +42,6 @@ const it = {
   'conversationEncryption.fact.endToEndNeverTurnedOff': 'La crittografia end-to-end non si disattiva mai. Potrai sempre aprire un’altra conversazione, senza crittografia end-to-end, con le stesse persone.',
   'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'La crittografia end-to-end non si disattiva mai: questa chat individuale resta tale. Puoi sempre aprire accanto una conversazione senza crittografia end-to-end con questa persona: entrambe sono nell’elenco, questa segnata da un lucchetto.',
   'conversationEncryption.fact.serverCannotTurnItOff': 'Su questo browser, una volta vista questa conversazione crittografata end-to-end, il tuo account non vi scrive mai più senza quella crittografia, anche se il server la presentasse poi diversamente.',
-  'conversationEncryption.fact.webCannotReadYet': 'Sul web i messaggi crittografati end-to-end non possono ancora essere letti né scritti: apri questa conversazione nell’app iOS.',
   'conversationEncryption.plaintextDirect.open': 'Apri una conversazione senza crittografia end-to-end con {name}',
   'conversationEncryption.plaintextDirect.busy': 'Apertura…',
   'conversationEncryption.plaintextDirect.failed': 'Impossibile aprire la conversazione senza crittografia end-to-end. Riprova.',

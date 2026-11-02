@@ -6,15 +6,15 @@ import { chosenCreationMode, webCreationEncryptionOffer, WEB_END_TO_END_SUPPORTE
  * LE CHOIX DU CHIFFREMENT À LA CRÉATION, SUR LE WEB (décision du 2026-11-01,
  * `packages/shared/decisions/2026-11-01-le-mode-de-chiffrement-se-choisit-a-la-creation.md`).
  *
- * Le web ne lit ni n'écrit encore le bout en bout : la loi partagée
- * (`creationEncryptionOffer`) y est appelée avec `endToEndSupported: false`.
+ * Depuis #14592 le web lit et écrit un tête-à-tête chiffré de bout en bout : la
+ * loi partagée (`creationEncryptionOffer`) y est appelée avec `endToEndSupported: true`.
  * Ce qui en résulte, rôle par rôle et type par type, est ce que l'écran montre.
  */
 const modes = (offer: ReturnType<typeof webCreationEncryptionOffer>) => offer.choices.map((choice) => choice.mode);
 
-describe('le web ne sait pas encore chiffrer de bout en bout', () => {
+describe('le web chiffre de bout en bout (libsignal en WASM, #14592)', () => {
   test('la loi partagée est appelée en le disant', () => {
-    expect(WEB_END_TO_END_SUPPORTED).toBe(false);
+    expect(WEB_END_TO_END_SUPPORTED).toBe(true);
   });
 });
 
@@ -31,12 +31,12 @@ describe('un utilisateur ordinaire voit Serveur et Hybride, Serveur présélecti
   }
 });
 
-describe('ANALYST et plus voient aussi le bout en bout, grisé, avec sa raison', () => {
+describe('ANALYST et plus voient le bout en bout : disponible en tête-à-tête, grisé pour un groupe', () => {
   for (const platformRole of ['ANALYST', 'AUDIT', 'MODERATOR', 'ADMIN', 'BIGBOSS']) {
-    test(`${platformRole} · tête-à-tête : « bientôt sur le web »`, () => {
+    test(`${platformRole} · tête-à-tête : disponible, et présélectionné par la loi partagée`, () => {
       const offer = webCreationEncryptionOffer({ platformRole, conversationType: 'direct' });
-      expect(offer.choices.at(-1)).toEqual({ mode: 'e2ee', available: false, unavailability: 'client-not-yet' });
-      expect(offer.defaultMode).toBe('server');
+      expect(offer.choices.at(-1)).toEqual({ mode: 'e2ee', available: true, unavailability: null });
+      expect(offer.defaultMode).toBe('e2ee');
     });
 
     test(`${platformRole} · groupe : « bientôt pour les groupes »`, () => {
@@ -59,8 +59,13 @@ describe('le mode envoyé est toujours un mode offert ET disponible', () => {
     expect(chosenCreationMode(user, 'hybrid')).toBe('hybrid');
   });
 
+  test('le bout en bout choisi en tête-à-tête part', () => {
+    expect(chosenCreationMode(analyst, 'e2ee')).toBe('e2ee');
+  });
+
   test('un mode grisé ne part jamais : retour au défaut', () => {
-    expect(chosenCreationMode(analyst, 'e2ee')).toBe('server');
+    const group = webCreationEncryptionOffer({ platformRole: 'ANALYST', conversationType: 'group' });
+    expect(chosenCreationMode(group, 'e2ee')).toBe('server');
   });
 
   test('un mode qui n’est pas offert ne part jamais', () => {

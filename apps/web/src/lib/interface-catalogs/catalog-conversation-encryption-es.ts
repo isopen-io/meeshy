@@ -42,7 +42,6 @@ const es = {
   'conversationEncryption.fact.endToEndNeverTurnedOff': 'El cifrado de extremo a extremo nunca se desactiva. Siempre podrás abrir otra conversación, sin cifrado de extremo a extremo, con las mismas personas.',
   'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'El cifrado de extremo a extremo nunca se desactiva: este chat individual sigue así. Siempre puedes abrir al lado una conversación sin cifrado de extremo a extremo con esta persona: las dos están en la lista, esta marcada con un candado.',
   'conversationEncryption.fact.serverCannotTurnItOff': 'En este navegador, una vez vista esta conversación cifrada de extremo a extremo, tu cuenta ya no escribe nunca en ella sin ese cifrado, aunque el servidor la presentara después de otra forma.',
-  'conversationEncryption.fact.webCannotReadYet': 'En la web, los mensajes cifrados de extremo a extremo aún no se pueden leer ni escribir: abre esta conversación en la app de iOS.',
   'conversationEncryption.plaintextDirect.open': 'Abrir una conversación sin cifrado de extremo a extremo con {name}',
   'conversationEncryption.plaintextDirect.busy': 'Abriendo…',
   'conversationEncryption.plaintextDirect.failed': 'No se pudo abrir la conversación sin cifrado de extremo a extremo. Inténtalo de nuevo.',

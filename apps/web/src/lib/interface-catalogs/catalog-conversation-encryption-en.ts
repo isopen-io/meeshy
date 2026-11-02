@@ -42,7 +42,6 @@ const en = {
   'conversationEncryption.fact.endToEndNeverTurnedOff': 'End-to-end encryption can never be turned off. You can always open another conversation, without end-to-end encryption, with the same people.',
   'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'End-to-end encryption can never be turned off: this one-to-one chat stays that way. You can always open a conversation without end-to-end encryption with this person alongside it: both are in the list, this one marked with a padlock.',
   'conversationEncryption.fact.serverCannotTurnItOff': 'On this browser, once this conversation has been seen end-to-end encrypted, your account never writes in it without that encryption again, even if the server later presented it otherwise.',
-  'conversationEncryption.fact.webCannotReadYet': 'On the web, end-to-end encrypted messages can’t be read or written yet: open this conversation in the iOS app.',
   'conversationEncryption.plaintextDirect.open': 'Open a conversation without end-to-end encryption with {name}',
   'conversationEncryption.plaintextDirect.busy': 'Opening…',
   'conversationEncryption.plaintextDirect.failed': 'The conversation without end-to-end encryption couldn’t be opened. Try again.',

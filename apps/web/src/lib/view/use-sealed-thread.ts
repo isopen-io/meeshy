@@ -3,8 +3,10 @@ import { useStore } from 'zustand/react';
 
 import type { Conversation, Message } from '@/lib/api/types';
 import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
+import { openedMessagesStore } from '@/lib/e2ee/opened-messages';
+import { useEndToEndThread } from '@/lib/e2ee/use-end-to-end-thread';
 
-import { endToEndRegimeOf, sealForgedPlaintext, type EndToEndRegimeView } from './end-to-end-sealed';
+import { endToEndRegimeOf, sealForgedPlaintext, withOpenedTexts, type EndToEndRegimeView } from './end-to-end-sealed';
 
 /**
  * **LE RÉGIME VU DU FIL OUVERT** (#12992) — ce que la passerelle sert, ce que le
@@ -49,6 +51,8 @@ export function useEndToEndRegime(params: {
  */
 export function useSealedThread<T extends { readonly conversationId: string; readonly conversation: Conversation | undefined; readonly messages: readonly Message[] }>(data: T): T {
   const regime = useEndToEndRegime({ conversationId: data.conversationId, conversation: data.conversation, trail: data.messages });
-  const messages = useMemo(() => sealForgedPlaintext(data.messages, regime), [data.messages, regime]);
+  useEndToEndThread({ sealed: regime.sealed, conversation: data.conversation, messages: data.messages });
+  const opened = useStore(openedMessagesStore, (state) => state.opened);
+  const messages = useMemo(() => withOpenedTexts(sealForgedPlaintext(data.messages, regime), opened), [data.messages, regime, opened]);
   return messages === data.messages ? data : { ...data, messages };
 }

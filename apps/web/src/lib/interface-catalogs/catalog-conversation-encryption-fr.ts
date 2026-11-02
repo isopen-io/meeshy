@@ -51,7 +51,6 @@ const fr = {
   'conversationEncryption.fact.endToEndNeverTurnedOff': 'Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.',
   'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'Le chiffrement de bout en bout ne se désactive jamais : ce tête-à-tête le reste. Vous pouvez toujours ouvrir, à côté, une conversation sans chiffrement de bout en bout avec cette personne : les deux sont dans la liste, celle-ci marquée d’un cadenas.',
   'conversationEncryption.fact.serverCannotTurnItOff': 'Sur ce navigateur, une fois cette conversation vue chiffrée de bout en bout, votre compte n’y écrit plus jamais sans ce chiffrement, même si le serveur la présentait ensuite autrement.',
-  'conversationEncryption.fact.webCannotReadYet': 'Sur le web, les messages chiffrés de bout en bout ne peuvent pas encore être lus ni écrits : ouvrez cette conversation dans l’application iOS.',
   'conversationEncryption.plaintextDirect.open': 'Ouvrir une conversation sans chiffrement de bout en bout avec {name}',
   'conversationEncryption.plaintextDirect.busy': 'Ouverture…',
   'conversationEncryption.plaintextDirect.failed': 'La conversation sans chiffrement de bout en bout n’a pas pu être ouverte. Réessayez.',
