@@ -68,6 +68,25 @@ class BubbleImagePreviewTest {
     )
 
     @Test
+    fun `an optimistic image still on the device paints its local file, never a gateway route built from it`() {
+        val local = "file:///data/user/0/me.meeshy.app/cache/sticker-1.png"
+        val image = BubbleContentBuilder.build(
+            message = ApiMessage(
+                id = "cid-1",
+                conversationId = "c1",
+                senderId = "me",
+                attachments = listOf(ApiMessageAttachment(id = "cmid-1", mimeType = "image/png", fileUrl = local, width = 512, height = 512)),
+            ),
+            currentUserId = "me",
+            preferences = French,
+            mediaBaseUrl = "https://gate.staging.meeshy.me/api/v1",
+            displayDensity = BubbleContentBuilder.DEFAULT_DISPLAY_DENSITY,
+        ).images.single()
+
+        assertThat(image.url).isEqualTo(local)
+    }
+
+    @Test
     fun `a single image previews the smallest variant that covers its 252 dp cell`() {
         val image = build(photo()).images.single()
 
