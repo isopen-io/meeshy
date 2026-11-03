@@ -111,3 +111,52 @@ class OpenSourceLicensePresentationBuilderTest {
         assertThat(group.licenses).containsExactly(a, b)
     }
 }
+
+class OpenSourceLicenseCardsTest {
+
+    private fun license(name: String, type: OpenSourceLicenseType, url: String = "https://example.com/$name") =
+        OpenSourceLicense(name = name, author = "Author", type = type, url = url)
+
+    @Test
+    fun `cards gives one card per library, not one block per type`() {
+        val cards = OpenSourceLicensePresentationBuilder.cards(
+            listOf(
+                license("Okio", OpenSourceLicenseType.APACHE_2_0),
+                license("Coil", OpenSourceLicenseType.APACHE_2_0),
+                license("Socket.IO", OpenSourceLicenseType.MIT),
+            ),
+        )
+
+        assertThat(cards.map { it.name }).containsExactly("Socket.IO", "Coil", "Okio").inOrder()
+    }
+
+    @Test
+    fun `the capsule colour follows the license family`() {
+        assertThat(OpenSourceLicensePresentationBuilder.badge(OpenSourceLicenseType.MIT)).isEqualTo(LicenseBadge.SUCCESS)
+        assertThat(OpenSourceLicensePresentationBuilder.badge(OpenSourceLicenseType.APACHE_2_0)).isEqualTo(LicenseBadge.WARNING)
+        assertThat(OpenSourceLicensePresentationBuilder.badge(OpenSourceLicenseType.BSD)).isEqualTo(LicenseBadge.INFO)
+        assertThat(OpenSourceLicensePresentationBuilder.badge(OpenSourceLicenseType.OTHER)).isEqualTo(LicenseBadge.NEUTRAL)
+    }
+
+    @Test
+    fun `a card carries the capsule text and the repository to open`() {
+        val card = OpenSourceLicensePresentationBuilder.cards(
+            listOf(license("Coil", OpenSourceLicenseType.APACHE_2_0, "https://github.com/coil-kt/coil")),
+        ).single()
+
+        assertThat(card.typeName).isEqualTo("Apache 2.0")
+        assertThat(card.badge).isEqualTo(LicenseBadge.WARNING)
+        assertThat(card.url).isEqualTo("https://github.com/coil-kt/coil")
+    }
+
+    @Test
+    fun `the other family has no fixed name so the app localizes it`() {
+        val card = OpenSourceLicensePresentationBuilder.cards(listOf(license("X", OpenSourceLicenseType.OTHER))).single()
+        assertThat(card.typeName).isNull()
+    }
+
+    @Test
+    fun `non launchable entries never become cards`() {
+        assertThat(OpenSourceLicensePresentationBuilder.cards(listOf(license("Dead", OpenSourceLicenseType.MIT, url = "")))).isEmpty()
+    }
+}
