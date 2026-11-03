@@ -53,6 +53,14 @@ class Media3AudioPlaybackEngineTest {
 
     private fun Rig.playWhenReady(value: Boolean) = port.playWhenReady(value)
 
+    @Test fun `un vocal protege est charge comme protege, un vocal public comme public`() = engineTest { rig ->
+        rig.engine.play("a", "https://cdn/a.mp3", isProtected = true)
+        assertThat(rig.port.loads.last().first).isEqualTo(AudioSource.Remote("https://cdn/a.mp3", isProtected = true))
+
+        rig.engine.play("b", "https://cdn/b.mp3")
+        assertThat(rig.port.loads.last().first).isEqualTo(AudioSource.Remote("https://cdn/b.mp3", isProtected = false))
+    }
+
     @Test fun `jouer un vocal le charge, puis la preparation lance la lecture`() = engineTest { rig ->
 
         rig.engine.play("a", "https://cdn/a.mp3")

@@ -590,6 +590,15 @@ fait fuiter une vidéo privée entre comptes. Le coût (re-téléchargement de r
 
 **Consequences.** Premier réel du compte suivant à froid ; plus aucune vidéo du compte quitté sur disque.
 
+**Amendement 2026-11-03 (#15486, chantier #15462).** La fin de session vide aussi : (1) le cache des FORMES D'ONDE, mémoire
+et disque (`com.meeshy.waveforms.v2`, `WaveformModule.waveformsOnLogout` → `WaveformCache.clearAll`), car un relevé dérive
+du contenu du compte quitté ; (2) la mémoire des POSITIONS de lecture (`PlaybackModule.positionsOnLogout`, déjà un
+`PerAccountCache`, désormais prouvée par témoin). Le moteur partagé (`ConversationAudioCoordinator`) lit par le cache AUDIO
+de `MeeshyMediaCache` (clôture d'époque, bail contre l'éviction) via la couture `AudioPlaybackSources` liée par `:app` ; son
+cache séparé `cacheDir/audio-playback` (64 Mo, sans clôture de compte) disparaît et le dossier est purgé une fois au
+démarrage (`LegacyAudioPlaybackCache`). Un vocal protégé (éphémère, vue unique, flouté, chiffré) se lit en direct : ni cache,
+ni bail, aucun octet sur le disque.
+
 ---
 
 ## ADR-028 — L'app native reprend la fiche Play `me.meeshy.app` ; la coque devient `me.meeshy.webapp`

@@ -134,6 +134,7 @@ internal class ChatAudioPlayer internal constructor(
             VoicePlaybackCommand.Stop -> stopPlayback()
             is VoicePlaybackCommand.SeekTo -> seekTo(command.positionMs)
             is VoicePlaybackCommand.Skip -> seekTo(currentPositionMs() + command.offsetMs)
+            VoicePlaybackCommand.Next, VoicePlaybackCommand.Previous -> Unit
         }
     }
 

@@ -49,4 +49,11 @@ class VoicePlaybackCardOwnershipTest {
         assertThat(VoicePlaybackCardOwnership.retire(current = Shared, by = Screen)).isEqualTo(Shared)
         assertThat(VoicePlaybackCardOwnership.retire(current = null, by = Screen)).isNull()
     }
+
+    @Test
+    fun `system orders go to the owner, to the screen player while nobody owns the card`() {
+        assertThat(VoicePlaybackCardOwnership.routeTo(Shared)).isEqualTo(Shared)
+        assertThat(VoicePlaybackCardOwnership.routeTo(Screen)).isEqualTo(Screen)
+        assertThat(VoicePlaybackCardOwnership.routeTo(null)).isEqualTo(Screen)
+    }
 }
