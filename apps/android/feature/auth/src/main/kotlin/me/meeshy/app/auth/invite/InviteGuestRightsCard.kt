@@ -118,7 +118,8 @@ private fun Fact(label: String, value: String, isDark: Boolean) {
     Text(
         text = buildAnnotatedString {
             withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = title)) { append(label) }
-            append(" ").append(value)
+            append(" ")
+            append(value)
         },
         style = MaterialTheme.typography.labelLarge,
         color = if (isDark) MeeshyPalette.Indigo200 else MeeshyPalette.Neutral600,
