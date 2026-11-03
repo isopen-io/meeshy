@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 /// **Un bouton de la colonne posée sur la scène** (#13839, #14050).
 ///
@@ -104,6 +105,16 @@ nonisolated enum ComposerRestChrome {
     private static let footTools: Set<ComposerRestTool> = [.postText, .more]
 
     static func showsSlideRow(slideCount: Int) -> Bool { slideCount >= 2 }
+
+    /// **L'écart entre le bord de l'écran et celui de la scène dessinée**, où
+    /// ✕, ↶ ↷ et la colonne se calent : sur un écran court (iPhone SE), la
+    /// scène 9:16 prend toute la hauteur et laisse une marge de chaque côté.
+    /// Il se lit sur la carte dessinée au REPOS ; une scène réduite (panneau,
+    /// feuille, clavier) le garde, pour que ses options ne sautent pas.
+    static func sceneSideInset(card: CGRect, sceneIsLifted: Bool, current: CGFloat) -> CGFloat {
+        guard !sceneIsLifted, !card.isNull, card.minX.isFinite else { return current }
+        return max(0, card.minX)
+    }
 
     static func sceneIsReduced(_ state: State) -> Bool {
         state.bottomPanelIsOpen || state.propertiesAreOpen

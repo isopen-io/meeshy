@@ -15,6 +15,26 @@ final class ComposerSceneRestChromeTests: XCTestCase {
     private let portesDeLaStory = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
                                                            format: .story, allowsCapture: true)
 
+    // MARK: - La scène plus étroite que l'écran
+
+    /// Relevé au simulateur iPhone SE : la scène dessinée commence à 17,5 pt du
+    /// bord ; c'est cet écart que le chrome du repos reprend.
+    func test_sceneSideInset_seLitSurLaCarteDessineeAuRepos() {
+        let carte = CGRect(x: 17.5, y: 12.5, width: 340, height: 604)
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(card: carte, sceneIsLifted: false, current: 0), 17.5)
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(card: CGRect(x: -2, y: 0, width: 379, height: 674),
+                                                         sceneIsLifted: false, current: 5), 0,
+                       "une scène plus large que l'écran ne pousse rien")
+    }
+
+    func test_sceneSideInset_uneSceneReduite_gardeLEcartDuRepos() {
+        let reduite = CGRect(x: 80, y: 12.5, width: 215, height: 382)
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(card: reduite, sceneIsLifted: true, current: 17.5), 17.5,
+                       "les options d'une scène réduite ne sautent pas vers elle")
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(card: .null, sceneIsLifted: false, current: 17.5), 17.5,
+                       "tant que la carte n'est pas mesurée, rien ne bouge")
+    }
+
     // MARK: - La colonne
 
     func test_tools_enStory_lesCinqOutils_puisFondMentionLieu_puisPlus() {

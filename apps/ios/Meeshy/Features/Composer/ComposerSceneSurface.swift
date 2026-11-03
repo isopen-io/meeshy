@@ -482,7 +482,7 @@ struct ComposerSceneSurface: View {
                                    backgroundIsMedia: restBackgroundIsMedia,
                                    postText: restPostText,
                                    selection: selectionColumn,
-                                   sceneSideInset: sceneCardLeading - railLaneLeading)
+                                   sceneSideInset: restSceneSideInset)
     }
 
     /// **Le volet de description, borné à la CARTE.**
@@ -519,6 +519,12 @@ struct ComposerSceneSurface: View {
     /// Le cadre du DESSIN dans l'écran : le panneau d'options s'y repère pour
     /// laisser voir l'objet qu'il règle.
     @State private var sceneCardFrame: CGRect = .null
+    @State private var restSceneSideInset: CGFloat = 0
+
+    /// Un panneau, une feuille ou le clavier réduisent la scène (`visibleBottom`).
+    private var sceneIsLifted: Bool {
+        sceneLiftInset > 0 || anchoredSheetTop != nil || editingTextId != nil
+    }
 
     /// Le cadre de la scène LIBRE, dans le même repère que la carte : le rail
     /// droit s'y borne à la hauteur de la carte (#10542).
@@ -584,7 +590,11 @@ struct ComposerSceneSurface: View {
         }
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
         .onPreferenceChange(ComposerSceneCardWidthPreferenceKey.self) { sceneCardWidth = $0 }
-        .onPreferenceChange(ComposerSceneCardFrameKey.self) { sceneCardFrame = $0 }
+        .onPreferenceChange(ComposerSceneCardFrameKey.self) { carte in
+            sceneCardFrame = carte
+            restSceneSideInset = ComposerRestChrome.sceneSideInset(card: carte, sceneIsLifted: sceneIsLifted,
+                                                                   current: restSceneSideInset)
+        }
         .onPreferenceChange(ComposerFreeZoneFrameKey.self) { freeZoneFrame = $0 }
         .onPreferenceChange(ComposerLowerFloorsHeightKey.self) { lowerFloorsHeight = $0 }
         // **La bascule outil <-> scène se fait en fondu**, coupé sous
