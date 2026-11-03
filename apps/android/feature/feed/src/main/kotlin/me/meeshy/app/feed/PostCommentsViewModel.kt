@@ -1,5 +1,8 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.CommentLikeState
+import me.meeshy.sdk.model.CommentRepliesState
+import me.meeshy.sdk.model.CommentThreadState
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

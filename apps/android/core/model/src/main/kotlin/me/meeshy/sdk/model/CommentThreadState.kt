@@ -1,8 +1,5 @@
-package me.meeshy.app.feed
+package me.meeshy.sdk.model
 
-import androidx.compose.runtime.Immutable
-import me.meeshy.sdk.model.ApiPostComment
-import me.meeshy.sdk.model.ApiPostTranslationEntry
 
 /**
  * Immutable accumulation SSOT for a post's comment thread.
@@ -13,7 +10,6 @@ import me.meeshy.sdk.model.ApiPostTranslationEntry
  * send fails (roll it back). Every transition is pure — the ViewModel owns "when",
  * this owns "what the list becomes".
  */
-@Immutable
 data class CommentThreadState(
     val comments: List<ApiPostComment> = emptyList(),
     val pendingIds: Set<String> = emptySet(),
