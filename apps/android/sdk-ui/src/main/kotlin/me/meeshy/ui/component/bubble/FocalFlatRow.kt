@@ -348,6 +348,7 @@ private fun FlatIdentityHeader(content: BubbleContent, onSenderTap: (() -> Unit)
                 imageUrl = content.senderAvatarUrl,
                 presence = rememberPresence(content.senderProfile?.userId),
                 here = rememberConversationHere(content.senderProfile?.userId, content.viewingConversationId),
+                decorRing = content.senderRing,
             )
         }
         Text(

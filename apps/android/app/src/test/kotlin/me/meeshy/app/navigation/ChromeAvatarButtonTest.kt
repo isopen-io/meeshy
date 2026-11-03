@@ -65,3 +65,12 @@ class ChromeAvatarButtonTest {
             .inOrder()
     }
 }
+
+class ChromeAvatarContourTest {
+
+    @Test
+    fun `le disque local cede la place des qu'un contour equipe existe`() {
+        assertThat(chromeShowsLocalRing(equippedRing = null)).isTrue()
+        assertThat(chromeShowsLocalRing(equippedRing = Any())).isFalse()
+    }
+}

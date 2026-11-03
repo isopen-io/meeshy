@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.chrome.unreadBadgeLabel
 import me.meeshy.sdk.util.resolveServedImageUrl
+import me.meeshy.ui.appearance.rememberAvatarRing
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.chrome.FloatingButtonSize
 import me.meeshy.ui.theme.MeeshyPalette
@@ -47,6 +48,12 @@ internal fun chromeAvatarRingColors(menuExpanded: Boolean): List<Color> = if (me
 /** L'avatar dans le disque : 38 dp comme le `context: .custom(38)` iOS — l'anneau degrade fait 7 dp. */
 internal const val CHROME_AVATAR_SIZE_DP: Float = 38f
 
+/**
+ * Le disque degrade local ne se peint que SANS contour equipe : un contour (`profileDecor.avatarRing`) le remplace
+ * et l'avatar occupe alors l'empreinte du disque, le contour se posant DANS cette empreinte (iOS `avatarRingWithin`).
+ */
+internal fun chromeShowsLocalRing(equippedRing: Any?): Boolean = equippedRing == null
+
 /** La pastille de non-lus : seulement echelle FERMEE et compteur positif (iOS `!showMenu && unreadCount > 0`). */
 internal fun chromeBadgeVisible(menuExpanded: Boolean, unreadCount: Int): Boolean = !menuExpanded && unreadCount > 0
 
@@ -63,13 +70,22 @@ internal const val CHROME_BADGE_OFFSET_DP: Float = 16f
 internal fun ChromeAvatarButton(user: MeeshyUser?, avatarUrl: String?, unreadCount: Int, menuExpanded: Boolean) {
     val displayName = user?.effectiveDisplayName.orEmpty()
     Box(modifier = Modifier.size(FloatingButtonSize), contentAlignment = Alignment.Center) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(Brush.linearGradient(chromeAvatarRingColors(menuExpanded)), CircleShape),
-        )
+        val decorRing = user?.profileDecor?.avatarRing
+        val showsLocalRing = chromeShowsLocalRing(rememberAvatarRing(decorRing))
+        if (showsLocalRing) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Brush.linearGradient(chromeAvatarRingColors(menuExpanded)), CircleShape),
+            )
+        }
         // One face: the photo once loaded, its initials standing in until then — never an empty ring.
-        MeeshyAvatar(name = displayName, size = CHROME_AVATAR_SIZE_DP.dp, imageUrl = avatarUrl)
+        MeeshyAvatar(
+            name = displayName,
+            size = if (showsLocalRing) CHROME_AVATAR_SIZE_DP.dp else FloatingButtonSize,
+            imageUrl = avatarUrl,
+            decorRing = decorRing,
+        )
         if (chromeBadgeVisible(menuExpanded, unreadCount)) {
             ChromeNotificationBadge(
                 count = unreadCount,

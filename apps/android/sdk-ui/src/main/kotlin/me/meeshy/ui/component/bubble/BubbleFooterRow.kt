@@ -144,6 +144,7 @@ private fun BubbleIdentityFooter(
                     imageUrl = content.senderAvatarUrl,
                     presence = rememberPresence(content.senderProfile?.userId),
                     here = rememberConversationHere(content.senderProfile?.userId, content.viewingConversationId),
+                    decorRing = content.senderRing,
                     modifier = avatarModifier,
                 )
             }
