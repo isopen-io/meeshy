@@ -54,4 +54,7 @@ sealed interface ConversationListDialogEffect {
 
     /** La conversation s'ouvre après un « Rechercher » franchi par son code : armer la recherche. */
     data class ArmSearch(val conversationId: String) : ConversationListDialogEffect
+
+    /** « Ouvrir dans l'administration » : l'hôte ouvre [url] dans le navigateur. */
+    data class OpenUrl(val url: String) : ConversationListDialogEffect
 }

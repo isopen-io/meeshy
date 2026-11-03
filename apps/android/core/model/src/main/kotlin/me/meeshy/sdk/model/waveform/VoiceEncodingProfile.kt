@@ -16,9 +16,9 @@ public data class VoiceEncodingProfile(
     val channelCount: Int,
     val bitRateBitsPerSecond: Int,
 ) {
-    public enum class Container { MPEG_4 }
+    public enum class Container { MPEG_4, OGG }
 
-    public enum class Codec { AAC_LC }
+    public enum class Codec { AAC_LC, OPUS }
 
     /** Ce qu'on enregistre : un vocal de conversation ou le son d'une story. */
     public enum class Kind { VOICE_MESSAGE, STORY_SOUND }

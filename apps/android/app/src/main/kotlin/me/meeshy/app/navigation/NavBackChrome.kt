@@ -5,6 +5,7 @@ import me.meeshy.app.navigation.graph.CommunityRoutes
 import me.meeshy.app.navigation.graph.FriendRequestsDestinations
 import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.LinksRoutes
+import me.meeshy.app.navigation.graph.StoryRoutes
 
 /**
  * Comment un écran quitte la pile, comme sur iOS (#13364).
@@ -109,6 +110,7 @@ internal object NavBackChrome {
         arrow("Routes.POST_DETAIL", Routes.POST_DETAIL, feed("PostDetailScreen.kt")),
         modal("Routes.REELS", Routes.REELS, IosPresentation.COVER, "$FEATURE/reels/src/main/kotlin/me/meeshy/app/reels/ReelsScreen.kt"),
         modal("Routes.STORY_VIEWER", Routes.STORY_VIEWER, IosPresentation.COVER, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerScreen.kt"),
+        modal("StoryRoutes.STORY_POST", StoryRoutes.STORY_POST, IosPresentation.COVER, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerScreen.kt"),
         modal("Routes.STORY_COMPOSER_ROUTE", Routes.STORY_COMPOSER_ROUTE, IosPresentation.COVER, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/StoryComposerScreen.kt"),
         modal("Routes.COMPOSER", Routes.COMPOSER, IosPresentation.COVER, "app/src/main/kotlin/me/meeshy/app/composer/host/ComposerHostScreen.kt"),
         // Réglages.

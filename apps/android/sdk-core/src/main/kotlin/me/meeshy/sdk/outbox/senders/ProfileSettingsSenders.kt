@@ -134,7 +134,7 @@ public class UpdateAudioSettingsHandler @Inject constructor(
 private val PREFERENCE_RETRYABLE = setOf(401, 408, 429)
 private val PREFERENCE_CLIENT_ERRORS = 400..499
 
-private fun NetworkResult<*>.toPreferenceSendResult(block: String): SendResult = when (this) {
+internal fun NetworkResult<*>.toPreferenceSendResult(block: String): SendResult = when (this) {
     is NetworkResult.Success -> SendResult.Success
     is NetworkResult.Failure -> {
         val status = error.httpStatus

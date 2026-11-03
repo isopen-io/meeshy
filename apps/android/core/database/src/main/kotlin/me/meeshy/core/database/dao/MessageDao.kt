@@ -174,6 +174,26 @@ public interface MessageDao {
         throughMillis: Long,
     ): Flow<List<MessageEntity>>
 
+    /** Les [limit] lignes strictement plus anciennes que [createdAt], la plus récente d'abord : le côté ancien d'un saut. */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId AND createdAt < :createdAt " +
+            "ORDER BY createdAt DESC LIMIT :limit",
+    )
+    public suspend fun olderThan(conversationId: String, createdAt: Long, limit: Int): List<MessageEntity>
+
+    /** Les [limit] lignes strictement plus récentes que [createdAt], la plus ancienne d'abord : le côté récent d'un saut. */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId AND createdAt > :createdAt " +
+            "ORDER BY createdAt ASC LIMIT :limit",
+    )
+    public suspend fun newerThan(conversationId: String, createdAt: Long, limit: Int): List<MessageEntity>
+
+    /** Les lignes d'une recherche, la plus récente d'abord : le mode `Search(ids)` de la fenêtre. */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId AND id IN (:ids) ORDER BY createdAt DESC",
+    )
+    public fun observeByIds(conversationId: String, ids: List<String>): Flow<List<MessageEntity>>
+
     /**
      * Oldest server-acked row among the newest [limit] — the `before` cursor of the RECENT window
      * (#14670). The cache may hold an older island (a jump to an old message): paging from the
