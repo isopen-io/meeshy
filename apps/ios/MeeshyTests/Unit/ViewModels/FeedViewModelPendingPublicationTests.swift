@@ -102,4 +102,15 @@ final class FeedViewModelPendingPublicationTests: XCTestCase {
         XCTAssertNil(PendingPublicationMarker.label(postId: "665f1c2e9b1d4a0012345678"),
                      "une publication en ligne garde son heure")
     }
+
+    /// Annulée depuis la pastille ou le détail, la carte optimiste quitte le
+    /// fil : sa ligne n'existe plus, rien ne la réconcilierait jamais.
+    func test_cancellationFromAnotherSurface_dropsTheQueuedCard() async throws {
+        let (sut, queue, _) = makeSUT(cancellation: .removed)
+        let cmid = try await queuedPostId(sut, queue)
+
+        _ = await PendingPublicationCancel.run(cmid, queue: queue, toasts: MockFeedbackToast())
+
+        XCTAssertFalse(sut.posts.contains { $0.id == cmid })
+    }
 }

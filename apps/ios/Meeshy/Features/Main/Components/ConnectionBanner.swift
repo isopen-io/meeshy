@@ -225,7 +225,9 @@ struct ConnectionBanner: View {
                 // le portait déjà sans jamais s'en servir, et le tap tombait
                 // dans `case .unknown: break` chez les deux racines — une
                 // publication échouée était un mur.
-                retryOutboxId: StuckPublicationRetry.retryableOutboxId(for: item)
+                retryOutboxId: StuckPublicationRetry.retryableOutboxId(for: item),
+                // #10331 — une publication en file s'annule d'ici aussi.
+                pendingPublicationId: PendingPublicationPill.cancellableId(for: item)
             ))
         }
 
@@ -276,7 +278,8 @@ struct ConnectionBanner: View {
         } else {
             SyncPill(entries: entries,
                      onTap: onItemTap,
-                     onRetry: { StuckPublicationRetry.retry(outboxId: $0) })
+                     onRetry: { StuckPublicationRetry.retry(outboxId: $0) },
+                     onCancelPublication: { PendingPublicationCancel.start($0) })
                 .adaptiveOnChange(of: statusVM.status) { oldValue, newValue in
                     handleStatusTransition(from: oldValue, to: newValue)
                 }

@@ -109,7 +109,6 @@
     <string name="about_version_label">Versión %1$s</string>
     <string name="about_info_application_id">ID de aplicación</string>
     <string name="settings_help_support">Ayuda y soporte</string>
-    <string name="licenses_intro">Meeshy está construido con las siguientes bibliotecas de código abierto.</string>
     <string name="licenses_type_mit">MIT</string>
     <string name="licenses_type_apache">Apache 2.0</string>
     <string name="licenses_type_bsd">BSD</string>

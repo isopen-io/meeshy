@@ -52,4 +52,8 @@ object MentionRoster {
     /** username → display name map for resolving `@mentions` in rendered bubbles. */
     fun displayNames(candidates: List<MentionCandidate>): Map<String, String> =
         candidates.associate { it.username to it.displayName }
+
+    /** Le roster d'abord, complété des noms servis avec le message : le roster ne masque jamais un nom connu. */
+    fun withServedNames(roster: Map<String, String>?, served: Map<String, String>): Map<String, String>? =
+        if (served.isEmpty()) roster else served + roster.orEmpty()
 }

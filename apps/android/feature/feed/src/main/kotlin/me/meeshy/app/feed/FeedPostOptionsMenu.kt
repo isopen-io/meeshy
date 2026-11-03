@@ -51,6 +51,7 @@ internal fun PostOptionsButton(
     onDelete: () -> Unit,
     tint: androidx.compose.ui.graphics.Color = MeeshyTheme.tokens.textSecondary,
     onImager: (() -> Unit)? = null,
+    onOpen: (() -> Unit)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = rememberMeeshyHaptics()
@@ -63,19 +64,21 @@ internal fun PostOptionsButton(
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            PostActionMenu.actions(PostActionContext(isOwn = isOwn, isBookmarked = isBookmarked, hasText = hasText, imageable = onImager != null)).forEach { action ->
+            PostActionMenu.actions(PostActionContext(isOwn = isOwn, isBookmarked = isBookmarked, hasText = hasText, imageable = onImager != null, canOpen = onOpen != null)).forEach { action ->
                 val (label, handler) = when (action) {
-                    PostAction.Share -> stringResource(R.string.feed_action_share) to onShare
-                    PostAction.CopyLink -> stringResource(R.string.feed_action_copy_link) to onCopyLink
+                    PostAction.Open -> stringResource(R.string.feed_post_open) to { haptics.light(); (onOpen ?: {})() }
+                    PostAction.Share -> stringResource(R.string.feed_action_share) to { haptics.light(); onShare() }
+                    PostAction.CopyLink -> stringResource(R.string.feed_action_copy_link) to { haptics.success(); onCopyLink() }
                     PostAction.CopyText -> stringResource(R.string.feed_action_copy_text) to { haptics.success(); onCopyText() }
                     PostAction.Repost -> stringResource(R.string.feed_action_repost) to onRepost
                     PostAction.Quote -> stringResource(R.string.feed_action_quote) to onQuote
-                    PostAction.Bookmark -> stringResource(R.string.feed_action_bookmark) to onBookmarkToggle
-                    PostAction.Unbookmark -> stringResource(R.string.feed_action_unbookmark) to onBookmarkToggle
+                    PostAction.Bookmark -> stringResource(R.string.feed_action_bookmark) to { haptics.light(); onBookmarkToggle() }
+                    PostAction.Unbookmark -> stringResource(R.string.feed_action_unbookmark) to { haptics.light(); onBookmarkToggle() }
                     PostAction.Imager -> stringResource(R.string.feed_comment_imagine) to (onImager ?: {})
-                    PostAction.Pin -> stringResource(R.string.feed_action_pin) to onPin
-                    PostAction.Report -> stringResource(R.string.feed_action_report) to onReport
-                    PostAction.Delete -> stringResource(R.string.feed_action_delete) to onDelete
+                    PostAction.Pin -> stringResource(R.string.feed_action_pin) to { haptics.light(); onPin() }
+                    PostAction.Report -> stringResource(R.string.feed_action_report) to { haptics.medium(); onReport() }
+                    PostAction.Delete -> stringResource(R.string.feed_action_delete) to { haptics.medium(); onDelete() }
+                    PostAction.SaveMedia, PostAction.ViewViewers, PostAction.Edit, PostAction.NearHere -> return@forEach
                 }
                 DropdownMenuItem(
                     text = {

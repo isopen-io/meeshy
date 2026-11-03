@@ -42,9 +42,9 @@ extension PostDetailViewModel {
 
     /// **Une publication encore dans la file d'envoi s'ANNULE** (#10331) : son
     /// id est le cmid de sa ligne `.createPost`, et rien n'existe côté serveur
-    /// à supprimer. Même verdict que la carte du fil (`withdrawPendingPublication`).
+    /// à supprimer. Même action que la pastille (`PendingPublicationCancel`).
     private func cancelPendingSend(_ cmid: String) async -> Bool {
-        PendingSendNotice.announce(await offlineQueue.cancelPendingPublication(clientMutationId: cmid))
+        await PendingPublicationCancel.run(cmid, queue: offlineQueue)
     }
 
     func pinPost(_ postId: String) async {

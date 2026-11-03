@@ -36,6 +36,7 @@ public object PlaybackModule {
         positions: SharedPreferencesPlaybackPositionStore,
         reportSink: PlaybackReportSink,
         callGate: CallActivityGate,
+        coordinator: PlaybackCoordinator,
         @MainDispatcher dispatcher: CoroutineDispatcher,
     ): AudioPlaybackEngine = Media3AudioPlaybackEngine(
         portFactory = exoPortFactory(context),
@@ -43,7 +44,8 @@ public object PlaybackModule {
         reportSink = reportSink,
         callActive = { callGate.isActive },
         dispatcher = dispatcher,
-    )
+        coordinator = coordinator,
+    ).also(coordinator::register)
 
     @Provides
     @Singleton

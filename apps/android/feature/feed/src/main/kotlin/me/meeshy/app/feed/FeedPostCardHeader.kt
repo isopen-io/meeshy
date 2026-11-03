@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -49,6 +52,7 @@ internal fun FeedPostCardHeader(
     onPin: () -> Unit,
     onReport: () -> Unit,
     onDelete: () -> Unit,
+    onOpen: (() -> Unit)? = null,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -85,6 +89,7 @@ internal fun FeedPostCardHeader(
                     color = MeeshyTheme.tokens.textSecondary,
                 )
             }
+            if (isOwn) AuthorReachLine(post)
         }
         PostOptionsButton(
             isOwn = isOwn,
@@ -100,6 +105,7 @@ internal fun FeedPostCardHeader(
             onReport = onReport,
             onDelete = onDelete,
             onImager = rememberPostImager(post),
+            onOpen = onOpen,
         )
     }
 }
@@ -150,4 +156,35 @@ private fun RepostAttribution(handle: String) {
             modifier = Modifier.padding(start = MeeshySpacing.xs),
         )
     }
+}
+
+/**
+ * La portée, pour l'auteur SEUL : impressions puis vues (iOS `reachMetrics`). Les nombres seulement ; la liste des
+ * vues n'est offerte qu'à ADMIN/BIGBOSS (`PostMenuEntry.ViewViewers`). Un lecteur n'en voit rien.
+ */
+@Composable
+private fun AuthorReachLine(post: FeedPostPresentation) {
+    val reach = PostReachFormatter.components(username = post.authorUsername, isAuthor = true, viewCount = post.viewCount, impressionCount = post.impressionCount)
+    val impressions = stringResource(R.string.feed_reel_impressions)
+    val views = stringResource(R.string.feed_reel_views)
+    val spoken = "$impressions ${reach.impressions}, $views ${reach.views}"
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = spoken },
+    ) {
+        ReachFigure(Icons.Filled.BarChart, reach.impressions.orEmpty())
+        Spacer(Modifier.width(MeeshySpacing.sm))
+        ReachFigure(Icons.Filled.Visibility, reach.views.orEmpty())
+    }
+}
+
+@Composable
+private fun ReachFigure(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+    Icon(imageVector = icon, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(12.dp))
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MeeshyTheme.tokens.textSecondary,
+        modifier = Modifier.padding(start = MeeshySpacing.xs),
+    )
 }
