@@ -5,9 +5,24 @@ package me.meeshy.sdk.model.call
  * démarre pas ne termine pas l'appel : il continue en audio, et le pair l'apprend comme une caméra coupée.
  */
 enum class CallVideoFallback {
+    /** Un émulateur dont la caméra est fantôme (iOS `simulator`) : rien à réparer, rien à dire. */
+    Emulator,
     CameraPermissionDenied,
     NoCamera;
 
     /** Seul un refus d'accès se dit à l'utilisateur (toast qui ouvre les Paramètres) : une absence de caméra n'a rien à réparer. */
     val warnsUser: Boolean get() = this == CameraPermissionDenied
+
+    companion object {
+        /**
+         * Le repli que dicte l'état de la caméra, ou `null` quand la vidéo peut démarrer. L'ordre est celui d'iOS :
+         * un émulateur n'a pas de vraie caméra, puis le refus d'accès (réparable), puis l'absence de matériel.
+         */
+        fun resolve(cameraGranted: Boolean, hasCamera: Boolean = true, isEmulator: Boolean = false): CallVideoFallback? = when {
+            isEmulator -> Emulator
+            !cameraGranted -> CameraPermissionDenied
+            !hasCamera -> NoCamera
+            else -> null
+        }
+    }
 }

@@ -162,6 +162,7 @@
     <string name="call_signal_fair">Signal moyen</string>
     <string name="call_signal_lost">Signal très faible</string>
     <string name="call_signal_poor">Signal faible</string>
+    <string name="call_starter_busy">Un appel est déjà en cours</string>
     <string name="call_transcript_participant">Participant</string>
     <string name="call_transcript_show_original">Afficher le texte original</string>
     <string name="call_transcript_show_translated">Afficher la traduction</string>
@@ -169,4 +170,5 @@
     <string name="call_zoom_cycle_hint">Touchez pour passer au facteur de zoom suivant</string>
     <string name="call_zoom_hint">Balayez vers le haut ou le bas pour zoomer. Sur l\'écran, pincez votre image ; touchez deux fois pour revenir à 1×</string>
     <string name="call_zoom_label">Zoom de ma caméra</string>
+    <string name="permission_microphone_denied">Micro refusé — toucher pour ouvrir les Réglages</string>
 </resources>

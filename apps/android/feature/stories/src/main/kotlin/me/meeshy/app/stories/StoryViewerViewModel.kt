@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.model.FeedMedia
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.game.GameMomentPresence
@@ -732,7 +733,7 @@ class StoryViewerViewModel @Inject constructor(
 
         val user = sessionRepository.currentUser.value ?: return present
         val presentLower = presentCodes.mapTo(mutableSetOf()) { it.lowercase() }
-        val translatable = LanguageResolver.preferredContentLanguages(user)
+        val translatable = ReaderPrism.resolve(user)
             .distinctBy { it.lowercase() }
             .filter { it.lowercase() !in presentLower }
             .map { languageOption(it, storyId, isTranslatable = true) }

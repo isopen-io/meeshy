@@ -324,6 +324,10 @@
     <string name="story_media_soundExtraction_a11yHint">Altre persone potranno riutilizzare la colonna sonora dei video di questo post nelle proprie pubblicazioni.</string>
     <string name="story_media_soundExtraction_caption">Altre persone potranno riutilizzare la colonna sonora dei video di questo post.</string>
     <string name="story_media_soundExtraction_label">Consenti il riutilizzo dell\'audio</string>
+    <string name="story_notification_expired_back">Torna alle notifiche</string>
+    <string name="story_notification_expired_cta_create">Crea una storia</string>
+    <string name="story_notification_expired_subtitle">Questa storia non è più disponibile.</string>
+    <string name="story_notification_expired_title">Storia scaduta</string>
     <string name="story_reader_buffering">Caricamento della storia in corso</string>
     <string name="story_reader_loading">Caricamento della storia…</string>
     <string name="story_repost_error_forbidden">Questa storia non può essere ricondivisa</string>
