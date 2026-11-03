@@ -254,7 +254,7 @@ function hatFront() {
       art([cone], [radial([[0, '#E3263F'], [1, NOEL.deepRed]], [62, 16], 40)]),
       art([circle(6.4, pompom)], [radial([[0, '#FFFFFF'], [1, '#D9E2EC']], pompom, 6.4)]),
     ],
-    around(pivot, { r: animated(keys([[0, -4], [1.5, 4], [3, -4], [4.5, 4], [6, -4]])) }),
+    around(pivot, { r: animated(keys([[0, -4], [2, 4], [3.5, -2], [5, 3], [6, -4]])) }),
   );
   return film('bonnet-du-pere-noel-avant', seconds, [swinging, art([brim], [radial([[0, '#FFFFFF'], [1, '#D9E2EC']], [C, 24], 30), stroke('#CBD5E1', 0.6)])]);
 }
