@@ -1,4 +1,4 @@
-import { relationLevelIfAtLeast, relationRungAfter, type RelationLevel, type RelationRequestLevel } from '@meeshy/shared/types/relation';
+import { compareRelationLevel, relationLevelIfAtLeast, relationRungAfter, type RelationLevel, type RelationRequestLevel } from '@meeshy/shared/types/relation';
 import { evaluateRelationRequest } from '@meeshy/shared/utils/relation-request';
 
 import type { FriendRequestRecord } from '@/lib/api/friend-requests';
@@ -47,12 +47,46 @@ export type RaiseOffer =
   | { readonly kind: 'locked'; readonly target: RelationRequestLevel }
   | { readonly kind: 'none' };
 
-/** Le cran suivant, ouvert ou verrouillé selon la loi de demande ; plus rien au sommet. */
+const dateOf = (iso: string | undefined): Date | null => {
+  if (iso === undefined) return null;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+/**
+ * Le cran suivant, ouvert ou verrouillé selon la loi de demande ; plus rien au
+ * sommet. Le délai servi (`raiseBlockedUntil`, #14910) verrouille tant qu'il
+ * court ; absent ou illisible, la loi décide seule.
+ */
 export function raiseOffer(link: RelationLink, now: Date): RaiseOffer {
   const target = relationRungAfter(link.effectiveLevel);
   if (target === null) return { kind: 'none' };
-  const verdict = evaluateRelationRequest({ targetLevel: target, currentLevel: link.effectiveLevel, eligibleFor: link.eligibleFor, cooldownUntil: null, now });
+  const cooldownUntil = dateOf(link.raiseBlockedUntil);
+  const verdict = evaluateRelationRequest({ targetLevel: target, currentLevel: link.effectiveLevel, eligibleFor: link.eligibleFor, cooldownUntil, now });
   return verdict.allowed ? { kind: 'available', target } : { kind: 'locked', target };
+}
+
+export type Demotion = {
+  readonly kind: 'demote' | 'unlink';
+  readonly from: CircleLevel;
+  readonly to: RelationLevel;
+};
+
+const DEMOTION: Readonly<Record<CircleLevel, RelationLevel>> = { BLOOD: 'CLOSE', CLOSE: 'FRIEND', FRIEND: 'ACQUAINTANCE', ACQUAINTANCE: 'PUBLIC' };
+
+/**
+ * **RÉTROGRADER D'UN CRAN, OU ANNULER LE LIEN** (#14910) — un cran sous le niveau
+ * EFFECTIF affiché, jamais sous Connaissance par ce geste : à Connaissance, il
+ * devient « Annuler le lien » (`PUBLIC`). La passerelle ne baisse que MON accord
+ * et refuse ce qui n'en est pas une baisse (`RELATION_NOT_A_DROP`) : un accord
+ * déjà au plus bas n'offre rien.
+ */
+export function demotionOf(link: RelationLink): Demotion | null {
+  const from = CIRCLE_LEVELS.find((level) => level === link.effectiveLevel);
+  if (from === undefined) return null;
+  const to = DEMOTION[from];
+  if (compareRelationLevel(to, link.grantedByMe) >= 0) return null;
+  return { kind: to === 'PUBLIC' ? 'unlink' : 'demote', from, to };
 }
 
 export const MISSING_PIECES = ['message', 'reaction', 'postView', 'audio', 'other'] as const;
