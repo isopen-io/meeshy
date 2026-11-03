@@ -43,6 +43,9 @@
     <string name="feed_notice_reported">Post reported</string>
     <string name="feed_notice_repost_failed">Error reposting</string>
     <string name="feed_notice_translation_failed">Translation error</string>
+    <string name="feed_pending_cancel_send">Cancel sending</string>
+    <string name="feed_pending_waiting">Waiting to send</string>
+    <string name="feed_pending_withdrawn">Sending canceled</string>
     <string name="feed_post_deleted">Post deleted</string>
     <string name="feed_post_open">Open</string>
     <string name="feed_post_pinned">Post pinned</string>

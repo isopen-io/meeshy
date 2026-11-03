@@ -9,34 +9,41 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.map
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.publication.PublicationOutbox
-import me.meeshy.sdk.publication.UnsentPublication
+import me.meeshy.sdk.session.SessionRepository
 import javax.inject.Inject
 
 /**
- * « Publications non envoyées » (#13417, iso iOS #13415): every post, reel and story the device
- * holds and the server has not confirmed, read live from the outbox. A failed one is retried
- * (its refused uploads with it), a failed post, reel or story reopens in its composer, and only the
- * author's explicit « Supprimer » removes a publication and its media from the device.
+ * The publications the device holds and the server has not confirmed (#13417, iso iOS #13415), read live from the
+ * outbox. Since #14902 (iOS #14879) they read in the feed as the author's own cards, their time replaced by the sending
+ * clock: no row, no list. A failed one is retried (its refused uploads with it) or reopened in its composer from the
+ * card's menu, and only the author's explicit « Annuler l'envoi » removes a publication and its media from the device.
  */
 @HiltViewModel
 class UnsentPublicationsViewModel @Inject constructor(
     private val publications: PublicationOutbox,
     private val workManager: WorkManager,
     networkMonitor: NetworkMonitor,
+    sessionRepository: SessionRepository,
+    config: MeeshyConfig,
 ) : ViewModel() {
-
-    val items: StateFlow<List<UnsentPublication>> = publications.unsent()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
     /** Whether the connection is down: the break told to the author depends on it (wait, not retry). */
     val offline: StateFlow<Boolean> = networkMonitor.isOnline.map { !it }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), !networkMonitor.isOnline.value)
+
+    /** The feed cards of the held publications, newest first — `null` until the outbox has been read once. */
+    val cards: StateFlow<List<PendingFeedCard>?> =
+        combine(publications.unsent(), offline, sessionRepository.currentUser) { items, isOffline, user ->
+            PendingFeedPublications.cards(items, user, config.apiBaseUrl, isOffline)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
 
     private val _reopened = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 

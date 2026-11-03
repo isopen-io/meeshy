@@ -24,6 +24,7 @@ import java.util.Locale
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.bubble.PendingSendClock
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.format.RelativeTimeFormat
@@ -50,6 +51,7 @@ internal fun FeedPostCardHeader(
     onReport: () -> Unit,
     onDelete: () -> Unit,
     onOpen: (() -> Unit)? = null,
+    pendingSend: PendingSendActions? = null,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -79,14 +81,22 @@ internal fun FeedPostCardHeader(
                 }
                 post.repostAttribution?.let { handle -> RepostAttribution(handle) }
             }
-            post.createdAtIso?.let {
-                Text(
-                    text = postRelativeTime(it),
-                    style = MaterialTheme.typography.bodySmall,
+            if (post.isPendingSend) {
+                PendingSendClock(
                     color = MeeshyTheme.tokens.textSecondary,
+                    description = stringResource(R.string.feed_pending_waiting),
+                    modifier = Modifier.padding(top = MeeshySpacing.xxs),
                 )
+            } else {
+                post.createdAtIso?.let {
+                    Text(
+                        text = postRelativeTime(it),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.textSecondary,
+                    )
+                }
+                if (isOwn) AuthorReachLine(post)
             }
-            if (isOwn) AuthorReachLine(post)
         }
         PostOptionsButton(
             isOwn = isOwn,
@@ -103,6 +113,7 @@ internal fun FeedPostCardHeader(
             onDelete = onDelete,
             onImager = rememberPostImager(post),
             onOpen = onOpen,
+            pendingSend = pendingSend,
         )
     }
 }
