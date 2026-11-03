@@ -57,6 +57,7 @@ public object OutboxLocalTargets {
         OutboxKind.CREATE_COMMENT,
         OutboxKind.CONSUME_AFTER_READ,
         OutboxKind.CONSUME_VIEW_ONCE,
+        OutboxKind.REPOST_POST,
     ).map { it.name }.toSet()
 
     /** Whether [kind] sends its row's `targetId` to the server as a resource key. */

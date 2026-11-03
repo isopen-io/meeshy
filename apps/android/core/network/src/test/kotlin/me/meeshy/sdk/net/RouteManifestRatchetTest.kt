@@ -108,7 +108,7 @@ class RouteManifestRatchetTest {
          * 191 : moins `POST /relations/:userId/level` (#14910 : rétrograder un lien ou l'annuler depuis le profil), que
          * porte `RelationsApi.lower`.
          */
-        const val TO_PORT_CEILING = 190
+        const val TO_PORT_CEILING = 172
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

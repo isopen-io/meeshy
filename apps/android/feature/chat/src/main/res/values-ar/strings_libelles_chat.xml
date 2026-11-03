@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="chat_pinned_count">
+        <item quantity="zero">لا رسائل مثبتة</item>
+        <item quantity="one">رسالة مثبتة واحدة</item>
+        <item quantity="two">رسالتان مثبتتان</item>
+        <item quantity="few">%1$d رسائل مثبتة</item>
+        <item quantity="many">%1$d رسالة مثبتة</item>
+        <item quantity="other">%1$d رسالة مثبتة</item>
+    </plurals>
+    <plurals name="chat_typing_many">
+        <item quantity="zero">لا أحد يكتب…</item>
+        <item quantity="one">شخص واحد يكتب…</item>
+        <item quantity="two">شخصان يكتبان…</item>
+        <item quantity="few">%1$d أشخاص يكتبون…</item>
+        <item quantity="many">%1$d شخصًا يكتبون…</item>
+        <item quantity="other">%1$d شخص يكتبون…</item>
+    </plurals>
+</resources>

@@ -44,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -143,7 +144,7 @@ internal fun ConversationMembersContent(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = stringResource(R.string.conversation_members_title, state.memberCount),
+                    text = pluralStringResource(R.plurals.conversation_members_title, state.memberCount, state.memberCount),
                     style = MaterialTheme.typography.titleMedium,
                     color = MeeshyTheme.tokens.textPrimary,
                 )

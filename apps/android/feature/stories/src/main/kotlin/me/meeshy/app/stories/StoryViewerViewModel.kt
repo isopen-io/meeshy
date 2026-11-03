@@ -52,7 +52,11 @@ import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.model.scene.SceneObjectNumbers
 import me.meeshy.sdk.model.scene.SceneLookRecipe
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
+import me.meeshy.sdk.model.story.StoryRepostDestination
+import me.meeshy.sdk.model.story.StoryRepostFailure
+import me.meeshy.sdk.story.StoryDirectRepostOutcome
 import me.meeshy.sdk.story.StoryRepository
+import me.meeshy.sdk.story.StoryRepostPublisher
 import me.meeshy.sdk.story.purgingDeadStories
 import me.meeshy.sdk.story.toStoryGroups
 import me.meeshy.sdk.story.toStoryItem
@@ -75,6 +79,7 @@ class StoryViewerViewModel @Inject constructor(
     private val privacyPreferencesStore: PrivacyPreferencesStore,
     savedStateHandle: SavedStateHandle,
     private val gameMoment: GameMomentPresence = GameMomentPresence(),
+    private val repostPublisher: StoryRepostPublisher = storyRepository.asRepostPublisher(),
 ) : ViewModel() {
 
     private val userId: String = savedStateHandle.get<String>(USER_ID_ARG).orEmpty()
@@ -584,25 +589,31 @@ class StoryViewerViewModel @Inject constructor(
     }
 
     /**
-     * « Republier » (#14443, iOS `StoryDirectRepost`) : la story à l'écran repart EN STORY d'un seul geste, chez autrui
-     * seulement. Le compteur et la marque bougent aussitôt ; un refus les rend et dit pourquoi.
+     * « Republier » (#14443, #15067, iOS `StoryDirectRepost`) : la story à l'écran repart d'un seul geste, chez autrui
+     * seulement — en story depuis le rail, en post ou en réel depuis le menu. En story, le compteur et la marque bougent
+     * aussitôt ; un refus les rend et dit pourquoi, hors ligne la republication part au retour du réseau.
      */
-    fun repostCurrentStory() {
+    fun repostCurrentStory(destination: StoryRepostDestination = StoryRepostDestination.STORY) {
         val storyId = playback.currentSlide?.id ?: return
         if (playback.currentGroup?.userId == sessionRepository.currentUserId) return
-        reposts = reposts.begun(storyId) ?: return
-        emit()
+        val marked = destination == StoryRepostDestination.STORY
+        if (marked) {
+            reposts = reposts.begun(storyId) ?: return
+            emit()
+        }
         viewModelScope.launch {
-            val refusal = try {
-                (storyRepository.repost(storyId) as? NetworkResult.Failure)?.let { StoryRepostRefusal.of(it.error) }
+            val outcome = try {
+                repostPublisher.publish(storyId, destination)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                StoryRepostRefusal.OTHER
+                StoryDirectRepostOutcome.Refused(StoryRepostFailure.OTHER)
             }
-            reposts = if (refusal == null) reposts.confirmed(storyId) else reposts.refused(storyId)
-            emit()
-            toastChannel.trySend(StoryRepostRefusal.toast(refusal))
+            if (marked) {
+                reposts = if (outcome.isDone) reposts.confirmed(storyId) else reposts.refused(storyId)
+                emit()
+            }
+            outcome.toast(destination)?.let { toastChannel.trySend(it) }
         }
     }
 

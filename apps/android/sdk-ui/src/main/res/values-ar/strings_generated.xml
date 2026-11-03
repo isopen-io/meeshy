@@ -404,6 +404,9 @@
     <string name="time_lastSeen_online">متصل</string>
     <string name="time_lastSeen_seen">شوهد %1$s</string>
     <string name="time_lastSeen_yesterdayAt">شوهد أمس في %1$s</string>
+    <string name="userIdentity_language_show_a11y">عرض بـ%1$s</string>
+    <string name="userIdentity_read">مقروء</string>
+    <string name="userIdentity_translation_available">الترجمة متاحة</string>
     <string name="viewer_caption_see_less">عرض أقل</string>
     <string name="viewer_caption_see_less_hint">يطوي الشرح</string>
     <string name="viewer_caption_see_more">عرض المزيد</string>

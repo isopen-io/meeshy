@@ -389,6 +389,9 @@
     <string name="time_lastSeen_online">In linea</string>
     <string name="time_lastSeen_seen">Visto %1$s</string>
     <string name="time_lastSeen_yesterdayAt">Visto ieri alle %1$s</string>
+    <string name="userIdentity_language_show_a11y">Mostra in %1$s</string>
+    <string name="userIdentity_read">Letto</string>
+    <string name="userIdentity_translation_available">Traduzione disponibile</string>
     <string name="viewer_caption_see_less">mostra meno</string>
     <string name="viewer_caption_see_less_hint">Comprime la didascalia</string>
     <string name="viewer_caption_see_more">mostra di più</string>

@@ -1,5 +1,15 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.cache.valueOrNull
+import me.meeshy.sdk.model.CommentLikeState
+import me.meeshy.sdk.model.CommentReactionLaw
+import me.meeshy.sdk.model.mediaRewritten
+import me.meeshy.sdk.model.mergedFirstPage
+import me.meeshy.sdk.model.reactionAggregated
+import me.meeshy.sdk.model.aggregated
+import me.meeshy.sdk.model.CommentRepliesState
+import me.meeshy.sdk.model.CommentThreadState
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -38,6 +48,8 @@ import me.meeshy.sdk.model.SocketCommentTranslationUpdatedData
 import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.CommentHeartTransport
+import me.meeshy.sdk.post.PostCommentsEngine
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.post.UnsentCommentStore
 import me.meeshy.sdk.session.SessionRepository
@@ -122,6 +134,8 @@ class PostCommentsViewModel @Inject constructor(
     private val mediaUploader: CommentMediaUploader? = null,
     private val unsentComments: UnsentCommentStore? = null,
     mentionContacts: MentionContacts = MentionContacts.None,
+    private val commentsEngine: PostCommentsEngine? = null,
+    private val heartTransport: CommentHeartTransport? = null,
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
@@ -131,6 +145,10 @@ class PostCommentsViewModel @Inject constructor(
     private val likes = MutableStateFlow(CommentLikeState())
     private val replies = MutableStateFlow(CommentRepliesState())
     private val composer = MutableStateFlow<ReplyTarget?>(null)
+
+    /** The rows served from the disk and not written back untouched (it would renew their age). */
+    private var persistBaseline: List<ApiPostComment>? = null
+    private var networkConfirmed = false
 
     /** Per-comment Prisme language override (comment id → chosen language code), set by a flag tap. */
     private val activeLanguages = MutableStateFlow<Map<String, String>>(emptyMap())
@@ -189,8 +207,33 @@ class PostCommentsViewModel @Inject constructor(
                 .collect { projected -> _state.value = projected }
         }
         restoreUnsentComment()
+        persistThread()
         observeRealtime()
         loadInitial()
+    }
+
+    /**
+     * Every change of the loaded thread (a page, a live echo, an edit, a reaction, a media rewrite) is handed to the
+     * disk by the shared engine, so reopening the post serves it back without the network. Optimistic rows are
+     * filtered by the cache source itself, never here.
+     */
+    private fun persistThread() {
+        val engine = commentsEngine ?: return
+        if (postId.isBlank()) return
+        viewModelScope.launch {
+            thread.collect { state ->
+                val unchangedFromDisk = state.comments == persistBaseline
+                if (state.hasLoaded && !unchangedFromDisk && (networkConfirmed || persistBaseline != null)) {
+                    try {
+                        engine.keep(postId, state.comments)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // the disk is a convenience — the thread on screen stays
+                    }
+                }
+            }
+        }
     }
 
     /** #13693 — a comment typed in a banner and refused for good comes back in this post's field (it leaves the store). */
@@ -236,6 +279,19 @@ class PostCommentsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             socialSocket.commentReactionRemoved.collect { event -> onCommentReaction(event, added = false) }
+        }
+        viewModelScope.launch {
+            try {
+                socialSocket.commentMediaUpdated.collect { event ->
+                    if (event.postId != postId) return@collect
+                    thread.update { it.mediaRewritten(event.comment) }
+                    replies.update { it.mediaRewritten(event.comment) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // a flow that cannot be collected is simply not listened to
+            }
         }
         viewModelScope.launch {
             socialSocket.commentTranslationUpdated.collect { event -> onCommentTranslationUpdated(event) }
@@ -291,8 +347,19 @@ class PostCommentsViewModel @Inject constructor(
      * `PostDetailViewModel` `commentReactionAdded`/`commentReactionRemoved` sinks.
      */
     private fun onCommentReaction(event: SocketCommentReactionUpdateData, added: Boolean) {
-        if (event.postId != postId || event.emoji != HEART_EMOJI) return
-        val isOwn = event.userId == sessionRepository.currentUser.value?.id
+        if (event.postId != postId) return
+        val viewerId = sessionRepository.currentUser.value?.id
+        val aggregation = event.aggregation
+        if (aggregation != null && aggregation.emoji.isNotBlank()) {
+            thread.update { it.reactionAggregated(event.commentId, aggregation, viewerId, HEART_EMOJI) }
+            replies.update { it.reactionAggregated(event.commentId, aggregation, viewerId, HEART_EMOJI) }
+            if (aggregation.emoji == HEART_EMOJI) {
+                likes.update { it.aggregated(event.commentId, CommentReactionLaw.viewerHeart(aggregation, viewerId)) }
+            }
+            return
+        }
+        if (event.emoji != HEART_EMOJI) return
+        val isOwn = event.userId == viewerId
         likes.update { it.reactionApplied(event.commentId, isOwn = isOwn, added = added) }
     }
 
@@ -355,7 +422,33 @@ class PostCommentsViewModel @Inject constructor(
         }
         if (status.value.isLoading || thread.value.hasLoaded) return
         status.update { it.copy(isLoading = true, error = null) }
-        fetch(cursor = null, loadingMore = false)
+        val engine = commentsEngine
+        if (engine == null) {
+            fetch(cursor = null, loadingMore = false)
+            return
+        }
+        viewModelScope.launch {
+            val cached = try {
+                engine.cached(postId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                CacheResult.Empty
+            }
+            val rows = cached.valueOrNull
+            if (rows != null) {
+                val more = rows.size >= PAGE_SIZE
+                persistBaseline = rows
+                thread.update { it.mergedFirstPage(rows, if (more) rows.lastOrNull()?.id else null, more) }
+                likes.update { it.seeded(rows, HEART_EMOJI) }
+                preloadReplyPreviews()
+            }
+            if (cached is CacheResult.Fresh) {
+                status.update { it.copy(isLoading = false, error = null) }
+            } else {
+                fetch(cursor = null, loadingMore = false)
+            }
+        }
     }
 
     /** « Try again » of the error state: replays the first page. */
@@ -385,7 +478,17 @@ class PostCommentsViewModel @Inject constructor(
                         val page = result.data
                         val more = page.size >= PAGE_SIZE
                         val nextCursor = if (more) page.lastOrNull()?.id else null
-                        thread.update { it.appended(page, nextCursor, more) }
+                        val served = persistBaseline
+                        persistBaseline = null
+                        networkConfirmed = true
+                        val pageIds = page.mapTo(HashSet()) { it.id }
+                        val vanished = if (cursor == null && served != null) {
+                            served.take(page.size).filter { it.id !in pageIds }.mapTo(HashSet()) { it.id }
+                        } else emptySet()
+                        thread.update {
+                            if (cursor != null) it.appended(page, nextCursor, more)
+                            else it.copy(comments = it.comments.filter { row -> row.id !in vanished }).mergedFirstPage(page, nextCursor, more)
+                        }
                         likes.update { it.seeded(page, HEART_EMOJI) }
                         status.update { it.copy(isLoading = false, isLoadingMore = false, error = null) }
                         preloadReplyPreviews()
@@ -738,6 +841,12 @@ class PostCommentsViewModel @Inject constructor(
         likes.value = began
         viewModelScope.launch {
             try {
+                val transport = heartTransport
+                if (transport != null) {
+                    if (transport.deliver(wasLiked, commentId, postId)) likes.update { it.settle(commentId) }
+                    else likes.update { it.rollback(commentId) }
+                    return@launch
+                }
                 val result =
                     if (wasLiked) postRepository.unlikeComment(postId, commentId)
                     else postRepository.likeComment(postId, commentId)

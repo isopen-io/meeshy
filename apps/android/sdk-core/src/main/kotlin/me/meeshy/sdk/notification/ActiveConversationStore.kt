@@ -26,6 +26,16 @@ public class ActiveConversationStore @Inject constructor() {
     /** The conversation currently on screen, or `null` when none is. */
     public val conversationId: StateFlow<String?> = _conversationId.asStateFlow()
 
+    private val _postId = MutableStateFlow<String?>(null)
+
+    /** The post, story or status currently on screen, or `null` when none is (its notifications are consumed on open). */
+    public val postId: StateFlow<String?> = _postId.asStateFlow()
+
+    /** Records the post now on screen (or `null` when leaving it). */
+    public fun setActivePost(postId: String?) {
+        _postId.value = postId
+    }
+
     /** Records the conversation now on screen (or `null` when leaving all threads). */
     public fun setActive(conversationId: String?) {
         _conversationId.value = conversationId

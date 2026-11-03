@@ -86,13 +86,29 @@ class NotificationBannerViewModelTest {
 
     private fun viewModel(
         preferences: UserNotificationPreferences = UserNotificationPreferences(),
+        store: ActiveConversationStore = ActiveConversationStore(),
     ) = NotificationBannerViewModel(
         messageSocketManager = socket,
         preferencesStore = InMemoryNotificationPreferencesStore(preferences),
         conversationRepository = conversationRepository,
         clock = clock,
-        activeConversationStore = ActiveConversationStore(),
+        activeConversationStore = store,
     )
+
+    @Test
+    fun theActivePostIsPublishedToTheStoreSoItsNotificationsAreConsumedOnOpen() = runTest(dispatcher.scheduler) {
+        val store = ActiveConversationStore()
+        val vm = viewModel(store = store)
+        runCurrent()
+
+        vm.setActiveContext(conversationId = null, postId = "p1")
+        assertThat(store.postId.value).isEqualTo("p1")
+        assertThat(store.conversationId.value).isNull()
+
+        vm.setActiveContext(conversationId = "c1", postId = null)
+        assertThat(store.postId.value).isNull()
+        assertThat(store.conversationId.value).isEqualTo("c1")
+    }
 
     @Test
     fun aFreshNotificationSurfacesAsABanner() = runTest(dispatcher.scheduler) {

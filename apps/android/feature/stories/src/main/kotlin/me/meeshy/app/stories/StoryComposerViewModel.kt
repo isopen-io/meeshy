@@ -238,10 +238,7 @@ class StoryComposerViewModel @Inject constructor(
                     is StoryDraftPersist.Save -> {
                         StoryComposerAutosave.saveThenCover({ draftStore.save(action.snapshot) }, { draftCover?.onDraftSaved(action.snapshot) })
                         ownsStoredDraft = true
-                        DraftRelease(
-                            StoryComposerAutosave.orphanedUploads(previous, action.snapshot),
-                            StoryComposerAutosave.namedUploads(action.snapshot),
-                        )
+                        DraftRelease(StoryComposerAutosave.orphanedUploads(previous, action.snapshot), StoryComposerAutosave.namedUploads(action.snapshot))
                     }
                     StoryDraftPersist.Clear -> {
                         draftStore.clear()

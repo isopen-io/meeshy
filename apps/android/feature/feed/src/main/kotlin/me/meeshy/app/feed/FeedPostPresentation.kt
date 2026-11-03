@@ -16,6 +16,7 @@ import me.meeshy.sdk.model.card.PostCommentCardPost
 import me.meeshy.sdk.model.composesScene
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
+import me.meeshy.sdk.model.trackedLinkMap
 import me.meeshy.sdk.model.resolvedLayout
 import me.meeshy.sdk.model.resolvedCaption
 import me.meeshy.sdk.model.StoryItem
@@ -137,6 +138,12 @@ data class FeedPostPresentation(
     val commentCardSupport: PostCommentCardPost? = null,
     /** Les premiers commentaires que la carte montre sous ses actions (#14314) ; `null` : aucun à montrer. */
     val commentsPreview: FeedCommentsPreviewState? = null,
+    /** `pseudo (minuscules) -> userId` des personnes que le post mentionne : seules ces @mentions se rendent cliquables. */
+    val mentionUserIds: Map<String, String> = emptyMap(),
+    /** `pseudo -> nom d'affichage` des personnes mentionnées (le texte montre `@Nom`). */
+    val mentionDisplayNames: Map<String, String> = emptyMap(),
+    /** `urlBrute -> jeton` des liens suivis : le toucher passe par la redirection de la passerelle. */
+    val trackedLinks: Map<String, String> = emptyMap(),
 ) {
     /**
      * Le réel que ce réel republie, quand il n'a pas de média propre : la carte montre alors UNE couverture, celle du
@@ -218,6 +225,8 @@ object FeedPostBuilder {
                 soundCredit = PostSceneSound.credit(read.items, post.storyEffects?.canvas?.sound),
             )
         }
+        val mentioned = post.mentionedUsers.orEmpty().filter { it.username.isNotBlank() }.map { Triple(it.username, it.userId, it.displayName) } +
+            post.mentions.orEmpty().filter { it.display.isPubliclyVisible && it.username.isNotBlank() }.map { Triple(it.username, it.userId, it.displayName) }
         val composedReel = if (isReel) post.toStoryItem().takeIf { it.storyEffects.composesScene() } else null
         return FeedPostPresentation(
             id = post.id,
@@ -268,6 +277,9 @@ object FeedPostBuilder {
             imagerScenes = PostImaging.of(scenes, composedReel, post.authorAccentHex()),
             commentCardSupport = CommentCardReading.support(post, content),
             commentsPreview = FeedCommentsPreviewBuilder.build(post.comments, post.commentCount ?: 0, preferences, mediaBaseUrl),
+            mentionUserIds = mentioned.associate { it.first.lowercase() to it.second },
+            mentionDisplayNames = mentioned.mapNotNull { (u, _, n) -> n?.takeIf(String::isNotBlank)?.let { u to it } }.toMap(),
+            trackedLinks = post.trackedLinkMap,
         )
     }
 
