@@ -6,6 +6,7 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
@@ -29,7 +30,7 @@ class DocumentPreviewHardeningTest {
     fun `l'appui long est consomme et rien ne s'emporte par la vue`() {
         val view = hardened()
         assertThat(view.isLongClickable).isFalse()
-        assertThat(view.performLongClick()).isTrue()
+        assertThat(shadowOf(view).onLongClickListener.onLongClick(view)).isTrue()
         assertThat(view.isHapticFeedbackEnabled).isFalse()
     }
 }
