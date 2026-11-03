@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.ui.component.retouch.rememberComposerLookAuthor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -62,10 +63,12 @@ internal fun rememberStoryOverflowDialogs(state: StoryComposerUiState, viewModel
  */
 @Composable
 private fun StoryComposerPreviewDialog(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDismiss: () -> Unit) {
-    val slides = remember(state.deck, state.attachments, state.draft) {
+    val author = rememberComposerLookAuthor(viewModel.lookPerson)
+    val slides = remember(state.deck, state.attachments, state.draft, author) {
         val projector = StorySlideProjector(viewModel.mediaBaseUrl)
-        StoryComposerPreview.items(state, viewModel.resolvePublishLanguage(), viewModel.authorFloor)
-            .map { projector.project(it, viewModel.authorAccentHex.orEmpty(), NoContentPreferences) }
+        StoryComposerPreview.scenes(state, viewModel.resolvePublishLanguage(), viewModel.authorFloor, viewModel.mediaBaseUrl, author) {
+            projector.project(it, viewModel.authorAccentHex.orEmpty(), NoContentPreferences)
+        }.map { it.second }
     }
     if (slides.isEmpty()) return
     var page by remember { mutableIntStateOf(0) }

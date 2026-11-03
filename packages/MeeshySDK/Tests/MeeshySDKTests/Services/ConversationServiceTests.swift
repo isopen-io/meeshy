@@ -83,6 +83,21 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "GET")
     }
 
+    /// #14708 — la relecture du régime d'une réponse rapide ne distingue un
+    /// 404 SERVI par la passerelle d'un 404 de Traefik que si elle demande
+    /// les refus typés : perdre l'enveloppe `TypedRefusals` doit rougir.
+    func testGetByIdTypedRefusalsAsksTheSameAddressForStructuredRefusals() async throws {
+        let response = APIResponse(success: true, data: makeConversation(id: "abc456"), error: nil)
+        mock.stub("/conversations/abc456", result: response)
+
+        _ = try await service.getByIdTypedRefusals("abc456")
+        _ = try await service.getById("abc456")
+
+        XCTAssertEqual(mock.requests.map(\.endpoint), ["/conversations/abc456", "/conversations/abc456"])
+        XCTAssertEqual(mock.requests.map(\.rejectionPolicy), [.structured, .opaque],
+                       "seule la relecture typée change la forme des refus ; les autres appelants gardent la leur")
+    }
+
     // MARK: - create
 
     func testCreateReturnsNewConversation() async throws {

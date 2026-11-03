@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import me.meeshy.ui.component.retouch.LocalComposerLookAuthor
+import me.meeshy.ui.component.retouch.rememberComposerLookAuthor
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -337,6 +339,7 @@ private fun StorySlideStrip(state: StoryComposerUiState, viewModel: StoryCompose
     val placedMedia = remember(state.deck.slides, state.attachments, state.pendingUploads) {
         state.deck.slides.associate { it.id to state.thumbnailPlacedOf(it, viewModel.mediaBaseUrl) }
     }
+    CompositionLocalProvider(LocalComposerLookAuthor provides rememberComposerLookAuthor(viewModel.lookPerson)) {
     ComposerSlideRail(
         deck = state.deck,
         backgrounds = backgrounds,
@@ -351,6 +354,7 @@ private fun StorySlideStrip(state: StoryComposerUiState, viewModel: StoryCompose
         onEditBackground = viewModel::onEditSlideBackground,
         placedMedia = placedMedia,
     )
+    }
 }
 
 /** Ce que les outils et le « ⋯ » atteignent hors du view model : l'export, les portes de l'écran, l'aperçu et l'effacement. */

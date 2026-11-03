@@ -1,7 +1,10 @@
 package me.meeshy.sdk.post
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -101,6 +104,14 @@ class PostRepository @Inject constructor(
     private val likeFlips = GestureTraces()
     private val bookmarkFlips = GestureTraces()
     private val _feedHasMore = MutableStateFlow(true)
+
+    private val _gestureRefusals = MutableSharedFlow<GestureRefusal>(extraBufferCapacity = 16)
+
+    /**
+     * Un geste optimiste (j'aime, favori) que la file a définitivement perdu ET dont l'effet vient d'être défait : le fil
+     * le dit (« Impossible d'aimer la publication ») au lieu de laisser le cœur s'éteindre sans explication (iOS `FeedbackToastManager`).
+     */
+    val gestureRefusals: SharedFlow<GestureRefusal> = _gestureRefusals.asSharedFlow()
 
     /** Whether older feed pages remain to be fetched (drives the infinite-scroll trigger). */
     val feedHasMore: StateFlow<Boolean> = _feedHasMore.asStateFlow()
@@ -278,7 +289,7 @@ class PostRepository @Inject constructor(
      * state is reverted and the served count is kept: applying the delta to it would
      * double-count (#13588).
      */
-    suspend fun rollbackLike(postId: String, liked: Boolean, cmid: String? = null) {
+    suspend fun rollbackLike(postId: String, liked: Boolean, cmid: String? = null, reason: String? = null) {
         val refusal = likeFlips.take(postId, cmid, liked)?.takeUnless { it.overridden } ?: return
         val flip = refusal.trace
         rewriteRow(fence?.currentTicket(), postId) {
@@ -288,6 +299,7 @@ class PostRepository @Inject constructor(
                 else -> it.copy(isLikedByMe = flip.revertTo)
             }
         }
+        _gestureRefusals.tryEmit(GestureRefusal(postId, PostGesture.LIKE, reason))
     }
 
     /** La ligne [cmid] est livrée : la trace de son geste n'a plus de retour arrière à porter. */
@@ -402,7 +414,7 @@ class PostRepository @Inject constructor(
      * state). [bookmarked] is the value to revert TO; the count is recomputed as
      * the inverse of the delta [toggleBookmark]'s [applyBookmark] applied.
      */
-    suspend fun rollbackBookmark(postId: String, bookmarked: Boolean, cmid: String? = null) {
+    suspend fun rollbackBookmark(postId: String, bookmarked: Boolean, cmid: String? = null, reason: String? = null) {
         val refusal = bookmarkFlips.take(postId, cmid, bookmarked)?.takeUnless { it.overridden } ?: return
         val flip = refusal.trace
         rewriteRow(fence?.currentTicket(), postId) {
@@ -412,6 +424,7 @@ class PostRepository @Inject constructor(
                 else -> it.copy(isBookmarkedByMe = flip.revertTo)
             }
         }
+        _gestureRefusals.tryEmit(GestureRefusal(postId, PostGesture.BOOKMARK, reason))
     }
 
     /** Pagination infinie : la page apres le curseur, sans doublon ; le filigrane de fraicheur ne bouge pas. Rend s'il reste des pages. */
