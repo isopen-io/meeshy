@@ -81,6 +81,7 @@ internal fun BubbleFooterRow(
     onColor: Color,
     onFlagTap: ((String) -> Unit)? = null,
     onSenderTap: (() -> Unit)? = null,
+    onShowReadStatus: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val metaColor = if (content.isOutgoing) onColor.copy(alpha = 0.7f) else MeeshyTheme.tokens.textMuted
@@ -93,13 +94,14 @@ internal fun BubbleFooterRow(
             metaColor = metaColor,
             onFlagTap = onFlagTap,
             onSenderTap = onSenderTap,
+            onShowReadStatus = onShowReadStatus,
             modifier = modifier,
         )
     } else {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
             BubbleMetaLeading(content, onColor, metaColor, onFlagTap)
             Spacer(Modifier.weight(1f).widthIn(min = MeeshySpacing.xs))
-            BubbleMetaTrailing(content, metaColor)
+            BubbleMetaTrailing(content, metaColor, onShowReadStatus = onShowReadStatus)
         }
     }
 }
@@ -113,6 +115,7 @@ private fun BubbleIdentityFooter(
     metaColor: Color,
     onFlagTap: ((String) -> Unit)?,
     onSenderTap: (() -> Unit)?,
+    onShowReadStatus: (() -> Unit)?,
     modifier: Modifier,
 ) {
     val senderColor = content.senderColorHex?.let { hexColor(it, MeeshyPalette.Indigo500) } ?: MeeshyPalette.Indigo500
@@ -181,7 +184,7 @@ private fun BubbleIdentityFooter(
                     BubbleMetaLeading(content, onColor, metaColor, onFlagTap)
                 }
                 Spacer(Modifier.width(MeeshySpacing.xs))
-                BubbleMetaTrailing(content, metaColor)
+                BubbleMetaTrailing(content, metaColor, onShowReadStatus = onShowReadStatus)
             }
             content.senderUsername?.let { username ->
                 Text(
@@ -276,106 +279,6 @@ internal fun CompactFlagChip(
                 .height(2.dp)
                 .clip(RoundedCornerShape(1.dp))
                 .background(if (chip.isActive) accent else Color.Transparent),
-        )
-    }
-}
-
-@Composable
-internal fun BubbleMetaTrailing(
-    content: BubbleContent,
-    metaColor: Color,
-    modifier: Modifier = Modifier,
-    readTint: Color? = null,
-) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-    ) {
-        if (content.isEdited && !content.isDeleted) {
-            Icon(
-                imageVector = Icons.Filled.Edit,
-                contentDescription = stringResource(R.string.bubble_edited),
-                tint = metaColor,
-                modifier = Modifier.size(10.dp),
-            )
-        }
-        val clock = remember(content.createdAtIso) { bubbleClockLabel(content.createdAtIso) }
-        if (clock != null) {
-            Text(
-                text = clock,
-                fontSize = MeeshyFontSize.small,
-                fontWeight = FontWeight.Medium,
-                color = metaColor,
-                maxLines = 1,
-            )
-        }
-        // Échec : la coche se tait, la bande orange de la bulle porte le renvoi (iOS).
-        if (content.isOutgoing && content.deliveryStatus != DeliveryStatus.Failed) {
-            // The online in-flight clock is debounced: a send that
-            // round-trips under 200ms never flashes it (parity iOS
-            // `SendingClockGlyph`). The offline hourglass and every
-            // settled tier render immediately.
-            if (content.deliveryStatus == DeliveryStatus.Pending) {
-                if (rememberSendingGlyphRevealed(content.createdAtIso)) {
-                    DeliveryStatusIcon(status = content.deliveryStatus, metaColor = metaColor, isSlow = content.isSlowSend, readTintOverride = readTint)
-                }
-            } else {
-                DeliveryStatusIcon(status = content.deliveryStatus, metaColor = metaColor, isSlow = content.isSlowSend, readTintOverride = readTint)
-            }
-        }
-    }
-}
-
-/**
- * La coche d'un message envoyé (iOS `BubbleDeliveryCheck`) : horloge en cours d'envoi (orange si
- * lent), sablier hors ligne, ✓ envoyé et ✓✓ délivré dans la couleur méta, ✓✓ lu en indigo 600
- * (clair) / 400 (sombre), échec en rouge.
- */
-@Composable
-internal fun DeliveryStatusIcon(
-    status: DeliveryStatus,
-    metaColor: Color,
-    isSlow: Boolean,
-    readTintOverride: Color? = null,
-) {
-    val readTint = readTintOverride ?: if (MeeshyTheme.isDark) MeeshyPalette.Indigo400 else MeeshyPalette.Indigo600
-    when (status) {
-        DeliveryStatus.Pending -> Icon(
-            imageVector = Icons.Filled.Schedule,
-            contentDescription = stringResource(R.string.bubble_status_pending),
-            tint = if (isSlow) MeeshyPalette.Warning else metaColor,
-            modifier = Modifier.size(12.dp),
-        )
-        DeliveryStatus.QueuedOffline -> Icon(
-            imageVector = Icons.Filled.HourglassEmpty,
-            contentDescription = stringResource(R.string.bubble_status_queued),
-            tint = metaColor,
-            modifier = Modifier.size(12.dp),
-        )
-        DeliveryStatus.Sent -> Icon(
-            imageVector = Icons.Filled.Done,
-            contentDescription = stringResource(R.string.bubble_status_sent),
-            tint = metaColor,
-            modifier = Modifier.size(13.dp),
-        )
-        DeliveryStatus.Delivered -> Icon(
-            imageVector = Icons.Filled.DoneAll,
-            contentDescription = stringResource(R.string.bubble_status_delivered),
-            tint = metaColor,
-            modifier = Modifier.size(14.dp),
-        )
-        DeliveryStatus.Read -> Icon(
-            imageVector = Icons.Filled.DoneAll,
-            contentDescription = stringResource(R.string.bubble_status_read),
-            tint = readTint,
-            modifier = Modifier.size(15.dp),
-        )
-        DeliveryStatus.Failed -> Icon(
-            imageVector = Icons.Filled.Error,
-            contentDescription = stringResource(R.string.bubble_status_failed),
-            tint = MeeshyPalette.Error,
-            modifier = Modifier.size(12.dp),
         )
     }
 }
