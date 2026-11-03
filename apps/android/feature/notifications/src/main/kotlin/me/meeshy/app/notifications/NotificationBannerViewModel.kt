@@ -124,6 +124,7 @@ class NotificationBannerViewModel @Inject constructor(
         // Publish the on-screen thread process-wide so the FCM push service — which has no
         // ViewModel — can suppress a foreground banner for the conversation being read.
         activeConversationStore.setActive(conversationId)
+        activeConversationStore.setActivePost(postId)
         // A banner already on screen for the thread the reader just opened has said its piece —
         // the reader now sees the content in the fil, so pull it down (iOS
         // NotificationToastManager.onConversationOpened / onPostOpened). The SAME pure predicate

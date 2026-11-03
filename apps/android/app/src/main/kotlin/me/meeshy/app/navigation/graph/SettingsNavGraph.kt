@@ -49,8 +49,8 @@ internal fun NavGraphBuilder.settingsNavGraph(
         SettingsScreen(
             onBack = { navController.popBackStack() },
             // La racine bascule sur LOGIN quand la session est fermée (startDestination) :
-            // naviguer ici, avant la fin de l'appel serveur, renvoyait vers la liste.
-            onLogout = { authViewModel.logout() },
+            // SignOutViewModel n'émet qu'après le retour de logout().
+            onSignedOut = { authViewModel.onSignedOutExternally() },
             onOpenProfile = { userId -> ProfileRoutes.own(userId)?.let { navController.navigate(it) } },
             onOpenStarred = { navController.navigate(Routes.STARRED) },
             onOpenSaved = { navController.navigate(Routes.SAVED_POSTS) },

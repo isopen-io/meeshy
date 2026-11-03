@@ -1,7 +1,11 @@
 package me.meeshy.sdk.outbox
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.yield
 import me.meeshy.sdk.media.MediaLoss
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -51,11 +55,15 @@ class OutboxSendLifecycleTest {
     @Test
     fun `cancelPendingSend removes a pending send and ends its observers without an outcome`() = withOwnedOutbox { outbox, db ->
         db.outboxDao().upsert(send("m1"))
+        coroutineScope {
+            val observed = async(start = CoroutineStart.UNDISPATCHED) { outbox.outcomeFor("m1").toList() }
+            yield()
 
-        assertThat(outbox.cancelPendingSend("m1")).isTrue()
+            assertThat(outbox.cancelPendingSend("m1")).isTrue()
 
-        assertThat(outbox.row("m1")).isNull()
-        assertThat(outbox.outcomeFor("m1").toList()).isEmpty()
+            assertThat(outbox.row("m1")).isNull()
+            assertThat(observed.await()).isEmpty()
+        }
     }
 
     @Test

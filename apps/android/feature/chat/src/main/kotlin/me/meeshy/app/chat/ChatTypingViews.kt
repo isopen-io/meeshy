@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -29,7 +30,7 @@ internal fun typingLabelText(label: TypingLabel): String? = when (label) {
     TypingLabel.None -> null
     is TypingLabel.One -> stringResource(R.string.chat_typing_one, label.name)
     is TypingLabel.Two -> stringResource(R.string.chat_typing_two, label.first, label.second)
-    is TypingLabel.Many -> stringResource(R.string.chat_typing_many, label.count)
+    is TypingLabel.Many -> pluralStringResource(R.plurals.chat_typing_many, label.count, label.count)
 }
 
 @Composable
@@ -37,7 +38,7 @@ internal fun ChatHeaderSubtitleRow(subtitle: ChatHeaderSubtitle, accentColor: Co
     val (text, color) = when (subtitle) {
         ChatHeaderSubtitle.None -> return
         is ChatHeaderSubtitle.Members ->
-            stringResource(R.string.chat_header_members, subtitle.count) to
+            pluralStringResource(R.plurals.chat_header_members, subtitle.count, subtitle.count) to
                 MeeshyTheme.tokens.textSecondary
         is ChatHeaderSubtitle.Typing ->
             (typingLabelText(subtitle.label) ?: return) to accentColor

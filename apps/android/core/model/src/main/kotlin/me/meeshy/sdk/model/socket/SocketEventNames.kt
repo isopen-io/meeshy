@@ -89,7 +89,9 @@ object SocketEventNames {
     const val COMMENT_DELETED = "comment:deleted"
     const val COMMENT_LIKED = "comment:liked"
     const val COMMENT_MEDIA_UPDATED = "comment:media-updated"
+    const val COMMENT_REACTION_ADD = "comment:reaction-add"
     const val COMMENT_REACTION_ADDED = "comment:reaction-added"
+    const val COMMENT_REACTION_REMOVE = "comment:reaction-remove"
     const val COMMENT_REACTION_REMOVED = "comment:reaction-removed"
     const val COMMENT_TRANSLATION_UPDATED = "comment:translation-updated"
     const val COMMENT_UNLIKED = "comment:unliked"
@@ -313,7 +315,9 @@ object SocketEventNames {
         COMMENT_DELETED,
         COMMENT_LIKED,
         COMMENT_MEDIA_UPDATED,
+        COMMENT_REACTION_ADD,
         COMMENT_REACTION_ADDED,
+        COMMENT_REACTION_REMOVE,
         COMMENT_REACTION_REMOVED,
         COMMENT_TRANSLATION_UPDATED,
         COMMENT_UNLIKED,

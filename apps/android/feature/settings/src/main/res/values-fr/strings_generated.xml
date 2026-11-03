@@ -221,6 +221,8 @@
     <string name="settings_log_out">Se déconnecter</string>
     <string name="settings_logout_confirm_message">Voulez-vous vraiment vous déconnecter ?</string>
     <string name="settings_logout_confirm_title">Déconnexion</string>
+    <string name="settings_logout_hint">Vous déconnecter de votre compte</string>
+    <string name="settings_logout_in_progress">Déconnexion en cours...</string>
     <string name="settings_media_capture_header">À la prise de vue</string>
     <string name="settings_media_capture_original_subtitle">La photo ou la vidéo brute, sans effet ni cadre, rejoint Photos à chaque prise.</string>
     <string name="settings_media_capture_original_title">Enregistrer l\'original</string>

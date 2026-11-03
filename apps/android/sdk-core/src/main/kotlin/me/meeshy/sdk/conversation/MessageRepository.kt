@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageSticker
 import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.search.ConversationSearchResults
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.outbox.OutboxRepository
@@ -42,6 +43,7 @@ class MessageRepository internal constructor(
     private val enrichment: MessageEnrichmentWriter,
     private val receipts: MessageReceiptWriter,
     private val erasures: PlaintextErasureLedger? = null,
+    private val searches: MessageSearchReader? = null,
 ) {
     @Inject
     constructor(
@@ -74,6 +76,7 @@ class MessageRepository internal constructor(
         enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao, fence), translationApi),
         receipts = MessageReceiptWriter(database, messageDao, fence),
         erasures = erasures,
+        searches = MessageSearchReader(messageApi, database, clock, fence, regime, events, erasures),
     )
 
     /**
@@ -121,6 +124,17 @@ class MessageRepository internal constructor(
      */
     suspend fun loadAround(conversationId: String, messageId: String): MessageLanding =
         history.loadAround(conversationId, messageId)
+
+    /**
+     * Server search of one conversation: a page of [limit] hits for [query] after [cursor], merged into Room so
+     * the thread can jump to any of them. Throws [MessageSearchException]; a 404 is an empty page.
+     */
+    suspend fun searchMessages(
+        conversationId: String,
+        query: String,
+        cursor: String? = null,
+        limit: Int = ConversationSearchResults.PAGE_SIZE,
+    ): MessageSearchPage = searches?.search(conversationId, query, cursor, limit) ?: MessageSearchPage.EMPTY
 
     /** #14670 — the page after an anchored window; returns whether newer messages remain. */
     suspend fun loadNewer(conversationId: String): Boolean = history.loadNewer(conversationId)
