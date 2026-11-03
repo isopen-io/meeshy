@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +21,8 @@ import me.meeshy.sdk.model.EngagementSessions
 import me.meeshy.sdk.model.navigation.PostDetailLanding
 import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PostTranslationMerge
+import me.meeshy.sdk.model.PostUpdateMerge
 import me.meeshy.sdk.model.PublicationViewersAccess
 import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.net.MeeshyConfig
@@ -280,6 +283,51 @@ class PostDetailViewModel @Inject constructor(
                 if (event.postId != postId) return@collect
                 val mine = if (event.userId == currentUserId()) false else null
                 liveOverlay.update { it.copy(likeCount = event.likesCount, isLiked = mine ?: it.isLiked) }
+            }
+        }
+        observeEditsAndReconnection()
+    }
+
+    /**
+     * The rest of the room (iOS `subscribeToSocket`): the author's edit and a finished translation
+     * fold onto the open post in place, and every RECONNECTION joins the room again and reads the post
+     * again — the events emitted during the cut are lost. Each listener swallows its own failure.
+     */
+    private fun observeEditsAndReconnection() {
+        listen(socialSocket.postUpdated) { event ->
+            if (event.post.id == postId) {
+                rawPost.update { current -> current?.let { PostUpdateMerge.merge(it, event.post) ?: it } }
+            }
+        }
+        listen(socialSocket.postTranslationUpdated) { event ->
+            if (event.postId == postId) {
+                rawPost.update { current ->
+                    current?.let { PostTranslationMerge.mergeTranslation(it, event.language, event.translation) ?: it }
+                }
+            }
+        }
+        listen(socialSocket.reconnected) {
+            socialSocket.joinPostRoom(postId)
+            load(silentWhenShown = true)
+        }
+    }
+
+    private fun <T> listen(flow: Flow<T>, onEach: suspend (T) -> Unit) {
+        viewModelScope.launch {
+            try {
+                flow.collect { value ->
+                    try {
+                        onEach(value)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // best-effort — the next event or the next reconnection heals it
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // a flow that cannot be collected is simply not listened to
             }
         }
     }
