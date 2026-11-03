@@ -31,7 +31,7 @@ import retrofit2.http.Query
 
 /**
  * Le profil vocal, le consentement et la traduction vocale — miroir de `VoiceEndpoint` (iOS) et des routes
- * `/voice/*` de la passerelle. Les formes que Android lit sont typées ; celles qu'aucun écran ne projette encore
+ * `/voice/…` de la passerelle. Les formes que Android lit sont typées ; celles qu'aucun écran ne projette encore
  * (analyses, historique, langues, métriques) restent un `JsonElement` brut.
  *
  * Les envois audio ne mettent jamais l'audio en mémoire : l'inscription du profil est un multipart sur FICHIER,

@@ -11,7 +11,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.Test
 
-/** Les routes `/voice/*` et `/me/consents`, telles qu'elles partent (#15085). */
+/** Les routes `/voice/…` et `/me/consents`, telles qu'elles partent (#15085). */
 class VoiceApiRoutesTest {
 
     private fun voice(http: RecordingHttp) = http.serve(VoiceApi::class.java)
