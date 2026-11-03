@@ -496,6 +496,7 @@ internal fun ChatListHost(
                         focalScale = scale,
                         selecting = host.selection.isActive,
                         selectedIds = host.selection.ids,
+                        translatingLanguages = state.translatingLanguages,
                         overlayMessageId = state.actionMessageId,
                     ) }
                     val framed: @Composable (Boolean, Float) -> Unit = { elected, scale ->

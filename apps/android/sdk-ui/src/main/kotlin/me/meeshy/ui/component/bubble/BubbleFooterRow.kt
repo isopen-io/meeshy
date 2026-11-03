@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -57,6 +58,7 @@ import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.format.bubbleClockLabel
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -80,6 +82,7 @@ internal fun BubbleFooterRow(
     content: BubbleContent,
     onColor: Color,
     onFlagTap: ((String) -> Unit)? = null,
+    onTranslate: (() -> Unit)? = null,
     onSenderTap: (() -> Unit)? = null,
     onShowReadStatus: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -93,13 +96,14 @@ internal fun BubbleFooterRow(
             onColor = onColor,
             metaColor = metaColor,
             onFlagTap = onFlagTap,
+            onTranslate = onTranslate,
             onSenderTap = onSenderTap,
             onShowReadStatus = onShowReadStatus,
             modifier = modifier,
         )
     } else {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
-            BubbleMetaLeading(content, onColor, metaColor, onFlagTap)
+            BubbleMetaLeading(content, onColor, metaColor, onFlagTap, onTranslate)
             Spacer(Modifier.weight(1f).widthIn(min = MeeshySpacing.xs))
             BubbleMetaTrailing(content, metaColor, onShowReadStatus = onShowReadStatus)
         }
@@ -114,6 +118,7 @@ private fun BubbleIdentityFooter(
     onColor: Color,
     metaColor: Color,
     onFlagTap: ((String) -> Unit)?,
+    onTranslate: (() -> Unit)?,
     onSenderTap: (() -> Unit)?,
     onShowReadStatus: (() -> Unit)?,
     modifier: Modifier,
@@ -181,7 +186,7 @@ private fun BubbleIdentityFooter(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false).padding(end = MeeshySpacing.xs),
                     )
-                    BubbleMetaLeading(content, onColor, metaColor, onFlagTap)
+                    BubbleMetaLeading(content, onColor, metaColor, onFlagTap, onTranslate)
                 }
                 Spacer(Modifier.width(MeeshySpacing.xs))
                 BubbleMetaTrailing(content, metaColor, onShowReadStatus = onShowReadStatus)
@@ -205,6 +210,7 @@ private fun BubbleMetaLeading(
     onColor: Color,
     metaColor: Color,
     onFlagTap: ((String) -> Unit)?,
+    onTranslate: (() -> Unit)?,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -230,9 +236,14 @@ private fun BubbleMetaLeading(
             )
         }
         val chips = if (content.isDeleted) emptyList() else content.languageStrip
+        // iOS `metaLeading` : le bouton traduire vient TOUJOURS en premier (position stable) et ne vit que là où
+        // AUCUN drapeau ne dit déjà la traduction ; les drapeaux suivent à sa droite.
+        if (chips.isEmpty() && !content.isDeleted && onTranslate != null && offersTranslation(content)) {
+            TranslateButton(onTranslate)
+        }
         if (chips.isNotEmpty()) {
-            chips.forEach { chip -> CompactFlagChip(chip, onColor, onFlagTap) }
-        } else if (content.isTranslated) {
+            chips.forEach { chip -> CompactFlagChip(chip, onColor, onFlagTap, isWaiting = chip.code in content.translatingCodes) }
+        } else if (content.isTranslated && onTranslate == null) {
             Icon(
                 imageVector = Icons.Filled.Translate,
                 contentDescription = stringResource(R.string.bubble_translated),
@@ -240,6 +251,33 @@ private fun BubbleMetaLeading(
                 modifier = Modifier.size(12.dp),
             )
         }
+    }
+}
+
+private fun offersTranslation(content: BubbleContent): Boolean = BubbleFooterBuilder.build(content).showsTranslate
+
+/** Le bouton traduire du pied : ouvre l'explorateur des langues, haptique léger, cible de 22 dp. */
+@Composable
+private fun TranslateButton(onTranslate: () -> Unit) {
+    val haptics = rememberMeeshyHaptics()
+    val label = stringResource(R.string.bubble_footer_translation_request)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .sizeIn(minWidth = 22.dp, minHeight = 22.dp)
+            .clip(RoundedCornerShape(MeeshySpacing.xs))
+            .clickable(onClickLabel = label) {
+                haptics.light()
+                onTranslate()
+            }
+            .semantics { role = Role.Button; contentDescription = label },
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Translate,
+            contentDescription = null,
+            tint = MeeshyPalette.Indigo400,
+            modifier = Modifier.size(12.dp),
+        )
     }
 }
 
@@ -253,6 +291,7 @@ internal fun CompactFlagChip(
     chip: LanguageChip,
     onColor: Color,
     onFlagTap: ((String) -> Unit)?,
+    isWaiting: Boolean = false,
 ) {
     val accent = chip.info?.colorHex?.let { hexColor(it, onColor) } ?: onColor
     val label = chip.info?.name ?: chip.code
@@ -268,11 +307,19 @@ internal fun CompactFlagChip(
             }
             .semantics(mergeDescendants = true) { contentDescription = label },
     ) {
-        Text(
-            text = chip.info?.flag ?: chip.code.uppercase(),
-            fontSize = MeeshyFontSize.small,
-            modifier = Modifier.alpha(if (chip.isTranslatable) 0.45f else 1f),
-        )
+        if (isWaiting) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(12.dp),
+                strokeWidth = 1.5.dp,
+                color = accent,
+            )
+        } else {
+            Text(
+                text = chip.info?.flag ?: chip.code.uppercase(),
+                fontSize = MeeshyFontSize.small,
+                modifier = Modifier.alpha(if (chip.isTranslatable) 0.45f else 1f),
+            )
+        }
         Box(
             modifier = Modifier
                 .width(12.dp)
