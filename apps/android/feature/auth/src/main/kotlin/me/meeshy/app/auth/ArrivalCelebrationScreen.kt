@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -41,6 +39,7 @@ import me.meeshy.sdk.model.auth.ArrivalCelebrationMotion
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.auth.FireworksCanvas
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -97,7 +96,7 @@ fun ArrivalCelebrationScreen(onContinue: () -> Unit, modifier: Modifier = Modifi
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Filled.CheckCircle,
+                    imageVector = MeeshyIcons.CheckCircleFilled,
                     contentDescription = null,
                     tint = tokens.success,
                     modifier = Modifier.size(56.dp),

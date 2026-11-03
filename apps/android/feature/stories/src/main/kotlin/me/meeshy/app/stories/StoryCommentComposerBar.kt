@@ -15,10 +15,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -38,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.story.StoryCommentComposerState
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -81,7 +78,7 @@ internal fun StoryCommentComposerBar(
                 Box(Modifier.size(width = 3.dp, height = 30.dp).clip(RoundedCornerShape(2.dp)).background(hexColor(reply.authorColorHex)))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-                        Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null, tint = hexColor(reply.authorColorHex), modifier = Modifier.size(12.dp))
+                        Icon(MeeshyIcons.Reply, contentDescription = null, tint = hexColor(reply.authorColorHex), modifier = Modifier.size(12.dp))
                         Text(
                             text = stringResource(R.string.stories_reply_to, reply.authorName),
                             style = MaterialTheme.typography.labelMedium,
@@ -108,7 +105,7 @@ internal fun StoryCommentComposerBar(
                         .testTag(STORY_COMMENT_REPLY_CANCEL_TAG),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Close, contentDescription = null, tint = MeeshyMediaChromeColors.OnMediaMuted, modifier = Modifier.size(14.dp))
+                    Icon(MeeshyIcons.Close, contentDescription = null, tint = MeeshyMediaChromeColors.OnMediaMuted, modifier = Modifier.size(14.dp))
                 }
             }
         }
@@ -154,7 +151,7 @@ internal fun StoryCommentComposerBar(
                     .testTag(STORY_COMMENT_SEND_TAG),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = MeeshyMediaChromeColors.OnMedia, modifier = Modifier.size(20.dp))
+                Icon(MeeshyIcons.Send, contentDescription = null, tint = MeeshyMediaChromeColors.OnMedia, modifier = Modifier.size(20.dp))
             }
         }
     }
