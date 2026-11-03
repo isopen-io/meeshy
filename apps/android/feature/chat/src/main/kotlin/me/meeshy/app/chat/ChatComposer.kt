@@ -455,6 +455,7 @@ internal fun ChatComposer(
                         onFold = if (foldable && configuration.offersFold(minimized, isComposing)) fold else null,
                         configuration = configuration,
                         onSticker = openStickers,
+                        counter = me.meeshy.sdk.model.composer.ComposerCounterLaw.state(draft.length, configuration.maxLength),
                     )
                 }
                 when {
