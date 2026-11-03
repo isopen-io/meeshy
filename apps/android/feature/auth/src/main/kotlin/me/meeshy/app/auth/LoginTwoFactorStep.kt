@@ -51,7 +51,7 @@ internal fun LoginTwoFactorStep(
     ChallengeColumn(
         icon = { Icon(MeeshyIcons.ShieldFilled, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(48.dp)) },
         title = stringResource(R.string.auth_login_two_factor_title),
-        description = stringResource(R.string.auth_login_two_factor_description),
+        description = stringResource(R.string.login_two_factor_description_with_backup),
         modifier = modifier,
     ) {
         AuthTextField(
@@ -59,8 +59,8 @@ internal fun LoginTwoFactorStep(
             onValueChange = onCodeChange,
             title = stringResource(R.string.auth_login_two_factor_placeholder),
             icon = MeeshyIcons.Key,
-            contentType = AuthContentType.OneTimeCode,
-            imeAction = ImeAction.Go,
+            contentType = AuthContentType.TwoFactorCode,
+            imeAction = ImeAction.Done,
             onImeAction = onSubmit,
             enabled = !state.isSubmitting,
             modifier = Modifier
