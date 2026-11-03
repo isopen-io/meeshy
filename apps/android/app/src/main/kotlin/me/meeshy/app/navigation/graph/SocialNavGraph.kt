@@ -25,17 +25,14 @@ import me.meeshy.app.profile.ReportUserViewModel
 internal fun NavGraphBuilder.socialNavGraph(
     navController: NavHostController,
 ) {
-    val openProfile: (String) -> Unit = { userId ->
-        if (userId.isNotBlank()) navController.navigate(Routes.profile(userId))
-    }
     composable(Routes.CONTACTS) {
-        ContactsScreen(onBack = { navController.popBackStack() }, onOpenProfile = openProfile)
+        ContactsScreen(onBack = { navController.popBackStack() }, onOpenProfile = rememberProfileOpenerOverSheet(navController))
     }
     composable(Routes.CONTACTS_DISCOVER) {
         ContactsScreen(
             onBack = { navController.popBackStack() },
             initialTab = me.meeshy.app.contacts.ContactsTab.Discover,
-            onOpenProfile = openProfile,
+            onOpenProfile = rememberProfileOpenerOverSheet(navController),
         )
     }
     sheetComposable(Routes.BLOCKED_USERS, navController) { _, dismiss ->
@@ -53,7 +50,7 @@ internal fun NavGraphBuilder.socialNavGraph(
             onOpenReel = { navController.navigate(Routes.reels(seed = it)) },
             onOpenStory = { navController.navigate(Routes.story(it)) },
             onOpenMood = { navController.navigate(Routes.moodSpotlight(it)) },
-            onOpenProfile = { navController.navigate(Routes.profile(it)) },
+            onOpenProfile = rememberProfileOpenerOverSheet(navController),
             onOpenGame = { navController.navigate(GameRoutes.route(it)) },
         )
     }

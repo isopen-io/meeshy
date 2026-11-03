@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "story.viewer.action.sound", "androidName": "stories_action_sound", "status": "adopted" },
+        { "catalog": "app", "iosKey": "story.viewer.action.mute", "androidName": "stories_action_mute", "status": "adopted" },
+        { "catalog": "app", "iosKey": "story.viewer.action.save", "androidName": "stories_action_save", "status": "adopted" }
+      ]
+    }
+  }
+}

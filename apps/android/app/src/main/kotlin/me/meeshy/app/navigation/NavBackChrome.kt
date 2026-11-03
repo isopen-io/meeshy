@@ -74,7 +74,7 @@ internal object NavBackChrome {
 
     private val contacts = "$FEATURE/contacts/src/main/kotlin/me/meeshy/app/contacts/ContactsScreen.kt"
     private val linksChrome = conversations("links/LinksChrome.kt")
-    private val gameScaffold = game("progression/GamePageScaffold.kt")
+    private val gameScaffold = game("GamePageScaffold.kt")
 
     val entries: List<RouteChrome> = listOf(
         // Authentification : la connexion est la racine ; le reste s'y empile.

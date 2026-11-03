@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StorySlidePublishMatter
 import me.meeshy.sdk.model.media.MediaTrimBounds
 
 import me.meeshy.sdk.model.ImageAdjustments
@@ -72,6 +73,20 @@ data class StorySlide(
     val mediaLooks: Map<String, me.meeshy.sdk.model.StoryMediaLook> = emptyMap(),
 )
 
+/** Ce que la loi unique [StorySlidePublishMatter] lit de la slide : une coquille de texte vide n'y est jamais comptée. */
+internal val StorySlide.publishFacts: StorySlidePublishMatter.Facts
+    get() = StorySlidePublishMatter.Facts(
+        caption = text,
+        realTextObjects = elements.count { it.isPublishable },
+        mediaCount = mediaIds.size,
+        hasBackgroundMedia = backgroundMediaId != null,
+        stickerCount = stickers.count { it.isPublishable },
+        placeCount = places.size,
+        strokeCount = strokes.size,
+        soundCount = audio.size,
+        hasChosenBackground = background != null,
+    )
+
 /**
  * Pure, immutable state of the multi-slide composer — the structural rules behind
  * the future canvas. It enforces two invariants the UI must never violate: the
@@ -143,15 +158,10 @@ data class StorySlideDeck(
      * a slide with none of these is skipped.
      */
     val publishableSlides: List<StorySlide>
-        get() = slides.filter { slide ->
-            slide.text.isNotBlank() ||
-                slide.mediaIds.isNotEmpty() ||
-                slide.elements.any { it.isPublishable } ||
-                slide.stickers.any { it.isPublishable } ||
-                slide.strokes.isNotEmpty() ||
-                slide.audio.isNotEmpty() ||
-                slide.places.isNotEmpty()
-        }
+        get() = slides.filter { StorySlidePublishMatter.deservesAPost(it.publishFacts) }
+
+    /** Some slide carries matter beyond its caption (object, media, sound, place, drawing, chosen backdrop) — [StorySlidePublishMatter]. */
+    val hasPublishMatter: Boolean get() = slides.any { StorySlidePublishMatter.carriesMatter(it.publishFacts) }
 
     /** Free media slots left on the **selected** slide; never negative so the UI can size a pick. */
     val selectedRemainingMediaSlots: Int

@@ -4,6 +4,9 @@ import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.JoinNoticePresentation
+import me.meeshy.sdk.model.MessageSenderIdentity
+import me.meeshy.sdk.model.ReactionSummaryReconstruction
+import me.meeshy.sdk.model.sourceKind
 import me.meeshy.sdk.model.SystemNoticeText
 import java.time.ZoneId
 import java.util.Locale
@@ -59,6 +62,8 @@ public object BubbleContentBuilder {
         readerLanguage: String? = null,
         /** Fuseau IANA du lecteur pour l'heure d'un avis de capture ; défaut : celui de l'appareil. */
         readerTimeZoneId: String? = null,
+        /** Mon identité de session : l'écho allégé de MON message (sans expéditeur imbriqué) n'a pas de nom vide. */
+        sessionIdentity: MessageSenderIdentity.Session? = null,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         // #13106 — un blob chiffré de bout en bout scelle la bulle entière, même servie en clair.
@@ -88,11 +93,9 @@ public object BubbleContentBuilder {
             recipientCount = recipientCount,
             showReadReceipts = showReadReceipts,
         )
-        val reactions = message.reactionSummary
-            ?.map { (emoji, count) ->
-                ReactionEntry(emoji = emoji, count = count, includesMe = emoji in ownReactions)
-            }
-            ?: emptyList()
+        val reactions = ReactionSummaryReconstruction
+            .reconstruct(message.reactionSummary, ownReactions)
+            .map { ReactionEntry(emoji = it.emoji, count = it.count, includesMe = it.includesMe) }
         val quoted = BubbleQuotedReplyBuilder.build(message.replyTo, preferences, mediaBaseUrl)
         val replyToDeleted = quoted?.isDeleted == true
         // Story/mood-reply preview. A message reply (`replyTo`) takes precedence,
@@ -155,8 +158,15 @@ public object BubbleContentBuilder {
                 includeTranslatable = true,
             )
         }
+        val identity = MessageSenderIdentity.resolve(
+            sender = message.sender,
+            source = message.sourceKind,
+            isMe = isOutgoing,
+            session = sessionIdentity,
+        )
         val senderName = (message.sender?.displayName ?: message.sender?.username)
             ?.takeIf { it.isNotBlank() }
+            ?: identity.name.takeIf { message.sender == null }
         return BubbleContent(
             messageId = message.id,
             viewingConversationId = message.conversationId.takeIf { it.isNotBlank() },
@@ -170,9 +180,13 @@ public object BubbleContentBuilder {
             showSenderName = showSenderName && !isOutgoing,
             senderId = message.senderId,
             senderProfile = if (isOutgoing || message.isSystemMessage) null else ProfileSheetUser.from(message),
-            senderUsername = (message.sender?.username ?: message.sender?.user?.username)
-                ?.takeIf { it.isNotBlank() },
-            senderAvatarUrl = message.sender?.resolvedAvatar,
+            senderUsername = identity.username,
+            senderAvatarUrl = identity.avatarUrl,
+            senderIsAnonymous = identity.isAnonymous,
+            senderHasAccount = identity.hasAccount,
+            senderRing = identity.avatarRing,
+            sourceKind = message.sourceKind,
+            servedMentionNames = if (isDeleted || isEndToEndSealed) emptyMap() else servedMentionNames(message),
             senderColorHex = (senderName ?: message.senderId)?.let(DynamicColorGenerator::colorForName),
             isEdited = message.isEdited,
             isDeleted = isDeleted,
@@ -249,6 +263,15 @@ public object BubbleContentBuilder {
             sticker = if (isDeleted || isEndToEndSealed) null else stickerOf(message, visibleAttachments, attachments.images),
         )
     }
+
+    /** Les noms servis pour les mentions : une mention d'un absent du roster affiche pourtant son nom. */
+    private fun servedMentionNames(message: ApiMessage): Map<String, String> =
+        message.mentionedUsers.orEmpty()
+            .mapNotNull { user ->
+                val name = user.displayName?.takeIf { it.isNotBlank() && it != user.username }
+                if (user.username.isBlank() || name == null) null else user.username to name
+            }
+            .toMap()
 
     /** Le sticker et la PREMIÈRE image jointe, à l'adresse servie (iOS `resolveSticker`) ; rien sur un message masqué. */
     private fun stickerOf(

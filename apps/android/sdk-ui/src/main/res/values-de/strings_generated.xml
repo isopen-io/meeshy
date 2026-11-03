@@ -76,6 +76,7 @@
     <string name="emoji_category_travel">Reisen</string>
     <string name="focal_focus_add_reaction">Reaktion hinzufügen</string>
     <string name="focal_focus_translation_detail">Übersetzungsdetails</string>
+    <string name="focal_row_anonymousSender">Kein Konto</string>
     <string name="focal_row_you">Du</string>
     <string name="image_editor_before">Original</string>
     <string name="image_editor_cancel">Abbrechen</string>
@@ -153,6 +154,9 @@
     </plurals>
     <string name="presence_offline">Offline</string>
     <string name="presence_online">Online</string>
+    <string name="pull_refresh_armed">Loslassen zum Aktualisieren</string>
+    <string name="pull_refresh_done">Aktualisiert</string>
+    <string name="pull_refresh_refreshing">Wird aktualisiert</string>
     <string name="reactions_more">Weitere Reaktionen</string>
     <string name="retouch_crop_original">Original</string>
     <string name="retouch_effect_angel">Engel</string>
@@ -215,6 +219,10 @@
     <string name="retouch_tool_text">Text</string>
     <string name="retouch_tool_trim">Kürzen</string>
     <string name="settings_info_button_label">Mehr über %1$s erfahren</string>
+    <string name="skeleton_feed_post_loading">Ein Beitrag wird geladen</string>
+    <string name="skeleton_link_row_loading">Ein Link wird geladen</string>
+    <string name="skeleton_profile_loading">Profil wird geladen</string>
+    <string name="skeleton_stories_loading">Storys werden geladen</string>
     <string name="slide_rail_delete_cancel">Abbrechen</string>
     <string name="slide_rail_delete_confirm_action">Löschen</string>
     <string name="slide_rail_delete_confirm_title">Diese Szene löschen?</string>

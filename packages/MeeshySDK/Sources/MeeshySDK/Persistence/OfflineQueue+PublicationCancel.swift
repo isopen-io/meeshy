@@ -126,6 +126,19 @@ final class OutboxInflightDispatches: Sendable {
         tasks.mutate { $0[id] = task }
     }
 
+    /// Lance l'envoi DÉJÀ inscrit : la `Task` naît sous le verrou de la table,
+    /// donc un `cancel` concurrent attend qu'elle y soit et la trouve — même
+    /// s'il tombe avant que l'envoi ait franchi sa première instruction.
+    /// Créée puis inscrite en deux temps, elle pouvait téléverser hors de la
+    /// table, et l'annulation laissait la requête en vol aller à son terme.
+    func start(_ id: String, _ operation: @escaping @Sendable @concurrent () async throws -> Void) -> Task<Void, Error> {
+        tasks.mutateUnchecked { table in
+            let task = Task { try await operation() }
+            table[id] = task
+            return task
+        }
+    }
+
     func unregister(_ task: Task<Void, Error>, for id: String) {
         tasks.mutate { table in
             guard table[id] == task else { return }
