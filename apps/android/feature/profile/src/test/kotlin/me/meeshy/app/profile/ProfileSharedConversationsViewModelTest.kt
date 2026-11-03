@@ -69,7 +69,7 @@ class ProfileSharedConversationsViewModelTest {
     }
 
     @Test
-    fun `le chargement est independant : l'etat est vide tant que rien n'est arrive`() = runTest {
+    fun `le chargement est independant, l'etat est vide tant que rien n'est arrive`() = runTest {
         val gate = CompletableDeferred<NetworkResult<List<ApiConversation>>>()
         coEvery { repository.listSharedWith("u2", any()) } coAnswers { gate.await() }
         val vm = viewModel()
@@ -148,19 +148,19 @@ class ProfileSharedConversationsViewModelTest {
     // MARK: ce que l'onglet peint
 
     @Test
-    fun `vide, on peut ecrire : la pilule Message accompagne le texte`() {
+    fun `vide, on peut ecrire, la pilule Message accompagne le texte`() {
         assertThat(ProfileConversationsView.of(hasRows = false, interactionsDisabled = false, canMessage = true))
             .isEqualTo(ProfileConversationsView.Empty(interactionsDisabled = false, showsMessagePill = true))
     }
 
     @Test
-    fun `vide et bloque : interdit sans pilule`() {
+    fun `vide et bloque, interdit sans pilule`() {
         assertThat(ProfileConversationsView.of(hasRows = false, interactionsDisabled = true, canMessage = true))
             .isEqualTo(ProfileConversationsView.Empty(interactionsDisabled = true, showsMessagePill = false))
     }
 
     @Test
-    fun `vide pour moi-meme ou un visiteur anonyme : aucune pilule`() {
+    fun `vide pour moi-meme ou un visiteur anonyme, aucune pilule`() {
         assertThat(ProfileConversationsView.of(hasRows = false, interactionsDisabled = false, canMessage = false))
             .isEqualTo(ProfileConversationsView.Empty(interactionsDisabled = false, showsMessagePill = false))
     }
