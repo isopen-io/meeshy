@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -45,6 +46,16 @@ private val LIVE_AUDIO_ATTRIBUTES: AudioAttributes = AudioAttributes.Builder()
     .setUsage(C.USAGE_MEDIA)
     .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
     .build()
+
+/**
+ * Les effets d'image qu'un lecteur vivant pose sur sa vidéo (le look d'une vidéo réglée, #13841) ; [PENDING] ouvre le
+ * pipeline sans rien peindre, le temps que le look se peigne.
+ */
+class ComposerLiveEffects internal constructor(internal val effects: List<Effect>) {
+    companion object {
+        val PENDING: ComposerLiveEffects = ComposerLiveEffects(emptyList())
+    }
+}
 
 /** Le lecteur vivant du compositeur, et s'il attend encore sa première image (la scène le dit). */
 @Stable
@@ -71,7 +82,8 @@ internal class ComposerLiveFirstFrame : Player.Listener {
  * les autres — la scène se tait, elle, hors premier plan. La fenêtre est tenue sur la source entière — un message posé à sa fin ramène la tête au début, une boucle de la
  * source aussi ([ComposerLivePlayback.rewindTo]) — et chaque fenêtre nouvelle déplace la tête là où l'auteur regarde
  * ([ComposerLivePlayback.seekOnChange]). Le volume suit à chaud ; [playing] faux le fige sans rembobiner. Chacun ne charge
- * d'avance que quelques secondes, 8 Mo au plus ([ComposerLiveBuffer]).
+ * d'avance que quelques secondes, 8 Mo au plus ([ComposerLiveBuffer]). [effects] : le look d'une vidéo réglée, posé par
+ * le GPU ([me.meeshy.ui.component.retouch.rememberStoryVideoLookEffects]) ; `null` n'ouvre aucun pipeline d'effets.
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -82,16 +94,20 @@ fun rememberComposerLivePlayer(
     playing: Boolean,
     category: MediaCacheCategory = MediaCacheCategory.VIDEO,
     follow: ComposerLiveFollow? = null,
+    effects: ComposerLiveEffects? = null,
 ): ComposerLivePlayerState {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
-    val player = remember(mediaUrl) {
+    val painted = effects != null
+    val player = remember(mediaUrl, painted) {
         PlayerCensus.record()
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaCache.mediaSourceFactory(category, mediaUrl))
             .setLoadControl(ComposerLiveBuffer.loadControl())
             .build().apply {
                 setAudioAttributes(LIVE_AUDIO_ATTRIBUTES, false)
+                // Le pipeline d'effets s'ouvre avant la préparation, pour que le look s'y pose à chaud (#13841).
+                if (painted) setVideoEffects(emptyList())
                 setMediaItem(MediaItem.fromUri(mediaUrl))
                 repeatMode = Player.REPEAT_MODE_ALL
                 prepare()
@@ -101,6 +117,7 @@ fun rememberComposerLivePlayer(
     val live = remember(player) { ComposerLiveHead(player) }
     LaunchedEffect(live, window) { live.follow(window) }
     LaunchedEffect(player, volume) { player.volume = volume }
+    LaunchedEffect(player, effects) { effects?.let { player.setVideoEffects(it.effects) } }
     // La frise ouverte (#13481) : le lecteur suit sa tête — il joue avec elle, se fige sur l'image de l'instant à l'arrêt,
     // se tait hors de sa fenêtre. Fermée, la scène joue en continu.
     LaunchedEffect(player, playing, follow) { player.obey(playing, follow) }
