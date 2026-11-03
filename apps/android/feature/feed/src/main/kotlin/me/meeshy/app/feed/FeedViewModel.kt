@@ -149,6 +149,11 @@ class FeedViewModel @Inject constructor(
         impressionBatcher.record(postId)
     }
 
+    /** Le fil sort de l'écran ou passe en arrière-plan : le lot d'impressions part, il n'est pas jeté (iOS `flushNow`). */
+    fun flushImpressions() {
+        impressionBatcher.flushNowAsync()
+    }
+
     override fun onCleared() {
         super.onCleared()
         impressionBatcher.flushNowAsync()
