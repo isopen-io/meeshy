@@ -40,6 +40,7 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.ComposeLanguageDefault
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.lang.LanguageIdentifying
+import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.media.NetworkConditionMonitor
 import me.meeshy.sdk.mention.MentionContacts
@@ -576,7 +577,9 @@ class ChatViewModel @Inject constructor(
     private suspend fun markConversationRead(arrived: ApiMessage? = null) = quietly {
         val unread = conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
         if (!mayAcknowledge(unread, arrived)) return@quietly
-        if (conversationRepository.markReadOptimistic(conversationId)) workManager.enqueue(OutboxFlushWorker.buildRequest())
+        if (conversationRepository.markReadOptimistic(conversationId, readDeclaration(unread, arrived))) {
+            workManager.enqueue(OutboxFlushWorker.buildRequest())
+        }
     }
 
     /**
@@ -588,13 +591,24 @@ class ChatViewModel @Inject constructor(
      */
     private suspend fun markConversationReadOnOpening(unreadAtOpening: Int) = quietly {
         if (!mayAcknowledge(unreadAtOpening, arrived = null)) return@quietly
+        val declaration = readDeclaration(unreadAtOpening, arrived = null)
         val queued = if (unreadAtOpening > 0) {
-            conversationRepository.acknowledgeRead(conversationId)
+            conversationRepository.acknowledgeRead(conversationId, declaration)
         } else {
-            conversationRepository.markReadOptimistic(conversationId)
+            conversationRepository.markReadOptimistic(conversationId, declaration)
         }
         if (queued) workManager.enqueue(OutboxFlushWorker.buildRequest())
     }
+
+    private fun readDeclaration(unread: Int, arrived: ApiMessage?) = ReadReceiptComposition.declaration(
+        window = latestMessages.value.map { it.message },
+        ownUserId = sessionRepository.currentUser.value?.id,
+        unreadCount = unread,
+        arrived = arrived,
+        prism = sessionRepository.currentUser.value?.let { ReaderPrism.resolve(it, java.util.Locale.getDefault()) }.orEmpty(),
+        overrides = translation.activeLanguageOverride.value,
+        showingOriginal = translation.showingOriginal.value,
+    )
 
     private fun mayAcknowledge(unread: Int, arrived: ApiMessage?): Boolean =
         ReadAcknowledgement.mayAcknowledge(

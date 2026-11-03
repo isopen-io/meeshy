@@ -50,6 +50,7 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.ReadReceiptPayload
 import me.meeshy.core.database.dao.SearchIndexDao
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.commitOrWrite
@@ -673,19 +674,20 @@ class ConversationRepository @Inject constructor(
      * coalescer merges repeats). No-op when the conversation is unknown or
      * already read. Returns whether anything was queued.
      */
-    suspend fun markReadOptimistic(id: String): Boolean {
+    suspend fun markReadOptimistic(id: String, declaration: ReadReceiptPayload? = null): Boolean {
         if (!markReadLocally(id)) return false
-        queueReadReceipt(id)
+        queueReadReceipt(id, declaration)
         return true
     }
 
-    private suspend fun queueReadReceipt(id: String) {
+    /** [declaration] : ce qui a été lu et dans quelle langue, résolu à la composition (jamais à l'envoi de la file). */
+    private suspend fun queueReadReceipt(id: String, declaration: ReadReceiptPayload? = null) {
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.READ_RECEIPT,
                 lane = OutboxLanes.READ_RECEIPT,
                 targetId = id,
-                payload = "{}",
+                payload = declaration?.let { MeeshyApi.json.encodeToString(ReadReceiptPayload.serializer(), it) } ?: "{}",
             ),
         )
     }
@@ -698,9 +700,9 @@ class ConversationRepository @Inject constructor(
      * counting unread). The coalescer keeps a single pending `READ_RECEIPT` per conversation, and
      * the route is idempotent, so a repeated acknowledgement costs nothing.
      */
-    suspend fun acknowledgeRead(id: String): Boolean {
+    suspend fun acknowledgeRead(id: String, declaration: ReadReceiptPayload? = null): Boolean {
         markReadLocally(id)
-        queueReadReceipt(id)
+        queueReadReceipt(id, declaration)
         return true
     }
 
