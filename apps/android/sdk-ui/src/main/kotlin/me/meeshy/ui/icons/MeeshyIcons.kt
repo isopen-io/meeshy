@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.AttachFile as FiAttachFile
 import androidx.compose.material.icons.filled.AutoAwesome as FiAutoAwesome
 import androidx.compose.material.icons.filled.AutoAwesomeMotion as FiAutoAwesomeMotion
 import androidx.compose.material.icons.filled.AutoFixHigh as FiAutoFixHigh
+import androidx.compose.material.icons.filled.Autorenew as FiAutorenew
 import androidx.compose.material.icons.filled.BarChart as FiBarChart
 import androidx.compose.material.icons.filled.Block as FiBlock
 import androidx.compose.material.icons.filled.Bolt as FiBolt
@@ -319,6 +320,7 @@ public object MeeshyIcons {
     public val AlignLeft: ImageVector get() = Icons.AutoMirrored.Filled.AfFormatAlignLeft
     public val ArrowUpRight: ImageVector get() = Icons.AutoMirrored.Filled.AfCallMade
     public val Article: ImageVector get() = Icons.AutoMirrored.Filled.AfArticle
+    public val Autorenew: ImageVector get() = Icons.Filled.FiAutorenew
     public val Back: ImageVector get() = Icons.AutoMirrored.Filled.AfKeyboardArrowLeft
     public val Backspace: ImageVector get() = Icons.AutoMirrored.Filled.AfBackspace
     public val ChartLine: ImageVector get() = Icons.AutoMirrored.Filled.AfShowChart

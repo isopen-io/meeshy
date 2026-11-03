@@ -35,6 +35,30 @@
         {
           "androidName": "audio_recorder_spoken_language",
           "status": "android-only"
+        },
+        {
+          "androidName": "bubble_footer_edited_by_moderator",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bubble_footer_offline_pending",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bubble_footer_resend",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bubble_footer_saving_edit",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bubble_footer_slow",
+          "status": "android-only"
+        },
+        {
+          "androidName": "storage_unavailable_banner",
+          "status": "android-only"
         }
       ]
     }
