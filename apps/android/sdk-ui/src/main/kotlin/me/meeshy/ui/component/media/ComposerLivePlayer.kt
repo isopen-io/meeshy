@@ -83,7 +83,8 @@ internal class ComposerLiveFirstFrame : Player.Listener {
  * source aussi ([ComposerLivePlayback.rewindTo]) — et chaque fenêtre nouvelle déplace la tête là où l'auteur regarde
  * ([ComposerLivePlayback.seekOnChange]). Le volume suit à chaud ; [playing] faux le fige sans rembobiner. Chacun ne charge
  * d'avance que quelques secondes, 8 Mo au plus ([ComposerLiveBuffer]). [effects] : le look d'une vidéo réglée, posé par
- * le GPU ([me.meeshy.ui.component.retouch.rememberStoryVideoLookEffects]) ; `null` n'ouvre aucun pipeline d'effets.
+ * le GPU ([me.meeshy.ui.component.retouch.rememberStoryVideoLookEffects]) sur CE lecteur ([ComposerLiveLook]) — poser,
+ * changer ou retirer un look ne le recrée jamais et garde la position de lecture ; `null` n'ouvre aucun pipeline d'effets.
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -98,16 +99,14 @@ fun rememberComposerLivePlayer(
 ): ComposerLivePlayerState {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
-    val painted = effects != null
-    val player = remember(mediaUrl, painted) {
+    val player = remember(mediaUrl) {
         PlayerCensus.record()
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaCache.mediaSourceFactory(category, mediaUrl))
             .setLoadControl(ComposerLiveBuffer.loadControl())
             .build().apply {
                 setAudioAttributes(LIVE_AUDIO_ATTRIBUTES, false)
-                // Le pipeline d'effets s'ouvre avant la préparation, pour que le look s'y pose à chaud (#13841).
-                if (painted) setVideoEffects(emptyList())
+                if (effects != null) setVideoEffects(emptyList())
                 setMediaItem(MediaItem.fromUri(mediaUrl))
                 repeatMode = Player.REPEAT_MODE_ALL
                 prepare()
@@ -117,7 +116,8 @@ fun rememberComposerLivePlayer(
     val live = remember(player) { ComposerLiveHead(player) }
     LaunchedEffect(live, window) { live.follow(window) }
     LaunchedEffect(player, volume) { player.volume = volume }
-    LaunchedEffect(player, effects) { effects?.let { player.setVideoEffects(it.effects) } }
+    val look = remember(player) { ComposerLiveLook(player, opened = effects != null, onReopened = live::rearm) }
+    LaunchedEffect(look, effects) { look.paint(effects) }
     // La frise ouverte (#13481) : le lecteur suit sa tête — il joue avec elle, se fige sur l'image de l'instant à l'arrêt,
     // se tait hors de sa fenêtre. Fermée, la scène joue en continu.
     LaunchedEffect(player, playing, follow) { player.obey(playing, follow) }
@@ -152,6 +152,28 @@ private fun ExoPlayer.obey(playing: Boolean, follow: ComposerLiveFollow?) {
     playWhenReady = runs
 }
 
+/**
+ * Le look posé sur un lecteur vivant, sans jamais le recréer (#14858) : un pipeline d'effets ouvert prend chaque look à
+ * chaud, et le retirer y pose une liste vide. Le premier look d'un lecteur né sans pipeline le rouvre SUR PLACE — arrêté
+ * puis repréparé, sa position, sa lecture et sa fenêtre gardées ([onReopened]) — car le rendu vidéo ne prend son pipeline
+ * qu'en s'activant.
+ */
+@OptIn(UnstableApi::class)
+internal class ComposerLiveLook(private val player: ExoPlayer, private var opened: Boolean, private val onReopened: () -> Unit) {
+    fun paint(effects: ComposerLiveEffects?) {
+        if (effects == null) {
+            if (opened) player.setVideoEffects(emptyList())
+            return
+        }
+        player.setVideoEffects(effects.effects)
+        if (opened) return
+        opened = true
+        player.stop()
+        player.prepare()
+        onReopened()
+    }
+}
+
 /** La tête du lecteur vivant : elle suit la fenêtre courante et reboucle sur son début. */
 private class ComposerLiveHead(private val player: ExoPlayer) {
     private var window: ComposerLiveWindow? = null
@@ -160,6 +182,15 @@ private class ComposerLiveHead(private val player: ExoPlayer) {
     fun follow(next: ComposerLiveWindow) {
         ComposerLivePlayback.seekOnChange(window, next)?.let(player::seekTo)
         window = next
+        arm(next)
+    }
+
+    /** Le lecteur s'est rouvert sur place : le rendez-vous de fin de fenêtre se repose. */
+    fun rearm() {
+        window?.let(::arm)
+    }
+
+    private fun arm(next: ComposerLiveWindow) {
         endMessage?.cancel()
         endMessage = next.endMs?.let { end ->
             player.createMessage { _, _ -> player.seekTo(next.startMs) }
