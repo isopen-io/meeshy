@@ -19,6 +19,7 @@ class RecordingSessionControllerTest {
             system, FakeNoisySource(), PlaybackInterruptionState(), { callActive },
             StandardTestDispatcher(scope.testScheduler),
         )
+        val keep = mutableListOf<Any>()
         val controller = RecordingSessionController(system, focus, playback, recorders) { callActive }
     }
 
@@ -26,7 +27,7 @@ class RecordingSessionControllerTest {
     fun `begin baisse les lecteurs a 0,3 et finish rend exactement les volumes`() = runTest {
         val rig = Rig(this)
         val volume = FakeVolume(0.8f)
-        FakePlayer(playing = true, volumeTarget = volume).also(rig.playback::register)
+        FakePlayer(playing = true, volumeTarget = volume).also(rig.playback::register).also { rig.keep += it }
 
         assertThat(rig.controller.begin(RecordingSource.VoiceMessage)).isTrue()
         assertThat(volume.volume).isWithin(1e-6f).of(0.8f * 0.3f)
@@ -68,7 +69,7 @@ class RecordingSessionControllerTest {
     fun `un volume change pendant la prise n'est pas ecrase`() = runTest {
         val rig = Rig(this)
         val volume = FakeVolume(1f)
-        FakePlayer(playing = true, volumeTarget = volume).also(rig.playback::register)
+        FakePlayer(playing = true, volumeTarget = volume).also(rig.playback::register).also { rig.keep += it }
         rig.controller.begin(RecordingSource.VoiceMessage)
 
         volume.volume = 0.9f

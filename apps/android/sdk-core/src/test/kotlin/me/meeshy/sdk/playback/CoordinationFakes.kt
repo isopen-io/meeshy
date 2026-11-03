@@ -42,6 +42,10 @@ internal class FakePlayer(
     var playing: Boolean = false,
     override val volumeTarget: PlaybackVolumeTarget? = null,
 ) : CoordinatedPlayer {
+    init {
+        strongRefs += this
+    }
+
     var stops = 0
         private set
     val events = mutableListOf<MediaSessionEvent>()
@@ -59,3 +63,5 @@ internal class FakePlayer(
 }
 
 internal class FakeVolume(override var volume: Float) : PlaybackVolumeTarget
+
+private val strongRefs = java.util.Collections.synchronizedList(mutableListOf<Any>())
