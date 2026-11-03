@@ -90,6 +90,19 @@ describe('PATCH /users/me/password — vrai schéma, sans confirmPassword', () =
     const { app, update } = await buildApp('$2b$12$hash');
     const res = await patch(app, { newPassword: NEW_PASSWORD });
     expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('Current password is incorrect');
+    expect(mockVerify).toHaveBeenLastCalledWith('', '$2b$12$hash');
+    expect(update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('refuse un currentPassword fourni mais faux', async () => {
+    mockVerify.mockResolvedValueOnce(false);
+    const { app, update } = await buildApp('$2b$12$hash');
+    const res = await patch(app, { currentPassword: 'faux', newPassword: NEW_PASSWORD });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('Current password is incorrect');
+    expect(mockVerify).toHaveBeenLastCalledWith('faux', '$2b$12$hash');
     expect(update).not.toHaveBeenCalled();
     await app.close();
   });
