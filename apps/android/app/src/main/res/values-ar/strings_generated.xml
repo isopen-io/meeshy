@@ -50,6 +50,7 @@
     <string name="route_title_starred">الرسائل المفضّلة</string>
     <string name="route_title_story">قصة</string>
     <string name="route_title_tracking_links">روابط التتبّع</string>
+    <string name="share_sending">جارٍ الإرسال…</string>
     <string name="upgrade_required_action">تحديث</string>
     <string name="upgrade_required_message">لم يعد بإمكان هذا الإصدار من Meeshy الاتصال بالخادم. ثبّت أحدث إصدار للمتابعة.</string>
     <string name="upgrade_required_min_version">الحد الأدنى للإصدار: %1$s</string>

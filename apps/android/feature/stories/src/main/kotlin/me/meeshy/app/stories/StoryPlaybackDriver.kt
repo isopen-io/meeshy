@@ -53,7 +53,7 @@ internal fun storyPlaybackCauses(
     gestureInFlight = dragging || rail.scrubKind != null,
     coveredByScreen = !foreground,
     interrupted = interrupted,
-    engaged = cover.sheet || cover.menu || cover.dialog || cover.composing || rail.languageBarVisible,
+    engaged = cover.sheet || cover.menu || cover.dialog || cover.composing || cover.reading || rail.languageBarVisible,
 )
 
 /**

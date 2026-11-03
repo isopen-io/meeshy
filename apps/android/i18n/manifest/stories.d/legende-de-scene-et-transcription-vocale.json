@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "story.caption.scroll_to_top", "status": "adopted" },
+        { "catalog": "app", "iosKey": "story.caption.scroll_to_top.hint", "status": "adopted" },
+        { "catalog": "app", "iosKey": "story.viewer.transcript.title", "status": "adopted" }
+      ]
+    }
+  }
+}

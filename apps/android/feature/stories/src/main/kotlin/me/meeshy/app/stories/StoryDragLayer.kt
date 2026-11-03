@@ -55,6 +55,7 @@ internal class StoryDragFrameSource {
     var railShown: Boolean = false
     var composerHeightPx: Int = 0
     var hasScrollableSurface: Boolean = false
+    var scrollableSurfaceTop: Float? = null
 
     fun snapshot(reactionBar: StoryDragRegion?): StoryDragFrames {
         val composer = composerHeightPx.takeIf { it > 0 }?.let {
@@ -69,6 +70,7 @@ internal class StoryDragFrameSource {
             rail = railRegion.takeIf { railShown },
             reactionBar = reactionBar,
             composer = composer,
+            scrollableSurfaceTop = scrollableSurfaceTop.takeIf { hasScrollableSurface },
             hasScrollableSurface = hasScrollableSurface,
         )
     }

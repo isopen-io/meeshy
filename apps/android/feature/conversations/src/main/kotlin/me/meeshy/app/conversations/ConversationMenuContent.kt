@@ -1,6 +1,5 @@
 package me.meeshy.app.conversations
 
-import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -217,7 +216,7 @@ private fun EntryRow(
 private fun BackHeader(title: String, onBack: () -> Unit) {
     DropdownMenuItem(
         text = { Text(title, style = MaterialTheme.typography.labelLarge) },
-        leadingIcon = { Icon(MeeshyIcons.BackArrow, contentDescription = null) },
+        leadingIcon = { Icon(MeeshyIcons.Back, contentDescription = null) },
         onClick = onBack,
         modifier = Modifier.testTag(BACK_TEST_TAG),
     )
