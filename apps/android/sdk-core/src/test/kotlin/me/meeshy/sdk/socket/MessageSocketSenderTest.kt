@@ -17,7 +17,10 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class MessageSocketSenderTest {
 
-    private class FakeTransport(override var isConnected: Boolean = true, val reply: ((Array<Any>) -> Unit)? = null) : AckTransport {
+    private class FakeTransport(
+        override var isConnected: Boolean = true,
+        val reply: ((ack: (Array<Any>) -> Unit) -> Unit)? = null,
+    ) : AckTransport {
         val emitted = mutableListOf<Pair<String, JSONObject>>()
         override fun emit(event: String, data: JSONObject, ack: (Array<Any>) -> Unit) {
             emitted += event to data
