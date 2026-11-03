@@ -101,7 +101,7 @@ class ShareRecipientRowRobolectricTest {
         val view = ShareDirectoryView(emptyList(), emptyList(), emptyList(), emptyList())
         val skeleton = ShareRecipientsZoneState.of(view, true, true, null, emptyList(), true, emptyMap())
         show { ShareRecipientsZone(skeleton, ShareRecipientsZoneSnapshot(), MeeshyPalette.Indigo500, noActions) }
-        compose.onAllNodesWithTag(ShareRecipientsSkeletonTestTag).assertCountEquals(3)
+        compose.onAllNodesWithTag(ShareRecipientsSkeletonTestTag, useUnmergedTree = true).assertCountEquals(3)
     }
 
     @Test
