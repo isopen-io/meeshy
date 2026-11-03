@@ -1,6 +1,15 @@
 package me.meeshy.ui.story.canvas
 
 import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
+import androidx.test.core.app.ApplicationProvider
+import coil.Coil
+import coil.ImageLoader
+import coil.decode.DataSource
+import coil.intercept.Interceptor
+import coil.request.ImageResult
+import coil.request.SuccessResult
+import org.junit.After
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -27,6 +36,27 @@ class SceneMediaLayerRobolectricTest {
 
     private fun plan(media: StoryMediaObject): List<SceneRenderItem> =
         SceneRenderPlanner.plan(SceneLists(medias = listOf(media)), 0.0, SceneRenderMode.PLAY, SceneReaderLanguages.NONE)
+
+    @After
+    fun resetImages() {
+        Coil.reset()
+    }
+
+    private fun servingEveryImage() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val loader = ImageLoader.Builder(context)
+            .components {
+                add(object : Interceptor {
+                    override suspend fun intercept(chain: Interceptor.Chain): ImageResult = SuccessResult(
+                        drawable = BitmapDrawable(context.resources, bitmap()),
+                        request = chain.request,
+                        dataSource = DataSource.MEMORY,
+                    )
+                })
+            }
+            .build()
+        Coil.setImageLoader(loader)
+    }
 
     private fun bitmap(): Bitmap = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888)
 
@@ -56,6 +86,7 @@ class SceneMediaLayerRobolectricTest {
 
     @Test
     fun `une image rognee et un gif animes sont peints`() {
+        servingEveryImage()
         val items = plan(StoryMediaObject(id = "m", mediaURL = "https://x/a.gif", crop = StoryMediaCrop(0.1, 0.1, 0.5, 0.5)))
         compose.setContent { SceneCanvas(items = items) }
         compose.onAllNodesWithTag(SCENE_MEDIA_TAG).assertCountEquals(1)

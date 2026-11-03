@@ -1,7 +1,6 @@
 package me.meeshy.app.calls
 
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallAnalytics
 import me.meeshy.sdk.model.call.CallPersistedQualitySummary
@@ -28,6 +27,7 @@ class CallAnalyticsController @Inject constructor(
     private val signals: CallSignalManager,
     private val clock: CallClock,
     private val summaries: CallQualitySummaryStoring,
+    private val snapshotTicker: CallAnalyticsSnapshotTicker,
 ) {
     private var host: CallSessionHost? = null
     private val quality = CallQualityController(signals)
@@ -81,10 +81,7 @@ class CallAnalyticsController @Inject constructor(
         val host = host ?: return
         if (snapshotJob?.isActive == true) return
         snapshotJob = host.scope.launch {
-            while (true) {
-                delay(CallAnalytics.SNAPSHOT_INTERVAL_MS)
-                emitSnapshot(host)
-            }
+            snapshotTicker.beats.collect { emitSnapshot(host) }
         }
     }
 

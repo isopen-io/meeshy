@@ -104,6 +104,7 @@
     <string name="composer_slide_rail_delete">Delete scene %1$d</string>
     <string name="composer_slide_rail_position">Scene %1$d of %2$d</string>
     <string name="composer_socle_audience">Audience</string>
+    <string name="composer_socle_blocked_audience">Choose at least one person to publish</string>
     <string name="composer_socle_publish">Publish</string>
     <string name="composer_sound_background_a11y">Background sound</string>
     <string name="composer_text_frame_cloud">Cloud</string>
@@ -291,6 +292,8 @@
     <string name="story_canvas_action_edit">Edit</string>
     <string name="story_canvas_action_leaveScene">Remove from scene</string>
     <string name="story_canvas_action_sendBackward">Send backward</string>
+    <string name="story_caption_scroll_to_top">Back to the top of the text</string>
+    <string name="story_caption_scroll_to_top_hint">Scrolls the description back to its first word</string>
     <string name="story_composer_cancel">Cancel</string>
     <string name="story_composer_edit_slide_background">Edit background</string>
     <string name="story_composer_fab_badge">%1$d active item(s)</string>
@@ -390,4 +393,5 @@
     <string name="story_tray_a11y_changeMood">Change my mood</string>
     <string name="story_tray_menu_profile">View profile</string>
     <string name="story_tray_menu_viewStories">View stories</string>
+    <string name="story_viewer_transcript_title">Transcript</string>
 </resources>

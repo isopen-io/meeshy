@@ -123,7 +123,7 @@ data class ApiConversation(
     val lastDeliveredAt: String? = null,
 ) {
     /** La conversation « World » : le salon global, reconnu à son identifiant. */
-    val isWorldWide: Boolean get() = identifier == "world"
+    val isWorldWide: Boolean get() = identifier == WORLD_WIDE_IDENTIFIER
 
     /** Prefers the server-computed count over [participants], which is truncated to 5. */
     val memberCount: Int get() = serverMemberCount ?: participants.size

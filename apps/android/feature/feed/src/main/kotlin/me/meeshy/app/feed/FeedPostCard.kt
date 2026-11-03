@@ -88,6 +88,7 @@ internal fun PostCard(
                 post = post,
                 onFlagTap = onFlagTap,
                 onOpenHashtag = onOpenHashtag,
+                onOpenProfile = onOpenProfile,
                 translatingCodes = translatingCodes,
                 onSelectLanguage = onSelectLanguage,
             )

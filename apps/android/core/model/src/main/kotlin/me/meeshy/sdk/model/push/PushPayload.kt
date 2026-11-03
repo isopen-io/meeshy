@@ -16,6 +16,8 @@ public data class PushPayload(
     val senderId: String? = null,
     val postId: String? = null,
     val postType: String? = null,
+    /** Le discriminant que la famille `friend_new_*` expédie à la place de `postType` (iOS `NotificationContentRouter`). */
+    val contentType: String? = null,
     val commentId: String? = null,
     val parentCommentId: String? = null,
     val callId: String? = null,
@@ -94,6 +96,7 @@ public data class PushPayload(
                 senderId = text("senderId"),
                 postId = text("postId"),
                 postType = text("postType"),
+                contentType = text("contentType"),
                 commentId = text("commentId"),
                 parentCommentId = text("parentCommentId"),
                 callId = text("callId"),

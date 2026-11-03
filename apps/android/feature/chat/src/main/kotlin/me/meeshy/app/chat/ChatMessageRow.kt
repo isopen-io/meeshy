@@ -64,6 +64,8 @@ internal class ChatMessageRowActions(
     val onRetry: (messageId: String) -> Unit = {},
     /** Tap sur le smiley d'ajout de réaction du dernier message reçu. */
     val onAddReaction: (messageId: String) -> Unit = {},
+    /** Appui long de 0,4 s sur le smiley d'ajout : le sélecteur d'emoji complet. */
+    val onOpenReactPicker: (messageId: String) -> Unit = {},
     /** Tap sur l'avatar de l'auteur (pied d'identité d'une suite reçue en groupe) : sa fiche profil. */
     val onSenderTap: (bubble: BubbleContent) -> Unit = {},
     /** Icône de traduction de l'élu Focal : l'explorateur des langues du message. */
@@ -150,6 +152,7 @@ internal fun ChatMessageRow(
             onRetry = { actions.onRetry(messageId) },
             onSayHi = { actions.onReply(messageId) }.takeIf { canWrite && bubble.isArrivalsNotice },
             onAddReaction = { actions.onAddReaction(messageId) }.takeIf { reacts },
+            onOpenReactPicker = { actions.onOpenReactPicker(messageId) }.takeIf { reacts },
             onSenderTap = if (bubble.senderProfile != null) {
                 { actions.onSenderTap(bubble) }
             } else {

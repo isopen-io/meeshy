@@ -184,6 +184,13 @@ public interface OutboxDao {
     @Query("UPDATE outbox SET cancelRequestedAt = :at, updatedAt = :at WHERE cmid = :cmid")
     public suspend fun requestCancel(cmid: String, at: Long)
 
+    /** Every row the table holds, whatever its state — what the capacity ceiling bounds. */
+    @Query("SELECT COUNT(*) FROM outbox")
+    public suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM outbox")
+    public fun observeCount(): Flow<Int>
+
     @Query("DELETE FROM outbox")
     public suspend fun clear()
 }

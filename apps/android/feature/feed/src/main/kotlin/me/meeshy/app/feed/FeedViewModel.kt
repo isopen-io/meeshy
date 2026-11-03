@@ -59,7 +59,7 @@ data class FeedUiState(
     val newPostsCount: Int = 0,
     /** L'id de l'utilisateur connecte — decide quel menu d'options porte chaque card. */
     val currentUserId: String? = null,
-    /** Le nom et l'avatar de l'utilisateur connecté : le visage du placeholder de composeur (iOS `MeeshyAvatar(.feedComposer)`). */
+    /** Le nom et l'avatar de l'utilisateur connecté : le visage du placeholder de composeur (iOS `MeeshyAvatar`, mode `.feedComposer`). */
     val currentUserName: String? = null,
     val currentUserAvatarUrl: String? = null,
     /**

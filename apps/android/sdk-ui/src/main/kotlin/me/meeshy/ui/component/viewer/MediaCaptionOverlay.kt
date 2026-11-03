@@ -1,5 +1,7 @@
 package me.meeshy.ui.component.viewer
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -16,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +33,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.caption.MediaCaptionLaw
 import me.meeshy.ui.R
@@ -49,6 +53,8 @@ private val CaptionShadow = Shadow(color = Color.Black.copy(alpha = 0.65f), offs
  *
  * @param endInset espace laissé à droite (le rail d'actions).
  * @param bottomInset espace laissé sous la légende (un compositeur épinglé).
+ * @param scrollToTopToken chaque incrément ramène le texte déplié à son premier mot (iOS `scrollToTopToken`).
+ * @param expandSpec ressort qui anime la croissance du bloc au dépliage ; `null` = saut net.
  * @param anchoredToParent `true` : la couche occupe son parent (ancrée bas-gauche, voile et tap hors
  *   texte qui referme) ; `false` : bloc en ligne dans une colonne de l'hôte, sans voile, que le toucher
  *   du texte replie.
@@ -69,9 +75,13 @@ public fun MediaCaptionOverlay(
     dimsBackgroundWhenExpanded: Boolean = true,
     bottomInset: Dp = 0.dp,
     anchoredToParent: Boolean = true,
+    scrollToTopToken: Int = 0,
+    expandSpec: FiniteAnimationSpec<IntSize>? = null,
 ) {
     val folded = remember(caption) { MediaCaptionLaw.collapse(caption) }
     val open = expanded && folded.isTruncated
+    val scrollState = rememberScrollState()
+    LaunchedEffect(scrollToTopToken) { if (scrollToTopToken > 0) scrollState.animateScrollTo(0) }
     Box(modifier = if (anchoredToParent) modifier.fillMaxSize() else modifier) {
         if (open && anchoredToParent) {
             Box(
@@ -91,6 +101,7 @@ public fun MediaCaptionOverlay(
             Modifier
                 .then(if (anchoredToParent) Modifier.align(Alignment.BottomStart).navigationBarsPadding() else Modifier)
                 .fillMaxWidth()
+                .then(if (expandSpec != null) Modifier.animateContentSize(expandSpec) else Modifier)
                 .padding(
                     start = startInset,
                     end = endInset,
@@ -99,7 +110,7 @@ public fun MediaCaptionOverlay(
         ) {
             val body = if (expanded && folded.isTruncated) caption else MediaCaptionLaw.shown(caption, expanded = false)
             val scrolling = if (expanded && folded.isTruncated) {
-                Modifier.heightIn(max = maxExpandedHeight).verticalScroll(rememberScrollState())
+                Modifier.heightIn(max = maxExpandedHeight).verticalScroll(scrollState)
             } else {
                 Modifier
             }

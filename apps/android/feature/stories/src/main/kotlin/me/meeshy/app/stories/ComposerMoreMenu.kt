@@ -18,6 +18,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerMoreEntry
+import me.meeshy.sdk.model.composer.ComposerOverflowPolicy
 import me.meeshy.ui.icons.MeeshyIcons
 
 /**
@@ -38,6 +39,7 @@ internal fun ComposerMoreMenu(
     },
     onPick: (ComposerMoreEntry) -> Unit,
 ) {
+    if (!ComposerOverflowPolicy.showsMenu(entries)) return
     var expanded by remember { mutableStateOf(false) }
     Box {
         anchor(expanded) { expanded = true }

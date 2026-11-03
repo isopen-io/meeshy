@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.ApiPost
@@ -20,6 +21,7 @@ import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.FailedStoryPublish
 import me.meeshy.sdk.story.PendingStoryPublish
 import me.meeshy.sdk.publication.PublicationOutbox
+import me.meeshy.sdk.story.StoryCoverStore
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.toStoryGroups
 import javax.inject.Inject
@@ -46,6 +48,8 @@ class StoriesViewModel @Inject constructor(
     private val socialSocket: SocialSocketManager,
     private val publications: PublicationOutbox,
     private val coverMemo: StoryCoverMemo = StoryCoverMemo(),
+    private val coverStore: StoryCoverStore = StoryCoverStore.Empty,
+    private val coverSignal: StoryCoverRenderSignal? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoriesUiState())
@@ -70,7 +74,9 @@ class StoriesViewModel @Inject constructor(
                 // à froid) : la barre se recompose alors, sinon mes stories restent rangées
                 // comme celles d'un autre auteur jusqu'à la prochaine émission.
                 sessionRepository.currentUser,
-            ) { result, queue, user -> Triple(result, queue, user) }
+                // Une couverture rendue après coup rafraîchit les cellules (iOS `StoryCoverRenderSignal`).
+                coverSignal?.generation ?: flowOf(0),
+            ) { result, queue, user, _ -> Triple(result, queue, user) }
                 .catch { _state.update { it.copy(showSkeleton = false, isSyncing = false) } }
                 .collectEachSafely { (result, queue, user) ->
                     val pending = queue.pending
@@ -90,7 +96,8 @@ class StoriesViewModel @Inject constructor(
                         groups = merged.toStoryGroups(currentUserId = currentUserId),
                         currentUserId = currentUserId,
                         mediaBaseUrl = config.apiBaseUrl,
-                        coverOf = { coverMemo.coverUrl(it, currentUserId) { null } },
+                        coverOf = { coverMemo.coverUrl(it, currentUserId, coverStore::localPath) },
+                        localCoverOf = { coverMemo.localCover(it, currentUserId, coverStore::localPath) },
                     )
                     _state.update {
                         it.copy(
