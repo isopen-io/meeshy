@@ -316,7 +316,10 @@
     <string name="share_link_join_anonymously">Anonym beitreten</string>
     <string name="share_link_resume_anonymously">Anonym fortsetzen</string>
     <string name="signup_back">Zurück</string>
+    <string name="signup_card_code_lead">Gib den 6-stelligen Code ein, der an %1$s gesendet wurde, oder öffne den erhaltenen Link.</string>
     <string name="signup_card_title">Dein Konto</string>
+    <string name="signup_card_verified">Konto bestätigt!</string>
+    <string name="signup_card_verified_lead">Alles bereit: Deine Kontakte lesen dich in ihrer Sprache.</string>
     <string name="signup_close">Schließen</string>
     <string name="signup_country_search_hint">Land suchen</string>
     <string name="signup_display_name_label">Wie sollen wir dich nennen?</string>
@@ -354,9 +357,11 @@
     <string name="signup_sign_in">Anmelden</string>
     <string name="signup_submit_in_progress">Konto wird erstellt</string>
     <string name="signup_subtitle">Du liest alle in deiner Sprache.</string>
+    <string name="signup_talk">Mit anderen sprechen</string>
     <string name="signup_title">Erstelle dein Konto</string>
     <string name="signup_username_invalid_characters">Nur Buchstaben ohne Akzent, Ziffern, - und _ — keine Leerzeichen.</string>
     <string name="signup_username_too_long">Höchstens %1$d Zeichen.</string>
+    <string name="signup_validate_now">Konto jetzt bestätigen</string>
     <string name="visitor_body">Erstelle dein Konto oder melde dich an, um zu reagieren, zu kommentieren und alles in deiner Sprache zu lesen.</string>
     <string name="visitor_close">Schließen</string>
     <string name="visitor_failed_body">Dieser Inhalt konnte nicht geladen werden. Prüfe deine Verbindung und versuche es erneut.</string>

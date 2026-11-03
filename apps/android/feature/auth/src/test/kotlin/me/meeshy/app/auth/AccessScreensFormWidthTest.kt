@@ -230,6 +230,8 @@ class AccessScreensFormWidthTest {
             override fun regionTag(): String = "US"
         },
         me.meeshy.sdk.notification.InMemoryPushPermissionDeferralStore(),
+        provenSessions = provenOpener(),
+        celebration = arrivalCelebration(),
     )
 
     private fun refusedLinkViewModel(): MagicLinkValidateViewModel {

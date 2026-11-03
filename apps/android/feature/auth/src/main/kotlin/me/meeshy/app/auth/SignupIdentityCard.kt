@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -32,6 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.graphics.SolidColor
@@ -42,15 +45,19 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.auth.R
 import me.meeshy.sdk.model.auth.AuthFieldBorder
 import me.meeshy.sdk.model.auth.AuthFieldBorderRole
 import me.meeshy.ui.component.auth.AuthContentType
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.auth.AuthTextField
+import me.meeshy.ui.component.auth.FireworksCanvas
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMotion
@@ -63,9 +70,14 @@ internal const val SIGNUP_CARD_TAG: String = "signup.card"
 internal const val SIGNUP_DISPLAY_NAME_TAG: String = "signup.card.displayName"
 internal const val SIGNUP_USERNAME_TAG: String = "signup.card.username"
 internal const val SIGNUP_PASSWORD_TAG: String = "signup.card.password"
+internal const val SIGNUP_VALIDATE_NOW_TAG: String = "signup.card.validateNow"
+internal const val SIGNUP_FIREWORKS_TAG: String = "signup.card.fireworks"
 
 private val INPUT_MIN_HEIGHT = 48.dp
 private val TAP_TARGET = 48.dp
+private const val INACTIVE_ALPHA = 0.6f
+private const val VALIDATE_TINT = 0.12f
+private const val VALIDATE_STROKE = 0.4f
 
 /** Ce que la carte demande à son hôte — des rappels, jamais le ViewModel lui-même. */
 internal class SignupCardActions(
@@ -74,6 +86,8 @@ internal class SignupCardActions(
     val onSuggestionPicked: (String) -> Unit,
     val onPasswordChange: (String) -> Unit,
     val onSubmit: () -> Unit,
+    val onValidateNow: () -> Unit = {},
+    val onSignIn: () -> Unit = {},
 )
 
 /**
@@ -87,29 +101,87 @@ internal fun SignupIdentityCard(
     state: SignupUiState,
     actions: SignupCardActions,
     modifier: Modifier = Modifier,
+    codeStep: @Composable (SignupCodeStep) -> Unit = {},
 ) {
     val tokens = MeeshyTheme.tokens
     val shape = RoundedCornerShape(MeeshyRadius.xxl)
+    val celebrating = state.card is SignupCard.Verified && !LocalReduceMotion.current
     MeeshyGlassSurface(shape = shape, modifier = modifier.fillMaxWidth().testTag(SIGNUP_CARD_TAG)) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(BorderStroke(1.dp, tokens.inputBorder.copy(alpha = AuthFieldBorder.IDLE_ALPHA)), shape)
-                .padding(MeeshySpacing.lg)
-                .animateContentSize(),
-            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
-        ) {
-            Text(
-                text = stringResource(R.string.signup_card_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = tokens.textPrimary,
-                modifier = Modifier.semantics { heading() },
-            )
-            IdentityInputs(state, actions)
-            AnimatedVisibility(visible = state.passwordRevealed) {
-                SignupPasswordBlock(state, actions)
+        Box {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(BorderStroke(1.dp, tokens.inputBorder.copy(alpha = AuthFieldBorder.IDLE_ALPHA)), shape)
+                    .padding(MeeshySpacing.lg)
+                    .animateContentSize(),
+                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
+            ) {
+                Text(
+                    text = stringResource(R.string.signup_card_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = tokens.textPrimary,
+                    modifier = Modifier.semantics { heading() },
+                )
+                when (val card = state.card) {
+                    SignupCard.Editing -> {
+                        IdentityInputs(state, actions)
+                        AnimatedVisibility(visible = state.passwordRevealed) {
+                            SignupPasswordBlock(state, actions)
+                        }
+                        ValidateNowButton(state, actions.onValidateNow)
+                    }
+                    is SignupCard.AwaitingCode -> codeStep(card.step)
+                    is SignupCard.Verified -> SignupVerifiedStep(
+                        openRefused = state.openRefused,
+                        needsSignIn = state.needsSignIn,
+                        onSignIn = actions.onSignIn,
+                    )
+                }
             }
+            // Le feu d'artifice se clippe à la forme de la carte et se tait sous « Réduire les animations ».
+            if (celebrating) {
+                Box(Modifier.matchParentSize().testTag(SIGNUP_FIREWORKS_TAG)) { FireworksCanvas(clip = shape) }
+            }
+        }
+    }
+}
+
+/** « Valider mon compte maintenant » : crée le compte en TENANT sa session et fait paraître le code dans la carte. */
+@Composable
+private fun ValidateNowButton(state: SignupUiState, onClick: () -> Unit) {
+    val tokens = MeeshyTheme.tokens
+    val title = stringResource(R.string.signup_validate_now)
+    val inProgress = stringResource(R.string.signup_submit_in_progress)
+    val shape = RoundedCornerShape(MeeshyRadius.md)
+    val ready = state.canSubmit
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = INPUT_MIN_HEIGHT)
+            .testTag(SIGNUP_VALIDATE_NOW_TAG)
+            .alpha(if (ready || state.isValidating) 1f else INACTIVE_ALPHA)
+            .background(MeeshyPalette.Indigo500.copy(alpha = VALIDATE_TINT), shape)
+            .border(BorderStroke(1.dp, MeeshyPalette.Indigo500.copy(alpha = VALIDATE_STROKE)), shape)
+            .clip(shape)
+            .clickable(enabled = !state.isValidating && !state.isSubmitting, role = Role.Button, onClick = onClick)
+            .semantics {
+                contentDescription = title
+                if (state.isValidating) stateDescription = inProgress
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (state.isValidating) {
+            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MeeshyPalette.Indigo500)
+        } else {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = tokens.textPrimary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = MeeshySpacing.md),
+            )
         }
     }
 }

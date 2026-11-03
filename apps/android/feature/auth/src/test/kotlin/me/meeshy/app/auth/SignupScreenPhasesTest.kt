@@ -74,6 +74,8 @@ class SignupScreenPhasesTest {
             },
             InMemoryPushPermissionDeferralStore(),
             loginHandoffs = handoffs,
+            provenSessions = provenOpener(),
+            celebration = arrivalCelebration(),
         )
         return Rig(viewModel, repository, handoffs)
     }
