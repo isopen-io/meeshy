@@ -22,7 +22,7 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.scene.PrimaryVideoStatus
-import me.meeshy.sdk.model.scene.SceneBackgroundKind
+import me.meeshy.sdk.model.scene.SceneReadinessKind
 import me.meeshy.sdk.model.scene.SceneContentReadiness
 import me.meeshy.sdk.model.scene.SceneScrubPlan
 import me.meeshy.sdk.model.scene.StoryPlaybackHealth
@@ -119,9 +119,9 @@ internal fun rememberStoryPlayback(
         awaitingStart = true
         val slide = slideNow
         val kind = when {
-            slide?.backgroundVideoUrl != null -> SceneBackgroundKind.Video
-            slide?.imageUrl != null -> SceneBackgroundKind.Image
-            else -> SceneBackgroundKind.Flat
+            slide?.backgroundVideoUrl != null -> SceneReadinessKind.Video
+            slide?.imageUrl != null -> SceneReadinessKind.Image
+            else -> SceneReadinessKind.Flat
         }
         contentReadiness.begin(slideKey, kind, foregroundVideosPending = !foregroundReadyNow)
         progress.snapTo(0f)
