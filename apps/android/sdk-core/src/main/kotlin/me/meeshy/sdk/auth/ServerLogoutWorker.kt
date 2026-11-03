@@ -44,7 +44,7 @@ class PendingServerLogoutTokens @Inject constructor(@SecretVault private val vau
     /** Les identifiants dont le coffre garde encore un jeton : la vérité de ce qui n'a pas été fermé côté serveur. */
     fun ids(): Set<String> = vault.keys(null)
         .filter { it.startsWith(PREFIX) }
-        .map { it.removePrefix(PREFIX).substringBeforeLast(PART_SEPARATOR) }
+        .map { it.removePrefix(PREFIX).substringBefore(PART_SEPARATOR) }
         .filter { it.isNotEmpty() }
         .toSet()
 

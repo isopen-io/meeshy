@@ -6,6 +6,8 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.currentTime
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.auth.ServerLogoutPolicy.Verdict
@@ -98,7 +100,8 @@ class ServerLogoutTest {
         serverLogout.closeInBackground("jwt-a", "sess-a")
 
         assertThat(handovers.calls).isEmpty()
-        testScheduler.advanceUntilIdle()
+        advanceTimeBy(6_001)
+        runCurrent()
         assertThat(handovers.calls).hasSize(1)
     }
 
@@ -107,7 +110,8 @@ class ServerLogoutTest {
         val api = mockk<AuthApi>()
 
         logout(api).closeInBackground(null, null)
-        testScheduler.advanceUntilIdle()
+        advanceTimeBy(6_001)
+        runCurrent()
 
         coVerify(exactly = 0) { api.logout(any(), any()) }
     }
