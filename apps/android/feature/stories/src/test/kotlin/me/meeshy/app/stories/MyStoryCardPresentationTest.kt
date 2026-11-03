@@ -7,8 +7,13 @@ import me.meeshy.sdk.model.MyStoryGlyph
 import me.meeshy.sdk.model.MyStorySelectionIndicator
 import me.meeshy.sdk.model.MyStoryThumbnailSource
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.util.Locale
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class MyStoryCardPresentationTest {
 
     private val now = 1_800_000_000_000L
