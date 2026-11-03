@@ -91,8 +91,7 @@ fun StoryViewerScreen(
         onComposeStory = onComposeStory,
     )
 
-    val playing = rememberStoryPlaying(isPaused = state.isPaused, dragging = cardMotion.dragging)
-    val progress = rememberStoryProgress(state, slideDurationMs, playing, cover.freezesPlayback, viewModel)
+    val playback = rememberStoryPlayback(state, slideDurationMs, cover, rail, cardMotion.dragging, viewModel)
     StoryViewerLifecycleEffects(state, onClose)
 
     StoryViewerShell(
@@ -100,8 +99,10 @@ fun StoryViewerScreen(
         slide = slide,
         accent = accent,
         slideDurationMs = slideDurationMs,
-        progress = progress,
-        playing = playing,
+        progress = playback.progress,
+        playing = playback.playing,
+        lap = playback.lap,
+        waiting = playback.waiting,
         composing = cover.composing,
         railPlan = railPlan,
         commentThread = commentThread,

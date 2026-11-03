@@ -53,41 +53,7 @@ extension StoryViewModel {
 
         let media = try loadMediaFromReferences(item.mediaReferences)
 
-        let user = AuthManager.shared.currentUser
-        let upload = StoryUploadState(
-            id: item.tempStoryId,
-            thumbnailImage: media.slideImages.values.first?
-                .preparingThumbnail(of: CGSize(width: 100, height: 178)) ?? UIImage(),
-            // **Le lien d'origine voyage jusqu'au rejeu** (#8522) : persisté
-            // dans l'item, il n'était jamais relu — une republication rejouée
-            // partait orpheline.
-            repostOfId: item.repostOfId,
-            phase: .uploading,
-            authorId: user?.id ?? "",
-            authorName: user?.displayName ?? user?.username ?? "",
-            authorAvatar: user?.avatar,
-            slides: slides,
-            slideImages: media.slideImages,
-            loadedImages: media.loadedImages,
-            loadedVideoURLs: media.loadedVideoURLs,
-            loadedAudioURLs: media.loadedAudioURLs,
-            loadedStickerAnimations: media.loadedStickerAnimations,
-            originalLanguage: item.originalLanguage,
-            visibility: item.visibility,
-            visibilityUserIds: item.visibilityUserIds ?? [],
-            declaredMentions: item.mentionsPayload ?? [],
-            // Row d'avant #4068 : la carte est absente, l'envoi retombe sur la
-            // liste plate — l'ancien comportement pour ces rows-là seulement.
-            mentionsBySlide: item.mentionsBySlidePayload ?? [:],
-            composerMediaTexts: ComposerMediaTexts(alt: item.mediaAltPayload ?? [:],
-                                                   caption: item.mediaCaptionPayload ?? [:]),
-            allowSoundExtraction: item.allowSoundExtractionPayload,
-            // Une valeur inconnue (row écrite par une version future) retombe
-            // sur la story plutôt que d'échouer : le rejeu publie, au pire sous
-            // le format historique.
-            targetType: item.targetTypePayload.flatMap(PostType.init(rawValue:)) ?? .story,
-            alsoAsReel: item.alsoAsReelPayload ?? false
-        )
+        let upload = queuedUploadState(item: item, slides: slides, media: media)
 
         let ids: [String]
         do {
@@ -131,6 +97,54 @@ extension StoryViewModel {
             "executeQueuedPublish done tempId=\(item.tempStoryId, privacy: .public) → \(last, privacy: .public)"
         )
         return last
+    }
+
+    /// L'état de téléversement qu'un item de la file rejoue, tel que le
+    /// premier passage l'avait composé.
+    private func queuedUploadState(
+        item: StoryPublishQueueItem,
+        slides: [StorySlide],
+        media: LoadedMedia
+    ) -> StoryUploadState {
+        let user = AuthManager.shared.currentUser
+        return StoryUploadState(
+            id: item.tempStoryId,
+            thumbnailImage: media.slideImages.values.first?
+                .preparingThumbnail(of: CGSize(width: 100, height: 178)) ?? UIImage(),
+            // **Le rejeu reprend la clé du premier passage** (#4773) : le chemin
+            // en ligne clé chaque slide par l'id de l'item ; sans lui, une story
+            // interrompue après sa première slide la republiait au rejeu.
+            queueId: item.id,
+            // **Le lien d'origine voyage jusqu'au rejeu** (#8522) : persisté
+            // dans l'item, il n'était jamais relu — une republication rejouée
+            // partait orpheline.
+            repostOfId: item.repostOfId,
+            phase: .uploading,
+            authorId: user?.id ?? "",
+            authorName: user?.displayName ?? user?.username ?? "",
+            authorAvatar: user?.avatar,
+            slides: slides,
+            slideImages: media.slideImages,
+            loadedImages: media.loadedImages,
+            loadedVideoURLs: media.loadedVideoURLs,
+            loadedAudioURLs: media.loadedAudioURLs,
+            loadedStickerAnimations: media.loadedStickerAnimations,
+            originalLanguage: item.originalLanguage,
+            visibility: item.visibility,
+            visibilityUserIds: item.visibilityUserIds ?? [],
+            declaredMentions: item.mentionsPayload ?? [],
+            // Row d'avant #4068 : la carte est absente, l'envoi retombe sur la
+            // liste plate — l'ancien comportement pour ces rows-là seulement.
+            mentionsBySlide: item.mentionsBySlidePayload ?? [:],
+            composerMediaTexts: ComposerMediaTexts(alt: item.mediaAltPayload ?? [:],
+                                                   caption: item.mediaCaptionPayload ?? [:]),
+            allowSoundExtraction: item.allowSoundExtractionPayload,
+            // Une valeur inconnue (row écrite par une version future) retombe
+            // sur la story plutôt que d'échouer : le rejeu publie, au pire sous
+            // le format historique.
+            targetType: item.targetTypePayload.flatMap(PostType.init(rawValue:)) ?? .story,
+            alsoAsReel: item.alsoAsReelPayload ?? false
+        )
     }
 
     // MARK: - Auto-retry on reconnect (SOTA audit Pilier 22, scope A)

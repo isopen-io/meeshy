@@ -938,7 +938,12 @@
     <string name="game_notebook_remove_failed">Die Chronik konnte dieses Foto nicht entfernen.</string>
     <string name="game_notebook_size">Die Chronik belegt %1$s.</string>
     <string name="game_photo_a11y">Foto: %1$s</string>
+    <string name="game_photo_author_caption_achievement">Heldentat von</string>
+    <string name="game_photo_author_caption_mission">Traum erfüllt von</string>
+    <string name="game_photo_author_caption_rank">Rang erreicht von</string>
     <string name="game_photo_author_label_achievement">Heldentat von %1$s</string>
+    <string name="game_photo_author_label_mission">Traum erfüllt von %1$s</string>
+    <string name="game_photo_author_label_rank">Rang erreicht von %1$s</string>
     <string name="game_photo_camera_denied">Die Kamera ist verweigert. Erlaube sie in den Geräteeinstellungen oder wähle ein Foto aus deiner Galerie.</string>
     <string name="game_photo_camera_unavailable">Die Kamera ist nicht verfügbar (nutzt sie eine andere App?). Wähle ein Foto aus deiner Galerie oder behalte nur die Karte.</string>
     <string name="game_photo_camera_unsupported">Dieses Gerät erlaubt hier keine Kamera. Wähle ein Foto aus deiner Galerie oder behalte nur die Karte.</string>
