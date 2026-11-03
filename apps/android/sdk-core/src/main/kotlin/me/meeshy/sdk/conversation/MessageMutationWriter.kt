@@ -46,10 +46,9 @@ internal class MessageMutationWriter(
     suspend fun toggleReactionOptimistic(messageId: String, emoji: String, isAdding: Boolean): Boolean {
         val me = selfId?.invoke() ?: updater.ticket()?.ownerId
         val updated = updater.update(messageId, requireSynced = true) { message ->
-            MessageReactionRows.withOwn(
-                message.copy(reactionSummary = ReactionSummaryShift.shifted(message.reactionSummary, emoji, if (isAdding) 1 else -1)),
-                emoji, isAdding, me,
-            )
+            // Les lignes se dressent du résumé D'AVANT le décalage, sinon ma ligne compterait deux fois.
+            MessageReactionRows.withOwn(message, emoji, isAdding, me)
+                .let { it.copy(reactionSummary = ReactionSummaryShift.shifted(it.reactionSummary, emoji, if (isAdding) 1 else -1)) }
         } ?: return false
         outboxRepository.enqueue(
             OutboxMutation(

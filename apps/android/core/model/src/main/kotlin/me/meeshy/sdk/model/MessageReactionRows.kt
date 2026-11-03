@@ -59,7 +59,8 @@ object MessageReactionRows {
             )
         } else {
             ReactionLedger.removing(rows, emoji, participantId, ownerUserId, currentUserId, aggregate)
-        } ?: return Echo(message, changed = false)
+        }
+        if (next == null) return Echo(message, changed = false)
         return Echo(message.copy(reactionRows = next), changed = true)
     }
 }
