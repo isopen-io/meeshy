@@ -380,6 +380,7 @@
     <string name="new_conversation_selected">Seleccionado</string>
     <string name="new_conversation_title">Nueva conversación</string>
     <string name="participantProfile_linkExpires">Caduca el</string>
+    <string name="preview_messages_unavailable">No se pudieron cargar los mensajes</string>
     <string name="row_a11y_conversation_with">Conversación con %1$s</string>
     <string name="row_a11y_last_message">último mensaje: %1$s</string>
     <string name="row_a11y_muted">silenciada</string>
