@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.EmojiUsageRanker
+import me.meeshy.sdk.model.ReactionAnimationGate
 import me.meeshy.sdk.model.ReactionLedger
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -43,6 +44,7 @@ internal class ChatReactionController(
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
     private val ownReactionWithdrawals: OwnReactionWithdrawals,
+    private val animationGate: ReactionAnimationGate = ReactionAnimationGate.Shared,
     private val rowStore: ReactionRowStore? = null,
 ) {
 
@@ -114,6 +116,7 @@ internal class ChatReactionController(
             if (rowsMoved) messageRepository.applyReactionDelta(event.messageId, event.emoji, delta)
             return
         }
+        if (delta > 0) animationGate.markAdded(event.messageId, event.emoji)
         messageRepository.applyReactionDelta(event.messageId, event.emoji, delta)
     }
 
@@ -159,7 +162,10 @@ internal class ChatReactionController(
         }
         val mine = mutableOwnReactions.value[messageId] ?: emptySet()
         val isAdding = emoji !in mine
-        if (isAdding) emojiUsageStore.record(emoji)
+        if (isAdding) {
+            emojiUsageStore.record(emoji)
+            animationGate.markAdded(messageId, emoji)
+        }
         mutableOwnReactions.update { it + (messageId to if (isAdding) mine + emoji else mine - emoji) }
         applySelfToOpenDetails(messageId, emoji, present = isAdding)
         state.update { it.copy(actionMessageId = null, emojiPickerMessageId = null) }

@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationFilters
+import me.meeshy.sdk.model.conversationlist.ConversationFilterComposition
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.StoryGroup
@@ -46,7 +47,7 @@ data class ConversationListUiState(
      * without a second session read at render time.
      */
     val currentUser: MeeshyUser? = null,
-    val selectedFilter: ConversationFilter = ConversationFilter.ALL,
+    val selectedFilters: Set<ConversationFilter> = ConversationFilterComposition.neutral,
     val searchText: String = "",
     val isSearchActive: Boolean = false,
     val drafts: Map<String, ConversationDraft> = emptyMap(),
@@ -207,7 +208,7 @@ data class ConversationListUiState(
     /** True when a filter/search is narrowing the list yet nothing matches — distinct from a cold-empty cache. */
     val isFilteredEmpty: Boolean
         get() = conversations.isEmpty() && !showSkeleton && errorMessage == null &&
-            (selectedFilter != ConversationFilter.ALL || searchText.isNotBlank())
+            (!ConversationFilterComposition.isNeutral(selectedFilters) || searchText.isNotBlank())
 }
 
 /** Extracts the list carried by a [CacheResult], keeping [fallback] when a sync carries no value yet. */
@@ -230,8 +231,9 @@ internal fun ConversationListUiState.withVisible(raw: List<ApiConversation>): Co
     return copy(
         pendingRemovals = stillPending,
         conversations = DraftAwareOrdering.apply(
-            ConversationFilters.apply(kept, selectedFilter, searchText, currentUserId),
+            ConversationFilters.apply(kept, selectedFilters, searchText, currentUserId),
             drafts,
+            currentUserId,
         ),
     )
 }

@@ -54,6 +54,7 @@ internal fun BoxScope.StoryCommentsOverlayHost(
     haptics: MeeshyHaptics,
     viewModel: StoryViewerViewModel,
     chromeVisible: Boolean,
+    comments: StoryCommentsOverlayRequest = StoryCommentsOverlayRequest(),
 ) {
     var composerHeightPx by remember { mutableIntStateOf(0) }
     LaunchedEffect(slide?.id) {
@@ -64,6 +65,16 @@ internal fun BoxScope.StoryCommentsOverlayHost(
     val composerBlockHeight = if (composerPinned && commentThread != null) composerHeightPx.toFloat() else null
     val bottomInset = with(density) {
         StoryCaptionPlacement.bottomInset(composerBlockHeight, composerBottomPadding = 0f, isComposerShown = chromeVisible).toDp()
+    }
+    // Les commentaires passent SOUS le composeur et la légende, au-dessus de la scène : aucun fond, aucun voile global.
+    comments.storyId?.takeIf { comments.open }?.let { id ->
+        StoryCommentsOverlayLayer(
+            storyId = id,
+            request = comments,
+            composerPinned = composerPinned && commentThread != null,
+            composerHeightPx = composerHeightPx,
+            commentThread = commentThread,
+        )
     }
     val transcriptText = chrome.transcript.text(currentItem?.storyEffects, viewModel.transcriptLanguageChain())
     if (transcriptText != null) {
@@ -98,6 +109,17 @@ internal fun BoxScope.StoryCommentsOverlayHost(
         }
     }
 }
+
+/** Ce que le lecteur demande à l'overlay : ouvert ou non, pour quelle story, avec quelle cible de notification. */
+internal class StoryCommentsOverlayRequest(
+    val open: Boolean = false,
+    val storyId: String? = null,
+    val isStoryExpired: Boolean = false,
+    val targetCommentId: String? = null,
+    val targetParentCommentId: String? = null,
+    val topReservedPx: Int = 0,
+    val onListTop: (Float) -> Unit = {},
+)
 
 /** La transcription d'un vocal : un sous-titre centré sur un voile, qui ne prend aucun toucher (iOS `voiceCaptionLayer`). */
 @Composable
