@@ -8,6 +8,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import me.meeshy.sdk.model.BubbleRenderKind
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.ui.theme.MeeshyPalette
 
@@ -77,6 +78,10 @@ public fun MessageBubble(
             // tombstone (iOS `BubbleBurnedView`) in place of its content, aligned to
             // the sender side like the deleted tombstone.
             renderKind.isBurned -> BubbleBurnedView(isOutgoing = content.isOutgoing)
+            // A deleted message is an autonomous capsule on the sender side, never text inside a
+            // coloured bubble (iOS `BubbleDeletedView`).
+            renderKind == BubbleRenderKind.Kind.Deleted ->
+                BubbleDeletedView(isOutgoing = content.isOutgoing, onLongPress = callbacks.onLongPress)
             else -> BubbleStandardLayout(
                 content = content,
                 outgoingColor = outgoingColor,

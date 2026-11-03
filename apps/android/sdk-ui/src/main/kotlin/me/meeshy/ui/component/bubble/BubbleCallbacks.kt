@@ -47,6 +47,8 @@ public data class BubbleCallbacks(
     val onSenderTap: (() -> Unit)? = null,
     /** Tap sur « dis-leur salut » de la ligne d'arrivées groupées : la réponse rapide s'ouvre. */
     val onSayHi: (() -> Unit)? = null,
+    /** Double toucher (« Voir la fiche » en TalkBack) sur un avis d'arrivée : la fiche de participation de l'arrivant. */
+    val onOpenJoinProfile: ((participantId: String) -> Unit)? = null,
     /** Tap sur les coches de livraison d'une rangée plate envoyée : les détails de lecture. */
     val onShowReadStatus: (() -> Unit)? = null,
     /**

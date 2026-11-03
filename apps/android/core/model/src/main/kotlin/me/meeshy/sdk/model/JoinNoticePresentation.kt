@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model
 
+import me.meeshy.sdk.model.profile.ProfileSheetUser
+
 /**
  * Loi de présentation de l'avis d'arrivée « X a rejoint la conversation » — miroir de
  * `JoinNoticePresentation` (iOS). Décidable hors de Compose.
@@ -14,7 +16,31 @@ data class JoinNoticePresentation(
     val handle: String?,
     val showsNoAccountBadge: Boolean,
     val rules: JoinNoticeMetadata.LinkRules?,
+    /** Le participant dont la fiche s'ouvre au double toucher ; vide ⇒ aucune fiche. */
+    val participantId: String = "",
 ) {
+    /** Le glyphe de tête : masques pour un visiteur sans compte, personne+ sinon (iOS `theatermasks.fill` / `person.badge.plus`). */
+    enum class Glyph { PersonPlus, Masks }
+
+    val glyph: Glyph get() = if (showsNoAccountBadge) Glyph.Masks else Glyph.PersonPlus
+
+    val opensProfile: Boolean get() = participantId.isNotEmpty()
+
+    /** Une seconde ligne (@handle et/ou règles d'entrée) ⇒ la pastille s'arrondit moins (iOS `hasDetailRow`). */
+    val hasDetailRow: Boolean get() = handle != null || rules != null
+
+    /**
+     * L'identité que le double toucher remet à la fiche : seul `Participant.id` est connu de l'avis, donc
+     * la route est celle de la PARTICIPATION de la conversation, jamais d'un compte (même convention que
+     * `ProfileSheetUser.from(member)` sans `userId`).
+     */
+    fun toProfileSheetUser(): ProfileSheetUser = ProfileSheetUser(
+        username = primaryName,
+        displayName = primaryName,
+        participantId = participantId.takeIf { it.isNotEmpty() },
+        isAnonymous = true,
+    )
+
     companion object {
         fun of(notice: JoinNoticeMetadata): JoinNoticePresentation {
             val primary = notice.givenName?.takeIf { it.isNotEmpty() } ?: notice.displayName
@@ -24,6 +50,7 @@ data class JoinNoticePresentation(
                 handle = username?.takeIf { it != primary }?.let { "@$it" },
                 showsNoAccountBadge = notice.isAnonymous,
                 rules = notice.linkRules,
+                participantId = notice.participantId,
             )
         }
     }
