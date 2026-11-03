@@ -21,12 +21,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -63,11 +61,9 @@ import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import me.meeshy.sdk.model.reading.focal.LongMessageExcerpt
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.R
-import me.meeshy.ui.component.MeeshyAvatar
-import me.meeshy.ui.component.rememberConversationHere
-import me.meeshy.ui.component.rememberPresence
-import me.meeshy.ui.format.bubbleClockLabel
-import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.component.focal.FocalIdentityHeader
+import me.meeshy.ui.component.focal.FocalMetaColumn
+import me.meeshy.ui.component.focal.FocalRowInput
 import me.meeshy.ui.sticker.MessageStickerArtwork
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -162,15 +158,6 @@ private val FlatTextStyle = TextStyle(
     lineHeight = FlatRowMetrics.lineHeightSp.sp,
 )
 
-/** Teinte méta : noir / blanc à 55 % (iOS `FocalMetrics.MetaText`). */
-@Composable
-private fun flatMetaTint(): Color =
-    if (MeeshyTheme.isDark) {
-        Color.White.copy(alpha = FocalMetrics.MetaText.DARK_OPACITY.toFloat())
-    } else {
-        Color.Black.copy(alpha = FocalMetrics.MetaText.LIGHT_OPACITY.toFloat())
-    }
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FlatStandardBody(
@@ -197,6 +184,7 @@ private fun FlatStandardBody(
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val namedActions = callbacks.accessibilityActions
     val ink = MeeshyTheme.tokens.textPrimary
+    val rowInput = remember(content) { FocalRowInput.of(content) }
     Row(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(FlatRowMetrics.metaSpacing),
@@ -228,7 +216,7 @@ private fun FlatStandardBody(
             if (content.isFirstInGroup) {
                 // En focus l'identité passe sur la chip du cadre : l'en-tête garde sa place, s'efface.
                 Box(Modifier.graphicsLayer { alpha = if (focused) 0f else 1f }) {
-                    FlatIdentityHeader(content = content, onSenderTap = callbacks.onSenderTap)
+                    FocalIdentityHeader(input = rowInput, onSenderTap = callbacks.onSenderTap)
                 }
             }
             Box(
@@ -286,7 +274,11 @@ private fun FlatStandardBody(
             )
         }
         // En focus, la chip de date dit la même chose : la colonne s'efface sans céder sa place.
-        FlatMetaColumn(content = content, metaAlpha = { if (focused) 0f else metaAlpha() })
+        FocalMetaColumn(
+            input = rowInput,
+            metaAlpha = { if (focused) 0f else metaAlpha() },
+            onShowReadStatus = callbacks.onShowReadStatus,
+        )
     }
 }
 
@@ -305,59 +297,6 @@ private fun FlatBadges(content: BubbleContent) {
         if (showsPin) BubblePinnedIndicator()
         if (showsForward) BubbleForwardedBadge(content.forwardedFromName, MeeshyTheme.tokens.textMuted)
         if (showsEphemeral) EphemeralCountdownBadge(expiresAtIso = content.expiresAtIso)
-    }
-}
-
-/**
- * L'en-tête d'identité de la tête de groupe (iOS `FocalIdentityHeader`) : pastille 22, nom en
- * sous-titre très gras — « Toi » en indigo pour mes messages. Hauteur minimale 34, celle de la
- * pastille de focus, pour que la rangée ne change jamais de hauteur. Tap → fiche de l'auteur.
- */
-@Composable
-private fun FlatIdentityHeader(content: BubbleContent, onSenderTap: (() -> Unit)?) {
-    val you = stringResource(R.string.focal_row_you)
-    val senderName = content.senderName?.takeIf { it.isNotBlank() }
-    val displayName = if (content.isOutgoing) you else senderName ?: ""
-    val senderColor = remember(content.senderColorHex, senderName) {
-        val hex = content.senderColorHex ?: senderName?.let(DynamicColorGenerator::colorForName)
-        hex?.let { hexColor(it, MeeshyPalette.Indigo500) } ?: MeeshyPalette.Indigo500
-    }
-    val nameColor = when {
-        content.isOutgoing -> MeeshyPalette.Indigo500
-        MeeshyTheme.isDark -> Color.White.copy(alpha = 0.92f)
-        else -> Color.Black.copy(alpha = 0.88f)
-    }
-    val profileLabel = stringResource(R.string.bubble_view_profile)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
-        modifier = Modifier
-            .heightIn(min = FocalMetrics.Focus.AVATAR_SIZE.toFloat().dp)
-            .let { base ->
-                if (onSenderTap == null) base
-                else base.clip(RoundedCornerShape(MeeshyRadius.sm)).clickable(onClickLabel = profileLabel, onClick = onSenderTap)
-            },
-    ) {
-        if (content.senderIsAnonymous) {
-            BubbleSenderGhost(size = FlatRowMetrics.avatar, color = senderColor)
-        } else {
-            MeeshyAvatar(
-                name = senderName ?: you,
-                size = FlatRowMetrics.avatar,
-                containerColor = senderColor,
-                imageUrl = content.senderAvatarUrl,
-                presence = rememberPresence(content.senderProfile?.userId),
-                here = rememberConversationHere(content.senderProfile?.userId, content.viewingConversationId),
-            )
-        }
-        Text(
-            text = displayName,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = nameColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
@@ -561,56 +500,6 @@ private fun FlatBottomLine(content: BubbleContent, accentColor: Color, callbacks
                 messageId = content.messageId,
                 onOpenReactPicker = callbacks.onOpenReactPicker,
             )
-        }
-    }
-}
-
-/**
- * La colonne méta (iOS `FocalMetaColumn`) : « modifié » toujours lisible, l'heure et les coches
- * masquées par opacité au repos — leur place reste réservée, rien ne bouge quand elles paraissent.
- */
-@Composable
-private fun FlatMetaColumn(content: BubbleContent, metaAlpha: () -> Float) {
-    val tint = flatMetaTint()
-    val readTint = if (MeeshyTheme.isDark) MeeshyPalette.Indigo400 else MeeshyPalette.Indigo600
-    val clock = remember(content.createdAtIso) { bubbleClockLabel(content.createdAtIso) }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
-        modifier = Modifier
-            .widthIn(min = FlatRowMetrics.metaWidth)
-            .padding(bottom = 2.dp),
-    ) {
-        if (content.isEdited) {
-            Icon(
-                imageVector = MeeshyIcons.Edit,
-                contentDescription = stringResource(R.string.bubble_edited),
-                tint = tint,
-                modifier = Modifier.size(10.dp),
-            )
-        }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.graphicsLayer { alpha = metaAlpha() },
-        ) {
-            if (clock != null) {
-                Text(
-                    text = clock,
-                    fontSize = FlatRowMetrics.TIME_SIZE_SP.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = tint,
-                    maxLines = 1,
-                )
-            }
-            if (content.isOutgoing && content.deliveryStatus != DeliveryStatus.Failed) {
-                DeliveryStatusIcon(
-                    status = content.deliveryStatus,
-                    metaColor = tint,
-                    isSlow = content.isSlowSend,
-                    readTintOverride = readTint,
-                )
-            }
         }
     }
 }

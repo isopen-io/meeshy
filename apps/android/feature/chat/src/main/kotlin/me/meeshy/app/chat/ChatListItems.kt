@@ -32,6 +32,15 @@ sealed class ChatListItem {
         override val key: String get() = "encryption-notice"
     }
 
+    /**
+     * « Début de la conversation avec <nom> » (iOS `FocalConversationStartRow`) : le marqueur posé
+     * en tête du fil quand l'historique est entièrement chargé. [firstMessageDayMillis] est le jour
+     * du premier message chargé, nul si son horodatage est illisible.
+     */
+    data class ConversationStart(val conversationName: String, val firstMessageDayMillis: Long?) : ChatListItem() {
+        override val key: String get() = "conversation-start"
+    }
+
     data class Message(val bubble: BubbleContent) : ChatListItem() {
         override val key: String get() = bubble.messageId
     }
@@ -55,10 +64,18 @@ fun buildChatListItems(
     zone: ZoneId,
     firstUnreadId: String? = null,
     showEncryptionNotice: Boolean = false,
+    conversationStartName: String? = null,
 ): List<ChatListItem> {
     val items = mutableListOf<ChatListItem>()
     if (showEncryptionNotice) {
         items += ChatListItem.EncryptionNotice
+    }
+    if (conversationStartName != null && bubbles.isNotEmpty()) {
+        val firstMillis = isoToEpochMillis(bubbles.first().createdAtIso)
+        items += ChatListItem.ConversationStart(
+            conversationName = conversationStartName,
+            firstMessageDayMillis = firstMillis.takeIf { it > 0L },
+        )
     }
     var currentDay: LocalDate? = null
     val unreadIndex = firstUnreadId?.let { id -> bubbles.indexOfFirst { it.messageId == id } } ?: -1
@@ -78,6 +95,16 @@ fun buildChatListItems(
         items += ChatListItem.Message(bubble)
     }
     return items
+}
+
+/**
+ * Le nom que porte la rangée de début de conversation : seulement quand tout l'historique est
+ * chargé ([hasMoreOlder] faux), hors squelette de démarrage à froid, et que la conversation a un
+ * titre. Sinon `null` : aucune rangée.
+ */
+internal object ConversationStartName {
+    fun of(title: String?, hasMoreOlder: Boolean, isLoadingInitial: Boolean): String? =
+        title?.trim()?.takeIf { it.isNotEmpty() && !hasMoreOlder && !isLoadingInitial }
 }
 
 /**
