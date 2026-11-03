@@ -28,6 +28,9 @@ data class ShareRecipient(
         data class Group(val members: Int) : Detail
         data object FriendWithoutConversation : Detail
         data class Handle(val handle: String) : Detail
+
+        /** Un canal d'une communauté où l'on peut écrire : « Canal de X ». */
+        data class Channel(val community: String) : Detail
     }
 
     val isGroup: Boolean get() = detail is Detail.Group
