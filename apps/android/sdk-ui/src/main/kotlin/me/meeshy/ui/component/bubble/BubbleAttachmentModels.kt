@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.model.MeeshyMediaConsumption
 import me.meeshy.sdk.model.MessageTranscriptionSegment
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 
@@ -61,7 +62,15 @@ public data class BubbleVideo(
     val sizeBytes: Int? = null,
     /** À vue unique, floue, éphémère ou retenue : ni vignette ni lecture. */
     val isProtected: Boolean = false,
-)
+    /** Envoi local (`file:` / `content:`) : le poster est celui de l'appareil, tout de suite, sans badge de téléchargement. */
+    val isOnDevice: Boolean = false,
+    /** Ce que la passerelle sert de la consommation de CE lecteur : alimente la barre de reprise. */
+    val servedConsumption: MeeshyMediaConsumption? = null,
+) {
+    /** Le ratio servi par la métadonnée (niveau 3 de [me.meeshy.sdk.model.media.VideoDisplayAspect]) ; `null` sans dimensions. */
+    val metadataRatio: Double?
+        get() = if (width != null && height != null && width > 0 && height > 0) width.toDouble() / height else null
+}
 
 /**
  * A shared contact card (vCard attachment). [name] is the card's display name when known, else

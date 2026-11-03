@@ -241,7 +241,7 @@ private fun BubbleBody(
                             modifier = Modifier.padding(bottom = MeeshySpacing.xs),
                         )
                     }
-                    BubbleAttachmentSections(content, onColor, callbacks, audioPlayback)
+                    BubbleAttachmentSections(content, onColor, callbacks, audioPlayback, accent = options.accentColor)
                     BubbleTextBody(content, onColor, options.decor)
                     if (!content.isDeleted) options.bodyAccessory?.invoke(onColor)
                 }

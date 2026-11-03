@@ -6,6 +6,8 @@
     <string name="a11y_kit_toggle_on">مُفعَّل</string>
     <string name="a11y_media_download_action">تنزيل</string>
     <string name="a11y_media_download_cancel">إلغاء التنزيل</string>
+    <string name="audio_consent_notice_action">التفعيل في الإعدادات</string>
+    <string name="audio_consent_notice_message">فعّل الموافقة الصوتية لتُنسَخ رسائلك الصوتية نصًّا وتُترجَم.</string>
     <string name="audio_editor_a11y_playhead">موضع التشغيل</string>
     <string name="audio_editor_apply">تطبيق التعديلات</string>
     <string name="audio_editor_close">إغلاق</string>
@@ -158,6 +160,7 @@
     <string name="focal_focus_add_reaction">إضافة تفاعل</string>
     <string name="focal_focus_translation_detail">تفاصيل الترجمة</string>
     <string name="focal_row_anonymousSender">بدون حساب</string>
+    <string name="focal_row_conversationStart">بداية المحادثة مع %1$s</string>
     <string name="focal_row_you">أنت</string>
     <string name="fullscreen_back">رجوع</string>
     <string name="fullscreen_close">إغلاق</string>
@@ -245,6 +248,7 @@
     <string name="media_trim_of_total">من %1$s</string>
     <string name="media_trim_window">الجزء المحتفظ به</string>
     <string name="media_video_pip_enter">صورة داخل صورة</string>
+    <string name="media_video_unavailable_retry">الفيديو غير متاح. أعد المحاولة.</string>
     <string name="media_voice_message">رسالة صوتية</string>
     <string name="media_voice_recording">رسالة صوتية (%1$s)</string>
     <string name="message_long_collapse">عرض أقل</string>

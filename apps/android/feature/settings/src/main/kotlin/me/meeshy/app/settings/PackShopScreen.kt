@@ -92,7 +92,7 @@ fun PackShopScreen(
     val generic = stringResource(R.string.pack_shop_failed)
     val failureText = when (ui.failure) {
         PackShopFailure.INSUFFICIENT_MEESHES -> insufficient
-        PackShopFailure.GENERIC -> generic
+        PackShopFailure.GENERIC, PackShopFailure.OFFLINE -> generic
         null -> null
     }
 

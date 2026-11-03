@@ -44,6 +44,8 @@ import me.meeshy.sdk.sync.SyncDeltaFetching
 import me.meeshy.sdk.sync.SyncDeltaOutcome
 import me.meeshy.sdk.sync.SyncDeltaRequest
 import me.meeshy.sdk.model.sync.ConversationDeltaRules
+import me.meeshy.sdk.model.sync.DeltaApplyRules
+import me.meeshy.sdk.model.sync.ReconcilePlan
 import me.meeshy.sdk.sync.fetchPageWithRetry
 import me.meeshy.sdk.sync.fetchPagesInParallel
 import kotlinx.coroutines.CancellationException
@@ -353,7 +355,10 @@ internal class ConversationCacheSource(
         val currentEtag = syncMetaDao.etag(RESOURCE_KEY)
         val currentEtagScope = syncMetaDao.etagRequestKey(RESOURCE_KEY)
         val now = clock.nowMillis()
-        val useDelta = watermark != null && (now - watermark) <= CachePolicy.Conversations.keepForMillis
+        val reconcileDue = account != null && checkpoints.read(account).lastFullReconcile
+            ?.let { ReconcilePlan.isDue(it, now) } == true
+        val useDelta = watermark != null && !reconcileDue &&
+            (now - watermark) <= CachePolicy.Conversations.keepForMillis
         val updatedSince = if (useDelta) Instant.ofEpochMilli(watermark!!).toString() else null
         val requestScope = updatedSince ?: FULL_SWEEP_ETAG_SCOPE
         val ifNoneMatch = currentEtag?.takeIf { currentEtagScope == requestScope }
@@ -450,13 +455,15 @@ internal class ConversationCacheSource(
                 conversationDao.find(row.id)
                     ?.let { runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }.getOrNull() }
             }.associateBy { it.id }
-            val merge = ConversationDeltaRules.merge(known, outcome.rows, outcome.deletedIds)
+            val applied = DeltaApplyRules.apply(known, outcome.rows, outcome.deletedIds)
+            val merge = applied.merge
             val carried = merge.upserts.map { keepingEndToEnd(it) }
             confirmServedClear(carried)
             val now = clock.nowMillis()
             conversationDao.upsertAll(carried.map { entityOf(it, now) })
             carried.forEach(searchIndex::indexConversation)
             merge.removedIds.chunked(DELETE_CHUNK_SIZE).forEach { conversationDao.deleteByIds(it) }
+            applied.invalidatedMessageIds.forEach { database.messageDao().clearConversation(it) }
             merge
         }
 

@@ -94,6 +94,7 @@
     <string name="composer_object_editor_start">Inicio</string>
     <string name="composer_object_editor_window">De %1$s a %2$s</string>
     <string name="composer_object_editor_window_permanent">De %1$s hasta el final</string>
+    <string name="composer_preupload_uploading">SUBIENDO</string>
     <string name="composer_publish_as_post">Publicar publicación</string>
     <string name="composer_publish_as_reel">Publicar reel</string>
     <string name="composer_publish_as_story">Publicar historia</string>

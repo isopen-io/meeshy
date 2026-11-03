@@ -105,7 +105,7 @@ internal fun ChatListHost(
         }
     }
     // Script / Focal : la rangée plate d'iOS (`FocalRow`) ; Bulles, Résumé, Rivière : la bulle.
-    val flatRows = host.readingMode?.state?.mode?.usesFlatRow == true
+    val flatRows = ThreadRowMux.rendering(host.readingMode?.state?.mode) == ThreadRowRendering.Flat
     // L'heure et les coches de la rangée plate : visibles pendant le défilement du doigt puis
     // 900 ms (ScrollTimePillLaw), fondu de 280 ms — lues au dessin, sans recomposer les rangées.
     var metaRevealed by remember { mutableStateOf(false) }
@@ -143,12 +143,14 @@ internal fun ChatListHost(
     // the cheap `asReversed()` VIEW actually fed to the `LazyColumn` and to
     // every pure function below that scrolls/indexes into rendered rows.
     val orientation = ChatListOrientation.BottomUp
-    val listItems = remember(state.messages, state.firstUnreadMessageId, state.showEncryptionDisclaimer) {
+    val startName = ConversationStartName.of(state.conversationTitle, state.hasMoreOlder, state.showSkeleton)
+    val listItems = remember(state.messages, state.firstUnreadMessageId, state.showEncryptionDisclaimer, startName) {
         buildChatListItems(
             state.messages,
             ZoneId.systemDefault(),
             state.firstUnreadMessageId,
             showEncryptionNotice = state.showEncryptionDisclaimer,
+            conversationStartName = startName,
         )
     }
     val renderedItems = remember(listItems) { listItems.asReversed() }

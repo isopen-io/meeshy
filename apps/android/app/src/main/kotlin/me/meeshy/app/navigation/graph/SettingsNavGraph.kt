@@ -29,7 +29,7 @@ import me.meeshy.app.settings.DataExportScreen
 import me.meeshy.app.settings.EncryptedDevicesScreen
 import me.meeshy.app.settings.LegalDocumentScreen
 import me.meeshy.app.settings.LicensesScreen
-import me.meeshy.app.settings.MediaCacheScreen
+import me.meeshy.app.settings.DataStorageScreen
 import me.meeshy.app.settings.MediaDownloadScreen
 import me.meeshy.app.settings.NotificationSettingsScreen
 import me.meeshy.app.settings.PackShopScreen
@@ -109,7 +109,7 @@ internal fun NavGraphBuilder.settingsNavGraph(
         MediaDownloadScreen(onBack = dismiss)
     }
     sheetComposable(Routes.MEDIA_CACHE, navController) { _, dismiss ->
-        MediaCacheScreen(onBack = dismiss)
+        DataStorageScreen(onBack = dismiss)
     }
     sheetComposable(
         route = "${Routes.PACK_SHOP}?domain={domain}&pack={pack}",

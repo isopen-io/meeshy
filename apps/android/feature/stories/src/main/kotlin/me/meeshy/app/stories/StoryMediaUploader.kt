@@ -60,4 +60,17 @@ public class StoryMediaUploader @Inject constructor(
             if (prepared.isDerived) file.delete()
         }
     }
+
+    /** Pré-montée d'un fichier du disque (contexte STORY, comme la publication) ; `null` sur échec, jamais une exception. */
+    internal suspend fun preUpload(
+        path: String,
+        mimeType: String,
+        onProgress: (sent: Long, total: Long) -> Unit,
+    ): PreUploadedAsset? {
+        val file = File(path)
+        val item = MediaUploadItem.onDisk(file, file.name, mimeType)
+        val media = (tusUploadRepository.uploadEach(listOf(item), TusUploadContext.STORY) { _, sent, total -> onProgress(sent, total) }
+            .firstOrNull() as? NetworkResult.Success)?.data?.firstOrNull() ?: return null
+        return PreUploadedAsset(postMediaId = media.id, remoteUrl = media.url)
+    }
 }

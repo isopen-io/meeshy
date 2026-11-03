@@ -105,6 +105,8 @@ internal object BubbleAttachmentBuilder {
                         durationSeconds = attachment.duration?.let { it / 1000 },
                         sizeBytes = attachment.fileSize,
                         isProtected = attachment.isProtected,
+                        isOnDevice = attachment.fileUrl.isLocalUri(),
+                        servedConsumption = attachment.currentUserConsumption,
                     )
                 },
             contactCards = visibleAttachments

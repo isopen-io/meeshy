@@ -27,7 +27,6 @@ import me.meeshy.ui.component.bubble.BubbleAccessibilityAction
 import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.FlatRowFocus
-import me.meeshy.ui.component.bubble.FocalFlatRow
 import me.meeshy.ui.format.bubbleClockLabel
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.reading.focal.FocalFocusTimestamp
@@ -35,8 +34,6 @@ import me.meeshy.sdk.model.PlainSignalAdmission
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
-import me.meeshy.ui.component.bubble.MessageBubble
-import me.meeshy.ui.theme.MeeshyPalette
 
 /**
  * The callbacks one message row can raise, all keyed by the message id so a single instance
@@ -151,6 +148,7 @@ internal fun ChatMessageRow(
             onStoryCitationClick = bubble.storyReply?.postId?.takeIf { bubble.storyReply?.opensTarget == true }
                 ?.let { postId -> { actions.onStoryCitationOpen(postId) } },
             onFlagTap = { code -> actions.onFlagTap(messageId, code) },
+            onShowReadStatus = { actions.onLongPress(messageId) },
             onRetry = { actions.onRetry(messageId) },
             onSayHi = { actions.onReply(messageId) }.takeIf { canWrite && bubble.isArrivalsNotice },
             onOpenJoinProfile = { _: String -> actions.onOpenJoinProfile(bubble) }.takeIf { bubble.joinNotice?.opensProfile == true },
@@ -257,29 +255,17 @@ internal fun ChatMessageRow(
             actions.onBubbleFramed(messageId, it.boundsInWindow())
         },
     ) {
-        if (flat) {
-            FocalFlatRow(
-                content = bubble,
-                accentColor = accentColor,
-                callbacks = callbacks,
-                audioPlayback = audioPlayback,
-                mentionDisplayNames = mentionNames,
-                highlightTerm = highlightTerm,
-                metaAlpha = metaAlpha,
-                bodyAccessory = linkAccessory,
-                focus = if (focalElected) rememberFlatRowFocus(bubble, focalScale, actions) else null,
-            )
-        } else MessageBubble(
-            content = bubble,
-            // iOS : la bulle envoyée porte l'indigo de marque (BubbleSkin.brand), pas l'accent
-            // de la conversation — l'accent reste aux liens, citations et réactions.
-            outgoingColor = MeeshyPalette.Indigo500,
+        ThreadRow(
+            rendering = if (flat) ThreadRowRendering.Flat else ThreadRowRendering.Bubble,
+            bubble = bubble,
             accentColor = accentColor,
-            mentionDisplayNames = mentionNames,
-            highlightTerm = highlightTerm,
             callbacks = callbacks,
             audioPlayback = audioPlayback,
-            bodyAccessory = linkAccessory,
+            mentionDisplayNames = mentionNames,
+            highlightTerm = highlightTerm,
+            linkAccessory = linkAccessory,
+            metaAlpha = metaAlpha,
+            focus = if (focalElected) rememberFlatRowFocus(bubble, focalScale, actions) else null,
         )
     }
     }

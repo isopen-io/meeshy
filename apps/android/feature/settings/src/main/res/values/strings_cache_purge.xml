@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cache_purge_freed">Freed %1$s</string>
+    <string name="cache_purge_failed">Couldn\'t clear the cache. Please try again.</string>
+    <string name="cache_purge_cell_selected">Selected</string>
+    <string name="cache_purge_cell_unselected">Not selected</string>
+</resources>

@@ -6,6 +6,8 @@
     <string name="a11y_kit_toggle_on">Activado</string>
     <string name="a11y_media_download_action">Descargar</string>
     <string name="a11y_media_download_cancel">Cancelar descarga</string>
+    <string name="audio_consent_notice_action">Activar en Ajustes</string>
+    <string name="audio_consent_notice_message">Activa el consentimiento de voz para que tus mensajes de audio sean transcritos y traducidos.</string>
     <string name="audio_editor_a11y_playhead">Posición de reproducción</string>
     <string name="audio_editor_apply">Aplicar los cambios</string>
     <string name="audio_editor_close">Cerrar</string>
@@ -152,6 +154,7 @@
     <string name="focal_focus_add_reaction">Añadir una reacción</string>
     <string name="focal_focus_translation_detail">Detalles de la traducción</string>
     <string name="focal_row_anonymousSender">Sin cuenta</string>
+    <string name="focal_row_conversationStart">Inicio de la conversación con %1$s</string>
     <string name="focal_row_you">Tú</string>
     <string name="fullscreen_back">Atrás</string>
     <string name="fullscreen_close">Cerrar</string>
@@ -239,6 +242,7 @@
     <string name="media_trim_of_total">de %1$s</string>
     <string name="media_trim_window">Fragmento conservado</string>
     <string name="media_video_pip_enter">Imagen en imagen</string>
+    <string name="media_video_unavailable_retry">Video no disponible. Reintentar.</string>
     <string name="media_voice_message">Mensaje de voz</string>
     <string name="media_voice_recording">Mensaje de voz (%1$s)</string>
     <string name="message_long_collapse">Ver menos</string>

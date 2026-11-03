@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import me.meeshy.ui.component.ProfileCompletionRing
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -181,15 +182,8 @@ private fun ProfileCompletionGauge(percent: Int, accent: Color) {
         ) {
             ProfileCompletionRing(
                 percent = percent,
-                color = accent,
-                track = MeeshyTheme.tokens.backgroundTertiary,
-                modifier = Modifier.size(COMPLETION_RING_SIZE),
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MeeshyTheme.tokens.textPrimary,
+                size = COMPLETION_RING_SIZE,
+                label = label,
             )
         }
     }
