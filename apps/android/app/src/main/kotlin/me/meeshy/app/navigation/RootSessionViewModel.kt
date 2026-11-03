@@ -84,7 +84,7 @@ class RootSessionViewModel @Inject constructor(
                 it.copy(
                     isAuthenticated = event.isAuthenticated,
                     isRestoring = event.isRestoringSession,
-                    isSwitching = event.isSwitchingAccount,
+                    isSwitching = event.isSwitchingAccount || transition.isSwitchingAccount,
                 )
             }
             is RootSessionEvent.PendingLinkChanged -> inputs.update { it.copy(pendingLink = event.opensAfterSignIn) }
