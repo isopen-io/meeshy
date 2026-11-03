@@ -72,6 +72,8 @@ class CallViewModel @Inject constructor(
     private val preview: CallPreviewCoordinator,
     private val turnCredentials: CallTurnCredentialsController,
     private val groupTitleWording: GroupCallTitleWordingSource,
+    private val endReconciler: CallEndReconciler,
+    private val teardown: CallTeardownController,
     private val videoFallbackAnnouncer: CallVideoFallbackAnnouncer = CallVideoFallbackAnnouncer.None,
     private val pictureInPicture: CallPictureInPictureCoordinator = CallPictureInPictureCoordinator(),
     private val reliability: CallReliability = CallReliability.Inert,
@@ -135,6 +137,23 @@ class CallViewModel @Inject constructor(
     private var socketWasConnected: Boolean? = null
     private var rejoinJob: Job? = null
 
+    /** Le média d'un appel ne se libère qu'une fois : le démontage de l'arête `Ended` et les sorties directes se recoupent. */
+    private var mediaReleased = false
+
+    private fun releaseMedia() {
+        if (mediaReleased) return
+        mediaReleased = true
+        coordinator.end()
+    }
+
+    /** Aucune tâche de la session ne survit à l'appel (le chrono, la qualité, la reprise de socket). */
+    private fun cancelSessionJobs() {
+        stopTicker()
+        stopQuality()
+        rejoinJob?.cancel()
+        rejoinJob = null
+    }
+
     private val errors = CallErrorController(signalManager, turnCredentials) { rejoinJob?.isActive == true }
 
     /** What the collaborators may read of this session, and the one door back into it. */
@@ -146,7 +165,8 @@ class CallViewModel @Inject constructor(
         override val callState: CallState get() = this@CallViewModel.callState
         override val elapsedSeconds: Long get() = this@CallViewModel.elapsedSeconds
         override fun dispatch(event: CallEvent) = this@CallViewModel.dispatch(event)
-        override fun endMedia() = coordinator.end()
+        override fun endMedia() = releaseMedia()
+        override fun cancelSessionJobs() = this@CallViewModel.cancelSessionJobs()
         override fun restartMediaIce() = coordinator.retryIceRestart()
         override fun publish() = this@CallViewModel.publish()
         override fun routesGroupMediaToggle(toggle: CallMediaTogglePayload): Boolean =
@@ -358,6 +378,7 @@ class CallViewModel @Inject constructor(
         localCameraPending = false
         this.callId = config.callId
         this.elapsedSeconds = 0L
+        this.mediaReleased = false
         this.mediaEstablished = false
         this.connectionQuality = null
         this.groupTitle = null
@@ -427,7 +448,7 @@ class CallViewModel @Inject constructor(
                     if (callState.isActive) turnCredentials.afterConfigure(callId, result.iceServers)
                 }
                 is CallJoinResult.Failure -> {
-                    coordinator.end()
+                    releaseMedia()
                     dispatch(CallEvent.ConnectionFailed(result.message))
                 }
             }
@@ -438,16 +459,17 @@ class CallViewModel @Inject constructor(
     fun decline() {
         dispatch(CallEvent.Reject)
         // reason=rejected: else the server resolves this pre-answer end as missed.
-        emitIfIdentified { signalManager.emitEnd(it, reason = END_REASON_REJECTED) }
-        coordinator.end()
+        emitIfIdentified { endReconciler.end(it, reason = END_REASON_REJECTED) }
+        releaseMedia()
     }
 
     /** Local user hangs up an active call — end the FSM and the call on the wire. */
     fun hangUp() {
-        dispatch(CallEvent.LocalHangUp)
+        // Le bye in-band part AVANT la bascule en Ended : l'arête déclenche le démontage, qui ferme le canal.
         coordinator.sendHangupBye()
-        emitIfIdentified { signalManager.emitEnd(it) }
-        coordinator.end()
+        dispatch(CallEvent.LocalHangUp)
+        emitIfIdentified { endReconciler.end(it) }
+        releaseMedia()
     }
 
     /** Feed a signalling event directly (peer joined, answer, stall, remote end…). */
@@ -649,7 +671,7 @@ class CallViewModel @Inject constructor(
         if (callId.isNotBlank() && signal.callId == callId) {
             extensions.controllers.notifyRemoteEvent(signal.event, session())
             dispatch(signal.event)
-            coordinator.end()
+            releaseMedia()
             return
         }
         waiting.onRemotelyEnded(signal.callId)
@@ -659,7 +681,7 @@ class CallViewModel @Inject constructor(
     private fun onRemoteBye() {
         if (!callState.isActive) return
         dispatch(CallEvent.RemoteHangUp)
-        coordinator.end()
+        releaseMedia()
     }
 
     /** Runs [emit] with the current [callId] only once one is known — inert otherwise. */
@@ -677,6 +699,7 @@ class CallViewModel @Inject constructor(
         driveTone(previous, callState)
         driveTelecom(previous, callState)
         analytics.onTransition(previous, callState)
+        if (callState is CallState.Ended && previous !is CallState.Ended) teardown.teardown(host)
         syncTicker()
         syncQuality()
         watchdogs.onTransition(callState)
