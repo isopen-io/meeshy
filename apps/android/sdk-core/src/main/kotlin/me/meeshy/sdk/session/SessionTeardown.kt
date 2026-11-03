@@ -3,6 +3,7 @@ package me.meeshy.sdk.session
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.meeshy.core.database.DatabaseRecovery
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.category.CategorySnapshotStore
 import me.meeshy.sdk.preferences.PreferenceSnapshotStore
@@ -133,6 +134,7 @@ public class DefaultSessionTeardown(
         val owed = erasures.all().filter { it.account.isNotEmpty() }
         database.clearAllTables()
         if (owed.isNotEmpty()) erasures.restore(owed)
+        runCatching { DatabaseRecovery.clearStaleCorruptionMarker(database.openHelper.writableDatabase) }
     }
 
     private suspend fun clearAll() {

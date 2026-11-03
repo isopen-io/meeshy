@@ -11,6 +11,7 @@ import android.database.sqlite.SQLiteDiskIOException
 import android.database.sqlite.SQLiteException
 import android.database.sqlite.SQLiteFullException
 import android.database.sqlite.SQLiteReadOnlyDatabaseException
+import androidx.sqlite.db.SupportSQLiteDatabase
 import java.io.File
 import java.io.FileOutputStream
 import me.meeshy.core.database.entity.OutboxEntity
@@ -92,6 +93,26 @@ public object DatabaseRecovery {
     public fun isMarkedCorrupted(database: File): Boolean = corruptionMarker(database).exists()
 
     public fun clearCorruptionMarker(database: File): Boolean = corruptionMarker(database).delete()
+
+    /**
+     * Efface le marqueur de corruption de [db] s'il est périmé : après une purge de session (`clearAllTables` finit par
+     * un `VACUUM`, qui réécrit le fichier), `PRAGMA quick_check` peut le trouver sain, et une réparation au lancement
+     * suivant ne ferait que vider le cache du compte suivant. Le marqueur reste au moindre doute (contrôle qui échoue ou
+     * qui rapporte une erreur). Rend `true` si le marqueur a été effacé.
+     */
+    public fun clearStaleCorruptionMarker(db: SupportSQLiteDatabase): Boolean {
+        val path = db.path?.takeUnless { it.isBlank() || it == IN_MEMORY_PATH } ?: return false
+        val file = File(path)
+        if (!isMarkedCorrupted(file)) return false
+        val healthy = try {
+            db.query("PRAGMA quick_check").use { cursor ->
+                buildList { while (cursor.moveToNext()) add(cursor.getString(0)) } == listOf("ok")
+            }
+        } catch (_: Exception) {
+            false
+        }
+        return healthy && clearCorruptionMarker(file)
+    }
 
     /** [database] en lecture-écriture, avec un gestionnaire d'erreurs inerte ; `null` si elle ne s'ouvre pas. */
     public fun openWritable(database: File): SQLiteDatabase? =
@@ -289,6 +310,9 @@ public object DatabaseRecovery {
     public fun isStorageFailure(failure: Throwable): Boolean = classify(failure) != OpenFailureKind.DEFECT
 
     public const val CORRUPTION_MARKER_SUFFIX: String = ".corruption-detected"
+
+    /** Le chemin que SQLite donne à une base en mémoire : elle n'a ni fichier ni marqueur. */
+    public const val IN_MEMORY_PATH: String = ":memory:"
 
     private const val MAX_CAUSES = 8
 

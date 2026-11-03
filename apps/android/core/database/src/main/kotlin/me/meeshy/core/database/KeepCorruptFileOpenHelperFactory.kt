@@ -70,13 +70,12 @@ internal class KeepFileOnCorruption(
     }
 
     override fun onCorruption(db: SupportSQLiteDatabase) {
-        val path = db.path?.takeUnless { it.isBlank() || it == IN_MEMORY } ?: return
+        val path = db.path?.takeUnless { it.isBlank() || it == DatabaseRecovery.IN_MEMORY_PATH } ?: return
         val marked = DatabaseRecovery.markCorrupted(File(path))
         Log.e(TAG, "Corruption signalee par SQLite : fichier garde, reparation au prochain lancement (marqueur=$marked)")
     }
 
     private companion object {
         const val TAG = "MeeshyDatabase"
-        const val IN_MEMORY = ":memory:"
     }
 }

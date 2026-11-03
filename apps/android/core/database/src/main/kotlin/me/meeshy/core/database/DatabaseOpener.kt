@@ -30,8 +30,9 @@ public sealed interface DatabaseLocation {
  * Chaque jalon est consigné dans [DatabaseInitDiagnostics].
  *
  * Une ouverture nominale reprend ce que la base de repli d'un lancement précédent a gardé, puis la supprime : elle n'est
- * pas chiffrée, et elle ne doit jamais être rouverte plus tard sous un autre compte. Une ligne reprise quitte aussitôt
- * la base de repli, et une ligne sauvée n'écrase jamais celle que la base de destination porte déjà : rien n'est rejoué.
+ * pas chiffrée, et elle ne doit jamais être rouverte plus tard sous un autre compte. Une ligne reprise quitte la base de
+ * repli dans le même geste, une ligne non reprise y reste, et une ligne sauvée n'écrase jamais celle que la base de
+ * destination porte déjà : rien n'est rejoué, rien n'est perdu.
  */
 public class DatabaseOpener(
     private val context: Context,
@@ -107,28 +108,52 @@ public class DatabaseOpener(
     }
 
     /**
-     * La base de repli d'un lancement précédent : chaque ligne reprise par la base principale la quitte aussitôt, pour
-     * qu'elle ne garde que les pertes (disque plein, contrainte) ; elle disparaît quand il n'en reste aucune. Si une ligne
-     * reprise ne peut pas en être retirée, elle disparaît aussi : rejouer un envoi déjà parti (édition, profil, blocage,
-     * story) est pire que perdre une ligne que l'utilisateur peut refaire. La purge de session la retire de toute façon.
+     * La base de repli d'un lancement précédent rejoint la base principale ligne à ligne, sans jamais en rejouer ni en
+     * perdre une : chaque ligne est retirée de la base de repli dans une transaction de celle-ci, insérée dans la base
+     * principale, et le retrait n'est validé que si l'insertion a réussi ([adoptRow]). La base de repli ne disparaît que
+     * vide de toute ligne lisible ; sinon elle reste pour le lancement suivant et le stockage passe en dégradé, pour que
+     * l'interface dise que des envois attendent encore. La purge de session la retire de toute façon.
      */
     private fun adoptFallback(database: MeeshyDatabase) {
         if (!secondaryFile.exists()) return
         val salvage = DatabaseRecovery.salvage(secondaryFile)
-        var unforgotten = 0
         val fallback = if (salvage.isEmpty) null else DatabaseRecovery.openWritable(secondaryFile)
-        val lost = try {
-            restore(database, salvage) { row -> if (fallback == null || !row.forgetIn(fallback)) unforgotten++ }
+        val kept = try {
+            restore(database, salvage) { row, insert -> fallback != null && adoptRow(fallback, row, insert) }
         } finally {
             runCatching { fallback?.close() }
         }
-        if (lost == 0 || unforgotten > 0) DatabaseRecovery.deleteFallback(secondaryFile)
+        if (kept == 0) {
+            DatabaseRecovery.deleteFallback(secondaryFile)
+        } else {
+            health.markDegraded("$FALLBACK_KEPT$kept")
+        }
+    }
+
+    /**
+     * Retire [row] de [fallback] et l'insère dans la base principale ([insert]) comme UN geste : le retrait se fait dans
+     * une transaction de la base de repli, validée seulement après une insertion réussie. Un retrait refusé n'insère rien,
+     * une insertion refusée annule le retrait : la ligne reste dans la base de repli, ni rejouée ni perdue. Seul un échec
+     * de la validation elle-même, après une insertion réussie, laisse la ligne des deux côtés ; l'insertion « si absente »
+     * du lancement suivant la retrouve alors sans l'écraser.
+     */
+    private fun adoptRow(fallback: SQLiteDatabase, row: Rescued, insert: () -> Boolean): Boolean = try {
+        fallback.beginTransaction()
+        try {
+            val adopted = row.forgetIn(fallback) && insert()
+            if (adopted) fallback.setTransactionSuccessful()
+            adopted
+        } finally {
+            fallback.endTransaction()
+        }
+    } catch (_: Exception) {
+        false
     }
 
     private fun quarantine(file: File): DatabaseSalvage {
         val salvaged = DatabaseRecovery.salvage(file)
         val moved = DatabaseRecovery.quarantine(file, clock())
-        DatabaseRecovery.clearCorruptionMarker(file)
+        if (!file.exists()) DatabaseRecovery.clearCorruptionMarker(file)
         diagnostics.record(DatabaseInitStage.QUARANTINED, moved.joinToString(",") { it.name })
         DatabaseRecovery.pruneQuarantines(file, keep = MAX_QUARANTINES)
         return salvaged
@@ -151,12 +176,13 @@ public class DatabaseOpener(
     /**
      * Réinjecte [salvage] dans [database] ; rend le nombre de lignes qui n'ont pas pu l'être. Chaque ligne s'insère « si
      * absente » : une ligne déjà présente (une annulation demandée, un état plus récent) n'est jamais écrasée par sa copie
-     * sauvée, et compte comme reprise. [onRestored] est appelé pour chaque ligne reprise, aussitôt après son insertion.
+     * sauvée, et compte comme reprise. [adopt] encadre l'insertion de chaque ligne (elle lui est remise) et rend si la
+     * ligne est reprise.
      */
     private fun restore(
         database: MeeshyDatabase,
         salvage: DatabaseSalvage,
-        onRestored: (Rescued) -> Unit = {},
+        adopt: (Rescued, () -> Boolean) -> Boolean = { _, insert -> insert() },
     ): Int {
         if (salvage.isEmpty) return 0
         val groups = listOf(
@@ -187,7 +213,7 @@ public class DatabaseOpener(
             false
         }
         val restored = groups.sumOf { group ->
-            val count = group.rows.count { row -> insertIfAbsent(row).also { if (it) onRestored(row) } }
+            val count = group.rows.count { row -> adopt(row) { insertIfAbsent(row) } }
             diagnostics.record(group.stage, "$count/${group.rows.size}")
             count
         }
@@ -251,6 +277,9 @@ public class DatabaseOpener(
 
         /** Les quarantaines gardées sur l'appareil : les plus récentes, pour le support ; les autres sont supprimées. */
         public const val MAX_QUARANTINES: Int = 2
+
+        /** La raison de [StorageState.Degraded] quand la base de repli garde des lignes non reprises, suivie de leur nombre. */
+        public const val FALLBACK_KEPT: String = "fallback-kept:"
 
         private val OUTBOX_KEY = listOf("cmid")
         private val ERASURE_KEY = listOf("account", "kind", "itemId")
