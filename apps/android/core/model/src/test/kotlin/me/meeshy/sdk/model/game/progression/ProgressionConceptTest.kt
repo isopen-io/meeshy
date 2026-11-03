@@ -1,6 +1,8 @@
 package me.meeshy.sdk.model.game.progression
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.game.engagement.ApiEngagementProgress
+import me.meeshy.sdk.model.game.engagement.EngagementProgressResolver
 import org.junit.Test
 
 class ProgressionConceptTest {
@@ -36,9 +38,9 @@ class ProgressionConceptTest {
 
     @Test
     fun `une extension sans le bloc game qui la porte est ignoree`() {
-        val orphan = ProgressionConceptSource(league = true, season = true, prestige = true, trophies = true, atlas = true)
+        val progress = EngagementProgressResolver.resolve(ApiEngagementProgress.empty)
 
-        assertThat(served(orphan)).containsExactly("level", "flame", "elans", "badges", "succes").inOrder()
+        assertThat(ProgressionConcepts.served(progress, null).map { it.wire }).containsExactly("level", "flame", "elans", "badges", "succes").inOrder()
     }
 
     @Test

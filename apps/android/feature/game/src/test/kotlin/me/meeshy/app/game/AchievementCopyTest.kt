@@ -38,7 +38,7 @@ class AchievementCopyTest {
     @Test
     fun `le nombre suit la locale du lecteur`() {
         assertThat(label("en", family("message.send.count"), 1000)).isEqualTo("1,000 messages sent")
-        assertThat(label("fr", family("message.send.count"), 1000)).isEqualTo("1 000 messages envoyés")
+        assertThat(label("fr", family("message.send.count"), 1000)).isEqualTo("1\u202F000 messages envoyés")
         assertThat(label("ar", family("message.send.count"), 1000)).isNotEmpty()
     }
 

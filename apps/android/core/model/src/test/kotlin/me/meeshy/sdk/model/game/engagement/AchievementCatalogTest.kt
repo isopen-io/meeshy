@@ -24,7 +24,7 @@ class AchievementCatalogTest {
     @Test
     fun `la carte d atteignabilite retire les paliers au dela de la mesure`() {
         val reach = mapOf("conversation.join.size" to 150)
-        val tiers = AchievementResolver.sections(reach, emptyMap())
+        val tiers = AchievementResolver.sections(reach, emptyMap(), listOf(family("conversation.join.size")))
             .flatMap { it.entries }.filter { it.family.id == "conversation.join.size" }.map { it.tier }
 
         assertThat(tiers).containsExactly(10, 100)
@@ -36,8 +36,9 @@ class AchievementCatalogTest {
         val all = AchievementResolver.sections(emptyMap(), emptyMap())
 
         assertThat(all.all { s -> s.entries.zipWithNext().all { (a, b) -> a.difficulty < b.difficulty || (a.difficulty == b.difficulty && a.key < b.key) } }).isTrue()
-        val sample = entries.first { it.key == "achievement.parole.message.send.count:100" }
-        assertThat(sample.difficulty).isWithin(1e-9).of(0.0 + log10(100.0))
+        assertThat(entries).isNotEmpty()
+        assertThat(family("message.send.count").difficulty(100)).isWithin(1e-9).of(0.0 + log10(100.0))
+        assertThat(family("conversation.join.size").difficulty(1_000)).isWithin(1e-9).of(1.0 + log10(1_000.0))
     }
 
     @Test
