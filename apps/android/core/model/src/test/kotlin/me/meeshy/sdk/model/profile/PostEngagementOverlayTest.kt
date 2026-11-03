@@ -86,6 +86,13 @@ class PostEngagementOverlayTest {
     }
 
     @Test
+    fun `un partage refuse reprend son cran`() {
+        val overlay = PostEngagementOverlay().sharedOnce("p1").unsharedOnce("p1")
+        assertThat(overlay.shareCount(post(shares = 3))).isEqualTo(3)
+        assertThat(overlay.shareDelta).isEmpty()
+    }
+
+    @Test
     fun `le total absolu d'un autre devient la base et laisse ma surcharge`() {
         val mine = PostEngagementOverlay().withLike("p1", true)
         val base = PostEngagementPatches.liked(post(likes = 5), absolute = 9, actorIsMe = false, liked = true)

@@ -36,6 +36,12 @@ data class PostEngagementOverlay(
     fun withoutRepost(postId: String): PostEngagementOverlay = copy(reposted = reposted - postId)
     fun sharedOnce(postId: String): PostEngagementOverlay = copy(shareDelta = shareDelta + (postId to (shareDelta[postId] ?: 0) + 1))
 
+    /** Le partage n'a pas abouti : le cran ajouté au toucher est repris. */
+    fun unsharedOnce(postId: String): PostEngagementOverlay {
+        val next = (shareDelta[postId] ?: 0) - 1
+        return copy(shareDelta = if (next == 0) shareDelta - postId else shareDelta + (postId to next))
+    }
+
     /** `post:liked` / `post:unliked` : seul l'écho de MA propre action lève ma surcharge. */
     fun afterLikeEcho(postId: String, actorIsMe: Boolean): PostEngagementOverlay =
         if (actorIsMe) copy(liked = liked - postId) else this
