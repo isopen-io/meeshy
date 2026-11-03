@@ -320,7 +320,7 @@ internal fun StoryCanvasSurface(
                 onStrokeCaptured = onStrokeCaptured,
                 onErase = onStrokeErased,
                 onViewportPinch = onViewportScale?.let { settle ->
-                    { factor, ended ->
+                    { factor: Float, ended: Boolean ->
                         if (ended) {
                             pinchScale = 1f
                             settle(CanvasViewportZoomPolicy.settledScale(settledViewport, factor))
