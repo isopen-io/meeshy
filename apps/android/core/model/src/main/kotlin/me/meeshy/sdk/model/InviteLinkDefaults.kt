@@ -60,6 +60,14 @@ object InviteLinkDefaults {
         },
     )
 
+    /** Pas du stepper d'iOS (`value < 100 ? 1 : 10`), au plafond de [CreateShareLinkForm.MAX_MAX_USES]. */
+    fun maxUsesStep(value: Int): Int = if (value < STEP_THRESHOLD) 1 else 10
+
+    fun stepMaxUses(form: CreateShareLinkForm, direction: Int): CreateShareLinkForm =
+        form.withMaxUses(form.maxUses + direction * maxUsesStep(form.maxUses))
+
+    private const val STEP_THRESHOLD = 100
+
     /** La requête de création : nom et message vides retombent sur leurs textes par défaut. */
     fun toRequest(
         draft: InviteLinkDraft,

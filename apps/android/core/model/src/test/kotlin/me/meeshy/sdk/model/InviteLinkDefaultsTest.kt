@@ -100,4 +100,13 @@ class InviteLinkDefaultsTest {
         assertThat(InviteLinkDefaults.defaultLinkName("Rejoins la conversation", "Équipe"))
             .isEqualTo("Rejoins la conversation \"Équipe\"")
     }
+
+    @Test
+    fun `le stepper avance de 1 sous 100 puis de 10 et reste borne entre 1 et 10000`() {
+        val form = draft().form.withMaxUsesEnabled(true)
+        assertThat(InviteLinkDefaults.stepMaxUses(form.withMaxUses(99), 1).maxUses).isEqualTo(100)
+        assertThat(InviteLinkDefaults.stepMaxUses(form.withMaxUses(100), 1).maxUses).isEqualTo(110)
+        assertThat(InviteLinkDefaults.stepMaxUses(form.withMaxUses(1), -1).maxUses).isEqualTo(1)
+        assertThat(InviteLinkDefaults.stepMaxUses(form.withMaxUses(10_000), 1).maxUses).isEqualTo(10_000)
+    }
 }
