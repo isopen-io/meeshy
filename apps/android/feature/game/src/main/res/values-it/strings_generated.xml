@@ -940,7 +940,12 @@
     <string name="game_notebook_remove_failed">La Cronaca non è riuscita a rimuovere questa foto.</string>
     <string name="game_notebook_size">La Cronaca occupa %1$s.</string>
     <string name="game_photo_a11y">Foto: %1$s</string>
+    <string name="game_photo_author_caption_achievement">Impresa di</string>
+    <string name="game_photo_author_caption_mission">Sogno compiuto da</string>
+    <string name="game_photo_author_caption_rank">Rango raggiunto da</string>
     <string name="game_photo_author_label_achievement">Impresa di %1$s</string>
+    <string name="game_photo_author_label_mission">Sogno compiuto da %1$s</string>
+    <string name="game_photo_author_label_rank">Rango raggiunto da %1$s</string>
     <string name="game_photo_camera_denied">La fotocamera è negata. Consentila nelle impostazioni del dispositivo, oppure scegli una foto dalla galleria.</string>
     <string name="game_photo_camera_unavailable">La fotocamera non è disponibile (la sta usando un’altra app?). Scegli una foto dalla galleria, oppure tieni solo la carta.</string>
     <string name="game_photo_camera_unsupported">Questo dispositivo non consente la fotocamera qui. Scegli una foto dalla galleria, oppure tieni solo la carta.</string>

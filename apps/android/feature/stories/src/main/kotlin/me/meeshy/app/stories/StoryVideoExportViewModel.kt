@@ -1,11 +1,13 @@
 package me.meeshy.app.stories
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.media.MediaMetadataRetriever
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -28,6 +30,7 @@ import me.meeshy.sdk.relation.RelationLevelProvider
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.status.StatusRepository
+import me.meeshy.ui.component.retouch.StoryVideoLook
 
 /**
  * L'export vidéo d'une story depuis le lecteur, ou des scènes d'un post ou d'un réel : Enregistrer, Partager ou Imager. Le bake vit à la portée du ViewModel —
@@ -35,6 +38,7 @@ import me.meeshy.sdk.status.StatusRepository
  */
 @HiltViewModel
 class StoryVideoExportViewModel @Inject constructor(
+    @ApplicationContext context: Context,
     factory: SceneExportCoordinatorFactory,
     private val config: MeeshyConfig,
     private val statusRepository: StatusRepository,
@@ -56,6 +60,7 @@ class StoryVideoExportViewModel @Inject constructor(
         decideImager = stages::askImager,
         paint = stages::askPaint,
         paintBrand = ::paintBrand,
+        bakeLook = { source, look, author, output -> StoryVideoLook.bake(context, source, look, author, output) },
     )
 
     /** Le mood de l'auteur et le niveau de son lien sont lus à l'export, bornés : ce qui n'arrive pas à temps manque. */

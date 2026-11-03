@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ProfileEditApply
+import me.meeshy.sdk.model.ProfileGuard
 import me.meeshy.sdk.model.ProfileSnapshot
 import me.meeshy.sdk.model.ServedProfileDecor
 import me.meeshy.sdk.model.UpdateProfileRequest
@@ -113,7 +114,7 @@ class SessionRepository @Inject constructor(
         if (generation != transition.generation) return
         val current = _currentUser.value ?: return
         if (current.id != server.id) return
-        publish(ProfileSnapshot.resolveServerUserWithOptimistic(ProfileSnapshot.mergingServerUser(server, current), pending))
+        publish(ProfileGuard.fold(ProfileSnapshot.mergingServerUser(server, current), pending))
     }
 
     private suspend fun pendingEditsFor(userId: String, excludingCmid: String? = null): List<UpdateProfileRequest> = try {
@@ -155,7 +156,7 @@ class SessionRepository @Inject constructor(
                 val server = result.data.user
                 val pending = pendingEditsFor(server.id)
                 if (generation != transition.generation) return
-                _currentUser.value = ProfileSnapshot.resolveServerUserWithOptimistic(
+                _currentUser.value = ProfileGuard.fold(
                     ProfileSnapshot.mergingServerUser(server, _currentUser.value),
                     pending,
                 )
@@ -195,6 +196,9 @@ class SessionRepository @Inject constructor(
         _currentUser.value = remembered
         _hasResolvedStoredSession.value = true
     }
+
+    /** Efface du coffre le profil gardé pour [userId], le compte qui quitte l'appareil ; les autres comptes gardent le leur. */
+    suspend fun forgetIdentity(userId: String) = identities.forget(userId)
 
     /** Drop the identity on logout / account switch. */
     fun clear() {

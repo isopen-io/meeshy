@@ -10,7 +10,12 @@ import me.meeshy.sdk.model.game.LeagueConsentRequest
 import me.meeshy.sdk.model.game.LeaguePseudonymRequest
 import me.meeshy.sdk.model.game.ShowcaseOrderRequest
 import me.meeshy.sdk.model.game.ShowcaseVisibilityRequest
+import me.meeshy.sdk.model.game.FrameAtmosphereRequest
+import me.meeshy.sdk.model.game.PhotoInvitationsRequest
+import me.meeshy.sdk.model.game.PhotoMomentsRequest
+import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.Header
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -106,4 +111,39 @@ interface GameApi {
     /** Marque des cartes du guide comme vues (1 à 32 clés) : la prochaine ouverture les dit en version courte. */
     @POST("me/game/guide/seen")
     suspend fun markGuideSeen(@Body body: GuideSeenRequest): ApiResponse<JsonElement>
+
+    /** La vitrine d'un AUTRE membre, selon son réglage. Le refus est un 403 structuré : le corps brut se lit sur la [Response]. */
+    @GET("users/{userId}/game/showcase")
+    suspend fun userShowcase(@Path("userId") userId: String): Response<ApiResponse<JsonElement>>
+
+    /** Une saison par son numéro (passée, en cours ou future) : calendrier, thème, état, ma progression si j'y ai joué. */
+    @GET("me/game/seasons/{number}")
+    suspend fun seasonArchive(@Path("number") number: Int): ApiResponse<JsonElement>
+
+    /**
+     * Le calendrier des saisons servi. [ifNoneMatch] rejoue l'ETag du dernier calendrier lu : un 304 se rend SANS corps
+     * ([Response.body] `null`, [Response.code] 304) et le cache reste.
+     */
+    @GET("me/game/seasons/calendar")
+    suspend fun seasonCalendar(@Header("If-None-Match") ifNoneMatch: String? = null): Response<ApiResponse<JsonElement>>
+
+    /** Une semaine de ligue par sa clé (le lundi) : mon résultat gravé, ou la purge. La clé vient d'un lien : jamais hors `A-Za-z0-9-_~`. */
+    @GET("me/game/league/weeks/{weekKey}")
+    suspend fun leagueWeekArchive(@Path("weekKey") weekKey: String): ApiResponse<JsonElement>
+
+    /** Choisit son atmosphère de cadres, qui INSTALLE aussi son pack. Le corps brut d'un refus 409 se lit sur la [Response]. */
+    @PUT("me/game/frames/atmosphere")
+    suspend fun setFrameAtmosphere(@Body body: FrameAtmosphereRequest): Response<ApiResponse<JsonElement>>
+
+    /** « Me proposer d'immortaliser » : chaque étape, les grands moments, jamais. */
+    @PUT("me/game/photo-moments/invitations")
+    suspend fun setPhotoInvitations(@Body body: PhotoInvitationsRequest): Response<ApiResponse<JsonElement>>
+
+    /** Accuse la présentation d'étapes (64 au plus), idempotent. */
+    @POST("me/game/photo-moments/presented")
+    suspend fun markPhotoMomentsPresented(@Body body: PhotoMomentsRequest): Response<ApiResponse<JsonElement>>
+
+    /** Signale des étapes IMMORTALISÉES : leurs identifiants seuls, 64 au plus, idempotent. */
+    @POST("me/game/photo-moments/kept")
+    suspend fun markPhotoMomentsKept(@Body body: PhotoMomentsRequest): Response<ApiResponse<JsonElement>>
 }

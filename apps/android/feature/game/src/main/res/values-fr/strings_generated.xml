@@ -940,7 +940,12 @@
     <string name="game_notebook_remove_failed">La Chronique n’a pas pu retirer cette photo.</string>
     <string name="game_notebook_size">La Chronique occupe %1$s.</string>
     <string name="game_photo_a11y">Photo : %1$s</string>
+    <string name="game_photo_author_caption_achievement">Haut fait de</string>
+    <string name="game_photo_author_caption_mission">Rêve réalisé par</string>
+    <string name="game_photo_author_caption_rank">Rang atteint par</string>
     <string name="game_photo_author_label_achievement">Haut fait de %1$s</string>
+    <string name="game_photo_author_label_mission">Rêve réalisé par %1$s</string>
+    <string name="game_photo_author_label_rank">Rang atteint par %1$s</string>
     <string name="game_photo_camera_denied">La caméra est refusée. Autorise-la dans les réglages de ton appareil, ou choisis une photo dans ta galerie.</string>
     <string name="game_photo_camera_unavailable">La caméra n’est pas disponible (une autre application l’utilise ?). Choisis une photo dans ta galerie, ou garde la carte seule.</string>
     <string name="game_photo_camera_unsupported">Cet appareil ne permet pas la caméra ici. Choisis une photo dans ta galerie, ou garde la carte seule.</string>

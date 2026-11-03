@@ -32,6 +32,9 @@ data class SelectableUser(
         get() = UserPresence.served(isOnline, lastActiveAt)
 }
 
+/** What the selection draws: nothing yet, a direct, or a group (iOS `NewConversationShape`). */
+enum class NewConversationShape { NONE, DIRECT, GROUP }
+
 /**
  * Stateless rules behind the new-conversation flow (port of the iOS
  * `NewConversationViewModel` create logic). Kept pure so the debounce/search
@@ -45,19 +48,30 @@ object NewConversationLogic {
     const val MIN_QUERY_LENGTH: Int = 2
 
     /**
-     * A single peer is a direct chat; anything else is a group — two or more peers, or nobody at all:
-     * a group of myself alone (#14646), which the gateway accepts as long as it carries a title.
+     * The shape the sheet draws (iOS `NewConversationShape.resolve`): « Nouveau groupe » touched, or two
+     * peers and more, make a group — even of myself alone (#14646); a single peer is a direct; nobody, nothing yet.
      */
-    fun conversationType(selectedCount: Int): String =
-        if (selectedCount == 1) TYPE_DIRECT else TYPE_GROUP
+    fun shape(selectedCount: Int, groupRequested: Boolean): NewConversationShape = when {
+        groupRequested || selectedCount > 1 -> NewConversationShape.GROUP
+        selectedCount == 1 -> NewConversationShape.DIRECT
+        else -> NewConversationShape.NONE
+    }
 
-    /** At least one peer, or a titled group of myself alone (the gateway refuses it untitled: `MISSING_REQUIRED_FIELD`). */
-    fun canCreate(selectedCount: Int, rawTitle: String): Boolean =
-        selectedCount >= 1 || rawTitle.isNotBlank()
+    /** The type that leaves with the request: only a direct shape is a direct. */
+    fun conversationType(selectedCount: Int, groupRequested: Boolean = false): String =
+        if (shape(selectedCount, groupRequested) == NewConversationShape.DIRECT) TYPE_DIRECT else TYPE_GROUP
+
+    /** A direct is created at once; every group needs its title (iOS `NewConversationShape.canCreate`). */
+    fun canCreate(selectedCount: Int, groupRequested: Boolean, rawTitle: String): Boolean =
+        when (shape(selectedCount, groupRequested)) {
+            NewConversationShape.NONE -> false
+            NewConversationShape.DIRECT -> true
+            NewConversationShape.GROUP -> rawTitle.isNotBlank()
+        }
 
     /** Group conversations carry a user-typed title; direct chats derive theirs. */
-    fun resolvedTitle(rawTitle: String, selectedCount: Int): String? =
-        rawTitle.trim().takeIf { it.isNotEmpty() && conversationType(selectedCount) == TYPE_GROUP }
+    fun resolvedTitle(rawTitle: String, selectedCount: Int, groupRequested: Boolean = false): String? =
+        rawTitle.trim().takeIf { it.isNotEmpty() && conversationType(selectedCount, groupRequested) == TYPE_GROUP }
 
     /**
      * Ce téléphone chiffre et lit le texte d'un tête-à-tête de bout en bout (libsignal, #14591) : l'écran de création
@@ -66,8 +80,8 @@ object NewConversationLogic {
     const val END_TO_END_SUPPORTED: Boolean = true
 
     /** Ce que la section Chiffrement propose pour [selectedCount] personnes choisies (`creationEncryptionOffer`). */
-    fun encryptionOffer(platformRole: String?, selectedCount: Int): CreationEncryptionOffer =
-        ConversationCreationEncryption.offer(platformRole, conversationType(selectedCount), END_TO_END_SUPPORTED)
+    fun encryptionOffer(platformRole: String?, selectedCount: Int, groupRequested: Boolean = false): CreationEncryptionOffer =
+        ConversationCreationEncryption.offer(platformRole, conversationType(selectedCount, groupRequested), END_TO_END_SUPPORTED)
 
     /**
      * Le mode qui partira : celui que l'utilisateur a touché s'il reste DISPONIBLE dans l'offre
@@ -80,20 +94,21 @@ object NewConversationLogic {
      * The creation request for the picker's selection. A single peer is a DIRECT, built by the
      * very [directConversationRequest] that the story/mood reply and a profile's Message button
      * create through (`ConversationRepository.directConversationWith`, #11615) — so no two
-     * entry points can ever describe a direct differently; two or more peers, or none, are a group.
+     * entry points can ever describe a direct differently; any group shape (the switch, or two peers and more) is a group.
      * Seul cet écran choisit un mode de chiffrement : il part avec la demande, les autres
      * chemins n'en envoient aucun (la passerelle pose Serveur).
      */
     fun request(
         participantIds: List<String>,
         rawTitle: String,
+        groupRequested: Boolean,
         encryptionMode: CreationEncryptionMode,
     ): CreateConversationRequest =
         (
-            participantIds.singleOrNull()?.let(::directConversationRequest)
+            participantIds.singleOrNull()?.takeUnless { groupRequested }?.let(::directConversationRequest)
                 ?: CreateConversationRequest(
-                    type = conversationType(participantIds.size),
-                    title = resolvedTitle(rawTitle, participantIds.size),
+                    type = conversationType(participantIds.size, groupRequested),
+                    title = resolvedTitle(rawTitle, participantIds.size, groupRequested),
                     participantIds = participantIds,
                 )
             ).copy(encryptionMode = encryptionMode.wire)

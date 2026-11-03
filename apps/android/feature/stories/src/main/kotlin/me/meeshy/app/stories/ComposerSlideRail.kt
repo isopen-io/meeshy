@@ -60,6 +60,7 @@ import me.meeshy.ui.component.composer.SlideRailGeometry
 import me.meeshy.sdk.model.composer.SlideThumbEditAffordance
 import me.meeshy.ui.component.composer.SlideRailTile
 import me.meeshy.ui.component.composer.rememberConfirmedSlideDeletion
+import me.meeshy.ui.component.retouch.LocalComposerLookAuthor
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
@@ -184,6 +185,7 @@ private fun rememberTileSpec(
                 heightPx = SlideRailGeometry.TileHeight.roundToPx(),
                 canvasWidthPx = canvasWidthPx,
                 placedMedia = placed,
+                backgroundLook = background?.look,
             )
         }
     }
@@ -287,6 +289,7 @@ private fun SlideTile(
 @Composable
 private fun SlideThumbnail(spec: SlideThumbnailSpec, backgroundModel: Any?, placedModels: List<ThumbnailPlaced>, modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val author = LocalComposerLookAuthor.current
     var shown by remember { mutableStateOf<Bitmap?>(SlideThumbnailStore.shared.get(spec)) }
     LaunchedEffect(spec) {
         SlideThumbnailStore.shared.get(spec)?.let { shown = it; return@LaunchedEffect }
@@ -294,8 +297,10 @@ private fun SlideThumbnail(spec: SlideThumbnailSpec, backgroundModel: Any?, plac
             delay(SlideThumbnailRefresh.DEBOUNCE_MILLIS)
         }
         val painted = withContext(Dispatchers.Default) {
-            val image = backgroundModel?.let { loadThumbnailBackground(context, it, spec) }
-            val placed = placedModels.mapNotNull { media -> loadThumbnailPlaced(context, media.model, spec)?.let { media.key to it } }.toMap()
+            val image = backgroundModel?.let { loadThumbnailBackground(context, it, spec) }?.let { SlideThumbnailLook.painted(it, spec.backgroundLook, author) }
+            val placed = placedModels.mapNotNull { media ->
+                loadThumbnailPlaced(context, media.model, spec)?.let { media.key to SlideThumbnailLook.painted(it, media.look, author) }
+            }.toMap()
             SlideThumbnailRenderer.render(spec, image, placed).also { bitmap ->
                 if ((backgroundModel == null || image != null) && placed.size == placedModels.size) SlideThumbnailStore.shared.put(spec, bitmap)
             }

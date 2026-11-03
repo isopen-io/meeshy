@@ -940,7 +940,12 @@
     <string name="game_notebook_remove_failed">تعذّر على السيرة حذف هذه الصورة.</string>
     <string name="game_notebook_size">تشغل السيرة %1$s.</string>
     <string name="game_photo_a11y">صورة: %1$s</string>
+    <string name="game_photo_author_caption_achievement">مأثرة</string>
+    <string name="game_photo_author_caption_mission">حلم حقّقه</string>
+    <string name="game_photo_author_caption_rank">رتبة بلغها</string>
     <string name="game_photo_author_label_achievement">مأثرة ⁨%1$s⁩</string>
+    <string name="game_photo_author_label_mission">حلم حقّقه ⁨%1$s⁩</string>
+    <string name="game_photo_author_label_rank">رتبة بلغها ⁦%1$s⁩</string>
     <string name="game_photo_camera_denied">تم رفض الكاميرا. اسمح بها من إعدادات جهازك، أو اختر صورة من المعرض.</string>
     <string name="game_photo_camera_unavailable">الكاميرا غير متاحة (هل يستخدمها تطبيق آخر؟). اختر صورة من المعرض، أو احتفظ بالبطاقة فقط.</string>
     <string name="game_photo_camera_unsupported">لا يسمح هذا الجهاز بالكاميرا هنا. اختر صورة من المعرض، أو احتفظ بالبطاقة فقط.</string>

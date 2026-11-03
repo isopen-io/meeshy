@@ -1,6 +1,7 @@
 package me.meeshy.app
 
 import android.app.Application
+import android.content.Context
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -15,6 +16,7 @@ import me.meeshy.app.push.DeclinedCallStore
 import me.meeshy.app.push.NotificationChannelInstaller
 import me.meeshy.app.settings.CrashDiagnosticsRecorder
 import me.meeshy.app.startup.AppInitializerRunner
+import me.meeshy.app.theme.UiLanguageBootstrap
 import me.meeshy.app.startup.AppLifecycleRunner
 import me.meeshy.sdk.lifecycle.AppLifecycleDispatcher
 import me.meeshy.sdk.model.lifecycle.TrimLevel
@@ -70,6 +72,11 @@ class MeeshyApplication : Application(), Configuration.Provider, ImageLoaderFact
 
     /** Le chargeur partagé de Coil : il respecte l'orientation EXIF de toute photo (`MeeshyImageLoader`). */
     override fun newImageLoader(): ImageLoader = MeeshyImageLoader.build(this)
+
+    /** La langue d'interface s'écrit avant tout : locale du process posée avant l'Activity (#14731). */
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(UiLanguageBootstrap.wrap(base))
+    }
 
     override fun onCreate() {
         super.onCreate()

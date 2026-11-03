@@ -53,6 +53,8 @@ internal fun StorySceneBackground(
     loads: Boolean = true,
     rewindWhenInactive: Boolean = false,
     onAudioFocusLost: () -> Unit = {},
+    onAudioFocusGained: () -> Unit = {},
+    onAudioFocusLostForGood: () -> Unit = {},
     onImageResolved: (String) -> Unit = {},
     onBackgroundPlayer: (ReelPlayerHandle?) -> Unit = {},
     stillFrame: Boolean = false,
@@ -70,12 +72,15 @@ internal fun StorySceneBackground(
                 loads = loads,
                 // Un vocal ou un appel prend le son : la scène se fige avec la vidéo.
                 onAudioFocusLost = onAudioFocusLost,
+                onAudioFocusGained = onAudioFocusGained,
+                onAudioFocusLostForGood = onAudioFocusLostForGood,
                 // La fenêtre de lecture que l'auteur a posée (#5129) — `null` quand la source joue en entier.
                 sourceStartMs = slide.backgroundVideoWindow?.startMs,
                 sourceEndMs = slide.backgroundVideoWindow?.endMs,
                 onPlayer = onBackgroundPlayer,
                 fit = slide.backgroundFits,
                 modifier = Modifier.fillMaxSize().graphicsLayer { frame(bg) },
+                effects = rememberSceneVideoEffects(slide.backgroundVideoUrl, slide.backgroundPosterUrl, slide.composerLooks),
             )
         }
         // Au repos le fond vidéo n'a pas de lecteur : son affiche (vignette, sinon ThumbHash) garde le cadre, l'aplat dessous.
@@ -98,7 +103,7 @@ internal fun StorySceneBackground(
             val bg = slide.backgroundTransform
             if (slide.backgroundFits) SceneBackdropLayer(slide.backdrop, imageUrl)
             AsyncImage(
-                model = imageUrl,
+                model = rememberSceneMediaModel(imageUrl, slide.composerLooks),
                 contentDescription = null,
                 contentScale = if (slide.backgroundFits) ContentScale.Fit else ContentScale.Crop,
                 colorFilter = SceneLookChain.colorFilter(slide.lookRecipe),
