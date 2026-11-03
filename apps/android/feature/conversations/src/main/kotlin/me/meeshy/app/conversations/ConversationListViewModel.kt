@@ -23,6 +23,7 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.lock.ConversationUnlockSessionStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.conversationlist.ConversationListLoadState
@@ -61,6 +62,7 @@ class ConversationListViewModel @Inject constructor(
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
     lockStore: ConversationLockStore,
+    unlockSession: ConversationUnlockSessionStore,
     storyRepository: StoryRepository,
     statusBarCache: StatusBarCache,
     messagePrefetch: ConversationListMessagePrefetchTriggers,
@@ -100,6 +102,7 @@ class ConversationListViewModel @Inject constructor(
         state = _state,
         lockStore = lockStore,
         openConversation = { dialogs.onConversationOpened(it); openConversationRequests.trySend(it) },
+        unlockSession = unlockSession,
     )
     private val actions = ConversationListRowActions(
         scope = viewModelScope,
