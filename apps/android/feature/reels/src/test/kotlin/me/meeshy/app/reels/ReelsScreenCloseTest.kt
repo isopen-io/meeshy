@@ -11,10 +11,26 @@ import me.meeshy.sdk.playback.CoordinatedPlayer
 import me.meeshy.sdk.playback.CoordinatedPlayerKind
 import me.meeshy.sdk.playback.PlaybackCoordinator
 import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Before
 import org.junit.Test
 
 /** La fermeture du lecteur coupe tout ce qui joue (vidéo partagée et réel-audio) avant que le disque ne se referme. */
 class ReelsScreenCloseTest {
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(StandardTestDispatcher())
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
 
     private class FakePlayer(override val kind: CoordinatedPlayerKind) : CoordinatedPlayer {
         var stopped = 0
