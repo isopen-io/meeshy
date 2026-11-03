@@ -38,11 +38,13 @@ import me.meeshy.app.navigation.ReportsConversationViewing
 import me.meeshy.app.navigation.MeeshyStoryRail
 import me.meeshy.app.navigation.ProvideConversationMoods
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.navigateClosingSheet
 import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.SheetStyle
 import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.feed.StatusesViewModel
+import me.meeshy.sdk.model.search.PostSearchDestination
 import me.meeshy.app.stories.StoriesViewModel
 
 /** Liste, recherche, tableau de bord, liens de partage, fil de discussion et messages favoris. */
@@ -94,6 +96,9 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 onCreateShareLink = { id -> navController.navigate(Routes.createShareLink(id)) },
             ),
             onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+            onOpenMessage = { conversationId, messageId ->
+                navController.navigate(Routes.chat(conversationId, highlightMessageId = messageId))
+            },
         )
     }
     sheetComposable(Routes.SHARE_LINK_PICKER, navController) { _, dismiss ->
@@ -104,10 +109,24 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         )
     }
     sheetComposable(Routes.GLOBAL_SEARCH, navController, style = SheetStyle.COVER) { _, dismiss ->
+        // #14671 — un post, un réel ou une story ouverts depuis les résultats y reviennent (même requête, même
+        // onglet) ; une conversation ouverte ferme la recherche, comme iOS.
         GlobalSearchScreen(
             onBack = dismiss,
             onOpenConversation = { conversationId ->
-                navController.navigate(Routes.chat(conversationId))
+                navController.navigateClosingSheet(Routes.chat(conversationId))
+            },
+            onOpenMessage = { conversationId, messageId ->
+                navController.navigateClosingSheet(Routes.chat(conversationId, highlightMessageId = messageId))
+            },
+            onOpenPost = { destination ->
+                navController.navigateKeepingSheet(
+                    when (destination) {
+                        is PostSearchDestination.Post -> Routes.postDetail(destination.postId)
+                        is PostSearchDestination.Reel -> Routes.reels(seed = destination.postId)
+                        is PostSearchDestination.Story -> Routes.story(destination.authorId, destination.storyId)
+                    },
+                )
             },
             onOpenUser = rememberProfileOpenerOverSheet(navController),
         )

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -44,7 +43,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.fullscreen.FullscreenChromeMetrics
 import me.meeshy.ui.theme.MeeshyMotion
-import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
@@ -132,8 +130,8 @@ public fun FullscreenActionButton(
             isActive = isActive,
             activeTint = activeTint,
             outlineTint = outlineTint,
+            // Aucun découpage : la légende qui NOMME l'action déborde la cellule de 56 dp, et la découper la rognait (#14615).
             modifier = modifier
-                .clip(RoundedCornerShape(MeeshyRadius.md))
                 .fullscreenTappable(onClickLabel = hint, viaGesture = handlesTapViaGesture, onClick = onClick)
                 .then(semanticsModifier),
         )

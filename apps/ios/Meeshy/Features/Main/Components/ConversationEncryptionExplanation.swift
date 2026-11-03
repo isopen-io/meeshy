@@ -32,7 +32,7 @@ enum ConversationEncryptionRegime: Equatable {
                    defaultValue: "Chiffrée sur nos serveurs", bundle: .main)
         case .hybrid:
             String(localized: "conversation.encryption.summary.hybrid",
-                   defaultValue: "Chiffrée sur nos serveurs (mode hybride)", bundle: .main)
+                   defaultValue: "Chiffrée sur nos serveurs, avec vérification entre appareils compatibles", bundle: .main)
         case .endToEnd:
             String(localized: "conversation.encryption.summary.endToEnd",
                    defaultValue: "Chiffrée de bout en bout : seuls les appareils des participants lisent les messages", bundle: .main)

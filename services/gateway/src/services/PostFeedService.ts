@@ -15,6 +15,7 @@ import {
 } from './posts/reelAffinity';
 import type { CacheStore } from './CacheStore';
 import { loadFeedFriendIds } from './posts/feedFriends';
+import { loadFeedDirectContactIds } from './posts/feedContacts';
 import { getCommunityCoMemberIds, isActiveCommunityMember } from './posts/communityVisibility';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { hoistLocationDeep } from './location/sharedPlace';
@@ -27,8 +28,6 @@ import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-h
 import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 
 const logger = enhancedLogger.child({ module: 'PostFeedService' });
-
-const FEED_SOCIAL_CACHE_TTL = 300; // 5 min — friend lists change infrequently
 
 // Plafond des tombstones renvoyés par un delta-sync de stories. Le filtre de
 // visibilité borne déjà au cercle de l'utilisateur : 500 disparitions sur une
@@ -1001,37 +1000,8 @@ export class PostFeedService {
   // PRIVATE HELPERS
   // ============================================
 
-  private async getDirectConversationContactIds(userId: string): Promise<string[]> {
-    const cacheKey = `feed:contacts:${userId}`;
-    if (this.cache) {
-      const cached = await this.cache.get(cacheKey).catch(() => null);
-      if (cached) return JSON.parse(cached) as string[];
-    }
-    try {
-      const myMemberships = await this.prisma.participant.findMany({
-        where: { userId, isActive: true, conversation: { type: 'direct' } },
-        select: { conversationId: true },
-      });
-      const conversationIds = myMemberships.map((m) => m.conversationId);
-      if (conversationIds.length === 0) {
-        if (this.cache) await this.cache.set(cacheKey, '[]', FEED_SOCIAL_CACHE_TTL).catch(() => undefined);
-        return [];
-      }
-
-      const otherMembers = await this.prisma.participant.findMany({
-        where: {
-          conversationId: { in: conversationIds },
-          userId: { not: userId },
-          isActive: true,
-        },
-        select: { userId: true },
-      });
-      const result = [...new Set(otherMembers.map((m) => m.userId).filter(Boolean) as string[])];
-      if (this.cache) await this.cache.set(cacheKey, JSON.stringify(result), FEED_SOCIAL_CACHE_TTL).catch(() => undefined);
-      return result;
-    } catch {
-      return [];
-    }
+  private getDirectConversationContactIds(userId: string): Promise<string[]> {
+    return loadFeedDirectContactIds({ prisma: this.prisma, cache: this.cache, userId });
   }
 
   private getFriendIds(userId: string): Promise<string[]> {

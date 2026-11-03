@@ -71,3 +71,7 @@
 -dontwarn org.bouncycastle.**
 -dontwarn org.conscrypt.**
 -dontwarn org.openjsse.**
+
+# #14628 — l'écran Licences sonde la présence de libsignal par ce nom de classe (`LibsignalNotices.PROBE_CLASS`) :
+# l'obfusquer ferait disparaître la mention AGPL-3.0 et les avis de libsignal d'un APK qui l'embarque.
+-keepnames class org.signal.libsignal.protocol.IdentityKey

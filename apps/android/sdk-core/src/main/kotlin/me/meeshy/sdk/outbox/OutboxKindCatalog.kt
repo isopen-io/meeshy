@@ -58,6 +58,7 @@ public object OutboxKindCatalog {
         OutboxKind.RESPOND_FRIEND_REQUEST,
         OutboxKind.CREATE_POST,
         OutboxKind.CREATE_COMMENT,
+        OutboxKind.SEND_E2EE_MESSAGE,
         -> true
     }
 
@@ -82,6 +83,7 @@ public object OutboxKindCatalog {
         OutboxKind.UNBOOKMARK_POST,
         -> true
         OutboxKind.SEND_MESSAGE,
+        OutboxKind.SEND_E2EE_MESSAGE,
         OutboxKind.EDIT_MESSAGE,
         OutboxKind.UPDATE_CONVERSATION_PREFS,
         OutboxKind.UPDATE_PROFILE,

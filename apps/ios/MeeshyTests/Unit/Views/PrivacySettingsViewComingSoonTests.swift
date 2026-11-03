@@ -44,8 +44,9 @@ final class PrivacySettingsViewComingSoonTests: XCTestCase {
         XCTAssertFalse(PrivacySettingsView.isComingSoon(\.acceptCallsFromNonContacts))
     }
 
-    func test_isComingSoon_saveMediaToGallery_returnsTrue() {
-        XCTAssertTrue(PrivacySettingsView.isComingSoon(\.saveMediaToGallery))
+    /// L'enregistrement automatique des médias reçus le lit (#14640) : l'interrupteur a un effet.
+    func test_isComingSoon_saveMediaToGallery_isLiveSinceTheAutoSaverReadsIt() {
+        XCTAssertFalse(PrivacySettingsView.isComingSoon(\.saveMediaToGallery))
     }
 
     func test_isComingSoon_shareUsageData_returnsTrue() {

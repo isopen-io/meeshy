@@ -1,17 +1,20 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.StoryMediaRotation
 import me.meeshy.sdk.model.scene.StoryVolumeCarrying
 
 /**
  * Ce que l'auteur règle du média de FOND hors de son cadrage et de son look (#14083), comme l'objet `isBackground` d'iOS :
- * son quart de tour ([rotationDeg], dans [0, 360)) et le volume d'une vidéo de fond, de 0 à 1 — 0 est le muet, et
- * [mutedVolumeMemento] rend le niveau quitté. Au repos, il ne change rien au fil.
+ * son quart de tour ([rotationDeg], dans [0, 360)), son recadrage ([crop], la fenêtre gardée de la source, `null` : entière,
+ * #13973) et le volume d'une vidéo de fond, de 0 à 1 — 0 est le muet, et [mutedVolumeMemento] rend le niveau quitté. Au
+ * repos, il ne change rien au fil.
  */
 data class StoryBackgroundSetting(
     val rotationDeg: Float = 0f,
     override val volume: Float = 1f,
     override val mutedVolumeMemento: Float? = null,
+    val crop: StoryMediaCrop? = null,
 ) : StoryVolumeCarrying
 
 /**
@@ -36,14 +39,15 @@ fun StorySlideDeck.updateSelectedBackgroundSetting(mediaId: String, change: (Sto
     })
 }
 
-/** Le réglage du fond relu du fil ou d'un brouillon, tolérant : un angle illisible se lit droit, un volume illisible plein, un mémento n'existe que sous un muet. */
+/** Le réglage du fond relu du fil ou d'un brouillon, tolérant : un angle illisible se lit droit, un volume illisible plein, un mémento n'existe que sous un muet, un recadrage se borne à la source. */
 internal object StoryBackgroundSettingWire {
-    fun read(rotation: Double?, volume: Float?, mutedVolumeMemento: Float?): StoryBackgroundSetting {
+    fun read(rotation: Double?, volume: Float?, mutedVolumeMemento: Float?, crop: StoryMediaCrop? = null): StoryBackgroundSetting {
         val level = volume?.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f
         return StoryBackgroundSetting(
             rotationDeg = rotation?.toFloat()?.takeIf { it.isFinite() }?.let(StoryMediaRotation::normalized) ?: 0f,
             volume = level,
             mutedVolumeMemento = mutedVolumeMemento?.takeIf { level == 0f && it.isFinite() && it > 0f }?.coerceAtMost(1f),
+            crop = crop?.let { StoryMediaCrop.fromPayloadBounds(it.x, it.y, it.width, it.height) },
         )
     }
 }

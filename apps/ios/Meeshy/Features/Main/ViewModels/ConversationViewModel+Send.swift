@@ -233,7 +233,7 @@ extension ConversationViewModel {
         markDeparture()
         let outcome: Result<SentMessageReceipt, any Error>
         do {
-            outcome = .success(try await emit(outgoing, payload: payload, context: context))
+            outcome = .success(try await HybridTextRoute(viewModel: self, sealer: sealer).emit(outgoing, plain: payload, context: context))
         } catch {
             outcome = .failure(error)
         }

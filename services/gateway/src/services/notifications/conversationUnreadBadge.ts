@@ -56,8 +56,10 @@ export async function computeConversationUnreadBadge(
   userId: string
 ): Promise<number> {
   const [participants, mutedRows] = await Promise.all([
+    // #14107 (audit M4) — une demande de message en attente ne compte pas : elle
+    // ne sonne pas, son badge ne doit pas l'annoncer non plus.
     prisma.participant.findMany({
-      where: { userId, isActive: true },
+      where: { userId, isActive: true, OR: [{ messageRequestAt: null }, { messageRequestAt: { isSet: false } }] },
       select: { conversationId: true },
     }),
     prisma.userConversationPreferences.findMany({

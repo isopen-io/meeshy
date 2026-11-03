@@ -1,0 +1,543 @@
+{
+ "parapluie": 14566,
+ "issue_mesures": 14583,
+ "decision_diagnostics": 14584,
+ "branche_source": "claude/festive-cray-07fl4p",
+ "lots": [
+  {
+   "key": "socle-media3-1-10",
+   "issue": 14567,
+   "title": "Android lit et exporte avec Media3 1.10.1 : correctifs audio et vidéo acquis, médias en HTTP/2 par le client partagé, exports qui commencent sur une image",
+   "wave": 1,
+   "depends_on": [],
+   "modele": "opus",
+   "sensible": true,
+   "files_owned": [
+    "apps/android/gradle/libs.versions.toml",
+    "apps/android/sdk-core/build.gradle.kts",
+    "apps/android/sdk-ui/build.gradle.kts",
+    "apps/android/feature/chat/build.gradle.kts",
+    "apps/android/feature/settings/build.gradle.kts",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/audioedit/MetadataFreeMuxerFactory.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/audioedit/Media3AudioTransformRunner.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/scene/Media3SceneComposition.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/scene/Media3SceneTransformRunner.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/Media3VideoTransformRunner.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/RetouchVideoExporter.kt",
+    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/audioedit/MetadataFreeMuxerTest.kt",
+    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/media/scene/Media3SceneCompositionTest.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/media/ComposerLiveBuffer.kt",
+    "apps/android/sdk-ui/src/test/kotlin/me/meeshy/ui/component/media/ComposerLiveBufferTest.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/media/MeeshyMediaCache.kt",
+    "apps/android/app/src/main/kotlin/me/meeshy/app/media/MediaCredentialInitializer.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/MediaClientDerivation.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/media/MediaClientDerivationTest.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/ExportContainerPolicy.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/media/ExportContainerPolicyTest.kt"
+   ],
+   "dimensions": [
+    1,
+    2,
+    9,
+    11
+   ],
+   "etat": "livré",
+   "pr": 14610,
+   "note": "Fusionné dans dev le 2026-11-02 (PR #14610) sans compilateur Android local ; preuve de compilation = android.yml sur dev ; mesure sur appareil à faire (phase Mesurer, lots déjà fusionnés)."
+  },
+  {
+   "key": "vocaux-qualite-cache-reprise",
+   "issue": 14568,
+   "title": "Un vocal Android s'enregistre en qualité iOS (AAC 44,1 kHz mono 64 kb/s), se réécoute depuis le cache, même hors ligne, et reprend depuis l'écran verrouillé sur Android 15",
+   "wave": 1,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/audio/ComposerVoiceCapture.kt",
+    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/ComposerVoiceHost.kt",
+    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/StorySoundSheet.kt",
+    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/VoiceNoteEngine.kt",
+    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatAudioPlayerHost.kt",
+    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatAudioFocus.kt",
+    "apps/android/app/src/main/kotlin/me/meeshy/app/audio/VoicePlaybackService.kt",
+    "apps/android/app/src/main/kotlin/me/meeshy/app/audio/VoicePlaybackSessionController.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/waveform/VoiceEncodingProfile.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/waveform/VoiceEncodingProfileTest.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/playback/BackgroundResumeRoute.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/playback/BackgroundResumeRouteTest.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/playback/MediaBackgroundPolicy.kt"
+   ],
+   "dimensions": [
+    2,
+    4,
+    6,
+    8,
+    9,
+    13
+   ],
+   "etat": "livré",
+   "pr": 14610,
+   "note": "Fusionné dans dev le 2026-11-02 (PR #14610) sans compilateur Android local ; preuve de compilation = android.yml sur dev ; mesure sur appareil à faire (phase Mesurer, lots déjà fusionnés)."
+  },
+  {
+   "key": "video-envoyee-allegee",
+   "issue": 11726,
+   "title": "Une vidéo envoyée depuis Android part au budget iOS : remuxée si elle y est déjà, sinon encodée par l'encodeur MATÉRIEL, moov en tête",
+   "wave": 2,
+   "depends_on": [
+    "socle-media3-1-10"
+   ],
+   "modele": "sonnet",
+   "sensible": true,
+   "files_owned": [
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/MediaCompressionModule.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/VideoTranscoder.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/Media3VideoTransformRunner.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/AndroidVideoProbes.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/TusUploadRepository.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/MediaRepository.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/OutgoingMediaPreparer.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/scene/Media3SceneTransformRunner.kt",
+    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/media/VideoTranscoderDecisionTest.kt",
+    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/media/OutgoingMediaPreparerTest.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/VideoTranscodePlan.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/TusUpload.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/VideoEncoderChoice.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/VideoEncoderRequest.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/OutgoingVideoRoute.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/scene/export/StoryExportVideoSettings.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/media/VideoEncoderChoiceTest.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/media/VideoEncoderRequestTest.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/media/OutgoingVideoRouteTest.kt"
+   ],
+   "dimensions": [
+    2,
+    9,
+    10,
+    11,
+    13
+   ],
+   "etat": "à-faire"
+  },
+  {
+   "key": "images-conversation-legeres-protegees",
+   "issue": 14569,
+   "title": "Les images d'une conversation arrivent à la bonne taille avec leur aperçu ThumbHash, s'animent quand elles le sont, et ne sont jamais lisibles ni copiées sur disque quand elles sont protégées",
+   "wave": 2,
+   "depends_on": [
+    "socle-media3-1-10"
+   ],
+   "modele": "sonnet",
+   "sensible": true,
+   "files_owned": [
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/media/MeeshyImageLoader.kt",
+    "apps/android/sdk-ui/src/test/kotlin/me/meeshy/ui/component/media/MeeshyImageLoaderTest.kt",
+    "apps/android/app/src/main/kotlin/me/meeshy/app/MeeshyApplication.kt",
+    "apps/android/app/src/main/kotlin/me/meeshy/app/media/ImageCacheTeardown.kt",
+    "apps/android/app/src/main/AndroidManifest.xml",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubbleImageGrid.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubbleAttachmentBuilder.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubbleAttachmentModels.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubbleBlurReveal.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubbleContentBuilder.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/media/ThumbHashPainter.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ImageVariants.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/ProtectedMediaRendering.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/ThumbHashMemo.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/AnimatedImagePolicy.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/BubbleImageSourceLawTest.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/media/ProtectedMediaRenderingTest.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/media/ThumbHashMemoTest.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/media/AnimatedImagePolicyTest.kt"
+   ],
+   "dimensions": [
+    1,
+    2,
+    3,
+    4,
+    6,
+    8,
+    9,
+    13
+   ],
+   "etat": "à-faire"
+  },
+  {
+   "key": "photo-envoyee-allegee",
+   "issue": 14570,
+   "title": "Une photo envoyée depuis Android part au budget HD d'iOS, décodée à la taille cible : plus de plantage mémoire sur une HEIC de 50 Mpx, ni de message trompeur sur Android 8",
+   "wave": 3,
+   "depends_on": [
+    "video-envoyee-allegee"
+   ],
+   "modele": "sonnet",
+   "sensible": true,
+   "files_owned": [
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/ImageCompressor.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/OutgoingMediaSanitizer.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/OutgoingImagePreparer.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/ImagePreparationModule.kt",
+    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/media/OutgoingImagePreparerTest.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/retouch/RetouchSourceDecoder.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/ImageCompression.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/OutgoingImagePlanner.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/OrientedDecodePlan.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/media/OutgoingImagePlannerTest.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/media/OrientedDecodePlanTest.kt"
+   ],
+   "dimensions": [
+    1,
+    2,
+    3,
+    9,
+    11,
+    13
+   ],
+   "etat": "à-faire"
+  },
+  {
+   "key": "lecture-video-robuste",
+   "issue": 14571,
+   "title": "Une vidéo démarre dès 0,5 s de tampon avec une mémoire bornée, se rétablit quand un décodeur est refusé, s'ouvre en plein écran sur son affiche, et la minuterie d'une story suit la vidéo réellement vue",
+   "wave": 3,
+   "depends_on": [
+    "socle-media3-1-10"
+   ],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/video/ReelVideoSurface.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/video/ReelPlayerHandle.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/video/MeeshyVideoViewer.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/viewer/VideoPosterSource.kt",
+    "apps/android/sdk-ui/src/test/kotlin/me/meeshy/ui/component/viewer/VideoPosterSourceTest.kt",
+    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatListHost.kt",
+    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/mediahub/ConversationMediaHubSheet.kt",
+    "apps/android/feature/feed/src/main/kotlin/me/meeshy/app/feed/CommentMediaFullscreen.kt",
+    "apps/android/feature/reels/src/main/kotlin/me/meeshy/app/reels/ReelPage.kt",
+    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryAutoAdvanceGate.kt",
+    "apps/android/feature/stories/src/test/kotlin/me/meeshy/app/stories/StoryAutoAdvanceGateTest.kt",
+    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerScreen.kt",
+    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryProgressTrack.kt",
+    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryScenePlayer.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/PlaybackBufferPolicy.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/PlaybackRecovery.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/FullscreenVideoOpening.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/VideoPosterSource.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/StoryAutoAdvanceGate.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/StoryVideoClock.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/media/PlaybackBufferPolicyTest.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/media/PlaybackRecoveryTest.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/media/VideoPosterSourceTest.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/StoryAutoAdvanceGateTest.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/StoryVideoClockTest.kt"
+   ],
+   "dimensions": [
+    2,
+    3,
+    4,
+    8,
+    13
+   ],
+   "etat": "à-faire"
+  },
+  {
+   "key": "reels-prechargement",
+   "issue": 13262,
+   "title": "Les réels démarrent sans attente au balayage : préchargement Media3 en mémoire près et sur disque plus loin, lecteurs réutilisés, charge adaptée à la puissance et à la chaleur de l'appareil",
+   "wave": 4,
+   "depends_on": [
+    "socle-media3-1-10",
+    "lecture-video-robuste"
+   ],
+   "modele": "opus",
+   "sensible": false,
+   "files_owned": [
+    "apps/android/feature/reels/src/main/kotlin/me/meeshy/app/reels/ReelSound.kt",
+    "apps/android/feature/reels/src/main/kotlin/me/meeshy/app/reels/ReelsScreen.kt",
+    "apps/android/feature/reels/src/main/kotlin/me/meeshy/app/reels/ReelPage.kt",
+    "apps/android/feature/reels/src/main/kotlin/me/meeshy/app/reels/ReelsViewModel.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/video/ReelVideoSurface.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/video/ReelPreloadHost.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/media/MeeshyMediaCache.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/DeviceMediaProbe.kt",
+    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/media/DeviceMediaModule.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ReelPreloadWindow.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ReelPreloadStage.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ReelPlayerPoolPlan.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/PlaybackPolicy.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/DeviceMediaInputs.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/ReelPreloadStageTest.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/ReelPlayerPoolPlanTest.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/media/PlaybackPolicyTest.kt"
+   ],
+   "dimensions": [
+    2,
+    3,
+    4,
+    9
+   ],
+   "etat": "à-faire"
+  },
+  {
+   "key": "vignettes-video-utiles",
+   "issue": 14572,
+   "title": "Les vignettes, frises et affiches vidéo sont extraites à la taille utile, depuis le cache, sans requête hors de la politique d'URL ni décodage pour rien",
+   "wave": 4,
+   "depends_on": [
+    "socle-media3-1-10"
+   ],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [
+    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/PlacedVideoFrames.kt",
+    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerVideoPoster.kt",
+    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerMediaAddress.kt",
+    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryVideoExportViewModel.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/retouch/ComposerRetouchVideoPanels.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/retouch/RetouchVideoLookPainter.kt",
+    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/viewer/VideoFirstFrameExtractor.kt",
+    "apps/android/feature/feed/src/main/kotlin/me/meeshy/app/feed/FeedMediaPrefetchHost.kt",
+    "apps/android/feature/feed/src/main/kotlin/me/meeshy/app/feed/FeedMediaPrefetcher.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/composer/timeline/FilmstripFrames.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/net/ComposerFrameSource.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/media/VideoPosterPlan.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/composer/timeline/FilmstripFramesTest.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/net/ComposerFrameSourceTest.kt",
+    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/media/VideoPosterPlanTest.kt"
+   ],
+   "dimensions": [
+    1,
+    2,
+    3,
+    4,
+    8,
+    11
+   ],
+   "etat": "à-faire"
+  }
+ ],
+ "reports": [
+  {
+   "key": "suivi-14613",
+   "issue": 14613,
+   "title": "Le client HTTP des médias ne renvoie aucun jeton de session à un autre hôte, ne retombe jamais en silence sur la pile intégrée, et son comportement est prouvé par un témoin",
+   "wave": 5,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": true,
+   "files_owned": [],
+   "raison_du_report": "Suites non bloquantes de l'audit adversarial du socle Media3 (#14567)."
+  },
+  {
+   "key": "report-01",
+   "issue": 14573,
+   "title": "Socle Kotlin 2.2+ et BOM Compose 2026, puis migration Coil 2 vers Coil 3 et Media3 1.11 (PlayerPool, rememberPooledPlayer, ContentFrame, media3-ui-compose)",
+   "wave": 7,
+   "depends_on": [],
+   "modele": "opus",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "Un seul lot du plan peut toucher le catalogue de versions, et c'est le socle Media3 1.10.1. Monter Kotlin entraîne KSP, Hilt, Room et le plugin Compose, dont la compatibilité n'est pas vérifiée. La migration coil→coil3 touche environ 63 fichiers sans compilateur local, et RESPECT_ALL ferait retomber Coil 3 sur BitmapFactory sans travail préalable sur MediaIntake. À faire en chantier dédié : un lot « socle Kotlin et BOM » prouvé seul sur android.yml, puis Coil 3 écran par écran (Coil 2 et 3 coexistent), puis Media3 1.11."
+  },
+  {
+   "key": "report-02",
+   "issue": 14574,
+   "title": "Capture caméra : CameraX 1.6.2 (CameraPipe, muxer résistant aux interruptions, correctif Android 17), FHD, stabilisation et miroir de la caméra avant, fusion des segments sans retournement ni perte",
+   "wave": 9,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": true,
+   "files_owned": [],
+   "raison_du_report": "La montée CameraX exige un second lot de catalogue (interdit ici) et une recette CameraPipe sur S8 et Pixel. La qualité, le miroir et la stabilisation (API CameraX 1.3 et 1.4) et la fusion des segments (P1 : perte silencieuse d'une prise) n'exigent aucune montée, mais dépassent la capacité de 8 lots de ce tour. À faire au tour suivant, en lot disjoint (sdk-ui/capture)."
+  },
+  {
+   "key": "report-03",
+   "issue": 14575,
+   "title": "Retouche vidéo : export au budget (taille, cadence), coupe seule sans ré-encodage complet, aperçu libéré pendant le rendu, progression et cause d'échec affichées",
+   "wave": 6,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "Les fichiers de retouche (RetouchVideoExporter, ComposerVideoRetouchScreen et Playback) sont touchés par le socle. Ce lot suit le transcodeur câblé, qui fournit VideoBudget. Il est reporté au tour suivant pour rester sous 8 lots et 600 lignes par lot."
+  },
+  {
+   "key": "report-04",
+   "issue": 14576,
+   "title": "Export vidéo de scène : cadence plafonnée à 30 i/s, conversion YUV choisie d'après la couleur de la source puis composition GPU, politique HDR explicite, gain sans écrêtage",
+   "wave": 10,
+   "depends_on": [],
+   "modele": "opus",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "Demande la base Media3 1.10 (multi-séquence, MultipleInputVideoGraph) et une décision HDR alignée sur la passerelle (#9888). Charge L hors capacité de ce tour."
+  },
+  {
+   "key": "report-05",
+   "issue": 14577,
+   "title": "Export vidéo en arrière-plan : worker au premier plan (mediaProcessing sur API 35, dataSync sur API 34), Looper dédié, reprise idempotente, WorkManager 2.10+",
+   "wave": 10,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": true,
+   "files_owned": [],
+   "raison_du_report": "La montée de WorkManager touche le catalogue (un seul lot autorisé). Il faut aussi des déclarations de manifeste et de service à recetter sur appareil. Ce lot suit le transcodeur câblé, qui tourne encore dans le flux d'envoi."
+  },
+  {
+   "key": "issue-13841",
+   "issue": 13841,
+   "title": "Une vidéo de story peut recevoir filtre et cadre, cuits à la publication comme sur iOS",
+   "wave": 12,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "C'est une fonctionnalité d'iso couverte par une issue existante, pas une optimisation. Elle demande aussi d'extraire d'abord StoryComposerViewModelTest (3 303 lignes, au-delà du budget)."
+  },
+  {
+   "key": "report-07",
+   "issue": 14578,
+   "title": "Aperçu du composer et export sur un seul moteur (CompositionPlayer) et budget du composer selon le palier d'appareil",
+   "wave": 11,
+   "depends_on": [],
+   "modele": "opus",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "CompositionPlayer est @ExperimentalApi, et son multi-asset est encore en développement actif. Le budget par palier gagne à suivre la politique de lecture livrée par le lot des réels. À faire derrière un drapeau, au tour suivant."
+  },
+  {
+   "key": "report-08",
+   "issue": 14579,
+   "title": "Glisser une barre de lecture montre l'image visée (mode scrubbing) dans les réels, le plein écran, la frise et la retouche",
+   "wave": 5,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "setScrubbingModeEnabled devient disponible après le socle 1.10.1. Les fichiers (ReelScrubBar, MeeshyVideoViewer, ComposerLivePlayer) sont touchés par d'autres lots de ce plan, d'où un lot suivant naturel."
+  },
+  {
+   "key": "issue-13253",
+   "issue": 13253,
+   "title": "Le lecteur de stories précharge la vidéo et le son de la story suivante (playlist, PreloadConfiguration, préchauffage sur haut de gamme)",
+   "wave": 8,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "Ce lot réutilise la politique d'appareil et le préchargement livrés par le lot des réels. Il est reporté pour ne pas dépasser 600 lignes et parce que StoryViewerScreen est déjà au plafond."
+  },
+  {
+   "key": "issue-14008",
+   "issue": 14008,
+   "title": "Vidéo dans les bulles (affiche, durée) et dans les cartes du fil (lecture muette à l'écran seulement)",
+   "wave": 12,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "Ce sont des fonctionnalités d'iso iOS couvertes par des issues ouvertes, pas des optimisations de l'existant. Elles s'appuieront sur l'affiche et la reprise livrées par le lot de lecture."
+  },
+  {
+   "key": "issue-9888",
+   "issue": 9888,
+   "title": "Renditions vidéo côté passerelle (basse 480p, HEVC ou AV1 matériel) et choix de la rendition par le client",
+   "wave": 12,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "La décision serveur (#9888) est ouverte. Il faut un lot passerelle plus un lot client."
+  },
+  {
+   "key": "issue-13660",
+   "issue": 13660,
+   "title": "Baseline Profile et Startup Profile générés par Macrobenchmark sur les parcours médias",
+   "wave": 12,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "La génération exige un émulateur ou un Gradle Managed Device dans android.yml, non vérifié, ainsi qu'un nouveau module et des plugins dans le catalogue (lot unique déjà pris)."
+  },
+  {
+   "key": "report-13",
+   "issue": 14580,
+   "title": "Ultra HDR : préservé à l'envoi (gainmap nettoyée récursivement) et affiché en HDR dans la visionneuse sans éblouir le fil",
+   "wave": 8,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": true,
+   "files_owned": [],
+   "raison_du_report": "C'est un lot de confidentialité de taille L : réécriture du nettoyeur, MPF et XMP hdrgm, passage par l'auditeur-adversarial. Il passe après le lot photo, qui touche le même nettoyeur."
+  },
+  {
+   "key": "report-14",
+   "issue": 14581,
+   "title": "Visionneuse d'images : ThumbHash et résidence mesurée à la taille de l'écran, zoom net par tuiles, enregistrement et partage depuis le cache (et Enregistrer sur Android 8 et 9)",
+   "wave": 6,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "Effort L pour le décodage par tuiles (telephoto 0.x ou BitmapRegionDecoder). Les fichiers ne sont touchés par aucun lot de ce tour : à faire au tour suivant."
+  },
+  {
+   "key": "issue-14009",
+   "issue": 14009,
+   "title": "Stickers : décodage APNG animé et grilles sans SubcomposeAsyncImage ; HEIC envoyé en natif avec repli JPEG",
+   "wave": 12,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "Le décodage APNG demande un décodeur dédié (aucun dans le dépôt). Le HEIC natif demande un nettoyeur de métadonnées HEIF, qui n'existe pas, pour rester fail-closed sur le lieu. #14009 reste ouverte pour l'APNG."
+  },
+  {
+   "key": "issue-11610",
+   "issue": 11610,
+   "title": "Session audio : loi d'enregistrement appliquée (source voix, focus exclusif, micro du casque), focus de la musique des stories, commentaire vocal sur le socle audio, MediaSessionService Media3",
+   "wave": 12,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "Plusieurs issues ouvertes et des fichiers partagés avec le lot vocal de la vague 1. C'est le tour suivant du chantier audio, et un A/B sur appareils réels est requis pour la source voix."
+  },
+  {
+   "key": "issue-12109",
+   "issue": 12109,
+   "title": "Bulle vocale avec forme d'onde (pics publiés à l'envoi), progression lue à chaque image, son de story décodé une seule fois",
+   "wave": 12,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "La forme d'onde publiée demande un champ serveur rétrocompatible (passerelle et shared) avant le client."
+  },
+  {
+   "key": "report-18",
+   "issue": 14582,
+   "title": "Éditeur audio : copie sans ré-encodage pour une coupe, rendu depuis l'original en un seul encodage au débit de la source, fondus GainProcessor à puissance constante",
+   "wave": 5,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "GainProcessor et addGap demandent la base Media3 1.8+ livrée par le socle, et les fichiers de l'éditeur sont touchés par le socle. C'est un lot suivant naturel."
+  },
+  {
+   "key": "issue-12285",
+   "issue": 12285,
+   "title": "Sonie égalisée (loudnessLufs), offload DSP des vocaux longs, sonde des capacités audio de l'appareil, vocal en Opus/Ogg 48 kHz 24 kb/s",
+   "wave": 12,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": false,
+   "files_owned": [],
+   "raison_du_report": "La sonie touche aussi iOS et le web (#12285). L'Opus est un changement versionné qui attend DEC-COMPRESSION (#11471) et la lecture vérifiée sur iOS et le web. Le gain de l'offload n'est mesurable que sur appareil."
+  }
+ ]
+}

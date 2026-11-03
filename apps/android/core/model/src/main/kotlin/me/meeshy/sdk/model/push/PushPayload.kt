@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model.push
 
+import me.meeshy.sdk.model.EndToEndRegime
+
 /**
  * La charge `data` d'un push FCM, decodee UNE seule fois. FCM ne transporte que des
  * chaines : nombres et booleens arrivent en texte. Une cle absente, vide ou illisible
@@ -47,7 +49,16 @@ public data class PushPayload(
     val attachmentFileSize: Long? = null,
     /** La photo de l'acteur, sous le nom que la passerelle lui donne pour iOS (`imageURL`). */
     val imageUrl: String? = null,
+    /** Le mode servi de la conversation (`e2ee` / `server` / `hybrid`, #14669) ; absent pour le clair ou d'une passerelle antérieure. */
+    val conversationEncryptionMode: String? = null,
 ) {
+    /**
+     * #13794 — la conversation que ce push apprend chiffrée de bout en bout, au même titre que la mémoire locale : le mode
+     * servi ne peut qu'AJOUTER le bout en bout au registre, jamais l'en retirer (#12949). `null` pour tout autre mode.
+     */
+    val teachesEndToEndTo: String?
+        get() = conversationId?.takeIf { EndToEndRegime.isEndToEnd(conversationEncryptionMode) }
+
     /**
      * Le média peut-il voyager jusqu'à la bannière ? Une protection déclarée
      * (`notificationLocKey` présent, drapeau de cycle de vie dans `effectFlags`) ou une
@@ -111,6 +122,7 @@ public data class PushPayload(
                 attachmentDurationMs = long("attachmentDurationMs"),
                 attachmentFileSize = long("attachmentFileSize"),
                 imageUrl = text("imageURL"),
+                conversationEncryptionMode = text("conversationEncryptionMode"),
             )
         }
     }

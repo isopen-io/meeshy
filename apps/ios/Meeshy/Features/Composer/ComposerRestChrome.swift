@@ -90,6 +90,19 @@ nonisolated enum ComposerRestChrome {
         return sceneTools.filter { outil in outil.door.map(offertes.contains) ?? false } + [.more]
     }
 
+    /// **Le pied de la colonne ne défile jamais** (#14622, comme Android
+    /// #14282) : « Texte du post » et ⋯ restent posés en bas, et ce sont les
+    /// outils au-dessus d'eux qui défilent quand la colonne n'a plus la place.
+    static func columnFoot(_ tools: [ComposerRestTool]) -> [ComposerRestTool] {
+        tools.filter(footTools.contains)
+    }
+
+    static func columnBody(_ tools: [ComposerRestTool]) -> [ComposerRestTool] {
+        tools.filter { !footTools.contains($0) }
+    }
+
+    private static let footTools: Set<ComposerRestTool> = [.postText, .more]
+
     static func showsSlideRow(slideCount: Int) -> Bool { slideCount >= 2 }
 
     static func sceneIsReduced(_ state: State) -> Bool {

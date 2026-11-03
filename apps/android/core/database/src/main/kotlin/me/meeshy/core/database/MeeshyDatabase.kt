@@ -17,6 +17,7 @@ import me.meeshy.core.database.dao.MediaIndexDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.dao.PendingIdDao
+import me.meeshy.core.database.dao.PlaintextErasureDao
 import me.meeshy.core.database.dao.ProfileStatsCacheDao
 import me.meeshy.core.database.dao.StatusBarCacheDao
 import me.meeshy.core.database.dao.StoryDao
@@ -38,6 +39,7 @@ import me.meeshy.core.database.entity.MediaIndexEntity
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.core.database.entity.PendingIdEntity
+import me.meeshy.core.database.entity.PlaintextErasureEntity
 import me.meeshy.core.database.entity.ProfileStatsCacheEntity
 import me.meeshy.core.database.entity.StatusBarCacheEntity
 import me.meeshy.core.database.entity.StoryEntity
@@ -75,8 +77,9 @@ import me.meeshy.core.database.entity.TusUploadCheckpointEntity
         CacheEntryEntity::class,
         KeyedJsonCacheEntity::class,
         PendingIdEntity::class,
+        PlaintextErasureEntity::class,
     ],
-    version = 22,
+    version = 23,
     exportSchema = true,
 )
 public abstract class MeeshyDatabase : RoomDatabase() {
@@ -101,4 +104,5 @@ public abstract class MeeshyDatabase : RoomDatabase() {
     public abstract fun cacheEntryDao(): CacheEntryDao
     public abstract fun keyedJsonCacheDao(): KeyedJsonCacheDao
     public abstract fun pendingIdDao(): PendingIdDao
+    public abstract fun plaintextErasureDao(): PlaintextErasureDao
 }

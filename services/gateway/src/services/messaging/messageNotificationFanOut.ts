@@ -363,6 +363,22 @@ async function listeningRegularRecipients(
  * envoi réussi en 500. `onError` laisse l'appelant journaliser dans le contexte
  * de sa requête.
  */
+/**
+ * #13114 — le seul chiffré qui voyage sur le fil push est l'enveloppe qu'un
+ * APPAREIL a scellée (`e2ee`), que la NSE ouvre avec ses propres clés. En
+ * `server` et `hybrid`, `encryptedContent` est le chiffré AU REPOS, sous la clé
+ * de conversation que seule la passerelle détient : il ne quitte pas le
+ * serveur. Le mode de la LIGNE décide, celui de la conversation ne supplée
+ * qu'une ligne héritée qui n'en porte aucun.
+ */
+export function deviceEnvelopeForPush(
+  message: Pick<FanOutMessage, 'encryptedContent' | 'encryptionMode'>,
+  conversationMode: string | null | undefined,
+): string | undefined {
+  if (!message.encryptedContent) return undefined;
+  return isEndToEndMode(message.encryptionMode ?? conversationMode) ? message.encryptedContent : undefined;
+}
+
 export async function notifyMessageRecipients(params: {
   prisma: FanOutPrisma;
   notificationService: MessageNotificationTarget | null | undefined;
@@ -404,7 +420,6 @@ export async function notifyMessageRecipients(params: {
     // consommée, éphémère échu, transitivement) est morte pour lui dès sa
     // naissance : aucune bannière ne lui annonce son texte.
     const deadFor = await loadQuoteCascadeAudience(prisma, message.replyToId);
-    const validatedMentionUserIds = (params.validatedMentionUserIds ?? []).filter((id) => !deadFor.has(id));
 
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
@@ -414,11 +429,23 @@ export async function notifyMessageRecipients(params: {
         encryptionMode: true,
         participants: {
           where: { isActive: true, type: 'user' },
-          select: { userId: true },
+          select: { userId: true, messageRequestAt: true },
         },
       },
     });
     if (!conversation) return;
+
+    // #14107 (MSG-02, MIN-03) — une DEMANDE de message en attente ne sonne pas :
+    // son destinataire la découvre dans sa boîte de demandes, ni bannière, ni
+    // mention, ni réponse ne la lui annoncent.
+    const silenced = new Set<string>([
+      ...deadFor.keys(),
+      ...conversation.participants
+        .filter((p) => p.messageRequestAt instanceof Date)
+        .map((p) => p.userId)
+        .filter((id): id is string => Boolean(id)),
+    ]);
+    const validatedMentionUserIds = (params.validatedMentionUserIds ?? []).filter((id) => !silenced.has(id));
 
     // Le contenu qu'un message PROTÉGÉ (éphémère, vue unique, flouté, chiffré)
     // est autorisé à montrer sur un écran verrouillé — jamais le contenu lui-même.
@@ -452,7 +479,7 @@ export async function notifyMessageRecipients(params: {
 
     const memberIds = conversation.participants
       .map(p => p.userId)
-      .filter((id): id is string => id !== null && !deadFor.has(id));
+      .filter((id): id is string => id !== null && !silenced.has(id));
 
     // L'auteur du message auquel celui-ci répond, en `User.id`. Un auteur
     // anonyme n'a pas de ligne `Notification` possible : il reste `null`.
@@ -649,6 +676,7 @@ export async function notifyMessageRecipients(params: {
 
     const owesReplyNotification =
       !!originalMessageAuthorUserId &&
+      !silenced.has(originalMessageAuthorUserId) &&
       originalMessageAuthorUserId !== sender.actorId &&
       !validatedMentionUserIds.includes(originalMessageAuthorUserId);
 
@@ -746,7 +774,7 @@ export async function notifyMessageRecipients(params: {
           messageId: message.id,
           conversationId,
           messagePreview: notificationPreviewForPush,
-          encryptedContent: message.encryptedContent || undefined,
+          encryptedContent: deviceEnvelopeForPush(message, conversation.encryptionMode),
           notificationLocKey,
           // La transcription d'un vocal n'est PAS `Message.content` : ses
           // traductions vivent sur `MessageAttachment.translations`. Le cycle 122

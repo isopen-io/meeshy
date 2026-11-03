@@ -2,7 +2,9 @@ package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.StoryMediaRotation
+import me.meeshy.sdk.model.composer.look.ComposerCropPreset
 import me.meeshy.sdk.model.composer.scene.SceneEffectChoice
 import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.media.MediaTrimBounds
@@ -57,6 +59,20 @@ internal object StoryComposerBackgroundReducer {
     /** Pivoter (#14083) : le fond tourne d'un quart, comme un média posé ; quatre touchers le rendent droit. */
     fun rotated(state: StoryComposerUiState): StoryComposerUiState =
         backgroundSetting(state) { it.copy(rotationDeg = StoryMediaRotation.turned(it.rotationDeg)) }
+
+    /**
+     * Recadrer (#13973, iOS `ComposerMediaCropPads` sur le fond) : l'image de fond garde le plus grand cadre centré aux
+     * proportions [preset] dans sa source mesurée ; « Original » la rend entière. Inerte pour une vidéo, ou tant que la
+     * source n'est pas mesurée.
+     */
+    fun cropPreset(state: StoryComposerUiState, preset: ComposerCropPreset): StoryComposerUiState {
+        val id = state.selectedSlideBackdropMediaId ?: return state
+        if (state.placedMediaIsVideo(id)) return state
+        if (preset == ComposerCropPreset.ORIGINAL) return backgroundSetting(state) { it.copy(crop = null) }
+        val (width, height) = state.placedSourceSizeOf(id) ?: return state
+        val crop = StoryMediaCrop.ofNormalized(ComposerCropPreset.centeredCrop(preset.aspect(width, height), width, height))
+        return backgroundSetting(state) { it.copy(crop = crop) }
+    }
 
     /** Le volume d'une vidéo de fond, 0…1 (#14083) ; 0 coupe en mémorisant le niveau quitté. Inerte pour une image. */
     fun volumeSet(state: StoryComposerUiState, volume: Float): StoryComposerUiState =
