@@ -159,7 +159,7 @@ internal fun ChatMessageRow(
                     MessageRowAction.Reply -> BubbleAccessibilityAction(replyLabel) { actions.onReply(messageId) }
                     MessageRowAction.Forward -> BubbleAccessibilityAction(forwardLabel) { actions.onForward(messageId) }
                 }
-            },
+            } + BubbleAccessibilityAction(menuLabel) { actions.onLongPress(messageId) },
         )
     }
     val onSwipeReply: (() -> Unit)? = remember(messageId, actions, offer.canReply) {
