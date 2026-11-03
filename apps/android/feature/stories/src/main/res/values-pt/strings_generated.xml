@@ -262,6 +262,8 @@
     <string name="stories_tray_manage">Gerenciar meus stories</string>
     <string name="stories_tray_view_my_story">Ver meu story</string>
     <string name="stories_viewer_close">Fechar</string>
+    <string name="stories_viewer_fullscreen_enter">Tela cheia</string>
+    <string name="stories_viewer_fullscreen_exit">Sair da tela cheia</string>
     <string name="stories_viewer_mute">Silenciar som de fundo</string>
     <string name="stories_viewer_next">Próxima story</string>
     <string name="stories_viewer_not_found_description">Não foi possível carregar esta story. Tente novamente ou feche.</string>
@@ -324,6 +326,10 @@
     <string name="story_media_soundExtraction_a11yHint">Outras pessoas poderão reaproveitar a trilha sonora dos vídeos desta publicação em suas próprias publicações.</string>
     <string name="story_media_soundExtraction_caption">Outras pessoas poderão reaproveitar a trilha sonora dos vídeos desta publicação.</string>
     <string name="story_media_soundExtraction_label">Permitir reaproveitamento do som</string>
+    <string name="story_notification_expired_back">Voltar às notificações</string>
+    <string name="story_notification_expired_cta_create">Criar um story</string>
+    <string name="story_notification_expired_subtitle">Este story não está mais disponível.</string>
+    <string name="story_notification_expired_title">Story expirado</string>
     <string name="story_reader_buffering">Carregando a story</string>
     <string name="story_reader_loading">Carregando story…</string>
     <string name="story_repost_error_forbidden">Este story não pode ser repostado</string>

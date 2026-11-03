@@ -4,11 +4,13 @@ import androidx.room.withTransaction
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.media.MediaAdoption
 import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.model.ApiMessage
@@ -40,6 +42,8 @@ internal class MessageSendCoordinator(
     private val clock: CacheClock,
     /** #13792 — l'accusé d'envoi nourrit le registre des régimes comme tout message servi. */
     private val regime: EndToEndRegimeKeeper? = null,
+    /** #14890 — à l'accusé, le fichier local d'un média envoyé rejoint le cache typé sous son adresse canonique. */
+    private val adoption: MediaAdoption? = null,
 ) {
 
     /**
@@ -55,6 +59,9 @@ internal class MessageSendCoordinator(
      * et le serveur impose son format : `^cid_<uuid v4 minuscule>` aux trois portes (REST, socket,
      * lien anonyme). `OutboxIds.cmid()` produisait un prefixe que les trois rejetaient en 400 —
      * aucun message ne partait d'Android.
+     *
+     * [clientMessageId] : un `cid_` fourni par l'appelant (un partage le DERIVE de son geste, destinataire et rang : stable
+     * au rejeu). Une bulle deja nee sous ce `cid_` n'est ni reecrite ni remise en file ; un `cid_` mal forme est refuse.
      *
      * Le `cmid` reste la cle des mutations qui ne sont PAS des messages (amis, preferences,
      * televersements de media) : il ne voyage pas sur ce fil-ci.
@@ -75,9 +82,13 @@ internal class MessageSendCoordinator(
         location: SharedPlace? = null,
         forwardedAttachmentIds: List<String>? = null,
         sticker: MessageSticker? = null,
+        clientMessageId: String? = null,
     ): String {
+        require(clientMessageId == null || OutboxIds.isValidCid(clientMessageId)) { "clientMessageId must be a cid_ id" }
+        val cid = clientMessageId ?: OutboxIds.cid()
+        // A replay of the same share (reopened sheet, retry after a partial series) finds its bubble: nothing is born twice.
+        if (clientMessageId != null && messageDao.find(cid) != null) return cid
         val ticket = outboxRepository.currentTicket()
-        val cid = OutboxIds.cid()
         val now = clock.nowMillis()
         val wire = MessageEffectsEncoder.encode(effects, Instant.ofEpochMilli(now))
         // A queued send references each prerequisite upload by its cmid until the
@@ -161,13 +172,20 @@ internal class MessageSendCoordinator(
      */
     suspend fun reconcileSent(cmid: String, serverMessage: ApiMessage) {
         val now = clock.nowMillis()
+        val optimisticAttachments = adoption?.let { optimisticAttachmentsOf(cmid) }.orEmpty()
         database.withTransaction {
             messageDao.deleteByIds(listOf(cmid))
             messageDao.upsertAll(listOf(MessageEntityFactory.cached(serverMessage, now)))
             MessageIdReconciliation.recordAck(database, cmid, serverMessage.id, serverMessage.conversationId, now)
         }
         regime?.learnFromServed(listOf(serverMessage))
+        adoption?.adopt(optimisticAttachments, serverMessage.attachments)
     }
+
+    private suspend fun optimisticAttachmentsOf(cmid: String): List<ApiMessageAttachment> =
+        messageDao.find(cmid)?.let { row ->
+            runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload).attachments }.getOrNull()
+        }.orEmpty()
 
     /**
      * The outbox exhausted its retries — surface the bubble as retryable. A send refused because a media's

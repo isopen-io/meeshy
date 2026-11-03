@@ -10,6 +10,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import me.meeshy.app.stories.composer.scene.ComposerSceneInvite
+import me.meeshy.app.stories.composer.scene.sceneInviteShown
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerEditingChrome
 import me.meeshy.sdk.model.composer.ComposerHistoryPlace
@@ -118,7 +120,10 @@ private fun SceneFirstFrame(
             reduced = reduced,
             scene = { modifier ->
                 CompositionLocalProvider(LocalPlacedReframe provides placedReframe(edition.placedBand, placed, viewModel)) {
-                    StoryComposerScene(state, viewModel, comparison, modifier, capture, captureOffered)
+                    Box(modifier) {
+                        StoryComposerScene(state, viewModel, comparison, Modifier.fillMaxSize(), capture, captureOffered)
+                        ComposerSceneInvite(sceneInviteShown(state, armed, panel != null || typing != null || openSheet != null))
+                    }
                 }
             },
             top = { StorySceneTop(state, viewModel, doors.onClose, editing) },

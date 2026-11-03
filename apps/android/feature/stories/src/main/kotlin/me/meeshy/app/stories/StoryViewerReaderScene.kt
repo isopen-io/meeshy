@@ -27,6 +27,8 @@ internal fun StoryViewerReaderScene(
     state: StoryViewerUiState,
     commentsOpen: Boolean,
     viewModel: StoryViewerViewModel,
+    chromeVisible: Boolean = !state.isPaused,
+    fullscreen: Boolean = false,
 ) {
     val uriHandler = LocalUriHandler.current
     val unpaintable = StorySentinelPolicy.currentStoryIsUnpaintable(item?.storyEffects)
@@ -35,7 +37,7 @@ internal fun StoryViewerReaderScene(
     val floorHash = item?.let(StoryReaderFloor::backdropHash) ?: slide.backgroundThumbHash
     StoryReaderBackground(slide)
     StoryReaderSceneCard(
-        state = StoryReaderCardState(chromeVisible = !state.isPaused, commentsOpen = commentsOpen),
+        state = StoryReaderCardState(chromeVisible = chromeVisible, isFullscreenSession = fullscreen, commentsOpen = commentsOpen),
         floor = { expanded -> StorySceneFloor(floorHash, expanded) },
     ) {
         if (unpaintable) {

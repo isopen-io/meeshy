@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.AppThemeMode
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.next
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.preferences.ApplicationPreferencesSyncRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.theme.ThemeStore
 import me.meeshy.sdk.user.UserRepository
@@ -46,6 +47,7 @@ class SettingsViewModel @Inject constructor(
     private val themeStore: ThemeStore,
     private val interfaceLanguageStore: InterfaceLanguageStore,
     private val workManager: WorkManager,
+    private val applicationSync: ApplicationPreferencesSyncRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -81,12 +83,19 @@ class SettingsViewModel @Inject constructor(
 
     /** Persists an explicit appearance choice (light/dark/system). */
     fun setThemeMode(mode: AppThemeMode) {
-        viewModelScope.launch { themeStore.setThemeMode(mode) }
+        viewModelScope.launch { applyTheme(mode) }
     }
 
     /** Advances the appearance to the next mode — the tap-to-cycle gesture. */
     fun cycleTheme() {
-        viewModelScope.launch { themeStore.setThemeMode(themeStore.themeMode.value.next()) }
+        viewModelScope.launch { applyTheme(themeStore.themeMode.value.next()) }
+    }
+
+    /** Peint le thème à l'instant depuis le magasin local, puis le met en file vers le compte (un seul PATCH par rafale). */
+    private suspend fun applyTheme(mode: AppThemeMode) {
+        themeStore.setThemeMode(mode)
+        val cmid = applicationSync.enqueueTheme(mode)
+        if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
     }
 
     /** Persists the interface (UI chrome) language; `null` follows the device locale. */

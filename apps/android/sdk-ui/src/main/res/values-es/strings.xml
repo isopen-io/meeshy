@@ -1,36 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="bubble_message_deleted">Mensaje eliminado</string>
-    <string name="bubble_edited">editado</string>
     <string name="bubble_view_profile">Ver perfil</string>
     <string name="bubble_add_reaction">Añadir una reacción</string>
     <string name="bubble_failed_retry">No enviado — toca para reintentar</string>
-    <string name="bubble_forwarded">Reenviado</string>
-    <string name="bubble_forwarded_from">Reenviado de %1$s</string>
     <string name="bubble_starred">Guardado</string>
-    <string name="bubble_translated">Traducido</string>
-    <string name="bubble_status_pending">Pendiente</string>
-    <string name="bubble_status_queued">En cola</string>
-    <string name="bubble_status_sent">Enviado</string>
-    <string name="bubble_status_delivered">Entregado</string>
-    <string name="bubble_status_read">Leído</string>
-    <string name="bubble_status_failed">Fallido</string>
     <string name="avatar_fallback">Avatar</string>
-    <string name="bubble_reply_photo">Foto</string>
     <string name="bubble_reply_attachment">Adjunto</string>
-    <string name="bubble_reply_story">Historia</string>
-    <string name="bubble_story_reactions">%1$d reacciones</string>
-    <string name="bubble_story_comments">%1$d comentarios</string>
-    <string name="bubble_story_shares">%1$d veces compartido</string>
-    <string name="bubble_image_description">Imagen</string>
-    <string name="bubble_attachment_file_fallback">Archivo</string>
     <string name="bubble_file_open">Abrir archivo</string>
-    <string name="bubble_location_shared">Ubicación compartida</string>
-    <string name="bubble_location_open">Abrir en mapas</string>
-    <string name="live_location_sharing_by">%1$s está compartiendo su ubicación</string>
     <string name="live_location_remaining">%1$s restantes</string>
-    <string name="live_location_stop">Detener</string>
-    <string name="live_location_duration_title">Duración del uso compartido</string>
     <string name="live_location_duration_15m">15 min</string>
     <string name="live_location_duration_30m">30 min</string>
     <string name="live_location_duration_1h">1 hora</string>
@@ -41,13 +18,9 @@
     <string name="bubble_file_size_kb">%1$s KB</string>
     <string name="bubble_file_size_mb">%1$s MB</string>
     <string name="bubble_blur_tap_to_reveal">Toca para revelar</string>
-    <string name="bubble_blur_view_once">Ver una vez</string>
     <string name="bubble_blur_reveal_action">Revelar mensaje oculto</string>
     <string name="bubble_burned">Visto y eliminado</string>
     <string name="bubble_burned_a11y">Mensaje visto y eliminado</string>
-    <string name="bubble_hidden_images">%1$d imágenes más</string>
-    <string name="emoji_picker_title">Reacciones</string>
-    <string name="emoji_picker_expand">Más emojis</string>
     <string name="emoji_react_with">Reaccionar con %1$s</string>
     <string name="language_strip_select">Leer en %1$s</string>
     <string name="time_relative_now">ahora</string>
@@ -66,13 +39,8 @@
     <string name="time_relative_long_weeks">hace %1$d sem</string>
     <string name="time_relative_long_months">hace %1$d meses</string>
     <string name="bubble_a11y_unknown_sender">Remitente desconocido</string>
-    <string name="bubble_a11y_reply_to">Respuesta a %1$s</string>
     <string name="bubble_a11y_reply_to_excerpt">Respuesta a %1$s: %2$s</string>
-    <string name="bubble_a11y_images">%1$d imágenes</string>
-    <string name="bubble_a11y_audios">%1$d mensajes de voz</string>
-    <string name="bubble_a11y_location">Ubicación compartida</string>
     <string name="bubble_a11y_file">Archivo %1$s</string>
     <string name="bubble_a11y_pinned">Fijado</string>
     <string name="bubble_a11y_ephemeral">Mensaje autodestructivo</string>
-    <string name="bubble_a11y_reactions">Reacciones: %1$s</string>
 </resources>

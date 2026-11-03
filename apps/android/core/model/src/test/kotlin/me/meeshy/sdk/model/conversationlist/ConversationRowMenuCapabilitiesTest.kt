@@ -271,4 +271,39 @@ class ConversationRowMenuCapabilitiesTest {
         assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), null).obsolete).isFalse()
         assertThat(caps(conversation(type = "group", currentUserRole = "member"), user()).obsolete).isFalse()
     }
+
+    // ── Appeler (#14897) ──
+
+    @Test
+    fun `a direct with a known peer offers the call, audio and video`() {
+        val caps = caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), user())
+        assertThat(caps.call).isTrue()
+        assertThat(caps.videoCall).isTrue()
+    }
+
+    @Test
+    fun `a group never offers the call from the menu, it would ring no single peer`() {
+        val caps = caps(conversation(type = "group", currentUserRole = "creator"), user())
+        assertThat(caps.call).isFalse()
+        assertThat(caps.videoCall).isFalse()
+    }
+
+    @Test
+    fun `a direct with oneself or without peer offers no call`() {
+        assertThat(caps(conversation(type = "direct", peerUserId = "me"), user()).call).isFalse()
+        assertThat(caps(conversation(type = "direct"), user()).call).isFalse()
+    }
+
+    @Test
+    fun `an ended direct and an unloaded reader offer no call`() {
+        assertThat(caps(conversation(type = "direct", peerUserId = "peer", isActive = false), user()).call).isFalse()
+        assertThat(caps(conversation(type = "direct", peerUserId = "peer"), null).call).isFalse()
+    }
+
+    @Test
+    fun `only an admin or more of an open group deletes for everyone`() {
+        assertThat(caps(conversation(currentUserRole = "admin"), user()).deleteForAll).isTrue()
+        assertThat(caps(conversation(currentUserRole = "moderator"), user()).deleteForAll).isFalse()
+        assertThat(caps(conversation(type = "direct", currentUserRole = "creator", peerUserId = "peer"), user()).deleteForAll).isFalse()
+    }
 }

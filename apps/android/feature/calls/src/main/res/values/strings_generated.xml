@@ -162,6 +162,7 @@
     <string name="call_signal_fair">Fair signal</string>
     <string name="call_signal_lost">Very weak signal</string>
     <string name="call_signal_poor">Weak signal</string>
+    <string name="call_starter_busy">A call is already in progress</string>
     <string name="call_transcript_participant">Participant</string>
     <string name="call_transcript_show_original">Show original text</string>
     <string name="call_transcript_show_translated">Show translation</string>
@@ -169,4 +170,5 @@
     <string name="call_zoom_cycle_hint">Tap to switch to the next zoom factor</string>
     <string name="call_zoom_hint">Swipe up or down to zoom. On screen, pinch your image; double-tap to return to 1×</string>
     <string name="call_zoom_label">My camera zoom</string>
+    <string name="permission_microphone_denied">Microphone denied — tap to open Settings</string>
 </resources>

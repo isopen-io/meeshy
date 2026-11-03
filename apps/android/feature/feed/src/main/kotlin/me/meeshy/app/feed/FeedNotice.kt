@@ -29,6 +29,7 @@ enum class FeedNotice(val isError: Boolean) {
     PUBLISHED(false),
     PUBLISH_QUEUED(false),
     TRANSLATION_FAILED(true),
+    UNBOOKMARKED(false),
 }
 
 /** Le retour que le fil montre pour une publication que la file de l'appareil a prise, ou n'a pas pu prendre (#13863). */

@@ -164,7 +164,7 @@ private const val AVATAR_DP = 30
 private fun openConversationIntent(context: Context, conversationId: String): Intent =
     Intent(
         Intent.ACTION_VIEW,
-        Uri.parse("meeshy://conversation/$conversationId"),
+        Uri.parse(WidgetDeepLink.conversation(conversationId)),
         context,
         MainActivity::class.java,
     )
