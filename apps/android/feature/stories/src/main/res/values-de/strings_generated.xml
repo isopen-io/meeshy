@@ -104,6 +104,7 @@
     <string name="composer_slide_rail_delete">Szene %1$d löschen</string>
     <string name="composer_slide_rail_position">Szene %1$d von %2$d</string>
     <string name="composer_socle_audience">Publikum</string>
+    <string name="composer_socle_blocked_audience">Wähle mindestens eine Person aus, um zu veröffentlichen</string>
     <string name="composer_socle_publish">Veröffentlichen</string>
     <string name="composer_sound_background_a11y">Hintergrundton</string>
     <string name="composer_text_frame_cloud">Wolke</string>
@@ -260,7 +261,10 @@
     <string name="stories_tray_add_story">Story hinzufügen</string>
     <string name="stories_tray_manage">Meine Storys verwalten</string>
     <string name="stories_tray_view_my_story">Meine Story ansehen</string>
+    <string name="stories_viewer_a11y_background_audio">Hintergrundaudio</string>
     <string name="stories_viewer_close">Schließen</string>
+    <string name="stories_viewer_fullscreen_enter">Vollbild</string>
+    <string name="stories_viewer_fullscreen_exit">Vollbild verlassen</string>
     <string name="stories_viewer_mute">Hintergrundton stummschalten</string>
     <string name="stories_viewer_next">Nächste Story</string>
     <string name="stories_viewer_not_found_description">Diese Story konnte nicht geladen werden. Erneut versuchen oder schließen.</string>
@@ -288,6 +292,8 @@
     <string name="story_canvas_action_edit">Bearbeiten</string>
     <string name="story_canvas_action_leaveScene">Aus der Szene entfernen</string>
     <string name="story_canvas_action_sendBackward">Nach hinten</string>
+    <string name="story_caption_scroll_to_top">Zum Textanfang zurück</string>
+    <string name="story_caption_scroll_to_top_hint">Scrollt die Beschreibung bis zum ersten Wort</string>
     <string name="story_composer_cancel">Abbrechen</string>
     <string name="story_composer_edit_slide_background">Hintergrund bearbeiten</string>
     <string name="story_composer_fab_badge">%1$d aktive(s) Element(e)</string>
@@ -387,4 +393,5 @@
     <string name="story_tray_a11y_changeMood">Meine Stimmung ändern</string>
     <string name="story_tray_menu_profile">Profil ansehen</string>
     <string name="story_tray_menu_viewStories">Storys ansehen</string>
+    <string name="story_viewer_transcript_title">Transkript</string>
 </resources>

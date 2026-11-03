@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import me.meeshy.sdk.model.story.StoryTranscriptState
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -41,12 +42,18 @@ import me.meeshy.ui.theme.MeeshySpacing
 internal class StoryViewerChromeState {
     var showViewers by mutableStateOf(false)
     var showComments by mutableStateOf(false)
+    /** Le commentaire visé par une notification (iOS `targetCommentId`), et son parent quand c'est une réponse. */
+    var targetCommentId by mutableStateOf<String?>(null)
+    var targetParentCommentId by mutableStateOf<String?>(null)
     var showReply by mutableStateOf(false)
     var showSendTo by mutableStateOf(false)
     var showOptions by mutableStateOf(false)
     var showReportDialog by mutableStateOf(false)
     var showDeleteDialog by mutableStateOf(false)
     var showRemoveDialog by mutableStateOf(false)
+    /** La légende dépliée et la transcription demandée : la story boucle, la scène s'efface (iOS `isCaptionExpanded`). */
+    var captionExpanded by mutableStateOf(false)
+    var transcript by mutableStateOf(StoryTranscriptState())
 
     val sheetOpen: Boolean get() = showViewers || showComments || showReply || showSendTo
     val dialogOpen: Boolean get() = showReportDialog || showDeleteDialog || showRemoveDialog
@@ -132,14 +139,6 @@ internal fun StoryViewerSheetsHost(
                 accentHex = accent,
             ),
             onDismiss = { chrome.showReply = false },
-        )
-    }
-
-    if (chrome.showComments && commentThread != null) {
-        StoryCommentsThreadSheet(
-            thread = commentThread,
-            serverCommentCount = currentItem?.commentCount ?: 0,
-            onDismiss = { chrome.showComments = false },
         )
     }
 }

@@ -1,18 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Source unique des libellés de média (lot media-vocabulaire-partage). -->
-    <string name="media_label_photo">Foto</string>
-    <string name="media_label_video">Vídeo</string>
-    <string name="media_label_audio">Audio</string>
-    <string name="media_label_file">Archivo</string>
-    <string name="media_label_location">Ubicación</string>
-    <string name="media_summary_photo">📷 Foto</string>
-    <string name="media_summary_video">🎥 Vídeo</string>
-    <string name="media_summary_voice">🎙️ Mensaje de voz</string>
-    <string name="media_summary_file">📎 Archivo</string>
-    <string name="media_summary_location">📍 Ubicación</string>
-    <string name="media_voice_message">Mensaje de voz</string>
-    <string name="media_voice_recording">Mensaje de voz (%1$s)</string>
     <plurals name="media_duration_minutes">
         <item quantity="one">%1$d minuto</item>
         <item quantity="many">%1$d minutos</item>

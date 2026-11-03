@@ -28,7 +28,7 @@ class SceneCanvasRobolectricTest {
         SceneRenderPlanner.plan(lists, time, SceneRenderMode.PLAY, SceneReaderLanguages.NONE)
 
     @Test
-    fun `un sticker emoji et un texte sont peints, un lieu ne peint rien`() {
+    fun `un sticker emoji, un texte et un lieu sont peints`() {
         val lists = SceneLists(
             texts = listOf(StoryTextObject(id = "t", text = "Salut")),
             stickers = listOf(StorySticker(id = "s", emoji = "🔥")),
@@ -37,6 +37,7 @@ class SceneCanvasRobolectricTest {
         compose.setContent { SceneCanvas(items = plan(lists)) }
         compose.onAllNodesWithTag(SCENE_STICKER_TAG).assertCountEquals(1)
         compose.onAllNodesWithTag(SCENE_TEXT_TAG).assertCountEquals(1)
+        compose.onAllNodesWithTag(SCENE_LOCATION_TAG).assertCountEquals(1)
     }
 
     @Test

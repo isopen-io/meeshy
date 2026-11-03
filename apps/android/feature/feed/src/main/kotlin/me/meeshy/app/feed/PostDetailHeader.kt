@@ -1,13 +1,11 @@
 package me.meeshy.app.feed
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -67,8 +65,8 @@ internal fun PostDetailAuthorChip(post: FeedPostPresentation, onOpenProfile: ((S
                         Text(text = it, style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     }
                     if (reach.views != null && reach.impressions != null) {
-                        ReachFigure(Icons.Filled.Visibility, reach.views)
-                        ReachFigure(Icons.Filled.BarChart, reach.impressions)
+                        ReachFigure(MeeshyIcons.EyeFilled, reach.views)
+                        ReachFigure(MeeshyIcons.ChartBar, reach.impressions)
                     }
                 }
             }
