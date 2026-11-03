@@ -11,6 +11,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -26,6 +27,8 @@ import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.component.video.ReelPlayerHandle
 import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.story.canvas.SceneLookChain
+import me.meeshy.ui.story.canvas.SceneRootTransitionSpec
+import me.meeshy.ui.story.canvas.sceneRootTransition
 import me.meeshy.ui.theme.hexColor
 
 private fun androidx.compose.ui.graphics.GraphicsLayerScope.frame(bg: StoryBackgroundObjectTransform) {
@@ -210,30 +213,42 @@ fun StoryScenePlayer(
     LaunchedEffect(rewindWhenIdle) {
         if (rewindWhenIdle) progress.snapTo(0f)
     }
+    var started by remember(slide.id) { mutableStateOf(false) }
+    if (playing) started = true
+    val totalSeconds = durationMs / 1000.0
+    val rootTransition = if (resting || !started) null else SceneRootTransitionSpec(
+        opening = slide.opening,
+        closing = slide.closing,
+        totalDurationSeconds = totalSeconds,
+        restartKey = slide.id to lap,
+        playing = playing,
+    )
     Box(modifier.fillMaxSize().background(if (floor == SceneFloor.BLACK) Color.Black else hexColor(slide.accentHex))) {
-        StorySceneBackground(
-            slide = slide,
-            playing = playing,
-            muted = muted,
-            loads = loads,
-            rewindWhenInactive = rewindWhenIdle,
-            onAudioFocusLost = onAudioFocusLost,
-            onBackgroundPlayer = onBackgroundPlayer,
-            stillFrame = resting,
-            floor = floor,
-        )
-        if (loads) {
-            StorySceneOverlays(
+        Box(Modifier.fillMaxSize().sceneRootTransition(rootTransition) { progress.value * totalSeconds }) {
+            StorySceneBackground(
                 slide = slide,
-                progress = progress,
-                slideDurationMs = durationMs,
                 playing = playing,
                 muted = muted,
+                loads = loads,
                 rewindWhenInactive = rewindWhenIdle,
                 onAudioFocusLost = onAudioFocusLost,
-                players = !resting,
+                onBackgroundPlayer = onBackgroundPlayer,
+                stillFrame = resting,
+                floor = floor,
             )
-            if (!resting) StorySceneAudio(slide = slide, playing = playing, muted = muted, rewindWhenInactive = rewindWhenIdle, lap = lap)
+            if (loads) {
+                StorySceneOverlays(
+                    slide = slide,
+                    progress = progress,
+                    slideDurationMs = durationMs,
+                    playing = playing,
+                    muted = muted,
+                    rewindWhenInactive = rewindWhenIdle,
+                    onAudioFocusLost = onAudioFocusLost,
+                    players = !resting,
+                )
+                if (!resting) StorySceneAudio(slide = slide, playing = playing, muted = muted, rewindWhenInactive = rewindWhenIdle, lap = lap)
+            }
         }
     }
 }

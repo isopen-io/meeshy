@@ -76,6 +76,8 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
             foregroundAudioUrl = foregroundTrack?.url,
             foregroundAudioWindow = foregroundTrack?.window,
             autoAdvanceMillis = StorySlideDuration.computeMillis(storyEffects),
+            opening = storyEffects?.opening,
+            closing = storyEffects?.closing,
             background = storyEffects?.background
                 ?.takeIf { it.isNotBlank() }
                 ?.let { StoryBackgroundValue.parse(it) },

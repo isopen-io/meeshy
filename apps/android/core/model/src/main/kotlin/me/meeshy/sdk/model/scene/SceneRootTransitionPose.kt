@@ -77,6 +77,25 @@ public object SceneRootTransitionPose {
         return if (!exit.isNeutral) exit else opening(opening, elapsed)
     }
 
+    /**
+     * La pose d'une slide en LECTURE : l'ouverture suit son propre temps écoulé [openingElapsed] (elle s'arrête quand la
+     * slide est en pause), la fermeture suit la tête de lecture [playbackSeconds]. Sous [reduceMotion] tout effet choisi
+     * devient un fondu simple (aucun zoom, glissement ni masque) ; sans effet choisi, rien ne s'anime.
+     */
+    public fun poseAt(
+        opening: StoryTransitionEffect?,
+        closing: StoryTransitionEffect?,
+        totalDuration: Double,
+        openingElapsed: Double,
+        playbackSeconds: Double,
+        reduceMotion: Boolean,
+    ): SceneRootPose {
+        val inEffect = if (reduceMotion && opening != null) StoryTransitionEffect.FADE else opening
+        val outEffect = if (reduceMotion && closing != null) StoryTransitionEffect.FADE else closing
+        val exit = closing(outEffect, totalDuration, playbackSeconds)
+        return if (!exit.isNeutral) exit else opening(inEffect, openingElapsed)
+    }
+
     /** Rayon (même unité que [width]/[height]) du cercle de révélation : 1 pt à 0, demi-diagonale à 1. */
     public fun revealRadius(coverage: Double, width: Double, height: Double): Double {
         val maxRadius = hypot(width, height) / 2.0
