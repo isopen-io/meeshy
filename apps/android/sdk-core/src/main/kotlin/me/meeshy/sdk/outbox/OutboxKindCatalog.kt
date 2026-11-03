@@ -60,6 +60,7 @@ public object OutboxKindCatalog {
         OutboxKind.CREATE_POST,
         OutboxKind.CREATE_COMMENT,
         OutboxKind.SEND_E2EE_MESSAGE,
+        OutboxKind.REPOST_POST,
         -> true
     }
 
@@ -96,6 +97,7 @@ public object OutboxKindCatalog {
         OutboxKind.UPLOAD_MEDIA,
         OutboxKind.CREATE_POST,
         OutboxKind.CREATE_COMMENT,
+        OutboxKind.REPOST_POST,
         -> false
     }
 
