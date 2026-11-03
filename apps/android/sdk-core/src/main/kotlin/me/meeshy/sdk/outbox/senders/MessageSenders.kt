@@ -16,6 +16,7 @@ import me.meeshy.sdk.net.api.ConsumeAfterReadRequest
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.notification.FirstMessageAcceptedSignal
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
 import me.meeshy.sdk.outbox.OutboxKindKey
@@ -40,6 +41,7 @@ public class SendMessageHandler @Inject constructor(
     private val messageRepository: MessageRepository,
     private val json: Json,
     private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
+    private val firstMessageAccepted: FirstMessageAcceptedSignal = FirstMessageAcceptedSignal(),
 ) : OutboxKindHandler {
 
     override val payloadGraft: OutboxPayloadGraft = MessageMediaWriteBack::graft
@@ -49,6 +51,7 @@ public class SendMessageHandler @Inject constructor(
             when (val result = apiCall { messageApi.send(row.targetId, request) }) {
                 is NetworkResult.Success -> {
                     messageRepository.reconcileSent(row.cmid, result.data)
+                    firstMessageAccepted.notifyAccepted()
                     SendResult.Success
                 }
                 is NetworkResult.Failure -> PlaintextRefusal.of(result, row.targetId, ledger) ?: SendFailureClassifier.classify(result.error)
