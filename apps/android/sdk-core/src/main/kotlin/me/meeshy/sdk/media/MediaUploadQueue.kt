@@ -68,9 +68,9 @@ class MediaUploadQueue @Inject constructor(
         blobStore.put(cmid, item, ticket)
         try {
             enqueueRow(cmid, context, conversationId, ticket)
-        } catch (closed: AccountClosedException) {
+        } catch (failure: Exception) {
             withContext(NonCancellable) { blobStore.remove(cmid) }
-            throw closed
+            throw failure
         }
         return cmid
     }

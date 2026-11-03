@@ -67,6 +67,16 @@ public object StoryMediaLookMapping {
         return next.normalized
     }
 
+    /**
+     * Ce qu'une VIDÉO peint de son look (#13841) : le filtre et le cadre, gravés par le GPU ; l'effet de visage, qui ne
+     * se suit pas image par image, n'est jamais peint sur une vidéo.
+     */
+    public fun videoLook(look: StoryMediaLook?): ComposerPhotoLook = photoLook(look).copy(effect = CallFaceEffect.NONE)
+
+    /** Le look change-t-il les images d'une vidéo : un filtre qui gradue, un cadre ou un cadrage. */
+    public fun videoPaints(look: StoryMediaLook?): Boolean =
+        ComposerVideoLook.paints(videoLook(look)) || framingCrop(look?.framing) != null
+
     /** Le look change-t-il les pixels du média ? */
     public fun paints(look: StoryMediaLook?): Boolean =
         !photoLook(look).isUntouched || framingCrop(look?.framing) != null

@@ -1,6 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="about_app_name">Meeshy</string>
+    <string name="about_copy">نسخ</string>
     <string name="about_copyright">‏2024-2026 Meeshy. جميع الحقوق محفوظة.</string>
     <string name="about_description_body">Meeshy منصة مراسلة فورية عالية الأداء مع ترجمة متعددة اللغات واستنساخ صوتي وتشفير من طرف إلى طرف.</string>
     <string name="about_feature_cloud_sync">المزامنة السحابية</string>
@@ -8,11 +9,19 @@
     <string name="about_feature_themes">سمات قابلة للتخصيص</string>
     <string name="about_feature_translation">ترجمة فورية</string>
     <string name="about_feature_voice_cloning">استنساخ الصوت</string>
+    <string name="about_info_media_tier">ملف الوسائط</string>
     <string name="about_info_platform">المنصة</string>
     <string name="about_info_sdk_version">إصدار SDK</string>
+    <string name="about_link_about">عن ميشي</string>
+    <string name="about_link_contact">اتصل بنا</string>
     <string name="about_link_github">GitHub</string>
+    <string name="about_link_partners">الشركاء</string>
     <string name="about_link_twitter">تويتر / إكس</string>
     <string name="about_link_website">الموقع الإلكتروني</string>
+    <string name="about_media_tier_high">عالٍ</string>
+    <string name="about_media_tier_low">أساسي</string>
+    <string name="about_media_tier_mid">متوسط</string>
+    <string name="about_media_tier_pro">احترافي</string>
     <string name="about_section_description">الوصف</string>
     <string name="about_section_features">الميزات</string>
     <string name="about_section_informations">معلومات</string>
@@ -290,6 +299,8 @@
     <string name="settings_transcription_engine">محرك النسخ النصي</string>
     <string name="settings_transcription_engine_a11y">محرك النسخ النصي</string>
     <string name="settings_version_label">الإصدار</string>
+    <string name="support_a11y_opens">يفتح %1$s</string>
+    <string name="support_help_rate">تقييم التطبيق</string>
     <string name="support_info_build">الإصدار</string>
     <string name="support_info_platform">المنصة</string>
     <string name="support_info_version">الإصدار</string>

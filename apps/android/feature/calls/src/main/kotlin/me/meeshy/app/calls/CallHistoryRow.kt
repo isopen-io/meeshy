@@ -22,6 +22,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.ui.semantics.Role
+import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.ui.profile.LocalProfileSheetOpener
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.foundation.background
@@ -125,13 +129,35 @@ private fun CallHistoryRowContent(
             modifier = Modifier.weight(1f).clickable(onClick = onOpen).padding(vertical = MeeshySpacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MeeshyAvatar(
-                name = name,
-                size = 48.dp,
-                containerColor = hexColor(DynamicColorGenerator.colorForName(name), MeeshyPalette.Indigo500),
-                presence = presence,
-                imageUrl = record.avatarUrl,
-            )
+            val peer = record.peer?.takeIf { it.userId.isNotBlank() }
+            val profileOpener = LocalProfileSheetOpener.current
+            val openProfileLabel = stringResource(R.string.call_history_open_profile_a11y, name)
+            Box(
+                modifier = if (peer == null) {
+                    Modifier
+                } else {
+                    Modifier
+                        .minimumInteractiveComponentSize()
+                        .clickable(onClickLabel = openProfileLabel, role = Role.Button) {
+                            profileOpener.open(
+                                ProfileSheetUser(
+                                    userId = peer.userId,
+                                    username = peer.username,
+                                    displayName = peer.displayName,
+                                    avatarUrl = peer.avatar,
+                                ),
+                            )
+                        }
+                },
+            ) {
+                MeeshyAvatar(
+                    name = name,
+                    size = 48.dp,
+                    containerColor = hexColor(DynamicColorGenerator.colorForName(name), MeeshyPalette.Indigo500),
+                    presence = presence,
+                    imageUrl = record.avatarUrl,
+                )
+            }
             Spacer(Modifier.width(MeeshySpacing.md))
             Column(Modifier.weight(1f)) {
                 Text(

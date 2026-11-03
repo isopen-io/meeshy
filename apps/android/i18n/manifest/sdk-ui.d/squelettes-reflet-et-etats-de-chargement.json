@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "skeleton.feed.post.loading", "androidName": "skeleton_feed_post_loading", "status": "adopted" },
+        { "catalog": "app", "iosKey": "skeleton.link_row.loading", "androidName": "skeleton_link_row_loading", "status": "adopted" },
+        { "catalog": "app", "iosKey": "skeleton.profile.loading", "androidName": "skeleton_profile_loading", "status": "adopted" },
+        { "catalog": "app", "iosKey": "skeleton.stories.loading", "androidName": "skeleton_stories_loading", "status": "adopted" }
+      ]
+    }
+  }
+}

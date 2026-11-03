@@ -94,6 +94,7 @@ class FeedViewModelTest {
     private fun viewModel(hasMore: Boolean = true): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         every { repository.feedHasMore } returns MutableStateFlow(hasMore)
+        every { repository.gestureRefusals } returns MutableSharedFlow()
         every { socialSocket.postCreated } returns postCreated
         every { socialSocket.postDeleted } returns postDeleted
         every { socialSocket.postLiked } returns postLiked
@@ -464,6 +465,7 @@ class FeedViewModelTest {
     ): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
         every { repository.feedHasMore } returns MutableStateFlow(true)
+        every { repository.gestureRefusals } returns MutableSharedFlow()
         every { repository.feedStream(any(), any()) } returns stream
         every { socialSocket.postCreated } returns postCreated
         every { socialSocket.postDeleted } returns postDeleted

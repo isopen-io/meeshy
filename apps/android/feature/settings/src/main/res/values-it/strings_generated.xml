@@ -1,6 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="about_app_name">Meeshy</string>
+    <string name="about_copy">Copia</string>
     <string name="about_copyright">2024-2026 Meeshy. Tutti i diritti riservati.</string>
     <string name="about_description_body">Meeshy è una piattaforma di messaggistica in tempo reale ad alte prestazioni con traduzione multilingue, clonazione vocale e crittografia end-to-end.</string>
     <string name="about_feature_cloud_sync">Sincronizzazione cloud</string>
@@ -8,11 +9,19 @@
     <string name="about_feature_themes">Temi personalizzabili</string>
     <string name="about_feature_translation">Traduzione in tempo reale</string>
     <string name="about_feature_voice_cloning">Clonazione vocale</string>
+    <string name="about_info_media_tier">Profilo multimediale</string>
     <string name="about_info_platform">Piattaforma</string>
     <string name="about_info_sdk_version">Versione SDK</string>
+    <string name="about_link_about">Informazioni su Meeshy</string>
+    <string name="about_link_contact">Contatti</string>
     <string name="about_link_github">GitHub</string>
+    <string name="about_link_partners">Partner</string>
     <string name="about_link_twitter">Twitter / X</string>
     <string name="about_link_website">Sito web</string>
+    <string name="about_media_tier_high">Alto</string>
+    <string name="about_media_tier_low">Base</string>
+    <string name="about_media_tier_mid">Intermedio</string>
+    <string name="about_media_tier_pro">Pro</string>
     <string name="about_section_description">Descrizione</string>
     <string name="about_section_features">Funzionalità</string>
     <string name="about_section_informations">Informazioni</string>
@@ -290,6 +299,8 @@
     <string name="settings_transcription_engine">Motore di trascrizione</string>
     <string name="settings_transcription_engine_a11y">Motore di trascrizione</string>
     <string name="settings_version_label">Versione</string>
+    <string name="support_a11y_opens">Apre %1$s</string>
+    <string name="support_help_rate">Valuta l\'app</string>
     <string name="support_info_build">Build</string>
     <string name="support_info_platform">Piattaforma</string>
     <string name="support_info_version">Versione</string>
