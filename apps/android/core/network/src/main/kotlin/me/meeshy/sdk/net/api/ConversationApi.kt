@@ -51,6 +51,17 @@ data class ConversationPreferencesUpdate(
 )
 
 /**
+ * Titre, description et avatar d'une conversation (`PUT /conversations/{id}`, #15179) : un champ `null` est omis, donc
+ * laissé tel quel côté serveur — c'est ce qui rend la fusion champ par champ de la file sans perte.
+ */
+@Serializable
+data class UpdateConversationDetailsRequest(
+    val title: String? = null,
+    val description: String? = null,
+    val avatar: String? = null,
+)
+
+/**
  * Body of `PATCH /conversations/{id}/participants/{userId}/role`. The gateway
  * enumerates `admin | moderator | member` and lowercases whatever it receives.
  */
@@ -191,6 +202,13 @@ interface ConversationApi {
     suspend fun updateSettings(
         @Path("id") id: String,
         @Body body: UpdateConversationSettingsRequest,
+    ): ApiResponse<UpdateConversationResponse>
+
+    /** Titre, description et avatar (même route que [updateSettings], autre sous-ensemble de champs). */
+    @PUT("conversations/{id}")
+    suspend fun updateDetails(
+        @Path("id") id: String,
+        @Body body: UpdateConversationDetailsRequest,
     ): ApiResponse<UpdateConversationResponse>
 
     /** Leaves the conversation (gateway `routes/conversations/leave.ts`) — irreversible for the

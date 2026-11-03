@@ -153,3 +153,30 @@ class OutboxLaneMapTest {
         assertThat(OutboxLocalTargets.isRouteAddressed(OutboxKind.CREATE_POST)).isFalse()
     }
 }
+
+class OutboxConversationKindsLaneTest {
+
+    @Test
+    fun `create and update conversation share the conversation lane`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.CREATE_CONVERSATION))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION))
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_CONVERSATION))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION))
+    }
+
+    @Test
+    fun `a generic settings action drains on the settings lane`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.SETTINGS_ACTION))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS))
+    }
+
+    @Test
+    fun `every kind has a lane and every shared lane is drained`() {
+        OutboxKind.entries.forEach { kind ->
+            val assignment = OutboxLaneMap.assignmentFor(kind)
+            if (assignment is OutboxLaneAssignment.Shared) {
+                assertThat(OutboxLaneMap.sharedDrainLanes).contains(assignment.lane)
+            }
+        }
+    }
+}
