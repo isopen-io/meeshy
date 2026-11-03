@@ -8,7 +8,7 @@ import org.junit.Test
 class GameRevisionMergeTest {
 
     private val readable = GameBlockFixtures.block()
-    private fun cached(revision: Long?) = GameState(revision, checkNotNull(GameBlockParser.parse(readable)))
+    private fun cached(revision: Long?) = GameRevisionState(revision, checkNotNull(GameBlockParser.parse(readable)))
 
     @Test fun `un etat plus ancien que le cache est ignore`() {
         val outcome = GameRevisionMerge.merge(cached(100), incomingRevision = 99, incomingBlock = readable)
