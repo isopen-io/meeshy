@@ -1,5 +1,20 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="activation_close">Schließen</string>
+    <string name="activation_complete">Dein Konto ist bestätigt. Danke!</string>
+    <string name="activation_email_done">E-Mail bestätigt ✓</string>
+    <string name="activation_email_label">Bestätige deine E-Mail-Adresse</string>
+    <string name="activation_email_send">Code erhalten</string>
+    <string name="activation_email_sending">Wird gesendet…</string>
+    <string name="activation_email_sent">Code an %1$s gesendet. Gib ihn unten ein.</string>
+    <string name="activation_invite_days_left">Du hast noch %1$d Tage, um dein Konto zu bestätigen. Danach verlangt die Anmeldung einen Code.</string>
+    <string name="activation_invite_days_left_one">Du hast noch 1 Tag, um dein Konto zu bestätigen. Danach verlangt die Anmeldung einen Code.</string>
+    <string name="activation_invite_lead">Bestätige dein Konto, um es ohne Unterbrechung weiter zu nutzen.</string>
+    <string name="activation_invite_title">Bestätige dein Konto</string>
+    <string name="activation_later">Später</string>
+    <string name="activation_phone_add">Meine Nummer hinzufügen</string>
+    <string name="activation_phone_done">Nummer bestätigt ✓</string>
+    <string name="activation_phone_label">Füge eine Telefonnummer hinzu, um dein Konto zu schützen und wiederherzustellen</string>
     <string name="ageGate_body">Dieses Konto kann Meeshy noch nicht nutzen. Du kannst mit 13 dabei sein.</string>
     <string name="arrival_celebration_lead">Deine Unterhaltungen werden vorbereitet…</string>
     <string name="arrival_celebration_skip">Weiter</string>
