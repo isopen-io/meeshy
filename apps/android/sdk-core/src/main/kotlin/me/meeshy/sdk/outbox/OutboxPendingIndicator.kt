@@ -21,7 +21,7 @@ public class OutboxPendingIndicator @Inject constructor(
 ) : OfflineQueuePillProviding {
 
     /** Les lignes que l'indicateur « Synchronisation… » compte (en attente ou en vol, hors genres d'arrière-plan). */
-    public val pendingCount: Flow<Int> = outbox.observeSyncIndicatorCount()
+    public val pendingCount: Flow<Int> = outbox.observeSyncIndicatorCount().distinctUntilChanged()
 
     /** Vrai dès 80 % du plafond de la file (400 sur 500) : l'UI prévient avant qu'un enfilage soit refusé. */
     public val isNearCapacity: Flow<Boolean> =
