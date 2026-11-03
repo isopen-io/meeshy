@@ -60,6 +60,9 @@ internal class MessageSendCoordinator(
      * lien anonyme). `OutboxIds.cmid()` produisait un prefixe que les trois rejetaient en 400 —
      * aucun message ne partait d'Android.
      *
+     * [clientMessageId] : un `cid_` fourni par l'appelant (un partage le DERIVE de son geste, destinataire et rang : stable
+     * au rejeu). Une bulle deja nee sous ce `cid_` n'est ni reecrite ni remise en file ; un `cid_` mal forme est refuse.
+     *
      * Le `cmid` reste la cle des mutations qui ne sont PAS des messages (amis, preferences,
      * televersements de media) : il ne voyage pas sur ce fil-ci.
      */
@@ -79,9 +82,13 @@ internal class MessageSendCoordinator(
         location: SharedPlace? = null,
         forwardedAttachmentIds: List<String>? = null,
         sticker: MessageSticker? = null,
+        clientMessageId: String? = null,
     ): String {
+        require(clientMessageId == null || OutboxIds.isValidCid(clientMessageId)) { "clientMessageId must be a cid_ id" }
+        val cid = clientMessageId ?: OutboxIds.cid()
+        // A replay of the same share (reopened sheet, retry after a partial series) finds its bubble: nothing is born twice.
+        if (clientMessageId != null && messageDao.find(cid) != null) return cid
         val ticket = outboxRepository.currentTicket()
-        val cid = OutboxIds.cid()
         val now = clock.nowMillis()
         val wire = MessageEffectsEncoder.encode(effects, Instant.ofEpochMilli(now))
         // A queued send references each prerequisite upload by its cmid until the

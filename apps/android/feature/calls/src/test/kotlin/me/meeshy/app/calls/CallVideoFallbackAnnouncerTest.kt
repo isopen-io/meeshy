@@ -44,4 +44,15 @@ class CallVideoFallbackAnnouncerTest {
         verify(exactly = 0) { rig.haptics.play(any()) }
         assertThat(rig.toasts.post(CallToast("Camera: access denied"))).isTrue()
     }
+
+    @Test
+    fun `a device too hot warns without offering the settings`() = runTest {
+        val rig = Rig()
+
+        rig.announcer.announce(CallVideoFallback.DeviceTooHot)
+
+        val toast = rig.toasts.toasts.first()
+        assertThat(toast.onTap).isNull()
+        verify { rig.haptics.play(CallHapticKind.Warning) }
+    }
 }

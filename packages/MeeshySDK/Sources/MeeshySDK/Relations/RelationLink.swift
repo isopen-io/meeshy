@@ -121,15 +121,11 @@ public struct RelationLink: Codable, CacheIdentifiable, Identifiable, Sendable, 
 
     private static func instant(_ wire: String?) -> Date? {
         guard let wire else { return nil }
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return fractional.date(from: wire) ?? ISO8601DateFormatter().date(from: wire)
+        return WireDate.date(from: wire)
     }
 
     private static func wireInstant(_ date: Date) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.string(from: date)
+        WireDate.string(from: date)
     }
 
     /// Le cran suivant, ouvert ou verrouillé selon la loi de demande. Le blocage de montée

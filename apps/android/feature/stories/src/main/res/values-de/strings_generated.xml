@@ -260,7 +260,10 @@
     <string name="stories_tray_add_story">Story hinzufügen</string>
     <string name="stories_tray_manage">Meine Storys verwalten</string>
     <string name="stories_tray_view_my_story">Meine Story ansehen</string>
+    <string name="stories_viewer_a11y_background_audio">Hintergrundaudio</string>
     <string name="stories_viewer_close">Schließen</string>
+    <string name="stories_viewer_fullscreen_enter">Vollbild</string>
+    <string name="stories_viewer_fullscreen_exit">Vollbild verlassen</string>
     <string name="stories_viewer_mute">Hintergrundton stummschalten</string>
     <string name="stories_viewer_next">Nächste Story</string>
     <string name="stories_viewer_not_found_description">Diese Story konnte nicht geladen werden. Erneut versuchen oder schließen.</string>
