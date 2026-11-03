@@ -1,5 +1,6 @@
 package me.meeshy.app.auth
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -28,7 +29,10 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
-/** iOS `LoginView.twoFactorSection` : bouclier, code à 6 chiffres, « Se connecter », « Annuler ». */
+/**
+ * iOS `LoginView.twoFactorSection` : bouclier, code TOTP ou code de secours, « Se connecter », « Annuler ».
+ * Le retour système est « Annuler » : il quitte l'étape en oubliant le défi, jamais l'écran avec le défi en mémoire.
+ */
 @Composable
 internal fun LoginTwoFactorStep(
     state: AuthUiState,
@@ -37,6 +41,7 @@ internal fun LoginTwoFactorStep(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    BackHandler { if (!state.isSubmitting) onCancel() }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         delay(CODE_FOCUS_DELAY_MS)

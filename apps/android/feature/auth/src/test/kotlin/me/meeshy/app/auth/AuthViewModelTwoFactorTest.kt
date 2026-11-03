@@ -34,7 +34,7 @@ import org.junit.Before
 import org.junit.Test
 import java.io.IOException
 
-/** L'étape du code à 6 chiffres d'un compte protégé (iOS `LoginView.twoFactorSection`). */
+/** L'étape du second facteur d'un compte protégé — code TOTP ou code de secours (iOS `LoginView.twoFactorSection`). */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AuthViewModelTwoFactorTest {
 
@@ -79,15 +79,63 @@ class AuthViewModelTwoFactorTest {
     }
 
     @Test
-    fun `the code field keeps only six digits`() = runTest(dispatcher) {
+    fun `a six digit code can be submitted`() = runTest(dispatcher) {
+        val api = mockk<AuthApi>()
+        val vm = viewModel(api)
+        vm.atCodeStep(api)
+        coEvery { api.completeLoginWith2FA(any()) } returns opened()
+
+        vm.onTwoFactorCodeChange("123 456")
+        assertThat(vm.state.value.canSubmitTwoFactor).isTrue()
+        vm.submitTwoFactor()
+        advanceUntilIdle()
+
+        coVerify { api.completeLoginWith2FA(TwoFactorLoginRequest("challenge", "123456")) }
+    }
+
+    @Test
+    fun `a backup code can be submitted`() = runTest(dispatcher) {
+        val api = mockk<AuthApi>()
+        val vm = viewModel(api)
+        vm.atCodeStep(api)
+        coEvery { api.completeLoginWith2FA(any()) } returns opened()
+
+        vm.onTwoFactorCodeChange("k7mp-q2rx")
+        assertThat(vm.state.value.twoFactorCode).isEqualTo("K7MP-Q2RX")
+        assertThat(vm.state.value.canSubmitTwoFactor).isTrue()
+        vm.submitTwoFactor()
+        advanceUntilIdle()
+
+        coVerify { api.completeLoginWith2FA(TwoFactorLoginRequest("challenge", "K7MP-Q2RX")) }
+        assertThat(vm.state.value.loginFlow).isEqualTo(LoginFlow.Authenticated)
+    }
+
+    @Test
+    fun `a partial code of either form cannot be submitted`() = runTest(dispatcher) {
         val api = mockk<AuthApi>()
         val vm = viewModel(api)
         vm.atCodeStep(api)
 
-        vm.onTwoFactorCodeChange("12a3-45 6789")
+        vm.onTwoFactorCodeChange("12345")
+        assertThat(vm.state.value.canSubmitTwoFactor).isFalse()
+        vm.onTwoFactorCodeChange("K7MP-Q2R")
+        assertThat(vm.state.value.canSubmitTwoFactor).isFalse()
+        vm.submitTwoFactor()
+        advanceUntilIdle()
 
-        assertThat(vm.state.value.twoFactorCode).isEqualTo("123456")
-        assertThat(vm.state.value.canSubmitTwoFactor).isTrue()
+        coVerify(exactly = 0) { api.completeLoginWith2FA(any()) }
+    }
+
+    @Test
+    fun `the password is forgotten as soon as the code step opens`() = runTest(dispatcher) {
+        val api = mockk<AuthApi>()
+        val vm = viewModel(api)
+
+        vm.atCodeStep(api)
+
+        assertThat(vm.state.value.loginFlow).isEqualTo(LoginFlow.TwoFactor("challenge"))
+        assertThat(vm.state.value.password).isEmpty()
+        assertThat(vm.state.value.username).isEqualTo("atabeth")
     }
 
     @Test
