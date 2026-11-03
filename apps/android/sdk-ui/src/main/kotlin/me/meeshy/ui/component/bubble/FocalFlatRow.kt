@@ -558,6 +558,8 @@ private fun FlatBottomLine(content: BubbleContent, accentColor: Color, callbacks
                 onReactionClick = callbacks.onReactionClick,
                 onReactionLongPress = callbacks.onReactionLongPress,
                 onAddReaction = callbacks.onAddReaction,
+                messageId = content.messageId,
+                onOpenReactPicker = callbacks.onOpenReactPicker,
             )
         }
     }
