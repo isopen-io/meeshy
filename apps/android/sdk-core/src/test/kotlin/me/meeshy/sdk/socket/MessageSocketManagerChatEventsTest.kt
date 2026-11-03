@@ -58,7 +58,7 @@ class MessageSocketManagerChatEventsTest {
             handlers.getValue(event).forEach { it.invoke(arrayOf(JSONObject(payload))) }
     }
 
-    private class FakeEmitter(private val reply: ((Array<Any>) -> Unit) -> Unit) : SocketAckEmitter {
+    private class FakeEmitter(private val reply: ((Array<Any>) -> Unit) -> Unit) : SocketRawAckEmitter {
         val sent = mutableListOf<Pair<String, JSONObject>>()
         override fun emit(event: String, data: JSONObject, ack: (Array<Any>) -> Unit) {
             sent += event to data

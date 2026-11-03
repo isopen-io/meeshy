@@ -70,11 +70,17 @@ describe('la ligne du cercle', () => {
     expect(view({ link: link({ effectiveLevel: 'COMMUNITY' }) })).toBe('');
   });
 
-  test('« Promouvoir en Proche » quand la série est servie comme atteinte, nommé pour la personne', () => {
+  test('« Soyons proches » quand la série est servie comme atteinte, nommé pour la personne', () => {
     const html = view({ link: link({ eligibleFor: 'CLOSE' }) });
     expect(html).toContain('data-profile-circle-raise="CLOSE"');
-    expect(html).toContain('Promouvoir en Proche');
-    expect(html).toContain('aria-label="Demander le niveau Proche à Ada"');
+    expect(html).toContain('>Soyons proches<');
+    expect(html).toContain('aria-label="Soyons proches : demander le niveau Proche à Ada"');
+  });
+
+  test('un libellé impératif par cercle visé (décision porteur 2026-11-03) : Soyons amis, Soyons proches, Devenons sang', () => {
+    expect(view({ link: link({ effectiveLevel: 'ACQUAINTANCE', grantedByMe: 'ACQUAINTANCE', canRaise: true }) })).toContain('>Soyons amis<');
+    expect(view({ link: link({ effectiveLevel: 'FRIEND', canRaise: true }) })).toContain('>Soyons proches<');
+    expect(view({ link: link({ effectiveLevel: 'CLOSE', grantedByMe: 'CLOSE', canRaise: true }) })).toContain('>Devenons sang<');
   });
 
   test('verrouillé, déjà demandé, ou offert ailleurs (« Ajouter ») : aucun bouton', () => {
@@ -119,14 +125,20 @@ describe('câblée sur les caches', () => {
 });
 
 describe('gérer le lien (#14910) — promouvoir si possible, rétrograder d’un cran, annuler à Connaissance', () => {
-  test('« Rétrograder en Ami » sous un Proche, « Annuler le lien » sous une Connaissance', () => {
+  test('« Restons amis » sous un Proche, « Annuler le lien » sous une Connaissance', () => {
     const close = view({ link: link({ effectiveLevel: 'CLOSE', grantedByMe: 'CLOSE' }) });
     expect(close).toContain('data-profile-circle-lower="demote"');
-    expect(close).toContain('Rétrograder en Ami');
+    expect(close).toContain('>Restons amis<');
     const acquaintance = view({ link: link({ effectiveLevel: 'ACQUAINTANCE', grantedByMe: 'ACQUAINTANCE' }), raisable: false });
     expect(acquaintance).toContain('data-profile-circle="ACQUAINTANCE"');
     expect(acquaintance).toContain('data-profile-circle-lower="unlink"');
     expect(acquaintance).toContain('Annuler le lien');
+  });
+
+  test('descendre dit le cercle d’arrivée à l’impératif : Restons proches, Restons amis, Restons en contact', () => {
+    expect(view({ link: link({ effectiveLevel: 'BLOOD', grantedByMe: 'BLOOD' }) })).toContain('>Restons proches<');
+    expect(view({ link: link({ effectiveLevel: 'CLOSE', grantedByMe: 'CLOSE' }) })).toContain('>Restons amis<');
+    expect(view({ link: link({ effectiveLevel: 'FRIEND', grantedByMe: 'FRIEND' }) })).toContain('>Restons en contact<');
   });
 
   test('Promouvoir est MASQUÉ tant que la passerelle sert un délai', () => {
@@ -199,7 +211,8 @@ describe('gérer le lien (#14910) — promouvoir si possible, rétrograder d’u
     const host = await mountRow(transportFor({ ok: true, data: null }, requests));
     await click(host.querySelector<HTMLButtonElement>('[data-profile-circle-lower="demote"]'));
     const dialog = document.querySelector('[data-confirm-dialog="circle-demote"]');
-    expect(dialog?.textContent).toContain('Rétrograder Ada en Ami ?');
+    expect(dialog?.textContent).toContain('Rester seulement amis avec Ada ?');
+    expect(document.querySelector('[data-confirm-dialog="circle-demote"] [data-confirm="confirm"]')?.textContent).toBe('Restons amis');
     expect(dialog?.textContent).toContain('Ada passera de Proche à Ami.');
     expect(dialog?.textContent).toContain('ne pourra pas vous redemander de remonter avant 30 jours');
     await click(document.querySelector<HTMLButtonElement>('[data-confirm-dialog="circle-demote"] [data-confirm="cancel"]'));
