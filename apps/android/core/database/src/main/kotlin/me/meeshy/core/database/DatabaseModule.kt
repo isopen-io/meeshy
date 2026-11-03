@@ -22,6 +22,7 @@ import me.meeshy.core.database.dao.MediaBlobDao
 import me.meeshy.core.database.dao.MediaIndexDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
+import me.meeshy.core.database.dao.NotificationDao
 import me.meeshy.core.database.dao.PendingIdDao
 import me.meeshy.core.database.dao.ProfileStatsCacheDao
 import me.meeshy.core.database.dao.StatusBarCacheDao
@@ -132,6 +133,10 @@ internal object DatabaseModule {
     @Provides
     fun providesPendingIdDao(database: MeeshyDatabase): PendingIdDao =
         database.pendingIdDao()
+
+    @Provides
+    fun providesNotificationDao(database: MeeshyDatabase): NotificationDao =
+        database.notificationDao()
 
     private const val DATABASE_NAME = "meeshy.db"
 
