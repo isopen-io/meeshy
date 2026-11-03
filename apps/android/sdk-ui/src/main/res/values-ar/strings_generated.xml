@@ -76,6 +76,7 @@
     <string name="emoji_category_travel">السفر</string>
     <string name="focal_focus_add_reaction">إضافة تفاعل</string>
     <string name="focal_focus_translation_detail">تفاصيل الترجمة</string>
+    <string name="focal_row_anonymousSender">بدون حساب</string>
     <string name="focal_row_you">أنت</string>
     <string name="image_editor_before">الأصل</string>
     <string name="image_editor_cancel">إلغاء</string>
@@ -101,7 +102,15 @@
     <string name="location_fullscreen_directions">المسار</string>
     <string name="location_fullscreen_mapStyle">نمط الخريطة</string>
     <string name="location_fullscreen_sharedPosition">موقع مشارَك</string>
+    <string name="media_audio_open_fullscreen">فتح بملء الشاشة، التشغيل %1$d%%</string>
+    <string name="media_audio_open_fullscreen_hint">يعرض واجهة ملء الشاشة مع خيارات الحفظ</string>
+    <string name="media_audio_play">تشغيل الصوت</string>
+    <string name="media_audio_speed_cycle">سرعة التشغيل %1$s</string>
     <string name="media_audio_transcribe">نسخ نصي</string>
+    <string name="media_caption_see_less">عرض أقل</string>
+    <string name="media_caption_see_less_hint">يطوي الشرح</string>
+    <string name="media_caption_see_more">عرض المزيد</string>
+    <string name="media_caption_see_more_hint">يعرض الشرح كاملاً</string>
     <string name="media_crop_a11y_handle_bottom">الحافة السفلية</string>
     <string name="media_crop_a11y_handle_bottomLeft">الزاوية السفلية اليسرى</string>
     <string name="media_crop_a11y_handle_bottomRight">الزاوية السفلية اليمنى</string>
@@ -161,6 +170,9 @@
     </plurals>
     <string name="presence_offline">غير متصل</string>
     <string name="presence_online">متصل</string>
+    <string name="pull_refresh_armed">أفلِت للتحديث</string>
+    <string name="pull_refresh_done">تم التحديث</string>
+    <string name="pull_refresh_refreshing">جارٍ التحديث</string>
     <string name="reactions_more">مزيد من التفاعلات</string>
     <string name="retouch_crop_original">الأصلي</string>
     <string name="retouch_effect_angel">ملاك</string>
@@ -223,6 +235,10 @@
     <string name="retouch_tool_text">نص</string>
     <string name="retouch_tool_trim">قص</string>
     <string name="settings_info_button_label">معرفة المزيد عن %1$s</string>
+    <string name="skeleton_feed_post_loading">جارٍ تحميل منشور</string>
+    <string name="skeleton_link_row_loading">جارٍ تحميل رابط</string>
+    <string name="skeleton_profile_loading">جارٍ تحميل الملف الشخصي</string>
+    <string name="skeleton_stories_loading">جارٍ تحميل القصص</string>
     <string name="slide_rail_delete_cancel">إلغاء</string>
     <string name="slide_rail_delete_confirm_action">حذف</string>
     <string name="slide_rail_delete_confirm_title">حذف هذا المشهد؟</string>

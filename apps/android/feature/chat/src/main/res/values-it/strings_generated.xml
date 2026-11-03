@@ -370,6 +370,7 @@
     <string name="message_detail_views_read_all">Letto da tutti</string>
     <string name="message_detail_views_read_empty">Nessuno ha letto questo messaggio</string>
     <string name="message_detail_views_sent">Inviato</string>
+    <string name="message_translation_e2ee_serverRefused">Crittografata end-to-end: questa conversazione viene tradotta sul tuo dispositivo, mai dal server.</string>
     <string name="permission_location_denied">Posizione negata — consentila in Impostazioni</string>
     <string name="piece_a11y_photo">Foto %1$d di %2$d</string>
     <string name="piece_a11y_video">Video %1$d di %2$d</string>

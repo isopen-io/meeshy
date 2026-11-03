@@ -147,12 +147,15 @@
     <string name="my_stories_viewers">Lista de vistas</string>
     <string name="share_story_text">🔗 Historia de %1$s: %2$s</string>
     <string name="stories_action_delete">Eliminar</string>
+    <string name="stories_action_mute">Silenciar</string>
     <string name="stories_action_react">Reaccionar</string>
     <string name="stories_action_reply">Responder</string>
     <string name="stories_action_report">Denunciar</string>
     <string name="stories_action_repost">Republicar</string>
+    <string name="stories_action_save">Guardar</string>
     <string name="stories_action_send">Enviar</string>
     <string name="stories_action_share">Compartir</string>
+    <string name="stories_action_sound">Sonido</string>
     <string name="stories_action_translations">Traducciones</string>
     <string name="stories_action_views">Vistas</string>
     <string name="stories_add">Añadir</string>
@@ -297,6 +300,8 @@
     <string name="story_composer_grabber">Asa de la barra de herramientas</string>
     <string name="story_composer_grabber_hint_dismiss">Arrastra hacia abajo para reducir o cerrar.</string>
     <string name="story_composer_grabber_hint_resize">Arrastra hacia arriba para ampliar, hacia abajo para reducir o cerrar.</string>
+    <string name="story_composer_loadingImage">Cargando imagen…</string>
+    <string name="story_composer_loadingVideo">Cargando vídeo…</string>
     <string name="story_composer_redo">Rehacer</string>
     <string name="story_composer_soundLibrary">Biblioteca</string>
     <string name="story_composer_undo">Deshacer</string>
@@ -319,6 +324,8 @@
     <string name="story_media_soundExtraction_a11yHint">Otras personas podrán reutilizar la banda sonora de los vídeos de esta publicación en sus propias publicaciones.</string>
     <string name="story_media_soundExtraction_caption">Otras personas podrán reutilizar la banda sonora de los vídeos de esta publicación.</string>
     <string name="story_media_soundExtraction_label">Permitir la reutilización del sonido</string>
+    <string name="story_reader_buffering">Cargando la story</string>
+    <string name="story_reader_loading">Cargando historia…</string>
     <string name="story_repost_error_forbidden">Esta historia no se puede volver a compartir</string>
     <string name="story_repost_error_generic">Error al republicar</string>
     <string name="story_repost_error_unavailable">Esta historia ya no está disponible</string>
@@ -331,6 +338,10 @@
     </plurals>
     <string name="story_send_search_hint">Buscar una conversación...</string>
     <string name="story_send_sent">Enviado</string>
+    <string name="story_sentinel_body">Tu versión de la aplicación aún no sabe pintarla. No se ha perdido: se mostrará tal y como la compuso su autor después de la actualización.</string>
+    <string name="story_sentinel_skip">PASAR A LA SIGUIENTE</string>
+    <string name="story_sentinel_title">Esta historia usa un formato más reciente</string>
+    <string name="story_sentinel_update">ACTUALIZAR</string>
     <string name="story_sound_library_clearSearch">Borrar la búsqueda</string>
     <string name="story_sound_library_emptyMine">Tus sonidos aparecerán aquí en cuanto publiques una historia con audio original.</string>
     <string name="story_sound_library_emptySearch">Ningún sonido coincide con esta búsqueda.</string>

@@ -26,6 +26,8 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.text.RainbowLetters
 import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -90,6 +92,10 @@ internal fun ColumnScope.BubbleTextBody(
                 mentionDisplayNames = decor.mentionDisplayNames,
                 highlightTerm = decor.highlightTerm,
                 trackedLinks = decor.trackedLinks,
+                rainbowSeed = RainbowLetters.seed(
+                    rainbow = content.effects.has(MessageEffectFlags.RAINBOW),
+                    messageId = content.messageId,
+                ),
             )
         }
     }

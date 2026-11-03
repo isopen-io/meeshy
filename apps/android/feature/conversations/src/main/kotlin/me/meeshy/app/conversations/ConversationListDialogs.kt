@@ -101,11 +101,23 @@ internal fun ConversationListDialogHost(
             onSubmit = controller::submitReport,
             onDismiss = controller::dismiss,
         )
-        is ConversationListDialog.Info, is ConversationListDialog.Invite -> Unit
+        is ConversationListDialog.Info -> Unit
+        is ConversationListDialog.Invite -> controller.conversationOf(current.conversationId)?.let { conversation ->
+            InviteFriendsSheet(
+                conversationId = current.conversationId,
+                info = InviteConversationInfo(
+                    name = controller.displayTitleOf(current.conversationId).orEmpty(),
+                    memberCount = conversation.memberCount,
+                    type = conversation.type,
+                ),
+                accent = hexColor(conversation.accentColorPalette().primary, MeeshyPalette.Indigo500),
+                onDismiss = controller::dismiss,
+            )
+        }
     }
 }
 
-/** « Infos » et « Inviter » : pris une fois ([ConversationListDialogController.takeNavigation]), puis ouverts. */
+/** « Infos » : pris une fois ([ConversationListDialogController.takeNavigation]), puis ouvert. « Inviter » a sa feuille. */
 private fun routeNavigation(
     dialog: ConversationListDialog,
     controller: ConversationListDialogController,
@@ -113,7 +125,6 @@ private fun routeNavigation(
 ) {
     val open = when (dialog) {
         is ConversationListDialog.Info -> navigation.onViewInfo
-        is ConversationListDialog.Invite -> navigation.onCreateShareLink
         else -> return
     }
     if (controller.takeNavigation(dialog)) open?.invoke(dialog.conversationId)

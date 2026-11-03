@@ -129,4 +129,39 @@ class AppLanguageTest {
         assertThat(AppLanguage.info(null)).isNull()
         assertThat(AppLanguage.info("ja")).isNull()
     }
+
+    @Test
+    fun `effectiveTag - un choix explicite prime sur la langue du profil`() {
+        assertThat(AppLanguage.resolveEffectiveTag(explicit = "es", profileLanguage = "fr")).isEqualTo("es")
+    }
+
+    @Test
+    fun `effectiveTag - sans choix explicite la langue du profil s'applique`() {
+        assertThat(AppLanguage.resolveEffectiveTag(explicit = null, profileLanguage = "de")).isEqualTo("de")
+    }
+
+    @Test
+    fun `effectiveTag - le portugais du profil est livre meme absent du selecteur`() {
+        assertThat(AppLanguage.resolveEffectiveTag(null, "pt-BR")).isEqualTo("pt")
+        assertThat(AppLanguage.resolveEffectiveTag(null, "PT_pt")).isEqualTo("pt")
+    }
+
+    @Test
+    fun `effectiveTag - sans choix ni profil exploitable on suit l'appareil`() {
+        assertThat(AppLanguage.resolveEffectiveTag(null, null)).isNull()
+        assertThat(AppLanguage.resolveEffectiveTag(null, "ja")).isNull()
+        assertThat(AppLanguage.resolveEffectiveTag("  ", "")).isNull()
+    }
+
+    @Test
+    fun `effectiveTag - un choix explicite non livre laisse la main au profil`() {
+        assertThat(AppLanguage.resolveEffectiveTag("ja", "it")).isEqualTo("it")
+    }
+
+    @Test
+    fun `isShipped - les sept langues livrees dont le portugais`() {
+        assertThat(AppLanguage.shippedCodes).containsExactly("fr", "en", "es", "de", "it", "ar", "pt")
+        assertThat(AppLanguage.isShipped("pt")).isTrue()
+        assertThat(AppLanguage.isShipped("ja")).isFalse()
+    }
 }

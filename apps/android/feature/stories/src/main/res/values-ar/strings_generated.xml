@@ -147,12 +147,15 @@
     <string name="my_stories_viewers">قائمة المشاهدات</string>
     <string name="share_story_text">🔗 قصة %1$s: %2$s</string>
     <string name="stories_action_delete">حذف</string>
+    <string name="stories_action_mute">كتم</string>
     <string name="stories_action_react">تفاعل</string>
     <string name="stories_action_reply">رد</string>
     <string name="stories_action_report">إبلاغ</string>
     <string name="stories_action_repost">إعادة النشر</string>
+    <string name="stories_action_save">حفظ</string>
     <string name="stories_action_send">إرسال</string>
     <string name="stories_action_share">مشاركة</string>
+    <string name="stories_action_sound">الصوت</string>
     <string name="stories_action_translations">الترجمات</string>
     <string name="stories_action_views">المشاهدات</string>
     <string name="stories_add">إضافة</string>
@@ -303,6 +306,8 @@
     <string name="story_composer_grabber">مقبض شريط الأدوات</string>
     <string name="story_composer_grabber_hint_dismiss">اسحب لأسفل للتصغير أو الإغلاق.</string>
     <string name="story_composer_grabber_hint_resize">اسحب لأعلى للتكبير، ولأسفل للتصغير أو الإغلاق.</string>
+    <string name="story_composer_loadingImage">جارٍ تحميل الصورة...</string>
+    <string name="story_composer_loadingVideo">جارٍ تحميل الفيديو...</string>
     <string name="story_composer_redo">إعادة</string>
     <string name="story_composer_soundLibrary">المكتبة</string>
     <string name="story_composer_undo">تراجع</string>
@@ -325,6 +330,8 @@
     <string name="story_media_soundExtraction_a11yHint">سيتمكن أشخاص آخرون من إعادة استخدام مسار صوت مقاطع الفيديو في هذا المنشور في منشوراتهم الخاصة.</string>
     <string name="story_media_soundExtraction_caption">سيتمكن أشخاص آخرون من إعادة استخدام مسار صوت مقاطع الفيديو في هذا المنشور.</string>
     <string name="story_media_soundExtraction_label">السماح بإعادة استخدام الصوت</string>
+    <string name="story_reader_buffering">جارٍ تحميل القصة</string>
+    <string name="story_reader_loading">جارٍ تحميل القصة…</string>
     <string name="story_repost_error_forbidden">لا يمكن إعادة مشاركة هذه القصة</string>
     <string name="story_repost_error_generic">فشلت إعادة النشر</string>
     <string name="story_repost_error_unavailable">لم تعد هذه القصة متاحة</string>
@@ -340,6 +347,10 @@
     </plurals>
     <string name="story_send_search_hint">ابحث عن محادثة...</string>
     <string name="story_send_sent">أُرسل</string>
+    <string name="story_sentinel_body">لا يمكن لإصدار التطبيق لديك عرضها بعد. لم تُفقد: ستظهر تمامًا كما أنشأها صاحبها بعد التحديث.</string>
+    <string name="story_sentinel_skip">الانتقال إلى التالية</string>
+    <string name="story_sentinel_title">تستخدم هذه القصة تنسيقًا أحدث</string>
+    <string name="story_sentinel_update">تحديث</string>
     <string name="story_sound_library_clearSearch">مسح البحث</string>
     <string name="story_sound_library_emptyMine">ستظهر أصواتك هنا بمجرد نشرك قصة تحتوي على صوت أصلي.</string>
     <string name="story_sound_library_emptySearch">لا يوجد صوت يطابق هذا البحث.</string>

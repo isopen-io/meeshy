@@ -18,13 +18,10 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
@@ -38,6 +35,8 @@ import me.meeshy.app.navigation.LaunchExtras
 import me.meeshy.app.navigation.LaunchRouter
 import me.meeshy.app.navigation.MeeshyApp
 import me.meeshy.app.navigation.ProvideRootSplash
+import me.meeshy.app.navigation.DeepLinkDispatcher
+import me.meeshy.app.navigation.LaunchLinkAdoption
 import me.meeshy.app.navigation.VisitorContentPresenter
 import me.meeshy.app.navigation.VisitorLinkGate
 import me.meeshy.sdk.auth.AuthRepository
@@ -50,7 +49,6 @@ import me.meeshy.app.shortcuts.DynamicShortcutsPublisher
 import me.meeshy.app.theme.LanguageViewModel
 import me.meeshy.app.theme.ThemeViewModel
 import me.meeshy.sdk.conversation.ConversationRepository
-import me.meeshy.sdk.model.AppLanguage
 import me.meeshy.sdk.model.SystemBarsAppearance
 import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.model.call.CallPictureInPicturePolicy
@@ -66,7 +64,6 @@ import me.meeshy.ui.component.video.LocalVideoPictureInPicture
 import me.meeshy.ui.component.video.VideoPictureInPictureCoordinator
 import me.meeshy.ui.profile.LocalProfileGameSlot
 import me.meeshy.ui.theme.MeeshyTheme
-import java.util.Locale
 import javax.inject.Inject
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.net.SessionExpiryNotifier
@@ -129,6 +126,10 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var authRepository: AuthRepository
 
+    /** Les liens que le graphe ne lit pas (hashtag, communauté, `/c/`, `/l/`, récentes, non lues, invitation). */
+    @Inject
+    lateinit var linkDispatcher: DeepLinkDispatcher
+
     /** La suite d'un toucher de push : ouverture sur le bus, puis notification marquée lue. */
     @Inject
     lateinit var pushTapConsumer: PushTapConsumer
@@ -173,6 +174,7 @@ class MainActivity : ComponentActivity() {
         val restored = savedInstanceState != null
         launchRoute = LaunchRouter.onCreateRoute(launchRouteOf(intent), restored)
         if (!restored) divertVisitorLink(intent, atLaunch = true)
+        LaunchLinkAdoption.adopt(intent, linkDispatcher, restored)?.let { if (warmDeepLink == null) warmDeepLink = it }
         // Restaurée, l'activité relit l'intent ORIGINAL : la demande d'appel a déjà été présentée, elle ne revient pas.
         callLink = callLinkOf(intent).takeUnless { restored }
         callPictureInPicture.attachActivity(
@@ -316,6 +318,7 @@ class MainActivity : ComponentActivity() {
         warmDeepLink = if (launchRoute == null && callLink == null) WarmDeepLink.replayable(intent) else null
         warmDeepLinkAwaitsAccount = false
         divertVisitorLink(intent, atLaunch = false)
+        LaunchLinkAdoption.rememberReferral(intent, linkDispatcher)
     }
 
     /**
@@ -349,45 +352,6 @@ class MainActivity : ComponentActivity() {
                 currentUserId = sessionRepository.currentUserId,
             )
         }
-    }
-}
-
-/**
- * Applies the persisted interface-language preference app-wide by re-localising the
- * [Context]/[Configuration] the whole Compose tree resolves `stringResource`s against.
- *
- * The *decision* — which locale tag to force, or `null` to leave the device locale in
- * place — lives in the pure, tested [AppLanguage.resolveInterfaceLocaleTag]. When the
- * preference is "System" (`null`) the original context is used unchanged, so a device
- * locale the app has no translation for still falls back through Android's own resource
- * resolution. Works on every supported API level (minSdk 26) with no extra dependency.
- * The Activity stays the context's base ([localizedContext]) so links, shares and
- * permission prompts keep working when a language is forced.
- */
-@androidx.compose.runtime.Composable
-private fun LocalizedContent(
-    languageCode: String?,
-    content: @androidx.compose.runtime.Composable () -> Unit,
-) {
-    val tag = AppLanguage.resolveInterfaceLocaleTag(languageCode)
-    val baseContext = LocalContext.current
-    val baseConfiguration = LocalConfiguration.current
-    val locale = remember(tag) { tag?.let(Locale::forLanguageTag) }
-    if (locale != null) SideEffect { Locale.setDefault(locale) }
-    val context = remember(tag, baseContext, baseConfiguration) {
-        tag?.let { localizedContext(baseContext, it, baseConfiguration) } ?: baseContext
-    }
-    val localizedConfiguration = remember(locale, baseConfiguration) {
-        locale?.let { Configuration(baseConfiguration).apply { setLocale(it) } } ?: baseConfiguration
-    }
-
-    // Toujours le même nœud : passer de « Système » à une langue ne recrée pas l'arbre,
-    // donc la navigation reste sur l'écran où la langue a été choisie.
-    CompositionLocalProvider(
-        LocalContext provides context,
-        LocalConfiguration provides localizedConfiguration,
-    ) {
-        content()
     }
 }
 

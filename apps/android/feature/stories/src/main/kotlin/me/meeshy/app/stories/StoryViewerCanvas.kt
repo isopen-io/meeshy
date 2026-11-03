@@ -15,15 +15,19 @@ internal fun StoryViewerCanvas(
     slideDurationMs: Int,
     playing: Boolean,
     muted: Boolean,
+    lap: Int,
     viewModel: StoryViewerViewModel,
 ) {
     StorySceneBackground(
         slide = slide,
         playing = playing,
         muted = muted,
-        // Un vocal ou un appel prend le son : la story se fige avec la vidéo (minuterie comprise), comme un appui long.
-        onAudioFocusLost = viewModel::pauseByHold,
+        // Un vocal ou un appel prend le son : l'horloge se fige, et repart au retour du focus (sinon : pause utilisateur).
+        onAudioFocusLost = viewModel.interruption::onFocusLost,
+        onAudioFocusGained = viewModel.interruption::onFocusGained,
+        onAudioFocusLostForGood = viewModel.interruption::onFocusLostForGood,
         onImageResolved = viewModel::onImageResolved,
+        onBackgroundPlayer = viewModel.mediaSignal::onBackgroundPlayer,
     )
     StorySceneOverlays(
         slide = slide,
@@ -31,7 +35,9 @@ internal fun StoryViewerCanvas(
         slideDurationMs = slideDurationMs,
         playing = playing,
         muted = muted,
-        onAudioFocusLost = viewModel::pauseByHold,
+        onAudioFocusLost = viewModel.interruption::onFocusLost,
+        onAudioFocusGained = viewModel.interruption::onFocusGained,
+        onAudioFocusLostForGood = viewModel.interruption::onFocusLostForGood,
     )
-    StorySceneAudio(slide = slide, playing = playing, muted = muted)
+    StorySceneAudio(slide = slide, playing = playing, muted = muted, lap = lap)
 }
