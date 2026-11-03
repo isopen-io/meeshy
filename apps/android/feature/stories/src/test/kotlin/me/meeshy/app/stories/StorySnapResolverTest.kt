@@ -15,8 +15,6 @@ import org.junit.runners.JUnit4
 class StorySnapResolverTest {
 
     private val tol = 1e-4f
-    private val third = 1f / 3f
-    private val twoThird = 2f / 3f
 
     // --- free drag (no snap) ---
 
@@ -54,13 +52,58 @@ class StorySnapResolverTest {
     }
 
     @Test
-    fun `a centre near a rule-of-thirds line snaps to that third`() {
-        val r = StorySnapResolver.resolve(0.34f, 0.66f)
+    fun `a centre near each iOS object target snaps to it`() {
+        listOf(0.18f, 0.25f, 0.5f, 0.75f, 0.82f).forEach { target ->
+            val r = StorySnapResolver.resolve(target + 0.015f, target - 0.015f)
 
-        assertThat(r.x).isWithin(tol).of(third)
-        assertThat(r.y).isWithin(tol).of(twoThird)
-        assertThat(r.verticalGuide!!).isWithin(tol).of(third)
-        assertThat(r.horizontalGuide!!).isWithin(tol).of(twoThird)
+            assertThat(r.x).isEqualTo(target)
+            assertThat(r.y).isEqualTo(target)
+            assertThat(r.verticalGuide).isEqualTo(target)
+            assertThat(r.horizontalGuide).isEqualTo(target)
+        }
+    }
+
+    @Test
+    fun `the old rule-of-thirds lines no longer attract`() {
+        val r = StorySnapResolver.resolve(1f / 3f, 2f / 3f)
+
+        assertThat(r.verticalGuide).isNull()
+        assertThat(r.horizontalGuide).isNull()
+    }
+
+    @Test
+    fun `the object targets are exactly the iOS ones`() {
+        assertThat(StorySnapResolver.OBJECT_TARGETS).containsExactly(0.18f, 0.25f, 0.5f, 0.75f, 0.82f).inOrder()
+        assertThat(StorySnapResolver.VERTICAL_GUIDES).isEqualTo(StorySnapResolver.OBJECT_TARGETS)
+        assertThat(StorySnapResolver.HORIZONTAL_GUIDES).isEqualTo(StorySnapResolver.OBJECT_TARGETS)
+    }
+
+    // --- background framing ---
+
+    @Test
+    fun `the background snaps to the centre and to both edges within 0,035`() {
+        val centre = StorySnapResolver.resolveBackground(0.52f, 0.48f)
+        assertThat(centre.x).isEqualTo(0.5f)
+        assertThat(centre.y).isEqualTo(0.5f)
+
+        val edges = StorySnapResolver.resolveBackground(0.03f, 0.97f)
+        assertThat(edges.x).isEqualTo(0f)
+        assertThat(edges.y).isEqualTo(1f)
+        assertThat(edges.verticalGuide).isEqualTo(0f)
+        assertThat(edges.horizontalGuide).isEqualTo(1f)
+    }
+
+    @Test
+    fun `the background tolerance is wider than the object one and stops at 0,035`() {
+        assertThat(StorySnapResolver.resolveBackground(0.53f, 0.5f).verticalGuide).isEqualTo(0.5f)
+        assertThat(StorySnapResolver.resolveBackground(0.54f, 0.5f).verticalGuide).isNull()
+        assertThat(StorySnapResolver.BACKGROUND_SNAP_THRESHOLD).isEqualTo(0.035f)
+        assertThat(StorySnapResolver.BACKGROUND_TARGETS).containsExactly(0f, 0.5f, 1f).inOrder()
+    }
+
+    @Test
+    fun `the background framing is never flagged out of the safe zone`() {
+        assertThat(StorySnapResolver.resolveBackground(0f, 1f).withinSafeZone).isTrue()
     }
 
     @Test
@@ -76,8 +119,8 @@ class StorySnapResolverTest {
     // --- threshold boundary ---
 
     @Test
-    fun `a centre exactly the threshold from a guide snaps (inclusive)`() {
-        val r = StorySnapResolver.resolve(0.5f + StorySnapResolver.SNAP_THRESHOLD, 0.5f)
+    fun `a centre just inside the threshold from a guide snaps`() {
+        val r = StorySnapResolver.resolve(0.5f + StorySnapResolver.SNAP_THRESHOLD - 0.002f, 0.5f)
 
         assertThat(r.x).isEqualTo(0.5f)
         assertThat(r.verticalGuide).isEqualTo(0.5f)
@@ -203,8 +246,8 @@ class StorySnapResolverTest {
     }
 
     @Test
-    fun `the magnet holds at the iOS tolerance of 0,015`() {
-        assertThat(StorySnapResolver.SNAP_THRESHOLD).isEqualTo(0.015f)
-        assertThat(StorySnapResolver.resolve(0.52f, 0.5f).verticalGuide).isNull()
+    fun `the magnet holds at the iOS tolerance of 0,02`() {
+        assertThat(StorySnapResolver.SNAP_THRESHOLD).isEqualTo(0.02f)
+        assertThat(StorySnapResolver.resolve(0.53f, 0.5f).verticalGuide).isNull()
     }
 }
