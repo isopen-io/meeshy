@@ -27,7 +27,6 @@ internal fun BubbleAttachmentSections(
     accent: Color = MeeshyPalette.Indigo500,
 ) {
     if (content.isDeleted) return
-    val autoReveal = AudioTranscriptionReveal.autoReveals(content.isOutgoing, LocalAutoRevealTranscription.current)
     if (content.images.isNotEmpty()) {
         BubbleImageGrid(
             images = content.images,
@@ -54,6 +53,23 @@ internal fun BubbleAttachmentSections(
             )
         }
     }
+    BubbleNonVisualSections(content, onColor, callbacks, audioPlayback, videoIds)
+}
+
+/**
+ * Les pièces qui ne sont ni une image ni une vidéo — fichiers, lieux partagés, notes vocales —, dans leur ordre fixe.
+ * Partagée par la bulle et par le bloc non-média de la rangée plate ([videoIds] : les vidéos déjà montrées ailleurs).
+ */
+@Composable
+internal fun BubbleNonVisualSections(
+    content: BubbleContent,
+    onColor: Color,
+    callbacks: BubbleCallbacks,
+    audioPlayback: BubbleAudioPlayback?,
+    videoIds: Set<String> = content.videos.mapTo(HashSet()) { it.attachmentId },
+) {
+    if (content.isDeleted) return
+    val autoReveal = AudioTranscriptionReveal.autoReveals(content.isOutgoing, LocalAutoRevealTranscription.current)
     content.files.filterNot { it.attachmentId in videoIds }.forEach { file ->
         BubbleFileRow(
             file = file,
