@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.push
 
+import me.meeshy.sdk.model.StoryViewerInitialAction
 import me.meeshy.sdk.model.game.GameTarget
 
 /**
@@ -15,6 +16,18 @@ public sealed interface PushTapDestination {
     public data class Post(val postId: String) : PushTapDestination
     public data class Reel(val postId: String) : PushTapDestination
     public data class Story(val userId: String) : PushTapDestination
+
+    /**
+     * Une story NOMMÉE par son id (réaction, commentaire, lien) : le lecteur s'ouvre sur CETTE story, sur la feuille que
+     * l'intention désigne (iOS `StoryNotificationIntent` : commentaires, vues ou rien).
+     */
+    public data class StoryContent(
+        val postId: String,
+        val action: StoryViewerInitialAction?,
+        val commentId: String?,
+        val parentCommentId: String?,
+    ) : PushTapDestination
+
     public data class Mood(val statusId: String) : PushTapDestination
     public data class Profile(val userId: String) : PushTapDestination
     public data object Notifications : PushTapDestination
@@ -46,6 +59,12 @@ public sealed interface PushTapDestination {
             "voice_clone_ready", "report_resolved",
         )
 
+        private val COMMENT_TYPES = setOf(
+            "post_comment", "comment_reply", "comment_reaction", "comment_like",
+            "story_new_comment", "friend_story_comment", "story_thread_reply",
+        )
+        private val REACTION_TYPES = setOf("story_reaction", "status_reaction", "post_like")
+
         private const val PROGRESSION_ROUTE = "progression"
         private val EPHEMERAL_ENTITIES = setOf("STORY", "STATUS", "MOOD")
 
@@ -74,7 +93,14 @@ public sealed interface PushTapDestination {
             if (entity in EPHEMERAL_ENTITIES && type == "friend_new_story") {
                 payload.senderId?.let { return Story(it) }
             }
+            if (entity == "STORY") return StoryContent(postId, storyAction(type), payload.commentId, payload.parentCommentId)
             return Post(postId)
+        }
+
+        private fun storyAction(type: String): StoryViewerInitialAction? = when (type) {
+            in COMMENT_TYPES -> StoryViewerInitialAction.COMMENTS
+            in REACTION_TYPES -> StoryViewerInitialAction.VIEWS
+            else -> null
         }
     }
 }
