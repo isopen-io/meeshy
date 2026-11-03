@@ -34,6 +34,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.story.StoryCommentComposerState
+import me.meeshy.sdk.model.story.StoryComposerFold
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.sdk.model.story.StoryCommentPiece
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
@@ -221,6 +226,86 @@ private fun StoryCommentPieceChip(piece: StoryCommentPiece, onRemove: () -> Unit
             contentAlignment = Alignment.Center,
         ) {
             Icon(MeeshyIcons.Close, contentDescription = null, tint = MeeshyMediaChromeColors.OnMediaMuted, modifier = Modifier.size(14.dp))
+        }
+    }
+}
+
+internal const val STORY_COMPOSER_FOLD_TAG = "story.composer.fold"
+internal const val STORY_COMPOSER_UNFOLD_TAG = "story.composer.unfold"
+internal const val STORY_COMPOSER_BADGE_TAG = "story.composer.unfold.badge"
+
+/** Le chevron qui replie le composeur en bulle (iOS `composerFoldControl`) : visible par défaut, cible de 48 dp. */
+@Composable
+internal fun StoryComposerFoldChevron(onFold: () -> Unit, modifier: Modifier = Modifier) {
+    val label = stringResource(R.string.story_composer_fold)
+    val hint = stringResource(R.string.story_composer_fold_hint)
+    Box(
+        modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onFold)
+            .semantics {
+                role = Role.Button
+                contentDescription = "$label. $hint"
+            }
+            .testTag(STORY_COMPOSER_FOLD_TAG),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(MeeshyIcons.ChevronDown, contentDescription = null, tint = MeeshyMediaChromeColors.OnMediaMuted, modifier = Modifier.size(20.dp))
+    }
+}
+
+/**
+ * La bulle de réouverture (iOS `composerUnfoldButton`) : centrée, à l'icône de commentaire, elle rouvre le composeur sans
+ * rouvrir le clavier et signale ce que le repli garde — une prise en cours (pastille rouge) ou une réponse (flèche).
+ */
+@Composable
+internal fun StoryComposerUnfoldBubble(
+    badge: StoryComposerFold.BubbleBadge,
+    onUnfold: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val label = stringResource(R.string.story_composer_unfold)
+    val hint = stringResource(R.string.story_composer_unfold_hint)
+    val value = when (badge) {
+        StoryComposerFold.BubbleBadge.NONE -> ""
+        StoryComposerFold.BubbleBadge.RECORDING -> stringResource(R.string.story_composer_unfold_recording)
+        StoryComposerFold.BubbleBadge.REPLY -> stringResource(R.string.story_composer_unfold_replying)
+    }
+    Box(modifier.fillMaxWidth().padding(vertical = MeeshySpacing.sm), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(MeeshyMediaChromeColors.MediaFill)
+                .clickable(onClick = onUnfold)
+                .semantics {
+                    role = Role.Button
+                    contentDescription = "$label. $hint"
+                    if (value.isNotEmpty()) stateDescription = value
+                }
+                .testTag(STORY_COMPOSER_UNFOLD_TAG),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(MeeshyIcons.ChatBubble, contentDescription = null, tint = MeeshyMediaChromeColors.OnMedia, modifier = Modifier.size(22.dp))
+            when (badge) {
+                StoryComposerFold.BubbleBadge.NONE -> Unit
+                StoryComposerFold.BubbleBadge.RECORDING -> Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(MeeshyPalette.Error)
+                        .testTag(STORY_COMPOSER_BADGE_TAG),
+                )
+                StoryComposerFold.BubbleBadge.REPLY -> Icon(
+                    MeeshyIcons.Reply,
+                    contentDescription = null,
+                    tint = MeeshyMediaChromeColors.OnMedia,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(12.dp).testTag(STORY_COMPOSER_BADGE_TAG),
+                )
+            }
         }
     }
 }
