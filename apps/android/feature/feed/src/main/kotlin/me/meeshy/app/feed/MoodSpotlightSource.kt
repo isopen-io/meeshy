@@ -9,7 +9,7 @@ import javax.inject.Inject
  * Ce que l'appareil sait déjà d'une humeur avant tout réseau (iOS `MoodSpotlightSource.cachedEntry`) : la barre des
  * amis, puis celle de la découverte, telles que la dernière lecture les a gardées sur le disque.
  */
-internal fun interface MoodStatusCache {
+fun interface MoodStatusCache {
     suspend fun cachedEntry(statusId: String): StatusEntry?
 
     companion object {
@@ -17,7 +17,7 @@ internal fun interface MoodStatusCache {
     }
 }
 
-internal class StatusBarMoodCache @Inject constructor(
+class StatusBarMoodCache @Inject constructor(
     private val bars: StatusBarCacheRepository,
 ) : MoodStatusCache {
     override suspend fun cachedEntry(statusId: String): StatusEntry? =
