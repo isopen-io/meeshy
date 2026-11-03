@@ -95,7 +95,7 @@ internal fun SceneMediaLayer(
                 val url = source.url
                 val context = LocalContext.current
                 AsyncImage(
-                    model = sceneImageRequest(context, url, constraints.maxWidth, crop),
+                    model = sceneImageRequest(context, url, constraints.maxWidth, crop, environment.versionOf(url)),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     onSuccess = { events.onImageResolved(url) },

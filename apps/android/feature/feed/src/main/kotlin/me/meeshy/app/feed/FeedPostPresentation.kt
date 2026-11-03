@@ -113,6 +113,8 @@ data class FeedPostPresentation(
     val repostEmbed: RepostEmbedPresentation?,
     val viewCount: Int,
     val impressionCount: Int,
+    /** Personnes distinctes ayant ouvert le post (`uniqueViewCount`) — montrée à l'auteur seul. */
+    val uniqueViewCount: Int? = null,
     /** True when the signed-in viewer authored this post — gates the author-only reach line. */
     val isAuthor: Boolean,
     /** The post's shared place, or null when none — mirror of iOS `post.location`. */
@@ -254,6 +256,7 @@ object FeedPostBuilder {
             repostEmbed = RepostEmbedBuilder.forPost(post, preferences, mediaBaseUrl),
             viewCount = post.viewCount ?: 0,
             impressionCount = post.impressionCount ?: 0,
+            uniqueViewCount = post.uniqueViewCount,
             isAuthor = currentUserId != null && post.author?.id == currentUserId,
             location = FeedPostLocationBuilder.build(post.location),
             distanceMeters = post.distanceMeters,
