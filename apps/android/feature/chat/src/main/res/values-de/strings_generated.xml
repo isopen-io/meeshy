@@ -537,6 +537,18 @@
     <string name="message_detail_reactions_empty">Keine Reaktionen</string>
     <string name="message_detail_report_confirm_message">Die Nachricht wird an die Moderation weitergeleitet.</string>
     <string name="message_detail_report_confirm_title">Diese Nachricht melden?</string>
+    <plurals name="message_detail_send_history_attempt_count">
+        <item quantity="one">%1$d Versuch</item>
+        <item quantity="other">%1$d Versuche</item>
+    </plurals>
+    <string name="message_detail_send_history_attempt_number">Versuch %1$d</string>
+    <string name="message_detail_send_history_first_attempt">1. Versuch</string>
+    <string name="message_detail_send_history_outcome_failed">Fehlgeschlagen</string>
+    <string name="message_detail_send_history_outcome_succeeded">Erfolgreich</string>
+    <string name="message_detail_send_history_title">Sendeverlauf</string>
+    <string name="message_detail_send_history_transport_auto_retry">Automatischer Neuversuch</string>
+    <string name="message_detail_send_history_transport_realtime">Echtzeit</string>
+    <string name="message_detail_send_history_transport_realtime_fallback">Echtzeit-Fallback</string>
     <string name="message_detail_sentiment_a11y_label">Stimmung</string>
     <string name="message_detail_sentiment_a11y_value">%1$s, Wert %2$.2f</string>
     <string name="message_detail_sentiment_score">Wert: %1$.2f</string>
