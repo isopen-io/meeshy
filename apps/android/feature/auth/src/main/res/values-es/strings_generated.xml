@@ -1,6 +1,10 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="ageGate_body">Esta cuenta todavía no puede usar Meeshy. Podrás unirte a nosotros a los 13 años.</string>
+    <string name="arrival_celebration_lead">Preparando tus conversaciones…</string>
+    <string name="arrival_celebration_skip">Continuar</string>
+    <string name="arrival_celebration_status">Dirección confirmada — iniciando sesión…</string>
+    <string name="arrival_celebration_title">¡Dirección confirmada!</string>
     <string name="auth_back">Atrás</string>
     <string name="auth_email_label">Correo</string>
     <string name="auth_forgot_never_had_label">¿Nunca has tenido contraseña?</string>
