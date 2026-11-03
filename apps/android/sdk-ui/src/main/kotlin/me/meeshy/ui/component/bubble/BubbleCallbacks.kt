@@ -33,6 +33,10 @@ public data class BubbleCallbacks(
     val onFileClick: ((BubbleFile) -> Unit)? = null,
     /** Tap on the quoted-reply preview (only wired when the quoted message id is known). */
     val onReplyPreviewClick: (() -> Unit)? = null,
+    /** Tap sur le NOM de l'auteur cité : sa fiche profil (armé seulement s'il y en a une). */
+    val onQuotedAuthorTap: (() -> Unit)? = null,
+    /** Tap sur la miniature du média cité : la visionneuse (repli hôte : le saut à l'original). */
+    val onQuotedMediaTap: (() -> Unit)? = null,
     /** Tap on the citation card of a quoted story (only wired when the story still opens, #13296). */
     val onStoryCitationClick: (() -> Unit)? = null,
     /** Tap on a language flag of the Prisme strip, with its language code. */

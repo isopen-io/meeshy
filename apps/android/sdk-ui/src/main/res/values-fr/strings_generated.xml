@@ -101,8 +101,13 @@
     <string name="bubble_message_deleted">Message supprimé</string>
     <string name="bubble_meta_pinned_a11y">Message épinglé</string>
     <string name="bubble_protection_after_read">Disparaît après lecture</string>
+    <string name="bubble_reply_author_hint">Affiche le profil de l\'auteur cité</string>
+    <string name="bubble_reply_media">Médias</string>
+    <string name="bubble_reply_mood">Humeur</string>
+    <string name="bubble_reply_open_media">Ouvrir le média cité</string>
     <string name="bubble_reply_photo">Photo</string>
     <string name="bubble_reply_story">Story</string>
+    <string name="bubble_reply_you">Vous</string>
     <string name="bubble_status_delivered">Distribué</string>
     <string name="bubble_status_failed">Échec</string>
     <string name="bubble_status_pending">En attente</string>

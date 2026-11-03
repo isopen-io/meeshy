@@ -99,8 +99,13 @@
     <string name="bubble_message_deleted">Message deleted</string>
     <string name="bubble_meta_pinned_a11y">Pinned message</string>
     <string name="bubble_protection_after_read">Disappears after reading</string>
+    <string name="bubble_reply_author_hint">Shows the quoted author\'s profile</string>
+    <string name="bubble_reply_media">Media</string>
+    <string name="bubble_reply_mood">Mood</string>
+    <string name="bubble_reply_open_media">Open quoted media</string>
     <string name="bubble_reply_photo">Photo</string>
     <string name="bubble_reply_story">Story</string>
+    <string name="bubble_reply_you">You</string>
     <string name="bubble_status_delivered">Delivered</string>
     <string name="bubble_status_failed">Failed</string>
     <string name="bubble_status_pending">Pending</string>

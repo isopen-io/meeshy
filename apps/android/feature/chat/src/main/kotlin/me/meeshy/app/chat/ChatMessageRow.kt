@@ -70,6 +70,10 @@ internal class ChatMessageRowActions(
     val onTranslationDetail: (messageId: String) -> Unit = {},
     /** Window-space frame of the bubble, captured during layout for the long-press hero. */
     val onBubbleFramed: (messageId: String, frame: Rect) -> Unit = { _, _ -> },
+    /** Tap sur le nom de l'auteur cité dans une citation de la rangée plate : sa fiche profil. */
+    val onQuotedAuthorTap: (bubble: BubbleContent) -> Unit = {},
+    /** Tap sur la miniature du média cité : la visionneuse du message cité (repli : le saut à l'original). */
+    val onQuotedMediaTap: (messageId: String, quotedId: String) -> Unit = { _, _ -> },
     /** Tap sur la carte d'une story citée (#13296) : le post s'ouvre. */
     val onStoryCitationOpen: (postId: String) -> Unit = {},
     /** Un toucher sur une rangée en mode sélection (#13294) : la coche ou la décoche. */
@@ -146,6 +150,8 @@ internal fun ChatMessageRow(
             onReplyPreviewClick = { actions.onReplyPreviewClick(messageId) },
             onStoryCitationClick = bubble.storyReply?.postId?.takeIf { bubble.storyReply?.opensTarget == true }
                 ?.let { postId -> { actions.onStoryCitationOpen(postId) } },
+            onQuotedAuthorTap = { actions.onQuotedAuthorTap(bubble) }.takeIf { bubble.replyToAuthor != null },
+            onQuotedMediaTap = bubble.replyToId?.let { quotedId -> { actions.onQuotedMediaTap(messageId, quotedId) } },
             onFlagTap = { code -> actions.onFlagTap(messageId, code) },
             onShowReadStatus = { actions.onLongPress(messageId) },
             onRetry = { actions.onRetry(messageId) },

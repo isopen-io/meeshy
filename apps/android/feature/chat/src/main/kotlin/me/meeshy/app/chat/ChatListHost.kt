@@ -299,6 +299,16 @@ internal fun ChatListHost(
             onReplyCountLongPress = { messageId -> actions.openReplyThread(messageId) },
             onRetry = { messageId -> actions.retryMessage(messageId) },
             onSenderTap = { bubble -> bubble.senderProfile?.let(profileTap) },
+            onQuotedAuthorTap = { bubble -> bubble.replyToAuthor?.let(profileTap) },
+            onQuotedMediaTap = { messageId, quotedId ->
+                val quoted = currentMessages.firstOrNull { it.messageId == quotedId }
+                if (quoted?.images?.isNotEmpty() == true && !quoted.isBlurred && quoted.blurReveal == null) {
+                    media.open(MediaPresentation.Image(quotedId, 0))
+                    actions.openImageViewer(quotedId, 0)
+                } else {
+                    actions.onReplyPreviewTap(messageId)
+                }
+            },
             onOpenJoinProfile = { bubble -> bubble.joinNotice?.toProfileSheetUser()?.let(profileTap) },
             onAddReaction = { messageId ->
                 val quick = state.quickReactions.firstOrNull()
