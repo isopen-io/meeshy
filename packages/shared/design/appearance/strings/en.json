@@ -131,6 +131,30 @@
     "cadres-australs": {
       "name": "Southern frames",
       "description": "Three frames inspired by dot painting and the southern sky: twinkling circles of dots, a sea turtle swimming around your avatar, and the shining Southern Cross."
+    },
+    "meeshy-signature": {
+      "name": "Meeshy Signature",
+      "description": "Six rings by Meeshy, understated and legible at any size: gold thread, mother-of-pearl beads, eclipse, rosette, starry night and facets."
+    },
+    "meeshy-vivants": {
+      "name": "Alive by Meeshy",
+      "description": "Six animated rings by Meeshy that barely spill past your avatar: an orbit, an aurora halo, a pulse, sparkles, a comet and a swell."
+    },
+    "meeshy-fonds": {
+      "name": "Signature wallpapers",
+      "description": "Six wallpapers by Meeshy that stay quiet under your bubbles, light or dark: silk, dots, fine waves, cane weave, terrazzo and dusk."
+    },
+    "meeshy-fonds-vivants": {
+      "name": "Living wallpapers",
+      "description": "Four animated wallpapers by Meeshy, gently moving behind your messages: fireflies, aurora veil, soft snow and ripples."
+    },
+    "meeshy-bordures": {
+      "name": "Signature borders",
+      "description": "Six banner frames by Meeshy, kept to the edge so your level and counters stay in view: gold piping, scrolls, pearl string, onyx, marquetry and midnight."
+    },
+    "meeshy-bordures-vivantes": {
+      "name": "Living borders",
+      "description": "Four animated banner frames by Meeshy: a glint gliding over gold, shining pearls, a twinkling night and a neon light."
     }
   },
   "designs": {
@@ -153,7 +177,17 @@
     "bulles-legeres": "Light bubbles",
     "pluie-de-petales": "Petal rain",
     "maree": "Tide",
-    "braises": "Embers"
+    "braises": "Embers",
+    "soie": "Silk",
+    "pointille": "Dots",
+    "vagues-fines": "Fine waves",
+    "cannage": "Cane weave",
+    "terrazzo": "Terrazzo",
+    "crepuscule": "Dusk",
+    "lucioles": "Fireflies",
+    "voile-aurore": "Aurora veil",
+    "neige-douce": "Soft snow",
+    "ondes": "Ripples"
   },
   "rings": {
     "filet": "Hairline",
@@ -214,7 +248,19 @@
     "soleil-montagnes": "Sun over the mountains",
     "cercles-points": "Dot circles",
     "tortue-marine": "Sea turtle",
-    "croix-du-sud": "Southern Cross"
+    "croix-du-sud": "Southern Cross",
+    "fil-d-or": "Gold thread",
+    "perles-de-nacre": "Mother-of-pearl",
+    "eclipse": "Eclipse",
+    "rosace": "Rosette",
+    "nuit-etoilee": "Starry night",
+    "facettes": "Facets",
+    "orbite": "Orbit",
+    "halo-aurore": "Aurora halo",
+    "pulsation": "Pulse",
+    "scintillement": "Twinkle",
+    "comete": "Comet",
+    "houle": "Swell"
   },
   "gamut": {
     "indigo": "Meeshy Indigo",
@@ -254,6 +300,16 @@
     "rituel": "African ritual",
     "rituel-anime": "African ritual, animated",
     "celte": "Celtic",
-    "celte-anime": "Celtic, animated"
+    "celte-anime": "Celtic, animated",
+    "liseret-or": "Gold piping",
+    "volutes": "Scrolls",
+    "rang-de-perles": "Pearl string",
+    "onyx": "Onyx",
+    "marqueterie": "Marquetry",
+    "minuit": "Midnight",
+    "liseret-lumiere": "Light piping",
+    "perles-vives": "Shining pearls",
+    "nuit-vive": "Twinkling night",
+    "neon": "Neon"
   }
 }

@@ -12,12 +12,17 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { loadPackIndex } from '../../../../services/packs/PackIndex';
+import { appearancePackDetail } from '../../../../services/packs/appearancePackSpec';
 
 const GATEWAY = resolve(__dirname, '../../../../..');
 const DESIGN = resolve(GATEWAY, '../../packages/shared/design');
 const ASSETS = join(GATEWAY, 'assets/packs');
 
 const load = (env: NodeJS.ProcessEnv = {}) => loadPackIndex([DESIGN], env, ASSETS);
+
+/** Les collections Meeshy de #15158 ont leur propre bloc ; les comptes ci-dessous portent sur le catalogue qui les précède. */
+const COLLECTIONS = ['meeshy-signature', 'meeshy-vivants', 'meeshy-fonds', 'meeshy-fonds-vivants', 'meeshy-bordures', 'meeshy-bordures-vivantes'];
+const beforeCollections = <T extends { readonly slug: string }>(entries: readonly T[]): readonly T[] => entries.filter((entry) => !COLLECTIONS.includes(entry.slug));
 
 describe('registres d’apparence générés', () => {
   const index = load();
@@ -27,7 +32,7 @@ describe('registres d’apparence générés', () => {
   });
 
   it('servent les quatre packs de fonds, « Essentiels » installé par défaut et non retirable', () => {
-    const wallpapers = index.entries('wallpaper');
+    const wallpapers = beforeCollections(index.entries('wallpaper'));
 
     expect(wallpapers.map((pack) => pack.slug)).toEqual(['essentiels', 'heritages', 'nature-et-ciel', 'illustrations', 'animes']);
     expect(wallpapers.map((pack) => [pack.installedByDefault, pack.removable])).toEqual([[true, false], [false, true], [false, true], [false, true], [true, true]]);
@@ -35,7 +40,7 @@ describe('registres d’apparence générés', () => {
   });
 
   it('porte 17 modèles de fonds, 9 bannières, 59 contours et 14 cadres de bannière, clés lues dans les contrats vérifiés', () => {
-    const count = (domain: 'wallpaper' | 'banner' | 'avatar-ring' | 'banner-frame') => index.entries(domain).reduce((sum, pack) => sum + index.itemKeys(pack).length, 0);
+    const count = (domain: 'wallpaper' | 'banner' | 'avatar-ring' | 'banner-frame') => beforeCollections(index.entries(domain)).reduce((sum, pack) => sum + index.itemKeys(pack).length, 0);
 
     expect(count('wallpaper')).toBe(17);
     expect(count('banner')).toBe(9);
@@ -57,7 +62,7 @@ describe('registres d’apparence générés', () => {
   it('les 28 cadres photo (#10936) : sept styles, un fixe et un animé chacun, en contour d’avatar et en cadre de bannière, à installer et usage annoncé', () => {
     const styles = ['haussmannien', 'arabe', 'grec', 'ancestral', 'technologique', 'rituel', 'celte'];
     const rings = index.entries('avatar-ring').filter((pack) => pack.slug.startsWith('contours-') && pack.slug !== 'contours-essentiels' && pack.slug !== 'contours-animes');
-    const frames = index.entries('banner-frame');
+    const frames = beforeCollections(index.entries('banner-frame'));
 
     expect(rings.map((pack) => pack.slug)).toEqual(styles.map((style) => `contours-${style}`));
     expect(frames.map((pack) => pack.slug)).toEqual(styles.map((style) => `cadres-${style}`));
@@ -84,7 +89,7 @@ describe('registres d’apparence générés', () => {
   });
 
   it('chaque couche Lottie d’un contrat d’apparence est servie par le magasin (#10638) — sans quoi iOS, qui la télécharge, reste à l’image fixe', () => {
-    const entries = (['wallpaper', 'banner', 'avatar-ring'] as const).flatMap((domain) => index.entries(domain));
+    const entries = (['wallpaper', 'banner', 'avatar-ring'] as const).flatMap((domain) => beforeCollections(index.entries(domain)));
     const lottieRefs = entries.flatMap((entry) => {
       const contract = JSON.parse(readFileSync(join(ASSETS, entry.contract.src), 'utf8')) as {
         readonly designs?: readonly { readonly lottie?: { readonly src: string; readonly sha256: string } }[];
@@ -130,6 +135,28 @@ describe('registres d’apparence générés', () => {
       return contract.rings.flatMap((ring) => [ring.decor?.back, ring.decor?.front]).flatMap((ref) => (ref ? [ref] : []));
     });
     expect(films).toHaveLength(60);
+    films.forEach((ref) => {
+      expect(createHash('sha256').update(readFileSync(join(ASSETS, ref.src))).digest('hex')).toBe(ref.sha256);
+      expect({ src: ref.src, served: index.isServedAsset(ref.src) }).toEqual({ src: ref.src, served: true });
+    });
+  });
+
+  it('les six collections Meeshy (#15158) sont servies, à ajouter depuis la boutique, signées Meeshy, nommées en sept langues, et chaque film est servi à son empreinte', () => {
+    const domains = [['avatar-ring', 'meeshy-signature', 'meeshy-vivants'], ['wallpaper', 'meeshy-fonds', 'meeshy-fonds-vivants'], ['banner-frame', 'meeshy-bordures', 'meeshy-bordures-vivantes']] as const;
+    const films = domains.flatMap(([domain, ...slugs]) => {
+      const served = index.entries(domain).slice(-2);
+      expect(served.map((pack) => pack.slug)).toEqual(slugs);
+      return served.flatMap((pack) => {
+        expect({ slug: pack.slug, installed: pack.installedByDefault, removable: pack.removable, origin: pack.origin, price: pack.price, names: Object.keys(pack.names).length }).toEqual({ slug: pack.slug, installed: false, removable: true, origin: 'builtin', price: undefined, names: 7 });
+        expect(appearancePackDetail(pack, false, true, index.itemKeys(pack).length)).toMatchObject({ author: 'Meeshy', builtin: true, price: null });
+        expect(index.itemKeys(pack).length).toBeGreaterThanOrEqual(pack.slug.endsWith('vivants') || pack.slug.endsWith('vivantes') ? (domain === 'avatar-ring' ? 6 : 4) : 6);
+        const contract = JSON.parse(readFileSync(join(ASSETS, pack.contract.src), 'utf8')) as {
+          readonly [key: string]: readonly { readonly lottie?: { readonly src: string; readonly sha256: string }; readonly decor?: { readonly back?: { readonly src: string; readonly sha256: string }; readonly front?: { readonly src: string; readonly sha256: string } } }[];
+        };
+        return [...(contract.rings ?? []), ...(contract.designs ?? []), ...(contract.frames ?? [])].flatMap((item) => [item.lottie, item.decor?.back, item.decor?.front]).flatMap((ref) => (ref ? [ref] : []));
+      });
+    });
+    expect(films).toHaveLength(13);
     films.forEach((ref) => {
       expect(createHash('sha256').update(readFileSync(join(ASSETS, ref.src))).digest('hex')).toBe(ref.sha256);
       expect({ src: ref.src, served: index.isServedAsset(ref.src) }).toEqual({ src: ref.src, served: true });

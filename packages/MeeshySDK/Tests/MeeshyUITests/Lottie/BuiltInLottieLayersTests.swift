@@ -62,4 +62,22 @@ final class BuiltInLottieLayersTests: XCTestCase {
             XCTAssertGreaterThan(film.duration, 0)
         }
     }
+
+    /// #15158 — les films des collections Meeshy (contours vivants, fonds vivants) sont servis à l'octet de leur
+    /// référence, sous 60 Ko, et le moteur partagé les lit.
+    func test_eachMeeshyCollectionFilm_isServedAtItsReference_andTheSharedEngineReadsIt() throws {
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: shippedFolder.path), "les fichiers servis ne sont pas lisibles depuis cet hôte de test")
+        let rings = try XCTUnwrap(AvatarRingCatalog.shared.packs.first { $0.slug == "meeshy-vivants" }).rings
+        let wallpapers = try XCTUnwrap(AppearanceCatalog.shared.wallpaperPacks.first { $0.slug == "meeshy-fonds-vivants" }).designs
+        let films = rings.flatMap { [$0.decor?.back, $0.decor?.front].compactMap { $0 } } + wallpapers.compactMap(\.lottie)
+        XCTAssertEqual(films.count, 13)
+        for ref in films {
+            let data = try Data(contentsOf: shippedFolder.appendingPathComponent(ref.src))
+            XCTAssertEqual(data.count, ref.bytes, ref.src)
+            XCTAssertLessThan(data.count, 60 * 1024, ref.src)
+            XCTAssertEqual(SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(), ref.sha256, ref.src)
+            let film = try XCTUnwrap(LottieLayerSource.film(data: data), "\(ref.src) doit se lire")
+            XCTAssertGreaterThan(film.duration, 0)
+        }
+    }
 }

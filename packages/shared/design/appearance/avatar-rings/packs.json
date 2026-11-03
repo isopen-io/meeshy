@@ -1879,5 +1879,203 @@
         "avatar"
       ]
     }
+  },
+  {
+    "slug": "meeshy-signature",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 19,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "03f2cc26b698dc50.webp",
+      "bytes": 13298,
+      "sha256": "03f2cc26b698dc506c6f797d94c9c2120371a32e9fc139442e7f0b78c022c662"
+    },
+    "preview": null,
+    "contract": {
+      "src": "6b22dc5a3faad6a1.json",
+      "bytes": 15059,
+      "sha256": "6b22dc5a3faad6a19b4c6241bd2291abb339e0d86385c2bedf21e9841ef2b6d6"
+    },
+    "strings": {
+      "fr": {
+        "src": "fdff023b52884736.json",
+        "bytes": 174,
+        "sha256": "fdff023b528847367695e129e353a19a9dcfb71a90de8ed82b16410482acd202"
+      },
+      "en": {
+        "src": "3dda7ea6f41e826e.json",
+        "bytes": 171,
+        "sha256": "3dda7ea6f41e826e835e9e8b71fc8aa3e73540b67975f75d2c960437c02e8ce3"
+      },
+      "es": {
+        "src": "ff6ace8281929094.json",
+        "bytes": 178,
+        "sha256": "ff6ace828192909417dca71aa399f3909a7a3e49cc18a404c05dcb490e8526a9"
+      },
+      "pt": {
+        "src": "5f238052c47ad1ac.json",
+        "bytes": 179,
+        "sha256": "5f238052c47ad1ac9de62da85636f67cba65c8d99cbe35ba165eef86aecc7537"
+      },
+      "de": {
+        "src": "506148e4f47769be.json",
+        "bytes": 173,
+        "sha256": "506148e4f47769bea06d982c6b923b155e9770ae346d03c8517ceef096346cee"
+      },
+      "it": {
+        "src": "b5a20df54cc5bf78.json",
+        "bytes": 184,
+        "sha256": "b5a20df54cc5bf78c94fd039fe1b7f67f9cce04cd4029fba4d3d2f3833c2ede0"
+      },
+      "ar": {
+        "src": "a504163dde75d7d4.json",
+        "bytes": 205,
+        "sha256": "a504163dde75d7d4ceb1719f6af5160c1eca90b6f362643be8b7062be2d582f4"
+      }
+    },
+    "downloadBytes": {
+      "story": 15059,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Signature Meeshy",
+        "description": "Six contours par Meeshy, sobres et lisibles à toute taille : fil d’or, perles de nacre, éclipse, rosace, nuit étoilée et facettes."
+      },
+      "en": {
+        "name": "Meeshy Signature",
+        "description": "Six rings by Meeshy, understated and legible at any size: gold thread, mother-of-pearl beads, eclipse, rosette, starry night and facets."
+      },
+      "es": {
+        "name": "Firma Meeshy",
+        "description": "Seis contornos de Meeshy, sobrios y legibles a cualquier tamaño: hilo de oro, perlas de nácar, eclipse, rosetón, noche estrellada y facetas."
+      },
+      "pt": {
+        "name": "Assinatura Meeshy",
+        "description": "Seis contornos da Meeshy, sóbrios e legíveis em qualquer tamanho: fio de ouro, pérolas de nácar, eclipse, rosácea, noite estrelada e facetas."
+      },
+      "de": {
+        "name": "Meeshy Signatur",
+        "description": "Sechs Rahmen von Meeshy, schlicht und in jeder Größe lesbar: Goldfaden, Perlmuttperlen, Finsternis, Rosette, Sternennacht und Facetten."
+      },
+      "it": {
+        "name": "Firma Meeshy",
+        "description": "Sei contorni di Meeshy, sobri e leggibili a ogni dimensione: filo d’oro, perle di madreperla, eclissi, rosone, notte stellata e sfaccettature."
+      },
+      "ar": {
+        "name": "توقيع Meeshy",
+        "description": "ستة أطر من Meeshy، رصينة وواضحة بأي حجم: خيط ذهبي، ولآلئ صدفية، وكسوف، ووردة، وليلة مرصّعة بالنجوم، وأوجه مصقولة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "meeshy-vivants",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 20,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "ef5b41e192cebd09.webp",
+      "bytes": 13392,
+      "sha256": "ef5b41e192cebd096d1e2bb2e9b1897e6f37555a01c05b6f11e1d0ed37a7701c"
+    },
+    "preview": null,
+    "contract": {
+      "src": "259c83751c2b3e79.json",
+      "bytes": 8353,
+      "sha256": "259c83751c2b3e799a33f41089d09e933478803f92726ec00eca4400c0263bba"
+    },
+    "strings": {
+      "fr": {
+        "src": "68639ed5bb4aa4f2.json",
+        "bytes": 162,
+        "sha256": "68639ed5bb4aa4f2c5c4975f2cef742155c900e27754c45fb61bf069e3c11b0f"
+      },
+      "en": {
+        "src": "3f7c9df00a927ea3.json",
+        "bytes": 145,
+        "sha256": "3f7c9df00a927ea3c58188b48ca4244874d544c0248a7ee5edd2952c0907726b"
+      },
+      "es": {
+        "src": "bb53f213f1dd8137.json",
+        "bytes": 153,
+        "sha256": "bb53f213f1dd81372cacffeac70333f984eea7ba7911b36be0cce7f5e0718256"
+      },
+      "pt": {
+        "src": "5826cef4dd855fe0.json",
+        "bytes": 167,
+        "sha256": "5826cef4dd855fe0735458265c4f2c69bf4dda4845c0b386d69131f3f4441423"
+      },
+      "de": {
+        "src": "0e1969028f52443b.json",
+        "bytes": 155,
+        "sha256": "0e1969028f52443b49750d8c2e2d322921a3d40c667ff33dfb8c6b3ff20fc767"
+      },
+      "it": {
+        "src": "7437499516e37a15.json",
+        "bytes": 165,
+        "sha256": "7437499516e37a15306dad239b1f1d206869bdc45d7ab8da187a752a5a7ab859"
+      },
+      "ar": {
+        "src": "106b3323ef8ce6b1.json",
+        "bytes": 166,
+        "sha256": "106b3323ef8ce6b14115059211028de2a25fe2c2cf4f413a9087816abdf5924c"
+      }
+    },
+    "downloadBytes": {
+      "story": 8353,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Vivants par Meeshy",
+        "description": "Six contours animés par Meeshy, qui débordent à peine de l’avatar : une orbite, un halo d’aurore, une pulsation, des étincelles, une comète et une houle."
+      },
+      "en": {
+        "name": "Alive by Meeshy",
+        "description": "Six animated rings by Meeshy that barely spill past your avatar: an orbit, an aurora halo, a pulse, sparkles, a comet and a swell."
+      },
+      "es": {
+        "name": "Vivos de Meeshy",
+        "description": "Seis contornos animados de Meeshy que apenas desbordan tu avatar: una órbita, un halo de aurora, un pulso, destellos, un cometa y un oleaje."
+      },
+      "pt": {
+        "name": "Vivos da Meeshy",
+        "description": "Seis contornos animados da Meeshy que mal transbordam do teu avatar: uma órbita, um halo de aurora, uma pulsação, faíscas, um cometa e uma ondulação."
+      },
+      "de": {
+        "name": "Lebendig von Meeshy",
+        "description": "Sechs animierte Rahmen von Meeshy, die kaum über deinen Avatar hinausragen: eine Umlaufbahn, ein Polarlicht-Halo, ein Puls, Funken, ein Komet und eine Dünung."
+      },
+      "it": {
+        "name": "Vivi di Meeshy",
+        "description": "Sei contorni animati di Meeshy che escono appena dal tuo avatar: un’orbita, un alone d’aurora, una pulsazione, scintille, una cometa e un’onda lunga."
+      },
+      "ar": {
+        "name": "نابضة من Meeshy",
+        "description": "ستة أطر متحركة من Meeshy تتجاوز صورتك الرمزية بالكاد: مدار، وهالة شفق، ونبض، وشرارات، ومذنّب، وموج."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
   }
 ]
