@@ -75,9 +75,42 @@ final class ConversationRowMenuCapabilitiesTests: XCTestCase {
         XCTAssertTrue(capabilities(makeConversation(currentUserRole: "member"), user: makeUser(role: "ADMIN")).obsolete)
     }
 
-    func test_make_direct_cannotMakeObsolete() {
-        let caps = capabilities(makeConversation(type: .direct, currentUserRole: "creator", participantUserId: "peer"), user: makeUser())
-        XCTAssertFalse(caps.obsolete)
+    // MARK: - Rendre obsolète un tête-à-tête (#14653, #14675) — l'un OU l'autre membre
+
+    private func openDirect(currentUserRole: String? = "member") -> MeeshyConversation {
+        makeConversation(type: .direct, currentUserRole: currentUserRole, participantUserId: "peer")
+    }
+
+    func test_make_openDirect_nonCreatorMember_canMakeObsolete() {
+        XCTAssertTrue(capabilities(openDirect(), user: makeUser()).obsolete,
+                      "Dans un tête-à-tête ouvert, l'un OU l'autre membre rend obsolète, comme le web et Android.")
+    }
+
+    func test_make_openDirect_creator_canMakeObsolete() {
+        XCTAssertTrue(capabilities(openDirect(currentUserRole: "creator"), user: makeUser()).obsolete)
+    }
+
+    func test_make_openDirect_anonymous_cannotMakeObsolete() {
+        XCTAssertFalse(capabilities(openDirect(), user: makeUser(role: nil, isAnonymous: true)).obsolete)
+    }
+
+    func test_make_openDirect_readerNotLoaded_cannotMakeObsolete() {
+        XCTAssertFalse(capabilities(openDirect(), user: nil).obsolete)
+    }
+
+    func test_make_inactiveDirect_cannotMakeObsolete() {
+        let closed = makeConversation(type: .direct, currentUserRole: "member", participantUserId: "peer", isActive: false)
+        XCTAssertFalse(capabilities(closed, user: makeUser()).obsolete)
+    }
+
+    func test_make_closedDirect_cannotMakeObsolete() {
+        var closed = openDirect()
+        closed.closedAt = Date()
+        XCTAssertFalse(capabilities(closed, user: makeUser()).obsolete)
+    }
+
+    func test_make_groupMember_cannotMakeObsolete() {
+        XCTAssertFalse(capabilities(makeConversation(currentUserRole: "member"), user: makeUser()).obsolete)
     }
 
     // MARK: - Inviter et lien de partage

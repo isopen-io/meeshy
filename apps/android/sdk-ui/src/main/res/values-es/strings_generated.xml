@@ -153,6 +153,9 @@
     </plurals>
     <string name="presence_offline">Desconectado</string>
     <string name="presence_online">En línea</string>
+    <string name="pull_refresh_armed">Suelta para actualizar</string>
+    <string name="pull_refresh_done">Actualizado</string>
+    <string name="pull_refresh_refreshing">Actualizando</string>
     <string name="reactions_more">Más reacciones</string>
     <string name="retouch_crop_original">Original</string>
     <string name="retouch_effect_angel">Ángel</string>
@@ -215,6 +218,10 @@
     <string name="retouch_tool_text">Texto</string>
     <string name="retouch_tool_trim">Recortar</string>
     <string name="settings_info_button_label">Más información sobre %1$s</string>
+    <string name="skeleton_feed_post_loading">Cargando una publicación</string>
+    <string name="skeleton_link_row_loading">Cargando un enlace</string>
+    <string name="skeleton_profile_loading">Cargando el perfil</string>
+    <string name="skeleton_stories_loading">Cargando las historias</string>
     <string name="slide_rail_delete_cancel">Cancelar</string>
     <string name="slide_rail_delete_confirm_action">Eliminar</string>
     <string name="slide_rail_delete_confirm_title">¿Eliminar esta escena?</string>

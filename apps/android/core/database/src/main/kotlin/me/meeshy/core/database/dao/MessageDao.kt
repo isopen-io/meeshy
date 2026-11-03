@@ -1,6 +1,8 @@
 package me.meeshy.core.database.dao
 
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +25,14 @@ public interface MessageDao {
     /** Les lignes du fil dont la charge nomme [postId] : candidates à une citation retirée (#13296). */
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId AND payload LIKE '%' || :postId || '%'")
     public suspend fun mentioning(conversationId: String, postId: String): List<MessageEntity>
+
+    /**
+     * Les lignes qui PEUVENT porter [userId] : son propre message (colonne `senderId`) ou une charge qui le nomme
+     * (citation, transfert). Un pré-filtre SQL qui sur-sélectionne — l'id peut figurer dans une URL — ; la loi se
+     * lit sur la charge décodée. [userId] est apparié littéralement : échapper `\`, `%` et `_` par `\` d'abord.
+     */
+    @Query("SELECT * FROM messages WHERE senderId = :rawUserId OR payload LIKE '%' || :userId || '%' ESCAPE '\\'")
+    public suspend fun involving(rawUserId: String, userId: String): List<MessageEntity>
 
     /**
      * #13792 — parmi les [window] lignes les plus RÉCENTES du fil, celles qui PEUVENT dire le bout en bout (drapeau chiffré,
@@ -69,6 +79,14 @@ public interface MessageDao {
             "ORDER BY createdAt DESC LIMIT :limit",
     )
     public fun observeRecentForConversation(conversationId: String, limit: Int): Flow<List<MessageEntity>>
+
+    /**
+     * INSERT IGNORE : n'écrit que les lignes dont l'identifiant est absent et ne remplace JAMAIS une ligne existante
+     * (préchargement d'un push : jamais d'écrasement d'un payload riche). Rend le rowid de chaque ligne, `-1` pour une
+     * ligne ignorée.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    public suspend fun insertIfAbsent(rows: List<MessageEntity>): List<Long>
 
     @Upsert
     public suspend fun upsertAll(rows: List<MessageEntity>)
@@ -207,7 +225,33 @@ public interface MessageDao {
 
     @Query("DELETE FROM messages")
     public suspend fun clear()
+
+    /** Rétention — les lignes confirmées par le serveur plus vieilles que [cutoff] (une ligne optimiste n'est jamais purgée). */
+    @Query("SELECT id, serverId FROM messages WHERE sendState IS NULL AND createdAt < :cutoff LIMIT :limit")
+    public suspend fun retentionKeysOlderThan(cutoff: Long, limit: Int): List<MessageKeys>
+
+    /** Rétention — les éphémères confirmés dont l'échéance est passée. */
+    @Query("SELECT id, serverId FROM messages WHERE sendState IS NULL AND expiresAt IS NOT NULL AND expiresAt <= :nowMillis LIMIT :limit")
+    public suspend fun retentionKeysExpired(nowMillis: Long, limit: Int): List<MessageKeys>
+
+    /** Rétention — toutes les clés d'un fil, pour purger une conversation entière sans orphelin. */
+    @Query("SELECT id, serverId FROM messages WHERE conversationId = :conversationId")
+    public suspend fun retentionKeysForConversation(conversationId: String): List<MessageKeys>
+
+    /** Rétention — les fils qui dépassent [cap] lignes confirmées. */
+    @Query("SELECT conversationId FROM messages WHERE sendState IS NULL GROUP BY conversationId HAVING COUNT(*) > :cap")
+    public suspend fun conversationsOverCap(cap: Int): List<String>
+
+    /** Rétention — les lignes confirmées au-delà des [keep] plus récentes d'un fil. */
+    @Query(
+        "SELECT id, serverId FROM messages WHERE conversationId = :conversationId AND sendState IS NULL " +
+            "ORDER BY createdAt DESC LIMIT -1 OFFSET :keep",
+    )
+    public suspend fun retentionKeysBeyondNewest(conversationId: String, keep: Int): List<MessageKeys>
 }
+
+/** Les deux identifiants sous lesquels les tables filles peuvent référencer un message. */
+public data class MessageKeys(val id: String, val serverId: String?)
 
 /**
  * Upserts server-truth rows without erasing what only this device knows (retry counter, last

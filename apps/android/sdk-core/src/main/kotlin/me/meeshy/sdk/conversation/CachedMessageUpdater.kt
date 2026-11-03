@@ -3,6 +3,7 @@ package me.meeshy.sdk.conversation
 import androidx.room.withTransaction
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
+import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.QuotePropagation
 import me.meeshy.sdk.net.MeeshyApi
@@ -64,6 +65,29 @@ internal class CachedMessageUpdater(
             }
         }
     }
+
+    /**
+     * Réécrit EN UNE ÉCRITURE toutes les lignes que [select] rend (même transaction, un seul `upsertAll`), sous le
+     * compte de [ticket]. [transform] rend le MÊME objet pour une ligne qu'elle ne change pas : elle n'est pas
+     * réécrite, donc ne réveille aucun observateur. Une charge illisible est laissée telle quelle. Rend les
+     * conversations réellement écrites.
+     */
+    suspend fun rewriteMany(
+        ticket: AccountTicket?,
+        select: suspend () -> List<MessageEntity>,
+        transform: (ApiMessage) -> ApiMessage,
+    ): Set<String> = fence.commitOrWrite(ticket) {
+        database.withTransaction {
+            val written = select().mapNotNull { row ->
+                val current = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull()
+                    ?: return@mapNotNull null
+                val updated = transform(current)
+                if (updated === current) null else MessageEntityFactory.refreshed(row, updated).bumped()
+            }
+            if (written.isNotEmpty()) messageDao.upsertAll(written)
+            written.map { it.conversationId }.toSet()
+        }
+    } ?: emptySet()
 
     /**
      * Réécrit, dans une seule transaction, chaque réponse de [conversationId] qui cite l'un des [parentIds]

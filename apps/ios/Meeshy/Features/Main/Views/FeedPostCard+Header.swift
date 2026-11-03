@@ -87,9 +87,7 @@ extension FeedPostCard {
                     // seule énumération, où la donnée la plus consultée — quand
                     // — se noyait dans la moins consultée.
                     // Suivie des points que ce post a rapportés (#9571).
-                    PostDateWithPoints(postId: post.id, seed: post.viewerPoints, color: theme.textMuted) {
-                        Text(RelativeTimeFormatter.shortString(for: post.timestamp))
-                    }
+                    FeedPostCardTimestamp(post: post, color: theme.textMuted)
 
                     // Attribution de republication, juste après le pseudo :
                     // l'icône, puis l'AUTEUR D'ORIGINE — rien d'autre (directive
@@ -275,6 +273,39 @@ extension FeedPostCard {
 /// La lecture (`seed`) est notée à chaque nouvelle valeur — la date est
 /// toujours là, donc la note part même quand la marque se tait — et
 /// `engagement:post-updated` fait rouler le nombre (`PostViewerPointsStore`).
+/// L'heure de la carte, suivie de ses points — ou, pour une carte encore dans
+/// la file d'envoi, « En attente d'envoi » à sa place (#10331) : elle n'a pas
+/// de date de publication.
+struct FeedPostCardTimestamp: View {
+    let post: FeedPost
+    let color: Color
+
+    var body: some View {
+        if let attente = PendingPublicationMarker.label(postId: post.id) {
+            Label(attente, systemImage: "clock.arrow.circlepath")
+                .labelStyle(.titleAndIcon)
+                .font(.caption)
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .accessibilityIdentifier("feed.post.pendingSend")
+        } else {
+            PostDateWithPoints(postId: post.id, seed: post.viewerPoints, color: color) {
+                Text(RelativeTimeFormatter.shortString(for: post.timestamp))
+            }
+        }
+    }
+}
+
+/// **Une publication encore dans la file d'envoi se voit comme telle** (#10331).
+/// La carte optimiste porte le cmid de sa ligne `.createPost` comme id : tant
+/// qu'il n'a pas été remplacé par l'id serveur, rien n'est publié.
+nonisolated enum PendingPublicationMarker {
+    static func label(postId: String) -> String? {
+        guard ClientMutationId.isValid(postId) else { return nil }
+        return String(localized: "feed.unsent.waiting", defaultValue: "En attente d'envoi", bundle: .main)
+    }
+}
+
 struct PostDateWithPoints<DateLabel: View>: View {
     let postId: String
     let seed: Int?

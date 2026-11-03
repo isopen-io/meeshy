@@ -26,14 +26,11 @@
  * et la fait reculer de six heures dans la file : un échec tenace ne bloque
  * jamais les suivantes.
  *
- * LE GEL DE MODÉRATION (#14676, décision porteur du 2026-11-02, option a). Une
- * conversation visée par un signalement NON CLOS — la conversation elle-même,
- * l'un de ses messages, ou l'un de ses membres — n'est pas effacée : l'obsolescence côté membres ne
- * change pas (contenu masqué, conversation hors des listes), mais sa purge
- * recule de `OBSOLETE_PURGE_REPORT_HOLD_MS`, et la passe qui suit la clôture du
- * dernier signalement la reprend. « Non clos » = tout statut hors `resolved`,
- * `rejected`, `dismissed` : un statut inconnu gèle (fail-closed). Si les
- * signalements ne se lisent pas, la passe n'efface rien.
+ * AUCUN GEL PAR SIGNALEMENT (#14691, décision porteur du 2026-11-03). Une
+ * conversation obsolète n'est pas un objet de signalement : gelée côté serveur
+ * dès l'émission, sans trace chez les clients, elle est détruite à 48 h. Ces
+ * 48 h SONT la fenêtre de modération ; un signalement ouvert ne la prolonge pas.
+ * Le gel qu'avait posé #14676 (option a, 2026-11-02) est retiré.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
@@ -44,10 +41,6 @@ const logger = enhancedLogger.child({ module: 'ObsoleteConversationPurge' });
 export const OBSOLETE_PURGE_EVERY_MS = 60 * 60 * 1000;
 /** Le recul d'une conversation dont la purge a échoué : elle cède la tête de file aux suivantes. */
 export const OBSOLETE_PURGE_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;
-/** Le recul d'une conversation gelée par un signalement ouvert : la passe qui suit la clôture la reprend. */
-export const OBSOLETE_PURGE_REPORT_HOLD_MS = OBSOLETE_PURGE_RETRY_DELAY_MS;
-/** Les statuts de `Report` qui CLOSENT un signalement ; tout autre statut, connu ou non, gèle la purge. */
-export const CLOSED_REPORT_STATUSES: readonly string[] = ['resolved', 'rejected', 'dismissed'];
 const CONVERSATIONS_PER_PASS = 20;
 const MESSAGE_PAGE = 500;
 const MAX_MESSAGE_PAGES = 200;
@@ -69,8 +62,6 @@ export type ObsoletePurgeReport = {
   readonly candidates: number;
   readonly purged: number;
   readonly failed: number;
-  /** Conversations gelées par un signalement ouvert (#14676) : reculées, rien d'effacé. */
-  readonly held: number;
   /** Une conversation a plus de messages qu'une passe n'en balaie : elle reprend à la suivante. */
   readonly truncated: boolean;
 };
@@ -89,7 +80,7 @@ export type ObsoletePurgePrisma = Pick<
   | 'conversationReadCursor' | 'callSession' | 'conversationPreference' | 'userConversationPreferences'
   | 'conversationPublicKey' | 'conversationShare' | 'agentConfig' | 'agentUserRole' | 'agentConversationSummary'
   | 'agentAnalysisSnapshot' | 'conversationMessageStats' | 'agentAnalytic' | 'agentScanLog' | 'agentTopicUsageLog'
-  | 'conversationShareLink' | 'participant' | 'callRecording' | 'serverEncryptionKey' | 'report'
+  | 'conversationShareLink' | 'participant' | 'callRecording' | 'serverEncryptionKey'
 >;
 
 /** Ce qui pend à un message, effacé avant lui. */
@@ -235,50 +226,15 @@ function stillMarkedForPurge(conversation: PurgeCandidate, now: Date): boolean {
  * échecs tenaces bloqueraient toute la file. Seul `purgeAfter` bouge — les
  * deux autres marques restent, la conversation reste une cible.
  */
-async function postponePurge(prisma: ObsoletePurgePrisma, conversationId: string, now: Date, delayMs = OBSOLETE_PURGE_RETRY_DELAY_MS): Promise<void> {
+async function postponePurge(prisma: ObsoletePurgePrisma, conversationId: string, now: Date): Promise<void> {
   try {
     await prisma.conversation.update({
       where: { id: conversationId },
-      data: { purgeAfter: new Date(now.getTime() + delayMs) },
+      data: { purgeAfter: new Date(now.getTime() + OBSOLETE_PURGE_RETRY_DELAY_MS) },
     });
   } catch (error) {
     logger.error('obsolete conversation purge could not be postponed', { conversationId, error });
   }
-}
-
-type OpenReportTargets = {
-  readonly conversationIds: ReadonlySet<string>;
-  readonly messageIds: readonly string[];
-  readonly userIds: readonly string[];
-};
-
-/** Ce que les signalements non clos désignent, lu UNE fois par passe ; une erreur arrête la passe (fail-closed). */
-async function loadOpenReportTargets(prisma: ObsoletePurgePrisma): Promise<OpenReportTargets> {
-  const reports = await prisma.report.findMany({
-    where: { reportedType: { in: ['conversation', 'message', 'user'] }, status: { notIn: [...CLOSED_REPORT_STATUSES] } },
-    select: { reportedType: true, reportedEntityId: true },
-  });
-  const idsOf = (type: string) => reports.filter((report) => report.reportedType === type).map((report) => report.reportedEntityId);
-  return {
-    conversationIds: new Set(idsOf('conversation')),
-    messageIds: [...new Set(idsOf('message'))],
-    userIds: [...new Set(idsOf('user'))],
-  };
-}
-
-/**
- * Le message signalé est compté sans regarder `deletedAt` : l'obsolescence l'a masqué, elle ne l'a pas blanchi.
- * Un MEMBRE signalé (`reportedType: 'user'`, option a telle que choisie) gèle aussi, ligne active ou partie.
- */
-async function heldByOpenReport(prisma: ObsoletePurgePrisma, targets: OpenReportTargets, conversationId: string): Promise<boolean> {
-  if (targets.conversationIds.has(conversationId)) return true;
-  if (targets.messageIds.length > 0) {
-    const reported = await prisma.message.count({ where: { conversationId, id: { in: [...targets.messageIds] } } });
-    if (reported > 0) return true;
-  }
-  if (targets.userIds.length === 0) return false;
-  const reportedMembers = await prisma.participant.count({ where: { conversationId, userId: { in: [...targets.userIds] } } });
-  return reportedMembers > 0;
 }
 
 export async function purgeObsoleteConversations(
@@ -290,7 +246,7 @@ export async function purgeObsoleteConversations(
 
   if (!options.apply) {
     const candidates = await prisma.conversation.count({ where });
-    return { applied: false, candidates, purged: 0, failed: 0, held: 0, truncated: false };
+    return { applied: false, candidates, purged: 0, failed: 0, truncated: false };
   }
 
   const rows: readonly PurgeCandidate[] = await prisma.conversation.findMany({
@@ -300,21 +256,13 @@ export async function purgeObsoleteConversations(
     take: CONVERSATIONS_PER_PASS,
   });
   const marked = rows.filter((row) => stillMarkedForPurge(row, now));
-  if (marked.length === 0) return { applied: true, candidates: rows.length, purged: 0, failed: 0, held: 0, truncated: false };
-  const openReports = await loadOpenReportTargets(prisma);
+  if (marked.length === 0) return { applied: true, candidates: rows.length, purged: 0, failed: 0, truncated: false };
 
   let purged = 0;
   let failed = 0;
-  let held = 0;
   let truncated = false;
   for (const conversation of marked) {
     try {
-      if (await heldByOpenReport(prisma, openReports, conversation.id)) {
-        held += 1;
-        logger.info('obsolete conversation purge held by an open report', { conversationId: conversation.id });
-        await postponePurge(prisma, conversation.id, now, OBSOLETE_PURGE_REPORT_HOLD_MS);
-        continue;
-      }
       if (await purgeConversation(prisma, options.attachmentRemover, conversation.id)) {
         purged += 1;
       } else {
@@ -326,5 +274,5 @@ export async function purgeObsoleteConversations(
       await postponePurge(prisma, conversation.id, now);
     }
   }
-  return { applied: true, candidates: rows.length, purged, failed, held, truncated };
+  return { applied: true, candidates: rows.length, purged, failed, truncated };
 }

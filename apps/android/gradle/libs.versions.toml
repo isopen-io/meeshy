@@ -67,6 +67,9 @@ mlkitSelfieSegmentation = "16.0.0-beta6"
 # lot: effets-de-visage-appel (#13706)
 mlkitFaceDetection = "17.1.0"
 
+# lot: about-and-support-pages-iso (#14771)
+playReview = "2.0.1"
+
 [libraries]
 play-services-auth-blockstore = { module = "com.google.android.gms:play-services-auth-blockstore", version.ref = "playServicesAuthBlockstore" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -183,6 +186,9 @@ mlkit-segmentation-selfie = { module = "com.google.mlkit:segmentation-selfie", v
 # lot: effets-de-visage-appel (#13706) — modèle servi par Play Services (déclaré à l'installation dans le manifeste de
 # sdk-core) : l'embarqué pèse ~13 Mo par appareil (bibliothèque native + modèles), celui-ci moins d'un.
 mlkit-face-detection = { module = "com.google.android.gms:play-services-mlkit-face-detection", version.ref = "mlkitFaceDetection" }
+
+# lot: about-and-support-pages-iso (#14771) — avis intégré Google Play de « Noter l'app » ; absent sans services Play (repli : fiche Play).
+play-review-ktx = { module = "com.google.android.play:review-ktx", version.ref = "playReview" }
 
 [bundles]
 compose = ["compose-ui", "compose-ui-graphics", "compose-ui-tooling-preview", "compose-material3", "compose-material-icons"]
