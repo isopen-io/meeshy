@@ -210,7 +210,7 @@ internal fun Map<String, PreviewState>.loadedMessages(): Map<String, List<me.mee
     mapNotNull { (id, preview) ->
         when (preview) {
             is PreviewState.Loaded -> id to preview.snapshot.messages.map { me.meeshy.sdk.conversation.LocalMessage(it) }
-            PreviewState.Empty -> id to emptyList()
+            PreviewState.Empty -> id to emptyList<me.meeshy.sdk.conversation.LocalMessage>()
             else -> null
         }
     }.toMap()
