@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -45,9 +46,11 @@ private val HEADER_AVATAR_SIZE = 32.dp
  * republication ajoute l'icône et le `@handle`, sans « via ». Lue d'un seul tenant par
  * TalkBack : « Profil de X ».
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun StoryAuthorIdentity(
     onClick: (() -> Unit)?,
+    onLongClick: (() -> Unit)? = null,
     name: String,
     avatarUrl: String?,
     accentHex: String,
@@ -62,7 +65,7 @@ internal fun StoryAuthorIdentity(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .clip(RoundedCornerShape(MeeshySpacing.sm))
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(if (onClick != null) Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick) else Modifier)
             .semantics(mergeDescendants = true) { contentDescription = profileLabel },
     ) {
         MeeshyAvatar(
