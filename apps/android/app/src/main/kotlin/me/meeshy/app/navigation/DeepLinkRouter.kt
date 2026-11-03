@@ -1,6 +1,5 @@
 package me.meeshy.app.navigation
 
-import android.net.Uri
 import me.meeshy.app.navigation.graph.CommunityRoutes
 import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.LinksRoutes
@@ -14,6 +13,9 @@ internal sealed interface DeepLinkAction {
 
     /** Une conversation par identifiant : le guichet unique d'ouverture (toast d'erreur identique partout). */
     data class OpenConversation(val conversationId: String) : DeepLinkAction
+
+    /** Une conversation avec un brouillon (`quickreply`, `send`) : empilée par son adresse, la seule qui porte `?draft=`. */
+    data class OpenDraft(val conversationId: String, val draft: String) : DeepLinkAction
 
     /** La conversation au dernier message le plus récent (hors archivées et fermées). */
     data object OpenRecentConversation : DeepLinkAction
@@ -75,13 +77,13 @@ internal object DeepLinkRouter {
     fun action(raw: String): DeepLinkAction = action(DeepLinkParser.parse(raw, WEB_ORIGIN))
 
     /**
-     * Le brouillon d'un raccourci (`quickreply?text=`, `send?message=`) voyage dans la route du fil, comme le
-     * `?draft=` du lien `meeshy://conversation/<id>` ; sans brouillon, c'est l'ouverture par identifiant.
+     * Le brouillon d'un raccourci (`quickreply?text=`, `send?message=`) voyage dans le `?draft=` du lien
+     * `meeshy://conversation/<id>` (la route du fil ne le porte pas) ; sans brouillon, c'est l'ouverture par identifiant.
      */
     private fun conversation(destination: DeepLinkDestination.Conversation): DeepLinkAction {
         val draft = destination.draftText?.takeIf { it.isNotBlank() }
             ?: return DeepLinkAction.OpenConversation(destination.id)
-        return DeepLinkAction.Navigate("${Routes.chat(destination.id)}?draft=${Uri.encode(draft)}")
+        return DeepLinkAction.OpenDraft(destination.id, draft)
     }
 
     /**

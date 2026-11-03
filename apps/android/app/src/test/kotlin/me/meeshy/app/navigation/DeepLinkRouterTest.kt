@@ -20,7 +20,7 @@ class DeepLinkRouterTest {
         D.OwnProfile to navigate(ProfileRoutes.OWN),
         D.UserProfile("bob") to navigate("profile/bob"),
         D.Conversation("c1") to DeepLinkAction.OpenConversation("c1"),
-        D.Conversation("c1", "salut") to navigate("chat/c1?draft=salut"),
+        D.Conversation("c1", "salut") to DeepLinkAction.OpenDraft("c1", "salut"),
         D.JoinLink("abc") to navigate("join/abc"),
         D.ChatLink("abc") to navigate("join/abc"),
         D.TrackedLink("AbC123") to DeepLinkAction.ResolveTrackedLink("AbC123"),

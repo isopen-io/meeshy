@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.navigation.NavDeepLinkRequest
 import androidx.navigation.NavHostController
+import androidx.navigation.navOptions
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -46,6 +48,7 @@ class DeepLinkDispatcher @Inject constructor(
                 surfacesClosed()
                 opener.open(action.conversationId)
             }
+            is DeepLinkAction.OpenDraft -> navigateUri(navController, draftUri(action))
             DeepLinkAction.OpenRecentConversation -> openRecent(navController)
             DeepLinkAction.OpenUnreadConversations -> {
                 listEntries.request(ConversationListEntry.unreadFilter)
@@ -70,6 +73,23 @@ class DeepLinkDispatcher @Inject constructor(
             navController.navigate(route) {
                 launchSingleTop = true
                 popUpTo(Routes.CONVERSATIONS) { inclusive = false }
+            }
+        }
+    }
+
+    private fun draftUri(action: DeepLinkAction.OpenDraft): Uri =
+        Uri.parse("meeshy://conversation/${Uri.encode(action.conversationId)}?draft=${Uri.encode(action.draft)}")
+
+    private fun navigateUri(navController: NavHostController, uri: Uri) {
+        surfaces.clearForConversation {
+            runCatching {
+                navController.navigate(
+                    NavDeepLinkRequest.Builder.fromUri(uri).build(),
+                    navOptions {
+                        launchSingleTop = true
+                        popUpTo(Routes.CONVERSATIONS) { inclusive = false }
+                    },
+                )
             }
         }
     }
