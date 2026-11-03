@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,8 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -170,7 +169,7 @@ private fun TriggerVisual(trigger: StoryNotificationContext.Trigger, ink: androi
             modifier = Modifier.semantics { contentDescription = trigger.emoji },
         )
         is StoryNotificationContext.Trigger.Comment -> Icon(
-            Icons.Filled.ChatBubble,
+            MeeshyIcons.ChatBubble,
             contentDescription = null,
             tint = ink.copy(alpha = MeeshyOpacity.intense),
             modifier = Modifier.size(56.dp),
