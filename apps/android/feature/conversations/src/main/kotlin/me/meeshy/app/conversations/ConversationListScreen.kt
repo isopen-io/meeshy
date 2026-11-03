@@ -162,7 +162,6 @@ fun ConversationListScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            ConnectionBannerStrip(state.banner)
             val content = ConversationListContent.of(state, messageSectionShown = messageSearch.showsSection)
             // iOS : le rail puis les filtres sont les premières lignes de la liste, dans tous les états (#13664).
             Box(modifier = Modifier.weight(1f).nestedScroll(searchScrollConnection)) {
