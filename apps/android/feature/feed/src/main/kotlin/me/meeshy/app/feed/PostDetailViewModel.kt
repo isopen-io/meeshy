@@ -48,6 +48,12 @@ import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.InMemoryEmojiUsageStore
 import javax.inject.Inject
 
+/** Effets ponctuels du detail d'un post. */
+sealed interface PostDetailEffect {
+    /** Le post n'existe plus (supprime) : quitter l'ecran. */
+    data object Close : PostDetailEffect
+}
+
 /**
  * A single post opened full-screen from the feed — the Android take on iOS `PostDetailView`.
  * Fetches the post by id, projects it through the shared [FeedPostBuilder] so the Prisme
@@ -64,12 +70,6 @@ import javax.inject.Inject
  * `comment:added`/`comment:deleted` for this post resyncs the badge to the server-authoritative
  * count the event carries (mirror of iOS `PostDetailViewModel` `commentAdded`/`commentDeleted`).
  */
-/** Effets ponctuels du detail d'un post. */
-sealed interface PostDetailEffect {
-    /** Le post n'existe plus (supprime) : quitter l'ecran. */
-    data object Close : PostDetailEffect
-}
-
 data class PostDetailUiState(
     val post: FeedPostPresentation? = null,
     val isLoading: Boolean = false,
