@@ -11,7 +11,7 @@ package me.meeshy.sdk.model
  * Le serveur chiffre toujours au repos : « sans chiffrement » n'est pas un choix. Trois modes
  * s'offrent, dans cet ordre :
  * - [CreationEncryptionMode.SERVER] : le choix de tous, et le défaut d'un utilisateur ordinaire ;
- * - [CreationEncryptionMode.HYBRID] : visible pour tous, il chiffre aujourd'hui comme Serveur ;
+ * - [CreationEncryptionMode.HYBRID] : visible pour tous, il chiffre deux fois (couche serveur + couche appareil libsignal, #14369) ;
  * - [CreationEncryptionMode.E2EE] : réservé, pendant la phase de test, au rôle de plateforme qui
  *   peut déjà l'activer (ANALYST et plus, #12588). Il est le défaut de ces rôles LÀ OÙ IL
  *   FONCTIONNE : un tête-à-tête, sur un client qui sait chiffrer. Ailleurs (groupe, client qui ne

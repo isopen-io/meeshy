@@ -3,10 +3,10 @@ package me.meeshy.app.stories
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -180,7 +180,7 @@ internal fun SceneToolColumn(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Column(
-            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            modifier = Modifier.weight(1f, fill = false).composerScrollEdgeCue(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(gap),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -213,7 +213,8 @@ internal fun ScenePublishSocle(
         Row(
             modifier = Modifier
                 .weight(1f)
-                .height(SCENE_TARGET)
+                .heightIn(min = SCENE_TARGET)
+                .height(IntrinsicSize.Min)
                 .clip(RoundedCornerShape(MeeshyRadius.pill))
                 .background(if (canPublish) Brush.linearGradient(MeeshyPalette.BrandGradient) else SolidColor(SOCLE_VEIL)),
             verticalAlignment = Alignment.CenterVertically,
@@ -232,7 +233,7 @@ internal fun ScenePublishSocle(
                     color = Color.White.copy(alpha = if (canPublish) 1f else 0.6f),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 1,
+                    maxLines = PUBLISH_LABEL_MAX_LINES,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -240,6 +241,9 @@ internal fun ScenePublishSocle(
         }
     }
 }
+
+/** Comme iOS (`publishCapsuleLabel`, `lineLimit(2)`) : « Publier la story, le post et le réel » passe à la ligne à 360 dp. */
+private const val PUBLISH_LABEL_MAX_LINES: Int = 2
 
 @Composable
 private fun AudiencePastille(audience: SceneAudience, onClick: () -> Unit) {

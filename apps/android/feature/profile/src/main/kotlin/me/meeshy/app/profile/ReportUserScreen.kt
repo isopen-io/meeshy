@@ -192,5 +192,5 @@ private fun reasonLabel(reason: ReportReason): Int = when (reason) {
     ReportReason.HARASSMENT -> R.string.report_reason_harassment
     ReportReason.INAPPROPRIATE -> R.string.report_reason_inappropriate
     ReportReason.IMPERSONATION -> R.string.report_reason_impersonation
-    ReportReason.OTHER, ReportReason.VIOLENCE, ReportReason.HATE_SPEECH -> R.string.report_reason_other
+    ReportReason.OTHER, ReportReason.VIOLENCE, ReportReason.HATE_SPEECH, ReportReason.FAKE_PROFILE -> R.string.report_reason_other
 }

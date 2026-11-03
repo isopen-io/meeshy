@@ -11,6 +11,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { boundApnsPayload } from './boundApnsPayload';
 import { ephemeralPushFields } from './ephemeralPushFields';
+import { conversationRegimeField } from './conversationRegimePushFields';
 import { callBackPushFields } from './callBackPushFields';
 import { contentActionPushFields } from './contentActionPushFields';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
@@ -1066,6 +1067,9 @@ export class NotificationService {
                   ? String(params.metadata.reactionEmoji ?? '')
                   : ''),
                 notificationLocKey: params.context.notificationLocKey || '',
+                // #14669 — le régime de la conversation, hors de `showPreview` :
+                // il ne compose aucun contenu.
+                ...conversationRegimeField(params.context.conversationEncryptionMode),
                 // GW5 — persistance NSE : timestamp serveur + type du message,
                 // clés absentes (pas de '') quand la notification ne porte pas
                 // de message.
@@ -1397,7 +1401,7 @@ export class NotificationService {
           }),
       this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
-        select: { title: true, type: true, avatar: true },
+        select: { title: true, type: true, avatar: true, encryptionMode: true },
       }),
     ]);
     const sender = resolvedSender;
@@ -1496,6 +1500,8 @@ export class NotificationService {
       context: {
         conversationId: params.conversationId,
         conversationTitle: conversation?.title,
+        // #14669 — le régime QUALIFIE la bannière, sur les trois éventails.
+        ...conversationRegimeField(conversation?.encryptionMode),
         // Group avatar — used by the iOS in-app toast as a fallback when the
         // sender has no personal avatar (group messages).
         conversationAvatar: conversation?.avatar ?? undefined,
@@ -1637,7 +1643,7 @@ export class NotificationService {
           }),
       this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
-        select: { title: true, type: true, avatar: true },
+        select: { title: true, type: true, avatar: true, encryptionMode: true },
       }),
       this.resolveRecipientPrism(params.mentionedUserId),
       params.prismSource
@@ -1698,6 +1704,8 @@ export class NotificationService {
       context: {
         conversationId: params.conversationId,
         conversationTitle: conversation?.title,
+        // #14669 — le régime QUALIFIE la bannière, sur les trois éventails.
+        ...conversationRegimeField(conversation?.encryptionMode),
         // Group avatar — fallback for the iOS in-app toast when the sender
         // has no personal avatar (group messages).
         conversationAvatar: conversation?.avatar ?? undefined,
@@ -2302,7 +2310,7 @@ export class NotificationService {
           }),
       this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
-        select: { title: true, type: true },
+        select: { title: true, type: true, encryptionMode: true },
       }),
       this.resolveRecipientPrism(params.recipientUserId),
       this.loadMessagePrismSource(params.messageId),
@@ -2359,6 +2367,8 @@ export class NotificationService {
       context: {
         conversationId: params.conversationId,
         conversationTitle: conversation?.title,
+        // #14669 — le régime QUALIFIE la bannière, sur les trois éventails.
+        ...conversationRegimeField(conversation?.encryptionMode),
         conversationType: conversation?.type as any,
         messageId: params.messageId,
         originalMessageId: params.originalMessageId,

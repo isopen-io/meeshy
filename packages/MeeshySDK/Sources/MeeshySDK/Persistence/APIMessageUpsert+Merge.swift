@@ -90,6 +90,7 @@ extension APIMessageUpsert {
             next.isEncrypted = api.isEncrypted ?? next.isEncrypted
             next.encryptionMode = api.encryptionMode ?? next.encryptionMode
         }
+        next.servedClientMessageId = api.clientMessageId ?? next.servedClientMessageId
         return next
     }
 
@@ -264,6 +265,7 @@ extension APIMessageUpsert {
             senderRingJson: MessageRecord.servedSenderRingJson(api.sender, id: api.id) ?? nil
         )
         record.editedById = api.editedById
+        record.servedClientMessageId = api.clientMessageId
         if api.consumedByMe == true {
             record.sealAsOpenedViewOnce(at: Date())
         }

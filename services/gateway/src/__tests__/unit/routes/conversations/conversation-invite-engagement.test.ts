@@ -11,6 +11,13 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify, { type FastifyRequest } from 'fastify';
 
+// #14107 — la boîte de demandes a ses propres témoins (`messageRequests.test.ts`) : ici, tout membre entre directement.
+jest.mock('../../../../services/messaging/messageRequests', () => ({
+  ...jest.requireActual<object>('../../../../services/messaging/messageRequests'),
+  decideOpenings: jest.fn(async () => new Map()),
+  decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })),
+}));
+
 jest.mock('../../../../utils/conversation-id-cache', () => ({
   resolveConversationId: jest.fn(async () => '507f1f77bcf86cd799439011'),
 }));
@@ -92,7 +99,7 @@ function prismaDouble(bobAlreadyMember: boolean) {
       }),
       update: jest.fn(async (args: { where: { id: string }; data: Record<string, unknown> }) => ({ id: args.where.id, ...args.data, user: bob })),
     },
-    user: {
+    user: { findMany: jest.fn(async () => []),
       findFirst: jest.fn(async () => bob),
       findUnique: jest.fn(async () => bob),
     },

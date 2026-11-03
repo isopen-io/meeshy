@@ -44,6 +44,7 @@ const wire = (overrides: Record<string, Record<string, unknown>> = {}) => ({
     hideProfileFromSearch: true,
     acceptCallsFromNonContacts: false,
     notifyContactsOnReturn: false,
+    saveMediaToGallery: true,
     allowAnalytics: true,
     ...overrides.privacy,
   },
@@ -63,6 +64,7 @@ const expected: AppPreferences = {
   hideProfileFromSearch: true,
   acceptCallsFromNonContacts: false,
   notifyContactsOnReturn: false,
+  saveMediaToGallery: true,
   allowAnalytics: true,
 };
 
@@ -104,6 +106,23 @@ describe('decodeAppPreferences — une PROJECTION, jamais la charge reçue', () 
     const decoded = decodeAppPreferences({ ...wire(), privacy: withoutAnalytics });
     expect(decoded).not.toBeNull();
     expect(decoded !== null && 'allowAnalytics' in decoded).toBe(false);
+  });
+
+  test('« Sauvegarder média » est lu sous `privacy` ; ABSENT (ancien serveur), il vaut COUPÉ — un média ne rejoint la galerie que si on le veut (#14641)', () => {
+    expect(decodeAppPreferences(wire({ privacy: { saveMediaToGallery: false } }))?.saveMediaToGallery).toBe(false);
+    const { saveMediaToGallery: _served, ...withoutGallery } = wire().privacy;
+    expect(decodeAppPreferences({ ...wire(), privacy: withoutGallery })?.saveMediaToGallery).toBe(false);
+  });
+
+  test('« Sauvegarder média » de mauvais type rend la lecture illisible', () => {
+    expect(decodeAppPreferences(wire({ privacy: { saveMediaToGallery: 'oui' } }))).toBeNull();
+  });
+
+  test('la lecture demande « Sauvegarder média », et son écriture part sous `privacy`', async () => {
+    const { calls, transport } = transportAnswering({ ok: true, data: wire() });
+    await loadAppPreferences({ source: 'gateway', transport });
+    expect(calls[0]?.path).toContain('privacy.saveMediaToGallery');
+    expect(preferencesPatchBody({ saveMediaToGallery: true })).toEqual({ privacy: { saveMediaToGallery: true } });
   });
 
   test('une bascule « Analytique » de mauvais type rend la lecture illisible, jamais un refus ou un accord deviné', () => {
@@ -265,6 +284,7 @@ describe('patchAppPreferences — l’écriture fusionne, et rend ce que le serv
         hideProfileFromSearch: true,
         acceptCallsFromNonContacts: false,
         notifyContactsOnReturn: false,
+        saveMediaToGallery: true,
         allowAnalytics: true,
       },
     });

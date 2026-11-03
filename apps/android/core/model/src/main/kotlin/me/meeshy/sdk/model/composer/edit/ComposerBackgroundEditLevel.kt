@@ -2,7 +2,7 @@ package me.meeshy.sdk.model.composer.edit
 
 /** Les outils du rail à plat d'un fond média que l'application sert, chacun nommé par son identifiant dans l'arbre partagé. */
 enum class ComposerBackgroundTool(val entryId: String) {
-    FRAMING("framing"), TRIM("trim"), FILTERS("filters"), FRAMES("frames"), ADJUST("adjust"), EFFECTS("effects"),
+    FRAMING("framing"), CROP("crop"), TRIM("trim"), FILTERS("filters"), FRAMES("frames"), ADJUST("adjust"), EFFECTS("effects"),
     SOUND("sound"), LOOP("loop"), ROTATE("rotate"), DESCRIPTION("description"),
 }
 

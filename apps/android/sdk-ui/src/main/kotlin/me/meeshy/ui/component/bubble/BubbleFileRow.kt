@@ -62,7 +62,7 @@ import me.meeshy.ui.theme.MeeshySpacing
  * A null [onClick] (no url yet, or no host callback) leaves the row non-interactive.
  */
 @Composable
-internal fun BubbleFileRow(
+public fun BubbleFileRow(
     file: BubbleFile,
     onColor: Color,
     onClick: (() -> Unit)?,

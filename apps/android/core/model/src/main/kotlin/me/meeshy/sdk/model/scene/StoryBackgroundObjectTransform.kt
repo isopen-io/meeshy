@@ -49,6 +49,9 @@ data class StoryBackgroundObjectTransform(
             offsetXFraction == 0f && offsetYFraction == 0f && rotationDegrees == 0f
 
     companion object {
+        /** La scène d'une story : 9:16. */
+        const val SCENE_ASPECT: Double = 9.0 / 16.0
+
         /** No extra framing — a plain aspect-fill. */
         val IDENTITY: StoryBackgroundObjectTransform = StoryBackgroundObjectTransform(
             scaleX = 1f,
@@ -69,6 +72,32 @@ data class StoryBackgroundObjectTransform(
          * collapses to its neutral component — so a malformed object can never blank or
          * invert the slide, only fail to reframe it.
          */
+        /**
+         * Un fond RECADRÉ peint comme iOS (`contentsRect`, puis aspect-fill) quand la mesure de la source est connue
+         * ([sourceAspect], largeur / hauteur) : la fenêtre gardée remplit la scène ([canvasAspect]) par un agrandissement
+         * UNIFORME, son centre au centre de la scène, le geste de l'auteur par-dessus. La projection sans mesure étire la
+         * fenêtre dès que ses proportions diffèrent de la scène ; elle reste le repli d'un fond sans mesure, sans recadrage,
+         * ou ajusté (la bande d'un fond ajusté laisserait voir la source hors de la fenêtre).
+         */
+        fun from(mediaObject: StoryMediaObject, sourceAspect: Double?, filled: Boolean = true, canvasAspect: Double = SCENE_ASPECT): StoryBackgroundObjectTransform {
+            val crop = mediaObject.crop?.takeIf { !it.isFull }?.let { StoryMediaCrop.clamped(it) }
+            val source = sourceAspect?.takeIf { it.isFinite() && it > 0.0 }
+            if (crop == null || source == null || !filled) return from(mediaObject)
+            val wide = source > canvasAspect
+            val shownX = if (wide) source / canvasAspect else 1.0
+            val shownY = if (wide) 1.0 else canvasAspect / source
+            val fill = maxOf(1.0 / (crop.width * shownX), 1.0 / (crop.height * shownY))
+            val centreX = (crop.x + crop.width / 2.0 - 0.5) * shownX
+            val centreY = (crop.y + crop.height / 2.0 - 0.5) * shownY
+            val plain = from(mediaObject.copy(crop = null))
+            return plain.copy(
+                scaleX = (plain.scaleX * fill).toFloat(),
+                scaleY = (plain.scaleY * fill).toFloat(),
+                offsetXFraction = plain.offsetXFraction - (fill * centreX).toFloat(),
+                offsetYFraction = plain.offsetYFraction - (fill * centreY).toFloat(),
+            )
+        }
+
         fun from(mediaObject: StoryMediaObject): StoryBackgroundObjectTransform {
             val zoom = mediaObject.scale.toFloat().takeIf { it.isFinite() && it > 0f } ?: 1f
             val panX = (mediaObject.x.toFloat().takeIf { it.isFinite() } ?: 0.5f) - 0.5f

@@ -15,6 +15,8 @@ import MeeshySDK
 /// Une instance par conversation ouverte (`ConversationDependencies`).
 final class EndToEndThreadClear {
     @Published private(set) var adopted: [String: E2EEPlaintextEntry] = [:]
+    /// Le verdict de la couche appareil des messages hybrides (#14369), lu au même coffre.
+    let hybrid = HybridThreadIntegrity()
 
     init() {}
 
@@ -25,9 +27,17 @@ final class EndToEndThreadClear {
 
     /// Lit puis pose le clair de tout message scellé du lot, et le retient.
     func resolve(_ messages: inout [MeeshyMessage], from endToEnd: any EndToEndMessagingProviding, conversationId: String, account: String) async {
+        await hybrid.resolve(messages, from: endToEnd, conversationId: conversationId, account: account)
         let found = await EndToEndThreadPlaintexts.resolve(&messages, from: endToEnd, conversationId: conversationId, account: account)
         guard found.contains(where: { adopted[$0.key] != $0.value }) else { return }
         adopted.merge(found) { _, fresh in fresh }
+    }
+
+    /// Une relecture du magasin doit-elle passer par le coffre ? Un message
+    /// chiffré sans son clair, ou un message hybride d'un autre membre pas
+    /// encore lu au coffre (#14369).
+    func needsVaultRead(_ message: MeeshyMessage) -> Bool {
+        EndToEndThreadPlaintexts.awaitsPlaintext(message) || hybrid.needsRead(message)
     }
 
     /// Repose sur une ligne du magasin le clair adopté pour elle, rejugé à SA

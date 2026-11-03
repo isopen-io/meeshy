@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.conversation.CategoryCreation
+import me.meeshy.sdk.conversation.ConversationObsoleting
 import me.meeshy.sdk.conversation.ConversationPreferenceActions
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.PreferenceWrite
@@ -32,10 +33,10 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
 
 /** Ce qui s'est mal passé, dit avec les mots d'iOS (`conversation.options.error.*`). */
-enum class ConversationOptionsError { SAVE, CREATE_CATEGORY, LEAVE, DELETE }
+enum class ConversationOptionsError { SAVE, CREATE_CATEGORY, LEAVE, DELETE, OBSOLETE }
 
-/** Pourquoi la fiche se referme : la conversation n'est plus à l'utilisateur, ou le pair est bloqué. */
-enum class ConversationOptionsExit { LEFT, DELETED, BLOCKED }
+/** Pourquoi la fiche se referme : la conversation n'est plus à l'utilisateur (ou plus à personne), ou le pair est bloqué. */
+enum class ConversationOptionsExit { LEFT, DELETED, OBSOLETED, BLOCKED }
 
 @Immutable
 data class ConversationOptionsUiState(
@@ -64,6 +65,7 @@ class ConversationOptionsViewModel @Inject constructor(
     private val blocker: BlockActionCoordinator,
     private val blockCache: BlockCache,
     private val session: SessionRepository,
+    private val obsoleter: ConversationObsoleting,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationOptionsUiState())
@@ -177,6 +179,10 @@ class ConversationOptionsViewModel @Inject constructor(
 
     fun deleteForMe() =
         exitWith(ConversationOptionsExit.DELETED, ConversationOptionsError.DELETE) { id -> conversations.deleteForMe(id) }
+
+    /** « Rendre obsolète » (#14645) : la fiche et le fil se ferment une fois la passerelle d'accord, la ligne a déjà quitté le cache. */
+    fun makeObsolete() =
+        exitWith(ConversationOptionsExit.OBSOLETED, ConversationOptionsError.OBSOLETE) { id -> obsoleter.makeObsolete(id) }
 
     fun blockPeer() {
         val peer = _state.value.plan?.blockUserId ?: return

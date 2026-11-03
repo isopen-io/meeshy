@@ -356,6 +356,10 @@ nonisolated struct BubbleContent: Equatable {
     /// compatibilite source avec les fixtures existantes, meme patron que
     /// `location` et `sticker` sur `APIMessage`. Le builder l'assigne.
     var isBurning: Bool = false
+
+    /// #14369 — le verdict de la couche appareil d'un message hybride, projeté
+    /// de `MeeshyMessage.deviceLayerIntegrity` : le pied le dit discrètement.
+    var deviceLayerIntegrity: HybridDeviceLayerIntegrity? = nil
     /// Vue unique TEXTE ouverte et lue sur place (#7579) : la retoucher la
     /// fait passer à « déjà ouvert ». Projection de
     /// `MeeshyMessage.isViewOnceRevealed`, posée par le builder.
@@ -508,6 +512,7 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.location == rhs.location
             && lhs.protection == rhs.protection
             && lhs.isBurning == rhs.isBurning
+            && lhs.deviceLayerIntegrity == rhs.deviceLayerIntegrity
             && lhs.isViewOnceRevealed == rhs.isViewOnceRevealed
             && lhs.exitGate == rhs.exitGate
             && lhs.captureVerdict == rhs.captureVerdict

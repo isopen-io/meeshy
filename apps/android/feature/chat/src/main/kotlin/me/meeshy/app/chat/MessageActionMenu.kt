@@ -110,6 +110,8 @@ data class MessageActionContext(
     val canWrite: Boolean = true,
     /** End-to-end encrypted and unopened here (#13110): nothing of it is copied or forwarded. */
     val isEndToEndSealed: Boolean = false,
+    /** End-to-end encrypted (opened here or in an end-to-end thread, #14591): it is never forwarded, as on iOS. */
+    val isEndToEndRegime: Boolean = false,
     /** The iOS entries the law offers ([MessageMenuEntries]) — each still needs its host ([hostedEntries]). */
     val entries: Set<MessageMenuEntries.Entry> = emptySet(),
     /**
@@ -151,7 +153,7 @@ data class MessageActionContext(
 
     /** `forward` of the shared law, its exit verdict aside ([MessageExitOffer]). */
     val offersForward: Boolean
-        get() = offersRelay && !isEndToEndSealed && exitOffer.offers(MessageExit.FORWARD)
+        get() = offersRelay && !isEndToEndSealed && !isEndToEndRegime && exitOffer.offers(MessageExit.FORWARD)
 
     private val offersRelay: Boolean
         get() = isActionable && !isNotice && !isUnconfirmed

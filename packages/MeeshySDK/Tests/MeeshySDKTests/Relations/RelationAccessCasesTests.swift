@@ -137,6 +137,17 @@ struct RelationAccessCasesTests {
         }
     }
 
+    @Test func theMinorShieldIsTheOneOfTheTypeScriptTable() throws {
+        let table = try block(after: "export const RELATION_MINOR_TARGET_MIN_LEVEL", until: "};", in: try levelsSource())
+        let rows = try matches("(?:'([\\w.]+)'|(\\w+)):\\s*'([A-Z]+)'", in: table)
+        let declared = Dictionary(uniqueKeysWithValues: rows.map { row in (row.first ?? "", row.last ?? "") })
+        let mirrored = Dictionary(uniqueKeysWithValues: RelationFeature.allCases.compactMap { feature in
+            feature.minorTargetMinimum.map { (feature.rawValue, $0.rawValue) }
+        })
+        #expect(!declared.isEmpty)
+        #expect(declared == mirrored)
+    }
+
     @Test func theConsentDirectedAndPresenceSetsAreTheOnesOfTheTypeScriptTable() throws {
         let consent = try featureSet(named: "RELATION_CONSENT_FEATURES")
         let directed = try featureSet(named: "RELATION_DIRECTED_FEATURES")

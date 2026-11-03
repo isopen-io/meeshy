@@ -65,7 +65,7 @@ const mockResolveMentionedUsers: any = jest.fn(async () => []);
 const mockResolveUsernamesToIds: any = jest.fn(async () => []);
 jest.mock('../../../services/MentionService', () => ({
   resolveMentionedUsers: (...a: any[]) => mockResolveMentionedUsers(...a),
-  resolveUsernamesToIds: (...a: any[]) => mockResolveUsernamesToIds(...a),
+  resolveUsernamesToIds: (...a: any[]) => mockResolveUsernamesToIds(...a), withoutPendingMessageRequests: async (_p: unknown, _c: unknown, ids?: string[]) => ids ?? [],
 }));
 
 const mockIsBlockedBetween: any = jest.fn(async () => false);

@@ -6,7 +6,11 @@ describe('ADMIN_READ_ONLY_PREFERENCES — ce qu’un administrateur ne règle ja
     expect(ADMIN_READ_ONLY_PREFERENCES.notification).toContain('bringEnabled');
   });
 
-  test('la famille chiffrement le reste', () => {
-    expect(ADMIN_READ_ONLY_PREFERENCES.privacy).toEqual(['encryptionPreference', 'autoEncryptNewConversations', 'warnOnUnencrypted']);
+  test('« Créer des Connaissances automatiquement » aussi (#14406) : un administrateur ne lève ni une opposition ni le défaut protecteur d’un mineur', () => {
+    expect(ADMIN_READ_ONLY_PREFERENCES.privacy).toContain('autoAcquaintance');
+  });
+
+  test('la famille chiffrement le reste, et rien d’autre en confidentialité', () => {
+    expect(ADMIN_READ_ONLY_PREFERENCES.privacy).toEqual(['encryptionPreference', 'autoEncryptNewConversations', 'warnOnUnencrypted', 'autoAcquaintance']);
   });
 });

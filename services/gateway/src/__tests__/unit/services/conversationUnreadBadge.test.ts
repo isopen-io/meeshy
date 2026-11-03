@@ -28,6 +28,8 @@ type ConversationFixture = {
   /** Messages d'autrui postérieurs au curseur de lecture — le VRAI non-lu. */
   readonly unreadMessages: number;
   readonly isMuted?: boolean;
+  /** #14107 — une demande de message en attente pour ce lecteur. */
+  readonly pendingRequest?: boolean;
 };
 
 type Where = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -52,6 +54,7 @@ function makePrisma(fixtures: readonly ConversationFixture[]) {
             .filter((f) =>
               where.conversationId?.in ? where.conversationId.in.includes(f.conversationId) : true
             )
+            .filter((f) => !(f.pendingRequest && JSON.stringify(where.OR ?? []).includes('"messageRequestAt":null')))
             .map((f) => ({
               id: f.participantId,
               userId: USER_ID,
@@ -118,6 +121,14 @@ function badgeOf(prisma: unknown): Promise<number> {
 }
 
 describe('computeConversationUnreadBadge — D-L1 : des CONVERSATIONS, pas des messages', () => {
+  it('test_pendingMessageRequest_isNotCounted', async () => {
+    const { prisma } = makePrisma([
+      { conversationId: 'conv-a', participantId: 'p-a', unreadMessages: 2 },
+      { conversationId: 'conv-req', participantId: 'p-req', unreadMessages: 3, pendingRequest: true },
+    ]);
+    await expect(computeConversationUnreadBadge(prisma as never, USER_ID)).resolves.toBe(1);
+  });
+
   it('test_countsOneConversationWithUnread_asOne_regardlessOfMessageCount', async () => {
     const { prisma } = makePrisma([
       { conversationId: 'conv-a', participantId: 'participant-a', unreadMessages: 12 },

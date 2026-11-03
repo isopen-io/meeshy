@@ -2,7 +2,6 @@ package me.meeshy.app.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -17,7 +16,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.DirectConversationOpener
 import me.meeshy.sdk.conversation.DirectOpenResult
+import me.meeshy.sdk.friend.BlockActionCoordinator
 import me.meeshy.sdk.friend.BlockCache
+import me.meeshy.sdk.friend.BlockFailure
 import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.friend.ConnectionActionController
 import me.meeshy.sdk.friend.FriendshipCache
@@ -29,10 +30,11 @@ import me.meeshy.sdk.model.friend.FriendshipStatus
 import me.meeshy.sdk.model.profile.ProfileActionPlan
 import me.meeshy.sdk.model.profile.ProfileCallRequest
 import me.meeshy.sdk.model.profile.ProfileConnection
+import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.model.relation.ProfileCircle
 import me.meeshy.sdk.net.NetworkResult
-import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.relation.CirclesGateway
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
 import javax.inject.Inject
 
@@ -57,6 +59,10 @@ enum class ProfileActionFeedback(val isError: Boolean) {
     /** La demande d'un cran du cercle (#13940) est partie, ou la file y a renoncé. */
     RaiseSent(false),
     RaiseFailed(true),
+
+    /** Le signalement en deux touches est parti, ou la passerelle l'a refusé. */
+    ReportSent(false),
+    ReportFailed(true),
 }
 
 sealed interface ProfileActionEvent {
@@ -80,7 +86,8 @@ class ProfileActionsViewModel @Inject constructor(
     private val blockCache: BlockCache,
     private val blockRepository: BlockRepository,
     private val directConversationOpener: DirectConversationOpener,
-    private val workManager: WorkManager,
+    private val blockActions: BlockActionCoordinator,
+    private val reportRepository: ReportRepository,
     private val sessionRepository: SessionRepository,
     private val circles: CirclesGateway,
 ) : ViewModel() {
@@ -110,6 +117,7 @@ class ProfileActionsViewModel @Inject constructor(
                 .collect { bound -> bound?.let(::rederive) }
         }
         viewModelScope.launch { circles.exhausted.collect { receiveExhausted(it) } }
+        viewModelScope.launch { blockActions.failures.collect { receiveBlockFailure(it) } }
     }
 
     /** Points the actions at the resolved person; idempotent for the same id. */
@@ -227,18 +235,43 @@ class ProfileActionsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Instantané → cache → file durable (y compris hors ligne) → réveil du flusher, le tout par le
+     * coordinateur unique ; si la file abandonne, il restaure l'état d'avant et [receiveBlockFailure] le dit.
+     */
     private fun setBlocked(blocked: Boolean) = withTarget { id ->
         viewModelScope.launch {
-            val feedback = try {
-                val cmid = blockRepository.setBlockedDurably(id, blocked)
-                if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
-                if (blocked) ProfileActionFeedback.UserBlocked else ProfileActionFeedback.UserUnblocked
+            try {
+                blockActions.setBlocked(id, blocked)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                if (blocked) ProfileActionFeedback.BlockFailed else ProfileActionFeedback.UnblockFailed
+                _events.emit(ProfileActionEvent.Toast(blockFailure(blocked)))
+                return@launch
             }
-            _events.emit(ProfileActionEvent.Toast(feedback))
+            _events.emit(ProfileActionEvent.Toast(if (blocked) ProfileActionFeedback.UserBlocked else ProfileActionFeedback.UserUnblocked))
+        }
+    }
+
+    private suspend fun receiveBlockFailure(failure: BlockFailure) {
+        if (target.value?.userId != failure.userId) return
+        _events.emit(ProfileActionEvent.Toast(blockFailure(failure.wasBlocking)))
+    }
+
+    private fun blockFailure(blocking: Boolean) =
+        if (blocking) ProfileActionFeedback.BlockFailed else ProfileActionFeedback.UnblockFailed
+
+    /** Signalement en deux touches : un motif, aucun détail (iso `submitReport`). Hors session ou en panne : l'échec se dit. */
+    fun report(reason: ReportReason) = withTarget { id ->
+        viewModelScope.launch {
+            val sent = try {
+                reportRepository.reportUser(id, reason, details = null) is NetworkResult.Success
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                false
+            }
+            _events.emit(ProfileActionEvent.Toast(if (sent) ProfileActionFeedback.ReportSent else ProfileActionFeedback.ReportFailed))
         }
     }
 

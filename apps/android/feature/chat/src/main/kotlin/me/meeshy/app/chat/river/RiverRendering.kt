@@ -3,6 +3,7 @@ package me.meeshy.app.chat.river
 import androidx.compose.runtime.Immutable
 import java.time.ZoneId
 import java.util.Locale
+import me.meeshy.sdk.model.BubbleStickerSpec
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.reading.river.RiverBubble
@@ -15,6 +16,7 @@ import me.meeshy.sdk.model.reading.river.RiverTimeScale
 import me.meeshy.ui.component.StoryRingState
 import me.meeshy.ui.component.bubble.BubbleBlurRevealSpec
 import me.meeshy.ui.component.bubble.BubbleContent
+import me.meeshy.ui.component.bubble.drawnSticker
 import me.meeshy.ui.format.bubbleClockLabel
 
 /** La citation d'une réponse, sur UNE ligne (iOS `RiverReplyPreview`). */
@@ -62,6 +64,8 @@ internal data class RiverBubbleContent(
     val isPending: Boolean,
     /** L'échéance d'un message éphémère (epoch ms) : passée, la bulle se retire comme dans le fil. */
     val expiresAtMs: Long? = null,
+    /** Le sticker que la bulle DESSINE à la place de son texte de repli (#14534, iOS `FocalRow.stickerBlock`). */
+    val sticker: BubbleStickerSpec? = null,
 )
 
 /**
@@ -151,6 +155,7 @@ internal object RiverRenderingBuilder {
             protection = protection(source),
             isPending = source.isPending,
             expiresAtMs = isoToEpochMillisOrNull(source.expiresAtIso),
+            sticker = source.drawnSticker?.takeIf { protection(source) == RiverProtection.NONE },
         )
     }
 

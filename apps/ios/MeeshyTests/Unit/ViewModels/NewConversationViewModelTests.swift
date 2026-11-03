@@ -354,6 +354,75 @@ final class NewConversationViewModelTests: XCTestCase {
         XCTAssertNil(sut.createdConversation)
     }
 
+    // MARK: - Un groupe dont je suis le seul membre (#14646)
+
+    func test_shape_noInviteeWithoutGroupRequest_isNone() {
+        XCTAssertEqual(NewConversationShape.resolve(selectedCount: 0, groupRequested: false), .none)
+    }
+
+    func test_shape_oneInvitee_isDirect_unlessAGroupIsRequested() {
+        XCTAssertEqual(NewConversationShape.resolve(selectedCount: 1, groupRequested: false), .direct)
+        XCTAssertEqual(NewConversationShape.resolve(selectedCount: 1, groupRequested: true), .group)
+    }
+
+    func test_shape_noInviteeWithGroupRequest_isGroup() {
+        XCTAssertEqual(NewConversationShape.resolve(selectedCount: 0, groupRequested: true), .group)
+    }
+
+    func test_shape_twoInvitees_isGroup() {
+        XCTAssertEqual(NewConversationShape.resolve(selectedCount: 2, groupRequested: false), .group)
+    }
+
+    func test_canCreate_soloGroupWithoutTitle_isFalse() {
+        XCTAssertFalse(NewConversationShape.canCreate(selectedCount: 0, groupRequested: true, groupTitle: "   "))
+    }
+
+    func test_canCreate_soloGroupWithTitle_isTrue() {
+        XCTAssertTrue(NewConversationShape.canCreate(selectedCount: 0, groupRequested: true, groupTitle: "Avis clients"))
+    }
+
+    func test_canCreate_directWithoutTitle_isTrue() {
+        XCTAssertTrue(NewConversationShape.canCreate(selectedCount: 1, groupRequested: false, groupTitle: ""))
+    }
+
+    func test_canCreate_nothingChosen_isFalse() {
+        XCTAssertFalse(NewConversationShape.canCreate(selectedCount: 0, groupRequested: false, groupTitle: "Titre"))
+    }
+
+    func test_createConversation_soloGroupWithTitle_postsAGroupWithoutParticipants() async {
+        let (sut, api) = makeSUT(platformRole: "USER")
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-solo", type: "group"))
+
+        await sut.createConversation(selectedUsers: [], groupTitle: " Audit ", groupRequested: true)
+
+        let body = lastPostedBody(api)
+        XCTAssertEqual(body?["type"] as? String, "group")
+        XCTAssertEqual(body?["title"] as? String, "Audit")
+        XCTAssertEqual(body?["participantIds"] as? [String], [])
+        XCTAssertEqual(sut.createdConversation?.id, "conv-solo")
+    }
+
+    func test_createConversation_soloGroupWithoutTitle_isNoOp() async {
+        let (sut, api) = makeSUT()
+
+        await sut.createConversation(selectedUsers: [], groupTitle: "  ", groupRequested: true)
+
+        XCTAssertEqual(api.postCount, 0)
+        XCTAssertNil(sut.createdConversation)
+    }
+
+    func test_createConversation_oneInviteeAsGroup_postsAGroup() async {
+        let (sut, api) = makeSUT()
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-g", type: "group"))
+
+        await sut.createConversation(
+            selectedUsers: [Self.makeUser(id: "u-1", username: "alice")], groupTitle: "Duo", groupRequested: true
+        )
+
+        XCTAssertEqual(lastPostedBody(api)?["type"] as? String, "group")
+        XCTAssertEqual(lastPostedBody(api)?["participantIds"] as? [String], ["u-1"])
+    }
+
     func test_createConversation_userBlocked_setsBlockSpecificError() async {
         let (sut, api) = makeSUT()
         // Gateway rejects a DM with a blocked user (either direction) with a

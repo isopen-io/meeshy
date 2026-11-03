@@ -98,7 +98,26 @@ class UniversalComposerHostTest {
         compose.onNodeWithContentDescription(string(R.string.chat_record_voice)).assertIsDisplayed()
     }
 
-    @Test fun `en commentaire, ni éphémère, ni flou, ni vue unique, ni effets`() {
+    @Test fun `#14385 en commentaire qui applique les effets, le flou et les effets sont là, ni éphémère ni vue unique`() {
+        val toggled = mutableListOf<Long>()
+        show(spec(ComposerConfiguration.COMMENT).served().copy(onToggleEffect = { toggled += it }))
+        compose.onNodeWithContentDescription(string(R.string.chat_effect_blurred)).assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription(string(R.string.chat_effects_open)).assertIsDisplayed()
+        compose.onNodeWithContentDescription(string(R.string.chat_ephemeral_activate)).assertDoesNotExist()
+        compose.onNodeWithContentDescription(string(R.string.chat_effect_view_once)).assertDoesNotExist()
+        assertThat(toggled).isNotEmpty()
+    }
+
+    @Test fun `#14387 le lieu en attente se pose en pastille au-dessus de la saisie et se retire`() {
+        var removed = 0
+        val place = me.meeshy.sdk.model.SharedPlace(latitude = 48.85, longitude = 2.35, name = "Café de Flore")
+        show(spec(ComposerConfiguration.COMMENT).served().copy(onPickPlace = {}, pendingPlace = place, onRemovePlace = { removed += 1 }))
+        compose.onNodeWithText("Café de Flore").assertIsDisplayed()
+        compose.onNodeWithContentDescription(string(R.string.chat_search_clear)).performClick()
+        assertThat(removed).isEqualTo(1)
+    }
+
+    @Test fun `en commentaire qui n'applique pas d'effet, ni éphémère, ni flou, ni vue unique, ni effets`() {
         show(spec(ComposerConfiguration.COMMENT).served())
         compose.onNodeWithContentDescription(string(R.string.chat_ephemeral_activate)).assertDoesNotExist()
         compose.onNodeWithContentDescription(string(R.string.chat_effect_blurred)).assertDoesNotExist()
@@ -115,7 +134,7 @@ class UniversalComposerHostTest {
     }
 
     @Test fun `en conversation, toutes les bascules restent`() {
-        show(spec(ComposerConfiguration.CONVERSATION))
+        show(spec(ComposerConfiguration.CONVERSATION).copy(onToggleEffect = {}))
         compose.onNodeWithContentDescription(string(R.string.chat_ephemeral_activate)).assertIsDisplayed()
         compose.onNodeWithContentDescription(string(R.string.chat_effect_blurred)).assertIsDisplayed()
         compose.onNodeWithContentDescription(string(R.string.chat_effect_view_once)).assertIsDisplayed()

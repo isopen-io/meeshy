@@ -31,7 +31,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -169,7 +168,7 @@ internal class RailTool(val icon: ImageVector, @StringRes val label: Int, val ac
 @Composable
 internal fun SceneOptionColumn(bar: SceneSelectionBar, tools: List<RailTool>, onAction: (ComposerSelectionAction) -> Unit) {
     Column(
-        modifier = Modifier.testTag(EDITING_RAIL_TAG).verticalScroll(rememberScrollState()),
+        modifier = Modifier.testTag(EDITING_RAIL_TAG).composerScrollEdgeCue(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(LocalComposerRailSize.current.gap),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

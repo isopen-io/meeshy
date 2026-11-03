@@ -80,6 +80,9 @@ class FeedRepostTest {
         every { socialSocket.commentDeleted } returns MutableSharedFlow()
         every { socialSocket.postTranslationUpdated } returns MutableSharedFlow()
         every { socialSocket.mediaCaptionTranslationUpdated } returns MutableSharedFlow()
+        every { socialSocket.postReactionAdded } returns MutableSharedFlow()
+        every { socialSocket.postReactionRemoved } returns MutableSharedFlow()
+        every { socialSocket.reconnected } returns kotlinx.coroutines.flow.emptyFlow()
         every { socialSocket.postUpdated } returns MutableSharedFlow()
         every { socialSocket.postReposted } returns reposted
         return FeedViewModel(
