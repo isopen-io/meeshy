@@ -348,6 +348,7 @@
     <string name="visitor_shared_by_story">%1$s compartilhou este story com você</string>
     <string name="visitor_signup">Criar uma conta</string>
     <string name="visitor_title">Entre no Meeshy</string>
+    <string name="welcome_brand_name">Meeshy</string>
     <string name="welcome_createAccount">Criar conta</string>
     <string name="welcome_createAccount_hint">Abre o formulário de cadastro</string>
     <string name="welcome_signIn">Entrar</string>
