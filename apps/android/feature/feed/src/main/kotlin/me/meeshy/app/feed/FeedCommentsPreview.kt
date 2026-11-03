@@ -29,9 +29,13 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.CommentEffects
 import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.comments.CommentBody
+import me.meeshy.ui.component.comments.commentSwipeToReply
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -44,6 +48,9 @@ data class FeedCommentPreviewRow(
     val authorName: String,
     val authorAvatarUrl: String?,
     val text: String,
+    val authorId: String? = null,
+    val likeCount: Int = 0,
+    val effects: MessageEffects = MessageEffects(),
 )
 
 /**
@@ -96,13 +103,25 @@ object FeedCommentsPreviewBuilder {
             authorName = (author?.displayName ?: author?.username)?.takeIf { it.isNotBlank() }.orEmpty(),
             authorAvatarUrl = author?.avatar?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
             text = text,
+            authorId = author?.id,
+            likeCount = comment.likeCount ?: 0,
+            effects = CommentEffects.served(comment.effectFlags),
         ) to (comment.likeCount ?: 0)
     }
 }
 
-/** L'aperçu sous la carte : un toucher n'importe où ouvre le fil des commentaires du post. */
+/**
+ * L'aperçu sous la carte : un toucher ouvre le fil des commentaires du post ; glisser une ligne vers la droite ouvre la
+ * feuille déjà en réponse à ce commentaire ([onReplyTo], iOS `commentSwipeToReply` → `openComments(replyingTo:)`).
+ */
 @Composable
-internal fun FeedCommentsPreview(preview: FeedCommentsPreviewState, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+internal fun FeedCommentsPreview(
+    preview: FeedCommentsPreviewState,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+    onReplyTo: (String) -> Unit = {},
+    onOpenProfile: ((String) -> Unit)? = null,
+) {
     val label = pluralStringResource(R.plurals.feed_view_comments, preview.total, preview.total)
     Column(
         modifier
@@ -116,16 +135,26 @@ internal fun FeedCommentsPreview(preview: FeedCommentsPreviewState, onOpen: () -
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             modifier = Modifier.padding(top = MeeshySpacing.md),
         ) {
-            preview.top.forEach { CommentPreviewRow(it) }
+            preview.top.forEach { CommentPreviewRow(it, onReplyTo = onReplyTo, onOpenProfile = onOpenProfile) }
             SeeAllRow(preview, label)
         }
     }
 }
 
 @Composable
-private fun CommentPreviewRow(row: FeedCommentPreviewRow) {
-    Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm), verticalAlignment = Alignment.Top) {
-        MeeshyAvatar(name = row.authorName, size = 28.dp, imageUrl = row.authorAvatarUrl)
+private fun CommentPreviewRow(row: FeedCommentPreviewRow, onReplyTo: (String) -> Unit, onOpenProfile: ((String) -> Unit)?) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.fillMaxWidth().commentSwipeToReply { onReplyTo(row.id) },
+    ) {
+        val authorId = row.authorId
+        MeeshyAvatar(
+            name = row.authorName,
+            size = 28.dp,
+            imageUrl = row.authorAvatarUrl,
+            modifier = if (authorId != null && onOpenProfile != null) Modifier.clickable { onOpenProfile(authorId) } else Modifier,
+        )
         Column(Modifier.weight(1f)) {
             if (row.authorName.isNotEmpty()) {
                 Text(
@@ -137,13 +166,21 @@ private fun CommentPreviewRow(row: FeedCommentPreviewRow) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Text(
-                row.text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MeeshyTheme.tokens.textPrimary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            CommentBody(commentId = row.id, effects = row.effects, isBlurred = false) {
+                Text(
+                    row.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MeeshyTheme.tokens.textPrimary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (row.likeCount > 0) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+                    Icon(MeeshyIcons.HeartFilled, contentDescription = null, tint = MeeshyPalette.Error, modifier = Modifier.size(12.dp))
+                    Text(row.likeCount.toString(), style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textSecondary)
+                }
+            }
         }
     }
 }
