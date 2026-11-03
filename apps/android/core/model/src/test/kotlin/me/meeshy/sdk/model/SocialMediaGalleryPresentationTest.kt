@@ -93,7 +93,7 @@ class SocialMediaGalleryPresentationTest {
     }
 
     @Test
-    fun `seule une page image porte un fichier ; les autres recoivent une piece synthetique inerte`() {
+    fun `seule une page image porte un fichier, les autres recoivent une piece synthetique inerte`() {
         val gallery = compose(post(listOf(image("a"), video("v"))))
         assertThat(gallery.pages.map { it.hasSyntheticAttachment }).containsExactly(false, true).inOrder()
         assertThat(gallery.pages.all { !it.reportsConsumption }).isTrue()
@@ -125,7 +125,7 @@ class SocialMediaGalleryPresentationTest {
     }
 
     @Test
-    fun `le fil rejoint la loi commune : ses pages deja composees suivies des commentaires donnent la meme galerie`() {
+    fun `le fil rejoint la loi commune, ses pages deja composees suivies des commentaires donnent la meme galerie`() {
         val p = post(listOf(image("a"), image("b")))
         val comments = listOf(comment("c1", listOf(image("m"))))
         val direct = compose(p, comments)
