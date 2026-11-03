@@ -128,7 +128,7 @@ public object GamePhotoAlerts {
         val candidates = reached.distinct().filter(::isCandidate)
         val announced = candidates.filter { invited(it, policy) }
         if (announced.isEmpty()) return null
-        if (pacing != null && pacing(pacing, policy) != PhotoAlertPace.Allowed) return null
+        if (pacing != null && GamePhotoAlerts.pacing(pacing, policy) != PhotoAlertPace.Allowed) return null
 
         fun rank(id: String): Pair<Int, Int> = GamePhotoCatchUpLaw.priority(id) to -steps.indexOf(id)
         val announce = announced.reduce { best, id -> if (compareRanks(rank(id), rank(best)) < 0) id else best }

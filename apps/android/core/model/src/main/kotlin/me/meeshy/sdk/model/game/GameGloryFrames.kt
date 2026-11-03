@@ -151,7 +151,7 @@ public object GameGloryFrames {
             "tier" -> LevelTierKey.entries.firstOrNull { GamePhotoCatchUpLaw.wire(it) == first }?.let(StepTarget::Tier) ?: StepTarget.None
             "meesh" -> meeshTarget(first)
             "treasury" -> first?.let(StepTarget::Treasury) ?: StepTarget.None
-            "flame" -> first?.takeIf(positive::matches)?.toIntOrNull()?.let(StepTarget::Flame) ?: StepTarget.None
+            "flame" -> first?.takeIf { positive.matches(it) }?.toIntOrNull()?.let(StepTarget::Flame) ?: StepTarget.None
             "day" -> StepTarget.Day
             "achievement" -> StepTarget.Achievement
             "level-100" -> StepTarget.Level100
@@ -168,7 +168,7 @@ public object GameGloryFrames {
     }
 
     private fun meeshTarget(first: String?): StepTarget {
-        val number = first?.takeIf(positive::matches)?.toIntOrNull() ?: return StepTarget.None
+        val number = first?.takeIf { positive.matches(it) }?.toIntOrNull() ?: return StepTarget.None
         val edition = when {
             number == 1 -> MeeshFrameEdition.First
             else -> when (GameMint.edition(number)) {
