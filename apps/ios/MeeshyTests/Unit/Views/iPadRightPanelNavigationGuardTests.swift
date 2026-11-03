@@ -161,7 +161,7 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
     func test_iPadRoot_toastsBannersAndWindowTitle_matchTheiPhone() throws {
         let overlays = try source(of: "iPadRootView+Overlays.swift")
         XCTAssertFalse(overlays.contains("FeedbackToastView("), "les toasts ont un hôte unique, au niveau de MeeshyApp")
-        XCTAssertTrue(overlays.contains("RootPendingBanners()"), "les bandeaux « en attente » existent aussi sur iPad")
+        XCTAssertTrue(overlays.contains("RootPendingBanners()"), "le bandeau des réglages en attente existe aussi sur iPad")
         let layer = try source(of: "RootLayers/iPadRootViewLayers.swift")
         XCTAssertTrue(layer.contains("DeviceLayout.activeWindowScene?.title"), "la fenêtre iPad porte le titre de ce qu'elle montre")
     }
