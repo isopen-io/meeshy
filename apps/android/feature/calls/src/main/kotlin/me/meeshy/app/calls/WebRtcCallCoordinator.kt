@@ -16,6 +16,7 @@ import me.meeshy.sdk.model.call.CallParticipantArrival
 import me.meeshy.sdk.model.call.CallParticipantLeftPayload
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.WebRtcError
+import me.meeshy.sdk.playback.CallHandoff
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
 
@@ -39,6 +40,7 @@ class WebRtcCallCoordinator @Inject constructor(
     @ApplicationContext appContext: Context,
     names: GroupCallNameSource,
     statsFeed: CallQualityStatsFeed = CallQualityStatsFeed(),
+    private val handoff: CallHandoff? = null,
 ) {
     private val negotiator = CallNegotiator(engine, signals)
     private val iceMonitor = CallIceStateMonitor(engine, signals)
@@ -173,6 +175,7 @@ class WebRtcCallCoordinator @Inject constructor(
         conversationId: String,
     ) {
         teardown()
+        handoff?.onCallStarted()
         negotiator.begin(callId, peerId, selfId, isCaller)
         iceMonitor.begin(callId, selfId, onMediaConnected, onMediaStalled)
         val cs = scope + SupervisorJob(scope.coroutineContext[Job])
@@ -295,6 +298,7 @@ class WebRtcCallCoordinator @Inject constructor(
         engine.close()
         iceMonitor.end()
         audio.restore()
+        handoff?.onCallEnded()
     }
 
     /**
