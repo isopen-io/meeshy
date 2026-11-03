@@ -1,6 +1,14 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="a11y_message_location">posizione condivisa</string>
+    <string name="attachment_loading_a11y_failed">Caricamento non riuscito</string>
+    <string name="attachment_loading_a11y_ready">Pronto</string>
+    <string name="attachment_loading_cancel_a11y">Annulla caricamento</string>
+    <string name="attachment_loading_error">Errore</string>
+    <string name="attachment_stage_compressing">Compressione in corso</string>
+    <string name="attachment_stage_hashing">Hash</string>
+    <string name="attachment_stage_loading">Caricamento</string>
+    <string name="attachment_stage_thumbnailing">Anteprima</string>
     <string name="attachment_sticker">Sticker</string>
     <string name="chat_action_copy_link">Copia link</string>
     <string name="chat_action_open_link">Apri link</string>
