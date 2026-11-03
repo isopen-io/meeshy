@@ -627,6 +627,11 @@ class StoryViewerViewModel @Inject constructor(
         nextId?.let { socialSocket.joinPostRoom(it) }
     }
 
+    /** La chaîne du Prisme pour la transcription : l'exploration en tête, puis les rangs stricts du lecteur. */
+    fun transcriptLanguageChain(): List<String> =
+        listOfNotNull(languageOverride?.second?.takeUnless(StoryLanguageOverride::isOriginal)) +
+            StoryContentResolver.readerLanguages(sessionRepository.currentUser.value ?: EmptyContentPreferences)
+
     private fun emit() {
         val now = clock.nowMillis()
         playback = playback.skippingUnplayable(sessionRepository.currentUserId, { rawItems[it] }) { it.isExpired(now) }
