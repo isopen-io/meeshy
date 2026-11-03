@@ -52,9 +52,13 @@ class WebRtcCallCoordinator @Inject constructor(
     private val negotiator = CallNegotiator(engine, signals)
     private val iceMonitor = CallIceStateMonitor(engine, signals)
     private val statsCollector = CallStatsCollector(engine)
+    /** Le focus audio est perdu ou rendu (appel GSM, alarme) : la mise en attente de l'appel s'en nourrit. */
+    var onAudioFocusChanged: ((hasFocus: Boolean) -> Unit)? = null
+
     private val audio = CallAudioSession(appContext) { hasFocus ->
         interrupted = !hasFocus
         applyMicrophone()
+        onAudioFocusChanged?.invoke(hasFocus)
     }
 
     private var userMuted = false

@@ -166,6 +166,7 @@
     <string name="call_transcript_participant">Participante</string>
     <string name="call_transcript_show_original">Mostrar o texto original</string>
     <string name="call_transcript_show_translated">Mostrar a tradução</string>
+    <string name="call_video_hold_blocked">Vídeo indisponível enquanto a chamada está em espera</string>
     <string name="call_video_permission_denied">Câmera: acesso negado — toque para abrir os Ajustes</string>
     <string name="call_zoom_cycle_hint">Toque para passar ao próximo nível de zoom</string>
     <string name="call_zoom_hint">Deslize para cima ou para baixo para dar zoom. Na tela, faça o gesto de pinça na sua imagem; toque duas vezes para voltar a 1×</string>

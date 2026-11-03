@@ -66,4 +66,30 @@ class CallLifecycleControllerTest {
 
         assertThat(rig.captures).containsExactly(false)
     }
+
+    @Test
+    fun `on hold the app state says nothing and the replay after the hold resumes a camera the app had stopped`() {
+        val rig = Rig()
+        rig.controller.onAppState(foreground = false, isVideoCall = true, userCameraOn = true)
+
+        rig.controller.onAppState(foreground = true, isVideoCall = true, userCameraOn = true, onHold = true)
+        assertThat(rig.captures).containsExactly(false)
+
+        rig.controller.reevaluate(isVideoCall = true, userCameraOn = true)
+        assertThat(rig.captures).containsExactly(false, true).inOrder()
+    }
+
+    @Test
+    fun `a suspension adopted from a hold is resumed when the app returns`() {
+        val rig = Rig()
+        rig.controller.onAppState(foreground = false, isVideoCall = true, userCameraOn = true, onHold = true)
+        assertThat(rig.controller.isHidden).isTrue()
+
+        rig.controller.adoptSuspension()
+        rig.controller.onAppState(foreground = true, isVideoCall = true, userCameraOn = true)
+
+        assertThat(rig.controller.isSuspended).isFalse()
+        assertThat(rig.captures).containsExactly(true)
+        assertThat(rig.announced).containsExactly(true)
+    }
 }
