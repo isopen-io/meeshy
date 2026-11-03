@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model.call
 
+import kotlin.math.pow
+
 /**
  * The self-heal decision a half-open media check yields. Port of iOS
  * `CallReliabilityPolicy.HalfOpenOutcome` (`WebRTCTypes.swift`).
@@ -150,6 +152,24 @@ object CallReliabilityPolicy {
     ): ReconnectTriggerOutcome {
         if (isEscalation) return ReconnectTriggerOutcome.Escalate
         return if (isAlreadyReconnecting) ReconnectTriggerOutcome.Coalesce else ReconnectTriggerOutcome.StartCycle
+    }
+
+    /**
+     * Recul exponentiel avant la prochaine tentative de reconnexion, avec gigue autour de la base
+     * déterministe : un même événement réseau (handoff de cellule, panne TURN régionale) fait passer tous
+     * les appels touchés par cette formule au même moment, et sans gigue ils frapperaient l'allocation TURN
+     * en cadence. [unitRandom] est dans `[0, 1)`. Parité iOS `reconnectBackoffSeconds`.
+     */
+    fun reconnectBackoffSeconds(
+        attempt: Int,
+        unitRandom: Double,
+        capSeconds: Double = 4.0,
+        jitterFraction: Double = 0.15,
+    ): Double {
+        if (attempt <= 1) return 0.0
+        val base = minOf(2.0.pow(attempt - 1), capSeconds)
+        val jitter = base * jitterFraction * (unitRandom * 2 - 1)
+        return maxOf(0.0, base + jitter)
     }
 
     /**

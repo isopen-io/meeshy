@@ -70,6 +70,7 @@ class FeedRepostTest {
     private fun viewModel(): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         every { repository.feedHasMore } returns MutableStateFlow(true)
+        every { repository.gestureRefusals } returns MutableSharedFlow()
         every { repository.feedStream(any(), any()) } returns feed
         every { socialSocket.postCreated } returns MutableSharedFlow()
         every { socialSocket.postDeleted } returns MutableSharedFlow()
@@ -80,6 +81,9 @@ class FeedRepostTest {
         every { socialSocket.commentDeleted } returns MutableSharedFlow()
         every { socialSocket.postTranslationUpdated } returns MutableSharedFlow()
         every { socialSocket.mediaCaptionTranslationUpdated } returns MutableSharedFlow()
+        every { socialSocket.postReactionAdded } returns MutableSharedFlow()
+        every { socialSocket.postReactionRemoved } returns MutableSharedFlow()
+        every { socialSocket.reconnected } returns kotlinx.coroutines.flow.emptyFlow()
         every { socialSocket.postUpdated } returns MutableSharedFlow()
         every { socialSocket.postReposted } returns reposted
         return FeedViewModel(

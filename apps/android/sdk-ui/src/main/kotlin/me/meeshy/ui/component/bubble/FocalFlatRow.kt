@@ -68,6 +68,7 @@ import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.format.bubbleClockLabel
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.sticker.MessageStickerArtwork
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -120,7 +121,7 @@ public fun FocalFlatRow(
                 .alpha(if (content.isPending) 0.7f else 1f),
         ) {
             when {
-                renderKind.isSystem -> FlatSystemNotice(content)
+                renderKind.isSystem -> SystemNoticeLine(content = content, callbacks = callbacks)
                 content.isDeleted -> FlatMutedLine(stringResource(R.string.bubble_message_deleted), callbacks.onLongPress)
                 renderKind.isBurned -> FlatMutedLine(stringResource(R.string.bubble_burned), callbacks.onLongPress)
                 else -> FlatStandardBody(
@@ -150,6 +151,7 @@ internal object FlatRowMetrics {
     val quoteRail = FocalMetrics.Quote.RAIL_WIDTH.toFloat().dp
     val mediaRadius = FocalMetrics.Media.RADIUS.toFloat().dp
     val mediaMaxWidth = 300.dp
+    val stickerSide = FocalMetrics.Sticker.SIDE.toFloat().dp
     const val TEXT_SIZE_SP = 15f
     val lineHeightSp = (TEXT_SIZE_SP * FocalMetrics.Text.LINE_HEIGHT_RATIO.toFloat())
     const val TIME_SIZE_SP = 10.5f
@@ -382,6 +384,12 @@ private fun FlatContentSections(
                 StoryCitationCard(story = story, accentColor = accentColor, onOpen = callbacks.onStoryCitationClick)
             }
         }
+        val sticker = content.drawnSticker
+        if (sticker != null) {
+            // iOS `FocalRow.stickerBlock` : le sticker se dessine, sans carte ni fond, au côté de la rangée.
+            MessageStickerArtwork(sticker, side = FlatRowMetrics.stickerSide)
+            return@Column
+        }
         if (content.hasRenderedAttachments) {
             Column(
                 modifier = Modifier
@@ -467,7 +475,7 @@ private fun FlatText(content: BubbleContent, accentColor: Color, ink: Color, dec
     if (content.text.isBlank()) return
     val emojiFontSize = if (content.replyToText == null) EmojiDetector.fontSizeSp(content.emojiOnlyCount) else null
     if (emojiFontSize != null) {
-        Text(text = content.text.trim(), fontSize = emojiFontSize.sp, lineHeight = (emojiFontSize * 1.15f).sp)
+        Text(text = content.text.trim(), style = largeEmojiTextStyle(emojiFontSize.sp))
         return
     }
     val excerpt = remember(content.text) { LongMessageExcerpt.of(content.text) }
@@ -598,26 +606,6 @@ private fun FlatMetaColumn(content: BubbleContent, metaAlpha: () -> Float) {
                 )
             }
         }
-    }
-}
-
-/** Avis de conversation : l'heure en petit au-dessus, le texte centré, atténué (iOS `FocalSystemNoticeRow`). */
-@Composable
-private fun FlatSystemNotice(content: BubbleContent) {
-    if (content.text.isBlank()) return
-    val muted = MeeshyTheme.tokens.textMuted
-    val clock = remember(content.createdAtIso) { bubbleClockLabel(content.createdAtIso) }
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
-        modifier = Modifier
-            .fillMaxWidth()
-            .semantics(mergeDescendants = true) { contentDescription = content.text },
-    ) {
-        if (clock != null) {
-            Text(text = clock, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, color = muted.copy(alpha = muted.alpha * 0.7f))
-        }
-        Text(text = content.text, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = muted, textAlign = TextAlign.Center)
     }
 }
 

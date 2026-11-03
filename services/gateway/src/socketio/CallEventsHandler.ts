@@ -25,6 +25,8 @@
  * `socketio/clientReceive.ts`.
  */
 import type { MeeshySocket as Socket, MeeshyIOServer as SocketIOServer } from './typed-socket';
+import { startSilentGroup } from '../services/conversations/announceStartedGroup';
+import { sealMessageIfConversationObsoleted } from '../services/conversations/obsoleteMessageSeal';
 import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
 import { CallService, CallAlreadyEndedError } from '../services/CallService';
 import { NotificationService } from '../services/notifications/NotificationService';
@@ -1609,7 +1611,7 @@ export class CallEventsHandler {
     const BASE_DELAY_MS = 1000;
     try {
       const result = await this.callService.createCallSummaryMessage(callId);
-      if (!result) {
+      if (!result || (await this.sealedByObsolescence(result.message))) {
         return;
       }
       // `created` → the summary is a brand-new message (message:new fanout);
@@ -1647,12 +1649,17 @@ export class CallEventsHandler {
    * and NEVER affect call setup — the terminal path then simply falls back to
    * creating the summary, the exact pre-live behaviour.
    */
+  /** #14643 — un message d'appel d'une conversation devenue obsolète naît effacé et ne part pas. */
+  private sealedByObsolescence(message: { id: string; conversationId: string }): Promise<boolean> {
+    return sealMessageIfConversationObsoleted(this.prisma, { conversationId: message.conversationId, messageId: message.id });
+  }
+
   private async postLiveCallMessage(callId: string, attempt = 1): Promise<void> {
     const MAX_ATTEMPTS = 3;
     const BASE_DELAY_MS = 1000;
     try {
       const message = await this.callService.createLiveCallMessage(callId);
-      if (!message || !this.messageBroadcaster) {
+      if (!message || !this.messageBroadcaster || (await this.sealedByObsolescence(message))) {
         return;
       }
       await this.messageBroadcaster(message, message.conversationId);
@@ -1977,6 +1984,10 @@ export class CallEventsHandler {
           }
         });
 
+        // #14644 — un groupe silencieux s'annonce (conversation:new + invitation) AVANT de sonner.
+        await startSilentGroup({ prisma: this.prisma, io, notificationService: this.notificationService }, data.conversationId)
+          .catch((err) => logger.error('silent group not announced before the ring', { conversationId: data.conversationId, err }));
+
         // Live-call message — fire-and-forget, AFTER the ack: the "Appel …
         // en cours" bubble must never gate (or fail) the call setup.
         /* istanbul ignore next -- postLiveCallMessage has its own internal catch and never rejects */
@@ -1992,13 +2003,13 @@ export class CallEventsHandler {
             userId: { not: null }
           },
           select: {
-            userId: true
+            userId: true, messageRequestAt: true
           }
         });
 
         const memberUserIds = await ringableCallees(this.prisma, {
           callerUserId: userId,
-          calleeUserIds: conversationParticipants.flatMap(p => (p.userId ? [p.userId] : [])),
+          calleeUserIds: conversationParticipants.flatMap(p => (p.userId && !p.messageRequestAt ? [p.userId] : [])), // #14107 (M2) : une demande en attente ne sonne pas
         });
         logger.info('📋 Conversation members to notify', {
           conversationId: data.conversationId,

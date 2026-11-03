@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "conversation.new.group.toggle",
+          "androidName": "new_conversation_group_toggle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.new.group.solo-hint",
+          "androidName": "new_conversation_group_solo_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "accessibility.section_expanded",
+          "androidName": "new_conversation_encryption_expanded",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "accessibility.section_collapsed",
+          "androidName": "new_conversation_encryption_collapsed",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

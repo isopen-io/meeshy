@@ -19,4 +19,5 @@ public object ApiRoutesMessages {
     public const val BY_MESSAGE_ID_RESTORE_FOR_ME: String = "messages/{messageId}/restore-for-me"
     public const val BY_MESSAGE_ID_STATUS_DETAILS: String = "messages/{messageId}/status-details"
     public const val BY_MESSAGE_ID_TRANSLATIONS: String = "messages/{messageId}/translations"
+    public const val SEARCH: String = "messages/search"
 }

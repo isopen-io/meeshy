@@ -40,7 +40,8 @@ export type RowActionId =
   | 'adminOpen'
   | 'block'
   | 'leave'
-  | 'delete';
+  | 'delete'
+  | 'obsolete';
 
 export type RowCallActionId = Extract<RowActionId, 'callAudio' | 'callVideo'>;
 
@@ -54,7 +55,7 @@ export type RowIntentActionId = Extract<RowActionId, 'details' | 'rename' | 'blo
 
 /** Les entrées que les RÔLES ouvrent (#11211) : la ligne les route elle-même
  * (la fiche, le départ, l'administration), sans passer par l'écran. */
-export type RowRoleActionId = Extract<RowActionId, 'invite' | 'manageMembers' | 'adminOpen' | 'leave'>;
+export type RowRoleActionId = Extract<RowActionId, 'invite' | 'manageMembers' | 'adminOpen' | 'leave' | 'obsolete'>;
 
 export const isRowFlagAction = (id: RowActionId): id is RowFlagActionId => id === 'pin' || id === 'mute' || id === 'read' || id === 'archive';
 
@@ -169,10 +170,23 @@ export type RowConversation = Pick<Conversation, 'type'> &
  * `currentUserRole`, et une conversation que le serveur dit non membre
  * (`isMember: false`) n'ouvre que ce que la plateforme accorde.
  */
-export function rowConversationActions(input: { readonly conversation: RowConversation; readonly viewer: RowViewer }): ConversationActions {
+/**
+ * RENDRE OBSOLÈTE (#14645, #14653) — la porte de `DELETE /conversations/:id/obsolete` :
+ * l'administrateur d'un type à autorité (`deleteForAll`), ou, dans un tête-à-tête
+ * ouvert, l'un OU l'autre des deux membres inscrits et actifs (`hide`).
+ */
+export type RowConversationActions = ConversationActions & { readonly obsolete: boolean };
+
+export function rowConversationActions(input: { readonly conversation: RowConversation; readonly viewer: RowViewer }): RowConversationActions {
+  const actions = conversationActionsFor(lawInputOf(input));
+  const directMember = input.conversation.type === 'direct' && input.conversation.isActive !== false && actions.hide;
+  return { ...actions, obsolete: actions.deleteForAll || directMember };
+}
+
+function lawInputOf(input: { readonly conversation: RowConversation; readonly viewer: RowViewer }): Parameters<typeof conversationActionsFor>[0] {
   const { conversation, viewer } = input;
   const hasAccount = viewer.hasAccount && !viewer.isAnonymous;
-  return conversationActionsFor({
+  return {
     conversation: {
       type: conversation.type,
       encryptionMode: conversation.encryptionMode ?? null,
@@ -191,7 +205,7 @@ export function rowConversationActions(input: { readonly conversation: RowConver
       canSendMessages: hasAccount,
       isDeclaredMinor: false,
     },
-  });
+  };
 }
 
 export function rowMenuItems(params: {
@@ -208,7 +222,7 @@ export function rowMenuItems(params: {
    * celui d'avant ; présents, ils GOUVERNENT l'appel, Renommer et Supprimer,
    * et ouvrent Inviter, Gérer les membres, l'administration et Quitter.
    */
-  readonly actions?: ConversationActions;
+  readonly actions?: RowConversationActions;
   /** Absentes (le balayage) : ni « Rechercher » ni « Mode de lecture ». */
   readonly doors?: RowMenuDoors;
 }): readonly RowMenuItem[] {
@@ -238,6 +252,9 @@ export function rowMenuItems(params: {
     ...(more === undefined ? [] : blockItems(more, language)),
     ...(actions?.leave === true && canDelete ? [{ id: 'leave', label: rowMenuText(language, 'rowMenu.leave'), glyph: 'signOut', destructive: true } as const] : []),
     ...(remove ? [{ id: 'delete', label: label('rowActions.delete'), glyph: 'trash', destructive: true } as const] : []),
+    ...(actions?.obsolete === true && canDelete
+      ? [{ id: 'obsolete', label: rowMenuText(language, 'rowMenu.obsolete'), glyph: 'trash', destructive: true } as const]
+      : []),
   ];
 }
 

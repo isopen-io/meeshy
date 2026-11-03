@@ -19,6 +19,27 @@ extension Error {
     }
 }
 
+/// La forme de la conversation que la feuille de création dessine (#14646) :
+/// un invité ⇒ tête-à-tête, plusieurs ⇒ groupe, et un groupe DEMANDÉ reste un
+/// groupe même sans aucun invité — pour un audit ou une récolte d'avis où je
+/// suis seul. Un groupe exige alors un titre, comme la passerelle.
+nonisolated enum NewConversationShape: Equatable, Sendable {
+    case none, direct, group
+
+    static func resolve(selectedCount: Int, groupRequested: Bool) -> NewConversationShape {
+        if groupRequested || selectedCount > 1 { return .group }
+        return selectedCount == 1 ? .direct : .none
+    }
+
+    static func canCreate(selectedCount: Int, groupRequested: Bool, groupTitle: String) -> Bool {
+        switch resolve(selectedCount: selectedCount, groupRequested: groupRequested) {
+        case .none: return false
+        case .direct: return true
+        case .group: return !groupTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+}
+
 /// MVVM extraction for ``NewConversationView``.
 ///
 /// Before this extraction the view called `APIClient.shared.request` /
@@ -282,16 +303,19 @@ final class NewConversationViewModel: ObservableObject {
     /// audit backlog) — out of scope here to avoid touching those files.
     func createConversation(
         selectedUsers: [SearchedUser],
-        groupTitle: String
+        groupTitle: String,
+        groupRequested: Bool = false
     ) async {
-        guard !selectedUsers.isEmpty else { return }
+        guard NewConversationShape.canCreate(
+            selectedCount: selectedUsers.count, groupRequested: groupRequested, groupTitle: groupTitle
+        ) else { return }
         isCreating = true
         errorMessage = nil
 
-        let isGroup = selectedUsers.count > 1
+        let isGroup = NewConversationShape.resolve(selectedCount: selectedUsers.count, groupRequested: groupRequested) == .group
         let body = CreateConversationRequest(
             type: isGroup ? "group" : "direct",
-            title: isGroup ? groupTitle.trimmingCharacters(in: .whitespaces) : nil,
+            title: isGroup ? groupTitle.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
             participantIds: selectedUsers.map(\.id),
             encryptionMode: encryptionMode(isGroup: isGroup)
         )

@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.search.SearchPaneFailure
 import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.MessageApi
@@ -29,11 +30,13 @@ public data class MessageSearchHit(
     val conversation: ApiConversation? = null,
 )
 
-/** Le resultat des trois volets de la recherche globale, chacun degradable a vide. */
+/** Le resultat des volets de la recherche globale, chacun degradable a vide. */
 public data class GlobalSearchResults(
     val conversations: List<ApiConversation> = emptyList(),
     val users: List<UserSearchResult> = emptyList(),
     val messages: List<MessageSearchHit> = emptyList(),
+    /** Posts, reels et stories visibles du lecteur (#14620), tels que la passerelle les sert. */
+    val posts: List<ApiPost> = emptyList(),
 )
 
 /**
@@ -51,8 +54,8 @@ public fun mergeMessageHits(batches: List<List<MessageSearchHit>>): List<Message
 /**
  * Recherche globale LOCAL D'ABORD — parite iOS `GlobalSearchViewModel.performSearch`.
  *
- * Le gateway n'a PAS d'endpoint unifie : trois volets tournent en parallele
- * (conversations, utilisateurs, messages). Chacun repond d'abord depuis l'appareil
+ * Les volets tournent en parallele (conversations, utilisateurs, messages, publications).
+ * Les publications (#14620) n'ont pas de copie locale : hors ligne, leur volet est vide. Chacun repond d'abord depuis l'appareil
  * ([LocalSearchSource] : index FTS, caches), puis le reseau se fond dans la liste
  * ([SearchResultMerger]). Le flux emet donc un instantane LOCAL (sans attendre le serveur,
  * hors ligne il est le seul) puis l'instantane fusionne. Un volet dont le reseau echoue rend
@@ -68,6 +71,7 @@ public class GlobalSearchRepository @Inject constructor(
     private val messageApi: MessageApi,
     private val local: LocalSearchSource,
     private val network: NetworkMonitor,
+    private val posts: PostSearchSource = NoPostSearch,
 ) {
     public fun search(
         query: String,
@@ -83,6 +87,7 @@ public class GlobalSearchRepository @Inject constructor(
             val remoteUsers = if (offline) null else async {
                 apiCall { userApi.search(query, limit = userLimit, offset = 0) }
             }
+            val remotePosts = if (offline) null else async { posts.search(query) }
             val localConversations = async { local.conversations(query) }
             val localUsers = async { local.users(query) }
             val localMessages = async { local.messages(query) }
@@ -118,6 +123,7 @@ public class GlobalSearchRepository @Inject constructor(
                         SearchResultMerger.users(firstPaint.users.items, usersResult.orEmpty()),
                         usersResult.failureOrNull(),
                     ),
+                    posts = remotePosts!!.await(),
                     messages = SearchPane(
                         SearchResultMerger.messages(firstPaint.messages.items, remoteMessages.items),
                         remoteMessages.failure.takeIf { firstPaint.messages.items.isEmpty() && remoteMessages.items.isEmpty() },

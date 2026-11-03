@@ -354,4 +354,21 @@ class NotificationDestinationResolverTest {
         assertThat(row).isEqualTo(NotificationDestination.Reel("p1"))
         assertThat(banner).isEqualTo(me.meeshy.sdk.model.push.PushTapDestination.Reel("p1"))
     }
+
+    @Test
+    fun `une charge push et la notification de l API menent a la meme destination`() {
+        val fromApi = NotificationDestinationResolver.resolve(
+            notification(type = "post_comment", postId = "p1", postType = "STORY", actorId = "u2"),
+        )
+        val fromPush = NotificationDestinationResolver.resolve(
+            me.meeshy.sdk.model.push.PushPayload(type = "post_comment", postId = "p1", postType = "STORY", senderId = "u2"),
+        )
+        assertThat(fromPush).isEqualTo(fromApi)
+    }
+
+    @Test
+    fun `une charge push sans destination ne mene nulle part`() {
+        assertThat(NotificationDestinationResolver.resolve(me.meeshy.sdk.model.push.PushPayload(type = "login_new_device")))
+            .isEqualTo(NotificationDestination.None)
+    }
 }

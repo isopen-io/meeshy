@@ -3,7 +3,9 @@ package me.meeshy.sdk.conversation
 import androidx.room.withTransaction
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
+import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.QuotePropagation
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
@@ -60,6 +62,70 @@ internal class CachedMessageUpdater(
                     messageDao.upsertAll(listOf(MessageEntityFactory.refreshed(row, updated).bumped()))
                 }
                 updated
+            }
+        }
+    }
+
+    /**
+     * Réécrit EN UNE ÉCRITURE toutes les lignes que [select] rend (même transaction, un seul `upsertAll`), sous le
+     * compte de [ticket]. [transform] rend le MÊME objet pour une ligne qu'elle ne change pas : elle n'est pas
+     * réécrite, donc ne réveille aucun observateur. Une charge illisible est laissée telle quelle. Rend les
+     * conversations réellement écrites.
+     */
+    suspend fun rewriteMany(
+        ticket: AccountTicket?,
+        select: suspend () -> List<MessageEntity>,
+        transform: (ApiMessage) -> ApiMessage,
+    ): Set<String> = fence.commitOrWrite(ticket) {
+        database.withTransaction {
+            val written = select().mapNotNull { row ->
+                val current = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull()
+                    ?: return@mapNotNull null
+                val updated = transform(current)
+                if (updated === current) null else MessageEntityFactory.refreshed(row, updated).bumped()
+            }
+            if (written.isNotEmpty()) messageDao.upsertAll(written)
+            written.map { it.conversationId }.toSet()
+        }
+    } ?: emptySet()
+
+    /**
+     * Réécrit, dans une seule transaction, chaque réponse de [conversationId] qui cite l'un des [parentIds]
+     * (identifiant serveur OU local : une réponse cite l'id serveur, la ligne d'un message envoyé d'ici peut
+     * encore porter son `cid_`). [transform] rend l'instance reçue quand la citation ne doit pas changer —
+     * rien n'est alors écrit. Chaque ligne réécrite voit son `changeVersion` monter : sa cellule se redessine.
+     */
+    suspend fun updateCiting(
+        ticket: AccountTicket?,
+        conversationId: String,
+        parentIds: Collection<String>,
+        transform: (ApiMessage) -> ApiMessage,
+    ) {
+        fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val candidates = parentIds.distinct()
+                    .flatMap { messageDao.mentioning(conversationId, it) }
+                    .distinctBy { it.id }
+                val rewritten = candidates.mapNotNull { row ->
+                    val current = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull()
+                        ?: return@mapNotNull null
+                    if (!QuotePropagation.quotes(current, parentIds)) return@mapNotNull null
+                    val updated = transform(current)
+                    if (updated === current) null else MessageEntityFactory.refreshed(row, updated).bumped()
+                }
+                if (rewritten.isNotEmpty()) messageDao.upsertAll(rewritten)
+            }
+        }
+    }
+
+    /** Retire les lignes nommées (par l'une ou l'autre de leurs deux clés) et leurs versions antérieures. */
+    suspend fun purge(ticket: AccountTicket?, messageIds: Collection<String>) {
+        if (messageIds.isEmpty()) return
+        fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val rowIds = messageIds.mapNotNull { MessageIdReconciliation.locate(database, it)?.id }.distinct()
+                if (rowIds.isNotEmpty()) messageDao.deleteByIds(rowIds)
+                messageIds.forEach { database.editRevisionDao().deleteForMessage(it) }
             }
         }
     }

@@ -8,7 +8,8 @@
  *  - `interactionDays` : par paire et par jour (`PairInteractionDay`), ce que
  *    J'AI fait envers l'autre, nature par nature ;
  *  - `consents` : les partages que J'AI consentis au rituel du Sang
- *    (`RelationFeatureSetting`, `ownerId` = moi).
+ *    (`RelationFeatureSetting`, `ownerId` = moi), et la date à laquelle j'ai
+ *    retiré chacun (#14401).
  *
  * Jamais ce qui décrit l'AUTRE (art. 15(4)) : ni ce qu'il m'accorde, ni ses
  * passages (ses baisses comprises), ni le niveau effectif qui en dérive, ni le
@@ -49,6 +50,10 @@ type ConsentRow = {
   readonly locationHistoryShared: boolean;
   readonly proximityShared: boolean;
   readonly consentedAt: Date;
+  readonly listeningTitleWithdrawnAt?: Date | null;
+  readonly locationWithdrawnAt?: Date | null;
+  readonly locationHistoryWithdrawnAt?: Date | null;
+  readonly proximityWithdrawnAt?: Date | null;
 };
 
 type FindMany<Row> = { readonly findMany: (args: never) => Promise<readonly Row[]> };
@@ -88,6 +93,12 @@ const consentOf = (row: ConsentRow) => ({
   locationHistoryShared: row.locationHistoryShared,
   proximityShared: row.proximityShared,
   consentedAt: row.consentedAt.toISOString(),
+  withdrawnAt: {
+    listeningTitleShared: row.listeningTitleWithdrawnAt?.toISOString() ?? null,
+    locationShared: row.locationWithdrawnAt?.toISOString() ?? null,
+    locationHistoryShared: row.locationHistoryWithdrawnAt?.toISOString() ?? null,
+    proximityShared: row.proximityWithdrawnAt?.toISOString() ?? null,
+  },
 });
 
 const interactionSelect = Object.fromEntries(
@@ -117,7 +128,8 @@ export async function exportRelations(prisma: RelationsExportPrisma | PrismaClie
     } as never),
     db.relationFeatureSetting.findMany({
       where: { ownerId: userId },
-      select: { otherId: true, listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true, consentedAt: true },
+      select: { otherId: true, listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true, consentedAt: true,
+        listeningTitleWithdrawnAt: true, locationWithdrawnAt: true, locationHistoryWithdrawnAt: true, proximityWithdrawnAt: true },
       orderBy: { consentedAt: 'asc' },
       take,
       skip,

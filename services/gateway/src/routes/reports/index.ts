@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { assessReportPriority } from '../../services/reports/reportPriority';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendInternalError, sendBadRequest, sendNotFound } from '../../utils/response';
 import { getReportService } from '../../services/admin/report.service';
@@ -26,13 +27,23 @@ import { verifierCible, type TypeSignale } from './target';
  * > jour où quelqu'un durcit `/admin` en croyant ne toucher qu'à
  * > l'administration.
  *
- * ## Trois seuils, trois clés — et c'est la troisième qui compte
+ * ## Deux seuils, par APPELANT — aucun par cible, un signalement par paire
  *
- * `10/h user:<id>` et `30/h ip:<ip>` bornent l'APPELANT. Aucune clé par
- * appelant ne peut empêcher le harcèlement par signalement en masse d'une même
- * cible : dix comptes complices tiennent chacun leur quota. `3/h
- * target:<entityId>` borne la CIBLE, et c'est le seul seuil qui protège la
- * personne signalée.
+ * `10/h user:<id>` et `30/h ip:<ip>` bornent l'APPELANT (anti-spam). Il n'y a
+ * plus de seuil par CIBLE (#14110, contre-audit N2/N3) : un seuil par cible
+ * jetait des signalements légitimes — celui d'une mineure, quatrième de l'heure
+ * — et se laissait épuiser par l'auteur du contenu ; un refus distinct (429) ou
+ * un accusé fabriqué disait au signalé qu'on l'avait signalé.
+ *
+ * Un signalant inscrit n'a qu'UN signalement ouvert par cible (#14627,
+ * `ReportService.createReport`) : son doublon reçoit l'accusé de la ligne
+ * existante, sans écriture. Plusieurs signalants d'une même cible écrivent
+ * chacun leur ligne, et rien ne les regroupe à la lecture : la console liste
+ * les lignes telles qu'elles sont.
+ *
+ * Signaler ce dont on est l'AUTEUR est refusé (`verifierCible`), avec le même
+ * 404 qu'une cible introuvable. Une conversation n'a pas d'auteur : tout membre
+ * actif la signale, y compris celui qui l'a ouverte ou en a hérité (#14626).
  *
  * ## L'identité du signalant ne vient jamais du corps
  *
@@ -115,6 +126,11 @@ function signalant(request: FastifyRequest): { id?: string; participantId?: stri
  * elle ne le recopie pas. Une copie porterait sa propre loi, et c'est
  * exactement ce que ce lot supprime.
  */
+type Accuse = { id: string; reportedType: string; reportedEntityId: string; reportType: string; status: string; createdAt: Date };
+
+const accuse = (reply: FastifyReply, accuseDeReception: Accuse) =>
+  sendSuccess(reply, accuseDeReception, { statusCode: 201, message: 'Signalement cree avec succes' });
+
 export async function signaler(
   fastify: FastifyInstance,
   request: FastifyRequest,
@@ -141,6 +157,11 @@ export async function signaler(
       });
     }
 
+    const priorite = await assessReportPriority(fastify.prisma, {
+      reportedType: corps.reportedType,
+      reportedEntityId: corps.reportedEntityId,
+      reporterId: moi.id ?? null,
+    });
     const rapport = await getReportService(fastify.prisma).createReport({
       reportedType: corps.reportedType,
       reportedEntityId: corps.reportedEntityId,
@@ -148,9 +169,14 @@ export async function signaler(
       reporterId: moi.id,
       reporterName: moi.nom,
       reason: corps.reason,
+      ...priorite,
     });
 
-    return sendSuccess(reply, rapport, { statusCode: 201, message: 'Signalement cree avec succes' });
+    // #14110 (SEC-06, MIN-04) — le signalant ne reçoit que l'accusé : jamais la
+    // priorité ni ses raisons (« mineur » dirait l'âge du signalé), y compris par
+    // l'alias historique `/admin/reports`, qui ne déclare aucun schéma.
+    const { id, reportedType, reportedEntityId, reportType, status, createdAt } = rapport;
+    return accuse(reply, { id, reportedType, reportedEntityId, reportType, status, createdAt });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return sendBadRequest(reply, 'Donnees invalides');
@@ -163,7 +189,7 @@ export async function signaler(
 const UNE_HEURE = 60 * 60 * 1000;
 
 /**
- * Les trois limiteurs — construits ici, pour les DEUX adresses.
+ * Les deux limiteurs — construits ici, pour les DEUX adresses.
  *
  * Ce ne sont pas les OBJETS qui sont partagés (chaque plugin monte les siens)
  * mais les COMPTEURS : même préfixe, même clé, donc mêmes entrées Redis. C'est
@@ -199,22 +225,7 @@ export function limiteursDeSignalement(fastify: FastifyInstance) {
     redis
   );
 
-  const parCible = createCustomRateLimiter(
-    {
-      max: 3,
-      windowMs: UNE_HEURE,
-      keyPrefix: 'reports:target',
-      message: 'Ce contenu a deja ete signale plusieurs fois. Nos equipes l’examinent.',
-      keyGenerator: (request) => {
-        const corps = request.body as { reportedEntityId?: unknown } | null | undefined;
-        const cible = typeof corps?.reportedEntityId === 'string' ? corps.reportedEntityId : 'sans-cible';
-        return `target:${cible}`;
-      },
-    },
-    redis
-  );
-
-  return [parCompte.middleware(), parAdresse.middleware(), parCible.middleware()];
+  return [parCompte.middleware(), parAdresse.middleware()];
 }
 
 export async function reportCreationRoutes(fastify: FastifyInstance) {

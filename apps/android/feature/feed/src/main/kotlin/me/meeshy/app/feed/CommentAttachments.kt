@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -42,6 +43,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.ui.component.bubble.BubbleFile
+import me.meeshy.ui.component.bubble.BubbleFileRow
 import me.meeshy.ui.component.retouch.RetouchSourceDecoder
 import me.meeshy.ui.component.retouch.RetouchVideoProbe
 import me.meeshy.ui.icons.MeeshyIcons
@@ -67,9 +70,26 @@ private const val PIECE_THUMBNAIL_LONG_SIDE = 256
 internal fun CommentMediaStrip(media: List<CommentMediaPreview>) {
     if (media.isEmpty()) return
     media.filter { it.isAudio }.forEach { CommentAudioChip(it) }
-    val visual = media.filterNot { it.isAudio }
+    media.filter { it.isFile }.forEach { CommentFileRow(it) }
+    val visual = media.filter { it.kind.isVisual }
     if (visual.isEmpty()) return
     CommentVisualStrip(visual)
+}
+
+/**
+ * #14386 — un fichier joint se lit comme dans une conversation ([BubbleFileRow] : trombone, nom, taille) ; le toucher
+ * l'ouvre hors de Meeshy (le navigateur ou l'application qui sait le lire le télécharge).
+ */
+@Composable
+private fun CommentFileRow(item: CommentMediaPreview) {
+    val uriHandler = LocalUriHandler.current
+    val url = item.url
+    BubbleFileRow(
+        file = BubbleFile(attachmentId = item.id, name = item.fileName, sizeBytes = item.fileSize, url = url),
+        onColor = MeeshyTheme.tokens.textPrimary,
+        onClick = url?.let { { runCatching { uriHandler.openUri(it) } } },
+        modifier = Modifier.padding(top = MeeshySpacing.xs),
+    )
 }
 
 @Composable
@@ -155,6 +175,10 @@ private fun PieceRemoveButton(label: String, onClick: () -> Unit, modifier: Modi
 
 @Composable
 private fun PieceThumbnail(piece: CommentPendingPiece) {
+    if (piece.isFile) {
+        PieceFileThumbnail(piece)
+        return
+    }
     if (piece.isVideo || piece.isAudio) {
         Icon(if (piece.isAudio) MeeshyIcons.Mic else MeeshyIcons.Video, contentDescription = null, tint = MeeshyPalette.Indigo500)
         return
@@ -163,6 +187,24 @@ private fun PieceThumbnail(piece: CommentPendingPiece) {
         runCatching { RetouchSourceDecoder.decode(piece.item.bytes, longSide = PIECE_THUMBNAIL_LONG_SIDE) }.getOrNull()
     }
     bitmap?.let { Image(it.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+}
+
+/** Un fichier du bandeau (#14386) : le trombone et le nom, qui se lit sous le pouce. */
+@Composable
+private fun PieceFileThumbnail(piece: CommentPendingPiece) {
+    androidx.compose.foundation.layout.Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(MeeshySpacing.xxs).semantics(mergeDescendants = true) { contentDescription = piece.item.fileName },
+    ) {
+        Icon(MeeshyIcons.AttachFile, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(20.dp))
+        androidx.compose.material3.Text(
+            text = piece.item.fileName,
+            style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+            color = MeeshyTheme.tokens.textSecondary,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
+    }
 }
 
 /**
@@ -187,7 +229,7 @@ internal fun rememberCommentPieceRetouch(onReplace: (String, MediaUploadItem) ->
         )
     }
     return { piece ->
-        scope.launch {
+        if (!piece.isFile) scope.launch {
             if (piece.isVideo) {
                 commentVideoPending(context, piece.item)?.let { video = piece.id to it }
             } else {

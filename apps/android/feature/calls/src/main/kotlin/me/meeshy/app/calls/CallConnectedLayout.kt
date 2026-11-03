@@ -153,6 +153,7 @@ internal fun CallConnectedColumn(
     val routeViewModel: CallAudioRouteViewModel = hiltViewModel()
     val route by routeViewModel.state.collectAsStateWithLifecycle()
     var routeSheetOpen by remember { mutableStateOf(false) }
+    val signalingDegraded by viewModel.signalingDegraded.collectAsStateWithLifecycle()
     LaunchedEffect(state.isVideoCall) { routeViewModel.onEvent(CallAudioRouteUiEvent.Start(state.isVideoCall)) }
 
     BoxWithConstraints(modifier) {
@@ -173,7 +174,7 @@ internal fun CallConnectedColumn(
                 // vivent dans la puce de l'en-tête (CallHeaderBar) ; ne reste que ce que le pair fait SUBIR.
                 CallVideoPeerNotices(state = state, modifier = Modifier.weight(1f).fillMaxWidth())
             } else {
-                CallAudioStage(state = state, peer = peer)
+                CallAudioStage(state = state, peer = peer, signalingDegraded = signalingDegraded)
             }
 
             state.captionText?.let { caption -> CallCaption(caption) }

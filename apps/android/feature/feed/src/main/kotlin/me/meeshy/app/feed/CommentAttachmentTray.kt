@@ -5,6 +5,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.TusUploadRepository
+import me.meeshy.sdk.model.CommentPieceKind
 import me.meeshy.sdk.model.MAX_POST_MEDIA
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.media.TusUploadContext
@@ -15,6 +16,8 @@ import me.meeshy.sdk.net.NetworkResult
 data class CommentPendingPiece(val id: String, val item: MediaUploadItem, val uploaded: UploadedMedia? = null) {
     val isVideo: Boolean get() = item.mimeType.startsWith("video")
     val isAudio: Boolean get() = item.mimeType.startsWith("audio")
+    /** Ni photo, ni vidéo, ni vocal : un fichier (#14386), montré par son nom, jamais décodé en vignette. */
+    val isFile: Boolean get() = CommentPieceKind.of(item.mimeType) == CommentPieceKind.FILE
 }
 
 /**

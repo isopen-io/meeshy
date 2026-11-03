@@ -20,9 +20,11 @@
  *    (`generateDefaultConversationTitle`). Laisser partir un groupe sans nom
  *    produirait une conversation que personne ne sait nommer ensuite — et,
  *    depuis #6790, on sait ce que coûte un titre qu'aucun humain n'a choisi.
- * 2. **Au moins un participant.** Le serveur accepte `participantIds: []` — il
- *    créerait un groupe d'une seule personne. Ce n'est pas un groupe, c'est une
- *    note ; l'écran ne doit pas l'offrir.
+ *
+ * **Un groupe dont je suis le seul membre se crée** (#14646, directive porteur
+ * du 2026-11-02) : `participantIds: []` part, et la passerelle exige alors le
+ * titre (400 `MISSING_REQUIRED_FIELD`) — que la règle 1 impose déjà. Le groupe
+ * n'est annoncé à ses invités qu'à leur arrivée et au premier message.
  *
  * **Le créateur n'est JAMAIS dans la liste.** La passerelle l'ajoute elle-même
  * en `role: 'creator'`, et l'y mettre rend **422 `INVALID_OPERATION`**
@@ -78,7 +80,7 @@ export function validateGroupDraft(draft: GroupDraft, viewerId: string | null): 
 
   if (title === '' || title.length > GROUP_TITLE_MAX) return { ok: false, field: 'title' };
   if (description.length > GROUP_DESCRIPTION_MAX) return { ok: false, field: 'description' };
-  if (participantIds.length === 0 || participantIds.length > GROUP_PARTICIPANTS_MAX) {
+  if (participantIds.length > GROUP_PARTICIPANTS_MAX) {
     return { ok: false, field: 'participants' };
   }
 
@@ -105,7 +107,7 @@ export function validateGroupDraft(draft: GroupDraft, viewerId: string | null): 
 export const GROUP_REFUSAL: Readonly<Record<GroupField, string>> = {
   title: 'Donnez un nom à ce groupe — 100 caractères au plus.',
   description: 'La description ne peut pas dépasser 500 caractères.',
-  participants: 'Choisissez au moins une personne, et 250 au plus.',
+  participants: 'Choisissez 250 personnes au plus.',
 };
 
 export const GROUP_CREATION_FAILED = 'Impossible de créer ce groupe — réessayez dans un instant.';

@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.e2ee.libsignal.EndToEndThreadAccess
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
@@ -49,8 +50,6 @@ import me.meeshy.sdk.model.mention.MentionLookupLaw
 import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.PinAction
-import me.meeshy.sdk.model.StarredAttachmentKind
-import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.app.chat.piece.PieceCapabilities
@@ -119,6 +118,8 @@ class ChatViewModel @Inject constructor(
     ownReactionWithdrawals: OwnReactionWithdrawals,
     outOfThreadSendGate: OutOfThreadSendGate,
     mentionContacts: MentionContacts = MentionContacts.None,
+    /** #14591 — le texte d'un tête-à-tête chiffré de bout en bout part scellé, et le fil relit son clair au coffre. */
+    private val endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -138,7 +139,14 @@ class ChatViewModel @Inject constructor(
         ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
         ?.takeIf { it.isNotBlank() }
 
-    private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId))
+    private var landingMessageId: String? = savedStateHandle.get<String>(LANDING_MESSAGE_ID_ARG)?.takeIf { it.isNotBlank() }
+
+    /** The message this conversation was opened ON (route arg `messageId`), handed out ONCE: a later open or recomposition never replays the jump. */
+    fun takeLandingMessageId(): String? = landingMessageId.also { landingMessageId = null }
+
+    private val _state = MutableStateFlow(
+        ChatUiState(conversationId = conversationId, endToEndAvailable = endToEnd !== EndToEndThreadAccess.None),
+    )
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     private val composerTextHolder = ComposerTextHolder(initialDraft.orEmpty())
@@ -209,6 +217,7 @@ class ChatViewModel @Inject constructor(
         recentEmojis = recentEmojiStore,
         languageIdentifier = languageIdentifier,
         mentionContacts = mentionContacts,
+        endToEnd = endToEnd,
     )
 
     private val reactions = ChatReactionController(
@@ -235,6 +244,8 @@ class ChatViewModel @Inject constructor(
     )
 
     private val replyJump = ChatReplyJumpController(screenState)
+
+    private val landing = ChatLandingController(conversationId, screenState, messageRepository, viewModelScope)
 
     private val forward = ChatForwardController(
         scope = viewModelScope,
@@ -358,6 +369,7 @@ class ChatViewModel @Inject constructor(
                             ?: it.composerLanguageSeed,
                     )
                 }
+                if (_state.value.isEndToEnd) composer.forgetEndToEndDraftOnDisk()
             }
         }
 
@@ -370,14 +382,17 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             combine(
-                messageRepository.messagesStream(
+                endToEnd.overlay(
                     conversationId,
-                    onSyncError = { error ->
-                        windowAnswered.value = true
-                        _state.update {
-                            it.copy(errorMessage = error.message, showSkeleton = false, isSyncing = false)
-                        }
-                    },
+                    messageRepository.messagesStream(
+                        conversationId,
+                        onSyncError = { error ->
+                            windowAnswered.value = true
+                            _state.update {
+                                it.copy(errorMessage = error.message, showSkeleton = false, isSyncing = false)
+                            }
+                        },
+                    ),
                 ),
                 sessionRepository.currentUser,
                 reactions.ownReactions,
@@ -423,6 +438,7 @@ class ChatViewModel @Inject constructor(
         }
 
         translation.start()
+        landingMessageId?.let(landing::land)
 
         viewModelScope.launch {
             launch {
@@ -759,6 +775,15 @@ class ChatViewModel @Inject constructor(
     /** The pending reply-jump scroll has been performed by the screen. */
     fun onScrollHandled() = replyJump.onScrollHandled()
 
+    /** #14670 — the landing state: an anchored window's way to the present, the lit message. */
+    internal val landingState: StateFlow<ChatLandingState> get() = landing.state
+
+    /** #14670 — the page after a window anchored on an old message. */
+    fun loadNewer() = landing.loadNewer()
+
+    /** #14670 — leaves a window anchored on an old message for the recent one. */
+    fun returnToPresent() = landing.returnToPresent()
+
     // --- Media, files ---------------------------------------------------------------------
 
     fun openImageViewer(messageId: String, imageIndex: Int) {
@@ -985,10 +1010,12 @@ class ChatViewModel @Inject constructor(
      * "Delete for me" — hides the message locally only (WhatsApp-style), never
      * reaching the server. The durable [locallyHiddenStore] emits the new hidden
      * set, which the message stream re-filters, so the bubble disappears at once.
+     * Its end-to-end plaintext leaves the vault for good (#14655).
      */
     fun deleteForMe(messageId: String) {
         _state.update { it.copy(actionMessageId = null) }
         locallyHiddenStore.hide(messageId)
+        viewModelScope.launch { endToEnd.forgetHiddenForMe(listOf(messageId)) }
     }
 
     /** « Pour tous » sur toute une sélection (#13294) : une suppression optimiste par message. */
@@ -1046,25 +1073,18 @@ class ChatViewModel @Inject constructor(
         val bubble = _state.value.messages.firstOrNull { it.messageId == messageId }
         _state.update { it.copy(actionMessageId = null) }
         if (bubble == null || bubble.isDeleted) return
-        starredStore.toggle(bubble.toStarSnapshot())
+        starredStore.toggle(
+            ChatStarSnapshot.of(
+                bubble = bubble,
+                conversationId = conversationId,
+                conversationName = _state.value.conversationTitle,
+                accentColorHex = _state.value.accentColorHex,
+                senderAvatarUrl = latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.sender?.resolvedAvatar,
+                conversationIsEndToEnd = _state.value.isEndToEnd,
+                nowMillis = clock.nowMillis(),
+            ),
+        )
     }
-
-    private fun BubbleContent.toStarSnapshot(): StarredMessage = StarredMessage(
-        messageId = messageId,
-        conversationId = conversationId,
-        conversationName = _state.value.conversationTitle,
-        conversationAccentColor = _state.value.accentColorHex,
-        senderName = senderName,
-        senderAvatarUrl = latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.sender?.resolvedAvatar,
-        contentPreview = text,
-        attachmentKind = when {
-            images.isNotEmpty() -> StarredAttachmentKind.IMAGE
-            files.isNotEmpty() -> StarredAttachmentKind.FILE
-            else -> null
-        },
-        starredAtMillis = clock.nowMillis(),
-        sentAtIso = createdAtIso,
-    )
 
     fun retryMessage(messageId: String) {
         viewModelScope.launch {
@@ -1115,6 +1135,9 @@ class ChatViewModel @Inject constructor(
 
         /** Optional deep-link query arg (`?draft=...`) — see [initialDraft]. */
         const val DRAFT_ARG: String = "draft"
+
+        /** Optional route arg: the message to land on — the same name as the chat route's `messageId`. */
+        const val LANDING_MESSAGE_ID_ARG: String = "messageId"
         private const val TYPING_TIMEOUT_MS = 5_000L
     }
 }

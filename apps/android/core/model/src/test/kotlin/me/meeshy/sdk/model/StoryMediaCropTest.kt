@@ -147,4 +147,16 @@ class StoryMediaCropTest {
         assertThat(StoryMediaCrop(x = 0.1, y = 0.2, width = 0.5, height = 0.5).normalized)
             .isEqualTo(me.meeshy.sdk.model.imageedit.NormalizedCrop(0.1f, 0.2f, 0.5f, 0.5f))
     }
+
+    /**
+     * La passerelle exige les quatre bornes (`storyEffects.mediaObjects[].crop`) : un encodeur qui tait les valeurs par
+     * défaut (`MeeshyApi.json`, `encodeDefaults = false`) laissait tomber `x = 0` et `width = 1`, et la publication d'un
+     * fond recadré au carré revenait en 400 VALIDATION_ERROR (recette S8, #13973).
+     */
+    @Test
+    fun `the wire always carries the four bounds, even those equal to their default`() {
+        val wire = Json { encodeDefaults = false }.encodeToString(StoryMediaCrop.serializer(), StoryMediaCrop(y = 0.125, height = 0.75))
+
+        assertThat(wire).isEqualTo("""{"x":0.0,"y":0.125,"width":1.0,"height":0.75}""")
+    }
 }
