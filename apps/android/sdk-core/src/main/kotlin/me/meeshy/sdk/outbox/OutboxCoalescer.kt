@@ -1,6 +1,10 @@
 package me.meeshy.sdk.outbox
 
 import me.meeshy.core.database.entity.OutboxEntity
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import me.meeshy.sdk.model.outbox.OutboxFieldMerge
 import me.meeshy.sdk.net.MeeshyApi
 
 /** Outcome of coalescing an incoming mutation against the pending queue (ARCHITECTURE.md §5). */
@@ -45,7 +49,11 @@ public sealed interface CoalesceDecision {
  * - a repeated settings update (same user id) keeps only the latest snapshot
  *   (each carries the full preference block — an offline toggle burst collapses to one PATCH);
  *   notification and privacy settings coalesce independently (distinct kinds share the settings
- *   lane but never supersede one another).
+ *   lane but never supersede one another);
+ * - an edit of a message still queued for sending is folded INTO that send (one request carrying the final text);
+ *   a delete of it cancels the send and any edit, a delete after an edit replaces the edit;
+ * - conversation details (title, description, avatar) and a generic settings action of the same (endpoint, method)
+ *   merge field by field, the last write winning on each key; different endpoints never merge (FIFO);
  *
  * [pending] MUST contain only still-cancellable rows ([OutboxState.PENDING]);
  * an in-flight mutation cannot be undone.
@@ -55,8 +63,11 @@ public object OutboxCoalescer {
     public fun decide(incoming: OutboxEntity, pending: List<OutboxEntity>): CoalesceDecision {
         val sameTarget = pending.filter { it.targetId == incoming.targetId }
         return when (incoming.kindEnum) {
-            OutboxKind.DELETE_MESSAGE -> onDelete(incoming, sameTarget)
-            OutboxKind.EDIT_MESSAGE -> replaceSameKind(incoming, sameTarget, OutboxKind.EDIT_MESSAGE)
+            OutboxKind.DELETE_MESSAGE -> onDelete(incoming, sameTarget, pending)
+            OutboxKind.EDIT_MESSAGE -> foldIntoQueuedSend(incoming, pending)
+                ?: replaceSameKind(incoming, sameTarget, OutboxKind.EDIT_MESSAGE)
+            OutboxKind.UPDATE_CONVERSATION -> mergeFieldByField(incoming, sameTarget, OutboxKind.UPDATE_CONVERSATION, BODY_ROOT)
+            OutboxKind.SETTINGS_ACTION -> mergeFieldByField(incoming, sameTarget, OutboxKind.SETTINGS_ACTION, SETTINGS_BODY)
             OutboxKind.READ_RECEIPT -> terminalToggle(incoming, sameTarget, OutboxKind.MARK_UNREAD, OutboxKind.READ_RECEIPT)
             OutboxKind.MARK_UNREAD -> terminalToggle(incoming, sameTarget, OutboxKind.READ_RECEIPT, OutboxKind.MARK_UNREAD)
             OutboxKind.UPDATE_CONVERSATION_PREFS -> replaceSameKind(
@@ -94,8 +105,62 @@ public object OutboxCoalescer {
         }
     }
 
-    private fun onDelete(incoming: OutboxEntity, sameTarget: List<OutboxEntity>): CoalesceDecision {
-        val sends = sameTarget.filter { it.kindEnum == OutboxKind.SEND_MESSAGE }.map { it.cmid }
+    private fun queuedSendsOf(messageId: String, pending: List<OutboxEntity>): List<OutboxEntity> =
+        pending.filter { it.kindEnum == OutboxKind.SEND_MESSAGE && (it.cmid == messageId || it.targetId == messageId) }
+
+    /**
+     * L'édition d'un message encore en file n'est pas une seconde requête : son texte final prend la place du texte de
+     * l'envoi (le clair d'un envoi chiffré n'existe pas en ligne, il n'est jamais touché). `null` quand aucun envoi ne
+     * l'attend, ou que sa charge ne se lit pas.
+     */
+    private fun foldIntoQueuedSend(incoming: OutboxEntity, pending: List<OutboxEntity>): CoalesceDecision? {
+        val send = queuedSendsOf(incoming.targetId, pending).firstOrNull() ?: return null
+        val content = parseObject(incoming.payload)?.get("content") ?: return null
+        val sendBody = parseObject(send.payload) ?: return null
+        val folded = JsonObject(sendBody + ("content" to content))
+        return CoalesceDecision.Replace(emptyList(), send.copy(payload = MeeshyApi.json.encodeToString(JsonObject.serializer(), folded)))
+    }
+
+    private fun parseObject(raw: String): JsonObject? =
+        runCatching { MeeshyApi.json.parseToJsonElement(raw).jsonObject }.getOrNull()
+
+    /**
+     * Fusionne [incoming] avec les écritures [kind] en attente pour la même cible, champ par champ ([OutboxFieldMerge]) :
+     * [select] dit où vit l'objet à fusionner dans la charge (la racine, ou le sous-objet `body`).
+     */
+    private fun mergeFieldByField(
+        incoming: OutboxEntity,
+        sameTarget: List<OutboxEntity>,
+        kind: OutboxKind,
+        select: BodySlot,
+    ): CoalesceDecision {
+        val older = sameTarget.filter { it.kindEnum == kind }
+        if (older.isEmpty()) return CoalesceDecision.Enqueue(incoming)
+        val newest = parseObject(incoming.payload) ?: return CoalesceDecision.Replace(older.map { it.cmid }, incoming)
+        val priorBodies = older.mapNotNull { parseObject(it.payload) }.map(select::read)
+        val merged = OutboxFieldMerge.merge(OutboxFieldMerge.mergeAll(priorBodies), select.read(newest))
+        val payload = MeeshyApi.json.encodeToString(JsonObject.serializer(), select.write(newest, merged))
+        return CoalesceDecision.Replace(older.map { it.cmid }, incoming.copy(payload = payload))
+    }
+
+    private interface BodySlot {
+        fun read(payload: JsonObject): JsonObject
+        fun write(payload: JsonObject, body: JsonObject): JsonObject
+    }
+
+    private val BODY_ROOT = object : BodySlot {
+        override fun read(payload: JsonObject): JsonObject = payload
+        override fun write(payload: JsonObject, body: JsonObject): JsonObject = body
+    }
+
+    private val SETTINGS_BODY = object : BodySlot {
+        override fun read(payload: JsonObject): JsonObject = (payload["body"] as? JsonObject) ?: JsonObject(emptyMap())
+        override fun write(payload: JsonObject, body: JsonObject): JsonObject =
+            JsonObject(payload + ("body" to (body as JsonElement)))
+    }
+
+    private fun onDelete(incoming: OutboxEntity, sameTarget: List<OutboxEntity>, pending: List<OutboxEntity>): CoalesceDecision {
+        val sends = queuedSendsOf(incoming.targetId, pending).map { it.cmid }
         if (sends.isNotEmpty()) {
             val edits = sameTarget.filter { it.kindEnum == OutboxKind.EDIT_MESSAGE }.map { it.cmid }
             return CoalesceDecision.Annihilate(sends + edits)

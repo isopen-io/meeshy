@@ -214,6 +214,7 @@
     <string name="contact_card_state_request_sent">Solicitud enviada</string>
     <string name="contact_card_toast_request_failed">No se pudo enviar la solicitud</string>
     <string name="context_invite_friends">Invitar a mis amigos</string>
+    <string name="conversation_accessRevoked">Se revocó el acceso a esta conversación</string>
     <string name="conversation_analysis_summary">Resumen</string>
     <string name="conversation_analysis_title">Análisis con IA</string>
     <string name="conversation_analysis_trait_communication">Comunicación</string>

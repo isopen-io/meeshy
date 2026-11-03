@@ -11,11 +11,13 @@ import me.meeshy.sdk.conversation.MessageMediaWriteBack
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.model.outbox.ReadListBounds
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConsumeAfterReadRequest
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.notification.FirstMessageAcceptedSignal
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
 import me.meeshy.sdk.outbox.OutboxKindKey
@@ -40,6 +42,7 @@ public class SendMessageHandler @Inject constructor(
     private val messageRepository: MessageRepository,
     private val json: Json,
     private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
+    private val firstMessageAccepted: FirstMessageAcceptedSignal = FirstMessageAcceptedSignal(),
 ) : OutboxKindHandler {
 
     override val payloadGraft: OutboxPayloadGraft = MessageMediaWriteBack::graft
@@ -49,6 +52,7 @@ public class SendMessageHandler @Inject constructor(
             when (val result = apiCall { messageApi.send(row.targetId, request) }) {
                 is NetworkResult.Success -> {
                     messageRepository.reconcileSent(row.cmid, result.data)
+                    firstMessageAccepted.notifyAccepted()
                     SendResult.Success
                 }
                 is NetworkResult.Failure -> PlaintextRefusal.of(result, row.targetId, ledger) ?: SendFailureClassifier.classify(result.error)
@@ -169,7 +173,7 @@ public class ConsumeAfterReadHandler @Inject constructor(
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<ConsumeAfterReadPayload>(row) { payload ->
-            apiCall { messageApi.consumeAfterRead(row.targetId, ConsumeAfterReadRequest(payload.messageIds)) }.toSendResult(row.targetId)
+            apiCall { messageApi.consumeAfterRead(row.targetId, ConsumeAfterReadRequest(ReadListBounds.cappedIds(payload.messageIds))) }.toSendResult(row.targetId)
         }
 }
 

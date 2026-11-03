@@ -44,6 +44,7 @@ import me.meeshy.sdk.net.api.ParticipantRoleUpdate
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.apiCallUnit
 import me.meeshy.sdk.outbox.ConversationPrefsPayload
+import me.meeshy.sdk.outbox.CreateConversationPayload
 import me.meeshy.sdk.outbox.ConversationPrefsPrevious
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
@@ -323,6 +324,50 @@ class ConversationRepository @Inject constructor(
     ): NetworkResult<ApiConversation> =
         apiCall { conversationApi.create(CreateConversationRequest(type, title, participantIds, encryptionMode)) }
             .also { if (it is NetworkResult.Success) noteCreated(it.data.id) }
+
+    /**
+     * Crée une conversation sans attendre le réseau (#15179, iOS `createConversation` hors ligne) : la ligne optimiste
+     * `pending_<uuid>` entre dans la liste à l'instant, la création part par l'outbox au retour du réseau, et
+     * [reconcileCreated] la remplace par l'identifiant serveur. Rend l'id optimiste, ou `null` quand la file est pleine
+     * (rien n'est alors laissé dans la liste).
+     */
+    suspend fun createOptimistic(
+        type: String,
+        title: String?,
+        participantIds: List<String>,
+        encryptionMode: String? = null,
+    ): String? {
+        val pendingId = PENDING_PREFIX + java.util.UUID.randomUUID().toString()
+        val stamp = java.time.Instant.now().toString()
+        cacheSource.remember(ApiConversation(id = pendingId, type = type, title = title, createdAt = stamp, updatedAt = stamp))
+        noteCreated(pendingId)
+        val payload = CreateConversationPayload(type, title, participantIds, encryptionMode)
+        val queued = outboxRepository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.CREATE_CONVERSATION,
+                lane = OutboxLanes.CONVERSATION,
+                targetId = pendingId,
+                payload = MeeshyApi.json.encodeToString(payload),
+            ),
+        )
+        if (queued == null) discardPending(pendingId)
+        return queued?.let { pendingId }
+    }
+
+    /** La création a abouti : la ligne serveur prend la place de la ligne optimiste, en une transaction (aucun doublon). */
+    suspend fun reconcileCreated(pendingId: String, created: ApiConversation) {
+        database.withTransaction {
+            cacheSource.rememberServed(created)
+            conversationDao.deleteByIds(listOf(pendingId))
+        }
+        outboxRepository.resolveLocalId(pendingId, created.id)
+    }
+
+    /** La création a échoué pour de bon : la ligne optimiste part, et les lignes qui l'attendaient avec elle. */
+    suspend fun discardPending(pendingId: String) {
+        conversationDao.deleteByIds(listOf(pendingId))
+        outboxRepository.cancelHeldFor(pendingId)
+    }
 
     /**
      * La conversation directe la plus récente avec [userId] qui existe DÉJÀ dans le cache local —
@@ -906,6 +951,9 @@ class ConversationRepository @Inject constructor(
     }
 
     companion object {
+        /** Le préfixe d'une conversation créée sur cet appareil et pas encore connue du serveur. */
+        private const val PENDING_PREFIX: String = "pending_"
+
         /** [ApiError.code] of a call that never reached the server (airplane mode, DNS, timeout). */
         private const val OFFLINE_ERROR_CODE: String = "NETWORK"
 

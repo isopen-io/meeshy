@@ -160,7 +160,7 @@ class SignupViewModelTest {
             mockk<SessionTeardown>(relaxed = true),
             SyncSeqTracker(),
         )
-        return Scenario(SignupViewModel(repository, coordinator, deviceLocaleProvider), api, coordinator, store)
+        return Scenario(SignupViewModel(repository, coordinator, deviceLocaleProvider, me.meeshy.sdk.notification.InMemoryPushPermissionDeferralStore()), api, coordinator, store)
     }
 
     private fun session() = RegisterResponse(
