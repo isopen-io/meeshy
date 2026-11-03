@@ -133,7 +133,7 @@ public fun AudioRecorderSheet(
             SpokenLanguageStrip(selected = language, onSelect = { language = it }, accent = accent, modifier = Modifier.fillMaxWidth().height(48.dp))
         }
         SheetControls(handle, accent)
-        MicRefusalNoticeInline(handle, onOpenSettings ?: { context.openAppSettings() })
+        MicRefusalNoticeInline(handle, onOpenSettings ?: { context.openAppSettings(); Unit })
         if (AudioRecorderSheetLaw.showsAccessory(recording, accessory != null)) {
             Box(Modifier.fillMaxWidth()) { accessory?.invoke() }
         }
