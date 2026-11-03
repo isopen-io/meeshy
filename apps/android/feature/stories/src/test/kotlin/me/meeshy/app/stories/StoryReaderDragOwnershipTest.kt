@@ -95,4 +95,27 @@ class StoryReaderDragOwnershipTest {
         assertThat(tracker.isInFlight).isFalse()
         assertThat(tracker.resetToken).isEqualTo(0)
     }
+
+    @Test
+    fun `un glissé horizontal né sur la barre ouverte ne change pas de groupe mais le vertical garde le lecteur`() {
+        val owner = StoryReaderDragOwnership.ownerAt(100f, 330f, frames)
+        val tracker = StoryReaderDragTracker()
+
+        val horizontal = tracker.track(60f, 2f, featureAtStart = true, horizontalYields = StoryReaderDragOwnership.yieldsHorizontalAxis(owner))
+        assertThat(horizontal).isEqualTo(StoryDragAxis.Undecided)
+        assertThat(StoryReaderDragOwnership.yieldsEverything(owner)).isFalse()
+
+        val vertical = tracker.track(2f, 60f, featureAtStart = true, horizontalYields = StoryReaderDragOwnership.yieldsHorizontalAxis(owner))
+        assertThat(vertical).isEqualTo(StoryDragAxis.Vertical)
+    }
+
+    @Test
+    fun `sans barre ouverte le même geste appartient au lecteur et change de groupe`() {
+        val closed = frames.copy(reactionBar = null)
+        val owner = StoryReaderDragOwnership.ownerAt(100f, 330f, closed)
+
+        assertThat(owner).isEqualTo(StoryDragOwner.Reader)
+        val axis = StoryReaderDragTracker().track(60f, 2f, featureAtStart = false, horizontalYields = StoryReaderDragOwnership.yieldsHorizontalAxis(owner))
+        assertThat(axis).isEqualTo(StoryDragAxis.Horizontal)
+    }
 }
