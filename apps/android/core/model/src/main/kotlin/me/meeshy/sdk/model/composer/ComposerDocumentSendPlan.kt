@@ -21,9 +21,6 @@ sealed interface ComposerDocumentSendRefusal {
     data class IncompleteAudience(val visibility: StoryVisibility) : ComposerDocumentSendRefusal
 }
 
-/** Un média local du brouillon : son type et sa durée suffisent aux lois d'envoi. */
-data class ComposerDocumentMedia(val uri: String, val mimeType: String, val durationMs: Long? = null)
-
 /** Ce que le brouillon porte, vu des lois d'envoi. */
 data class ComposerDocumentDraft(
     val format: ComposerFormat,

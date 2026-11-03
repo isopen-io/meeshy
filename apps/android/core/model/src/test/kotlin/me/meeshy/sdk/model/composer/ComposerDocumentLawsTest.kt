@@ -15,7 +15,7 @@ class ComposerDocumentLawsTest {
         location: Boolean = false,
     ) = ComposerDocumentDraft(format, text, visibility, users, repost, media, location)
 
-    private fun image() = ComposerDocumentMedia("file:///a.jpg", "image/jpeg")
+    private fun image() = ComposerDocumentMedia("/a.jpg", "image/jpeg")
 
     @Test
     fun `every tool of the served row has a declared effect and none is greyed`() {
@@ -112,7 +112,7 @@ class ComposerDocumentLawsTest {
 
     @Test
     fun `a reel with a long enough video is sent`() {
-        val video = ComposerDocumentMedia("file:///v.mp4", "video/mp4", 5_000)
+        val video = ComposerDocumentMedia("/v.mp4", "video/mp4", 5_000)
         assertThat(ComposerDocumentSendPlan.plan(draft(format = ComposerFormat.REEL, media = listOf(video))))
             .isInstanceOf(ComposerDocumentSendPlan.Send::class.java)
     }
