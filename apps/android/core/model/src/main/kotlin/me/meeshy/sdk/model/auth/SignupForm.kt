@@ -90,9 +90,15 @@ public data class SignupForm(
     val regionalLanguage: String = SignupRegionInference.SECONDARY_LANGUAGE,
     /**
      * Le pseudo TAPÉ (inscription par phases). `null` = jamais touché : il SUIT l'adresse en
-     * direct. Une chaîne = la saisie, qui gagne ; vidée, la dérivation repart.
+     * direct. Une chaîne = la saisie, qui gagne — vidée, elle reste vide et se refuse : un pseudo
+     * effacé ne repart jamais sous la valeur tirée de l'adresse (#15322).
      */
     val username: String? = null,
+    /**
+     * Le nom affiché a été touché (inscription par phases) : il ne suit plus l'adresse, et vidé il
+     * reste vide et se refuse, jamais remplacé en silence par le nom dérivé (#15322).
+     */
+    val displayNameEdited: Boolean = false,
 ) {
 
     /** L'indicatif E.164 du pays choisi (`"+33"`), ou `""` s'il est inconnu. */
@@ -106,22 +112,34 @@ public data class SignupForm(
 
     // ---- inscription par phases : identité dérivée, numéro requis, mot de passe facultatif ----
 
-    /** Le pseudo qui PARTIRA : tapé s'il l'a été, tiré de l'adresse sinon ; `""` si la dérivation retombe sur le recours. */
+    /**
+     * Le pseudo MONTRÉ, JUGÉ et qui PARTIRA : la saisie (même vidée) dès qu'il a été touché, tiré
+     * de l'adresse sinon ; `""` si la dérivation retombe sur le recours.
+     */
     public val effectiveUsername: String
         get() {
-            val typed = username.orEmpty().trim()
-            if (typed.isNotEmpty()) return typed
+            if (username != null) return username.trim()
             val derived = RegistrationIdentity.pseudoRacine(displayName = null, email = email)
             return if (derived == RegistrationIdentity.PSEUDO_DE_SECOURS) "" else derived
         }
 
-    /** Le nom affiché qui partira : tapé s'il l'a été, dérivé de l'adresse sinon. */
+    /** Le nom affiché MONTRÉ, JUGÉ et qui partira : la saisie (même vidée) dès qu'il a été touché, dérivé de l'adresse sinon. */
     public val effectiveDisplayName: String
-        get() = displayName.trim().ifEmpty { RegistrationIdentity.displayNameDepuisEmail(email) }
+        get() {
+            val typed = displayName.trim()
+            return if (displayNameEdited || typed.isNotEmpty()) typed else RegistrationIdentity.displayNameDepuisEmail(email)
+        }
 
-    /** Le refus EN DIRECT du pseudo qui partira (`null` s'il est recevable ou absent). */
+    /**
+     * Le refus EN DIRECT du pseudo qui partira, ou `null`. Un pseudo dérivé absent ne se refuse pas
+     * (l'adresse n'en donne pas encore) ; un pseudo TAPÉ puis vidé, si : il est trop court.
+     */
     public val usernameRefusal: RegistrationIdentity.UsernameRefusal?
-        get() = effectiveUsername.takeIf { it.isNotEmpty() }?.let(RegistrationIdentity::usernameRefusal)
+        get() = when {
+            effectiveUsername.isNotEmpty() -> RegistrationIdentity.usernameRefusal(effectiveUsername)
+            username != null -> RegistrationIdentity.UsernameRefusal.TOO_SHORT
+            else -> null
+        }
 
     /** Nom affiché ET pseudo existent et tiennent leurs bornes : c'est alors que paraît le mot de passe. */
     public val isIdentityDefined: Boolean

@@ -45,6 +45,7 @@ internal fun displayNameErrorText(state: SignupUiState): String? {
     val server = (state.submitError as? SignupSubmitError.Field)
         ?.takeIf { it.target == SignupField.DISPLAY_NAME && it.refusal != SignupRefusal.NAME_TAKEN }
     if (server != null) return stringResource(SignupRefusalCopy.fieldRefusal(SignupField.DISPLAY_NAME, server.refusal))
+    if (state.displayNameErased) return stringResource(R.string.signup_display_name_required)
     return state.validation.displayName?.let {
         fieldMessageText(SignupField.DISPLAY_NAME, SignupFieldMessage.Local(it))
     }

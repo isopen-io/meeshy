@@ -337,7 +337,7 @@ class SignupViewModelTest {
     }
 
     @Test
-    fun aTypedPseudoWinsAndClearingItBringsTheDerivationBack() {
+    fun aTypedPseudoWinsAndClearingItLeavesItEmptyAndRefused() {
         val vm = scenario().viewModel
         vm.onPhoneEntryChange("0612345678")
         vm.onEmailChange("ada@meeshy.me")
@@ -347,7 +347,54 @@ class SignupViewModelTest {
         assertThat(vm.state.value.form.effectiveUsername).isEqualTo("ada_l")
 
         vm.onUsernameChange("")
-        assertThat(vm.state.value.form.effectiveUsername).isEqualTo("ada")
+        assertThat(vm.state.value.shownUsername).isEmpty()
+        assertThat(vm.state.value.form.effectiveUsername).isEmpty()
+        assertThat(vm.state.value.usernameRefusal)
+            .isEqualTo(me.meeshy.sdk.model.auth.RegistrationIdentity.UsernameRefusal.TOO_SHORT)
+    }
+
+    @Test
+    fun register_afterClearingTheDerivedUsername_neverSendsTheErasedPseudo() = runTest(dispatcher) {
+        val scenario = scenario(ApiResponse(success = true, data = session()))
+        scenario.viewModel.onPhoneEntryChange("0612345678")
+        scenario.viewModel.onEmailChange("jean.dupont.1985@exemple.fr")
+        assertThat(scenario.viewModel.state.value.shownUsername).isNotEmpty()
+
+        scenario.viewModel.onUsernameChange("")
+        assertThat(scenario.viewModel.state.value.canSubmit).isFalse()
+        scenario.viewModel.register()
+        advanceUntilIdle()
+
+        assertThat(scenario.api.captured).isEmpty()
+    }
+
+    @Test
+    fun register_afterClearingTheDerivedDisplayName_neverSendsTheErasedName() = runTest(dispatcher) {
+        val scenario = scenario(ApiResponse(success = true, data = session()))
+        scenario.viewModel.onPhoneEntryChange("0612345678")
+        scenario.viewModel.onEmailChange("jean.dupont.1985@exemple.fr")
+        assertThat(scenario.viewModel.state.value.shownDisplayName).isNotEmpty()
+
+        scenario.viewModel.onDisplayNameChange("")
+        assertThat(scenario.viewModel.state.value.shownDisplayName).isEmpty()
+        assertThat(scenario.viewModel.state.value.displayNameErased).isTrue()
+        assertThat(scenario.viewModel.state.value.canSubmit).isFalse()
+        scenario.viewModel.register()
+        advanceUntilIdle()
+
+        assertThat(scenario.api.captured).isEmpty()
+    }
+
+    @Test
+    fun register_afterRetypingAnErasedPseudo_sendsWhatWasTyped() = runTest(dispatcher) {
+        val scenario = scenario(ApiResponse(success = true, data = session()))
+        scenario.viewModel.fillValid()
+        scenario.viewModel.onUsernameChange("")
+        scenario.viewModel.onUsernameChange("jdupont")
+        scenario.viewModel.register()
+        advanceUntilIdle()
+
+        assertThat(scenario.api.captured.single().username).isEqualTo("jdupont")
     }
 
     @Test

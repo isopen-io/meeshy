@@ -440,6 +440,33 @@ class SignupFormPhasedTest {
     }
 
     @Test
+    fun `un pseudo efface reste vide partout, se refuse et ne part pas`() {
+        val form = phased(username = "")
+        assertThat(form.effectiveUsername).isEmpty()
+        assertThat(form.usernameRefusal).isEqualTo(RegistrationIdentity.UsernameRefusal.TOO_SHORT)
+        assertThat(form.isIdentityDefined).isFalse()
+        assertThat(form.canSubmitPhased).isFalse()
+        assertThat(form.toPhasedRegisterRequest().username).isNull()
+        assertThat(phased(username = "   ").canSubmitPhased).isFalse()
+    }
+
+    @Test
+    fun `un nom efface reste vide partout et ne part pas`() {
+        val form = phased().copy(displayNameEdited = true)
+        assertThat(form.effectiveDisplayName).isEmpty()
+        assertThat(form.isIdentityDefined).isFalse()
+        assertThat(form.canSubmitPhased).isFalse()
+        assertThat(form.toPhasedRegisterRequest().displayName).isNull()
+    }
+
+    @Test
+    fun `un nom retape apres effacement est celui qui part`() {
+        val form = phased(displayName = "Ada L.").copy(displayNameEdited = true)
+        assertThat(form.effectiveDisplayName).isEqualTo("Ada L.")
+        assertThat(form.toPhasedRegisterRequest().displayName).isEqualTo("Ada L.")
+    }
+
+    @Test
     fun `une adresse sans rien de slugifiable ne definit pas l'identite`() {
         val form = phased(email = "a@meeshy.me")
         assertThat(form.effectiveUsername).isEmpty()

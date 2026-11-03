@@ -58,9 +58,10 @@ data class SignupUiState(
     val phoneChecked: Boolean = false,
     /** Le mot de passe facultatif est paru (identité définie) et ne se referme plus. */
     val passwordRevealed: Boolean = false,
-    /** Le nom affiché a été touché : sinon il SUIT l'adresse en direct. */
-    val displayNameEdited: Boolean = false,
 ) {
+    /** Le nom affiché a été touché : sinon il SUIT l'adresse en direct. */
+    val displayNameEdited: Boolean get() = form.displayNameEdited
+
     /** Les refus locaux qu'on AFFICHE — un champ encore vide n'en porte aucun. */
     val validation: SignupValidation get() = form.visibleValidation()
 
@@ -76,11 +77,14 @@ data class SignupUiState(
     val globalError: SignupSubmitError?
         get() = submitError?.takeIf { it !is SignupSubmitError.Field }
 
-    /** Le nom affiché montré dans la carte : tapé s'il l'a été, dérivé de l'adresse sinon. */
+    /** Le nom affiché montré dans la carte : la frappe brute s'il a été touché (même vidé), dérivé sinon — ce qui part. */
     val shownDisplayName: String get() = if (displayNameEdited) form.displayName else form.effectiveDisplayName
 
-    /** Le pseudo montré dans la carte : tapé (même vidé) s'il l'a été, dérivé sinon. */
+    /** Le pseudo montré dans la carte : la frappe brute s'il a été touché (même vidé), dérivé sinon — ce qui part. */
     val shownUsername: String get() = form.username ?: form.effectiveUsername
+
+    /** Le nom affiché vidé par l'utilisateur : il porte son refus « requis », rien ne le remplace en silence. */
+    val displayNameErased: Boolean get() = displayNameEdited && form.displayName.isEmpty()
 
     /** Les pseudos LIBRES que la passerelle propose quand le pseudo envoyé est pris. */
     val usernameSuggestions: List<String>
@@ -158,10 +162,7 @@ class SignupViewModel @Inject constructor(
     )
     val state: StateFlow<SignupUiState> = _state.asStateFlow()
 
-    fun onDisplayNameChange(value: String) {
-        editForm { it.copy(displayName = value) }
-        _state.update { it.copy(displayNameEdited = true) }
-    }
+    fun onDisplayNameChange(value: String) = editForm { it.copy(displayName = value, displayNameEdited = true) }
 
     /** Le pseudo tapé ; l'arobase de tête, que l'écran montre déjà, n'en fait pas partie. */
     fun onUsernameChange(value: String) = editForm { it.copy(username = value.trimStart('@')) }
