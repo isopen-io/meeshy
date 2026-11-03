@@ -367,7 +367,7 @@ class StoryRepository @Inject constructor(
         }
 
     /** Une republication faite ne devient pas un échec parce que le cache local a refusé l'écriture. */
-    private suspend fun adoptRepost(story: ApiPost) {
+    internal suspend fun adoptRepost(story: ApiPost) {
         if (postTypeFromWire(story.type) != PostType.STORY) return
         try {
             adoptPublished(story)

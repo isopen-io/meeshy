@@ -744,7 +744,33 @@ class ConversationListViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.conversations.map { it.id }).containsExactly("unread")
-        assertThat(vm.state.value.selectedFilter).isEqualTo(ConversationFilter.UNREAD)
+        assertThat(vm.state.value.selectedFilters).containsExactly(ConversationFilter.UNREAD)
+    }
+
+    @Test
+    fun toggling_filters_composes_then_a_second_tap_removes_and_last_removal_returns_to_all() = runTest(dispatcher) {
+        val convs = listOf(
+            ApiConversation(id = "du", type = "direct", unreadCount = 2),
+            ApiConversation(id = "dr", type = "direct"),
+            ApiConversation(id = "gu", type = "group", unreadCount = 1),
+        )
+        val vm = viewModel(repositoryReturning(flowOf(CacheResult.Fresh(convs, ageMillis = 0))))
+        advanceUntilIdle()
+
+        vm.toggleFilter(ConversationFilter.UNREAD)
+        vm.toggleFilter(ConversationFilter.PERSONAL)
+        advanceUntilIdle()
+        assertThat(vm.state.value.selectedFilters).containsExactly(ConversationFilter.UNREAD, ConversationFilter.PERSONAL)
+        assertThat(vm.state.value.conversations.map { it.id }).containsExactly("du")
+
+        vm.toggleFilter(ConversationFilter.PERSONAL)
+        advanceUntilIdle()
+        assertThat(vm.state.value.conversations.map { it.id }).containsExactly("du", "gu")
+
+        vm.toggleFilter(ConversationFilter.UNREAD)
+        advanceUntilIdle()
+        assertThat(vm.state.value.selectedFilters).containsExactly(ConversationFilter.ALL)
+        assertThat(vm.state.value.conversations).hasSize(3)
     }
 
     @Test

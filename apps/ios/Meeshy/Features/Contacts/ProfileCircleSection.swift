@@ -4,8 +4,8 @@ import MeeshyUI
 
 /// Le cercle sur le profil d'une personne liée, Connaissance comprise (#13940, #14910), posé là où la fiche disait
 /// « Connectés » ou proposait la demande de connexion : le niveau commun, ce qui manque pour monter, puis en bas
-/// « Promouvoir en X » quand c'est possible et « Rétrograder en Y » (ou « Annuler le lien » à Connaissance), chacun
-/// confirmé. Sans lien servi, rien : `linked` reste faux et la fiche garde ce qu'elle montrait avant.
+/// un libellé impératif par cercle visé quand c'est possible (« Soyons proches ») et, pour descendre, « Restons amis »
+/// (ou « Annuler le lien » à Connaissance), chacun confirmé. Sans lien servi, rien : `linked` reste faux et la fiche garde ce qu'elle montrait avant.
 struct ProfileCircleSection: View {
     @StateObject private var viewModel: ProfileCircleViewModel
     let displayName: String
@@ -72,32 +72,31 @@ struct ProfileCircleSection: View {
 
     @ViewBuilder
     private var promoteButton: some View {
-        if let target = viewModel.offeredRaise {
-            let targetTitle = CircleLevelNames.title(of: target)
+        if let target = viewModel.offeredRaise, let label = ProfileCircleWording.promote(to: target) {
             actionButton(
                 icon: "arrow.up.circle.fill",
-                label: String(format: String(localized: "circles.action.promote", defaultValue: "Promouvoir en %@", bundle: .main), targetTitle),
+                label: label,
                 color: CircleLevelColor.color(for: target)
             ) {
                 Task { await viewModel.requestRaise() }
             }
-            .accessibilityLabel(String(format: String(localized: "circles.action.request.a11y", defaultValue: "Demander le niveau %1$@ à %2$@", bundle: .main), targetTitle, displayName))
+            .accessibilityLabel(ProfileCircleWording.promoteAccessibility(to: target, name: displayName) ?? label)
         }
     }
 
     @ViewBuilder
     private func loweringButton(from level: RelationLevel) -> some View {
         if let lowering = viewModel.offeredLowering {
-            actionButton(icon: loweringIcon(lowering), label: loweringLabel(lowering), color: theme.error) {
+            actionButton(icon: loweringIcon(lowering), label: lowering.label, color: theme.error) {
                 confirmsLowering = true
             }
             .disabled(viewModel.isLowering)
             .confirmationDialog(
-                confirmationTitle(lowering),
+                lowering.confirmationTitle(name: displayName),
                 isPresented: $confirmsLowering,
                 titleVisibility: .visible
             ) {
-                Button(loweringLabel(lowering), role: .destructive) {
+                Button(lowering.label, role: .destructive) {
                     Task { await viewModel.lower() }
                 }
                 Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
@@ -135,24 +134,6 @@ struct ProfileCircleSection: View {
         switch lowering {
         case .demote: return "arrow.down.circle.fill"
         case .unlink: return "person.crop.circle.badge.xmark"
-        }
-    }
-
-    private func loweringLabel(_ lowering: ProfileCircleLowering) -> String {
-        switch lowering {
-        case .demote(let target):
-            return String(format: String(localized: "circles.action.demote", defaultValue: "Rétrograder en %@", bundle: .main), CircleLevelNames.title(of: target))
-        case .unlink:
-            return String(localized: "circles.action.unlink", defaultValue: "Annuler le lien", bundle: .main)
-        }
-    }
-
-    private func confirmationTitle(_ lowering: ProfileCircleLowering) -> String {
-        switch lowering {
-        case .demote(let target):
-            return String(format: String(localized: "circles.demote.confirm.title", defaultValue: "Rétrograder %1$@ en %2$@ ?", bundle: .main), displayName, CircleLevelNames.title(of: target))
-        case .unlink:
-            return String(format: String(localized: "circles.unlink.confirm.title", defaultValue: "Annuler le lien avec %@ ?", bundle: .main), displayName)
         }
     }
 

@@ -32,7 +32,7 @@ internal fun ComposerSceneInvite(shown: Boolean, modifier: Modifier = Modifier) 
             style = MaterialTheme.typography.bodyLarge,
             color = Color.White.copy(alpha = 0.72f),
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 48.dp),
+            modifier = Modifier.padding(horizontal = 72.dp),
         )
     }
 }
