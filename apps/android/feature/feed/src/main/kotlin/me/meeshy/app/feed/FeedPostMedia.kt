@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.request.ImageRequest
@@ -257,24 +258,30 @@ internal fun FeedImageMediaCell(
     }
     val offline = LocalBubbleMediaAutoDownload.current?.condition == NetworkCondition.OFFLINE
     val openLabel = stringResource(R.string.feed_media_view_fullscreen)
-    if (failed) {
-        FeedMediaFailure(offline = offline, onRetry = { attempt += 1 }, modifier = modifier)
-        return
-    }
-    AsyncImage(
-        model = model,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        placeholder = rememberThumbHashPainter(item.thumbHash),
-        onError = { failed = true },
-        modifier = modifier.clearAndSetSemantics {
-            contentDescription = description
-            if (onOpen != null) {
-                role = Role.Button
-                onClick(label = openLabel) { onOpen(); true }
+    Box(
+        modifier = modifier
+            .semantics {
+                contentDescription = description
+                if (onOpen != null) {
+                    role = Role.Button
+                    onClick(label = openLabel) { onOpen(); true }
+                }
             }
-        }.then(if (onOpen != null) Modifier.clickable(onClickLabel = openLabel, onClick = onOpen) else Modifier),
-    )
+            .then(if (onOpen != null) Modifier.clickable(onClickLabel = openLabel, onClick = onOpen) else Modifier),
+    ) {
+        if (failed) {
+            FeedMediaFailure(offline = offline, onRetry = { attempt += 1 }, modifier = Modifier.fillMaxSize())
+        } else {
+            AsyncImage(
+                model = model,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                placeholder = rememberThumbHashPainter(item.thumbHash),
+                onError = { failed = true },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
 }
 
 @Composable
