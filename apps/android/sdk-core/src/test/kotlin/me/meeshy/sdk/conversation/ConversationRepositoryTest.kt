@@ -465,6 +465,8 @@ private class CountingConversationDao(private val delegate: ConversationDao) : C
     }
 
     override fun unreadConversationCount(): Flow<Int> = delegate.unreadConversationCount()
+    override suspend fun payloadPage(limit: Int, offset: Int): List<String> = delegate.payloadPage(limit, offset)
+    override suspend fun payloadBytes(): Long = delegate.payloadBytes()
 }
 
 @RunWith(RobolectricTestRunner::class)

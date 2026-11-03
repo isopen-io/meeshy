@@ -26,6 +26,7 @@ import me.meeshy.sdk.outbox.OutboxScheduler
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Draine la voie des envois de média sous un bail de premier plan (type `dataSync`) : une notification discrète
@@ -51,7 +52,14 @@ class MediaUploadWorker @AssistedInject constructor(
 
     override suspend fun getForegroundInfo(): ForegroundInfo = notifier.foregroundInfo(null)
 
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = try {
+        drain()
+    } catch (stopped: CancellationException) {
+        provider?.expire()
+        throw stopped
+    }
+
+    private suspend fun drain(): Result {
         if (!outbox.hasDeliverable(OutboxLanes.MEDIA, OutboxKind.UPLOAD_MEDIA)) return Result.success()
         outbox.reclaimStaleInflight()
         val report: DrainReport = leases.run(this, leased = true, isFailure = { it.stoppedOnTransientFailure }) {
@@ -62,11 +70,6 @@ class MediaUploadWorker @AssistedInject constructor(
         }
         if (report.delivered + report.exhausted > 0) scheduler.flushNow()
         return if (report.stoppedOnTransientFailure) Result.retry() else Result.success()
-    }
-
-    override fun onStopped() {
-        super.onStopped()
-        provider?.expire()
     }
 
     override fun attachLease(provider: UploadLeaseProvider) {

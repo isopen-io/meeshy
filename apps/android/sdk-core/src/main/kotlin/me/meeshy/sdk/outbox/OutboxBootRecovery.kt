@@ -74,7 +74,7 @@ public class OutboxBootRecoveryHook @Inject constructor(
     outbox: OutboxRepository,
     blobs: MediaBlobStore,
 ) : AppLifecycleHook {
-    private val recovery = OutboxBootRecovery(outbox) { blobs.has(it) }
+    private val recovery = OutboxBootRecovery(outbox, PendingMediaPresence { blobs.has(it) })
     private val coldDone = AtomicBoolean(false)
 
     override val priority: Int get() = -100
