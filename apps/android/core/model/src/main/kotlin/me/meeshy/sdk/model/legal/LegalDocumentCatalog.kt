@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model.legal
 
+import me.meeshy.sdk.lang.ReaderPrism
+
 /**
  * Pure Android port of the iOS `TermsOfServiceView` / `PrivacyPolicyView` section models, unified
  * into one data-driven catalog. Each [LegalDocumentKind] maps to an ordered list of section keys;
@@ -38,4 +40,29 @@ public object LegalDocumentCatalog {
 
     public fun numbered(kind: LegalDocumentKind): List<LegalNumberedSection> =
         sections(kind).mapIndexed { index, key -> LegalNumberedSection(index + 1, key) }
+
+    /** Publication date of the current terms and privacy policy (24 February 2026), shared by all languages. */
+    public val LAST_UPDATED: LegalDate = LegalDate(year = 2026, month = 2, day = 24)
+
+    /** The languages every document is delivered in (segment order). */
+    public val languages: List<LegalDocumentLanguage> = LegalDocumentLanguage.entries
+
+    public fun document(kind: LegalDocumentKind, language: LegalDocumentLanguage): LegalDocument =
+        LegalDocument(kind, language, numbered(kind), LAST_UPDATED)
+
+    /**
+     * The language a document opens in: the first delivered language met while descending the
+     * reader's Prisme (systemLanguage, regionalLanguage, customDestinationLanguage, device locale
+     * - the same strict [ReaderPrism] descent as everywhere), French when none is delivered. Like
+     * iOS `resolveInitialLanguage`, a composition-style default - not a reading of content.
+     */
+    public fun initialLanguage(
+        systemLanguage: String?,
+        regionalLanguage: String?,
+        customDestinationLanguage: String?,
+        deviceLocale: String?,
+    ): LegalDocumentLanguage =
+        ReaderPrism.resolve(systemLanguage, regionalLanguage, customDestinationLanguage, deviceLocale)
+            .firstNotNullOfOrNull(LegalDocumentLanguage::fromCode)
+            ?: LegalDocumentLanguage.FRENCH
 }

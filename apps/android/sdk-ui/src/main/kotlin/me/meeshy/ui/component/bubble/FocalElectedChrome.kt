@@ -198,14 +198,18 @@ internal fun ElectedIdentityChip(content: BubbleContent, accent: Color, onSender
     }
     FocusChip(accent = accent, height = ElectedMetrics.identityHeight, onClick = onSenderTap) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus)) {
-            MeeshyAvatar(
-                name = senderName ?: you,
-                size = ElectedMetrics.identityAvatar,
-                containerColor = senderColor,
-                imageUrl = content.senderAvatarUrl,
-                presence = rememberPresence(content.senderProfile?.userId),
-                here = rememberConversationHere(content.senderProfile?.userId, content.viewingConversationId),
-            )
+            if (content.senderIsAnonymous) {
+                BubbleSenderGhost(size = ElectedMetrics.identityAvatar, color = senderColor)
+            } else {
+                MeeshyAvatar(
+                    name = senderName ?: you,
+                    size = ElectedMetrics.identityAvatar,
+                    containerColor = senderColor,
+                    imageUrl = content.senderAvatarUrl,
+                    presence = rememberPresence(content.senderProfile?.userId),
+                    here = rememberConversationHere(content.senderProfile?.userId, content.viewingConversationId),
+                )
+            }
             Text(
                 text = if (content.isOutgoing) you else senderName ?: "",
                 fontSize = ElectedMetrics.identityNameSp,

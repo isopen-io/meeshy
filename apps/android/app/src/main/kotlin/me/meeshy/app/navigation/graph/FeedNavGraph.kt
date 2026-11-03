@@ -101,7 +101,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             navArgument(PostDetailViewModel.COMMENT_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
             navArgument(PostDetailViewModel.PARENT_COMMENT_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
         ),
-        deepLinks = (Routes.POST_SHARE_DEEP_LINKS + Routes.STORY_SHARE_DEEP_LINKS).map { pattern -> navDeepLink { uriPattern = pattern } },
+        deepLinks = (Routes.POST_SHARE_DEEP_LINKS + Routes.STORY_SHARE_DEEP_LINKS.filter { "/story/" !in it }).map { pattern -> navDeepLink { uriPattern = pattern } },
     ) {
         PostDetailScreen(
             onBack = { navController.popBackStack() },
