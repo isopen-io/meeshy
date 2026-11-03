@@ -5,7 +5,7 @@ import { endToEndRegimeLedger, endToEndSealed } from '@/lib/end-to-end-regime-le
 import { translateConversationEncryption } from '@/lib/i18n-conversation-encryption-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { encryptionExplanation, FACT_KEY, REGIME_SUMMARY_KEY, TOPIC_KEY } from '@/lib/view/conversation-encryption-explanation';
-import type { EncryptionModeSwitchGesture } from '@/lib/view/conversation-encryption-switch';
+import { encryptionSwitchLock, type EncryptionModeSwitchGesture } from '@/lib/view/conversation-encryption-switch';
 import type { PlaintextDirectGesture } from '@/lib/view/plaintext-direct';
 import { useConversationEncryptionCatalog } from '@/lib/view/use-conversation-encryption-catalog';
 
@@ -48,7 +48,11 @@ export function ConversationEncryptionSection({
   const ready = useConversationEncryptionCatalog(language);
   const headingId = useId();
   const sealedIds = useStore(endToEndRegimeLedger, (state) => state.sealed);
+  const heldIds = useStore(endToEndRegimeLedger, (state) => state.held);
   const sealed = conversation.id !== undefined && endToEndSealed({ sealed: sealedIds }, { conversationId: conversation.id });
+  const switchLocked =
+    conversation.id !== undefined &&
+    encryptionSwitchLock({ sealed: sealedIds, held: heldIds }, { conversationId: conversation.id, servedMode: conversation.encryptionMode }) !== null;
 
   if (!ready) return <div aria-busy="true" className="px-4 pb-6" data-conversation-encryption-catalog-loading />;
 
@@ -76,7 +80,7 @@ export function ConversationEncryptionSection({
       {modeSwitch === undefined || conversation.id === undefined ? null : (
         <ConversationEncryptionSwitch
           conversation={{ id: conversation.id, type: conversation.type, encryptionMode: conversation.encryptionMode ?? null }}
-          sealed={sealed}
+          locked={switchLocked}
           gesture={modeSwitch}
           t={t}
         />

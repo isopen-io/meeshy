@@ -172,6 +172,32 @@ describe('changer de mode depuis la fiche (#14648)', () => {
     expect(document.querySelector('[data-conversation-encryption-switch]')).toBeNull();
   });
 
+  test('un fil qui retient l’envoi : aucune cible proposée, et la fiche ne se dit pas « bout en bout » (#14664)', async () => {
+    endToEndRegimeLedger.getState().holdSend('c-held', true);
+    await mount({ id: 'c-held', type: 'direct', encryptionMode: 'server' }, { mode: 'server', canToggleEncryption: true });
+    expect(document.querySelector('[data-conversation-encryption-switch-target]')).toBeNull();
+    expect(document.querySelector('[data-conversation-encryption]')?.getAttribute('data-conversation-encryption')).toBe('server');
+  });
+
+  test('retenu pendant que la fiche est ouverte : les cibles disparaissent (#14664)', async () => {
+    await mount({ id: 'c-held', type: 'direct', encryptionMode: 'server' }, { mode: 'server', canToggleEncryption: true });
+    expect(target('hybrid')).not.toBeNull();
+    await act(async () => {
+      endToEndRegimeLedger.getState().holdSend('c-held', true);
+    });
+    await settle();
+    expect(document.querySelector('[data-conversation-encryption-switch-target]')).toBeNull();
+  });
+
+  test('un refus « retenu » se dit pour ce qu’il est, jamais « bout en bout » (#14664)', async () => {
+    await mount({ id: 'c1', type: 'direct', encryptionMode: 'server' }, { mode: 'server', canToggleEncryption: true }, { kind: 'held' });
+    await act(async () => {
+      target('hybrid')?.click();
+    });
+    await settle();
+    expect(feedback()).toBe('Un message de ce fil utilise un chiffrement que ce navigateur ne reconnaît pas : le mode ne peut pas être changé d’ici.');
+  });
+
   test('un groupe ne change pas de mode depuis le web', async () => {
     await mount({ id: 'g1', type: 'group', encryptionMode: 'server' }, { mode: 'server', canToggleEncryption: true });
     expect(document.querySelector('[data-conversation-encryption-switch]')).toBeNull();

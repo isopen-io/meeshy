@@ -33,18 +33,18 @@ const MUTED = 'var(--color-ios-ink-2)';
 
 export function ConversationEncryptionSwitch({
   conversation,
-  sealed,
+  locked,
   gesture,
   t,
 }: {
   readonly conversation: { readonly id: string; readonly type: string; readonly encryptionMode?: string | null };
-  readonly sealed: boolean;
+  readonly locked: boolean;
   readonly gesture: EncryptionModeSwitchGesture;
   readonly t: Translate;
 }) {
   const headingId = useId();
   const isDirect = conversation.type === 'direct';
-  const closed = sealed || encryptionRegime(conversation.encryptionMode) === 'end-to-end';
+  const closed = locked;
   const asks = isDirect && !closed;
   const [status, setStatus] = useState<EncryptionStatus | null>(null);
   const [pending, setPending] = useState<CreationEncryptionMode | null>(null);

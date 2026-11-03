@@ -60,6 +60,7 @@ const es = {
   'conversationEncryption.switch.footer': 'El cifrado de extremo a extremo nunca se desactiva, ni tampoco el cifrado en nuestros servidores. Siempre podrás abrir otra conversación, sin cifrado de extremo a extremo, con las mismas personas.',
   'conversationEncryption.switch.endToEndOnApps': 'El cifrado de extremo a extremo se activa desde la aplicación Meeshy instalada: este navegador aún no sabe cifrar los mensajes en el dispositivo.',
   'conversationEncryption.switch.irreversible': 'Esta conversación está cifrada de extremo a extremo: este cifrado nunca se desactiva.',
+  'conversationEncryption.switch.held': 'Un mensaje de esta conversación usa un cifrado que este navegador no reconoce: el modo no se puede cambiar desde aquí.',
   'conversationEncryption.switch.regimeChanged': 'Otro miembro acaba de cambiar el cifrado: el estado se ha actualizado.',
   'conversationEncryption.switch.restricted': 'Durante la fase de prueba, solo un miembro con un rol del equipo Meeshy (analista o superior) puede cambiar el modo de cifrado.',
   'conversationEncryption.switch.unavailable': 'El cifrado en nuestros servidores no está disponible por el momento. Inténtalo más tarde.',

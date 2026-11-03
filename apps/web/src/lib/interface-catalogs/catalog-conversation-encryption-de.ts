@@ -60,6 +60,7 @@ const de = {
   'conversationEncryption.switch.footer': 'Die Ende-zu-Ende-Verschlüsselung lässt sich nie deaktivieren, die Verschlüsselung auf unseren Servern ebenso wenig. Du kannst jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit denselben Personen öffnen.',
   'conversationEncryption.switch.endToEndOnApps': 'Die Ende-zu-Ende-Verschlüsselung wird in der installierten Meeshy-App aktiviert: Dieser Browser kann Nachrichten noch nicht auf dem Gerät verschlüsseln.',
   'conversationEncryption.switch.irreversible': 'Diese Unterhaltung ist Ende-zu-Ende-verschlüsselt: Diese Verschlüsselung lässt sich nie deaktivieren.',
+  'conversationEncryption.switch.held': 'Eine Nachricht in diesem Verlauf verwendet eine Verschlüsselung, die dieser Browser nicht erkennt: Der Modus kann hier nicht geändert werden.',
   'conversationEncryption.switch.regimeChanged': 'Ein anderes Mitglied hat die Verschlüsselung gerade geändert: Der Status wurde aktualisiert.',
   'conversationEncryption.switch.restricted': 'Während der Testphase kann nur ein Mitglied mit einer Meeshy-Teamrolle (Analyst oder höher) den Verschlüsselungsmodus ändern.',
   'conversationEncryption.switch.unavailable': 'Die Verschlüsselung auf unseren Servern ist vorübergehend nicht verfügbar. Versuche es später erneut.',

@@ -9,7 +9,7 @@ import {
 import type { ApiResult } from '@/lib/api/http';
 import type { ConversationEncryptionCatalogKey } from '@/lib/i18n-conversation-encryption-catalog';
 import { WEB_END_TO_END_SUPPORTED } from '@/lib/conversation-new/encryption';
-import { endToEndRegimeLedger, endToEndSealed, type EndToEndRegimeState } from '@/lib/end-to-end-regime-ledger';
+import { endToEndRegimeLedger, isEndToEndMode, type EndToEndRegimeState } from '@/lib/end-to-end-regime-ledger';
 
 import { encryptionRegime } from './conversation-encryption-explanation';
 
@@ -45,6 +45,23 @@ const currentModeOf = (servedMode: string | null | undefined): CreationEncryptio
 
 const isLeavable = (servedMode: string | null | undefined): boolean => encryptionRegime(servedMode) !== 'end-to-end';
 
+/**
+ * #14664 — CE QUI FERME LE GESTE, la source unique de la fiche et du geste :
+ * `sealed` (servie e2ee, d'un mode inconnu ou vue e2ee par ce compte) ou
+ * `held` (le fil affiché retient l'envoi, #13099, sans rien apprendre). Une
+ * conversation retenue n'est pas « chiffrée de bout en bout » : elle se tait
+ * sans le prétendre.
+ */
+export type EncryptionSwitchLock = 'sealed' | 'held';
+
+export function encryptionSwitchLock(
+  state: Pick<EndToEndRegimeState, 'sealed' | 'held'>,
+  input: { readonly conversationId: string; readonly servedMode: string | null | undefined },
+): EncryptionSwitchLock | null {
+  if (isEndToEndMode(input.servedMode) || !isLeavable(input.servedMode) || state.sealed[input.conversationId] === true) return 'sealed';
+  return state.held[input.conversationId] === true ? 'held' : null;
+}
+
 export function encryptionSwitchTargets(params: {
   readonly servedMode: string | null | undefined;
   readonly sealed: boolean;
@@ -76,7 +93,7 @@ export function decodeEncryptionStatus(raw: unknown): EncryptionStatus | null {
   return { mode: mode ?? null, canToggleEncryption: canToggleEncryption === true };
 }
 
-export type EncryptionSwitchRefusal = 'irreversible' | 'regime-changed' | 'restricted' | 'unavailable' | 'offline' | 'failed' | 'refused';
+export type EncryptionSwitchRefusal = 'irreversible' | 'held' | 'regime-changed' | 'restricted' | 'unavailable' | 'offline' | 'failed' | 'refused';
 
 export type EncryptionSwitchOutcome =
   | { readonly kind: 'switched'; readonly mode: CreationEncryptionMode }
@@ -130,8 +147,9 @@ export async function switchConversationEncryption(
     ports.learn('e2ee');
     return { kind: 'irreversible' };
   };
-  const sealed = endToEndSealed(ledger.getState(), { conversationId: params.conversationId, servedMode: params.servedMode });
-  if (sealed || !isLeavable(params.servedMode)) return { kind: 'irreversible' };
+  const lock = encryptionSwitchLock(ledger.getState(), { conversationId: params.conversationId, servedMode: params.servedMode });
+  if (lock === 'sealed') return { kind: 'irreversible' };
+  if (lock === 'held') return { kind: 'held' };
   if (params.target === 'e2ee' && !WEB_END_TO_END_SUPPORTED) return { kind: 'refused' };
   if (params.target === currentModeOf(params.servedMode)) return { kind: 'refused' };
   if (!ports.online()) return { kind: 'offline' };
@@ -173,6 +191,7 @@ export const SWITCH_KEY = {
 /** Un refus local `refused` ne devrait jamais s'afficher : il se dit comme un échec. */
 export const SWITCH_REFUSAL_KEY = {
   irreversible: 'conversationEncryption.switch.irreversible',
+  held: 'conversationEncryption.switch.held',
   'regime-changed': 'conversationEncryption.switch.regimeChanged',
   restricted: 'conversationEncryption.switch.restricted',
   unavailable: 'conversationEncryption.switch.unavailable',

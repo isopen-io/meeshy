@@ -8,6 +8,7 @@ import { E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
 import {
   SWITCH_REFUSAL_CODES,
   decodeEncryptionStatus,
+  encryptionSwitchLock,
   encryptionSwitchTargets,
   switchConversationEncryption,
   type EncryptionSwitchPorts,
@@ -61,6 +62,30 @@ describe('les modes proposés', () => {
 
   test('un groupe ne change pas de mode depuis le web, comme sur iOS (#12844)', () => {
     expect(encryptionSwitchTargets({ servedMode: 'server', sealed: false, isDirect: false, mayToggle: true })).toEqual([]);
+  });
+});
+
+describe('ce qui ferme le geste (#14664)', () => {
+  test('rien ne le ferme : un tête-à-tête servi serveur, ni vu e2ee, ni retenu', () => {
+    expect(encryptionSwitchLock(endToEndRegimeLedger.getState(), { conversationId: 'c1', servedMode: 'server' })).toBeNull();
+  });
+
+  test('servi e2ee, d’un mode inconnu ou vu e2ee : scellée', () => {
+    expect(encryptionSwitchLock(endToEndRegimeLedger.getState(), { conversationId: 'c1', servedMode: 'e2ee' })).toBe('sealed');
+    expect(encryptionSwitchLock(endToEndRegimeLedger.getState(), { conversationId: 'c1', servedMode: 'signal_v9' })).toBe('sealed');
+    endToEndRegimeLedger.getState().learnEndToEnd('c1');
+    expect(encryptionSwitchLock(endToEndRegimeLedger.getState(), { conversationId: 'c1', servedMode: 'server' })).toBe('sealed');
+  });
+
+  test('un fil qui retient l’envoi ferme le geste sans dire « bout en bout »', () => {
+    endToEndRegimeLedger.getState().holdSend('c1', true);
+    expect(encryptionSwitchLock(endToEndRegimeLedger.getState(), { conversationId: 'c1', servedMode: 'server' })).toBe('held');
+  });
+
+  test('scellée l’emporte sur retenue', () => {
+    endToEndRegimeLedger.getState().holdSend('c1', true);
+    endToEndRegimeLedger.getState().learnEndToEnd('c1');
+    expect(encryptionSwitchLock(endToEndRegimeLedger.getState(), { conversationId: 'c1', servedMode: 'server' })).toBe('sealed');
   });
 });
 
@@ -129,6 +154,15 @@ describe('changer de mode', () => {
     const outcome = await switchConversationEncryption(ports, { conversationId: 'c1', servedMode: 'server', target: 'hybrid' });
     expect(outcome).toEqual({ kind: 'irreversible' });
     expect(ports.posted).toEqual([]);
+  });
+
+  test('un fil qui retient l’envoi : refus local dédié, jamais « bout en bout », aucune requête (#14664)', async () => {
+    endToEndRegimeLedger.getState().holdSend('c1', true);
+    const ports = portsOf(ok('hybrid'));
+    const outcome = await switchConversationEncryption(ports, { conversationId: 'c1', servedMode: 'server', target: 'hybrid' });
+    expect(outcome).toEqual({ kind: 'held' });
+    expect(ports.posted).toEqual([]);
+    expect(endToEndRegimeLedger.getState().sealed.c1).toBeUndefined();
   });
 
   test('depuis une conversation servie e2ee : refus local, aucune requête', async () => {

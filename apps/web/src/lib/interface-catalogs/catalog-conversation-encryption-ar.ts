@@ -60,6 +60,7 @@ const ar = {
   'conversationEncryption.switch.footer': 'لا يمكن إيقاف التشفير التام بين الطرفين أبدًا، ولا التشفير على خوادمنا. يمكنك دائمًا فتح محادثة أخرى، بدون تشفير تام بين الطرفين، مع الأشخاص أنفسهم.',
   'conversationEncryption.switch.endToEndOnApps': 'يُفعَّل التشفير التام بين الطرفين من تطبيق Meeshy المثبّت: لا يستطيع هذا المتصفح بعد تشفير الرسائل على الجهاز.',
   'conversationEncryption.switch.irreversible': 'هذه المحادثة مشفّرة تشفيرًا تامًا بين الطرفين: لا يمكن إيقاف هذا التشفير أبدًا.',
+  'conversationEncryption.switch.held': 'تستخدم رسالة في هذه المحادثة تشفيرًا لا يتعرّف عليه هذا المتصفح: لا يمكن تغيير الوضع من هنا.',
   'conversationEncryption.switch.regimeChanged': 'غيّر عضو آخر التشفير للتو: تم تحديث الحالة.',
   'conversationEncryption.switch.restricted': 'خلال مرحلة الاختبار، لا يستطيع تغيير وضع التشفير إلا عضو لديه دور في فريق Meeshy (محلل أو أعلى).',
   'conversationEncryption.switch.unavailable': 'التشفير على خوادمنا غير متاح مؤقتًا. حاول مرة أخرى لاحقًا.',

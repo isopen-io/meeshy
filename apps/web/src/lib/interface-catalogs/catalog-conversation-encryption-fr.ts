@@ -69,6 +69,7 @@ const fr = {
   'conversationEncryption.switch.footer': 'Le chiffrement de bout en bout ne se désactive jamais, le chiffrement sur nos serveurs non plus. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.',
   'conversationEncryption.switch.endToEndOnApps': 'Le chiffrement de bout en bout s’active depuis l’application Meeshy installée : ce navigateur ne sait pas encore chiffrer les messages sur l’appareil.',
   'conversationEncryption.switch.irreversible': 'Cette conversation est chiffrée de bout en bout : ce chiffrement ne se désactive jamais.',
+  'conversationEncryption.switch.held': 'Un message de ce fil utilise un chiffrement que ce navigateur ne reconnaît pas : le mode ne peut pas être changé d’ici.',
   'conversationEncryption.switch.regimeChanged': 'Le chiffrement vient d’être modifié par un autre membre : l’état est actualisé.',
   'conversationEncryption.switch.restricted': 'Pendant la phase de test, seul un membre ayant un rôle d’équipe Meeshy (analyste ou plus) peut changer le mode de chiffrement.',
   'conversationEncryption.switch.unavailable': 'Le chiffrement sur nos serveurs est momentanément indisponible. Réessayez plus tard.',
