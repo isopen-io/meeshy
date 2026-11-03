@@ -3,7 +3,10 @@ package me.meeshy.app.stories
 import com.google.common.truth.Truth.assertThat
 import java.io.File
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.media.RetouchVideoLook
+import me.meeshy.sdk.media.scene.SceneExportPlacedVideo
 import me.meeshy.sdk.media.scene.SceneExportSlideFill
+import me.meeshy.sdk.media.scene.SceneExportVideoLook
 import me.meeshy.sdk.model.FeedMedia
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.StoryEffects
@@ -20,7 +23,8 @@ import org.junit.rules.TemporaryFolder
 
 /**
  * #14848 — Enregistrer et Partager rendent une vidéo réglée du compositeur avec son look (filtre, cadre, cadrage), comme la
- * scène la montrait : chaque vidéo, de fond ou posée, passe par la cuisson de la publication avant d'entrer dans le rendu.
+ * scène la montrait. #14875 — sans l'encoder une fois de plus avant le rendu : chaque vidéo, de fond ou posée, entre dans
+ * le rendu TELLE QU'ELLE EST, et son look voyage avec elle jusqu'à la passe unique de l'export.
  */
 class StoryExportVideoLookTest {
 
@@ -58,56 +62,61 @@ class StoryExportVideoLookTest {
         composerLooks = StorySceneMediaLooks.of(looks, author),
     )
 
-    private class Baked(val source: String, val look: StoryMediaLook, val author: ComposerLookAuthor)
+    private class Resolved(val source: String, val look: StoryMediaLook, val author: ComposerLookAuthor, val maxLongSide: Int?)
 
-    private fun preparer(baked: MutableList<Baked>, bakes: Boolean = true) = StoryVideoExportPreparer(
+    private fun preparer(resolved: MutableList<Resolved>, paints: Boolean = true) = StoryVideoExportPreparer(
         fetch = { url, target -> target.writeText(url.substringAfterLast('/')) },
         probeMillis = { file -> 6_000L.takeIf { file.readText().endsWith(".mp4") } },
         blankPicture = { it.writeText("noir") },
         decideImager = { null },
         paint = { request -> request.frames.mapIndexed { i, _ -> File(request.directory, "calque-$i.png").also { it.writeText("png") } } },
-        bakeLook = { source, look, signer, output ->
-            baked += Baked(source.readText(), look, signer)
-            if (bakes) output.writeText("cuit:${source.readText()}")
-            bakes
+        exportLook = { source, look, signer, maxLongSide ->
+            resolved += Resolved(source.readText(), look, signer, maxLongSide)
+            SceneExportVideoLook(null, RetouchVideoLook(rgbMatrix = FloatArray(16))).takeIf { paints }
         },
         warn = { _, _ -> },
     )
 
     private fun scene(looks: Map<String, StoryMediaLook>) = slide(looks).let { listOf(StoryExportScene(StoryExportSubject.of(item, it, base), it)) }
 
-    @Test fun `the background and the posed video enter the render baked with their own look`() = runTest {
-        val baked = mutableListOf<Baked>()
-        val job = preparer(baked).prepare(StoryExportMode.SAVE, scene(mapOf(bgUrl to warm, fgUrl to polaroid)), folder.newFile("o.mp4"), folder.newFolder("w"))
+    @Test fun `the background and the posed video enter the render as they are, each carrying its own look`() = runTest {
+        val resolved = mutableListOf<Resolved>()
+        val work = folder.newFolder("w")
+        val job = preparer(resolved).prepare(StoryExportMode.SAVE, scene(mapOf(bgUrl to warm, fgUrl to polaroid)), folder.newFile("o.mp4"), work)
 
-        assertThat((job.fills.single() as SceneExportSlideFill.Video).file.readText()).isEqualTo("cuit:bg.mp4")
-        assertThat(job.placedVideos.single().file.readText()).isEqualTo("cuit:fg.mp4")
-        assertThat(baked.map { it.source to it.look }).containsExactly("bg.mp4" to warm, "fg.mp4" to polaroid)
-        assertThat(baked.map { it.author }.distinct()).containsExactly(author)
+        val fill = job.fills.single() as SceneExportSlideFill.Video
+        assertThat(fill.file.readText()).isEqualTo("bg.mp4")
+        assertThat(fill.look).isNotNull()
+        assertThat(job.placedVideos.single().file.readText()).isEqualTo("fg.mp4")
+        assertThat(job.placedVideos.single().look).isNotNull()
+        assertThat(resolved.map { Triple(it.source, it.look, it.maxLongSide) })
+            .containsExactly(Triple("bg.mp4", warm, null), Triple("fg.mp4", polaroid, SceneExportPlacedVideo.DECODED_LONG_SIDE))
+        assertThat(resolved.map { it.author }.distinct()).containsExactly(author)
+        assertThat(work.walk().filter { it.extension == "mp4" }.toList()).isEmpty()
     }
 
-    @Test fun `a video without a look enters the render as it is`() = runTest {
-        val baked = mutableListOf<Baked>()
-        val job = preparer(baked).prepare(StoryExportMode.SAVE, scene(mapOf(fgUrl to warm)), folder.newFile("o.mp4"), folder.newFolder("w"))
+    @Test fun `a video without a look enters the render as it is, with no look`() = runTest {
+        val resolved = mutableListOf<Resolved>()
+        val job = preparer(resolved).prepare(StoryExportMode.SAVE, scene(mapOf(fgUrl to warm)), folder.newFile("o.mp4"), folder.newFolder("w"))
 
-        assertThat((job.fills.single() as SceneExportSlideFill.Video).file.readText()).isEqualTo("bg.mp4")
-        assertThat(job.placedVideos.single().file.readText()).isEqualTo("cuit:fg.mp4")
-        assertThat(baked.map { it.source }).containsExactly("fg.mp4")
+        assertThat((job.fills.single() as SceneExportSlideFill.Video).look).isNull()
+        assertThat(job.placedVideos.single().look).isNotNull()
+        assertThat(resolved.map { it.source }).containsExactly("fg.mp4")
     }
 
-    @Test fun `a face effect alone is not baked into a video`() = runTest {
-        val baked = mutableListOf<Baked>()
+    @Test fun `a face effect alone puts no look on a video`() = runTest {
+        val resolved = mutableListOf<Resolved>()
         val toad = StoryMediaLook(faceEffect = "toad")
-        val job = preparer(baked).prepare(StoryExportMode.SAVE, scene(mapOf(bgUrl to toad)), folder.newFile("o.mp4"), folder.newFolder("w"))
+        val job = preparer(resolved).prepare(StoryExportMode.SAVE, scene(mapOf(bgUrl to toad)), folder.newFile("o.mp4"), folder.newFolder("w"))
 
-        assertThat((job.fills.single() as SceneExportSlideFill.Video).file.readText()).isEqualTo("bg.mp4")
-        assertThat(baked).isEmpty()
+        assertThat((job.fills.single() as SceneExportSlideFill.Video).look).isNull()
+        assertThat(resolved).isEmpty()
     }
 
-    @Test fun `a set video that does not bake stops the export instead of rendering the original`() = runTest {
+    @Test fun `a set video whose look cannot apply stops the export instead of rendering the original`() = runTest {
         val failure = assertThrows(IllegalStateException::class.java) {
             kotlinx.coroutines.runBlocking {
-                preparer(mutableListOf(), bakes = false).prepare(StoryExportMode.SAVE, scene(mapOf(bgUrl to warm)), folder.newFile("o.mp4"), folder.newFolder("w"))
+                preparer(mutableListOf(), paints = false).prepare(StoryExportMode.SAVE, scene(mapOf(bgUrl to warm)), folder.newFile("o.mp4"), folder.newFolder("w"))
             }
         }
         assertThat(failure).hasMessageThat().contains("look")

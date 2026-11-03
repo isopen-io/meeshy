@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- « Mes cercles » (#13938) : android-only tant que les clés circles.* ne sont pas au catalogue iOS de dev ; texte exact de la branche lot/ui-cercles-ios-13938. Partagées par « Mes cercles » et le profil. -->
 <resources>
+    <string name="circles_action_demote">خفض إلى %1$s</string>
+    <string name="circles_action_promote">ترقية إلى %1$s</string>
+    <string name="circles_action_promote_a11y">ترقية %2$s إلى %1$s</string>
     <string name="circles_action_request">اطلب %1$s</string>
     <string name="circles_action_request_a11y">اطلب من %2$s المستوى %1$s</string>
+    <string name="circles_action_unlink">إلغاء الرابط</string>
+    <string name="circles_confirm_cancel">إلغاء</string>
+    <string name="circles_demote_confirm_action">خفض</string>
+    <string name="circles_demote_confirm_body">سينتقل %1$s من %2$s إلى %3$s. ستفقد ما يشاركه %2$s. لن يتم إشعار %1$s ولن يستطيع أن يطلب منك الصعود مجددًا قبل 30 يومًا.</string>
+    <string name="circles_demote_confirm_title">خفض %1$s إلى %2$s؟</string>
     <string name="circles_level_acquaintance">معرفة</string>
     <string name="circles_level_blood">الدم</string>
     <string name="circles_level_close">مقرّب</string>
@@ -14,8 +22,11 @@
     <string name="circles_missing_other">تفاعل آخر</string>
     <string name="circles_missing_post_view">مشاهدة منشور</string>
     <string name="circles_missing_reaction">تفاعل</string>
+    <string name="circles_notice_lower_failed">تعذّر حفظ التعديل.</string>
     <string name="circles_pending">تم إرسال الطلب · %1$s</string>
     <string name="circles_progress_eligible">جاهز للمستوى %1$s</string>
     <string name="circles_progress_missing">ينقص: %1$s</string>
     <string name="circles_progress_weeks">أسابيع متتالية: %1$d من %2$d</string>
+    <string name="circles_unlink_confirm_body">لن تكونا مرتبطين بعد الآن: لا دائرة مشتركة. لن يتم إشعار %1$s ولن يستطيع أن يطلب منك رابطًا قبل 30 يومًا.</string>
+    <string name="circles_unlink_confirm_title">إلغاء الرابط مع %1$s؟</string>
 </resources>
