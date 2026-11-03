@@ -41,6 +41,9 @@ interface CallSessionHost {
      */
     fun endMedia()
 
+    /** Cancel every job the session itself launched (clock, quality, rejoin…): none survives the call. */
+    fun cancelSessionJobs() {}
+
     /** Force a fresh ICE restart of the media path (a no-op outside a stall). */
     fun restartMediaIce()
 

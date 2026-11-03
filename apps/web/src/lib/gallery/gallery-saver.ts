@@ -4,7 +4,13 @@ import { NATIVE_BRIDGE_MAX_BYTES } from '@/lib/media/file-delivery-host';
 import { base64De, fileSinkOf, SINK_CHUNK_BYTES, throughSink } from '@/lib/media/file-sink';
 import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native-shell';
 
-import { galleryDigest, idbGallerySavedRegistry, NULL_GALLERY_SAVED_REGISTRY, type GallerySavedRegistry } from './saved-registry';
+import {
+  galleryDigest,
+  idbGallerySavedRegistry,
+  NULL_GALLERY_SAVED_REGISTRY,
+  type GallerySavedEntry,
+  type GallerySavedRegistry,
+} from './saved-registry';
 
 /**
  * **L'ÉCRITURE DANS LA GALERIE DE LA COQUE ANDROID** (#8308, #8336) — jumelle
@@ -40,6 +46,17 @@ import { galleryDigest, idbGallerySavedRegistry, NULL_GALLERY_SAVED_REGISTRY, ty
  * consulte le registre des empreintes (`saved-registry.ts`) ; un média déjà
  * enregistré rend `already-saved` sans toucher à l'album, et deux demandes
  * simultanées des mêmes octets n'écrivent qu'une fois.
+ *
+ * **Mais un média supprimé de la galerie se réenregistre** (#14654), comme sur
+ * Android natif (qui relit son URI MediaStore) : le registre garde le chemin
+ * que `savePhoto`/`saveVideo` rendent (`filePath`), et avant de refuser le
+ * saver demande à la coque (`MeeshyGallery.exists`, borné à l'album) si ce
+ * fichier existe encore. Seul un « absent » explicite retire l'entrée et
+ * laisse écrire ; tout le reste garde le refus, pour ne jamais doubler un
+ * média encore présent :
+ *  - coque construite avant la vérification, réponse refusée ou illisible ;
+ *  - entrée écrite avant ce lot, sans chemin — rien ne permet de la vérifier,
+ *    et la réécrire doublerait chacun de ces médias encore présents.
  */
 export const GALLERY_ALBUM = 'Meeshy';
 
@@ -64,6 +81,7 @@ export function galleryMediaEssence(mimeType: string): string | null {
 export const NULL_GALLERY_SAVER: GallerySaver = { available: false, save: async () => 'unavailable' };
 
 const MEDIA_PLUGIN = 'Media';
+const GALLERY_PROBE_PLUGIN = 'MeeshyGallery';
 
 type MediaAlbum = { readonly name: string; readonly identifier: string };
 
@@ -89,6 +107,16 @@ function fileStemOf(fileName: string): string {
   return /[\p{L}\p{N}]/u.test(stem) ? stem : 'meeshy';
 }
 
+type GalleryWrite = { readonly outcome: GallerySaveOutcome; readonly path: string | null };
+
+const FAILED_WRITE: GalleryWrite = { outcome: 'failed', path: null };
+
+/** Le chemin du fichier que `savePhoto`/`saveVideo` ont écrit dans l'album (`MediaPlugin.java` 9.1.0), ou `null`. */
+function filePathOf(result: unknown): string | null {
+  const filePath = (result as { readonly filePath?: unknown } | null)?.filePath;
+  return typeof filePath === 'string' && filePath !== '' ? filePath : null;
+}
+
 export type GallerySaverLimits = {
   readonly bridgeMaxBytes?: number;
   readonly chunkBytes?: number;
@@ -104,6 +132,7 @@ export function shellGallerySaver(shell: CoqueNative | undefined, limits: Galler
   const saveVideo = appelNatifMethode(shell, MEDIA_PLUGIN, 'saveVideo');
   if (getAlbums === null || createAlbum === null || savePhoto === null || saveVideo === null) return NULL_GALLERY_SAVER;
   const sink = fileSinkOf(shell);
+  const exists = appelNatifMethode(shell, GALLERY_PROBE_PLUGIN, 'exists');
 
   let album: Promise<string | null> | null = null;
   let written = 0;
@@ -120,35 +149,51 @@ export function shellGallerySaver(shell: CoqueNative | undefined, limits: Galler
     return `${fileStemOf(fileName)}-${Date.now().toString(36)}${written.toString(36)}`;
   };
 
-  const writeMedia = async ({ blob, fileName }: GallerySaveInput, essence: string): Promise<GallerySaveOutcome> => {
+  const writeMedia = async ({ blob, fileName }: GallerySaveInput, essence: string): Promise<GalleryWrite> => {
     const write = isImageMimeType(essence) ? savePhoto : saveVideo;
     try {
       album ??= resolveAlbum();
       const albumIdentifier = await album;
       if (albumIdentifier === null) {
         album = null;
-        return 'failed';
+        return FAILED_WRITE;
       }
-      const writeAt = (path: string): Promise<unknown> => write({ path, albumIdentifier, fileName: nativeFileName(fileName) });
+      let writtenPath: string | null = null;
+      const writeAt = async (path: string): Promise<void> => {
+        writtenPath = filePathOf(await write({ path, albumIdentifier, fileName: nativeFileName(fileName) }));
+      };
       if (blob.size > bridgeMaxBytes && sink !== null) await throughSink({ sink, blob, mimeType: essence, chunkBytes, use: writeAt });
       else await writeAt(`data:${essence};base64,${await base64De(blob)}`);
-      return 'saved';
+      return { outcome: 'saved', path: writtenPath };
     } catch {
       album = null;
-      return 'failed';
+      return FAILED_WRITE;
+    }
+  };
+
+  const stillInGallery = async ({ path }: GallerySavedEntry): Promise<boolean> => {
+    if (path === null || exists === null) return true;
+    try {
+      return ((await exists({ path })) as { readonly exists?: unknown } | null)?.exists !== false;
+    } catch {
+      return true;
     }
   };
 
   const inFlight = new Map<string, Promise<GallerySaveOutcome>>();
-  const writeOnce = (digest: string, writeIt: () => Promise<GallerySaveOutcome>): Promise<GallerySaveOutcome> => {
+  const writeOnce = (digest: string, writeIt: () => Promise<GalleryWrite>): Promise<GallerySaveOutcome> => {
     const previous = inFlight.get(digest);
     if (previous !== undefined) {
       return previous.then((outcome) => (outcome === 'saved' || outcome === 'already-saved' ? 'already-saved' : writeOnce(digest, writeIt)));
     }
     const attempt = (async (): Promise<GallerySaveOutcome> => {
-      if (await saved.has(digest)) return 'already-saved';
-      const outcome = await writeIt();
-      if (outcome === 'saved') await saved.mark(digest);
+      const entry = await saved.lookup(digest);
+      if (entry !== null) {
+        if (await stillInGallery(entry)) return 'already-saved';
+        await saved.forget(digest);
+      }
+      const { outcome, path } = await writeIt();
+      if (outcome === 'saved') await saved.mark(digest, path);
       return outcome;
     })();
     inFlight.set(digest, attempt);
@@ -164,7 +209,7 @@ export function shellGallerySaver(shell: CoqueNative | undefined, limits: Galler
       const essence = galleryMediaEssence(input.mimeType);
       if (essence === null || (input.blob.size > bridgeMaxBytes && sink === null)) return 'unavailable';
       const digest = await galleryDigest(input.blob).catch(() => null);
-      if (digest === null) return writeMedia(input, essence);
+      if (digest === null) return (await writeMedia(input, essence)).outcome;
       return writeOnce(digest, () => writeMedia(input, essence));
     },
   };

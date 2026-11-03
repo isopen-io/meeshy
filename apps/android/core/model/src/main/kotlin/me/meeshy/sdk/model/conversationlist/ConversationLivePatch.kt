@@ -111,15 +111,22 @@ object ConversationLivePatch {
         isNewMessage: Boolean,
     ): ApiConversationLastMessage {
         val authorUserId = event.lastMessageSenderUserId ?: event.senderId
-        val mine = !readerId.isNullOrBlank() && (event.lastMessageSenderUserId == readerId || event.senderId == readerId)
-        val served = event.lastMessageSenderName as? PreviewFieldUpdate.Replaced<String>
+        val resolution = ConversationListAuthor.resolve(
+            eventSenderId = event.senderId,
+            eventSenderUserId = event.lastMessageSenderUserId,
+            eventSenderName = event.lastMessageSenderName,
+            readerId = readerId,
+            youLabel = youLabel,
+            eventMessageId = event.lastMessageId.let { (it as? PreviewFieldUpdate.Replaced<String>)?.value },
+            rowMessageId = id,
+            rowSenderName = senderName,
+        )
         val name = when {
-            mine -> youLabel
-            served != null -> served.value
+            resolution is ConversationListAuthor.Resolution.Display -> resolution.name
             isNewMessage -> null
             else -> return this
         }
-        val peerId = if (mine || name == null) null else authorUserId
+        val peerId = if (name == null || name == youLabel) null else authorUserId
         return copy(senderName = name, senderId = peerId)
     }
 

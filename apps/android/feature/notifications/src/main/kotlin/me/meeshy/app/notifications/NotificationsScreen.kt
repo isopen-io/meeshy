@@ -80,6 +80,7 @@ fun NotificationsScreen(
     onOpenMood: (String) -> Unit = onOpenPost,
     onOpenProfile: (String) -> Unit = {},
     onOpenGame: (GameTarget) -> Unit = {},
+    onOpenStoryContent: ((NotificationDestination.StoryContent) -> Unit)? = null,
     revealTap: EngagementRevealTapViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -93,6 +94,7 @@ fun NotificationsScreen(
     val openMood by rememberUpdatedState(onOpenMood)
     val openProfile by rememberUpdatedState(onOpenProfile)
     val openGame by rememberUpdatedState(onOpenGame)
+    val openStoryContent by rememberUpdatedState(onOpenStoryContent)
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
@@ -123,6 +125,7 @@ fun NotificationsScreen(
                 onOpenProfile = { openProfile(it) },
                 onOpenMood = { openMood(it) },
                 onOpenGame = { openGame(it) },
+                onOpenStoryContent = { target -> openStoryContent?.invoke(target) ?: openPost(target.postId) },
             )
         }
     }

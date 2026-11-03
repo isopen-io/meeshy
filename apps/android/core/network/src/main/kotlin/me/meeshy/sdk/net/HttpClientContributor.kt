@@ -53,6 +53,9 @@ object HttpPriority {
     const val AUTH = 1_000
     const val CLIENT_INFO = 1_050
     const val CLIENT_CAPABILITIES = 1_100
+
+    /** Déclare la vague du Jeu que ce binaire sait lire, sur les seules routes du jeu. */
+    const val GAME_VERSION = 1_110
     const val DEVICE_LOCALE = 1_200
     const val AUTH_EXPIRY = 1_300
 

@@ -74,6 +74,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 onDismiss = { membersTarget = null },
             )
         }
+        val openProfile = rememberProfileOpenerOverSheet(navController)
         ConversationListScreen(
             onConversationClick = { conversationId ->
                 navController.navigate(Routes.chat(conversationId))
@@ -92,7 +93,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             },
             rowNavigation = ConversationRowNavigation(
                 onManageMembers = { conversationId, accent -> membersTarget = conversationId to accent },
-                onViewProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+                onViewProfile = openProfile,
                 onCreateShareLink = { id -> navController.navigate(Routes.createShareLink(id)) },
             ),
             onOpenSettings = { navController.navigate(Routes.SETTINGS) },

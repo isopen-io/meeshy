@@ -10,12 +10,21 @@
  * Il vit dans IndexedDB, qui survit au redémarrage de la coque.
  *
  * **Meilleur effort, jamais un échec.** IndexedDB absente, refusée ou pleine :
- * `has` rend `false`, `mark` ne fait rien — l'enregistrement se fait comme
- * avant ce lot, sans déduplication.
+ * `lookup` rend `null`, `mark` et `forget` ne font rien — l'enregistrement se
+ * fait comme avant ce lot, sans déduplication.
+ *
+ * **Une entrée retient OÙ le média a été écrit** (#14654) : le chemin que la
+ * galerie a rendu, pour que le saver vérifie, avant de refuser, que le fichier
+ * est toujours là — l'utilisateur a pu le supprimer de sa galerie. Une entrée
+ * écrite avant ce lot (un horodatage seul) n'a pas de chemin : `path` y est
+ * `null`, et elle reste « déjà enregistré » (règle écrite dans le saver).
  */
+export type GallerySavedEntry = { readonly path: string | null };
+
 export type GallerySavedRegistry = {
-  readonly has: (digest: string) => Promise<boolean>;
-  readonly mark: (digest: string) => Promise<void>;
+  readonly lookup: (digest: string) => Promise<GallerySavedEntry | null>;
+  readonly mark: (digest: string, path: string | null) => Promise<void>;
+  readonly forget: (digest: string) => Promise<void>;
 };
 
 export const GALLERY_SAVED_DB_NAME = 'meeshy-gallery';
@@ -53,16 +62,32 @@ export async function galleryDigest(blob: Blob, limits: GalleryDigestLimits = {}
   return `sha256-sampled:${hex(await crypto.subtle.digest('SHA-256', await sampledBytes(blob, sampleBytes)))}`;
 }
 
-export const NULL_GALLERY_SAVED_REGISTRY: GallerySavedRegistry = { has: async () => false, mark: async () => undefined };
+export const NULL_GALLERY_SAVED_REGISTRY: GallerySavedRegistry = {
+  lookup: async () => null,
+  mark: async () => undefined,
+  forget: async () => undefined,
+};
 
 export function memoryGallerySavedRegistry(): GallerySavedRegistry {
-  const digests = new Set<string>();
+  const entries = new Map<string, GallerySavedEntry>();
   return {
-    has: async (digest) => digests.has(digest),
-    mark: async (digest) => {
-      digests.add(digest);
+    lookup: async (digest) => entries.get(digest) ?? null,
+    mark: async (digest, path) => {
+      entries.set(digest, { path });
+    },
+    forget: async (digest) => {
+      entries.delete(digest);
     },
   };
+}
+
+type StoredEntry = { readonly savedAt: number; readonly path: string | null };
+
+/** Une ligne lue : l'objet de ce lot, ou l'horodatage seul d'une version antérieure (#14641), sans chemin. */
+function entryOf(stored: unknown): GallerySavedEntry | null {
+  if (stored === undefined || stored === null) return null;
+  const path = (stored as { readonly path?: unknown }).path;
+  return { path: typeof path === 'string' && path !== '' ? path : null };
 }
 
 function transact<T>(
@@ -110,7 +135,11 @@ export function idbGallerySavedRegistry(
 ): GallerySavedRegistry {
   if (factory === undefined) return NULL_GALLERY_SAVED_REGISTRY;
   return {
-    has: (digest) => transact(factory, 'readonly', (store) => store.get(digest), (request) => request.result !== undefined, false),
-    mark: (digest) => transact(factory, 'readwrite', (store) => store.put(Date.now(), digest), () => undefined, undefined),
+    lookup: (digest) => transact(factory, 'readonly', (store) => store.get(digest), (request) => entryOf(request.result), null),
+    mark: (digest, path) => {
+      const stored: StoredEntry = { savedAt: Date.now(), path };
+      return transact(factory, 'readwrite', (store) => store.put(stored, digest), () => undefined, undefined);
+    },
+    forget: (digest) => transact(factory, 'readwrite', (store) => store.delete(digest), () => undefined, undefined),
   };
 }

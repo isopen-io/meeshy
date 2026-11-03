@@ -67,6 +67,9 @@ internal data class PlacedMediaFrame(
 ) {
     val key: String get() = placed.id
 
+    /** Le look que son image peint — celle d'une vidéo comprise, sans ce qu'une vidéo ne peint pas ; `null` : aucun. */
+    val paintedLook: StoryMediaLook? get() = mediaLook?.paintedOn(isVideo)
+
     val isPending: Boolean get() = pendingPhase != null
 
     /** Le look que le plateau peint : SON filtre à pleine force puis SES réglages, jamais ceux de la scène — le même que lit `SceneLookRecipe.forMedia`. */
@@ -159,13 +162,13 @@ internal fun PlacedMediaLayer(
     val crop = placed.crop.takeUnless { frame.isVideo }
     val author = LocalComposerLookAuthor.current
     val picture = rememberComposerPicture(frame.model)
-    val request = remember(picture, widthPx, heightPx, crop, frame.mediaLook, author) {
+    val request = remember(picture, widthPx, heightPx, crop, frame.paintedLook, author) {
         val (decodeWidth, decodeHeight) = croppedDecodeSize(widthPx, heightPx, crop)
         ImageRequest.Builder(context)
             .data(picture)
             .size(Size(decodeWidth, decodeHeight))
             .crossfade(false)
-            .storyMediaLook(frame.mediaLook.takeUnless { frame.isVideo }, author)
+            .storyMediaLook(frame.paintedLook, author)
             .build()
     }
     val corner = with(density) { (min(widthPx, heightPx) * CORNER_FRACTION).toDp() }

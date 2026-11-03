@@ -63,4 +63,10 @@ class ComposerSceneReferencesTest {
         val badges = (1..60).map { ComposerSceneReferences.Badge(userId = "u$it", username = "p$it") }
         assertThat(ComposerSceneReferences.declaredFor(emptyList(), badges)).hasSize(ComposerSceneReferences.MAX_MENTIONS)
     }
+
+    @Test
+    fun `an inline mention is never declared, the gateway reads it back from the text`() {
+        val sent = ComposerSceneReferences.declaredFor(listOf(mention("ana", "INLINE"), mention("bob", "NOTE")), badges = emptyList())
+        assertThat(sent.map { it.username }).containsExactly("bob")
+    }
 }

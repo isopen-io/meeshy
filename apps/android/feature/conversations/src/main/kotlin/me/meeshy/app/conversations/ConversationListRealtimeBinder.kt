@@ -53,6 +53,8 @@ internal class ConversationListRealtimeBinder(
         scope.launch { for (request in catchUpRequests) runSilently { repository.refresh() } }
         scope.launch { watchReconnections() }
         scope.launch { messageSocketManager.messageReceived.collect { enqueue { patcher.applyMessage(it) } } }
+        scope.launch { messageSocketManager.messageEdited.collect { enqueue { patcher.applyEdited(it) } } }
+        scope.launch { messageSocketManager.messageDeleted.collect { enqueue { patcher.applyDeleted(it) } } }
         scope.launch { messageSocketManager.conversationUpdated.collect { enqueue { patcher.applyUpdated(it) } } }
         scope.launch {
             messageSocketManager.unreadUpdated.collect { enqueue { patcher.applyUnread(it.conversationId, it.unreadCount) } }
