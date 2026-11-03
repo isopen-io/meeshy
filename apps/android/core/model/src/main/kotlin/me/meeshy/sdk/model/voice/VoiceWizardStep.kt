@@ -25,7 +25,7 @@ object VoiceWizardRules {
     const val MINIMUM_AGE: Int = 18
     private const val DEFAULT_AGE_YEARS: Long = 20
 
-    fun isAdult(birthDate: LocalDate, today: LocalDate): Boolean = !birthDate.plusYears(MINIMUM_AGE.toLong()).isAfter(today)
+    fun isAdult(birthDate: LocalDate, today: LocalDate): Boolean = java.time.Period.between(birthDate, today).years >= MINIMUM_AGE
 
     /** Le sélecteur s'ouvre sur un adulte (vingt ans), comme iOS. */
     fun defaultBirthDate(today: LocalDate): LocalDate = today.minusYears(DEFAULT_AGE_YEARS)
