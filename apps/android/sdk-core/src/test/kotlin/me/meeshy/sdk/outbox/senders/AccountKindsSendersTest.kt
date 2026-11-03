@@ -31,8 +31,8 @@ class AccountKindsSendersTest {
         payload = encodedPayload(SettingsActionPayload(method, endpoint, body)),
     )
 
-    private fun refusal(status: Int) =
-        HttpException(Response.error<ApiResponse<JsonElement>>(status, "{}".toResponseBody()))
+    private fun refusal(status: Int, body: String = "{}") =
+        HttpException(Response.error<ApiResponse<JsonElement>>(status, body.toResponseBody()))
 
     @Test
     fun `a patch is sent to the relative endpoint with its body`() = runTest {
@@ -53,7 +53,7 @@ class AccountKindsSendersTest {
 
     @Test
     fun `a 4xx is definitive and a 5xx is retried`() = runTest {
-        coEvery { api.post("me/x", body) } throws refusal(403)
+        coEvery { api.post("me/x", body) } throws refusal(403, """{"success":false,"error":"Forbidden","code":"FORBIDDEN"}""")
         assertThat(handler.send(row("POST", "me/x"))).isInstanceOf(SendResult.PermanentFailure::class.java)
 
         coEvery { api.post("me/x", body) } throws refusal(503)
