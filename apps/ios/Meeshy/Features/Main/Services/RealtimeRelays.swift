@@ -15,6 +15,7 @@ enum RealtimeRelays {
         DependencyContainer.shared.feedSocketHandler.arm()
         await ConversationSyncEngine.shared.startSocketRelay()
         ReceivedMediaAutoSaver.shared.startListening { AuthManager.shared.currentUser?.id }
+        Task { @MainActor in await ReceivedMediaAutoSaveLegacyMigration.run() }
         CallLaunchResume.shared.arm()
     }
 }

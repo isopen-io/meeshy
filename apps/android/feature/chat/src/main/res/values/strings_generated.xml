@@ -100,6 +100,7 @@
     <string name="conversation_appearance_section_solid">Solid color</string>
     <string name="conversation_appearance_sheet_title">Background and accent</string>
     <string name="conversation_appearance_signature">Signature</string>
+    <string name="conversation_encryption_switched_enabled">End-to-end encryption turned on: new messages are encrypted on your devices.</string>
     <string name="conversation_info_pinned_see_all">See all %1$d pinned messages</string>
     <string name="conversation_info_tab_media">Media</string>
     <string name="conversation_info_tab_members">Members</string>
@@ -177,7 +178,7 @@
     <string name="encryption_fact_end_to_end_never_turned_off_direct">End-to-end encryption can never be turned off: this one-to-one chat stays encrypted. You can always open another conversation alongside, without end-to-end encryption, with this person: both are in the list, this one marked with a padlock.</string>
     <string name="encryption_fact_every_server_feature">Every feature is available: automatic translation, voice message transcription, notification previews, search.</string>
     <string name="encryption_fact_group_sending_unavailable">In this group, the app can’t send encrypted messages yet.</string>
-    <string name="encryption_fact_hybrid_is_server_today">Hybrid mode currently encrypts like Server. Double encryption by your devices is coming soon.</string>
+    <string name="encryption_fact_hybrid_is_server_today">Hybrid mode encrypts your messages on our servers, which can read them for translation and search: it is not end-to-end encryption. Between two compatible devices, a second layer also lets you check that a text message was not altered on the way; when it is missing, nothing is presented as verified.</string>
     <string name="encryption_fact_no_edit">A sent message can’t be edited.</string>
     <string name="encryption_fact_no_forward">A message can’t be forwarded.</string>
     <string name="encryption_fact_no_notification_preview">Notifications don’t show the message text: the server doesn’t know it.</string>
@@ -202,12 +203,12 @@
     <string name="encryption_legacy_title">End-to-end encryption</string>
     <string name="encryption_mode_e2ee_description">Only your devices and those of the participants read the messages. Translation happens on your device.</string>
     <string name="encryption_mode_e2ee_label">End-to-end</string>
-    <string name="encryption_mode_hybrid_description">Encrypted on our servers, like Server. Double encryption by your devices is coming soon.</string>
+    <string name="encryption_mode_hybrid_description">Encrypted on our servers; between compatible devices, a second layer lets you check that a text message was not altered on the way.</string>
     <string name="encryption_mode_hybrid_label">Hybrid</string>
     <string name="encryption_mode_server_description">Your messages are encrypted on our servers. Translation, transcription and search work.</string>
     <string name="encryption_mode_server_label">Server</string>
     <string name="encryption_summary_end_to_end">End-to-end encrypted: only the participants’ devices can read the messages</string>
-    <string name="encryption_summary_hybrid">Encrypted on our servers (hybrid mode)</string>
+    <string name="encryption_summary_hybrid">Encrypted on our servers, with verification between compatible devices</string>
     <string name="encryption_summary_none">Conversation created before systematic encryption: its messages are not encrypted</string>
     <string name="encryption_summary_server">Encrypted on our servers</string>
     <string name="encryption_topic_absent">Not available in this mode</string>

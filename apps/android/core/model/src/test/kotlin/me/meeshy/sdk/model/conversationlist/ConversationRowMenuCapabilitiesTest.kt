@@ -238,4 +238,37 @@ class ConversationRowMenuCapabilitiesTest {
         assertThat(ConversationRowMenuCapabilities.adminConsoleUrl("c1", "https://meeshy.me"))
             .isEqualTo("https://meeshy.me/admin/conversations/c1")
     }
+
+    // ── Rendre obsolète (#14645) ──
+
+    @Test
+    fun `an admin of a group, a public conversation or a channel may make it obsolete, a moderator may not`() {
+        listOf("group", "public", "broadcast").forEach { type ->
+            assertWithMessage(type).that(caps(conversation(type = type, currentUserRole = "admin"), user()).obsolete).isTrue()
+            assertWithMessage(type).that(caps(conversation(type = type, currentUserRole = "creator"), user()).obsolete).isTrue()
+            assertWithMessage(type).that(caps(conversation(type = type, currentUserRole = "moderator"), user()).obsolete).isFalse()
+        }
+    }
+
+    @Test
+    fun `Global and an ended conversation are never made obsolete`() {
+        assertThat(caps(conversation(type = "global", currentUserRole = "creator"), user(role = "ADMIN")).obsolete).isFalse()
+        assertThat(caps(conversation(currentUserRole = "creator", isActive = false), user()).obsolete).isFalse()
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer", isActive = false), user()).obsolete).isFalse()
+    }
+
+    // ── #14653 : dans un tête-à-tête, l'un OU l'autre des deux membres le rend obsolète ──
+
+    @Test
+    fun `either member of an open direct may make it obsolete, creator or not`() {
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), user()).obsolete).isTrue()
+        assertThat(caps(conversation(type = "direct", currentUserRole = "creator", peerUserId = "peer"), user()).obsolete).isTrue()
+    }
+
+    @Test
+    fun `an anonymous or unloaded reader never makes a direct obsolete, and a group member still may not`() {
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), user(isAnonymous = true)).obsolete).isFalse()
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), null).obsolete).isFalse()
+        assertThat(caps(conversation(type = "group", currentUserRole = "member"), user()).obsolete).isFalse()
+    }
 }

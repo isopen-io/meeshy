@@ -8,7 +8,11 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.call.WebRtcEngine
+import me.meeshy.sdk.model.call.AnsweredRemoteOffer
+import me.meeshy.sdk.model.call.CallNegotiationRole
 import me.meeshy.sdk.model.call.CallSignalEnvelope
+import me.meeshy.sdk.model.call.GlareVerdict
+import me.meeshy.sdk.model.call.NegotiationEpoch
 import me.meeshy.sdk.model.call.WebRtcError
 import me.meeshy.sdk.socket.CallSignalManager
 import org.webrtc.IceCandidate
@@ -27,7 +31,20 @@ internal class CallNegotiator(
     private var callId: String = ""
     private var peerId: String = ""
     private var selfId: String = ""
-    private var negotiationId: Int = 0
+    private val epoch = NegotiationEpoch()
+    private val negotiationId: Int get() = epoch.highWaterMark
+
+    /** Négociation parfaite : le plus petit identifiant est poli (rollback), l'autre ignore l'offre en collision. */
+    private var polite: Boolean = false
+
+    /** Mon offre est posée en local et sa réponse n'est pas revenue : une offre entrante serait une collision. */
+    private var localOfferPending: Boolean = false
+
+    /** La dernière offre distante répondue : un rejeu exact reçoit la même réponse, sans renégociation. */
+    private val answered = AnsweredRemoteOffer()
+
+    /** Le pair a-t-il déjà remis son offre ? Un appelé qui l'attend n'est pas en panne ICE (le minuteur d'offre tient la phase). */
+    private var remoteOfferSeen: Boolean = false
 
     /** Whether WE placed this call — the initial caller re-offers on an ICE restart (anti-glare). */
     private var isCaller: Boolean = false
@@ -72,9 +89,20 @@ internal class CallNegotiator(
         this.callId = callId
         this.peerId = peerId
         this.selfId = selfId
-        this.negotiationId = 0
+        epoch.reset()
+        answered.clear()
+        localOfferPending = false
         this.isCaller = isCaller
+        this.remoteOfferSeen = false
+        refreshRole()
     }
+
+    private fun refreshRole() {
+        polite = CallNegotiationRole.isPolite(selfId, peerId)
+    }
+
+    /** `true` pour l'appelé tant que l'offre du pair n'est pas arrivée. */
+    val awaitingRemoteOffer: Boolean get() = !isCaller && !remoteOfferSeen
 
     /** Relay the remote signals into the engine and the local ICE candidates to the peer, in [scope]. */
     fun observe(scope: CoroutineScope) {
@@ -120,7 +148,7 @@ internal class CallNegotiator(
      * re-offers with the next generation, like iOS `screenShareNeedsRenegotiation` → `emitCallOffer`.
      */
     private suspend fun renegotiate() {
-        negotiationId += 1
+        epoch.beginOutgoing()
         sendOffer()
     }
 
@@ -129,7 +157,10 @@ internal class CallNegotiator(
         // An outgoing call carries no peerId through the route; the joiner IS the
         // callee we must address, so adopt their id before offering — otherwise the
         // offer's `to` is blank and the gateway rejects it ("to field is required").
-        joinerId?.takeIf { it.isNotBlank() }?.let { peerId = it }
+        joinerId?.takeIf { it.isNotBlank() }?.let {
+            peerId = it
+            refreshRole()
+        }
         scope.launch { sendOffer() }
     }
 
@@ -143,7 +174,7 @@ internal class CallNegotiator(
         if (!isCaller) return
         val cs = scope ?: return
         cs.launch {
-            negotiationId += 1
+            epoch.beginOutgoing()
             sendOffer()
         }
     }
@@ -152,6 +183,7 @@ internal class CallNegotiator(
         try {
             val offer = engine.createOffer()
             engine.setLocalDescription(offer)
+            localOfferPending = true
             signals.emitOffer(callId, offer.description, to = peerId, from = selfId, negotiationId = negotiationId)
         } catch (_: WebRtcError) {
             // Offre impossible (pair fermé entre-temps) : l'ICE monitor et le budget de reconnexion tranchent.
@@ -174,25 +206,31 @@ internal class CallNegotiator(
         // from an older negotiation epoch before touching the engine. Checked first,
         // exactly like iOS's ordering, so a stale offer/answer/candidate cannot even
         // adopt its sender's `peerId` on its way to being ignored.
-        if (!acceptIncomingNegotiation(signal.negotiationId)) return
+        val isOffer = signal.type == "offer"
+        if (epoch.isStale(signal.negotiationId ?: 0, isOffer)) return
         when (signal.type) {
             "offer" -> {
                 val sdp = signal.sdp ?: return
+                remoteOfferSeen = true
+                if (!acceptOffer(signal.negotiationId, sdp, signal.from)) return
                 // The offer's sender is our reply target. An incoming call may carry no
                 // peerId through the ring/route (an older push without its caller), so the
                 // answer + ICE candidates would otherwise be sent with a blank `to`
                 // and the gateway rejects the whole signal ("to field is required").
-                signal.from?.takeIf { it.isNotBlank() }?.let { peerId = it }
                 engine.setRemoteDescription(SessionDescription(SessionDescription.Type.OFFER, sdp))
                 val answer = engine.createAnswer()
                 engine.setLocalDescription(answer)
+                answered.remember(sdp, answer.description, negotiationId)
                 signals.emitAnswer(callId, answer.description, to = peerId, from = selfId, negotiationId = negotiationId)
             }
             "answer" -> {
                 val sdp = signal.sdp ?: return
+                if (!epoch.accept(signal.negotiationId, isOffer = false)) return
                 engine.setRemoteDescription(SessionDescription(SessionDescription.Type.ANSWER, sdp))
+                localOfferPending = false
             }
             "ice-candidate" -> {
+                if (!epoch.accept(signal.negotiationId, isOffer = false)) return
                 val candidate = signal.candidate ?: return
                 engine.addIceCandidate(IceCandidate(signal.sdpMid, signal.sdpMLineIndex ?: 0, candidate))
             }
@@ -200,25 +238,29 @@ internal class CallNegotiator(
     }
 
     /**
-     * §3.5 — accept an incoming signal's generation unless it is STALE (older than
-     * the highest generation this negotiator has sent or seen). Advances the
-     * high-water mark on accept, exactly mirroring iOS's
-     * `CallManager.acceptIncomingNegotiation`/`isStaleNegotiation`. A missing
-     * generation (`null` — a legacy or malformed signal) is treated as `0`, same as
-     * iOS's `event.signal.negotiationId ?? 0` at the decode boundary: never stale,
-     * always accepted.
-     *
-     * Without this guard every incoming `negotiationId` was adopted (offer branch)
-     * or applied unconditionally (answer / ice-candidate branches) regardless of
-     * arrival order — the gateway's §4.6 buffered-offer replay and an overlapping
-     * ICE-restart racing a peer's in-flight answer could both deliver a signal from
-     * an OLDER negotiation after a newer one was already sent, corrupting the SDP
-     * state with no error surfaced.
+     * Décide du sort d'une offre entrante (déjà non périmée) : un rejeu exact est re-servi par la même réponse ;
+     * une collision avec ma propre offre est tranchée par le rôle (l'impoli ignore, le poli fait un rollback puis
+     * répond). `true` : le moteur doit appliquer l'offre et répondre.
      */
-    private fun acceptIncomingNegotiation(generation: Int?): Boolean {
-        val incoming = generation ?: 0
-        if (incoming < negotiationId) return false
-        negotiationId = maxOf(negotiationId, incoming)
+    private suspend fun acceptOffer(generation: Int?, sdp: String, from: String?): Boolean {
+        answered.replayFor(sdp)?.let { replay ->
+            signals.emitAnswer(callId, replay.answerSdp, to = peerId, from = selfId, negotiationId = replay.generation)
+            return false
+        }
+        when (CallNegotiationRole.glare(polite, localOfferPending)) {
+            GlareVerdict.Ignore -> return false
+            GlareVerdict.RollbackThenAnswer -> {
+                engine.setLocalDescription(SessionDescription(SessionDescription.Type.ROLLBACK, ""))
+                localOfferPending = false
+            }
+            GlareVerdict.Answer -> Unit
+        }
+        epoch.accept(generation, isOffer = true)
+        // The offer's sender is our reply target (an older push may carry no caller).
+        from?.takeIf { it.isNotBlank() }?.let {
+            peerId = it
+            refreshRole()
+        }
         return true
     }
 }

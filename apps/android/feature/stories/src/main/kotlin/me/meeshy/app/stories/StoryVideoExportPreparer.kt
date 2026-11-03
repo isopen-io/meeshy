@@ -11,6 +11,7 @@ import me.meeshy.sdk.media.scene.SceneExportOverlay
 import me.meeshy.sdk.media.scene.SceneExportSlideFill
 import me.meeshy.sdk.media.scene.SceneExportSoundFile
 import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.StoryMediaLook
 import me.meeshy.sdk.model.scene.export.ImagerDecision
 import me.meeshy.sdk.model.scene.export.ImagerLength
 import me.meeshy.sdk.model.scene.export.ImagerOffer
@@ -22,6 +23,7 @@ import me.meeshy.sdk.model.scene.export.StoryExportSlideSource
 import me.meeshy.sdk.model.scene.export.StoryExportOverlayFrames
 import me.meeshy.sdk.model.scene.export.StoryExportTimeline
 import me.meeshy.sdk.model.scene.export.StoryExportVideoFormat
+import me.meeshy.ui.component.retouch.ComposerLookAuthor
 
 /**
  * Ce que l'écran doit peindre : la slide à chacun des [frames] (un calque par fenêtre où rien ne change), avec son fond
@@ -54,6 +56,11 @@ class StoryVideoExportPreparer(
     private val format: StoryExportVideoFormat = StoryExportVideoFormat.of(),
     /** Peint les cartes de marque d'un export de story ; `null` : aucun emballage, même si une identité est remise. */
     paintBrand: (suspend (StoryExportBrandPaintRequest) -> StoryExportBrandCards?)? = null,
+    /**
+     * Cuit une vidéo réglée du compositeur avec son look (#14848), comme la publication ([me.meeshy.ui.component.retouch.StoryVideoLook.bake]) ;
+     * `false` : elle ne se cuit pas, et l'export s'arrête plutôt que de rendre l'original.
+     */
+    private val bakeLook: suspend (source: File, look: StoryMediaLook, author: ComposerLookAuthor, output: File) -> Boolean = { _, _, _, _ -> false },
     /** Ce que l'export laisse de côté sans s'arrêter (un son injoignable), journalisé (#13986). */
     private val warn: (step: String, failure: Throwable) -> Unit = SceneExportLog::warn,
 ) {
@@ -83,6 +90,8 @@ class StoryVideoExportPreparer(
         val delay = branding?.plan?.storyStartMillis ?: 0L
         val still = plan.still && scenes.all { it.subject.backgroundVideo == null && StoryExportPlacedVideos.videosOf(it.slide).isEmpty() } && branding == null
         val rendered = plan.slides.map { placed -> placed to scenes[placed.index] }
+        val looks = StoryExportVideoLooks(bakeLook, work)
+        val sceneFiles = rendered.associate { (placed, scene) -> placed.index to files + looks.baked(scene, files) }
         val overlays = rendered.flatMap { (placed, scene) ->
             val backgroundFile = scene.subject.backgroundVideo?.let { files[it] }
             paintedOverlays(scene, placed.index, placed.durationMillis, backgroundFile == null, still, File(work, "scene-${placed.index}").apply { mkdirs() })
@@ -91,7 +100,7 @@ class StoryVideoExportPreparer(
         val placedVideos = rendered.flatMap { (placed, scene) ->
             StoryExportPlacedVideos.videosOf(scene.slide).mapIndexedNotNull { depth, view ->
                 val src = scene.subject.source.soundSources[view.id]
-                val file = src?.let(files::get) ?: return@mapIndexedNotNull null.also {
+                val file = src?.let(sceneFiles.getValue(placed.index)::get) ?: return@mapIndexedNotNull null.also {
                     warn("vidéo posée sans adresse, rendue sans elle (${view.id}, scène ${placed.index})", IllegalStateException("adresse absente"))
                 }
                 val clip = durations[src] ?: error("la vidéo posée ${view.id} de la scène ${placed.index} n'a pas de durée lisible")
@@ -105,7 +114,7 @@ class StoryVideoExportPreparer(
             plan = plan,
             format = format,
             fills = rendered.map { (placed, scene) ->
-                fill(scene.subject, scene.subject.backgroundVideo?.let { files[it] }, durations, placed.durationMillis, work, placed.index)
+                fill(scene.subject, scene.subject.backgroundVideo?.let { sceneFiles.getValue(placed.index)[it] }, durations, placed.durationMillis, work, placed.index)
             },
             overlays = overlays,
             sounds = sounds,

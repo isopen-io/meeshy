@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { OPEN_REPORT_STATUSES, priorityFirst } from '../reports/priorityQueue';
 import type {
   Report,
   CreateReportDTO,
@@ -14,9 +15,27 @@ export class ReportService {
   constructor(private prisma: PrismaClient) {}
 
   /**
-   * Créer un nouveau signalement
+   * Créer un signalement — UN seul ouvert par signalant inscrit et par cible
+   * (#14627, audit 3 M1).
+   *
+   * Sans seuil par cible, un même compte remplissait la file d'autant de lignes
+   * qu'il répétait le geste ; un compte déclaré mineur les rendait toutes
+   * prioritaires et repoussait en page 2 le signalement d'une autre mineure. Le
+   * doublon d'une ligne encore à traiter (`pending`, `under_review`) rend donc
+   * cette ligne, la plus ancienne, sans rien écrire : le signalant reçoit
+   * l'accusé de SON signalement, ce qu'il savait déjà — aucun oracle. Le motif
+   * n'entre pas dans la paire : changer de motif ne fait pas un second
+   * signalement de la même cible. Une ligne close ne retient pas le suivant.
+   *
+   * Un signalant anonyme n'est pas dédoublonné : rien ne l'identifie d'un
+   * signalement à l'autre, et les seuils par appelant le bornent. Deux requêtes
+   * simultanées peuvent encore écrire deux lignes (lecture puis écriture, sans
+   * index unique partiel) : la fenêtre est celle d'un aller-retour.
    */
   async createReport(data: CreateReportDTO): Promise<Report> {
+    const existing = await this.openReportOf(data);
+    if (existing) return existing;
+
     const report = await this.prisma.report.create({
       data: {
         reportedType: data.reportedType,
@@ -25,11 +44,28 @@ export class ReportService {
         reporterName: data.reporterName || null,
         reportType: data.reportType,
         reason: data.reason || null,
-        status: 'pending'
+        status: 'pending',
+        // #14110 (MIN-04) — calculée par la passerelle, jamais lue du corps.
+        priority: data.priority ?? 0,
+        priorityReasons: data.priorityReasons ?? []
       }
     });
 
     return report as Report;
+  }
+
+  private async openReportOf(data: CreateReportDTO): Promise<Report | null> {
+    if (!data.reporterId) return null;
+    const report = await this.prisma.report.findFirst({
+      where: {
+        reporterId: data.reporterId,
+        reportedType: data.reportedType,
+        reportedEntityId: data.reportedEntityId,
+        status: { in: [...OPEN_REPORT_STATUSES] },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return report as Report | null;
   }
 
   /**
@@ -91,22 +127,16 @@ export class ReportService {
       }
     }
 
-    // Déterminer l'ordre de tri
-    const orderBy: any = {};
+    // #14110 (MIN-04, audit B1 et m4) — la priorité est la PREMIÈRE clé quel que
+    // soit le tri demandé ; le tri demandé ordonne les ordinaires.
     const sortBy = filters.sortBy || 'createdAt';
     const sortOrder = filters.sortOrder || 'desc';
-    orderBy[sortBy] = sortOrder;
-
-    // Récupérer les données
-    const [reports, totalCount] = await Promise.all([
-      this.prisma.report.findMany({
-        where,
-        orderBy,
-        skip: offset,
-        take: limit
-      }),
-      this.prisma.report.count({ where })
-    ]);
+    const { rows: reports, total: totalCount } = await priorityFirst<Report>(this.prisma.report, {
+      where,
+      orderBy: { [sortBy]: sortOrder },
+      skip: offset,
+      take: limit
+    });
 
     return {
       reports: reports as Report[],
@@ -272,17 +302,14 @@ export class ReportService {
       reportedEntityId: entityId
     };
 
-    const [reports, total] = await Promise.all([
-      this.prisma.report.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: offset,
-        take: limit
-      }),
-      this.prisma.report.count({ where })
-    ]);
+    const { rows: reports, total } = await priorityFirst<Report>(this.prisma.report, {
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: offset,
+      take: limit
+    });
 
-    return { reports: reports as Report[], total };
+    return { reports, total };
   }
 
   /**
@@ -324,15 +351,13 @@ export class ReportService {
   async getRecentReports(limit: number = 10): Promise<Report[]> {
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    const reports = await this.prisma.report.findMany({
-      where: {
-        createdAt: { gte: twentyFourHoursAgo }
-      },
+    const { rows } = await priorityFirst<Report>(this.prisma.report, {
+      where: { createdAt: { gte: twentyFourHoursAgo } },
       orderBy: { createdAt: 'desc' },
       take: limit
     });
 
-    return reports as Report[];
+    return rows;
   }
 
   /**
@@ -358,15 +383,12 @@ export class ReportService {
    * Obtenir les signalements assignés à un modérateur
    */
   async getModeratorReports(moderatorId: string): Promise<Report[]> {
-    const reports = await this.prisma.report.findMany({
-      where: {
-        moderatorId,
-        status: { in: ['under_review', 'pending'] }
-      },
+    const { rows } = await priorityFirst<Report>(this.prisma.report, {
+      where: { moderatorId, status: { in: ['under_review', 'pending'] } },
       orderBy: { createdAt: 'desc' }
     });
 
-    return reports as Report[];
+    return rows;
   }
 }
 

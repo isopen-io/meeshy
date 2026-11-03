@@ -183,6 +183,11 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // #7377 — la liste des favoris de message charge `sender` pour chaque ligne
   // servie ; sa portée est connue (les conversations des étoiles de la page).
   'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #14619 — la recherche de la liste des conversations : ses deux lectures
+  // (contenu, traductions) chargent `sender` pour la ligne de résultat, et un
+  // seul `withOrphanedSenderRepair` les enveloppe via `Promise.all`, portée =
+  // les conversations du lecteur.
+  'search/globalMessageSearch.ts': { kind: 'applies', reads: 2, applications: 1 },
 
   // Deux lectures depuis #9240 : `resolveConversationId` (projette le scalaire
   // `conversationId`) et la garde d'admission d'écriture de
@@ -195,6 +200,9 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // `Participant` par son id. Jamais la relation `sender` — un expéditeur disparu
   // rend « sans auteur ».
   'reports/reportedContentAuthor.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #14110 / #14627 — la priorité d'un signalement : `messageType` (une
+  // position ?) et `conversationId` (l'audience). Jamais `sender`.
+  'reports/reportPriority.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   // #10726 — le mode de chiffrement du porteur et de sa conversation, pour
   // savoir si la passerelle lit le vocal. Jamais `sender`.
   'attachments/attachmentCarrierServerReadable.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },

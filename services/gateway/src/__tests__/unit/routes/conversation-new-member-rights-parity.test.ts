@@ -36,6 +36,7 @@ const mockResolveConversationId = jest.fn<any>();
 
 const noop = jest.fn<any>((reply: any) => reply);
 
+jest.mock('../../../services/messaging/messageRequests', () => ({ ...jest.requireActual<object>('../../../services/messaging/messageRequests'), decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })) }));
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));

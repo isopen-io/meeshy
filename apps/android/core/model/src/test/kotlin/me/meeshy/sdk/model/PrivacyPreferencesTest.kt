@@ -259,10 +259,9 @@ class PrivacyPreferencesTest {
     }
 
     @Test
-    fun comingSoon_isExactlyTheFiveTogglesWithoutEffect_andRefusesWrites() {
+    fun comingSoon_isExactlyTheFourTogglesWithoutEffect_andRefusesWrites() {
         assertThat(PrivacyCatalog.comingSoon).containsExactly(
             PrivacyToggle.BLOCK_SCREENSHOTS,
-            PrivacyToggle.SAVE_MEDIA_TO_GALLERY,
             PrivacyToggle.SHARE_USAGE_DATA,
             PrivacyToggle.ALLOW_CONTACT_REQUESTS,
             PrivacyToggle.ALLOW_GROUP_INVITES,
@@ -270,6 +269,12 @@ class PrivacyPreferencesTest {
         PrivacyToggle.entries.forEach { toggle ->
             assertThat(PrivacyCatalog.isWritable(toggle)).isEqualTo(!PrivacyCatalog.isComingSoon(toggle))
         }
+    }
+
+    @Test
+    fun saveMediaToGallery_hasARealEffectNow_isWritable_andOffByDefault() {
+        assertThat(PrivacyCatalog.isWritable(PrivacyToggle.SAVE_MEDIA_TO_GALLERY)).isTrue()
+        assertThat(PrivacyPreferences().saveMediaToGallery).isFalse()
     }
 
     @Test

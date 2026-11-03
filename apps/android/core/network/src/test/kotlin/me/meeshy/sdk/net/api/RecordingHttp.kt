@@ -25,6 +25,7 @@ internal class RecordedRequest(val request: Request) {
     val method: String get() = request.method
     val path: String get() = request.url.encodedPath
     val query: String? get() = request.url.encodedQuery
+    fun header(name: String): String? = request.header(name)
     val contentType: String? get() = request.body?.contentType()?.toString()
     val body: String? = request.body?.let { Buffer().also { buffer -> it.writeTo(buffer) }.readUtf8() }
 

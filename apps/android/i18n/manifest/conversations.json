@@ -741,8 +741,10 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "search.global.subtitle",
           "androidName": "global_search_empty_subtitle",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "androidName": "global_search_empty_title",
@@ -955,9 +957,9 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "a11y.back",
-          "androidName": "new_conversation_back",
+          "catalog": "ui",
+          "iosKey": "common.close",
+          "androidName": "new_conversation_close",
           "status": "adopted"
         },
         {
@@ -992,7 +994,7 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.new.group-name",
+          "iosKey": "conversation.new.group-name.required",
           "androidName": "new_conversation_group_title",
           "status": "adopted"
         },

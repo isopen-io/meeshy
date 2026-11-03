@@ -67,6 +67,10 @@ const es = {
   'conversationManage.options.pin': 'Fijar',
   'conversationManage.options.mute': 'Silenciar',
   'conversationManage.options.archive': 'Archivar',
+  'conversationManage.obsolete': 'Hacer obsoleta',
+  'conversationManage.obsolete.title': '¿Hacer obsoleta la conversación?',
+  'conversationManage.obsolete.message': 'Desaparecerá para todos los participantes. Su contenido dejará de ser legible y se borrará en 48 horas.',
+  'conversationManage.obsolete.error': 'No se pudo hacer obsoleta la conversación.',
   'conversationManage.header.created_on': 'Creado el {date}',
   'conversationManage.header.muted': 'Notificaciones desactivadas',
 } satisfies ConversationManageCatalog;

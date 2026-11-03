@@ -196,6 +196,16 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
 /// `localFilePath` exists before each retry; if missing, the item is failed
 /// permanently and surfaced via `publishFailed` so the UI can ask the user
 /// to retake the lost media.
+/// Ce qu'a fait l'annulation d'une story en attente (#10331).
+public enum StoryPendingCancellation: Equatable, Sendable {
+    /// Retirée de la file, médias locaux compris : rien ne partira.
+    case removed
+    /// En train de partir : la file la garde.
+    case inFlight
+    /// Plus dans la file — partie, ou déjà classée en échec.
+    case notFound
+}
+
 public struct StoryMediaReference: Codable, Sendable {
     public let elementId: String
     /// "image", "video" or "audio" — kept as a free string for forward
@@ -462,6 +472,12 @@ public actor StoryPublishQueue {
         items
     }
 
+    /// Les items EN ATTENTE que personne ne publie en ce moment (#10331) —
+    /// ceux qu'une annulation retirerait.
+    public var waitingItems: [StoryPublishQueueItem] {
+        items.filter { !inFlightIds.contains($0.id) }
+    }
+
     /// Items that failed permanently and are waiting for a manual retry or
     /// discard from the UI (`MyStoriesView`). Their local media is preserved
     /// (unlike `pendingItems`' terminal successes) so a retry can reuse it.
@@ -510,6 +526,19 @@ public actor StoryPublishQueue {
         let item = failedItems.remove(at: idx)
         removeLocalMedia(of: item)
         saveFailedItemsToDisk()
+    }
+
+    /// **Annuler une story EN ATTENTE d'envoi** (#10331) — le geste de
+    /// l'auteur, avant que la file ne la publie. Un item revendiqué
+    /// (`inFlightIds`) est en train de partir : il n'est pas retiré sous les
+    /// pieds de son téléversement, et l'appelant le dit.
+    public func cancelPendingItem(_ itemId: String) -> StoryPendingCancellation {
+        guard let idx = items.firstIndex(where: { $0.id == itemId }) else { return .notFound }
+        guard !inFlightIds.contains(itemId) else { return .inFlight }
+        let item = items.remove(at: idx)
+        removeLocalMedia(of: item)
+        saveToDisk()
+        return .removed
     }
 
     /// Draft recovery — the most recent queued story that has been stuck

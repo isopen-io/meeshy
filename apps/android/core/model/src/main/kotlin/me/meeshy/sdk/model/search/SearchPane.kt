@@ -1,7 +1,10 @@
 package me.meeshy.sdk.model.search
 
-/** Les trois volets de la recherche globale, dans l'ordre de priorite des erreurs (parite iOS). */
-public enum class SearchPaneKind { CONVERSATIONS, PEOPLE, MESSAGES }
+/**
+ * Les trois volets AFFICHES de la recherche globale, dans l'ordre de priorite des erreurs. Les
+ * publications (posts, reels, stories) remplacent les conversations (#14620).
+ */
+public enum class SearchPaneKind { POSTS, PEOPLE, MESSAGES }
 
 /** Pourquoi un volet n'a rien servi : une panne n'est JAMAIS un « aucun resultat ». */
 public sealed interface SearchPaneFailure {
@@ -19,13 +22,13 @@ public data class SearchPane<T>(
 
 public object SearchPanes {
 
-    /** Le premier volet en echec selon la priorite conversations, personnes, messages. */
+    /** Le premier volet en echec selon la priorite publications, personnes, messages. */
     public fun firstFailure(
-        conversations: SearchPane<*>,
+        posts: SearchPane<*>,
         people: SearchPane<*>,
         messages: SearchPane<*>,
     ): SearchPaneKind? = when {
-        conversations.isFailed -> SearchPaneKind.CONVERSATIONS
+        posts.isFailed -> SearchPaneKind.POSTS
         people.isFailed -> SearchPaneKind.PEOPLE
         messages.isFailed -> SearchPaneKind.MESSAGES
         else -> null
@@ -33,10 +36,10 @@ public object SearchPanes {
 
     /** Vrai des qu'une famille affiche quelque chose. */
     public fun hasDisplayedResults(
-        conversations: SearchPane<*>,
+        posts: SearchPane<*>,
         people: SearchPane<*>,
         messages: SearchPane<*>,
-    ): Boolean = conversations.items.isNotEmpty() || people.items.isNotEmpty() || messages.items.isNotEmpty()
+    ): Boolean = posts.items.isNotEmpty() || people.items.isNotEmpty() || messages.items.isNotEmpty()
 }
 
 /** Ce que l'ecran rend A LA PLACE de la liste (parite iOS `LoadState`). */

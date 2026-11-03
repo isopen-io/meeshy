@@ -131,6 +131,7 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
 
         val isVideo = governing?.let { it.mediaType == "video" } ?: (fallbackMedia?.type == FeedMediaType.VIDEO)
         val resolvedUrl = (ownUrl ?: fallbackMedia?.url)?.let { resolveMediaUrl(it, apiBaseUrl) }
+        val framing = { background: StoryMediaObject -> backgroundTransformOf(background, designatedId, ownUrl) }
 
         if (isVideo) {
             // La pièce qui porte la vidéo de fond : celle que l'objet désigne (ou dont il porte l'adresse), sinon le repli plat.
@@ -145,7 +146,7 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
             // surface via `graphicsLayer`, the exact mirror of the image branch.
             val videoTransform = governing
                 ?.takeIf { ownUrl != null && resolvedUrl != null }
-                ?.let { StoryBackgroundObjectTransform.from(it) }
+                ?.let(framing)
                 ?: StoryBackgroundObjectTransform.IDENTITY
             return BackgroundMedia(
                 imageUrl = null,
@@ -168,9 +169,21 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
         // fallback image never carries one, so it stays a plain aspect-fill (IDENTITY).
         val transform = governing
             ?.takeIf { imageUrl == resolvedUrl && resolvedUrl != null }
-            ?.let { StoryBackgroundObjectTransform.from(it) }
+            ?.let(framing)
             ?: StoryBackgroundObjectTransform.IDENTITY
         return BackgroundMedia(imageUrl = imageUrl, videoUrl = null, loop = true, transform = transform)
+    }
+
+    /**
+     * Le cadrage du fond [this], recadrage compris, peint comme iOS : la pièce qu'il désigne (ou dont il porte l'adresse)
+     * donne la mesure de la source, à défaut le ratio que l'objet porte ; la scène est remplie ou ajustée comme l'auteur
+     * l'a choisi.
+     */
+    private fun StoryItem.backgroundTransformOf(background: StoryMediaObject, designatedId: String?, ownUrl: String?): StoryBackgroundObjectTransform {
+        val piece = designatedId?.let { id -> media.firstOrNull { it.id == id } } ?: ownUrl?.let { url -> media.firstOrNull { it.url == url } }
+        val aspect = piece?.let { ForegroundMediaFrame.measuredAspectRatio(it.width, it.height) } ?: background.aspectRatio
+        val filled = StoryFitMode.rendersFilled(storyEffects?.backgroundTransform?.videoFitMode)
+        return StoryBackgroundObjectTransform.from(background, aspect, filled)
     }
 
     /**

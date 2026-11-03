@@ -721,8 +721,8 @@ const menuFit = await shortPage.evaluate(() => {
   };
 });
 check(
-  menuFit.count === 13 && menuFit.allInView,
-  `à 390×640, les TREIZE lignes du menu de la dernière rangée (deux appels, trois actions, Rechercher et Mode de lecture — #11226 —, Détails, Renommer, Favori, Déplacer vers… — #10593 —, « Archiver », « Supprimer » — #7285) ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
+  menuFit.count === 14 && menuFit.allInView,
+  `à 390×640, les QUATORZE lignes du menu de la dernière rangée (deux appels, trois actions, Rechercher et Mode de lecture — #11226 —, Détails, Renommer, Favori, Déplacer vers… — #10593 —, « Archiver », « Rendre obsolète » — #14653 —, « Supprimer » — #7285) ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
 );
 
 await shortContext.close();

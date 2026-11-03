@@ -145,6 +145,16 @@ class SessionTeardownTest {
     }
 
     @Test
+    fun wipe_clearsTheStoryPostCache() = runTest {
+        val cache = me.meeshy.sdk.story.StoryPostCache()
+        cache.put(me.meeshy.sdk.model.ApiPost(id = "s1", type = "STORY"))
+
+        teardown(perAccountCaches = setOf(cache)).wipe()
+
+        assertThat(cache.get("s1")).isNull()
+    }
+
+    @Test
     fun wipe_clearsTheAccountPreferenceSnapshots() = runTest {
         val snapshots = me.meeshy.sdk.preferences.InMemoryPreferenceSnapshotStore()
         snapshots.save("all", "{}", 5L)
@@ -330,5 +340,25 @@ class SessionTeardownTest {
 
         assertThat(db.keyedJsonCacheDao().find("community:list", "k")).isNull()
         assertThat(db.cacheEntryDao().itemCount("ns")).isEqualTo(0)
+    }
+
+    /**
+     * #14655 — the vault outlives the session, so do the erasures it still owes to an account (identifiers only, stamped
+     * with their account) ; an unstamped row could be drained by the next account, so it goes.
+     */
+    @Test
+    fun wipe_keepsThePlaintextErasuresOwedToAnAccount() = runTest {
+        val erasures = db.plaintextErasureDao()
+        erasures.recordMessages(
+            listOf(
+                me.meeshy.core.database.entity.PlaintextErasureEntity("alice", "message", "m1", "cid_1", "alice", recordedAt = 1L),
+                me.meeshy.core.database.entity.PlaintextErasureEntity("", "message", "m2", recordedAt = 1L),
+            ),
+        )
+
+        teardown().wipe()
+
+        assertThat(erasures.pending("alice", 10).map { it.itemId to it.clientMessageId }).containsExactly("m1" to "cid_1")
+        assertThat(erasures.pending("bob", 10)).isEmpty()
     }
 }

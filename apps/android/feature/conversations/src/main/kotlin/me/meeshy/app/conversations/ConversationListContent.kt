@@ -44,13 +44,17 @@ sealed interface ConversationListContent {
          * stale skeleton flag or a background sync error never hides rows already on screen.
          * [sectionsAwaitCorpus] (the rule above) keeps the skeleton while the corpus is
          * there but its sections are not yet produced — never a fleeting "empty" frame.
+         * [messageSectionShown]: a search that matched no conversation but some MESSAGES
+         * (#14619) is populated by its « Messages » section, never « no results ».
          */
         fun of(
             state: ConversationListUiState,
             sectionsAwaitCorpus: Boolean = false,
+            messageSectionShown: Boolean = false,
         ): ConversationListContent = when {
             sectionsAwaitCorpus -> Skeleton
             state.conversations.isNotEmpty() -> Populated
+            messageSectionShown && state.searchText.isNotBlank() -> Populated
             state.showSkeleton -> Skeleton
             state.errorMessage != null -> Error(state.errorMessage)
             state.isFilteredEmpty && state.searchText.isNotBlank() -> SearchNoResults

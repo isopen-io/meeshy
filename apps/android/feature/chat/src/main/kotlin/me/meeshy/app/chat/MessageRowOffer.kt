@@ -48,6 +48,7 @@ internal fun BubbleContent.actionContext(
     isUnconfirmed = ObjectIdGuard.isLocalId(messageId),
     canWrite = canWrite,
     isEndToEndSealed = isEndToEndSealed,
+    isEndToEndRegime = isEndToEndSealed || isEndToEndOpened || conversationIsEndToEnd,
     entries = MessageMenuEntries.offers(menuEntryFacts(hasThread, conversationIsEndToEnd, nowMillis)),
     signalClearance = signalClearance,
     isReadByServer = isReadByServer,

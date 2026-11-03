@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import casesFile from '../fixtures/relation-access-cases.json';
-import { resolveRelationAccess, type RelationAccessInput, type RelationAgeClass } from '../utils/relation-access';
+import { relationAccessReads, resolveRelationAccess, type RelationAccessInput, type RelationAgeClass } from '../utils/relation-access';
 import {
   RELATION_FEATURES,
   RELATION_FEATURE_MIN_LEVEL,
@@ -103,6 +103,12 @@ describe('resolveRelationAccess — la matrice niveau -> feature', () => {
     ['relay.commentersOnMyPosts', 'CLOSE'],
     ['relay.myCommentsElsewhere', 'BLOOD'],
     ['dm.direct', 'ACQUAINTANCE'],
+    ['dm.request', 'PUBLIC'],
+    ['dm.readReceipts', 'ACQUAINTANCE'],
+    ['dm.typing', 'ACQUAINTANCE'],
+    ['presence.dnd', 'ACQUAINTANCE'],
+    ['call.ring', 'PUBLIC'],
+    ['views.identity', 'COMMUNITY'],
     ['audience.acquaintances', 'ACQUAINTANCE'],
     ['audience.close', 'CLOSE'],
     ['audience.blood', 'BLOOD'],
@@ -251,6 +257,56 @@ describe('resolveRelationAccess — les mineurs (décision porteur 2026-10-31)',
   });
 });
 
+describe('resolveRelationAccess — le bouclier des mineurs (RG-21)', () => {
+  it('un message privé du Public vers un mineur déclaré est refusé, sans dire pourquoi', () => {
+    const refused = [
+      { viewerMinor: 'adult', targetMinor: 'minor' },
+      { viewerMinor: 'unknown', targetMinor: 'minor' },
+    ] as const;
+    refused.forEach((ages) => {
+      expect(access({ feature: 'dm.request', ...ages })).toEqual({
+        allowed: false,
+        effectiveLevel: 'PUBLIC',
+        reason: 'level',
+        requiresConsent: false,
+      });
+    });
+  });
+
+  it('une communauté commune ne suffit pas : seule la Connaissance lève le bouclier', () => {
+    expect(access({ feature: 'dm.request', viewerMinor: 'adult', targetMinor: 'minor', sharesCommunity: true }).allowed).toBe(false);
+    expect(access({ ...both('ACQUAINTANCE'), feature: 'dm.request', viewerMinor: 'adult', targetMinor: 'minor' }).allowed).toBe(true);
+  });
+
+  it('le bouclier ne vise ni deux mineurs, ni une cible majeure, ni un âge inconnu', () => {
+    const open = [
+      { viewerMinor: 'minor', targetMinor: 'minor' },
+      { viewerMinor: 'minor', targetMinor: 'adult' },
+      { viewerMinor: 'adult', targetMinor: 'unknown' },
+      { viewerMinor: 'adult', targetMinor: 'adult' },
+    ] as const;
+    open.forEach((ages) => {
+      expect(access({ feature: 'dm.request', ...ages }).allowed).toBe(true);
+    });
+  });
+
+  it('un majeur qui n\'est pas Ami ne fait pas sonner un mineur ; un Ami, si', () => {
+    expect(access({ ...both('CLOSE'), feature: 'call.ring', targetMinor: 'minor' }).allowed).toBe(true);
+    expect(access({ ...both('FRIEND'), feature: 'call.ring', targetMinor: 'minor' }).allowed).toBe(true);
+    expect(access({ ...both('ACQUAINTANCE'), feature: 'call.ring', targetMinor: 'minor' })).toMatchObject({ allowed: false, reason: 'level' });
+    expect(access({ feature: 'call.ring', viewerMinor: 'minor', targetMinor: 'minor' }).allowed).toBe(true);
+    expect(access({ feature: 'call.ring' }).allowed).toBe(true);
+  });
+
+  it('le bouclier ne relève que les features qu\'il nomme', () => {
+    expect(access({ ...both('ACQUAINTANCE'), feature: 'dm.typing', viewerMinor: 'adult', targetMinor: 'minor' }).allowed).toBe(true);
+  });
+
+  it('une demande de message à soi-même n\'a pas de sens', () => {
+    expect(access({ targetId: USER_A, feature: 'dm.request' })).toMatchObject({ allowed: false, reason: 'self' });
+  });
+});
+
 describe('declaredAgeClass — le tri-état de l\'âge déclaré', () => {
   const now = new Date('2026-10-31T12:00:00.000Z');
 
@@ -307,5 +363,20 @@ describe('relation-levels — la config', () => {
     expect(staging.cooldownDays).toBe(RELATION_THRESHOLDS.cooldownDays);
     expect(relationThresholdsFor('production')).toEqual(RELATION_THRESHOLDS);
     expect(relationThresholdsFor(undefined)).toEqual(RELATION_THRESHOLDS);
+  });
+});
+
+describe('relationAccessReads — ce que l\'orchestrateur doit lire pour juger une feature', () => {
+  it('lit l\'âge pour la Connaissance automatique et pour toute feature du bouclier', () => {
+    expect(relationAccessReads('acquaintance.auto').age).toBe(true);
+    expect(relationAccessReads('dm.request').age).toBe(true);
+    expect(relationAccessReads('dm.typing').age).toBe(false);
+  });
+
+  it('lit la communauté seulement quand un plancher de la feature peut s\'atteindre par elle', () => {
+    expect(relationAccessReads('dm.request').community).toBe(true);
+    expect(relationAccessReads('notify.newContent').community).toBe(true);
+    expect(relationAccessReads('dm.typing').community).toBe(false);
+    expect(relationAccessReads('presence.dnd').community).toBe(false);
   });
 });

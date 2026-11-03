@@ -43,6 +43,7 @@ import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
+import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.composer.scene.StoryFitMode
@@ -106,6 +107,8 @@ internal fun StoryCanvasSurface(
     backdrop: StoryBackdrop = StoryBackdrop.BLUR,
     onBackgroundLongPress: (() -> Unit)? = null,
     backgroundRotationDeg: Float = 0f,
+    backgroundCrop: StoryMediaCrop? = null,
+    backgroundSourceAspect: Double? = null,
     selectedMediaId: String? = null,
     stack: List<SceneObjectRef>,
     pins: @Composable (ref: SceneObjectRef, canvasWidthPx: Float, canvasHeightPx: Float) -> Unit = { _, _, _ -> },
@@ -168,6 +171,7 @@ internal fun StoryCanvasSurface(
                 ),
         ) {
             val filled = StoryFitMode.rendersFilled(fitMode)
+            val layer = transform.backgroundLayer(backgroundCrop, backgroundSourceAspect, filled, canvasWidthPx, canvasHeightPx)
             if (backgroundModel != null) {
                 if (!filled) SceneBackdropLayer(backdrop, backgroundModel)
                 AsyncImage(
@@ -177,17 +181,17 @@ internal fun StoryCanvasSurface(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            scaleX = transform.scale
-                            scaleY = transform.scale
-                            translationX = transform.offsetX
-                            translationY = transform.offsetY
+                            scaleX = layer.scaleX
+                            scaleY = layer.scaleY
+                            translationX = layer.translationX
+                            translationY = layer.translationY
                             rotationZ = backgroundRotationDeg
                         }
                         .sceneLook(look),
                 )
             }
             // La vidéo de fond joue en continu sur la scène (#13863), même avant que son affiche soit décodée.
-            live?.background?.let { slot -> LiveBackground(slot, transform, backgroundRotationDeg, look, fit = !filled) }
+            live?.background?.let { slot -> LiveBackground(slot, layer, backgroundRotationDeg, look, fit = !filled) }
             if (snapFeedback != null) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     // Persistent composition overlay (parity with iOS SafeZoneOverlay): while an
@@ -317,15 +321,15 @@ internal fun StoryCanvasSurface(
 
 /** La vidéo de fond sélectionnée joue à la place de son affiche, à la même pose, sous le même look (#13973, A-E3). */
 @Composable
-private fun LiveBackground(slot: ComposerLiveSlot, transform: StoryCanvasTransform, rotationDeg: Float, look: SceneLookRecipe, fit: Boolean) {
+private fun LiveBackground(slot: ComposerLiveSlot, layer: BackgroundLayer, rotationDeg: Float, look: SceneLookRecipe, fit: Boolean) {
     Box(
         Modifier
             .fillMaxSize()
             .graphicsLayer {
-                scaleX = transform.scale
-                scaleY = transform.scale
-                translationX = transform.offsetX
-                translationY = transform.offsetY
+                scaleX = layer.scaleX
+                scaleY = layer.scaleY
+                translationX = layer.translationX
+                translationY = layer.translationY
                 rotationZ = rotationDeg
             }
             .sceneLook(look),

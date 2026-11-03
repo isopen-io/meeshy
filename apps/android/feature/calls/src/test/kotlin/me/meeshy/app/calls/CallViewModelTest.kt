@@ -161,6 +161,7 @@ class CallViewModelTest {
         every { signalManager.incomingOffers } returns incomingOffers
         every { signalManager.endedCalls } returns endedCalls
         every { signalManager.iceServersRefreshed } returns iceServersRefreshed
+        every { signalManager.callErrors } returns MutableSharedFlow<me.meeshy.sdk.model.call.CallErrorSignal>()
         every { signalManager.qualityAlerts } returns qualityAlerts
         every { signalManager.screenCaptureAlerts } returns screenCaptureAlerts
         every { signalManager.translatedSegments } returns translatedSegments

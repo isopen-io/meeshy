@@ -11,14 +11,14 @@ import org.junit.Test
  */
 class SocketEventNamesParityTest {
 
-    private val hyphenated = Regex("^[a-z]+(-[a-z]+)*:[a-z]+(-[a-z]+)*$")
+    private val hyphenated = Regex("^[a-z][a-z0-9]*(-[a-z0-9]+)*:[a-z]+(-[a-z]+)*$")
 
     private fun contractNames(): Set<String> {
         val dir = generateSequence(File("").absoluteFile) { it.parentFile }
             .map { File(it, "packages/shared/types/socketio-events") }
             .firstOrNull { it.isDirectory }
         checkNotNull(dir) { "packages/shared/types/socketio-events introuvable depuis ${File("").absolutePath}" }
-        val declaration = Regex("""[A-Z][A-Z_0-9]*:\s*'([a-z][a-z-]*:[a-z-]+)'""")
+        val declaration = Regex("""[A-Z][A-Z_0-9]*:\s*'([a-z][a-z0-9-]*:[a-z-]+)'""")
         return dir.listFiles { f -> f.name.endsWith("event-names.ts") }.orEmpty()
             .flatMap { declaration.findAll(it.readText()).map { m -> m.groupValues[1] }.toList() }
             .toSet()

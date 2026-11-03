@@ -1,5 +1,6 @@
 package me.meeshy.app.profile
 
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.readMediaUploadItem
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -109,7 +110,8 @@ fun OwnProfileScreen(
     var pickingSlot by rememberSaveable { mutableStateOf<OwnProfileLanguageSlot?>(null) }
     var fullscreen by remember { mutableStateOf<ProfileFullscreenImage?>(null) }
     val mediaBaseUrl = LocalMediaBaseUrl.current
-    val pickImage = rememberOwnProfileImagePicker(uploadViewModel)
+    val imageEditor = rememberProfileImageEditor(uploadViewModel::onImagePicked)
+    val pickImage = rememberOwnProfileImagePicker(imageEditor::offer)
     val capsule = rememberOwnProfileErrorCapsule(
         errorMessage = state.errorMessage,
         uploadErrorMessage = uploadState.error?.let { stringResource(it.messageRes()) },
@@ -165,6 +167,7 @@ fun OwnProfileScreen(
         FeedbackToastHost(toasts = toasts)
     }
 
+    ProfileImageEditorHost(imageEditor)
     pickingSlot?.let { slot -> OwnProfileLanguagePicker(slot, state, onEvent, onDone = { pickingSlot = null }) }
     fullscreen?.let { image -> ProfileFullscreenImageViewer(image = image, onDismiss = { fullscreen = null }) }
     val share = state.user?.let(ProfileShareBuilder::build)
@@ -173,13 +176,13 @@ fun OwnProfileScreen(
 
 /** Le sélecteur de photo système, branché sur le téléversement de l'avatar ou de la bannière. */
 @Composable
-private fun rememberOwnProfileImagePicker(uploadViewModel: AvatarBannerUploadViewModel): (ImageUploadTarget) -> Unit {
+private fun rememberOwnProfileImagePicker(onPicked: (ImageUploadTarget, MediaUploadItem) -> Unit): (ImageUploadTarget) -> Unit {
     val context = LocalContext.current
     var target by rememberSaveable { mutableStateOf(ImageUploadTarget.AVATAR) }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        scope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let { uploadViewModel.onImagePicked(target, it) } }
+        scope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let { onPicked(target, it) } }
     }
     return { picked ->
         target = picked

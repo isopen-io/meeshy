@@ -53,7 +53,6 @@
     <string name="conversations_section_all">Le mie conversazioni</string>
     <string name="conversations_section_pinned">Fissate</string>
     <string name="dashboard_action_search">Ricerca globale</string>
-    <string name="global_search_empty_subtitle">Messaggi, conversazioni, utenti</string>
     <string name="global_search_hint">Cerca ovunque…</string>
     <string name="new_conversation_error_blocked">Non puoi avviare una conversazione con questo utente.</string>
 </resources>

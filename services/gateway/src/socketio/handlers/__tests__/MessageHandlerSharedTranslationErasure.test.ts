@@ -107,7 +107,7 @@ jest.mock('../../../services/CacheStore', () => ({
 
 const mockResolveMentionedUsers = jest.fn() as jest.Mock<any>;
 jest.mock('../../../services/MentionService', () => ({
-  resolveMentionedUsers: (...a: any[]) => mockResolveMentionedUsers(...a),
+  resolveMentionedUsers: (...a: any[]) => mockResolveMentionedUsers(...a), withoutPendingMessageRequests: async (_p: unknown, _c: unknown, ids: readonly string[]) => [...ids],
 }));
 
 jest.mock('../../../services/messaging/postReplySnapshot', () => ({

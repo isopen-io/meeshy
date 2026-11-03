@@ -1,6 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="about_app_name">Meeshy</string>
+    <string name="about_copy">Copia</string>
     <string name="about_copyright">2024-2026 Meeshy. Tutti i diritti riservati.</string>
     <string name="about_description_body">Meeshy è una piattaforma di messaggistica in tempo reale ad alte prestazioni con traduzione multilingue, clonazione vocale e crittografia end-to-end.</string>
     <string name="about_feature_cloud_sync">Sincronizzazione cloud</string>
@@ -8,11 +9,19 @@
     <string name="about_feature_themes">Temi personalizzabili</string>
     <string name="about_feature_translation">Traduzione in tempo reale</string>
     <string name="about_feature_voice_cloning">Clonazione vocale</string>
+    <string name="about_info_media_tier">Profilo multimediale</string>
     <string name="about_info_platform">Piattaforma</string>
     <string name="about_info_sdk_version">Versione SDK</string>
+    <string name="about_link_about">Informazioni su Meeshy</string>
+    <string name="about_link_contact">Contatti</string>
     <string name="about_link_github">GitHub</string>
+    <string name="about_link_partners">Partner</string>
     <string name="about_link_twitter">Twitter / X</string>
     <string name="about_link_website">Sito web</string>
+    <string name="about_media_tier_high">Alto</string>
+    <string name="about_media_tier_low">Base</string>
+    <string name="about_media_tier_mid">Intermedio</string>
+    <string name="about_media_tier_pro">Pro</string>
     <string name="about_section_description">Descrizione</string>
     <string name="about_section_features">Funzionalità</string>
     <string name="about_section_informations">Informazioni</string>
@@ -93,6 +102,17 @@
     <string name="delete_account_warning_conversations">Tutte le tue conversazioni</string>
     <string name="delete_account_warning_messages">Tutti i tuoi messaggi</string>
     <string name="delete_account_warning_preferences">Le tue preferenze e impostazioni</string>
+    <string name="licenses_agpl_title">Testo della licenza AGPL-3.0</string>
+    <string name="licenses_libsignal_body">libsignal e le librerie che include, con il testo delle loro licenze.</string>
+    <string name="licenses_libsignal_title">Avvisi di libsignal</string>
+    <string name="licenses_meeshy_body">Il codice sorgente di Meeshy è pubblicato con licenza MIT. Questa app include libsignal (Signal Messenger), pubblicato con licenza GNU AGPL-3.0: l’app distribuita è quindi un’opera concessa esclusivamente con licenza AGPL-3.0.</string>
+    <string name="licenses_meeshy_body_mit">Il codice sorgente di Meeshy è pubblicato con licenza MIT.</string>
+    <string name="licenses_meeshy_title">Licenza di Meeshy</string>
+    <string name="licenses_source_body">Il codice sorgente di questa versione, script di compilazione inclusi, è disponibile gratuitamente.</string>
+    <string name="licenses_source_commit">Revisione %1$s</string>
+    <string name="licenses_source_open">Apri il codice sorgente</string>
+    <string name="licenses_source_title">Codice sorgente</string>
+    <string name="licenses_text_hint">Mostra il testo completo della licenza</string>
     <string name="licenses_title">Licenze open source</string>
     <string name="licenses_type_other">Altro</string>
     <string name="location_map_style_hybrid">Ibrida</string>
@@ -275,6 +295,8 @@
     <string name="settings_transcription_engine">Motore di trascrizione</string>
     <string name="settings_transcription_engine_a11y">Motore di trascrizione</string>
     <string name="settings_version_label">Versione</string>
+    <string name="support_a11y_opens">Apre %1$s</string>
+    <string name="support_help_rate">Valuta l\'app</string>
     <string name="support_info_build">Build</string>
     <string name="support_info_platform">Piattaforma</string>
     <string name="support_info_version">Versione</string>
