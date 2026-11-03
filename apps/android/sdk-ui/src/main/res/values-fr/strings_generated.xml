@@ -102,6 +102,10 @@
     <string name="location_fullscreen_directions">Itinéraire</string>
     <string name="location_fullscreen_mapStyle">Style de carte</string>
     <string name="location_fullscreen_sharedPosition">Position partagée</string>
+    <string name="media_audio_open_fullscreen">Ouvrir en plein écran, lecture %1$d%%</string>
+    <string name="media_audio_open_fullscreen_hint">Affiche la vue plein écran avec les options de sauvegarde</string>
+    <string name="media_audio_play">Lire l\'audio</string>
+    <string name="media_audio_speed_cycle">Vitesse de lecture %1$s</string>
     <string name="media_audio_transcribe">Transcrire</string>
     <string name="media_caption_see_less">voir moins</string>
     <string name="media_caption_see_less_hint">Replie la légende</string>
