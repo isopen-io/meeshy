@@ -4,7 +4,9 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -82,6 +84,9 @@ class NotificationRepository @Inject constructor(
     @Volatile private var epoch = 0L
     private val persistScope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private var lastPersisted: PersistedNotifications? = null
+
+    /** Le vidage disque de [clear] : toute relecture ou écriture du compte suivant l'attend, jamais l'inverse. */
+    @Volatile private var pendingDiskClear: Job? = null
 
     init {
         if (store !== NoNotificationCacheStore) startPersisting()
@@ -601,6 +606,17 @@ class NotificationRepository @Inject constructor(
         epoch += 1
         lastPersisted = null
         hydrated = false
+        if (store !== NoNotificationCacheStore) {
+            pendingDiskClear = persistScope.launch {
+                try {
+                    store.clear()
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Le disque est un confort ; la barrière de compte l'a de toute façon purgé.
+                }
+            }
+        }
     }
 
     /**
@@ -611,8 +627,9 @@ class NotificationRepository @Inject constructor(
         if (hydrated) return
         hydration.withLock {
             if (hydrated) return
+            pendingDiskClear?.join()
             val loaded = try {
-                store.read()
+                store.read()?.withinRetention()
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -630,6 +647,15 @@ class NotificationRepository @Inject constructor(
         }
     }
 
+    /** Rétention et plafond du disque (24 h, 200) : une liste plus vieille que la fenêtre n'est pas rejouée. */
+    private fun PersistedNotifications.withinRetention(): PersistedNotifications? {
+        val policy = CachePolicy.Notifications
+        val age = syncedAt?.let { clock.nowMillis() - it }
+        if (age != null && age > policy.keepForMillis) return null
+        val cap = policy.maxItemCount ?: return this
+        return if (items.size <= cap) this else copy(items = items.take(cap), nextCursor = null, hasMore = true)
+    }
+
     @OptIn(FlowPreview::class)
     private fun startPersisting() {
         combine(_notificationsCache, _notificationsSyncedAt, _unreadCount, _hasMore, _nextCursor) { items, syncedAt, unread, hasMore, cursor ->
@@ -639,6 +665,8 @@ class NotificationRepository @Inject constructor(
             .onEach { snapshot ->
                 if (snapshot == null || snapshot == lastPersisted) return@onEach
                 val written = epoch
+                pendingDiskClear?.join()
+                if (written != epoch) return@onEach
                 try {
                     store.write(snapshot) { written == epoch }
                     if (written == epoch) lastPersisted = snapshot
