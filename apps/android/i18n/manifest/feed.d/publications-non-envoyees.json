@@ -9,26 +9,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "feed_unsent_title",
-          "status": "android-only"
-        },
-        {
-          "androidName": "feed_unsent_count",
-          "status": "android-only"
-        },
-        {
-          "androidName": "feed_unsent_open",
-          "status": "android-only"
-        },
-        {
-          "androidName": "feed_unsent_sending",
-          "status": "android-only"
-        },
-        {
-          "androidName": "feed_unsent_failed",
-          "status": "android-only"
-        },
-        {
           "androidName": "feed_unsent_retry",
           "status": "android-only"
         },
@@ -38,14 +18,6 @@
         },
         {
           "androidName": "feed_unsent_delete",
-          "status": "android-only"
-        },
-        {
-          "androidName": "feed_unsent_delete_confirm_title",
-          "status": "android-only"
-        },
-        {
-          "androidName": "feed_unsent_delete_confirm_body",
           "status": "android-only"
         },
         {

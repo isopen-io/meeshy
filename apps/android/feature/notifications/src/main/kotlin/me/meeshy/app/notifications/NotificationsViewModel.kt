@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -92,6 +93,38 @@ class NotificationsViewModel @Inject constructor(
         observeHasMore()
         observeRealtime()
         observeSyncGaps()
+        observeArrivalsForRefresh()
+    }
+
+    private var arrivalRefreshJob: Job? = null
+
+    /**
+     * Miroir de `scheduleRefresh` (iOS) : une notification qui arrive relance UN rafraîchissement
+     * ~0,5 s plus tard ; une rafale se replie sur le dernier. L'échec est silencieux — le cache
+     * reste affiché — et le compteur non lu est rechargé après chaque rafraîchissement réussi.
+     */
+    private fun observeArrivalsForRefresh() {
+        viewModelScope.launch {
+            messageSocketManager.notificationReceived.collect {
+                arrivalRefreshJob?.cancel()
+                arrivalRefreshJob = viewModelScope.launch {
+                    delay(ARRIVAL_REFRESH_DELAY_MS)
+                    refreshQuietly()
+                }
+            }
+        }
+    }
+
+    private suspend fun refreshQuietly() {
+        try {
+            notificationRepository.refresh()
+            (notificationRepository.unreadCount() as? NetworkResult.Success)
+                ?.let { notificationRepository.setUnreadCount(it.data) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Silent: the cached rows stay on screen.
+        }
     }
 
     private fun observeNotifications() {
@@ -350,6 +383,7 @@ class NotificationsViewModel @Inject constructor(
 
     private companion object {
         const val CATEGORY_PAGE_SIZE = 30
+        const val ARRIVAL_REFRESH_DELAY_MS = 500L
     }
 }
 

@@ -18,7 +18,13 @@ enum class PostMenuEntry {
     NearHere,
     Report,
     Delete,
+    RetrySend,
+    ReopenSend,
+    CancelSend,
 }
+
+/** Une publication encore sur l'appareil, que le serveur n'a pas confirmée : ce que son auteur peut en faire à la main. */
+data class PendingSendMenu(val canRetry: Boolean, val canReopen: Boolean)
 
 /** Ce que la politique sait de la publication et du lecteur au moment d'ouvrir le menu. */
 data class PostMenuContext(
@@ -38,6 +44,8 @@ data class PostMenuContext(
     val editable: Boolean = false,
     /** Le post est posé quelque part : « Voir près d'ici » a un point de départ. */
     val hasLocation: Boolean = false,
+    /** La publication est encore dans la file d'envoi (#14902) ; `null` pour une publication en ligne. */
+    val pendingSend: PendingSendMenu? = null,
 )
 
 /**
@@ -50,7 +58,24 @@ data class PostMenuContext(
 object PostMenuPolicy {
     private val ephemeralTypes = setOf("STORY", "STATUS")
 
-    fun entries(ctx: PostMenuContext): List<PostMenuEntry> = buildList {
+    fun entries(ctx: PostMenuContext): List<PostMenuEntry> =
+        ctx.pendingSend?.let { pendingEntries(ctx, it) } ?: onlineEntries(ctx)
+
+    /**
+     * Une publication en attente n'existe pas encore côté serveur (#14902, iOS #14879) : sa carte offre ouvrir, copier,
+     * réessayer et rouvrir quand elle a abandonné, puis annuler l'envoi ; son détail n'offre que l'annulation.
+     */
+    private fun pendingEntries(ctx: PostMenuContext, pending: PendingSendMenu): List<PostMenuEntry> = buildList {
+        if (ctx.canOpen) {
+            add(PostMenuEntry.Open)
+            if (ctx.hasText) add(PostMenuEntry.CopyText)
+            if (pending.canRetry) add(PostMenuEntry.RetrySend)
+            if (pending.canReopen) add(PostMenuEntry.ReopenSend)
+        }
+        add(PostMenuEntry.CancelSend)
+    }
+
+    private fun onlineEntries(ctx: PostMenuContext): List<PostMenuEntry> = buildList {
         val ephemeral = ctx.postType.orEmpty().uppercase() in ephemeralTypes
         if (ctx.canOpen) add(PostMenuEntry.Open)
         add(PostMenuEntry.Share)

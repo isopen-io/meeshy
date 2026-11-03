@@ -36,6 +36,9 @@ import me.meeshy.sdk.model.SocketStatusDeletedData
 import me.meeshy.sdk.model.SocketStatusReactedData
 import me.meeshy.sdk.model.SocketStatusUnreactedData
 import org.json.JSONObject
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -254,6 +257,24 @@ class SocialSocketManager @Inject constructor(
      */
     fun joinPostRoom(postId: String) {
         socketManager.emit(SocketEventNames.POST_JOIN, JSONObject().put("postId", postId))
+    }
+
+    /**
+     * Le coeur (ou toute réaction) d'un commentaire par le socket, avec accusé — iso `addCommentReaction` /
+     * `removeCommentReaction` iOS. Rend quand la passerelle accuse `success`, lève sinon (refus, socket absente,
+     * session finie) : l'appelant décide du repli. Aucun délai ici, il appartient à l'appelant.
+     */
+    suspend fun reactToComment(add: Boolean, commentId: String, postId: String, emoji: String) {
+        val event = if (add) SocketEventNames.COMMENT_REACTION_ADD else SocketEventNames.COMMENT_REACTION_REMOVE
+        val payload = JSONObject().put("commentId", commentId).put("postId", postId).put("emoji", emoji)
+        suspendCancellableCoroutine<Unit> { continuation ->
+            socketManager.emit(event, payload) { args ->
+                val accepted = (args.firstOrNull() as? JSONObject)?.optBoolean("success", false) == true
+                if (!continuation.isActive) return@emit
+                if (accepted) continuation.resume(Unit)
+                else continuation.resumeWithException(IllegalStateException("comment reaction refused"))
+            }
+        }
     }
 
     /** Leaves the post-detail realtime room — pairs with [joinPostRoom]. */

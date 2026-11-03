@@ -1,10 +1,10 @@
 package me.meeshy.sdk.model.packs
 
 import me.meeshy.sdk.model.appearance.AppearancePackDomain
-import me.meeshy.sdk.model.game.GameErrorCode
+import me.meeshy.sdk.model.pack.PackHttpStatus
 
-/** Pourquoi un achat n'a pas abouti ; le texte appartient à l'écran. */
-enum class PackShopFailure { INSUFFICIENT_MEESHES, GENERIC }
+/** Pourquoi un achat n'a pas abouti ; le texte appartient à l'écran. [OFFLINE] : aucune réponse du serveur, rien n'a été débité à notre connaissance ; le geste reste rejouable. */
+enum class PackShopFailure { INSUFFICIENT_MEESHES, GENERIC, OFFLINE }
 
 /**
  * Un refus lu pour ce qu'il dit : [definitive] = le geste est tranché (4xx hors 408/429), son identifiant d'intention
@@ -12,17 +12,24 @@ enum class PackShopFailure { INSUFFICIENT_MEESHES, GENERIC }
  * [failure] `null` = rien n'a échoué à dire : `PACK_ALREADY_OWNED`, le pack est à moi (une réponse perdue, un autre
  * appareil) et la vitrine relue le montre possédé.
  */
-data class PackPurchaseRefusal(val failure: PackShopFailure?, val definitive: Boolean) {
+data class PackPurchaseRefusal(
+    val failure: PackShopFailure?,
+    val definitive: Boolean,
+    /** `403` : la vitrine affichée n'est plus la vérité du serveur, elle se relit. */
+    val reloadsShop: Boolean = false,
+) {
     companion object {
         const val ALREADY_OWNED = "PACK_ALREADY_OWNED"
 
         fun of(httpStatus: Int?, code: String?): PackPurchaseRefusal = PackPurchaseRefusal(
-            failure = when (code) {
-                GameErrorCode.InsufficientMeeshes.wire -> PackShopFailure.INSUFFICIENT_MEESHES
-                ALREADY_OWNED -> null
+            failure = when {
+                PackHttpStatus.isInsufficientMeeshes(code) -> PackShopFailure.INSUFFICIENT_MEESHES
+                code == ALREADY_OWNED -> null
+                PackHttpStatus.isOffline(httpStatus, code) -> PackShopFailure.OFFLINE
                 else -> PackShopFailure.GENERIC
             },
-            definitive = httpStatus != null && httpStatus in 400..499 && httpStatus != 408 && httpStatus != 429,
+            definitive = PackHttpStatus.isDefinitiveRefusal(httpStatus),
+            reloadsShop = PackHttpStatus.isForbidden(httpStatus),
         )
 
         /** Une panne que la couche réseau n'a pas su lire : rien ne dit que le serveur n'a pas débité, le geste reste rejouable. */

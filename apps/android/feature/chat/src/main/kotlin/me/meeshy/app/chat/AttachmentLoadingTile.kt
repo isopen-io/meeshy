@@ -17,9 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -52,6 +49,7 @@ import me.meeshy.sdk.model.media.PreparationStageLabel
 import me.meeshy.sdk.model.media.PreparingAttachment
 import me.meeshy.sdk.model.media.label
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.icons.MeeshyIcons
 
 internal val LoadingTileSide = 56.dp
 internal val LoadingTileRadius = 10.dp
@@ -184,7 +182,7 @@ private fun FailureOverlay() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(Icons.Filled.Warning, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+        Icon(MeeshyIcons.WarningFilled, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
         Text(stringResource(R.string.attachment_loading_error), color = Color.White, fontSize = 8.sp)
     }
 }
@@ -201,6 +199,6 @@ private fun CancelButton(onClick: () -> Unit, label: String, modifier: Modifier 
             .clearAndSetSemantics { },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Filled.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(10.dp))
+        Icon(MeeshyIcons.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(10.dp))
     }
 }

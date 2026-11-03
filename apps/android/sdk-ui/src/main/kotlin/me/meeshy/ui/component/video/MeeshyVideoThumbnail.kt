@@ -9,9 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -41,6 +38,7 @@ import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.icons.MeeshyIcons
 
 public const val VideoPlayBadgeTestTag: String = "video-play-badge"
 public const val VideoDurationBadgeTestTag: String = "video-duration-badge"
@@ -102,7 +100,7 @@ private fun PosterLayer(url: String?, frame: ImageBitmap?, thumbHash: String?, c
             ),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.Videocam, null, tint = Color.White.copy(alpha = 0.2f), modifier = Modifier.size(32.dp))
+            Icon(MeeshyIcons.Video, null, tint = Color.White.copy(alpha = 0.2f), modifier = Modifier.size(32.dp))
         }
     }
 }
@@ -115,7 +113,7 @@ private fun PlayBadge(accent: Color) {
         tint = accent,
     ) {
         Box(Modifier.fillMaxSize().clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(28.dp))
+            Icon(MeeshyIcons.Play, null, tint = Color.White, modifier = Modifier.size(28.dp))
         }
     }
 }

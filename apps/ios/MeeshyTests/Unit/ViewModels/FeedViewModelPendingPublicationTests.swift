@@ -71,6 +71,41 @@ final class FeedViewModelPendingPublicationTests: XCTestCase {
         XCTAssertEqual(sut.posts.map(\.id), [cmid])
     }
 
+    // MARK: - #15095 — la carte d'un post en attente montre sa photo
+
+    func test_offlineMediaPost_pointsItsCardAtTheCopyTheQueueKeeps() async {
+        let (sut, queue, _) = makeSUT()
+
+        await sut.createOfflineMediaPost(
+            localMediaURLs: [URL(fileURLWithPath: NSTemporaryDirectory() + "photo-composee.jpg")],
+            content: "Hors ligne",
+            mobileTranscription: nil, storyEffects: nil,
+            mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil,
+            allowSoundExtraction: nil
+        )
+
+        XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
+        let expected = URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(forStored: "photo-composee.jpg")).absoluteString
+        XCTAssertEqual(sut.posts.first?.media.map(\.url), [expected],
+                       "la source est effacée par la file : la carte vise la copie gardée jusqu'à l'envoi")
+        XCTAssertEqual(sut.posts.first?.media.first?.type, .image)
+    }
+
+    func test_rebased_movesAPendingCardsLocalMediaIntoTheCurrentContainer() {
+        let home = "/Users/x/Library/Developer/CoreSimulator/Devices/D/data/Containers/Data/Application/NEW"
+        let stale = "file:///Users/x/Library/Developer/CoreSimulator/Devices/D/data/Containers/Data/Application/OLD/Documents/pending-media/c/0.jpg"
+        let pending = FeedPost(id: ClientMutationId.generate(), author: "moi", content: "",
+                               media: [FeedMedia(type: .image, url: stale)])
+        let published = FeedPost(id: "665f1c2e9b1d4a0012345678", author: "moi", content: "",
+                                 media: [FeedMedia(type: .image, url: stale)])
+
+        let rebased = PendingPublicationLocalMedia.rebased([pending, published], ontoHome: home)
+
+        XCTAssertEqual(rebased[0].media.first?.url, URL(fileURLWithPath: home + "/Documents/pending-media/c/0.jpg").absoluteString)
+        XCTAssertEqual(rebased[0].media.first?.id, pending.media.first?.id)
+        XCTAssertEqual(rebased[1].media.first?.url, stale, "une carte publiée n'est jamais réécrite")
+    }
+
     func test_deletePost_onServerPost_neverTouchesTheOutbox() async {
         let (sut, queue, postService) = makeSUT()
 

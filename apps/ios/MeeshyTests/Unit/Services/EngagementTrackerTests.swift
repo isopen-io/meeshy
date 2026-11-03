@@ -28,6 +28,20 @@ final class EngagementTrackerTests: XCTestCase {
         XCTAssertEqual(sink.finalized.first?.consent, "granted")
     }
 
+    /// #14929 — une publication encore dans la file n'a qu'un cmid : aucune
+    /// session ne s'ouvre, ne s'annonce ni ne se finalise sous cet id.
+    func test_begin_onPendingPublication_sendsNothing() async {
+        let (tracker, sink, clock) = makeSUT()
+        tracker.begin(postId: ClientMutationId.generate(), contentType: .post, surface: .detail)
+        clock.value += 4000
+        await tracker.end(surface: .detail)
+        await sink.waitForAnnouncements(1)
+
+        XCTAssertTrue(sink.opened.isEmpty)
+        XCTAssertTrue(sink.announced.isEmpty)
+        XCTAssertTrue(sink.finalized.isEmpty)
+    }
+
     func test_endSession_belowThreshold_isDropped_notFinalized() async {
         let (tracker, sink, clock) = makeSUT()
         tracker.begin(postId: "p1", contentType: .reel, surface: .reels)

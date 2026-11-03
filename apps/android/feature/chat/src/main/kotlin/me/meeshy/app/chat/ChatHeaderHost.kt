@@ -29,7 +29,10 @@ import me.meeshy.sdk.model.engagement.HeaderFlameLaw
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
+import androidx.compose.foundation.background
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.profile.LocalPeerMoodDirectory
 import me.meeshy.ui.profile.LocalPeerMoodOpener
 import me.meeshy.ui.profile.LocalProfileSheetOpener
@@ -41,7 +44,7 @@ import me.meeshy.ui.profile.LocalProfileSheetOpener
  * Reads [ChatHostContext] only; the ViewModel is reached through its plain callbacks.
  */
 @Composable
-internal fun ChatHeaderHost(host: ChatHostContext) {
+internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearch? = null) {
     val state = host.state
     val actions = host.actions
     val navigation = host.navigation
@@ -225,8 +228,22 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
                 onClose = actions.closeSearch,
             )
         }
+        val serverResults by (serverSearch?.state ?: NO_SERVER_SEARCH).collectAsStateWithLifecycle()
+        if (state.search.isActive && serverResults.panelOpen) {
+            ChatSearchResultsSheet(
+                state = serverResults,
+                accentColor = accentColor,
+                onSelect = actions.selectSearchResult,
+                onLoadMore = { serverSearch?.loadMore() },
+                onRetry = { serverSearch?.retry() },
+                modifier = Modifier.background(MeeshyTheme.tokens.backgroundSecondary),
+            )
+        }
     }
 }
+
+private val NO_SERVER_SEARCH: kotlinx.coroutines.flow.StateFlow<ChatServerSearchState> =
+    kotlinx.coroutines.flow.MutableStateFlow(ChatServerSearchState())
 
 /** Le ressort de bascule de l'en-tête (iOS `spring(response: 0.35, dampingFraction: 0.8)`) : raideur = (2π / 0,35)². */
 private const val HEADER_SPRING_DAMPING = 0.8f

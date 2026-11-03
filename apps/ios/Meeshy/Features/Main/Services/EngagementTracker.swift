@@ -72,7 +72,10 @@ final class EngagementTracker {
     /// sur tous les réels. Le refus retire de la session ce qui décrit le
     /// lecteur (micro-actions, trace de lecture), voir `snapshot`.
     func begin(postId: String, contentType: EngagementSession.ContentType, surface: EngagementSurface) {
-        guard let userId = userIdProvider() else { return }
+        // Une publication encore dans la file d'envoi n'a qu'un cmid : aucune
+        // session ne part pour un id que le serveur ne connaît pas (#14929).
+        guard !PendingPublicationMarker.isPending(postId: postId),
+              let userId = userIdProvider() else { return }
         pauseTop()   // topmost-owns-the-clock
         let s = ActiveSession(
             sessionId: UUID().uuidString, postId: postId, contentType: contentType, surface: surface,

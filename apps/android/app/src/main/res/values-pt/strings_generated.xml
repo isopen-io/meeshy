@@ -1,5 +1,6 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="auth_pending_link_notice">Entre na sua conta: o conteúdo compartilhado com você abrirá logo em seguida.</string>
     <string name="call_link_confirm_audio">Fazer chamada de voz para %1$s?</string>
     <string name="call_link_confirm_call">Ligar</string>
     <string name="call_link_confirm_cancel">Cancelar</string>
