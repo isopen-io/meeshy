@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.avatar.AvatarContext
+import me.meeshy.sdk.model.ConversationEngagementSnapshot
 import me.meeshy.sdk.model.engagement.HeaderFlameLaw
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.ui.component.rememberConversationHere
@@ -116,8 +117,8 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
         AnimatedContent(
             targetState = expanded,
             transitionSpec = {
-                fadeIn(spring(dampingRatio = 0.8f, stiffness = 300f)) togetherWith
-                    fadeOut(spring(dampingRatio = 0.8f, stiffness = 300f))
+                fadeIn(spring(dampingRatio = HEADER_SPRING_DAMPING, stiffness = HEADER_SPRING_STIFFNESS)) togetherWith
+                    fadeOut(spring(dampingRatio = HEADER_SPRING_DAMPING, stiffness = HEADER_SPRING_STIFFNESS))
             },
             label = "headerBand",
         ) { isExpanded ->
@@ -138,6 +139,11 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
                             TypingAvatarCluster(
                                 stack = TypingAvatarStack.of(state.typingParticipants),
                                 accentColor = accentColor,
+                            )
+                            ChatHeaderEngagementPill(
+                                snapshot = host.engagement.snapshot?.forDay(
+                                    ConversationEngagementSnapshot.dayString(java.time.LocalDate.now()),
+                                ),
                             )
                             ChatHeaderSubtitleRow(
                                 subtitle = ChatHeaderSubtitle.of(
@@ -221,3 +227,7 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
         }
     }
 }
+
+/** Le ressort de bascule de l'en-tête (iOS `spring(response: 0.35, dampingFraction: 0.8)`) : raideur = (2π / 0,35)². */
+private const val HEADER_SPRING_DAMPING = 0.8f
+private const val HEADER_SPRING_STIFFNESS = 322f
