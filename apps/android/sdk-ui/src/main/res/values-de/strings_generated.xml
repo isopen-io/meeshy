@@ -80,6 +80,7 @@
     <string name="bubble_contact_card_on_meeshy">Auf Meeshy</string>
     <string name="bubble_contact_card_shared">Geteilter Kontakt</string>
     <string name="bubble_edited">bearbeitet</string>
+    <string name="bubble_footer_translation_request">Übersetzung anfordern</string>
     <string name="bubble_forwarded">Weitergeleitet</string>
     <string name="bubble_forwarded_from">Weitergeleitet aus %1$s</string>
     <string name="bubble_forwarded_from_person">Wgl. von %1$s</string>
