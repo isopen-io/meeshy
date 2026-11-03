@@ -90,7 +90,7 @@ class MessageSendersTest {
     fun `send message stays retryable when the network is down`() = runTest {
         coEvery { messageApi.send(any(), any()) } throws IOException("offline")
 
-        assertThat(sendHandler().send(sendRow())).isEqualTo(SendResult.TransientFailure)
+        assertThat(sendHandler().send(sendRow())).isEqualTo(SendResult.TransportFailure)
     }
 
     @Test
@@ -153,7 +153,7 @@ class MessageSendersTest {
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
 
         coEvery { messageApi.delete("m1") } throws IOException("offline")
-        assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
+        assertThat(handler.send(row)).isEqualTo(SendResult.TransportFailure)
     }
 
     /** #14656 — only an ACCEPTED deletion lets the end-to-end plaintext leave the vault. */

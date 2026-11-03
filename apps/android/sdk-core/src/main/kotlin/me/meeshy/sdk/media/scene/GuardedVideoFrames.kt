@@ -31,7 +31,7 @@ internal class GuardedVideoFrames(private val name: String, private val open: ()
 
     companion object {
         /** Le plus grand côté auquel une image de vidéo posée se convertit : la largeur du format, où elle se pose. */
-        const val MAX_LONG_SIDE = 1_080
+        const val MAX_LONG_SIDE = SceneExportPlacedVideo.DECODED_LONG_SIDE
 
         fun of(video: SceneExportPlacedVideo): PlacedVideoFrames =
             GuardedVideoFrames(video.file.name) { SequentialVideoFrames(CodecVideoFrameDecoder(video.file, MAX_LONG_SIDE)) }

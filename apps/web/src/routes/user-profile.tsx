@@ -296,6 +296,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
                                   raisable={relation.kind === 'friend'}
                                   viewerId={viewerId}
                                   now={new Date()}
+                                  onNotice={(message) => announce(message, 'error')}
                                   onOutcome={(outcome) =>
                                     announce(
                                       translate(language, outcome === 'done' ? 'discover.announce.sent' : outcome === 'offline' ? 'discover.announce.offline' : 'discover.announce.sendFailed'),

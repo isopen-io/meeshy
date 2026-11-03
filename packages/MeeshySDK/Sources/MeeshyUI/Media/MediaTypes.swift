@@ -36,14 +36,16 @@ public enum ComposerMode: Equatable {
     case comment
     case caption
 
+    /// Dans la langue de l'interface (#14879) : le texte d'invite est le
+    /// premier mot que lit l'utilisateur dans la barre de saisie.
     public var placeholder: String {
         switch self {
-        case .message: return "Message..."
-        case .post: return "Quoi de neuf ?"
-        case .status: return "Votre statut..."
-        case .story: return "R\u{00E9}pondre..."
-        case .comment: return "Commenter..."
-        case .caption: return "Ajouter une l\u{00E9}gende..."
+        case .message: return String(localized: "composer.placeholder.message", defaultValue: "Message…", bundle: .module)
+        case .post: return String(localized: "composer.placeholder.post", defaultValue: "Quoi de neuf ?", bundle: .module)
+        case .status: return String(localized: "composer.placeholder.status", defaultValue: "Votre statut…", bundle: .module)
+        case .story: return String(localized: "composer.placeholder.story", defaultValue: "Répondre…", bundle: .module)
+        case .comment: return String(localized: "composer.placeholder.comment", defaultValue: "Commenter…", bundle: .module)
+        case .caption: return String(localized: "composer.placeholder.caption", defaultValue: "Ajouter une légende…", bundle: .module)
         }
     }
 

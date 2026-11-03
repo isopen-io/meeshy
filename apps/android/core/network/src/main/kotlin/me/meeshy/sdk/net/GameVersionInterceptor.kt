@@ -6,8 +6,8 @@ import okhttp3.Interceptor
 import okhttp3.Response
 
 /**
- * Pose `X-Meeshy-Game-Version: 2` sur les routes du jeu et sur elles seules : `/me/engagement`, `/me/game/*`,
- * `/me/meesh/*` et `/users/:id/game` (avec sa vitrine). Sans l'en-tête, la passerelle sert l'ancien comportement ; le
+ * Pose `X-Meeshy-Game-Version: 2` sur les routes du jeu et sur elles seules : `/me/engagement`, `/me/game/…`,
+ * `/me/meesh/…` et `/users/:id/game` (avec sa vitrine). Sans l'en-tête, la passerelle sert l'ancien comportement ; le
  * client déclare donc la vague qu'il sait lire, jamais davantage, et ne l'envoie pas aux autres routes.
  * Un en-tête déjà posé n'est jamais écrasé.
  */
