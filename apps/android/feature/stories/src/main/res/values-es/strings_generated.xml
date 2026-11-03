@@ -214,6 +214,7 @@
     <string name="stories_delete_confirm_title">¿Eliminar esta story?</string>
     <string name="stories_mood_kind">Estado de ánimo</string>
     <string name="stories_publish_retry">Reintentar</string>
+    <string name="stories_reply_cancel">Cancelar respuesta</string>
     <string name="stories_reply_failed">La respuesta no se envió</string>
     <string name="stories_reply_placeholder">Responder a %1$s…</string>
     <string name="stories_reply_send">Enviar respuesta</string>

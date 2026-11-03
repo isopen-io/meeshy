@@ -213,6 +213,7 @@
     <string name="stories_delete_confirm_title">Delete this story?</string>
     <string name="stories_mood_kind">Mood</string>
     <string name="stories_publish_retry">Retry</string>
+    <string name="stories_reply_cancel">Cancel reply</string>
     <string name="stories_reply_failed">Your reply wasn\'t sent</string>
     <string name="stories_reply_placeholder">Reply to %1$s…</string>
     <string name="stories_reply_send">Send reply</string>

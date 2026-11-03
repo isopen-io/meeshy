@@ -213,6 +213,7 @@
     <string name="stories_delete_confirm_title">Story löschen?</string>
     <string name="stories_mood_kind">Stimmung</string>
     <string name="stories_publish_retry">Erneut versuchen</string>
+    <string name="stories_reply_cancel">Antwort abbrechen</string>
     <string name="stories_reply_failed">Die Antwort wurde nicht gesendet</string>
     <string name="stories_reply_placeholder">%1$s antworten…</string>
     <string name="stories_reply_send">Antwort senden</string>

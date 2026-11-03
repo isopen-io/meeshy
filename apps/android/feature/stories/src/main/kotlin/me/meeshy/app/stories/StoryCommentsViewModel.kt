@@ -21,6 +21,13 @@ import me.meeshy.sdk.model.StoryCommentPage
 import me.meeshy.sdk.model.StoryCommentsReducer
 import me.meeshy.sdk.model.StoryCommentsState
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.model.StoryCommentStatus
+import me.meeshy.sdk.model.story.StoryCommentPublish
+import me.meeshy.sdk.model.story.StoryViewerParticipationMark
+import me.meeshy.sdk.story.StoryCommentPublication
+import me.meeshy.sdk.story.StoryCommentPublisher
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import me.meeshy.sdk.model.toStoryComment
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostModerationRepository
@@ -61,7 +68,17 @@ class StoryCommentsViewModel @Inject constructor(
     private val socialSocket: SocialSocketManager,
     private val moderation: PostModerationRepository,
     private val reports: ReportRepository,
+    private val publisher: StoryCommentPublisher? = null,
+    private val drafts: StoryCommentDraftStore? = null,
+    private val participation: StoryViewerParticipationStore? = null,
 ) : ViewModel() {
+
+    /** Un commentaire que la file a refusé : son texte (et son parent) retournent au composeur. */
+    data class RefusedComment(val text: String, val parentId: String?)
+
+    private val refusals = Channel<RefusedComment>(Channel.BUFFERED)
+    val refused: kotlinx.coroutines.flow.Flow<RefusedComment> = refusals.receiveAsFlow()
+    private var pendingSeq = 0
 
     private val _state = MutableStateFlow(StoryCommentsUiState())
     val state: StateFlow<StoryCommentsUiState> = _state.asStateFlow()
@@ -191,6 +208,55 @@ class StoryCommentsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Envoi optimiste depuis la barre unique (iOS `sendComment`) : la ligne paraît aussitôt (Pending, compteurs +1), le
+     * brouillon de la story tombe, l'action « commenté » est notée pour le contour du rail, puis la file durable prend
+     * le relais. Répondre à une réponse cible le parent RACINE. Rend faux quand rien ne part (texte vide, pas de session).
+     */
+    fun send(text: String, language: String?): Boolean {
+        val id = storyId ?: return false
+        if (publisher == null) return false
+        val clean = text.trim()
+        val user = sessionRepository.currentUser.value ?: return false
+        if (clean.isEmpty()) return false
+        val target = _state.value.replyTarget
+        val parentId = target?.let { it.parentId?.takeIf { p -> p.isNotBlank() } ?: it.id }
+        val tempId = "pending-${pendingSeq++}"
+        val author = user.displayName?.takeIf { it.isNotBlank() } ?: user.username
+        update { StoryCommentPublish.optimistic(it, StoryCommentPublish.pendingRow(tempId, clean, parentId, author, user.id, user.avatar)) }
+        _state.update { it.copy(replyTarget = null) }
+        drafts?.sent(id)
+        participation?.note(StoryViewerParticipationMark.COMMENTED, id)
+        dispatch(id, tempId, clean, parentId, language)
+        return true
+    }
+
+    /** Réessaie un commentaire en échec : la ligne repasse en attente et repart par la file. */
+    fun retrySend(tempId: String, language: String?) {
+        val id = storyId ?: return
+        val row = _state.value.comments.find(tempId)?.takeIf { it.status == StoryCommentStatus.Failed } ?: return
+        update { StoryCommentPublish.retrying(it, tempId) }
+        dispatch(id, tempId, row.originalContent, row.parentId, language)
+    }
+
+    private fun dispatch(id: String, tempId: String, text: String, parentId: String?, language: String?) {
+        val queue = publisher ?: return
+        viewModelScope.launch {
+            val outcome = guarded { queue.publish(id, text, parentId, language) }
+            if (!isViewing(id)) return@launch
+            when (outcome) {
+                StoryCommentPublication.Delivered -> update { StoryCommentPublish.delivered(it, tempId) }
+                StoryCommentPublication.Dropped -> Unit
+                null, StoryCommentPublication.Failed -> update { StoryCommentPublish.failed(it, tempId) }
+                is StoryCommentPublication.Refused -> {
+                    update { current -> StoryCommentPublish.refused(current, tempId)?.state ?: current }
+                    drafts?.refused(id, outcome.text, System.currentTimeMillis())
+                    refusals.trySend(RefusedComment(outcome.text, parentId))
+                }
+            }
+        }
+    }
+
     /** « Répondre » : le composeur épinglé répond à ce commentaire ; le fil le met en vue. */
     fun setReplyTarget(comment: me.meeshy.sdk.model.StoryComment) {
         _state.update { it.copy(replyTarget = comment) }
@@ -268,7 +334,7 @@ class StoryCommentsViewModel @Inject constructor(
     private fun observeRealtime() {
         viewModelScope.launch {
             socialSocket.commentAdded.collect { event ->
-                safely { if (isViewing(event.postId)) update { StoryCommentsReducer.added(it, event.comment.toStoryComment(prefs), event.commentCount) } }
+                safely { if (isViewing(event.postId)) update { StoryCommentPublish.echoed(it, event.comment.toStoryComment(prefs), event.commentCount) } }
             }
         }
         viewModelScope.launch {

@@ -217,6 +217,7 @@
     <string name="stories_delete_confirm_title">حذف القصة؟</string>
     <string name="stories_mood_kind">حالة مزاجية</string>
     <string name="stories_publish_retry">إعادة المحاولة</string>
+    <string name="stories_reply_cancel">إلغاء الرد</string>
     <string name="stories_reply_failed">لم يتم إرسال الرد</string>
     <string name="stories_reply_placeholder">الرد على %1$s…</string>
     <string name="stories_reply_send">إرسال الرد</string>
