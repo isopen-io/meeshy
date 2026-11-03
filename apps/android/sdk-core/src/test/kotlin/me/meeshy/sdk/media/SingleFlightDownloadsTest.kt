@@ -22,7 +22,7 @@ class SingleFlightDownloadsTest {
     private val immediate = MediaTransferProfile.STANDARD
     private val restricted = MediaTransferProfile.prefetch(meteredAllowed = false)
 
-    private fun <T> blocking(block: suspend () -> T): T = runBlocking { withTimeout(10_000) { block() } }
+    private fun <T> blocking(block: suspend kotlinx.coroutines.CoroutineScope.() -> T): T = runBlocking { withTimeout(10_000) { block() } }
 
     @Test
     fun `deux appelants d'une meme cle partagent UNE tache et son resultat`() = blocking {

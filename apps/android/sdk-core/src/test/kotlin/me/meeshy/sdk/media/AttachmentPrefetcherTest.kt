@@ -120,7 +120,7 @@ class AttachmentPrefetcherTest {
     }
 
     @Test
-    fun `reglage Wi-Fi seulement sur cellulaire : planifie hors reseau facture au lieu de telecharger`() = blocking {
+    fun `reglage Wi-Fi seulement sur cellulaire, planifie hors reseau facture au lieu de telecharger`() = blocking {
         prefetcher(NetworkCondition.GOOD_CELLULAR, AutoDownloadPolicy.WIFI_ONLY).prefetch(url, 5_000_000, category, MediaKind.VIDEO)
         assertThat(scheduled).containsExactly(url)
         assertThat(center.progress(center.key(url))).isNull()
@@ -135,7 +135,7 @@ class AttachmentPrefetcherTest {
     }
 
     @Test
-    fun `le reglage donne le profil du prechargement : cellulaire permis ou non`() = blocking {
+    fun `le reglage donne le profil du prechargement, cellulaire permis ou non`() = blocking {
         server.enqueue(slow())
         prefetcher(NetworkCondition.WIFI, AutoDownloadPolicy.WIFI_ONLY).prefetch(url, 5_000_000, category, MediaKind.VIDEO)
         assertThat(center.requestedProfile(center.key(url))).isEqualTo(MediaTransferProfile.prefetch(meteredAllowed = false))

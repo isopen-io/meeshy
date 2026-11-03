@@ -6,12 +6,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.media.AttachmentKind
+import me.meeshy.sdk.model.media.LocalFileUrl
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.util.resolveMediaUrl
 import timber.log.Timber
 import java.io.File
-import java.net.URI
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -55,9 +55,9 @@ class MediaAdoption internal constructor(
     private suspend fun adoptOne(local: ApiMessageAttachment, server: ApiMessageAttachment): Boolean {
         val previous = local.fileUrl.orEmpty()
         val canonical = server.fileUrl.orEmpty()
-        if (!previous.startsWith(FILE_SCHEME) || !(canonical.startsWith("http://") || canonical.startsWith("https://"))) return false
+        if (!LocalFileUrl.isLocal(previous) || !(canonical.startsWith("http://") || canonical.startsWith("https://"))) return false
         val category = categoryOf(server.mimeType ?: local.mimeType) ?: return false
-        val source = fileOf(previous) ?: return false
+        val source = LocalFileUrl.pathOf(previous)?.let(::File) ?: return false
         val key = resolveMediaUrl(canonical, apiBaseUrl())
         return withContext(io) {
             if (!source.isFile || source.length() <= 0L) return@withContext false
@@ -86,12 +86,6 @@ class MediaAdoption internal constructor(
         AttachmentKind.AUDIO -> MediaCacheCategory.AUDIO
         AttachmentKind.VIDEO -> MediaCacheCategory.VIDEO
         else -> null
-    }
-
-    private fun fileOf(url: String): File? = runCatching { File(URI(url).path) }.getOrNull()
-
-    private companion object {
-        const val FILE_SCHEME = "file://"
     }
 }
 

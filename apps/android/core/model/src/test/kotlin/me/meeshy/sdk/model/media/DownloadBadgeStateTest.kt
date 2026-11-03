@@ -68,6 +68,13 @@ class DownloadPresenceTest {
     }
 
     @Test
+    fun `les deux ecritures d'une adresse file sont reconnues`() {
+        assertThat(DownloadPresence.isOnDevice("file:/a/b.jpg", none) { it == "/a/b.jpg" }).isTrue()
+        assertThat(DownloadPresence.isOnDevice("FILE:///a/b.jpg", none) { it == "/a/b.jpg" }).isTrue()
+        assertThat(LocalFileUrl.pathOf("https://x.me/a.jpg")).isNull()
+    }
+
+    @Test
     fun `une url distante se cherche sous sa cle de cache`() {
         val url = "https://gate.meeshy.me/u/p.jpg"
         val key = me.meeshy.sdk.model.mediacache.MediaCacheKey.of(url)

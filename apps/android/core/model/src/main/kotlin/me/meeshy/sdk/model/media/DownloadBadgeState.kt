@@ -31,7 +31,7 @@ public sealed interface DownloadBadgeState {
             tileHostsVideoPlayer: Boolean = true,
         ): DownloadBadgeState {
             val badgeable = kind == AttachmentKind.IMAGE || (kind == AttachmentKind.VIDEO && !tileHostsVideoPlayer)
-            if (!badgeable || fileUrl.isEmpty() || fileUrl.startsWith(FILE_SCHEME) || isOptimistic || isOnDevice || landed) return Hidden
+            if (!badgeable || fileUrl.isEmpty() || LocalFileUrl.isLocal(fileUrl) || isOptimistic || isOnDevice || landed) return Hidden
             if (progress != null) {
                 val total = progress.totalBytes.takeIf { it > 0 } ?: expectedSizeBytes
                 val percent = if (total > 0) (progress.downloadedBytes * 100 / total).toInt().coerceIn(0, 100) else 0
@@ -40,8 +40,16 @@ public sealed interface DownloadBadgeState {
             return Idle(expectedSizeBytes.coerceAtLeast(0))
         }
 
-        internal const val FILE_SCHEME: String = "file://"
     }
+}
+
+/** Une adresse `file:` (une ou trois barres : `Uri.fromFile` donne `file:///…`, `File.toURI` donne `file:/…`). */
+public object LocalFileUrl {
+    public fun isLocal(url: String): Boolean = url.startsWith("file:", ignoreCase = true)
+
+    /** Le chemin du fichier local, ou `null` si [url] n'est pas une adresse `file:` lisible. */
+    public fun pathOf(url: String): String? =
+        if (isLocal(url)) runCatching { java.net.URI(url).path }.getOrNull()?.takeIf { it.isNotEmpty() } else null
 }
 
 /**
@@ -56,7 +64,7 @@ public object DownloadPresence {
         fileExists: (path: String) -> Boolean,
     ): Boolean {
         if (url.isEmpty()) return false
-        if (url.startsWith(DownloadBadgeState.FILE_SCHEME)) return fileExists(url.removePrefix(DownloadBadgeState.FILE_SCHEME))
+        if (LocalFileUrl.isLocal(url)) return LocalFileUrl.pathOf(url)?.let(fileExists) ?: false
         return inTypedStore(MediaCacheKey.of(url))
     }
 
