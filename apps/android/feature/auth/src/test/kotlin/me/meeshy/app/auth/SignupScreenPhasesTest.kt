@@ -9,6 +9,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
@@ -130,7 +131,7 @@ class SignupScreenPhasesTest {
         typeEmail("ada@meeshy.me")
         assertThat(rig.viewModel.state.value.canSubmit).isTrue()
 
-        compose.onNodeWithTag(SIGNUP_PRIMARY_TAG).performClick()
+        compose.onNodeWithTag(SIGNUP_PRIMARY_TAG).performScrollTo().performClick()
         compose.waitForIdle()
 
         coVerify(exactly = 1) { rig.repository.register(any()) }
@@ -142,7 +143,7 @@ class SignupScreenPhasesTest {
         val rig = rig()
         show(rig)
 
-        compose.onNodeWithTag(SIGNUP_PRIMARY_TAG).performClick()
+        compose.onNodeWithTag(SIGNUP_PRIMARY_TAG).performScrollTo().performClick()
         compose.waitForIdle()
 
         coVerify(exactly = 0) { rig.repository.register(any()) }
@@ -157,7 +158,7 @@ class SignupScreenPhasesTest {
         typePhone("0612345678")
         typeEmail("ada@meeshy.me")
 
-        compose.onNodeWithTag(SIGNUP_SIGN_IN_TAG).performClick()
+        compose.onNodeWithTag(SIGNUP_SIGN_IN_TAG).performScrollTo().performClick()
         compose.waitForIdle()
 
         assertThat(closed).isTrue()
