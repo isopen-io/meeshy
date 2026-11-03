@@ -323,6 +323,7 @@
     <string name="story_media_soundExtraction_caption">Andere Personen können den Ton der Videos dieses Beitrags wiederverwenden.</string>
     <string name="story_media_soundExtraction_label">Wiederverwendung des Tons erlauben</string>
     <string name="story_reader_buffering">Story wird geladen</string>
+    <string name="story_reader_loading">Story wird geladen…</string>
     <string name="story_repost_error_forbidden">Diese Story kann nicht erneut geteilt werden</string>
     <string name="story_repost_error_generic">Erneutes Teilen fehlgeschlagen</string>
     <string name="story_repost_error_unavailable">Diese Story ist nicht mehr verfügbar</string>
@@ -334,6 +335,10 @@
     </plurals>
     <string name="story_send_search_hint">Unterhaltung suchen...</string>
     <string name="story_send_sent">Gesendet</string>
+    <string name="story_sentinel_body">Deine Version der App kann sie noch nicht darstellen. Sie ist nicht verloren: Nach dem Update erscheint sie genau so, wie ihr Autor sie gestaltet hat.</string>
+    <string name="story_sentinel_skip">WEITER ZUR NÄCHSTEN</string>
+    <string name="story_sentinel_title">Diese Story verwendet ein neueres Format</string>
+    <string name="story_sentinel_update">AKTUALISIEREN</string>
     <string name="story_sound_library_clearSearch">Suche löschen</string>
     <string name="story_sound_library_emptyMine">Deine Sounds erscheinen hier, sobald du eine Story mit eigenem Audio veröffentlichst.</string>
     <string name="story_sound_library_emptySearch">Kein Sound entspricht dieser Suche.</string>

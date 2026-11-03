@@ -323,6 +323,7 @@
     <string name="story_media_soundExtraction_caption">Other people will be able to reuse this post\'s video soundtrack.</string>
     <string name="story_media_soundExtraction_label">Allow soundtrack reuse</string>
     <string name="story_reader_buffering">Loading the story</string>
+    <string name="story_reader_loading">Loading story…</string>
     <string name="story_repost_error_forbidden">This story can\'t be reposted</string>
     <string name="story_repost_error_generic">Reposting failed</string>
     <string name="story_repost_error_unavailable">This story is no longer available</string>
@@ -334,6 +335,10 @@
     </plurals>
     <string name="story_send_search_hint">Search a conversation...</string>
     <string name="story_send_sent">Sent</string>
+    <string name="story_sentinel_body">Your version of the app can\'t paint it yet. It isn\'t lost: it will appear exactly as its author composed it once you update.</string>
+    <string name="story_sentinel_skip">SKIP TO THE NEXT</string>
+    <string name="story_sentinel_title">This story uses a newer format</string>
+    <string name="story_sentinel_update">UPDATE</string>
     <string name="story_sound_library_clearSearch">Clear search</string>
     <string name="story_sound_library_emptyMine">Your sounds will appear here as soon as you publish a story with original audio.</string>
     <string name="story_sound_library_emptySearch">No sound matches this search.</string>

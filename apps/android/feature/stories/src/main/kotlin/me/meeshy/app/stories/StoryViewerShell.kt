@@ -31,7 +31,6 @@ import me.meeshy.sdk.model.scene.export.StoryExportMode
 import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
-import me.meeshy.ui.theme.hexColor
 
 /**
  * Propriétaire : lot story-viewer-decomposition-and-nav-graph. La coque du lecteur : la carte (cube, glissé, gestes),
@@ -98,11 +97,21 @@ internal fun StoryViewerShell(
             modifier = Modifier
                 .fillMaxSize()
                 .storyCardFrame(cardMotion)
-                .background(hexColor(accent))
                 .onGloballyPositioned { rail.boxOriginInRoot = it.positionInRoot() },
         ) {
             if (slide != null) {
-                StoryViewerCanvas(slide, progress, slideDurationMs, playing, state.isMuted, lap, viewModel)
+                StoryViewerReaderScene(
+                    slide = slide,
+                    item = currentItem,
+                    progress = progress,
+                    slideDurationMs = slideDurationMs,
+                    playing = playing,
+                    lap = lap,
+                    state = state,
+                    commentsOpen = chrome.showComments,
+                    viewModel = viewModel,
+                )
+                StoryReadingScrims(chromeVisible = !state.isPaused)
             }
 
             StoryStallIndicator(waiting = waiting, modifier = Modifier.align(Alignment.Center))

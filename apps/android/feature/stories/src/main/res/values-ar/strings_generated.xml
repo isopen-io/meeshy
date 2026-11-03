@@ -331,6 +331,7 @@
     <string name="story_media_soundExtraction_caption">سيتمكن أشخاص آخرون من إعادة استخدام مسار صوت مقاطع الفيديو في هذا المنشور.</string>
     <string name="story_media_soundExtraction_label">السماح بإعادة استخدام الصوت</string>
     <string name="story_reader_buffering">جارٍ تحميل القصة</string>
+    <string name="story_reader_loading">جارٍ تحميل القصة…</string>
     <string name="story_repost_error_forbidden">لا يمكن إعادة مشاركة هذه القصة</string>
     <string name="story_repost_error_generic">فشلت إعادة النشر</string>
     <string name="story_repost_error_unavailable">لم تعد هذه القصة متاحة</string>
@@ -346,6 +347,10 @@
     </plurals>
     <string name="story_send_search_hint">ابحث عن محادثة...</string>
     <string name="story_send_sent">أُرسل</string>
+    <string name="story_sentinel_body">لا يمكن لإصدار التطبيق لديك عرضها بعد. لم تُفقد: ستظهر تمامًا كما أنشأها صاحبها بعد التحديث.</string>
+    <string name="story_sentinel_skip">الانتقال إلى التالية</string>
+    <string name="story_sentinel_title">تستخدم هذه القصة تنسيقًا أحدث</string>
+    <string name="story_sentinel_update">تحديث</string>
     <string name="story_sound_library_clearSearch">مسح البحث</string>
     <string name="story_sound_library_emptyMine">ستظهر أصواتك هنا بمجرد نشرك قصة تحتوي على صوت أصلي.</string>
     <string name="story_sound_library_emptySearch">لا يوجد صوت يطابق هذا البحث.</string>
