@@ -507,7 +507,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // Découpe de la racine : le cliquet suit les CLÉS jusqu'à leurs nouveaux fichiers (leçon 578).
         "apps/ios/Meeshy/Features/Main/Views/RootConversationOpener.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/RootFloatingChrome.swift",  // 7
-        "apps/ios/Meeshy/Features/Main/Views/RootPendingBanners.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Views/RootPendingBanners.swift",  // 2
         // #6579 — `CallPresentationLayer` a QUITTÉ l'écran ci-dessus pour son
         // propre fichier (RootView.swift dépassait le plafond dur de 1200
         // lignes). Le cliquet suit le CODE, pas le chemin : sans cette ligne,

@@ -81,7 +81,7 @@ final class StoryCommentSession: ObservableObject {
         replyTarget = nil
         thread.reset(to: .story(storyId ?? ""))
         hearts.reset()
-        guard let storyId else {
+        guard let storyId, !PendingStoryMarker.isPending(storyId: storyId) else {
             count = 0
             thread.roots = []
             return

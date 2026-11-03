@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
@@ -28,6 +29,8 @@ internal fun StoryViewerTopBar(
     slide: StorySlideView?,
     accent: String,
     progress: () -> Float,
+    scrubber: StoryProgressScrubber,
+    awaitingStart: Boolean,
     chrome: StoryViewerChromeState,
     videoExport: StoryVideoExport,
     actions: StoryViewerActions,
@@ -42,7 +45,10 @@ internal fun StoryViewerTopBar(
             .statusBarsPadding()
             .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.sm),
     ) {
-        SegmentedProgress(count = state.slides.size, index = state.index, currentProgress = progress)
+        val hapticScrubber = remember(scrubber, haptics) {
+            StoryProgressScrubber(scrubber.fraction, { haptics.light(); scrubber.begin() }, scrubber.moveTo, scrubber.end)
+        }
+        SegmentedProgress(count = state.slides.size, index = state.index, currentProgress = progress, scrubber = hapticScrubber)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -73,6 +79,7 @@ internal fun StoryViewerTopBar(
                     .weight(1f)
                     .padding(start = MeeshySpacing.xs),
             )
+            StoryAwaitingSpinner(awaiting = awaitingStart, modifier = Modifier.padding(end = MeeshySpacing.sm))
             if (slide?.isTranslated == true) {
                 TranslatedBadge()
             }

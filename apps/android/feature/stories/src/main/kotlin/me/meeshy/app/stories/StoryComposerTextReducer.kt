@@ -76,6 +76,17 @@ internal object StoryComposerTextReducer {
         else -> state
     }
 
+    /**
+     * La saisie CÈDE au doigt (iOS `suspendInlineEditForManipulation`) : un geste de manipulation, ou le clavier qui se range,
+     * rend le texte écrit à sa position réelle sans le désélectionner — il reste cadré, et le toucher de nouveau
+     * ([tapped]) reprend la saisie. Inerte quand aucun texte n'est en cours d'écriture.
+     */
+    fun suspendedForManipulation(state: StoryComposerUiState): StoryComposerUiState {
+        val id = state.selectedTextElementId ?: return state
+        if (state.framedTextElementId == id || state.elementMenuId != null) return state
+        return state.copy(framedTextElementId = id)
+    }
+
     /** Stops editing the active element — the field returns to the slide caption. */
     fun deselected(state: StoryComposerUiState): StoryComposerUiState =
         if (state.selectedTextElementId == null) state else state.copy(selectedTextElementId = null, framedTextElementId = null)

@@ -332,8 +332,14 @@
     <string name="signup_close">Fechar</string>
     <string name="signup_country_search_hint">Buscar um país</string>
     <string name="signup_display_name_label">Como devemos chamar você?</string>
+    <string name="signup_email_forgot_password">Esqueceu a senha?</string>
+    <string name="signup_email_is_it_you">É você?</string>
+    <string name="signup_email_its_me">Sou eu — recuperar minha conta</string>
     <string name="signup_email_label">E-mail</string>
+    <string name="signup_email_not_me">Não sou eu</string>
+    <string name="signup_email_not_me_note">O código enviado para este endereço será pedido para obtê-lo.</string>
     <string name="signup_email_placeholder">voce@exemplo.com</string>
+    <string name="signup_email_send_sign_in_link">Receber um link de acesso</string>
     <string name="signup_email_taken">Já existe uma conta com este endereço.</string>
     <string name="signup_error_generic">Não foi possível criar a conta. Tente novamente.</string>
     <string name="signup_error_network">Sem conexão. Verifique sua rede e tente novamente.</string>
