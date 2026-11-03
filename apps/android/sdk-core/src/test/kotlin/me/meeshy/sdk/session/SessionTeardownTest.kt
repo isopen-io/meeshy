@@ -416,4 +416,30 @@ class SessionTeardownTest {
         assertThat(toasts.current.value).isNull()
         assertThat(outboxRepository.observeAll().first()).isEmpty()
     }
+
+    @Test
+    fun wipe_deletesTheUnencryptedDatabaseCopiesLeftByARecovery() = runTest {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val primary = context.getDatabasePath("teardown-leftovers.db").also { it.parentFile?.mkdirs() }
+        val quarantined = java.io.File(primary.path + ".corrupted.7").apply { writeText("history of A") }
+        val fallback = java.io.File(context.cacheDir, "teardown-fallback.db").apply { writeText("history of A") }
+        val leftovers = me.meeshy.core.database.DatabaseLeftovers(primary, fallback)
+
+        teardown(perAccountCaches = setOf(DatabaseLeftoversTeardown(leftovers))).wipe()
+
+        assertThat(quarantined.exists()).isFalse()
+        assertThat(fallback.exists()).isFalse()
+    }
+
+    @Test
+    fun wipeAfterServerInvalidation_aDeletedAccountLeavesNoDatabaseCopyBehind() = runTest {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val primary = context.getDatabasePath("deleted-leftovers.db").also { it.parentFile?.mkdirs() }
+        val quarantined = java.io.File(primary.path + ".corrupted.8-wal").apply { writeText("history of A") }
+        val leftovers = me.meeshy.core.database.DatabaseLeftovers(primary, java.io.File(context.cacheDir, "absent.db"))
+
+        teardown(perAccountCaches = setOf(DatabaseLeftoversTeardown(leftovers))).wipeAfterServerInvalidation()
+
+        assertThat(quarantined.exists()).isFalse()
+    }
 }
