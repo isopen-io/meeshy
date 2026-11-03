@@ -115,6 +115,9 @@ class CallViewModel @Inject constructor(
     /** `true` quand la vidéo est née en plein appel (audio vers vidéo) : la couper la ramène à l'audio, caméra libérée. */
     private var videoUpgradedMidCall: Boolean = false
 
+    /** `true` quand l'écran est passé en vidéo parce que le pair a allumé sa caméra : la mienne n'existe pas encore. */
+    private var localCameraPending: Boolean = false
+
     /** `true` while the app itself froze the outgoing video ([CallVideoHealth]). */
     private var videoAutoPaused: Boolean = false
 
@@ -347,6 +350,7 @@ class CallViewModel @Inject constructor(
         this.media = CallMedia(isCameraOn = config.isVideo, isSpeakerOn = config.isVideo)
         lifecycle.reset()
         videoUpgradedMidCall = false
+        localCameraPending = false
         this.callId = config.callId
         this.elapsedSeconds = 0L
         this.mediaEstablished = false
@@ -475,7 +479,7 @@ class CallViewModel @Inject constructor(
     /** Toggle the local camera (only meaningful on a video call) and signal the peer. */
     fun toggleCamera() {
         lifecycle.reset()
-        if (!config.isVideo) return upgradeToVideo()
+        if (!config.isVideo || localCameraPending) return upgradeToVideo()
         if (media.isCameraOn && videoUpgradedMidCall) return downgradeFromVideo()
         media = media.copy(isCameraOn = !media.isCameraOn)
         publish()
@@ -492,6 +496,7 @@ class CallViewModel @Inject constructor(
         val failure = coordinator.upgradeToVideo()
         if (failure != null) return videoFallbackAnnouncer.announce(failure)
         videoUpgradedMidCall = true
+        localCameraPending = false
         config = config.copy(isVideo = true)
         media = media.copy(isCameraOn = true)
         publish()
@@ -514,6 +519,7 @@ class CallViewModel @Inject constructor(
         if (callId.isBlank() || toggle.callId != callId || !callState.isActive) return
         if (toggle.userId != null && toggle.userId == selfId) return
         config = config.copy(isVideo = true)
+        localCameraPending = true
         media = media.copy(isCameraOn = false)
         publish()
     }
