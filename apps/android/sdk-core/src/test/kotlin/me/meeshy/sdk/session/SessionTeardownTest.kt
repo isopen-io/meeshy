@@ -361,4 +361,19 @@ class SessionTeardownTest {
         assertThat(erasures.pending("alice", 10).map { it.itemId to it.clientMessageId }).containsExactly("m1" to "cid_1")
         assertThat(erasures.pending("bob", 10)).isEmpty()
     }
+
+    @Test
+    fun wipe_passesThroughTheCacheStoreRegistryAndDropsItsMemory() = runTest {
+        val registry = me.meeshy.sdk.cache.store.CacheStoreRegistry(kotlinx.coroutines.Dispatchers.Unconfined)
+        val store = registry.roomStore(
+            db.cacheEntryDao(), "registry-ns", me.meeshy.sdk.cache.CachePolicy(1_000, 10_000, 10),
+            kotlinx.serialization.builtins.serializer<String>(), { it },
+        )
+        store.save(listOf("a"), "k")
+        store.load("k")
+
+        teardown(perAccountCaches = setOf(registry)).wipe()
+
+        assertThat(store.load("k")).isEqualTo(me.meeshy.sdk.cache.CacheResult.Empty)
+    }
 }
