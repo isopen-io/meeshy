@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.model.ChangePasswordForm
 import me.meeshy.sdk.model.ChangePasswordValidation
 import me.meeshy.sdk.model.PasswordStrength
@@ -27,14 +28,20 @@ data class ChangePasswordUiState(
     val isSaving: Boolean = false,
     val isSuccess: Boolean = false,
     val error: ChangePasswordError? = null,
+    /** `null` tant que la lecture n'a pas répondu ou a échoué : le champ « actuel » reste demandé. */
+    val hasPassword: Boolean? = null,
 ) {
+    /** Le champ « mot de passe actuel » n'est masqué que si le compte n'a PAS de mot de passe. */
+    val asksCurrentPassword: Boolean
+        get() = ChangePasswordForm.asksCurrentPassword(hasPassword)
+
     /** The live strength band of the new password (empty ⇒ TOO_WEAK). */
     val strength: PasswordStrengthLevel
         get() = PasswordStrength.evaluate(newPassword)
 
     /** Per-rule validation for the hint rows. */
     val validation: ChangePasswordValidation
-        get() = ChangePasswordForm.validate(currentPassword, newPassword, confirmPassword)
+        get() = ChangePasswordForm.validate(currentPassword, newPassword, confirmPassword, hasPassword)
 
     /** Whether the submit button may fire — every rule met and no request in flight. */
     val canSubmit: Boolean
@@ -53,10 +60,21 @@ data class ChangePasswordUiState(
 @HiltViewModel
 class ChangePasswordViewModel @Inject constructor(
     private val userRepository: UserRepository,
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ChangePasswordUiState())
     val state: StateFlow<ChangePasswordUiState> = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val known = when (val result = authRepository.hasPassword()) {
+                is NetworkResult.Success -> result.data
+                is NetworkResult.Failure -> null
+            }
+            _state.update { it.copy(hasPassword = known) }
+        }
+    }
 
     fun onCurrentPasswordChange(value: String) {
         _state.update { it.copy(currentPassword = value, error = null) }
@@ -81,12 +99,12 @@ class ChangePasswordViewModel @Inject constructor(
         _state.update { it.copy(isSaving = true, error = null) }
         viewModelScope.launch {
             val result = userRepository.changePassword(
-                currentPassword = snapshot.currentPassword,
+                currentPassword = ChangePasswordForm.submittedCurrent(snapshot.currentPassword, snapshot.hasPassword),
                 newPassword = snapshot.newPassword,
             )
             _state.update { current ->
                 when (result) {
-                    is NetworkResult.Success -> ChangePasswordUiState(isSuccess = true)
+                    is NetworkResult.Success -> ChangePasswordUiState(isSuccess = true, hasPassword = current.hasPassword)
                     is NetworkResult.Failure ->
                         current.copy(isSaving = false, error = result.error.toChangePasswordError())
                 }

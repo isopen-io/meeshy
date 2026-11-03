@@ -116,6 +116,10 @@ class StoryViewerViewModel @Inject constructor(
      */
     private val resolvedImageUrls = mutableSetOf<String>()
 
+    /** Focus audio et état des médias de la slide (lot story-playback-hold-and-stall) : lus par l'horloge du lecteur. */
+    internal val interruption = StorySessionInterruptionController()
+    internal val mediaSignal = StoryMediaReadinessSignal()
+
     private val _state = MutableStateFlow(StoryViewerUiState())
     val state: StateFlow<StoryViewerUiState> = _state.asStateFlow()
 
@@ -606,7 +610,7 @@ class StoryViewerViewModel @Inject constructor(
             val item = rawItems[slideView.id] ?: return@map slideView
             val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
             val resolved = StoryContentResolver.resolve(item, prefs, override)
-            val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
+            val preferredLanguages = StoryContentResolver.readerLanguages(prefs)
             val textObjects = item.storyEffects?.textObjects.orEmpty()
                 .map { StoryTextObjectProjection.project(it, preferredLanguages, override) }
             slideView.copy(

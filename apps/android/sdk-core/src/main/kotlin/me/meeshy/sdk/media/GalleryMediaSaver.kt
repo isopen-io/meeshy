@@ -2,7 +2,9 @@ package me.meeshy.sdk.media
 
 import android.content.ContentValues
 import android.content.Context
+import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.provider.MediaStore
 import java.io.File
 import java.net.HttpURLConnection
@@ -17,6 +19,7 @@ import me.meeshy.sdk.model.GallerySaveTargetResolver
 import me.meeshy.sdk.model.MediaFingerprint
 import me.meeshy.sdk.model.MediaSaveLedger
 import me.meeshy.sdk.model.MediaSaveOutcome
+import me.meeshy.sdk.model.MediaStoreWrite
 
 /**
  * Écrit un média distant dans la galerie (album « Meeshy ») — UNE fois (#14642).
@@ -42,7 +45,8 @@ public class GalleryMediaSaver(
         try {
             download(url, staging)
             val fingerprint = staging.inputStream().use(MediaFingerprint::of)
-            ledger.saveOnce(fingerprint) { insert(staging, target) }
+            val named = GallerySaveTargetResolver.byContent(target, fingerprint)
+            ledger.saveOnce(fingerprint, named.entryName) { insert(staging, named) }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -52,7 +56,11 @@ public class GalleryMediaSaver(
         }
     }
 
-    private fun insert(file: File, target: GallerySaveTarget): String? {
+    /**
+     * Écrit [file] sous le nom dérivé de son contenu. Si MediaStore a dû le renommer, un fichier de ce nom — donc ce
+     * média — occupait déjà l'album, peut-être d'une installation précédente : la copie est retirée (#14651).
+     */
+    private fun insert(file: File, target: GallerySaveTarget): MediaStoreWrite {
         val collection = if (target.mimeType.startsWith("video/")) {
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI
         } else {
@@ -65,16 +73,38 @@ public class GalleryMediaSaver(
             put(MediaStore.MediaColumns.RELATIVE_PATH, target.relativePath)
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
-        val item = resolver.insert(collection, pending) ?: return null
+        val item = resolver.insert(collection, pending) ?: return MediaStoreWrite.Failed
+        if (nameOf(item, target) == MediaStoreWrite.NameTaken) {
+            resolver.delete(item, null, null)
+            return MediaStoreWrite.NameTaken
+        }
         return try {
             resolver.openOutputStream(item)?.use { output -> file.inputStream().use { it.copyTo(output) } }
                 ?: error("MediaStore output stream unavailable")
             resolver.update(item, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
-            item.toString()
+            val written = nameOf(item, target)
+            if (written == MediaStoreWrite.NameTaken) resolver.delete(item, null, null)
+            written
         } catch (failure: Exception) {
             resolver.delete(item, null, null)
             throw failure
         }
+    }
+
+    /** Le nom que MediaStore a VRAIMENT donné à [item] — lisible sans permission : l'entrée est à l'app. */
+    private fun nameOf(item: Uri, target: GallerySaveTarget): MediaStoreWrite {
+        val projection = arrayOf(MediaStore.MediaColumns.DISPLAY_NAME)
+        val actual = runCatching {
+            val cursor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val includePending = Bundle().apply { putInt(MediaStore.QUERY_ARG_MATCH_PENDING, MediaStore.MATCH_INCLUDE) }
+                appContext.contentResolver.query(item, projection, includePending, null)
+            } else {
+                @Suppress("DEPRECATION")
+                appContext.contentResolver.query(MediaStore.setIncludePending(item), projection, null, null, null)
+            }
+            cursor?.use { if (it.moveToFirst()) it.getString(0) else null }
+        }.getOrNull()
+        return MediaStoreWrite.classify(uri = item.toString(), requested = target.displayName, actual = actual)
     }
 
     private fun download(url: String, into: File) {

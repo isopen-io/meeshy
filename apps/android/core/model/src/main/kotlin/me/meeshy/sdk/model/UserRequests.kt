@@ -66,7 +66,7 @@ data class VerifyPhoneChangeResponse(
 /** Change-password body — port of AuthService.changePassword inline body (AuthService.swift). */
 @Serializable
 data class ChangePasswordRequest(
-    val currentPassword: String,
+    val currentPassword: String? = null,
     val newPassword: String,
 )
 
