@@ -66,6 +66,7 @@ import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.comments.CommentThreadList
 import me.meeshy.sdk.model.composer.ComposerConfiguration
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.SharedPlace
@@ -145,63 +146,39 @@ private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsVi
             )
         }
 
-        when {
-            state.showSkeleton -> CommentsSkeleton()
-            state.loadFailed -> Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = MeeshySpacing.sm),
-            ) {
-                Text(
-                    text = stringResource(R.string.post_comments_load_error),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MeeshyTheme.tokens.textSecondary,
-                    modifier = Modifier.weight(1f),
+        val offline by viewModel.isOffline.collectAsStateWithLifecycle()
+        CommentThreadList(
+            state = state.listState(offline),
+            labels = rememberCommentsLabels(stringResource(R.string.post_comments_title)),
+            rows = state.comments,
+            rowKey = { it.id },
+            onRetry = viewModel::retryLoad,
+            onLoadMore = viewModel::loadMore,
+            skeleton = { CommentsSkeleton() },
+        ) { comment ->
+            Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+                CommentRow(
+                    comment = comment,
+                    mentionDisplayNames = state.mentionDisplayNames,
+                    onToggleLike = viewModel::toggleLike,
+                    onReply = viewModel::beginReply,
+                    onFlagTap = viewModel::onCommentFlagTap,
+                    onDelete = viewModel::deleteComment,
+                    imaging = imaging,
                 )
-                TextButton(onClick = viewModel::retryLoad) {
-                    Text(stringResource(R.string.feed_retry), color = MeeshyPalette.Indigo500)
-                }
-            }
-            state.isEmpty -> Text(
-                text = stringResource(R.string.post_comments_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MeeshyTheme.tokens.textSecondary,
-                modifier = Modifier.padding(vertical = MeeshySpacing.md),
-            )
-            else -> Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-                state.comments.forEach { comment ->
-                    CommentRow(
-                        comment = comment,
-                        mentionDisplayNames = state.mentionDisplayNames,
-                        onToggleLike = viewModel::toggleLike,
-                        onReply = viewModel::beginReply,
-                        onFlagTap = viewModel::onCommentFlagTap,
-                        onDelete = viewModel::deleteComment,
-                        imaging = imaging,
-                    )
-                    ReplyThread(
-                        comment = comment,
-                        thread = state.replyThreads[comment.id],
-                        mentionDisplayNames = state.mentionDisplayNames,
-                        onToggleReplies = viewModel::toggleReplies,
-                        onToggleLike = viewModel::toggleLike,
-                        onReply = viewModel::beginReply,
-                        onFlagTap = viewModel::onCommentFlagTap,
-                        onDelete = viewModel::deleteComment,
-                        imaging = imaging,
-                    )
-                }
+                ReplyThread(
+                    comment = comment,
+                    thread = state.replyThreads[comment.id],
+                    mentionDisplayNames = state.mentionDisplayNames,
+                    onToggleReplies = viewModel::toggleReplies,
+                    onToggleLike = viewModel::toggleLike,
+                    onReply = viewModel::beginReply,
+                    onFlagTap = viewModel::onCommentFlagTap,
+                    onDelete = viewModel::deleteComment,
+                    imaging = imaging,
+                )
             }
         }
-
-        if (state.canLoadMore) {
-            TextButton(
-                onClick = viewModel::loadMore,
-                enabled = !state.isLoadingMore,
-            ) {
-                Text(stringResource(R.string.post_comments_load_more), color = MeeshyPalette.Indigo500)
-            }
-        }
-
     }
 }
 

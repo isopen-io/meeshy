@@ -24,6 +24,8 @@ public fun interface ShareLinkPreviewProviding {
 public data class ShareLinkEntryResolution(
     val intent: ShareLinkEntryIntent,
     val conversationTitle: String?,
+    /** L'aperçu résolu, pour peindre la page d'invitation ; `null` = rien à peindre. */
+    val info: ShareLinkInfo? = null,
 )
 
 /**
@@ -83,6 +85,7 @@ public class ShareLinkEntryResolver(
         return ShareLinkEntryResolution(
             intent = ShareLinkEntryPolicy.intent(facts),
             conversationTitle = info.conversation?.title,
+            info = info,
         )
     }
 }
