@@ -1,6 +1,8 @@
 package me.meeshy.app.stories
 
 import android.content.Context
+import android.graphics.Bitmap
+import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
@@ -38,10 +40,10 @@ internal class StoryStickerSaver(
         runCatching {
             val request = ImageRequest.Builder(context).data(url).allowHardware(false).build()
             val bitmap = (context.imageLoader.execute(request) as? SuccessResult)?.drawable
-                ?.let { androidx.core.graphics.drawable.toBitmap(it) }
+                ?.toBitmap()
             bitmap?.let { b ->
                 ByteArrayOutputStream().use { out ->
-                    b.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                    b.compress(Bitmap.CompressFormat.PNG, 100, out)
                     out.toByteArray()
                 }
             }
