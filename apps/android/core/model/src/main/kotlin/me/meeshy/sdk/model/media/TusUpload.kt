@@ -20,6 +20,12 @@ public enum class TusUploadContext(public val wire: String) {
     STORY("story"),
     STATUS("status"),
     COMMENT("comment"),
+
+    /**
+     * A chat/call attachment: NOT one of the four publication strings, so the gateway creates a
+     * `MessageAttachment` (what `POST /calls/:id/recordings/:id/attachment` claims), never a `PostMedia`.
+     */
+    ATTACHMENT("attachment"),
     ;
 
     public companion object {
@@ -44,12 +50,24 @@ public object TusUploadMetadata {
     /** The only TUS protocol version the gateway's `@tus/server` speaks. */
     public const val TUS_RESUMABLE_VERSION: String = "1.0.0"
 
-    public fun headerValue(fileName: String, mimeType: String, context: TusUploadContext): String =
-        listOf(
-            "filename" to fileName,
-            "filetype" to mimeType,
-            "uploadcontext" to context.wire,
-        ).joinToString(",") { (key, value) -> "$key ${encode(value)}" }
+    public fun headerValue(
+        fileName: String,
+        mimeType: String,
+        context: TusUploadContext,
+        thumbHash: String? = null,
+        transcription: TusTranscription? = null,
+        capturedInApp: Boolean = false,
+    ): String =
+        listOfNotNull(
+            "filename ${encode(fileName)}",
+            "filetype ${encode(mimeType)}",
+            "uploadcontext ${encode(context.wire)}",
+            thumbHash?.let { "thumbhash ${encode(it)}" },
+            // Déjà en base64 : le budget encode lui-même, on ne ré-encode pas.
+            transcription?.let(TusMetadataBudget::transcriptionValue)?.let { "transcription $it" },
+            // Le serveur lit 'true' strictement ; l'absence vaut « pas une capture ».
+            if (capturedInApp) "capturedinapp ${encode("true")}" else null,
+        ).joinToString(",")
 
     private fun encode(value: String): String = Base64.getEncoder().encodeToString(value.toByteArray())
 }

@@ -1,6 +1,10 @@
 package me.meeshy.app.calls
 
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallAnalytics
+import me.meeshy.sdk.model.call.CallPersistedQualitySummary
+import me.meeshy.sdk.model.call.toPersistedStats
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallQualitySample
 import me.meeshy.sdk.model.call.CallState
@@ -22,12 +26,18 @@ import javax.inject.Inject
 class CallAnalyticsController @Inject constructor(
     private val signals: CallSignalManager,
     private val clock: CallClock,
+    private val summaries: CallQualitySummaryStoring,
+    private val snapshotTicker: CallAnalyticsSnapshotTicker,
 ) {
     private var host: CallSessionHost? = null
     private val quality = CallQualityController(signals)
 
     /** `null` before the first call and after the terminal report. */
     private var analytics: CallAnalytics? = null
+
+    /** La périodicité `in_progress` (une seule par appel) et la dernière mesure, pour le résumé persisté. */
+    private var snapshotJob: Job? = null
+    private var lastSample: CallQualitySample? = null
 
     fun attach(host: CallSessionHost) {
         this.host = host
@@ -36,12 +46,15 @@ class CallAnalyticsController @Inject constructor(
     /** A call begins: open a fresh accumulator anchored at now. */
     fun begin() {
         analytics = CallAnalytics(startedAtMs = clock.nowMs())
+        lastSample = null
+        stopSnapshots()
         quality.begin()
     }
 
     /** One live stats tick, folded into the averages and the quality distribution. */
     fun onSample(sample: CallQualitySample) {
         analytics = analytics?.plusSample(sample)
+        lastSample = sample
         host?.let { quality.onSample(it, sample) }
     }
 
@@ -49,6 +62,7 @@ class CallAnalyticsController @Inject constructor(
     fun onTransition(previous: CallState, next: CallState) {
         if (previous !is CallState.Connected && next is CallState.Connected) {
             analytics = analytics?.connected(clock.nowMs())
+            startSnapshots()
         }
         if (next is CallState.Reconnecting && previous != next) {
             analytics = analytics?.reconnecting()
@@ -58,9 +72,38 @@ class CallAnalyticsController @Inject constructor(
         }
     }
 
+    /**
+     * Un instantané `in_progress` par minute (iOS `startAnalyticsSnapshots`) : la passerelle écrase la ligne à
+     * chaque envoi, donc un kill en arrière-plan ne perd que la dernière fenêtre. Idempotent ; sauté pendant une
+     * reconnexion (stats gelées).
+     */
+    private fun startSnapshots() {
+        val host = host ?: return
+        if (snapshotJob?.isActive == true) return
+        snapshotJob = host.scope.launch {
+            snapshotTicker.beats.collect { emitSnapshot(host) }
+        }
+    }
+
+    private fun emitSnapshot(host: CallSessionHost) {
+        if (!CallAnalytics.snapshotDue(host.callState) || host.callId.isBlank()) return
+        val current = analytics ?: return
+        signals.emitAnalytics(
+            host.callId,
+            current.inProgressFields(host.elapsedSeconds, host.config.isVideo, deviceModel()),
+        )
+    }
+
+    private fun stopSnapshots() {
+        snapshotJob?.cancel()
+        snapshotJob = null
+    }
+
     /** Fire-and-forget; inert without a minted call id. */
     private fun report(reason: CallEndReason) {
+        stopSnapshots()
         val host = host ?: return
+        persistSummary(host, reason)
         val report = analytics ?: return
         analytics = null
         if (host.callId.isBlank()) return
@@ -73,6 +116,18 @@ class CallAnalyticsController @Inject constructor(
                 deviceModel = deviceModel(),
             ),
         )
+    }
+
+    /** Le résumé relisible après un redémarrage : écrit à chaque fin, même sans identifiant minté. */
+    private fun persistSummary(host: CallSessionHost, reason: CallEndReason) {
+        val summary = CallPersistedQualitySummary.of(
+            stats = lastSample?.toPersistedStats(),
+            callId = host.callId,
+            durationSeconds = host.elapsedSeconds,
+            remoteUser = host.config.peerName,
+            reason = reason,
+        )
+        host.scope.launch { runCatching { summaries.persist(summary) } }
     }
 
     /** `Build.MODEL` is null on plain-JVM unit tests — "unknown" beats a crash. */

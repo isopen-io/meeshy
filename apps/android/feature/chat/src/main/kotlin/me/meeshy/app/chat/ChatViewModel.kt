@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.TypingNames
 import me.meeshy.sdk.e2ee.libsignal.EndToEndThreadAccess
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
@@ -33,8 +34,10 @@ import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
 import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.composer.SlowModePolicy
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.conversation.OpenConversationRegistry
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.lang.ComposeLanguageDefault
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.media.MediaUploadQueue
@@ -120,6 +123,9 @@ class ChatViewModel @Inject constructor(
     mentionContacts: MentionContacts = MentionContacts.None,
     /** #14591 — le texte d'un tête-à-tête chiffré de bout en bout part scellé, et le fil relit son clair au coffre. */
     private val endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
+    private val openConversations: OpenConversationRegistry,
+    reactionRows: me.meeshy.sdk.reaction.ReactionRowStore? = null,
+    pendingPreviews: me.meeshy.sdk.media.PendingMediaPreviewing = me.meeshy.sdk.media.PendingMediaPreviewing.None,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -178,6 +184,9 @@ class ChatViewModel @Inject constructor(
      */
     private val bubbleMemo = BubbleMemoCache()
 
+    /** Ce qui retient l'application des enrichissements de la liste : geste en cours, liste endormie. */
+    internal val listGate = ChatListUpdateGate()
+
     /**
      * The cached message window behind the bubbles, mirrored from the cache stream — read
      * by the controllers and the language-explorer projection, which rebuilds live off it
@@ -195,6 +204,7 @@ class ChatViewModel @Inject constructor(
      * first conversation emission has been read.
      */
     private val initialUnreadCount = MutableStateFlow<Int?>(null)
+    private var openingCursor = UnreadCursor.of(null, null)
 
     private val screenState = ChatStateAccess(_state)
 
@@ -218,6 +228,7 @@ class ChatViewModel @Inject constructor(
         languageIdentifier = languageIdentifier,
         mentionContacts = mentionContacts,
         endToEnd = endToEnd,
+        pendingPreviews = pendingPreviews,
     )
 
     private val reactions = ChatReactionController(
@@ -231,6 +242,7 @@ class ChatViewModel @Inject constructor(
         messageSocketManager = messageSocketManager,
         workManager = workManager,
         ownReactionWithdrawals = ownReactionWithdrawals,
+        rowStore = reactionRows,
     )
 
     private val translation = ChatTranslationController(
@@ -271,11 +283,14 @@ class ChatViewModel @Inject constructor(
     val controllers: ChatControllers = ChatControllers(contributedControllers)
 
     init {
+        openConversations.open(conversationId)
         // Capture the unread count from the cached conversation BEFORE marking it
         // read (which zeroes it), then mark read. The first Room emission carries
         // the current cached value, so this never blocks beyond it.
         viewModelScope.launch {
-            val unread = conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
+            val opening = conversationRepository.conversationStream(conversationId).first()
+            openingCursor = UnreadCursor.of(opening, sessionRepository.currentUser.value?.id)
+            val unread = openingCursor.serverUnreadCount
             initialUnreadCount.value = unread
             if (unread > 0) {
                 withTimeoutOrNull(ReadAcknowledgement.WINDOW_WAIT_MILLIS) { windowAnswered.first { it } }
@@ -289,9 +304,9 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             val count = initialUnreadCount.filterNotNull().first()
             val bubbles = _state.map { it.messages }.first { it.isNotEmpty() }
-            val firstUnread = UnreadMarker.firstUnreadId(bubbles, count)
+            val firstUnread = UnreadMarker.firstUnreadId(bubbles, openingCursor, sessionRepository.currentUser.value?.id)
             _state.update {
-                it.copy(firstUnreadMessageId = firstUnread, unreadBoundaryResolved = true)
+                it.copy(firstUnreadMessageId = firstUnread, unreadAtOpening = count, unreadBoundaryResolved = true)
             }
         }
 
@@ -365,7 +380,7 @@ class ChatViewModel @Inject constructor(
                         encryptionMode = conversation.encryptionMode,
                         directPeerUserId = conversation.otherParticipantUserId(currentUserId),
                         composerLanguageSeed = sessionRepository.currentUser.value
-                            ?.let { user -> LanguageResolver.resolveUserLanguage(user) }
+                            ?.let { user -> ComposeLanguageDefault.of(user, null) }
                             ?: it.composerLanguageSeed,
                     )
                 }
@@ -393,7 +408,7 @@ class ChatViewModel @Inject constructor(
                             }
                         },
                     ),
-                ),
+                ).coalesced(listGate, enriched = ChatUpdateCoalescer::enrichedIds),
                 sessionRepository.currentUser,
                 reactions.ownReactions,
                 translation.showingOriginal,
@@ -487,13 +502,7 @@ class ChatViewModel @Inject constructor(
                 messageSocketManager.readStatusUpdated.collectArrived { event ->
                     if (event.conversationId != conversationId) return@collectArrived
                     val ownId = sessionRepository.currentUser.value?.id ?: return@collectArrived
-                    messageRepository.applyReadReceipt(
-                        conversationId = conversationId,
-                        ownSenderId = ownId,
-                        deliveredCount = event.summary.deliveredCount,
-                        readCount = event.summary.readCount,
-                        frontierIso = event.updatedAt,
-                    )
+                    messageRepository.applyReadStatusSummary(conversationId, event.summary, ownId)
                 }
             }
         }
@@ -502,7 +511,7 @@ class ChatViewModel @Inject constructor(
             launch {
                 messageSocketManager.typingStarted.collect { event ->
                     if (event.conversationId == conversationId) {
-                        val name = event.displayName ?: event.username ?: event.userId
+                        val name = TypingNames.inConversation(event)
                         typingCleanupJobs[event.userId]?.cancel()
                         _state.update { s ->
                             s.copy(
@@ -635,6 +644,7 @@ class ChatViewModel @Inject constructor(
     override fun onCleared() {
         composer.release()
         controllers.detachAll()
+        openConversations.close(conversationId)
         super.onCleared()
     }
 
@@ -685,6 +695,9 @@ class ChatViewModel @Inject constructor(
 
     /** The picker's "clear all" — reset the armed selection to no effects. */
     fun clearEffects() = composer.clearEffects()
+
+    /** « Tout effacer » du petit panneau : retire les effets du panneau, jamais les protections. */
+    fun clearPanelEffects() = composer.clearPanelEffects()
 
     fun startEdit(messageId: String) = composer.startEdit(messageId)
 
@@ -895,16 +908,38 @@ class ChatViewModel @Inject constructor(
 
     // --- Search ---------------------------------------------------------------------------
 
+    /** Le routeur demande d'atterrir sur [messageId] (fil déjà ouvert ou ouverture). */
+    fun landOnMessage(messageId: String) = landing.land(messageId)
+
+    /** L'app quitte le premier plan : le brouillon est mis à l'abri. */
+    fun flushDraft() = composer.flushDraft()
+
+    /** Le clavier actif ne sert la langue de composition que si aucune langue de contenu n'est configurée. */
+    fun seedComposerLanguageFromKeyboard(keyboardLanguageTag: String?) {
+        val user = sessionRepository.currentUser.value ?: return
+        if (ComposeLanguageDefault.of(user, null) != null) return
+        val code = ComposeLanguageDefault.of(user, keyboardLanguageTag) ?: return
+        _state.update { it.copy(composerLanguageSeed = code) }
+    }
+
     fun openSearch() {
         _state.update { it.copy(search = it.search.activated()) }
     }
 
     fun closeSearch() {
+        controllers.find<ChatServerSearch>()?.onQuery("")
         _state.update { it.copy(search = it.search.deactivated()) }
     }
 
     fun onSearchQueryChange(query: String) {
         _state.update { it.copy(search = it.search.withQuery(query, it.messages.toSearchable())) }
+        controllers.find<ChatServerSearch>()?.onQuery(query)
+    }
+
+    /** A server search hit: the thread lands on it (loading the window around it when out of reach). */
+    fun selectSearchResult(messageId: String) {
+        controllers.find<ChatServerSearch>()?.closePanel()
+        landing.land(messageId)
     }
 
     fun nextSearchMatch() {

@@ -78,14 +78,14 @@ internal fun CallDuoVideoStage(
     Box(modifier.fillMaxSize()) {
         if (!connected) {
             localTrack?.let { local ->
-                VideoRenderer(track = local, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = state.isFrontCamera)
+                VideoRenderer(track = local, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = state.mirrorsLocalPreview)
             }
         } else {
             val featuresLocal = layout.isMyImageFullScreen
             val fit = rememberCallVideoFit()
             if (!framed) {
                 if (featuresLocal && localTrack != null) {
-                    VideoRenderer(track = localTrack, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = state.isFrontCamera, fit = fit)
+                    VideoRenderer(track = localTrack, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = state.mirrorsLocalPreview, fit = fit)
                 } else {
                     CallRemoteVideoStage(
                         callKey = callKey,
@@ -193,7 +193,7 @@ internal fun CallDuoVideoStage(
                             track = localTrack,
                             eglContext = eglContext,
                             modifier = Modifier.fillMaxSize(),
-                            mirror = state.isFrontCamera,
+                            mirror = state.mirrorsLocalPreview,
                             overlay = true,
                         )
                         else -> Unit

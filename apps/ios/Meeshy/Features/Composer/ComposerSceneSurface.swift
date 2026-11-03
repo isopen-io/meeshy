@@ -399,7 +399,9 @@ struct ComposerSceneSurface: View {
                                  bottomPanelIsOpen: band != nil || timelinePanel != nil || sceneEffectIsOpen,
                                  timelineIsOpen: timelinePanel != nil,
                                  objectIsSelected: selectionColumn != nil,
-                                 propertiesAreOpen: propertiesSheet != nil)
+                                 propertiesAreOpen: propertiesSheet != nil,
+                                 keyboardIsUp: editingTextId != nil,
+                                 sheetIsRaised: anchoredSheetTop != nil)
     }
 
     /// La colonne droite ne sert plus le repos : ses effets de scène vivent
@@ -482,7 +484,9 @@ struct ComposerSceneSurface: View {
                                    backgroundIsMedia: restBackgroundIsMedia,
                                    postText: restPostText,
                                    selection: selectionColumn,
-                                   sceneSideInset: sceneCardLeading - railLaneLeading)
+                                   sceneSideInset: restSceneSideInset,
+                                   sceneTopInset: restSceneTopInset)
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { restChromeTop = $0 }
     }
 
     /// **Le volet de description, borné à la CARTE.**
@@ -519,6 +523,33 @@ struct ComposerSceneSurface: View {
     /// Le cadre du DESSIN dans l'écran : le panneau d'options s'y repère pour
     /// laisser voir l'objet qu'il règle.
     @State private var sceneCardFrame: CGRect = .null
+    @State private var restSceneSideInset: CGFloat = 0
+    @State private var restSceneTop: CGFloat = 0
+    @State private var restChromeTop: CGFloat = 0
+
+    private var restSceneTopInset: CGFloat {
+        ComposerRestChrome.sceneTopInset(sceneTop: restSceneTop, chromeTop: restChromeTop)
+    }
+
+    /// Une feuille ou le clavier réduisent la scène au-delà du repos (#15226).
+    private var sceneIsReduced: Bool { ComposerRestChrome.sceneIsReduced(restState) }
+
+    /// Une bande, la frise, les effets, la barre de dessin, les réglages d'un
+    /// outil ou les propriétés d'un objet se posent par-dessus la scène : elle
+    /// garde le bas du repos.
+    private var sceneIsOverlaid: Bool {
+        ComposerSceneLift.overlaysScene(lowZone: lowZone, bottomPanelIsOpen: restState.bottomPanelIsOpen,
+                                        drawingBarIsShown: drawingBar != nil)
+    }
+
+    /// Le bas du repos se relève quand rien n'occupe le bas et qu'on n'écrit pas.
+    private var floorsAreAtRest: Bool {
+        lowZone == .nothing && !sceneIsOverlaid && !writing.writesText && editingTextId == nil
+            && anchoredSheetTop == nil
+    }
+
+    /// Le haut des étages du bas au dernier repos (#15226).
+    @State private var restFloorTop: CGFloat?
 
     /// Le cadre de la scène LIBRE, dans le même repère que la carte : le rail
     /// droit s'y borne à la hauteur de la carte (#10542).
@@ -534,8 +565,8 @@ struct ComposerSceneSurface: View {
                                                             withSpring: !trailingFootFollowsOptions))
     }
 
-    /// **La hauteur des étages du bas, mesurée** — ce qu'un panneau
-    /// ouvert y occupe, et donc de combien la scène doit REMONTER.
+    /// **La hauteur des étages du bas, mesurée** — ce que les propriétés y
+    /// occupent : le rail d'édition s'arrête au-dessus d'elles.
     @State private var lowerFloorsHeight: CGFloat = 0
 
     private var writing: ComposerWriting {
@@ -544,14 +575,6 @@ struct ComposerSceneSurface: View {
 
     private var lowZone: ComposerLowZone {
         ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band, properties: propertiesSheet != nil)
-    }
-
-    private var sceneLiftInset: CGFloat {
-        ComposerSceneLift.bottomInset(
-            panelIsOpen: ComposerSceneLift.panelIsOpen(
-                lowZone: lowZone,
-                toolOptionsServed: toolOptions != nil),
-            panelHeight: lowerFloorsHeight)
     }
 
     // MARK: - La scène PREND LE VIEWPORT, le chrome flotte dessus
@@ -585,7 +608,18 @@ struct ComposerSceneSurface: View {
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
         .onPreferenceChange(ComposerSceneCardWidthPreferenceKey.self) { sceneCardWidth = $0 }
         .onPreferenceChange(ComposerSceneCardFrameKey.self) { sceneCardFrame = $0 }
-        .onPreferenceChange(ComposerFreeZoneFrameKey.self) { freeZoneFrame = $0 }
+        .onPreferenceChange(ComposerSceneDrawnOriginKey.self) { origine in
+            guard let origine else { return }
+            restSceneSideInset = ComposerRestChrome.restInset(measured: origine.x, sceneIsReduced: sceneIsReduced,
+                                                              current: restSceneSideInset)
+            restSceneTop = ComposerRestChrome.restInset(measured: origine.y, sceneIsReduced: sceneIsReduced,
+                                                        current: restSceneTop)
+        }
+        .onPreferenceChange(ComposerFreeZoneFrameKey.self) { cadre in
+            freeZoneFrame = cadre
+            restFloorTop = ComposerSceneLift.restFloorTop(measured: cadre.isNull ? nil : cadre.maxY,
+                                                          isRest: floorsAreAtRest, current: restFloorTop)
+        }
         .onPreferenceChange(ComposerLowerFloorsHeightKey.self) { lowerFloorsHeight = $0 }
         // **La bascule outil <-> scène se fait en fondu**, coupé sous
         // Reduce Motion ; VoiceOver est prévenu que l'écran a changé, et son
@@ -661,8 +695,8 @@ struct ComposerSceneSurface: View {
     @State private var keyboard = ComposerSceneKeyboard()
 
     /// **La scène est le plus grand 9:16 de la zone** (#13839) : ni carte ni
-    /// couloir, et elle descend sous le socle, qui se pose dessus. Un panneau
-    /// ouvert en bas la RÉDUIT par une échelle ancrée en haut et un décalage —
+    /// couloir, et elle descend sous le socle, qui se pose dessus. Le clavier
+    /// ou une feuille la RÉDUISENT par une échelle ancrée en haut et un décalage —
     /// une seule transaction, sans nouvelle mise en page du canvas : aucun
     /// objet ne saute pendant le geste (`ComposerSceneFit`).
     private var sceneLayer: some View {
@@ -676,6 +710,13 @@ struct ComposerSceneSurface: View {
                              anchor: UnitPoint(x: 0.5, y: zone.height > 0 ? (scene.minY - zone.minY) / zone.height : 0))
                 .offset(y: zone.minY + lift.offsetY)
                 .animation(keyboard.liftAnimation(reduceMotion: reduceMotion, now: Date()), value: lift)
+                .preference(key: ComposerSceneDrawnOriginKey.self,
+                            value: CGPoint(x: ComposerRestChrome.sceneSideInset(layer: geo.frame(in: .global),
+                                                                                aspectRatio: aspectRatio,
+                                                                                scale: lift.scale),
+                                           y: ComposerRestChrome.sceneTop(layer: geo.frame(in: .global),
+                                                                          aspectRatio: aspectRatio,
+                                                                          offsetY: lift.offsetY)))
         }
         .padding(ComposerSceneRailsInsets.insets(arrangement: arrangement, showsSlideRow: showsRailsSlideRow))
         .ignoresSafeArea(.container, edges: arrangement == .rails ? [] : .bottom)
@@ -698,11 +739,12 @@ struct ComposerSceneSurface: View {
     }
 
     /// Le bas visible de la scène, dans son propre repère : le haut des étages
-    /// du bas quand un panneau y est ouvert, sinon le bas de la zone.
-    /// Une feuille ancrée du meuble borne aussi la scène (#13839, L3) : le plus
-    /// haut des deux obstacles gagne (`ComposerSceneFraming`).
+    /// du bas — celui du repos sous un étage posé par-dessus (#15226) —, sinon
+    /// le bas de la zone. Une feuille ancrée du meuble borne aussi la scène
+    /// (#13839, L3) : le plus haut des obstacles gagne (`ComposerSceneFraming`).
     private func visibleBottom(in geo: GeometryProxy) -> CGFloat {
-        let panneau: CGFloat? = sceneLiftInset > 0 && !freeZoneFrame.isNull ? freeZoneFrame.maxY : nil
+        let panneau = ComposerSceneLift.floorTop(measured: freeZoneFrame.isNull ? nil : freeZoneFrame.maxY,
+                                                 rest: restFloorTop, overlaid: sceneIsOverlaid)
         // La barre et le clavier — ou le panneau qui le remplace, de la même
         // hauteur — bornent la scène pendant qu'on écrit SUR elle.
         let clavier: CGFloat? = editingTextId != nil ? keyboard.top : nil
@@ -1000,4 +1042,11 @@ struct ComposerSceneSurface: View {
     // `description` et `descriptionPlaceholder` restent au contrat : la porte
     // est servie par le meuble, qui possède le texte. Les retirer obligerait
     // chaque site de montage à re-prouver qu'il n'en a pas besoin.
+}
+
+/// Le coin haut-gauche de la scène DESSINÉE, dans la fenêtre : le 9:16 de la
+/// couche, à l'échelle et au décalage où la levée le pose.
+private struct ComposerSceneDrawnOriginKey: PreferenceKey {
+    static let defaultValue: CGPoint? = nil
+    static func reduce(value: inout CGPoint?, nextValue: () -> CGPoint?) { value = nextValue() ?? value }
 }

@@ -58,4 +58,13 @@ class FeedCommentsPreviewBuilderTest {
         assertThat(build(null)).isNull()
         assertThat(build(listOf(comment("reply", parentId = "x")))).isNull()
     }
+
+    @Test
+    fun `a row carries its author, its hearts and its served persistent effects`() {
+        val row = build(listOf(comment("a", likes = 7, effects = MessageEffectFlags.GLOW.toInt())))!!.top.single()
+
+        assertThat(row.authorId).isEqualTo("a-a")
+        assertThat(row.likeCount).isEqualTo(7)
+        assertThat(row.effects.hasPersistentEffect).isTrue()
+    }
 }

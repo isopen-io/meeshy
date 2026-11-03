@@ -10,12 +10,17 @@ import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.media.MediaAdoption
+import me.meeshy.sdk.media.PendingMediaPreviewing
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.socket.SendMessageAck
+import me.meeshy.sdk.model.ReadStatusSummary
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageSticker
 import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.search.ConversationSearchResults
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.outbox.OutboxRepository
@@ -41,6 +46,7 @@ class MessageRepository internal constructor(
     private val enrichment: MessageEnrichmentWriter,
     private val receipts: MessageReceiptWriter,
     private val erasures: PlaintextErasureLedger? = null,
+    private val searches: MessageSearchReader? = null,
 ) {
     @Inject
     constructor(
@@ -58,9 +64,15 @@ class MessageRepository internal constructor(
         events: MessageEventBuffer? = null,
         /** #14655 — la file durable des clairs E2EE à retirer du coffre. */
         erasures: PlaintextErasureLedger? = null,
+        /** #14890 — le fichier local d'un média envoyé rejoint le cache typé à l'accusé. */
+        adoption: MediaAdoption? = null,
+        /** #15104 — l'aperçu local d'un média en attente part avec sa bulle. */
+        previews: PendingMediaPreviewing? = null,
+        /** L'aperçu de la liste de conversations suit mon envoi optimiste et son retrait. */
+        listPreviews: SendPreviewSink? = null,
     ) : this(
         history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures),
-        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime),
+        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption, previews = previews, listPreviews = listPreviews),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao, fence),
             outboxRepository,
@@ -71,6 +83,7 @@ class MessageRepository internal constructor(
         enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao, fence), translationApi),
         receipts = MessageReceiptWriter(database, messageDao, fence),
         erasures = erasures,
+        searches = MessageSearchReader(messageApi, database, clock, fence, regime, events, erasures),
     )
 
     /**
@@ -103,6 +116,15 @@ class MessageRepository internal constructor(
         limit: Int = MessageHistoryReader.PREVIEW_LIMIT,
     ): List<LocalMessage> = history.recentMessages(conversationId, limit)
 
+    /** Whether the conversation's cached window is still within the messages freshness policy. */
+    suspend fun isCacheFresh(conversationId: String): Boolean = history.isCacheFresh(conversationId)
+
+    /** The aperçu's bounded network read (newest [limit], oldest first, not persisted); `null` on failure. */
+    suspend fun recentMessagesFromNetwork(
+        conversationId: String,
+        limit: Int = MessageHistoryReader.PREVIEW_LIMIT,
+    ): List<ApiMessage>? = history.recentMessagesFromNetwork(conversationId, limit)
+
     /**
      * Backwards pagination: appends the page of messages older than the oldest cached server row
      * to the Room cache. Returns whether more history remains.
@@ -118,6 +140,17 @@ class MessageRepository internal constructor(
      */
     suspend fun loadAround(conversationId: String, messageId: String): MessageLanding =
         history.loadAround(conversationId, messageId)
+
+    /**
+     * Server search of one conversation: a page of [limit] hits for [query] after [cursor], merged into Room so
+     * the thread can jump to any of them. Throws [MessageSearchException]; a 404 is an empty page.
+     */
+    suspend fun searchMessages(
+        conversationId: String,
+        query: String,
+        cursor: String? = null,
+        limit: Int = ConversationSearchResults.PAGE_SIZE,
+    ): MessageSearchPage = searches?.search(conversationId, query, cursor, limit) ?: MessageSearchPage.EMPTY
 
     /** #14670 — the page after an anchored window; returns whether newer messages remain. */
     suspend fun loadNewer(conversationId: String): Boolean = history.loadNewer(conversationId)
@@ -149,6 +182,9 @@ class MessageRepository internal constructor(
         location: SharedPlace? = null,
         forwardedAttachmentIds: List<String>? = null,
         sticker: MessageSticker? = null,
+        clientMessageId: String? = null,
+        attachmentReplyToId: String? = null,
+        copyAttachmentsFromMessageId: String? = null,
     ): String = history.returnToPresent(conversationId).let { sends.sendOptimistic(
         conversationId = conversationId,
         content = content,
@@ -165,6 +201,9 @@ class MessageRepository internal constructor(
         attachments = attachments,
         location = location,
         sticker = sticker,
+        clientMessageId = clientMessageId,
+        attachmentReplyToId = attachmentReplyToId,
+        copyAttachmentsFromMessageId = copyAttachmentsFromMessageId,
     ) }
 
     /**
@@ -173,6 +212,9 @@ class MessageRepository internal constructor(
      */
     suspend fun reconcileSent(cmid: String, serverMessage: ApiMessage) =
         sends.reconcileSent(cmid, serverMessage)
+
+    /** Server ACK of the socket fallback: the optimistic bubble becomes the acknowledged message. */
+    suspend fun reconcileAcknowledged(cmid: String, ack: SendMessageAck) = sends.reconcileAcknowledged(cmid, ack)
 
     /** The outbox exhausted its retries — surface the bubble as retryable, with the [reason] it says (#13550). */
     suspend fun markSendFailed(cmid: String, reason: String? = null) = sends.markSendFailed(cmid, reason)
@@ -303,4 +345,8 @@ class MessageRepository internal constructor(
         readCount: Int,
         frontierIso: String?,
     ) = receipts.applyReadReceipt(conversationId, ownSenderId, deliveredCount, readCount, frontierIso)
+
+    /** `read-status:updated` : le résumé ne touche que le message qu'il décrit ; `true` si la ligne a changé. */
+    suspend fun applyReadStatusSummary(conversationId: String, summary: ReadStatusSummary, currentUserId: String): Boolean =
+        receipts.applyReadStatusSummary(conversationId, summary, currentUserId)
 }

@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.push
 
+import me.meeshy.sdk.model.StoryViewerInitialAction
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.game.GameTarget
 import me.meeshy.sdk.model.game.pages.GamePage
@@ -48,8 +49,33 @@ class PushTapDestinationTest {
     }
 
     @Test
-    fun `une reaction a une story ouvre le post de la story`() {
+    fun `contentType designe le reel quand postType est absent`() {
+        assertThat(resolve(PushPayload(type = "friend_new_post", postId = "p1", contentType = "REEL")))
+            .isEqualTo(PushTapDestination.Reel("p1"))
+        assertThat(PushPayload.decode(mapOf("contentType" to "REEL")).contentType).isEqualTo("REEL")
+    }
+
+    @Test
+    fun `une reaction a une story ouvre le lecteur sur cette story avec les vues`() {
         assertThat(resolve(PushPayload(type = "story_reaction", postId = "p1", postType = "STORY")))
+            .isEqualTo(PushTapDestination.StoryContent("p1", StoryViewerInitialAction.VIEWS, null, null))
+    }
+
+    @Test
+    fun `un commentaire sur une story ouvre le lecteur sur ses commentaires, commentaire cible compris`() {
+        assertThat(resolve(PushPayload(type = "story_new_comment", postId = "p1", postType = "STORY", commentId = "k1", parentCommentId = "k0")))
+            .isEqualTo(PushTapDestination.StoryContent("p1", StoryViewerInitialAction.COMMENTS, "k1", "k0"))
+    }
+
+    @Test
+    fun `une story sans intention precise s ouvre simplement`() {
+        assertThat(resolve(PushPayload(type = "friend_new_story", postId = "p1", postType = "STORY")))
+            .isEqualTo(PushTapDestination.StoryContent("p1", null, null, null))
+    }
+
+    @Test
+    fun `une reaction a un statut garde la fiche du post`() {
+        assertThat(resolve(PushPayload(type = "story_reaction", postId = "p1", postType = "STATUS")))
             .isEqualTo(PushTapDestination.Post("p1"))
     }
 

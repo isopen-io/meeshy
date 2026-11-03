@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.AddToPhotos as FiAddToPhotos
 import androidx.compose.material.icons.filled.AdminPanelSettings as FiAdminPanelSettings
 import androidx.compose.material.icons.filled.AllInclusive as FiAllInclusive
 import androidx.compose.material.icons.filled.AlternateEmail as FiAlternateEmail
+import androidx.compose.material.icons.filled.Android as FiAndroid
 import androidx.compose.material.icons.filled.Apps as FiApps
 import androidx.compose.material.icons.filled.ArrowCircleDown as FiArrowCircleDown
 import androidx.compose.material.icons.filled.ArrowCircleUp as FiArrowCircleUp
@@ -59,11 +60,13 @@ import androidx.compose.material.icons.filled.CardGiftcard as FiCardGiftcard
 import androidx.compose.material.icons.filled.CellTower as FiCellTower
 import androidx.compose.material.icons.filled.ChangeHistory as FiChangeHistory
 import androidx.compose.material.icons.filled.Check as FiCheck
+import androidx.compose.material.icons.filled.CheckBox as FiCheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank as FiCheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.CheckCircle as FiCheckCircle
 import androidx.compose.material.icons.filled.Close as FiClose
 import androidx.compose.material.icons.filled.CloseFullscreen as FiCloseFullscreen
 import androidx.compose.material.icons.filled.Code as FiCode
+import androidx.compose.material.icons.filled.Computer as FiComputer
 import androidx.compose.material.icons.filled.ContentCopy as FiContentCopy
 import androidx.compose.material.icons.filled.ContentCut as FiContentCut
 import androidx.compose.material.icons.filled.Crop as FiCrop
@@ -74,6 +77,8 @@ import androidx.compose.material.icons.filled.Description as FiDescription
 import androidx.compose.material.icons.filled.Devices as FiDevices
 import androidx.compose.material.icons.filled.Diamond as FiDiamond
 import androidx.compose.material.icons.filled.Directions as FiDirections
+import androidx.compose.material.icons.filled.Done as FiDone
+import androidx.compose.material.icons.filled.DoneAll as FiDoneAll
 import androidx.compose.material.icons.filled.Download as FiDownload
 import androidx.compose.material.icons.filled.Drafts as FiDrafts
 import androidx.compose.material.icons.filled.Edit as FiEdit
@@ -147,6 +152,7 @@ import androidx.compose.material.icons.filled.Person as FiPerson
 import androidx.compose.material.icons.filled.PersonAdd as FiPersonAdd
 import androidx.compose.material.icons.filled.PersonOff as FiPersonOff
 import androidx.compose.material.icons.filled.PersonRemove as FiPersonRemove
+import androidx.compose.material.icons.filled.PhoneAndroid as FiPhoneAndroid
 import androidx.compose.material.icons.filled.PhotoCamera as FiPhotoCamera
 import androidx.compose.material.icons.filled.PhotoFilter as FiPhotoFilter
 import androidx.compose.material.icons.filled.PhotoLibrary as FiPhotoLibrary
@@ -189,6 +195,7 @@ import androidx.compose.material.icons.filled.SwapHoriz as FiSwapHoriz
 import androidx.compose.material.icons.filled.SwapVert as FiSwapVert
 import androidx.compose.material.icons.filled.Sync as FiSync
 import androidx.compose.material.icons.filled.SyncProblem as FiSyncProblem
+import androidx.compose.material.icons.filled.TabletAndroid as FiTabletAndroid
 import androidx.compose.material.icons.filled.Tag as FiTag
 import androidx.compose.material.icons.filled.TextDecrease as FiTextDecrease
 import androidx.compose.material.icons.filled.TextFields as FiTextFields
@@ -260,6 +267,44 @@ import androidx.compose.material.icons.outlined.Verified as OuVerified
 import androidx.compose.material.icons.outlined.Visibility as OuVisibility
 import androidx.compose.material.icons.outlined.VisibilityOff as OuVisibilityOff
 import androidx.compose.material.icons.outlined.Warning as OuWarning
+import androidx.compose.material.icons.outlined.AddPhotoAlternate as OuAddPhotoAlternate
+import androidx.compose.material.icons.filled.Archive as FiArchive
+import androidx.compose.material.icons.outlined.AttachFile as OuAttachFile
+import androidx.compose.material.icons.filled.Badge as FiBadge
+import androidx.compose.material.icons.filled.BugReport as FiBugReport
+import androidx.compose.material.icons.filled.Build as FiBuild
+import androidx.compose.material.icons.filled.Celebration as FiCelebration
+import androidx.compose.material.icons.filled.ChatBubble as FiChatBubble
+import androidx.compose.material.icons.filled.ChatBubbleOutline as FiChatBubbleOutline
+import androidx.compose.material.icons.outlined.ChatBubbleOutline as OuChatBubbleOutline
+import androidx.compose.material.icons.filled.DeleteForever as FiDeleteForever
+import androidx.compose.material.icons.filled.DeleteSweep as FiDeleteSweep
+import androidx.compose.material.icons.filled.DragHandle as FiDragHandle
+import androidx.compose.material.icons.filled.FavoriteBorder as FiFavoriteBorder
+import androidx.compose.material.icons.filled.Gradient as FiGradient
+import androidx.compose.material.icons.filled.Grain as FiGrain
+import androidx.compose.material.icons.outlined.GraphicEq as OuGraphicEq
+import androidx.compose.material.icons.filled.HelpOutline as FiHelpOutline
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile as AfInsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.Label as AfLabel
+import androidx.compose.material.icons.filled.Language as FiLanguage
+import androidx.compose.material.icons.filled.MarkChatRead as FiMarkChatRead
+import androidx.compose.material.icons.filled.MarkChatUnread as FiMarkChatUnread
+import androidx.compose.material.icons.filled.MoreVert as FiMoreVert
+import androidx.compose.material.icons.outlined.PhotoCamera as OuPhotoCamera
+import androidx.compose.material.icons.outlined.PhotoLibrary as OuPhotoLibrary
+import androidx.compose.material.icons.filled.PrivacyTip as FiPrivacyTip
+import androidx.compose.material.icons.filled.Report as FiReport
+import androidx.compose.material.icons.filled.Share as FiShare
+import androidx.compose.material.icons.filled.StarBorder as FiStarBorder
+import androidx.compose.material.icons.filled.Storage as FiStorage
+import androidx.compose.material.icons.filled.SupportAgent as FiSupportAgent
+import androidx.compose.material.icons.filled.Unarchive as FiUnarchive
+import androidx.compose.material.icons.filled.Vibration as FiVibration
+import androidx.compose.material.icons.filled.VolumeUp as FiVolumeUp
+import androidx.compose.material.icons.outlined.WarningAmber as OuWarningAmber
+import androidx.compose.material.icons.filled.WbSunny as FiWbSunny
+import androidx.compose.material.icons.filled.ZoomOutMap as FiZoomOutMap
 
 /**
  * Porte unique des icônes de l'app : un RÔLE sémantique (envoyer, répondre, épingler...) rend l'icône
@@ -276,6 +321,7 @@ public object MeeshyIcons {
     // Rôles directionnels : AutoMirrored, miroités en RTL.
     public val AddToList: ImageVector get() = Icons.AutoMirrored.Filled.AfPlaylistAdd
     public val AlignLeft: ImageVector get() = Icons.AutoMirrored.Filled.AfFormatAlignLeft
+    public val Android: ImageVector get() = Icons.Filled.FiAndroid
     public val ArrowUpRight: ImageVector get() = Icons.AutoMirrored.Filled.AfCallMade
     public val Article: ImageVector get() = Icons.AutoMirrored.Filled.AfArticle
     public val Back: ImageVector get() = Icons.AutoMirrored.Filled.AfKeyboardArrowLeft
@@ -284,6 +330,7 @@ public object MeeshyIcons {
     public val Chat: ImageVector get() = Icons.AutoMirrored.Filled.AfChat
     public val ChevronBackward: ImageVector get() = Icons.AutoMirrored.Filled.AfKeyboardArrowLeft
     public val ChevronForward: ImageVector get() = Icons.AutoMirrored.Filled.AfKeyboardArrowRight
+    public val Computer: ImageVector get() = Icons.Filled.FiComputer
     public val Dictionary: ImageVector get() = Icons.AutoMirrored.Filled.AfMenuBook
     public val Forward: ImageVector get() = Icons.AutoMirrored.Filled.AfArrowForward
     public val ForwardMessage: ImageVector get() = Icons.AutoMirrored.Filled.AfForward
@@ -291,6 +338,7 @@ public object MeeshyIcons {
     public val MessageFilled: ImageVector get() = Icons.AutoMirrored.Filled.AfMessage
     public val Notes: ImageVector get() = Icons.AutoMirrored.Filled.AfNotes
     public val OpenExternal: ImageVector get() = Icons.AutoMirrored.Filled.AfOpenInNew
+    public val PhoneAndroid: ImageVector get() = Icons.Filled.FiPhoneAndroid
     public val QueueMusic: ImageVector get() = Icons.AutoMirrored.Filled.AfQueueMusic
     public val Redo: ImageVector get() = Icons.AutoMirrored.Filled.AfRedo
     public val Reply: ImageVector get() = Icons.AutoMirrored.Filled.AfReply
@@ -298,6 +346,7 @@ public object MeeshyIcons {
     public val Send: ImageVector get() = Icons.AutoMirrored.Filled.AfSend
     public val SignIn: ImageVector get() = Icons.AutoMirrored.Filled.AfLogin
     public val SignOut: ImageVector get() = Icons.AutoMirrored.Filled.AfLogout
+    public val TabletAndroid: ImageVector get() = Icons.Filled.FiTabletAndroid
     public val Undo: ImageVector get() = Icons.AutoMirrored.Filled.AfUndo
     public val VolumeOff: ImageVector get() = Icons.AutoMirrored.Filled.AfVolumeOff
     public val VolumeUp: ImageVector get() = Icons.AutoMirrored.Filled.AfVolumeUp
@@ -339,6 +388,7 @@ public object MeeshyIcons {
     public val Campaign: ImageVector get() = Icons.Filled.FiCampaign
     public val ChartBar: ImageVector get() = Icons.Filled.FiBarChart
     public val Check: ImageVector get() = Icons.Filled.FiCheck
+    public val CheckBoxChecked: ImageVector get() = Icons.Filled.FiCheckBox
     public val CheckBoxBlank: ImageVector get() = Icons.Filled.FiCheckBoxOutlineBlank
     public val CheckCircle: ImageVector get() = Icons.Outlined.OuCheckCircle
     public val CheckCircleFilled: ImageVector get() = Icons.Filled.FiCheckCircle
@@ -362,6 +412,8 @@ public object MeeshyIcons {
     public val DiamondFilled: ImageVector get() = Icons.Filled.FiDiamond
     public val Directions: ImageVector get() = Icons.Filled.FiDirections
     public val Document: ImageVector get() = Icons.Filled.FiDescription
+    public val Done: ImageVector get() = Icons.Filled.FiDone
+    public val DoneAll: ImageVector get() = Icons.Filled.FiDoneAll
     public val Download: ImageVector get() = Icons.Filled.FiDownload
     public val Edit: ImageVector get() = Icons.Outlined.OuEdit
     public val EditFilled: ImageVector get() = Icons.Filled.FiEdit
@@ -535,6 +587,44 @@ public object MeeshyIcons {
     public val WifiProblem: ImageVector get() = Icons.Filled.FiSignalWifiConnectedNoInternet4
     public val ZoomIn: ImageVector get() = Icons.Filled.FiZoomIn
     public val ZoomOut: ImageVector get() = Icons.Filled.FiZoomOut
+    public val AddPhotoAlternateOutlined: ImageVector get() = Icons.Outlined.OuAddPhotoAlternate
+    public val Archive: ImageVector get() = Icons.Filled.FiArchive
+    public val AttachFileOutlined: ImageVector get() = Icons.Outlined.OuAttachFile
+    public val Badge: ImageVector get() = Icons.Filled.FiBadge
+    public val BugReport: ImageVector get() = Icons.Filled.FiBugReport
+    public val Build: ImageVector get() = Icons.Filled.FiBuild
+    public val Celebration: ImageVector get() = Icons.Filled.FiCelebration
+    public val ChatBubble: ImageVector get() = Icons.Filled.FiChatBubble
+    public val ChatBubbleOutline: ImageVector get() = Icons.Filled.FiChatBubbleOutline
+    public val ChatBubbleOutlineOutlined: ImageVector get() = Icons.Outlined.OuChatBubbleOutline
+    public val DeleteForever: ImageVector get() = Icons.Filled.FiDeleteForever
+    public val DeleteSweep: ImageVector get() = Icons.Filled.FiDeleteSweep
+    public val DragHandle: ImageVector get() = Icons.Filled.FiDragHandle
+    public val FavoriteBorder: ImageVector get() = Icons.Filled.FiFavoriteBorder
+    public val Gradient: ImageVector get() = Icons.Filled.FiGradient
+    public val Grain: ImageVector get() = Icons.Filled.FiGrain
+    public val GraphicEqOutlined: ImageVector get() = Icons.Outlined.OuGraphicEq
+    public val HelpOutline: ImageVector get() = Icons.Filled.FiHelpOutline
+    public val InsertFile: ImageVector get() = Icons.AutoMirrored.Filled.AfInsertDriveFile
+    public val LabelTag: ImageVector get() = Icons.AutoMirrored.Filled.AfLabel
+    public val Language: ImageVector get() = Icons.Filled.FiLanguage
+    public val MarkChatRead: ImageVector get() = Icons.Filled.FiMarkChatRead
+    public val MarkChatUnread: ImageVector get() = Icons.Filled.FiMarkChatUnread
+    public val MoreVert: ImageVector get() = Icons.Filled.FiMoreVert
+    public val PhotoCameraOutlined: ImageVector get() = Icons.Outlined.OuPhotoCamera
+    public val PhotoLibraryOutlined: ImageVector get() = Icons.Outlined.OuPhotoLibrary
+    public val PrivacyTip: ImageVector get() = Icons.Filled.FiPrivacyTip
+    public val Report: ImageVector get() = Icons.Filled.FiReport
+    public val ShareFilled: ImageVector get() = Icons.Filled.FiShare
+    public val StarBorder: ImageVector get() = Icons.Filled.FiStarBorder
+    public val Storage: ImageVector get() = Icons.Filled.FiStorage
+    public val SupportAgent: ImageVector get() = Icons.Filled.FiSupportAgent
+    public val Unarchive: ImageVector get() = Icons.Filled.FiUnarchive
+    public val Vibration: ImageVector get() = Icons.Filled.FiVibration
+    public val VolumeUpFilled: ImageVector get() = Icons.Filled.FiVolumeUp
+    public val WarningAmberOutlined: ImageVector get() = Icons.Outlined.OuWarningAmber
+    public val WbSunny: ImageVector get() = Icons.Filled.FiWbSunny
+    public val ZoomOutMap: ImageVector get() = Icons.Filled.FiZoomOutMap
 
     // Symboles sans équivalent Material : vecteurs maison.
     public val BubbleTail: ImageVector get() = MeeshyVectorIcons.BubbleTail

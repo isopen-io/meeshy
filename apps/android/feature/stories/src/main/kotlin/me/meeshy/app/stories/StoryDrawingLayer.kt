@@ -1,63 +1,45 @@
 package me.meeshy.app.stories
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Undo
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
-import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
+import me.meeshy.sdk.model.StrokeSmoothing
+import me.meeshy.sdk.model.StrokeTool
 import me.meeshy.sdk.model.scene.StoryDrawingCanvasSpace
-import me.meeshy.ui.theme.hexColor
+import me.meeshy.sdk.model.scene.StrokeCapture
+import me.meeshy.sdk.model.scene.StrokeCaptureSample
+import me.meeshy.ui.story.canvas.drawing.StrokeGeometryCache
+import me.meeshy.ui.story.canvas.drawing.StrokeRibbonRenderer
 
 /**
- * The story composer's freehand-drawing capture surface — renders the already
- * committed [strokes] (draw order, so later strokes paint over earlier ones) and,
- * only while [isCapturing], turns the whole surface into a finger-drag capture:
- * every drag builds one stroke's points in the canonical [StoryDrawingCanvasSpace]
- * and [onStrokeCaptured] fires with the finished list on release. When not
- * capturing the surface is purely decorative (no `pointerInput`), so it never
- * steals touches from the canvas' pan/zoom/element gestures underneath.
+ * The story composer's freehand-drawing surface — renders the committed [strokes] (draw order) and, only while
+ * [isCapturing], captures the drawing gesture like iOS `StrokeCaptureLayer`: the stylus pressure (or the finger speed)
+ * drives the width ([StrokeCapture], `captureVersion` 1), coalesced historical points are kept so a fast flick loses
+ * nothing, and the in-progress stroke is previewed by the very same ribbon renderer as the committed one.
  *
- * Rendering is intentionally the minimal "raw" polyline (straight segments through
- * every captured point) regardless of a stroke's [me.meeshy.sdk.model.StrokeSmoothing] —
- * the model already carries `curve`/`line` for a future renderer, but interpolating
- * them is out of this lot's scope.
+ * - Eraser: nothing is created nor previewed; the gesture points go to [onErase] on lift.
+ * - A second finger cancels the stroke in progress and drives the viewport zoom through [onViewportPinch] instead.
+ * - A cancelled gesture (the system or a parent took the touches) commits nothing; a lone tap commits one point (a disc).
+ * When not capturing it is purely decorative: no pointer input, so it never steals touches from the canvas gestures.
  */
 @Composable
 fun StoryDrawingLayer(
@@ -67,16 +49,23 @@ fun StoryDrawingLayer(
     activeWidthDesign: Double,
     onStrokeCaptured: (List<StoryDrawingStrokePoint>) -> Unit,
     modifier: Modifier = Modifier,
+    activeTool: StrokeTool = StrokeTool.PEN,
+    activeSmoothing: StrokeSmoothing = StrokeSmoothing.CURVE,
+    onErase: (List<StoryDrawingStrokePoint>) -> Unit = {},
+    /** Cumulative zoom factor of the two-finger gesture and whether it has ended. */
+    onViewportPinch: ((Float, Boolean) -> Unit)? = null,
 ) {
     var canvasWidthPx by remember { mutableFloatStateOf(0f) }
     var canvasHeightPx by remember { mutableFloatStateOf(0f) }
-    // The in-progress stroke is kept in plain (non-State) buffers and redrawn via a
-    // bumped counter rather than a recomposing list — a long drag samples many points
-    // per second, and re-diffing a growing List<Offset> on every one would be the
-    // exact re-render churn the composer's fluidity rule forbids.
-    var liveVersion by remember { mutableIntStateOf(0) }
-    val livePath = remember { Path() }
-    val liveDesignPoints = remember { mutableListOf<StoryDrawingStrokePoint>() }
+    var live by remember { mutableStateOf<StoryDrawingStroke?>(null) }
+    val geometryCache = remember { StrokeGeometryCache() }
+    val committedOps = remember(strokes) { StrokeRibbonRenderer.plan(strokes, cache = geometryCache) }
+    val liveCache = remember { StrokeGeometryCache(capacity = 4) }
+    val liveOps = remember(live) { live?.let { StrokeRibbonRenderer.plan(listOf(it), cache = liveCache) }.orEmpty() }
+    val brush by rememberUpdatedState(DrawingBrush(activeTool, activeColorHex, activeWidthDesign, activeSmoothing))
+    val onCaptured by rememberUpdatedState(onStrokeCaptured)
+    val onErased by rememberUpdatedState(onErase)
+    val onPinch by rememberUpdatedState(onViewportPinch)
 
     Canvas(
         modifier = modifier
@@ -87,178 +76,125 @@ fun StoryDrawingLayer(
             .then(
                 if (isCapturing) {
                     Modifier.pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragStart = { offset ->
-                                livePath.reset()
-                                liveDesignPoints.clear()
-                                addLivePoint(offset, canvasWidthPx, canvasHeightPx, livePath, liveDesignPoints, isFirst = true)
-                                liveVersion++
-                            },
-                            onDrag = { change, _ ->
-                                change.consume()
-                                addLivePoint(change.position, canvasWidthPx, canvasHeightPx, livePath, liveDesignPoints, isFirst = false)
-                                liveVersion++
-                            },
-                            onDragEnd = {
-                                onStrokeCaptured(liveDesignPoints.toList())
-                                livePath.reset()
-                                liveDesignPoints.clear()
-                                liveVersion++
-                            },
-                            onDragCancel = {
-                                livePath.reset()
-                                liveDesignPoints.clear()
-                                liveVersion++
-                            },
-                        )
+                        awaitEachGesture {
+                            val session = DrawingSession()
+                            try {
+                                runDrawingGesture(
+                                    session = session,
+                                    size = { canvasWidthPx.toDouble() to canvasHeightPx.toDouble() },
+                                    brush = { brush },
+                                    onPreview = { live = it },
+                                    onCommit = { points -> if (brush.tool == StrokeTool.ERASER) onErased(points) else onCaptured(points) },
+                                    onPinch = { factor, ended -> onPinch?.invoke(factor, ended) },
+                                )
+                            } finally {
+                                live = null
+                            }
+                        }
                     }
                 } else {
                     Modifier
                 },
             ),
     ) {
-        strokes.forEach { stroke ->
-            if (stroke.points.size < 2) return@forEach
-            val path = Path()
-            stroke.points.forEachIndexed { index, point ->
-                val x = StoryDrawingCanvasSpace.toScreenX(point.x, canvasWidthPx)
-                val y = StoryDrawingCanvasSpace.toScreenY(point.y, canvasHeightPx)
-                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-            }
-            drawPath(
-                path = path,
-                color = hexColor(stroke.colorHex),
-                style = Stroke(
-                    width = StoryDrawingCanvasSpace.toScreenWidth(stroke.width, canvasWidthPx),
-                    cap = StrokeCap.Round,
-                    join = StrokeJoin.Round,
-                ),
-            )
-        }
-        // Reading the version here subscribes this draw pass to every capture sample,
-        // so the in-progress path redraws live without the point buffer itself being State.
-        val redrawOn = liveVersion
-        if (redrawOn >= 0 && liveDesignPoints.size >= 2) {
-            drawPath(
-                path = livePath,
-                color = hexColor(activeColorHex),
-                style = Stroke(
-                    width = StoryDrawingCanvasSpace.toScreenWidth(activeWidthDesign, canvasWidthPx),
-                    cap = StrokeCap.Round,
-                    join = StrokeJoin.Round,
-                ),
-            )
+        drawIntoCanvas { canvas ->
+            val native = canvas.nativeCanvas
+            native.save()
+            native.scale(size.width / StoryDrawingCanvasSpace.DESIGN_WIDTH, size.height / StoryDrawingCanvasSpace.DESIGN_HEIGHT)
+            StrokeRibbonRenderer.draw(native, committedOps)
+            StrokeRibbonRenderer.draw(native, liveOps)
+            native.restore()
         }
     }
 }
 
-private fun addLivePoint(
-    offset: Offset,
-    canvasWidthPx: Float,
-    canvasHeightPx: Float,
-    path: Path,
-    designPoints: MutableList<StoryDrawingStrokePoint>,
-    isFirst: Boolean,
-) {
-    if (isFirst) path.moveTo(offset.x, offset.y) else path.lineTo(offset.x, offset.y)
-    StoryDrawingCanvasSpace.toDesignPoint(offset.x, offset.y, canvasWidthPx, canvasHeightPx)?.let(designPoints::add)
+/** The brush a gesture draws with, read live so a colour change mid-session applies to the next stroke. */
+internal data class DrawingBrush(val tool: StrokeTool, val colorHex: String, val widthDesign: Double, val smoothing: StrokeSmoothing)
+
+/** Samples of the stroke in progress; a plain buffer so a long drag does not recompose per sample. */
+internal class DrawingSession {
+    val samples = ArrayList<StrokeCaptureSample>()
+    var strokeId: String = "live"
+    var stylus: Boolean = false
 }
+
+private const val MAX_FORCE = 1.0
 
 /**
- * The drawing tool's minimal controls, shown in place of the caption field while
- * drawing is active: a colour swatch row, three thickness steps, an undo button
- * (disabled with nothing to undo), and a "done" affordance that leaves the tool.
- * Mirrors the other composer pickers' small-curated-set pattern rather than a full
- * colour wheel or a continuous thickness slider.
+ * One drawing gesture, from the first down to the last up: a single pointer traces (stylus or finger), a second pointer
+ * hands the gesture to the viewport pinch and abandons the stroke. Cancellation (the coroutine is cancelled when the
+ * pointer stream is taken from us) leaves through the caller's `finally`, so nothing is committed.
  */
-@Composable
-fun StoryDrawingToolbar(
-    activeColorHex: String,
-    activeWidthDesign: Double,
-    canUndo: Boolean,
-    onColorSelected: (String) -> Unit,
-    onWidthSelected: (Double) -> Unit,
-    onUndo: () -> Unit,
-    onDone: () -> Unit,
-    modifier: Modifier = Modifier,
-    /** Sur le plateau, la colonne droite range l'historique et la sortie : la rangée ne montre que le réglage déplié. */
-    control: DrawingControl? = null,
+@OptIn(ExperimentalComposeUiApi::class)
+private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.runDrawingGesture(
+    session: DrawingSession,
+    size: () -> Pair<Double, Double>,
+    brush: () -> DrawingBrush,
+    onPreview: (StoryDrawingStroke?) -> Unit,
+    onCommit: (List<StoryDrawingStrokePoint>) -> Unit,
+    onPinch: (Float, Boolean) -> Unit,
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (control == null) {
-            IconButton(onClick = onUndo, enabled = canUndo) {
-                Icon(Icons.Filled.Undo, contentDescription = stringResource(R.string.stories_composer_draw_undo))
-            }
+    val down = awaitFirstDown(requireUnconsumed = false)
+    session.stylus = down.type == PointerType.Stylus || down.type == PointerType.Eraser
+    val tracked = down.id
+    session.strokeId = "live-${down.uptimeMillis}"
+    session.samples.clear()
+    session.samples += down.toSample(session.stylus)
+    var pinching = false
+    var zoom = 1f
+    fun preview() {
+        val (w, h) = size()
+        val b = brush()
+        if (b.tool == StrokeTool.ERASER) return onPreview(null)
+        val points = StrokeCapture.points(session.samples, w, h, session.stylus)
+        onPreview(
+            if (points.isEmpty()) null else StoryDrawingStroke(
+                id = session.strokeId,
+                points = points,
+                colorHex = b.colorHex,
+                width = b.widthDesign,
+                tool = b.tool,
+                smoothing = b.smoothing,
+                captureVersion = StrokeCapture.CAPTURE_VERSION,
+            ),
+        )
+    }
+    preview()
+    while (true) {
+        val event = awaitPointerEvent(PointerEventPass.Main)
+        val pressed = event.changes.filter { it.pressed }
+        if (pressed.size >= 2 && !pinching) {
+            pinching = true
+            session.samples.clear()
+            onPreview(null)
         }
-        if (control == null || control == DrawingControl.COLOR) {
-            Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                StoryDrawingPalette.colors.forEach { colorHex ->
-                    DrawSwatch(
-                        colorHex = colorHex,
-                        selected = colorHex.equals(activeColorHex, ignoreCase = true),
-                        onClick = { onColorSelected(colorHex) },
-                    )
-                }
-            }
+        if (pinching) {
+            zoom *= event.calculateZoom()
+            event.changes.forEach { it.consume() }
+            onPinch(zoom, false)
+            if (pressed.isEmpty()) return onPinch(zoom, true)
+            continue
         }
-        if (control == null || control == DrawingControl.WIDTH) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                StoryDrawingPalette.widths.forEach { width ->
-                    DrawWidthDot(
-                        widthDesign = width,
-                        selected = width == activeWidthDesign,
-                        onClick = { onWidthSelected(width) },
-                    )
-                }
-            }
+        val change = event.changes.firstOrNull { it.id == tracked } ?: return
+        val previousForce = session.samples.lastOrNull()?.force ?: MAX_FORCE
+        val force = if (!session.stylus) MAX_FORCE else if (change.pressed) change.force() else previousForce
+        change.historical.forEach { h ->
+            session.samples += StrokeCaptureSample(h.position.x.toDouble(), h.position.y.toDouble(), h.uptimeMillis, force)
         }
-        if (control == null) {
-            IconButton(onClick = onDone) {
-                Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.stories_composer_draw_done))
-            }
+        session.samples += StrokeCaptureSample(change.position.x.toDouble(), change.position.y.toDouble(), change.uptimeMillis, force)
+        change.consume()
+        if (!change.pressed) {
+            val (w, h) = size()
+            val points = StrokeCapture.points(session.samples, w, h, session.stylus)
+            onPreview(null)
+            if (points.isNotEmpty()) onCommit(points)
+            return
         }
+        preview()
     }
 }
 
-@Composable
-private fun DrawSwatch(colorHex: String, selected: Boolean, onClick: () -> Unit) {
-    val ringColor = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
-    Box(
-        modifier = Modifier
-            .size(28.dp)
-            .clip(CircleShape)
-            .border(2.dp, ringColor, CircleShape)
-            .padding(3.dp)
-            .clip(CircleShape)
-            .background(hexColor(colorHex))
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = colorHex },
-    ) {}
-}
+private fun PointerInputChange.force(): Double = pressure.toDouble().coerceIn(0.0, MAX_FORCE)
 
-@Composable
-private fun DrawWidthDot(widthDesign: Double, selected: Boolean, onClick: () -> Unit) {
-    val fraction = (widthDesign / StoryDrawingPalette.widths.last()).coerceIn(0.35, 1.0)
-    val dotSize = (10 + fraction * 10).dp
-    val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    Box(
-        modifier = Modifier
-            .size(28.dp)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(dotSize)
-                .clip(CircleShape)
-                .background(color),
-        ) {}
-    }
-}
+private fun PointerInputChange.toSample(stylus: Boolean): StrokeCaptureSample =
+    StrokeCaptureSample(position.x.toDouble(), position.y.toDouble(), uptimeMillis, if (stylus) force() else MAX_FORCE)

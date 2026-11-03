@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.model.audio.BackgroundAudioAnnouncement
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryClipTransition
@@ -13,6 +14,7 @@ import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.scene.ResolvedKeyframeTransform
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
+import me.meeshy.sdk.model.StoryTransitionEffect
 import me.meeshy.sdk.model.scene.StoryClipTransitionResolver
 import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryKeyframeResolver
@@ -197,6 +199,9 @@ data class StorySlideView(
      * flat constant. Defaults to the 6s static baseline.
      */
     val autoAdvanceMillis: Int = StorySlideDuration.DEFAULT_STATIC_MS,
+    /** L'ouverture et la fermeture choisies par l'auteur (`effects.opening` / `effects.closing`), jouées 1,2 s par la scène. */
+    val opening: StoryTransitionEffect? = null,
+    val closing: StoryTransitionEffect? = null,
     /**
      * The author's colour backdrop (`StoryEffects.background`), parsed once at
      * projection time via the shared [StoryBackgroundValue] rule: a solid colour or
@@ -257,12 +262,16 @@ data class StorySlideView(
     val places: List<StoryLocationObject> = emptyList(),
     /** Les puces des sons de premier plan (iOS `AudioForegroundChip`). */
     val audioChips: List<StoryAudioChipView> = emptyList(),
+    /** Le son d'arrière-plan que l'en-tête annonce (iOS `BackgroundSoundBadge`) : rien, l'original, ou un crédit. */
+    val backgroundAudio: BackgroundAudioAnnouncement = BackgroundAudioAnnouncement.None,
     /** Déjà vue par le lecteur à l'ouverture : la lecture commence à la première non vue. */
     val isViewed: Boolean = false,
     /** Instant de publication, pour le « il y a 2 h » de l'en-tête ; `null` si illisible. */
     val createdAtMillis: Long? = null,
     /** Le look du fond (filtre de slide puis réglages) — neutre : aucun coût de rendu. */
     val lookRecipe: SceneLookRecipe = SceneLookRecipe.NEUTRAL,
+    /** Les filtres, effets et cadres d'une scène PAS ENCORE publiée (aperçu, export du compositeur, #13841) ; `null` partout ailleurs. */
+    val composerLooks: StorySceneMediaLooks? = null,
 ) {
     /** La slide fait du son : vidéo de fond ou de premier plan, ou piste audio. */
     val hasSound: Boolean

@@ -24,6 +24,10 @@ import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.BlockedListRepository
 import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.PendingMediaPreview
+import me.meeshy.sdk.media.PendingMediaPreviewing
+import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.isProtected
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
@@ -94,6 +98,7 @@ class AppShareSheetViewModelTest {
         stream: kotlinx.coroutines.flow.Flow<CacheResult<List<ApiConversation>>> = flowOf(CacheResult.Fresh(list, ageMillis = 0)),
         outOfThread: OutOfThreadSendGate = OutOfThreadSendGate { OutOfThreadAdmission.SEND },
         trackedLink: String? = null,
+        previews: PendingMediaPreviewing = PendingMediaPreviewing.None,
     ): Harness {
         val links = mockk<PostShareLinkService>()
         coEvery { links.resolve(any(), any()) } returns
@@ -115,7 +120,7 @@ class AppShareSheetViewModelTest {
         val online = MutableStateFlow(true)
         val network = mockk<NetworkMonitor>(relaxed = true)
         every { network.isOnline } returns online
-        val vm = AppShareSheetViewModel(conversationRepo, messages, session, mockk<WorkManager>(relaxed = true), mediaQueue, friendRepo, blockedRepo, blocks, network, outOfThread, links)
+        val vm = AppShareSheetViewModel(conversationRepo, messages, session, mockk<WorkManager>(relaxed = true), mediaQueue, friendRepo, blockedRepo, blocks, network, outOfThread, links, previews)
         return Harness(vm, messages, conversationRepo, mediaQueue, blocks, online, links)
     }
 
@@ -371,6 +376,33 @@ class AppShareSheetViewModelTest {
         coVerify(exactly = 1) { h.messages.sendOptimistic(conversationId = "c1", content = any(), originalLanguage = any(), sender = me, messageType = "video", attachmentUploadCmids = any(), attachments = any()) }
         coVerify(exactly = 2) { h.messages.sendOptimistic(conversationId = "c1", content = any(), originalLanguage = any(), sender = me, messageType = "file", attachmentUploadCmids = any(), attachments = match { it.single().mimeType in setOf("application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document") && it.single().fileName?.contains('.') == true }) }
         assertThat(h.model().deliveries.values).containsExactly(ShareDelivery.Sent)
+    }
+
+    @Test
+    fun a_shared_photo_leaves_with_its_local_preview_so_its_pending_bubble_paints_it() = runTest(dispatcher) {
+        val previews = object : PendingMediaPreviewing {
+            override suspend fun keep(cmid: String, thumbnailPath: String?, effects: MessageEffects): String? = null
+            override suspend fun render(cmid: String, item: MediaUploadItem, effects: MessageEffects): PendingMediaPreview =
+                PendingMediaPreview(thumbnailUrl = "file:///previews/$cmid.jpg", width = 800, height = 600, durationMs = 3_000L)
+            override suspend fun release(attachments: List<ApiMessageAttachment>) = Unit
+        }
+        val h = harness(previews = previews)
+        h.vm.bindIncoming(null, listOf(file("a.jpg", "image/jpeg")))
+        advanceUntilIdle()
+
+        h.vm.toggle(h.model().sections.recents[0])
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            h.messages.sendOptimistic(
+                conversationId = "c1", content = any(), originalLanguage = any(), sender = me, messageType = "image", attachmentUploadCmids = any(),
+                attachments = match {
+                    val piece = it.single()
+                    piece.thumbnailUrl == "file:///previews/upload-cmid.jpg" && piece.width == 800 && piece.height == 600 && piece.duration == 3_000 && !piece.isProtected
+                },
+            )
+        }
     }
 
     @Test

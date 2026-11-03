@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_type_direct">مباشرة</string>
+    <string name="conversation_type_group">مجموعة</string>
+    <string name="conversation_type_public">عامة</string>
+    <string name="conversation_type_global">عالمية</string>
+    <string name="conversation_type_community">مجتمع</string>
+    <string name="conversation_type_channel">قناة</string>
+    <string name="conversation_type_broadcast">بث</string>
+    <string name="conversation_type_bot">بوت</string>
+</resources>

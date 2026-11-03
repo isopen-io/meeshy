@@ -23,6 +23,7 @@ import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.media.PendingMediaPreviewing
 import me.meeshy.sdk.session.asCoroutineContext
 import me.meeshy.sdk.mention.MentionContacts
 import me.meeshy.sdk.mention.MentionLookupDriver
@@ -83,6 +84,7 @@ internal class ChatComposerController(
     private val languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
     mentionContacts: MentionContacts = MentionContacts.None,
     private val endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
+    private val pendingPreviews: PendingMediaPreviewing = PendingMediaPreviewing.None,
 ) {
 
     private val mentions = MentionLookupDriver(
@@ -593,9 +595,11 @@ internal class ChatComposerController(
                 originalName = name,
                 mimeType = mime,
                 fileSize = upload.sizeBytes.toInt(),
+                thumbnailUrl = pendingPreviews.keep(cmid, item.thumbnailPath, effects),
                 width = item.width,
                 height = item.height,
                 duration = item.durationMs?.toInt(),
+                effectFlags = effects.flags,
             )
         }
         tray.release(batch)
@@ -669,6 +673,11 @@ internal class ChatComposerController(
         persistDraft(composerText.text, state.value.replyingToMessageId)
     }
 
+    fun clearPanelEffects() {
+        state.update { it.copy(pendingEffects = MessageEffectsEditor.clearPanelFlags(it.pendingEffects)) }
+        persistDraft(composerText.text, state.value.replyingToMessageId)
+    }
+
     fun startEdit(messageId: String) {
         val message = messages.value.firstOrNull {
             it.message.id == messageId && it.sendState == LocalSendState.SYNCED
@@ -692,6 +701,9 @@ internal class ChatComposerController(
             )
         }
     }
+
+    /** Met le brouillon à l'abri (ON_STOP) : sans effet quand le magasin est déjà à jour. */
+    fun flushDraft() = persistDraft(composerText.text, state.value.replyingToMessageId)
 
     fun startReply(messageId: String) {
         val message = messages.value.firstOrNull {

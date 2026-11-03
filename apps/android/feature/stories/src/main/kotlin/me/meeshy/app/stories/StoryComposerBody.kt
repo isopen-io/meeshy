@@ -4,11 +4,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import me.meeshy.ui.component.retouch.LocalComposerLookAuthor
+import me.meeshy.ui.component.retouch.rememberComposerLookAuthor
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import me.meeshy.app.stories.composer.scene.ComposerSceneInvite
+import me.meeshy.app.stories.composer.scene.sceneInviteShown
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.ComposerEditingChrome
 import me.meeshy.sdk.model.composer.ComposerHistoryPlace
 import me.meeshy.sdk.model.composer.ComposerMediaSource
@@ -49,7 +54,8 @@ internal class StoryComposerDoors(
  * l'audience et Publier se retirent, et la colonne des outils porte, à la même place, ses options ; le pinceau en main n'a
  * que sa barre de dessin. [formatChevron] est le menu « Publier comme » de
  * l'hôte ; la route autonome n'en a pas. [sheet] est la feuille ouverte (stickers, sons, audience, ou celles de l'élément
- * sélectionné), ancrée en bas : la scène se réduit au-dessus d'elle (#13838). Un texte qu'on écrit, ou la légende, prend l'état de frappe (#13835) : la
+ * sélectionné), ancrée en bas : la scène se réduit au-dessus d'elle (#13838) ; le panneau du geste et la bande d'un réglage
+ * se posent par-dessus la scène, qui garde sa taille (#15192). Un texte qu'on écrit, ou la légende, prend l'état de frappe (#13835) : la
  * scène réduite au-dessus d'une barre collée au clavier, et rien d'autre. Quand la fenêtre a la place de deux rails
  * (#13837), les outils et le « ⋯ » vont dans un rail gauche libellé, la sélection et ↶↷ dans un rail droit, et Publier
  * sous la scène.
@@ -88,6 +94,7 @@ private fun SceneFirstFrame(
     capture: StorySceneCapture?,
 ) {
     val comparison = remember { LookComparison() }
+    val zoom = rememberComposerViewportZoom()
     val armed = capture?.armed == true
     val panel = state.scenePanel(morePanel)?.takeIf { !armed }
     val typing = rememberStoryTyping(state, viewModel, morePanel, onMorePanel, keyboard)
@@ -99,8 +106,8 @@ private fun SceneFirstFrame(
     val edition = rememberSceneEdition(state, viewModel, SceneEditionHost(sheet, doors, capture), besideScene.editing && openSheet == null, selection,
         quiet = panel != null || typing != null || armed)
     val raised = panel?.takeIf { it.raisedAtBottom }
-    val reduced = typing == null && (raised != null || edition.anyBand)
-    val editing = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null, sceneReduced = reduced)
+    val bottomPanelOpen = typing == null && (raised != null || edition.anyBand)
+    val editing = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null, bottomPanelOpen = bottomPanelOpen)
     val chrome = editing.sceneControls
     val levels = edition.levels
     val edited = edition.edited
@@ -113,13 +120,15 @@ private fun SceneFirstFrame(
     Box(Modifier.fillMaxSize()) {
         StorySceneFirstLayout(
             onDismiss = doors.onClose,
-            reduced = reduced,
             scene = { modifier ->
                 CompositionLocalProvider(LocalPlacedReframe provides placedReframe(edition.placedBand, placed, viewModel)) {
-                    StoryComposerScene(state, viewModel, comparison, modifier, capture, captureOffered)
+                    Box(modifier) {
+                        StoryComposerScene(state, viewModel, comparison, Modifier.fillMaxSize(), capture, captureOffered, zoom)
+                        ComposerSceneInvite(sceneInviteShown(state, armed, panel != null || typing != null || openSheet != null))
+                    }
                 }
             },
-            top = { StorySceneTop(state, viewModel, doors.onClose, editing) },
+            top = { if (!zoom.zoomed) StorySceneTop(state, viewModel, doors.onClose, editing) },
             strip = { if (chrome) StorySlideStrip(state, viewModel) },
             trailing = {
                 SceneRail(
@@ -140,6 +149,7 @@ private fun SceneFirstFrame(
                             StoryComposerPanel(state, viewModel, onPickMedia = doors.onPickMedia, onOpenSoundShelf = doors.onOpenSoundShelf)
                         },
                         onCloseLocal = { onMorePanel(null) },
+                        zoom = zoom,
                     )
                 } ?: SceneEditingBand(edition, state, viewModel, comparison)
             },
@@ -152,7 +162,6 @@ private fun SceneFirstFrame(
             typing = typing,
             rails = rails,
             incoming = state.incomingPlaceholder()?.let { placeholder -> { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } },
-            clearsTrailingLane = editing.cedesLane && openSheet == null,
         )
         EditingAnnouncer(editing = editedWord(state, editing.editing))
         edited.background?.let { BackgroundRemoveConfirmation(it) }
@@ -337,6 +346,7 @@ private fun StorySlideStrip(state: StoryComposerUiState, viewModel: StoryCompose
     val placedMedia = remember(state.deck.slides, state.attachments, state.pendingUploads) {
         state.deck.slides.associate { it.id to state.thumbnailPlacedOf(it, viewModel.mediaBaseUrl) }
     }
+    CompositionLocalProvider(LocalComposerLookAuthor provides rememberComposerLookAuthor(viewModel.lookPerson)) {
     ComposerSlideRail(
         deck = state.deck,
         backgrounds = backgrounds,
@@ -351,6 +361,7 @@ private fun StorySlideStrip(state: StoryComposerUiState, viewModel: StoryCompose
         onEditBackground = viewModel::onEditSlideBackground,
         placedMedia = placedMedia,
     )
+    }
 }
 
 /** Ce que les outils et le « ⋯ » atteignent hors du view model : l'export, les portes de l'écran, l'aperçu et l'effacement. */
@@ -598,7 +609,9 @@ private fun StorySocle(
 
 @Composable
 private fun StorySocleNotice(state: StoryComposerUiState, onRetryMedia: () -> Unit) {
+    val audienceEmpty = !ComposerAudienceSelection.isPublishable(state.draft.visibility, state.draft.visibilityUserIds)
     val block = state.publishBlock?.let { stringResource(it.messageRes()) }
+        ?: if (audienceEmpty) stringResource(R.string.composer_socle_blocked_audience) else null
     val notice = block ?: sceneNotice(state) ?: return
     val retries = block == null && state.canRetryMedia && state.errorMessage == StoryComposerViewModel.MEDIA_FAILED
     SceneNoticeLine(notice, onRetry = onRetryMedia.takeIf { retries })

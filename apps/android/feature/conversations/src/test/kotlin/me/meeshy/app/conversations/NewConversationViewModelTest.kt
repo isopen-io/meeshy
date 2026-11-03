@@ -281,6 +281,28 @@ class NewConversationViewModelTest {
     }
 
     @Test
+    fun create_offline_queues_the_conversation_and_closes_without_an_error() = runTest(dispatcher) {
+        val users = mockk<UserRepository>()
+        coEvery { users.searchUsersPaged(any(), any(), any()) } returns paged(listOf("u1"))
+        val conversations = mockk<ConversationRepository>()
+        coEvery { conversations.create(any(), any(), any(), any()) } returns
+            NetworkResult.Failure(ApiError(code = "NETWORK", message = "offline"))
+        coEvery { conversations.createOptimistic(any(), any(), any(), any()) } returns "pending_1"
+        val vm = viewModel(users = users, conversations = conversations)
+
+        vm.onQueryChange("bob")
+        advanceUntilIdle()
+        vm.toggleSelection("u1")
+        vm.create()
+        advanceUntilIdle()
+
+        coVerify { conversations.createOptimistic(NewConversationLogic.TYPE_DIRECT, null, listOf("u1"), "server") }
+        assertThat(vm.state.value.queuedOffline).isTrue()
+        assertThat(vm.state.value.error).isNull()
+        assertThat(vm.state.value.createdConversationId).isNull()
+    }
+
+    @Test
     fun creating_with_a_user_who_blocked_me_says_so_in_words() = runTest(dispatcher) {
         val users = mockk<UserRepository>()
         coEvery { users.searchUsersPaged(any(), any(), any()) } returns paged(listOf("u1"))
@@ -403,13 +425,28 @@ class NewConversationViewModelTest {
     }
 
     @Test
-    fun a_titled_group_of_myself_alone_is_created_with_no_invitee() = runTest(dispatcher) {
+    fun the_sheet_opens_with_nothing_to_create_and_no_encryption_row() = runTest(dispatcher) {
+        val vm = viewModel(session = session(role = "USER"))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.shape).isEqualTo(NewConversationShape.NONE)
+        assertThat(vm.state.value.isGroup).isFalse()
+        assertThat(vm.state.value.showsCreate).isFalse()
+        assertThat(vm.state.value.showsEncryption).isFalse()
+        assertThat(vm.state.value.encryptionExpanded).isFalse()
+    }
+
+    @Test
+    fun the_new_group_switch_asks_for_a_title_and_creates_a_group_of_myself_alone() = runTest(dispatcher) {
         val conversations = mockk<ConversationRepository>()
         coEvery { conversations.create(any(), any(), any(), any()) } returns NetworkResult.Success(ApiConversation(id = "c-solo"))
         val vm = viewModel(conversations = conversations, session = session(role = "USER"))
         advanceUntilIdle()
 
+        vm.toggleGroupRequested()
         assertThat(vm.state.value.isGroup).isTrue()
+        assertThat(vm.state.value.showsSoloHint).isTrue()
+        assertThat(vm.state.value.showsCreate).isTrue()
         assertThat(vm.state.value.canCreate).isFalse()
         vm.onGroupTitleChange("Mes notes")
         assertThat(vm.state.value.canCreate).isTrue()
@@ -421,17 +458,65 @@ class NewConversationViewModelTest {
     }
 
     @Test
-    fun the_sheet_opens_light_and_offers_encryption_only_once_something_can_be_created() = runTest(dispatcher) {
-        val vm = viewModel(users = pickerWith("u1"), session = session(role = "USER"))
+    fun the_switch_turned_back_off_returns_to_nothing_to_create() = runTest(dispatcher) {
+        val vm = viewModel(session = session(role = "USER"))
         advanceUntilIdle()
 
-        assertThat(vm.state.value.showsEncryption).isFalse()
-        vm.onGroupTitleChange("Mes notes")
-        assertThat(vm.state.value.showsEncryption).isTrue()
-        vm.onGroupTitleChange("")
+        vm.toggleGroupRequested()
+        vm.toggleGroupRequested()
+
+        assertThat(vm.state.value.shape).isEqualTo(NewConversationShape.NONE)
+    }
+
+    @Test
+    fun one_peer_with_the_group_switch_is_a_titled_group() = runTest(dispatcher) {
+        val conversations = mockk<ConversationRepository>()
+        coEvery { conversations.create(any(), any(), any(), any()) } returns NetworkResult.Success(ApiConversation(id = "g1"))
+        val vm = viewModel(users = pickerWith("u1"), conversations = conversations, session = session(role = "USER"))
+        advanceUntilIdle()
         vm.onQueryChange("bob")
         advanceUntilIdle()
         vm.toggleSelection("u1")
+        assertThat(vm.state.value.shape).isEqualTo(NewConversationShape.DIRECT)
+        assertThat(vm.state.value.showsSoloHint).isFalse()
+
+        vm.toggleGroupRequested()
+        assertThat(vm.state.value.canCreate).isFalse()
+        vm.onGroupTitleChange("Audit")
+        vm.create()
+        advanceUntilIdle()
+
+        coVerify { conversations.create(NewConversationLogic.TYPE_GROUP, "Audit", listOf("u1"), "server") }
+    }
+
+    @Test
+    fun two_peers_already_make_a_group_and_the_switch_stays_on() = runTest(dispatcher) {
+        val vm = viewModel(users = pickerWith("u1", "u2"), session = session(role = "USER"))
+        advanceUntilIdle()
+        vm.onQueryChange("bob")
+        advanceUntilIdle()
+        vm.toggleSelection("u1")
+        vm.toggleSelection("u2")
+
+        assertThat(vm.state.value.groupToggleEnabled).isFalse()
+        vm.toggleGroupRequested()
+        assertThat(vm.state.value.isGroup).isTrue()
+        assertThat(vm.state.value.canCreate).isFalse()
+    }
+
+    @Test
+    fun the_encryption_row_folds_its_choices_and_unfolds_them_on_touch() = runTest(dispatcher) {
+        val vm = viewModel(users = pickerWith("u1"), session = session(role = "USER"))
+        advanceUntilIdle()
+        vm.onQueryChange("bob")
+        advanceUntilIdle()
+        vm.toggleSelection("u1")
+
         assertThat(vm.state.value.showsEncryption).isTrue()
+        assertThat(vm.state.value.encryptionExpanded).isFalse()
+        vm.toggleEncryptionOptions()
+        assertThat(vm.state.value.encryptionExpanded).isTrue()
+        vm.toggleEncryptionOptions()
+        assertThat(vm.state.value.encryptionExpanded).isFalse()
     }
 }

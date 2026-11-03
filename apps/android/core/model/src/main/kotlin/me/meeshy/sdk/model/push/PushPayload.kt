@@ -16,6 +16,8 @@ public data class PushPayload(
     val senderId: String? = null,
     val postId: String? = null,
     val postType: String? = null,
+    /** Le discriminant que la famille `friend_new_*` expédie à la place de `postType` (iOS `NotificationContentRouter`). */
+    val contentType: String? = null,
     val commentId: String? = null,
     val parentCommentId: String? = null,
     val callId: String? = null,
@@ -42,6 +44,13 @@ public data class PushPayload(
     val senderAvatar: String? = null,
     /** Le compte que la passerelle vise (#13567) ; absent d'une passerelle antérieure. */
     val recipientUserId: String? = null,
+    /** Le média inline tel qu'il part sur le fil (`push-media-fields.ts`) : adresse, mime, durée, taille. */
+    val attachmentUrl: String? = null,
+    val attachmentMimeType: String? = null,
+    val attachmentDurationMs: Long? = null,
+    val attachmentFileSize: Long? = null,
+    /** La photo de l'acteur, sous le nom que la passerelle lui donne pour iOS (`imageURL`). */
+    val imageUrl: String? = null,
     /** Le mode servi de la conversation (`e2ee` / `server` / `hybrid`, #14669) ; absent pour le clair ou d'une passerelle antérieure. */
     val conversationEncryptionMode: String? = null,
 ) {
@@ -73,6 +82,7 @@ public data class PushPayload(
         public fun decode(data: Map<String, String>): PushPayload {
             fun text(key: String): String? = data[key]?.takeIf { it.isNotBlank() }
             fun int(key: String): Int? = text(key)?.trim()?.toIntOrNull()
+            fun long(key: String): Long? = text(key)?.trim()?.toLongOrNull()
             fun bool(key: String): Boolean? = when (text(key)?.trim()?.lowercase()) {
                 "true", "1" -> true
                 "false", "0" -> false
@@ -86,6 +96,7 @@ public data class PushPayload(
                 senderId = text("senderId"),
                 postId = text("postId"),
                 postType = text("postType"),
+                contentType = text("contentType"),
                 commentId = text("commentId"),
                 parentCommentId = text("parentCommentId"),
                 callId = text("callId"),
@@ -109,6 +120,11 @@ public data class PushPayload(
                 senderDisplayName = text("senderDisplayName"),
                 senderAvatar = text("senderAvatar"),
                 recipientUserId = text("recipientUserId"),
+                attachmentUrl = text("attachmentUrl"),
+                attachmentMimeType = text("attachmentMimeType"),
+                attachmentDurationMs = long("attachmentDurationMs"),
+                attachmentFileSize = long("attachmentFileSize"),
+                imageUrl = text("imageURL"),
                 conversationEncryptionMode = text("conversationEncryptionMode"),
             )
         }

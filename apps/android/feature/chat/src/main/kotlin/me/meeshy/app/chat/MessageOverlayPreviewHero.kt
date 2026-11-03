@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -27,6 +28,7 @@ import androidx.compose.ui.window.PopupProperties
 import java.util.Locale
 import me.meeshy.ui.R
 import me.meeshy.ui.component.bubble.BubbleAccessibilityStrings
+import me.meeshy.ui.component.bubble.BubbleSourceA11yStrings
 import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleDeliveryA11yStrings
@@ -115,9 +117,9 @@ private fun rememberBubbleAccessibilityLabel(content: BubbleContent): String {
         replyToAuthor = stringResource(R.string.bubble_a11y_reply_to),
         replyToExcerpt = stringResource(R.string.bubble_a11y_reply_to_excerpt),
         replyToYou = stringResource(R.string.a11y_message_reply_to_you),
-        images = stringResource(R.string.bubble_a11y_images),
+        images = pluralStringResource(R.plurals.bubble_a11y_images, content.images.size, content.images.size),
         videos = stringResource(R.string.a11y_message_videos),
-        audios = stringResource(R.string.bubble_a11y_audios),
+        audios = pluralStringResource(R.plurals.bubble_a11y_audios, content.audios.size, content.audios.size),
         location = stringResource(R.string.bubble_a11y_location),
         file = stringResource(R.string.bubble_a11y_file),
         contactCard = stringResource(R.string.a11y_message_contact_card),
@@ -126,7 +128,10 @@ private fun rememberBubbleAccessibilityLabel(content: BubbleContent): String {
         viewOnce = stringResource(R.string.a11y_message_view_once),
         blurred = stringResource(R.string.a11y_message_blurred),
         edited = stringResource(R.string.bubble_edited),
-        pinned = stringResource(R.string.bubble_a11y_pinned),
+        pinned = stringResource(R.string.bubble_meta_pinned_a11y),
+        forwarded = stringResource(R.string.bubble_forwarded),
+        forwardedFromGroup = stringResource(R.string.bubble_forwarded_from),
+        forwardedFromPerson = stringResource(R.string.bubble_forwarded_from_person),
         ephemeral = stringResource(R.string.bubble_a11y_ephemeral),
         reactions = stringResource(R.string.bubble_a11y_reactions),
         delivery = BubbleDeliveryA11yStrings(
@@ -139,6 +144,14 @@ private fun rememberBubbleAccessibilityLabel(content: BubbleContent): String {
             failed = stringResource(R.string.bubble_status_failed),
         ),
         endToEndSealed = stringResource(R.string.bubble_message_end_to_end),
+        anonymousSender = stringResource(R.string.focal_row_anonymousSender),
+        sources = BubbleSourceA11yStrings(
+            system = stringResource(R.string.a11y_message_source_system),
+            ads = stringResource(R.string.a11y_message_source_ads),
+            app = stringResource(R.string.a11y_message_source_app),
+            agent = stringResource(R.string.a11y_message_source_agent),
+            authority = stringResource(R.string.a11y_message_source_authority),
+        ),
     )
     val locale: Locale = LocalConfiguration.current.locales[0]
     return remember(content, strings, locale) {

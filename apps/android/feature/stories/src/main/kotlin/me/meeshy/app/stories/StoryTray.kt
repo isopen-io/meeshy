@@ -49,9 +49,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.stories.R
+import me.meeshy.ui.component.skeleton.SkeletonStoryTrayRow
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.sdk.model.story.MyStoryAvatarAction
+import me.meeshy.sdk.model.story.StoryTrayActionResolver
 
 
 /**
@@ -109,6 +112,7 @@ fun StoryTray(
             onMoodTap = onMoodTap,
             moodIdOf = moodIdOf,
             onMoodShown = onMoodShown,
+            hasStoryHistory = state.hasStoryHistory,
         )
     }
 }
@@ -133,6 +137,7 @@ internal fun StoryTrayRail(
     onMoodTap: ((String) -> Unit)? = null,
     moodIdOf: (String) -> String? = { null },
     onMoodShown: ((String) -> Unit)? = null,
+    hasStoryHistory: Boolean = false,
 ) {
     LazyRow(
         modifier = Modifier.height(StoryEntryMetrics.height),
@@ -153,6 +158,8 @@ internal fun StoryTrayRail(
                     moodEmoji = myMoodEmoji ?: moodEmojiOf(selfRing.userId),
                     showAddBadge = true,
                     onOpen = { onOpenStory(selfRing.userId) },
+                    onTap = onManageStories,
+                    tapDescription = stringResource(R.string.stories_tray_manage),
                     onShowProfile = onShowProfile?.let { open -> { open(selfRing.userId) } },
                     onAdd = onAddStory,
                     onManage = onManageStories,
@@ -166,6 +173,7 @@ internal fun StoryTrayRail(
             item(key = "add", contentType = ADD_CONTENT_TYPE) {
                 AddStoryItem(
                     moodEmoji = myMoodEmoji,
+                    hasStoryHistory = hasStoryHistory,
                     onClick = onAddStory,
                     onManage = onManageStories,
                     onAddStatus = onAddStatus,
@@ -290,47 +298,33 @@ private fun StoryFailedRow(
 }
 
 /**
- * Cold-start placeholder shown only when the cache is genuinely empty (no rows
- * yet). A warm start paints the real tray straight from Room, so this never
- * flashes over cached data (Instant-App principles).
+ * Cold-start placeholder shown only when the cache is genuinely empty (no rows yet): six rings 96/88 like iOS
+ * `SkeletonStoryTrayRow`. A warm start paints the real tray straight from Room, so this never flashes over cached data.
  */
 @Composable
 private fun StoryTraySkeleton(modifier: Modifier = Modifier) {
-    LazyRow(
-        modifier = modifier.height(StoryEntryMetrics.height).semantics { contentDescription = "" },
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-        contentPadding = PaddingValues(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
-        userScrollEnabled = false,
-    ) {
-        items(SKELETON_PLACEHOLDER_COUNT) {
-            Box(
-                modifier = Modifier
-                    .width(StoryEntryMetrics.labelWidth)
-                    .size(StoryEntryMetrics.ring)
-                    .clip(CircleShape)
-                    .background(MeeshyTheme.tokens.backgroundTertiary),
-            )
-        }
-    }
+    SkeletonStoryTrayRow(modifier = modifier.height(StoryEntryMetrics.height))
 }
-
-private const val SKELETON_PLACEHOLDER_COUNT = 4
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 private fun AddStoryItem(
     moodEmoji: String?,
+    hasStoryHistory: Boolean,
     onClick: () -> Unit,
     onManage: () -> Unit,
     onAddStatus: (() -> Unit)?,
 ) {
     val addLabel = stringResource(R.string.stories_my_story)
+    val tapsToManage = StoryTrayActionResolver.avatarTap(hasMyStory = false, hasAnyStory = hasStoryHistory) ==
+        MyStoryAvatarAction.ManageStories
+    val tapLabel = stringResource(if (tapsToManage) R.string.stories_tray_manage else R.string.story_tray_a11y_createStory)
     var menuOpen by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .width(StoryEntryMetrics.labelWidth)
-            .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
-            .semantics { role = Role.Button; contentDescription = addLabel },
+            .combinedClickable(onClick = if (tapsToManage) onManage else onClick, onLongClick = { menuOpen = true })
+            .semantics { role = Role.Button; contentDescription = tapLabel },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         StoryRingMenu(

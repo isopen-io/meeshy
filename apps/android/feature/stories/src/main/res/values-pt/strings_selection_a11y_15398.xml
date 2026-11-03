@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_scene_a11y_labeled">%1$s: %2$s</string>
+    <string name="composer_scene_a11y_selected">%1$s selecionado, plano %2$s, nível %3$d</string>
+    <string name="composer_scene_a11y_plane_foreground">frente</string>
+    <string name="composer_scene_a11y_plane_background">fundo</string>
+    <string name="composer_scene_a11y_place_named">Local: %1$s</string>
+    <string name="composer_scene_a11y_sticker_named">Sticker %1$s</string>
+</resources>

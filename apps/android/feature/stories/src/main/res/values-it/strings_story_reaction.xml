@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_reaction_limit_reached">Hai raggiunto il limite di reazioni per questa storia.</string>
+    <string name="story_reaction_unavailable">Questa storia non è più disponibile.</string>
+    <string name="story_reaction_failed">Impossibile inviare la reazione.</string>
+</resources>

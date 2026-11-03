@@ -271,4 +271,91 @@ class ConversationRowMenuCapabilitiesTest {
         assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), null).obsolete).isFalse()
         assertThat(caps(conversation(type = "group", currentUserRole = "member"), user()).obsolete).isFalse()
     }
+
+    // ── Appeler (#14897) ──
+
+    @Test
+    fun `a direct with a known peer offers the call, audio and video`() {
+        val caps = caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), user())
+        assertThat(caps.call).isTrue()
+        assertThat(caps.videoCall).isTrue()
+    }
+
+    @Test
+    fun `a group never offers the call from the menu, it would ring no single peer`() {
+        val caps = caps(conversation(type = "group", currentUserRole = "creator"), user())
+        assertThat(caps.call).isFalse()
+        assertThat(caps.videoCall).isFalse()
+    }
+
+    @Test
+    fun `a direct with oneself or without peer offers no call`() {
+        assertThat(caps(conversation(type = "direct", peerUserId = "me"), user()).call).isFalse()
+        assertThat(caps(conversation(type = "direct"), user()).call).isFalse()
+    }
+
+    @Test
+    fun `an ended direct and an unloaded reader offer no call`() {
+        assertThat(caps(conversation(type = "direct", peerUserId = "peer", isActive = false), user()).call).isFalse()
+        assertThat(caps(conversation(type = "direct", peerUserId = "peer"), null).call).isFalse()
+    }
+
+    @Test
+    fun `only an admin or more of an open group deletes for everyone`() {
+        assertThat(caps(conversation(currentUserRole = "admin"), user()).deleteForAll).isTrue()
+        assertThat(caps(conversation(currentUserRole = "moderator"), user()).deleteForAll).isFalse()
+        assertThat(caps(conversation(type = "direct", currentUserRole = "creator", peerUserId = "peer"), user()).deleteForAll).isFalse()
+    }
+
+    // ── Lecteur d'une conversation ouverte (#15269) ──
+
+    @Test
+    fun `an open thread falls back on the viewer participation when the row serves no role`() {
+        val served = conversation(currentUserRole = null).copy(
+            participants = listOf(ApiParticipant(id = "p-me", userId = "me", role = "admin")),
+        )
+
+        val viewer = ConversationRowMenuCapabilities.forViewer(served, user())
+
+        assertThat(viewer.rename).isTrue()
+        assertThat(viewer.invite).isTrue()
+        assertThat(viewer.deleteForAll).isTrue()
+    }
+
+    @Test
+    fun `an open thread with no role anywhere offers no authority action`() {
+        val viewer = ConversationRowMenuCapabilities.forViewer(conversation(currentUserRole = null), user())
+
+        assertThat(viewer.rename).isFalse()
+        assertThat(viewer.invite).isFalse()
+        assertThat(viewer.manageMembers).isFalse()
+    }
+
+    @Test
+    fun `in Global only platform admins invite and nobody renames, leaves or deletes for all`() {
+        val global = conversation(type = "global", currentUserRole = "member")
+
+        val admin = ConversationRowMenuCapabilities.forViewer(global, user(role = "ADMIN"))
+        val ordinary = ConversationRowMenuCapabilities.forViewer(global, user(role = "USER"))
+
+        assertThat(admin.invite).isTrue()
+        assertThat(ordinary.invite).isFalse()
+        listOf(admin, ordinary).forEach {
+            assertThat(it.rename).isFalse()
+            assertThat(it.leave).isFalse()
+            assertThat(it.deleteForAll).isFalse()
+        }
+    }
+
+    @Test
+    fun `a direct offers no authority action to either member`() {
+        val direct = conversation(type = "direct", currentUserRole = "creator", peerUserId = "peer")
+
+        val viewer = ConversationRowMenuCapabilities.forViewer(direct, user())
+
+        assertThat(viewer.rename).isFalse()
+        assertThat(viewer.invite).isFalse()
+        assertThat(viewer.leave).isFalse()
+        assertThat(viewer.manageMembers).isFalse()
+    }
 }

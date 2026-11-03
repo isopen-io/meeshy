@@ -85,6 +85,13 @@
       "rationaleKeys": []
     },
     {
+      "name": "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+      "justification": "Envoi long (média, story) tenu en arrière-plan par le service unique des notifications en cours, avec « Annuler » dans la notification.",
+      "usage": "app/ongoing OngoingActivityService",
+      "runtime": false,
+      "rationaleKeys": []
+    },
+    {
       "name": "android.permission.WAKE_LOCK",
       "justification": "Garder le processeur éveillé pendant la lecture d'un vocal écran éteint.",
       "usage": "feature/chat",
@@ -190,10 +197,6 @@
     {
       "permission": "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
       "arrivesWith": "appels intégrés au système (core-telecom)"
-    },
-    {
-      "permission": "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
-      "arrivesWith": "envoi de gros médias en arrière-plan"
     },
     {
       "permission": "android.permission.BLUETOOTH_CONNECT",

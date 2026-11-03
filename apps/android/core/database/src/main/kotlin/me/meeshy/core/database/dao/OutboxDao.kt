@@ -62,6 +62,10 @@ public interface OutboxDao {
     @Query("SELECT * FROM outbox WHERE state = :state ORDER BY createdAt ASC")
     public suspend fun byState(state: String): List<OutboxEntity>
 
+    /** The `(cmid, state)` of the outbox rows named by [cmids] — rows absent from the result do not exist. */
+    @Query("SELECT * FROM outbox WHERE cmid IN (:cmids)")
+    public suspend fun findAll(cmids: List<String>): List<OutboxEntity>
+
     @Query("SELECT * FROM outbox WHERE cmid = :cmid")
     public suspend fun find(cmid: String): OutboxEntity?
 
@@ -89,6 +93,10 @@ public interface OutboxDao {
     /** Crash-safe boot recovery: any row left INFLIGHT becomes PENDING again. */
     @Query("UPDATE outbox SET state = 'PENDING', updatedAt = :now WHERE state = 'INFLIGHT'")
     public suspend fun resetInflight(now: Long): Int
+
+    /** [resetInflight], sparing the rows a live send of this process still holds ([live]). */
+    @Query("UPDATE outbox SET state = 'PENDING', updatedAt = :now WHERE state = 'INFLIGHT' AND cmid NOT IN (:live)")
+    public suspend fun resetInflightExcept(live: List<String>, now: Long): Int
 
     /**
      * Rows the flusher may attempt at [now]: `PENDING`, and either never scheduled or whose
@@ -140,6 +148,17 @@ public interface OutboxDao {
     )
     public suspend fun defer(cmid: String, nextAttemptAt: Long, waitingSince: Long, now: Long)
 
+    /** Holds a row back until [nextAttemptAt] (a failed attempt's backoff); its wait clock and attempts are untouched. */
+    @Query("UPDATE outbox SET nextAttemptAt = :nextAttemptAt, updatedAt = :now WHERE cmid = :cmid")
+    public suspend fun scheduleNext(cmid: String, nextAttemptAt: Long, now: Long)
+
+    /** The earliest moment a held-back `PENDING` row becomes due, or `null`. */
+    @Query("SELECT MIN(nextAttemptAt) FROM outbox WHERE state = 'PENDING' AND nextAttemptAt IS NOT NULL")
+    public suspend fun earliestScheduledAttempt(): Long?
+
+    @Query("SELECT EXISTS(SELECT 1 FROM outbox WHERE state IN ('PENDING', 'INFLIGHT'))")
+    public suspend fun hasWork(): Boolean
+
     @Query("UPDATE outbox SET nextAttemptAt = NULL, waitingSince = NULL, lastError = NULL, cancelRequestedAt = NULL WHERE cmid = :cmid")
     public suspend fun resetSchedule(cmid: String)
 
@@ -168,6 +187,17 @@ public interface OutboxDao {
 
     @Query("UPDATE outbox SET cancelRequestedAt = :at, updatedAt = :at WHERE cmid = :cmid")
     public suspend fun requestCancel(cmid: String, at: Long)
+
+    /** Every row the table holds, whatever its state — what the capacity ceiling bounds. */
+    @Query("SELECT COUNT(*) FROM outbox")
+    public suspend fun count(): Int
+
+    /** Envois encore en route (file ou vol) : ce qu'une purge de session ferait perdre. */
+    @Query("SELECT COUNT(*) FROM outbox WHERE state != 'EXHAUSTED'")
+    public suspend fun pendingCount(): Int
+
+    @Query("SELECT COUNT(*) FROM outbox")
+    public fun observeCount(): Flow<Int>
 
     @Query("DELETE FROM outbox")
     public suspend fun clear()

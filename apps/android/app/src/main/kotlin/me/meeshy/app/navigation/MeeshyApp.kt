@@ -36,6 +36,7 @@ import me.meeshy.app.calls.IncomingCallViewModel
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.onboarding.OnboardingViewModel
+import me.meeshy.app.navigation.auth.WelcomeHost
 import me.meeshy.app.onboarding.BeneathOnboarding
 import me.meeshy.app.onboarding.hiddenBehindOnboarding
 import me.meeshy.app.navigation.graph.GameRoutes
@@ -53,6 +54,7 @@ import me.meeshy.app.upgrade.UpgradeGateHost
 import me.meeshy.app.upgrade.UpgradeRequiredViewModel
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.model.call.CallLinkRequest
+import me.meeshy.sdk.model.rootnav.RootRoute
 import me.meeshy.sdk.net.SessionExpiryNotifier
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -88,6 +90,7 @@ fun MeeshyApp(
     // that entry's store, never this Activity-scoped instance, so the WebRTC session
     // and every collector in [CallViewModel] stay alive while the conversation shows.
     val callViewModel: CallViewModel = hiltViewModel()
+    val deepLinkHost: DeepLinkHostViewModel = hiltViewModel()
     // Ne collecte QUE la reference : les StateFlow eux-memes (badges, avatar) sont
     // lus a l'interieur de [MeeshyFloatingChrome], pas ici — sinon toute variation
     // d'un badge invaliderait TOUT MeeshyApp, y compris le lambda `builder` du
@@ -95,6 +98,7 @@ fun MeeshyApp(
     // graphe de navigation entier a chaque notification.
     val chromeViewModel: ChromeViewModel = hiltViewModel()
     val extensions = hiltViewModel<AppExtensionsViewModel>().extensions
+    val rootSession: RootSessionViewModel = hiltViewModel()
     val authState by authViewModel.state.collectAsStateWithLifecycle()
     // La passerelle a terminé la session d'un invité de lien : l'appareil est déjà purgé, la racine retombe sur la
     // connexion (état aligné ci-dessous) et l'écran de fin dit pourquoi, à la place du fil.
@@ -113,6 +117,13 @@ fun MeeshyApp(
     // lit l'etat vivant dans [MinimizedCallPill].
     val callStatus by remember(callViewModel) { callViewModel.state.map { it.status }.distinctUntilChanged() }
         .collectAsStateWithLifecycle(initialValue = callViewModel.state.value.status)
+
+    val pendingLink = warmDeepLink != null && warmDeepLinkAwaitsAccount
+    LaunchedEffect(authState.isAuthenticated, authState.isRestoringSession, pendingLink) {
+        rootSession.onEvent(RootSessionEvent.AuthChanged(authState.isAuthenticated, authState.isRestoringSession))
+        rootSession.onEvent(RootSessionEvent.PendingLinkChanged(pendingLink))
+    }
+    val rootState by rootSession.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(authState.isAuthenticated) {
         chromeViewModel.warmUpIfAuthenticated(authState.isAuthenticated)
@@ -164,7 +175,7 @@ fun MeeshyApp(
     LaunchedEffect(warmDeepLink, authState.isAuthenticated, authState.hasAccount) {
         val uri = warmDeepLink ?: return@LaunchedEffect
         if (!WarmDeepLink.mayReplay(authState.isAuthenticated, authState.hasAccount, warmDeepLinkAwaitsAccount)) return@LaunchedEffect
-        WarmDeepLink.open(navController, uri)
+        if (!deepLinkHost.open(uri.toString(), navController)) WarmDeepLink.open(navController, uri)
         onWarmDeepLinkHandled()
     }
 
@@ -219,6 +230,7 @@ fun MeeshyApp(
                     }
                     // Le bandeau « Validez votre compte » (#13854) se range SOUS la pastille d'appel et AU-DESSUS de
                     // la destination, qu'il comprime au lieu de la recouvrir : le ✕ du compositeur reste entier.
+                    PendingLinkBanner(isVisible = rootState.showsPendingLinkNotice && currentRoute == Routes.LOGIN)
                     ActivationInviteBandHost(
                         navController = navController,
                         modifier = Modifier
@@ -267,11 +279,15 @@ fun MeeshyApp(
             }
         }
 
+        RootUndecidedCover(visible = rootState.route == RootRoute.NONE)
+
         // Les calques posés SOUS le parcours d'accueil ne sont ni lus ni atteignables par TalkBack tant qu'il couvre l'écran.
         BeneathOnboarding(isCovered = onboardingCovers) {
             // #4457 — la banniere in-app se monte UNE fois, ICI, par-dessus la navigation (une
             // banniere SUIT le lecteur : une instance par ecran en ferait autant de rivales).
+            val bannerPeek = rememberBannerPeekState()
             NotificationBannerHost(
+                onPreviewConversation = bannerPeek::show,
                 activeConversationId = navBackStack?.arguments?.getString(ChatViewModel.CONVERSATION_ID_ARG),
                 activePostId = navBackStack?.arguments?.getString(PostDetailViewModel.POST_ID_ARG),
                 onOpenConversation = { navigator.openConversation(it) },
@@ -279,6 +295,7 @@ fun MeeshyApp(
                 onOpenGame = { navController.navigate(GameRoutes.route(it)) },
             )
 
+            BannerPeekSheetHost(bannerPeek) { navigator.openConversation(it) }
             AppOverlayStack(extensions.overlays, navController)
             MediaOverlayHost(navController)
 
@@ -316,7 +333,11 @@ fun MeeshyApp(
 
         VisitorContentHost(navController = navController, isAuthenticated = authState.isAuthenticated)
 
+        WelcomeHost(navController, authViewModel, authState.isAuthenticated)
+
         NotificationPermissionOnArrival(isAuthenticated = authState.isAuthenticated)
+
+        OverlayHost()
 
         LoggingOutVeil(visible = authState.isLoggingOut)
 

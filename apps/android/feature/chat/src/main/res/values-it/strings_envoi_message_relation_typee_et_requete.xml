@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="send_failure_ineligible">Niente da inviare: aggiungi testo, un file o un luogo.</string>
+    <string name="send_failure_offline_enqueue_failed">Impossibile mettere il messaggio in coda offline.</string>
+    <string name="send_failure_write_restricted">Non puoi scrivere in questa conversazione.</string>
+    <string name="send_failure_slow_mode">Modalità lenta attiva: attendi %1$d s prima di reinviare.</string>
+    <string name="send_failure_recipient_blocked">Questa persona ti ha bloccato, il messaggio non è stato inviato.</string>
+    <string name="send_failure_queued_for_retry">Non ancora inviato: nuovo tentativo automatico.</string>
+    <string name="send_failure_retry_enqueue_failed">Impossibile mettere il messaggio in coda per un nuovo tentativo.</string>
+</resources>

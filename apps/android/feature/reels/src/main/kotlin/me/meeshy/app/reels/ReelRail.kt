@@ -14,9 +14,18 @@ import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.reels.R
 import me.meeshy.sdk.model.PostReactionPaletteState
 import me.meeshy.sdk.model.PostReactionPick
+import me.meeshy.sdk.model.fullscreen.ChromeRect
+import me.meeshy.sdk.model.fullscreen.MediaChromeFraming
+import me.meeshy.sdk.model.fullscreen.MediaChromePlacement
+import me.meeshy.sdk.model.fullscreen.MediaChromeProbe
+import me.meeshy.sdk.model.fullscreen.MediaChromeVeil
+import me.meeshy.ui.component.fullscreen.rememberGlyphChromeScheme
+import me.meeshy.ui.component.fullscreen.toTone
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.sdk.model.format.CompactCountFormat
 import me.meeshy.sdk.model.fullscreen.FullscreenChromeSymbol
 import me.meeshy.ui.component.fullscreen.FullscreenActionButton
+import me.meeshy.ui.component.fullscreen.FullscreenActionStyle
 import me.meeshy.ui.component.fullscreen.FullscreenChromeDimens
 import me.meeshy.ui.component.fullscreen.icon
 import me.meeshy.ui.component.reaction.PostReactionPalette
@@ -49,6 +58,10 @@ internal fun ReelRail(
     modifier: Modifier = Modifier,
 ) {
     val locale = Locale.getDefault()
+    val haptics = rememberMeeshyHaptics()
+    // Les glyphes nus prennent la teinte que la luminance du réel SOUS le rail commande (lisibilité AA sur image claire).
+    val probe = remember(reel.backdrop) { reel.backdrop?.let { MediaChromeProbe(it, RAIL_PLACEMENT) } }
+    val style = FullscreenActionStyle.Floating(rememberGlyphChromeScheme(probe).toTone())
     var palette by remember(reel.id) { mutableStateOf(PostReactionPaletteState()) }
     Column(
         modifier,
@@ -59,7 +72,9 @@ internal fun ReelRail(
             FullscreenActionButton(
                 icon = (if (reel.isLiked) FullscreenChromeSymbol.LikeActive else FullscreenChromeSymbol.Like).icon,
                 label = stringResource(if (reel.isLiked) R.string.reels_unlike else R.string.reels_like),
-                onClick = { actions.onLike(reel.id) },
+                onClick = { haptics.light(); actions.onLike(reel.id) },
+                style = style,
+                hint = stringResource(R.string.reels_like),
                 caption = ReelRailCaption.of(reel.likeCount, stringResource(R.string.reels_like), locale),
                 accessibilityValue = reel.likeCount.takeIf { it > 0 }?.toString(),
                 isActive = reel.isLiked,
@@ -82,14 +97,18 @@ internal fun ReelRail(
         FullscreenActionButton(
             icon = FullscreenChromeSymbol.Comments.icon,
             label = stringResource(R.string.reels_action_comment),
-            onClick = { actions.onComments(reel.id) },
+            onClick = { haptics.light(); actions.onComments(reel.id) },
+            style = style,
+            hint = stringResource(R.string.reels_action_comment),
             caption = ReelRailCaption.of(reel.commentCount, stringResource(R.string.reels_action_comment), locale),
             accessibilityValue = reel.commentCount.takeIf { it > 0 }?.toString(),
         )
         FullscreenActionButton(
             icon = if (reel.isBookmarked) MeeshyIcons.BookmarkFilled else MeeshyIcons.Bookmark,
             label = stringResource(if (reel.isBookmarked) R.string.reels_unbookmark else R.string.reels_bookmark),
-            onClick = { actions.onBookmark(reel.id) },
+            onClick = { haptics.medium(); actions.onBookmark(reel.id) },
+            style = style,
+            hint = stringResource(R.string.reels_bookmark),
             caption = ReelRailCaption.of(reel.bookmarkCount, stringResource(R.string.reels_bookmark), locale),
             accessibilityValue = reel.bookmarkCount.takeIf { it > 0 }?.toString(),
             isActive = reel.isBookmarked,
@@ -99,7 +118,9 @@ internal fun ReelRail(
         FullscreenActionButton(
             icon = FullscreenChromeSymbol.Repost.icon,
             label = stringResource(R.string.reels_action_repost),
-            onClick = { actions.onRepost(reel.id) },
+            onClick = { haptics.success(); actions.onRepost(reel.id) },
+            style = style,
+            hint = stringResource(R.string.reels_action_repost),
             caption = ReelRailCaption.of(reel.repostCount, stringResource(R.string.reels_action_repost), locale),
             accessibilityValue = reel.repostCount.takeIf { it > 0 }?.toString(),
             isActive = reel.isReposted,
@@ -109,7 +130,8 @@ internal fun ReelRail(
         FullscreenActionButton(
             icon = MeeshyIcons.Send,
             label = stringResource(R.string.reels_action_send),
-            onClick = { actions.onSend(reel.id) },
+            onClick = { haptics.light(); actions.onSend(reel.id) },
+            style = style,
             caption = ReelRailCaption.of(reel.shareCount, stringResource(R.string.reels_action_send), locale),
             accessibilityValue = reel.shareCount.takeIf { it > 0 }?.toString(),
         )
@@ -121,3 +143,7 @@ internal object ReelRailCaption {
     fun of(count: Int, label: String, locale: Locale): String =
         count.takeIf { it > 0 }?.let { CompactCountFormat.text(it, locale) } ?: label
 }
+
+/** Le rail : colonne de droite de la page, sous le voile bas du lecteur (iOS `MediaChromeStage.reelPlayer`). */
+private val RAIL_PLACEMENT: MediaChromePlacement =
+    MediaChromePlacement.of(ChromeRect(0.80, 0.40, 0.98, 0.90), 9.0 / 19.5, MediaChromeFraming.Fit, MediaChromeVeil.ReelPlayer)

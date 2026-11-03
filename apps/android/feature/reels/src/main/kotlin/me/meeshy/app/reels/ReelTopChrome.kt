@@ -47,6 +47,7 @@ internal fun ReelTopChrome(
     onReveal: () -> Unit,
     onOpen: (String) -> Unit,
     onShare: (ReelPresentation) -> Unit,
+    onEdit: ((String) -> Unit)? = null,
 ) {
     FullscreenChromeVisibility(visible = !chromeHidden, modifier = Modifier, onReveal = onReveal) {
         FullscreenTopBar(
@@ -60,7 +61,7 @@ internal fun ReelTopChrome(
                     activeTint = MeeshyPalette.White,
                 )
                 if (reel != null) {
-                    ReelMenuButton(reel = reel, viewModel = viewModel, onOpen = onOpen, onShare = onShare)
+                    ReelMenuButton(reel = reel, viewModel = viewModel, onOpen = onOpen, onShare = onShare, onEdit = onEdit)
                 }
             },
         )
@@ -73,13 +74,22 @@ private fun ReelMenuButton(
     viewModel: ReelsViewModel,
     onOpen: (String) -> Unit,
     onShare: (ReelPresentation) -> Unit,
+    onEdit: ((String) -> Unit)?,
 ) {
+    var reporting by remember(reel.id) { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     val haptics = rememberMeeshyHaptics()
     val context = LocalContext.current
     val text = reel.captionOriginal ?: reel.caption
     // Le réel ENTIER, scène ou vidéo, sort par le moteur d'export des stories (#13896).
     val export = rememberSceneVideoExport { listOfNotNull(reel.export) }
+    if (reporting) ReelReportDialog(
+        onDismiss = { reporting = false },
+        onPick = { reason ->
+            reporting = false
+            viewModel.report(reel.id, reason)
+        },
+    )
     Box {
         FullscreenChromeButton(
             icon = FullscreenChromeSymbol.More.icon,
@@ -88,7 +98,7 @@ private fun ReelMenuButton(
             isActive = expanded,
         )
         DropdownMenu(expanded = expanded && !export.busy, onDismissRequest = { expanded = false }) {
-            ReelMenu.actions(isOwn = viewModel.isOwn(reel), hasText = !text.isNullOrBlank(), exportable = reel.export != null).forEach { action ->
+            ReelMenu.actions(isOwn = viewModel.isOwn(reel), hasText = !text.isNullOrBlank(), exportable = reel.export != null, canEdit = onEdit != null).forEach { action ->
                 if (action == ReelMenu.Action.EXPORT) {
                     StoryVideoExportMenuEntries(onPick = { mode ->
                         expanded = false
@@ -120,7 +130,11 @@ private fun ReelMenuButton(
                         }
                         ReelMenu.Action.REPORT -> {
                             haptics.medium()
-                            viewModel.report(reel.id)
+                            reporting = true
+                        }
+                        ReelMenu.Action.EDIT -> {
+                            haptics.light()
+                            onEdit?.invoke(reel.id)
                         }
                         ReelMenu.Action.EXPORT -> Unit
                     }
@@ -139,6 +153,7 @@ private fun ReelMenuEntry(action: ReelMenu.Action, onClick: () -> Unit) {
             ReelMenu.Action.COPY_TEXT -> R.string.reels_menu_copy_text
             ReelMenu.Action.SHARE, ReelMenu.Action.EXPORT -> R.string.reels_menu_share
             ReelMenu.Action.PIN -> R.string.reels_menu_pin
+            ReelMenu.Action.EDIT -> R.string.reels_menu_edit
             ReelMenu.Action.DELETE -> R.string.reels_menu_delete
             ReelMenu.Action.REPORT -> R.string.reels_menu_report
         },
@@ -152,6 +167,7 @@ private fun ReelMenuEntry(action: ReelMenu.Action, onClick: () -> Unit) {
                     ReelMenu.Action.COPY_TEXT -> MeeshyIcons.Copy
                     ReelMenu.Action.SHARE, ReelMenu.Action.EXPORT -> MeeshyIcons.Share
                     ReelMenu.Action.PIN -> MeeshyIcons.Pin
+                    ReelMenu.Action.EDIT -> MeeshyIcons.Edit
                     ReelMenu.Action.DELETE -> MeeshyIcons.Delete
                     ReelMenu.Action.REPORT -> MeeshyIcons.Warning
                 },

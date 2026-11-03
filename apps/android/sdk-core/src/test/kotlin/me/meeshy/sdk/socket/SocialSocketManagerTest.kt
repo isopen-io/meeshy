@@ -50,6 +50,7 @@ class SocialSocketManagerTest {
     fun `leavePostRoom emits post-leave with the postId`() = runTest {
         val socket: SocketManager = mockk(relaxed = true)
         val manager = SocialSocketManager(socket, json)
+        manager.joinPostRoom("p1")
 
         manager.leavePostRoom("p1")
 

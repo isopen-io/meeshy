@@ -20,13 +20,13 @@ class ConversationListContentTest {
         conversations: List<ApiConversation> = emptyList(),
         showSkeleton: Boolean = false,
         errorMessage: String? = null,
-        selectedFilter: ConversationFilter = ConversationFilter.ALL,
+        selectedFilters: Set<ConversationFilter> = setOf(ConversationFilter.ALL),
         searchText: String = "",
     ) = ConversationListUiState(
         conversations = conversations,
         showSkeleton = showSkeleton,
         errorMessage = errorMessage,
-        selectedFilter = selectedFilter,
+        selectedFilters = selectedFilters,
         searchText = searchText,
     )
 
@@ -77,7 +77,7 @@ class ConversationListContentTest {
     @Test
     fun `error takes precedence over an active filter narrowing to nothing`() {
         val content = ConversationListContent.of(
-            state(errorMessage = "boom", selectedFilter = ConversationFilter.UNREAD),
+            state(errorMessage = "boom", selectedFilters = setOf(ConversationFilter.UNREAD)),
         )
 
         assertThat(content).isEqualTo(ConversationListContent.Error("boom"))
@@ -85,7 +85,7 @@ class ConversationListContentTest {
 
     @Test
     fun `active filter matching nothing renders the filtered-empty message`() {
-        val content = ConversationListContent.of(state(selectedFilter = ConversationFilter.UNREAD))
+        val content = ConversationListContent.of(state(selectedFilters = setOf(ConversationFilter.UNREAD)))
 
         assertThat(content).isEqualTo(ConversationListContent.FilteredEmpty)
     }
@@ -113,7 +113,7 @@ class ConversationListContentTest {
     @Test
     fun `search without results wins over an active filter`() {
         val content = ConversationListContent.of(
-            state(searchText = "zzz", selectedFilter = ConversationFilter.UNREAD),
+            state(searchText = "zzz", selectedFilters = setOf(ConversationFilter.UNREAD)),
         )
 
         assertThat(content).isEqualTo(ConversationListContent.SearchNoResults)

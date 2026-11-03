@@ -4,14 +4,38 @@ import SwiftUI
 //
 // Le niveau COMMUN avec un membre (Ami, Proche, Sang) et l'action de montée vivent côté app : lecture servie, cache,
 // file durable, loi de demande. Le SDK expose un emplacement OPAQUE, sur le patron de `ProfileGameSection`, posé là où
-// la fiche disait « Connectés ». Sans emplacement, elle le dit toujours.
+// la fiche disait « Connectés » — ou proposait la demande de connexion, une Connaissance n'ayant pas d'amitié acceptée
+// (#14910). Sans emplacement, elle montre toujours ce qu'elle montrait.
 
-/// Ce que l'app fournit : à partir de l'identifiant et du nom d'affichage du membre, la vue du cercle.
+/// Ce que l'app fournit : à partir de l'identifiant et du nom d'affichage du membre, la vue du cercle. L'app pose
+/// `linked` à vrai dès qu'elle montre un lien d'au moins Connaissance (ou qu'il vient d'être annulé) : la fiche cesse
+/// alors de montrer ce qu'elle montrait sans lien (« Connectés », ou la demande de connexion).
 public struct ProfileRelationSection {
-    public let build: (_ userId: String, _ displayName: String) -> AnyView
+    public let build: (_ userId: String, _ displayName: String, _ linked: Binding<Bool>) -> AnyView
 
-    public init(build: @escaping (_ userId: String, _ displayName: String) -> AnyView) {
+    public init(build: @escaping (_ userId: String, _ displayName: String, _ linked: Binding<Bool>) -> AnyView) {
         self.build = build
+    }
+}
+
+/// L'emplacement posé dans la fiche : le cercle quand l'app le fournit — une Connaissance n'a pas d'amitié acceptée,
+/// son lien se lit quand même (#14910) —, et ce que la fiche montrait tant qu'aucun lien n'est montré.
+struct ProfileRelationSlot<Unlinked: View>: View {
+    let section: ProfileRelationSection?
+    let userId: String?
+    let displayName: String
+    @ViewBuilder let unlinked: () -> Unlinked
+    @State private var linked = false
+
+    var body: some View {
+        if let section, let userId, !userId.isEmpty {
+            VStack(spacing: 0) {
+                section.build(userId, displayName, $linked)
+                if !linked { unlinked() }
+            }
+        } else {
+            unlinked()
+        }
     }
 }
 

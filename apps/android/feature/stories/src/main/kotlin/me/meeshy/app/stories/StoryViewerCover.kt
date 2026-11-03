@@ -12,6 +12,10 @@ data class StoryViewerCover(
     val menu: Boolean = false,
     val dialog: Boolean = false,
     val composing: Boolean = false,
+    /** Légende dépliée ou transcription demandée : la story boucle au lieu d'avancer, sans se figer. */
+    val reading: Boolean = false,
+    /** L'interlude d'identité est affiché : la story du nouvel auteur attend, et n'est vue qu'après lui. */
+    val groupIntro: Boolean = false,
 ) {
-    val freezesPlayback: Boolean get() = sheet || railBar || menu || dialog || composing
+    val freezesPlayback: Boolean get() = sheet || railBar || menu || dialog || composing || groupIntro
 }

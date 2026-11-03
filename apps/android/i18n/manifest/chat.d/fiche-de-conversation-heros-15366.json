@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.created-on",
+          "androidName": "conversation_info_created_on",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.muted",
+          "androidName": "conversation_info_muted",
+          "status": "adopted"
+        },
+        {
+          "androidName": "conversation_type_direct",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_type_group",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_type_public",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_type_global",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_type_community",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_type_channel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_type_broadcast",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_type_bot",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

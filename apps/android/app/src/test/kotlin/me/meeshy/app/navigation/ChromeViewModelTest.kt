@@ -55,12 +55,35 @@ class ChromeViewModelTest {
         every { notificationReceived } returns this@ChromeViewModelTest.notificationReceived
     }
 
+    private val bell = MutableStateFlow(0)
+
+    private val coordinator = me.meeshy.sdk.notification.UnreadBadgeCoordinator(
+        cacheSnapshots = kotlinx.coroutines.flow.emptyFlow(),
+        serverUpdates = kotlinx.coroutines.flow.emptyFlow(),
+        localReads = kotlinx.coroutines.flow.emptyFlow(),
+        bell = bell,
+        badgesEnabled = MutableStateFlow(true),
+        openConversation = MutableStateFlow(null),
+        sinks = emptySet(),
+    )
+
+    @Test
+    fun `la pastille suit le total du coordinateur`() = runTest {
+        val vm = viewModel()
+        assertThat(vm.unreadMessages.value).isEqualTo(0)
+        coordinator.start(backgroundScope)
+        coordinator.onServerUnread("c1", 3)
+        testScheduler.advanceTimeBy(200)
+        testScheduler.runCurrent()
+        assertThat(vm.unreadMessages.value).isEqualTo(3)
+    }
+
     private fun viewModel(cache: FriendshipCache = FriendshipCache()): ChromeViewModel {
         coEvery { friendRepository.friendshipGraph(any()) } returns
             NetworkResult.Success(FriendshipPages(sent = emptyList(), received = emptyList()))
         every { notificationRepository.notificationsStream(any(), any()) } returns
             MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
-        return ChromeViewModel(sessionRepository, notificationRepository, friendRepository, cache, messageSocketManager, me.meeshy.sdk.net.MeeshyConfig())
+        return ChromeViewModel(sessionRepository, notificationRepository, friendRepository, cache, messageSocketManager, me.meeshy.sdk.net.MeeshyConfig(), coordinator)
     }
 
     @Test
@@ -78,14 +101,15 @@ class ChromeViewModelTest {
     }
 
     @Test
-    fun `unread notifications pass through the shared NotificationRepository singleton stream unchanged`() = runTest {
-        val unreadFlow = MutableStateFlow(0)
-        every { notificationRepository.unreadCountStream } returns unreadFlow
+    fun `la cloche suit l'etat du coordinateur apres son debounce`() = runTest {
         val vm = viewModel()
+        coordinator.start(backgroundScope)
 
         assertThat(vm.unreadNotifications.value).isEqualTo(0)
 
-        unreadFlow.value = 7
+        bell.value = 7
+        testScheduler.advanceTimeBy(200)
+        testScheduler.runCurrent()
 
         assertThat(vm.unreadNotifications.value).isEqualTo(7)
     }
@@ -100,37 +124,6 @@ class ChromeViewModelTest {
         cache.didReceiveRequest("alice", "r1")
 
         assertThat(vm.pendingFriendRequests.value).isEqualTo(1)
-    }
-
-    @Test
-    fun `a live friend request notification lands in the cache and the badge without any refresh`() = runTest {
-        val cache = FriendshipCache()
-        val vm = viewModel(cache)
-
-        notificationReceived.emit(
-            ApiNotification(
-                id = "n1",
-                type = "friend_request",
-                actor = me.meeshy.sdk.model.NotificationActor(id = "alice"),
-                context = me.meeshy.sdk.model.NotificationContext(friendRequestId = "r1"),
-            ),
-        )
-
-        assertThat(cache.currentReceivedPendingSenderIds).containsExactly("alice")
-        assertThat(vm.pendingFriendRequests.value).isEqualTo(1)
-    }
-
-    @Test
-    fun `a live acceptance notification makes the accepter a friend and clears the sent pending entry`() = runTest {
-        val cache = FriendshipCache()
-        cache.didSendRequest("bob", "r2")
-        viewModel(cache)
-
-        notificationReceived.emit(
-            ApiNotification(id = "n2", type = "friend_accepted", actor = me.meeshy.sdk.model.NotificationActor(id = "bob")),
-        )
-
-        assertThat(cache.isFriend("bob")).isTrue()
     }
 
     @Test

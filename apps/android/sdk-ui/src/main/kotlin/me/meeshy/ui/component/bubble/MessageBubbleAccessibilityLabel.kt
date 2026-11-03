@@ -1,6 +1,9 @@
 package me.meeshy.ui.component.bubble
 
+import me.meeshy.sdk.model.text.PlainText
 import java.util.Locale
+import me.meeshy.sdk.model.ForwardAttribution
+import me.meeshy.sdk.model.MessageSourceKind
 
 /**
  * Localized wording for the composed message-bubble accessibility label, injected by the
@@ -30,12 +33,40 @@ public data class BubbleAccessibilityStrings(
     val blurred: String,
     val edited: String,
     val pinned: String,
+    /** « Transféré » : annoncé quand la politique ne nomme personne ; blanc ⇒ rien. */
+    val forwarded: String = "",
+    /** « Transféré depuis %s » (un groupe au moins public) ; blanc ⇒ [forwarded]. */
+    val forwardedFromGroup: String = "",
+    /** « Transf. de %s » (un tête-à-tête) ; blanc ⇒ [forwarded]. */
+    val forwardedFromPerson: String = "",
     val ephemeral: String,
     val reactions: String,
     val delivery: BubbleDeliveryA11yStrings,
     /** What an end-to-end message this device cannot open says (#13110); blank ⇒ nothing of it is read. */
     val endToEndSealed: String = "",
+    /** « Sans compte » : annoncé après le nom d'un invité anonyme ; blanc ⇒ rien. */
+    val anonymousSender: String = "",
+    /** La source annoncée pour un message qui ne vient pas d'un utilisateur ; blanc ⇒ rien. */
+    val sources: BubbleSourceA11yStrings = BubbleSourceA11yStrings(),
 )
+
+/** L'étiquette parlée de chaque source non utilisateur ; blanc ⇒ la source n'est pas annoncée. */
+public data class BubbleSourceA11yStrings(
+    val system: String = "",
+    val ads: String = "",
+    val app: String = "",
+    val agent: String = "",
+    val authority: String = "",
+) {
+    internal fun of(kind: MessageSourceKind): String = when (kind) {
+        MessageSourceKind.User -> ""
+        MessageSourceKind.System -> system
+        MessageSourceKind.Ads -> ads
+        MessageSourceKind.App -> app
+        MessageSourceKind.Agent -> agent
+        MessageSourceKind.Authority -> authority
+    }
+}
 
 /** The six spoken delivery phrasings, one per [DeliveryStatus] arm. */
 public data class BubbleDeliveryA11yStrings(
@@ -74,6 +105,8 @@ public object MessageBubbleAccessibilityLabel {
 
         if (!content.isOutgoing) {
             parts += content.senderName?.takeIf { it.isNotBlank() } ?: strings.unknownSender
+            if (content.senderIsAnonymous) strings.anonymousSender.takeIf { it.isNotBlank() }?.let { parts += it }
+            strings.sources.of(content.sourceKind).takeIf { it.isNotBlank() }?.let { parts += it }
         }
 
         if (content.isEndToEndSealed) {
@@ -97,7 +130,7 @@ public object MessageBubbleAccessibilityLabel {
         }
 
         if (content.text.isNotBlank() && !content.isBlurred) {
-            parts += content.text
+            parts += PlainText.of(content.text)
         }
 
         if (content.images.isNotEmpty()) {
@@ -122,6 +155,7 @@ public object MessageBubbleAccessibilityLabel {
         }
         if (content.isEdited) parts += strings.edited
         if (content.pinnedAtIso != null) parts += strings.pinned
+        if (content.isForwarded) forwardedLabel(content.forwardAttribution, strings, locale).takeIf { it.isNotBlank() }?.let { parts += it }
         if (content.expiresAtIso != null) parts += strings.ephemeral
         if (content.isViewOnce) parts += strings.viewOnce
         if (content.isBlurred) parts += strings.blurred
@@ -173,4 +207,13 @@ public object MessageBubbleAccessibilityLabel {
         DeliveryStatus.Read -> strings.read
         DeliveryStatus.Failed -> strings.failed
     }
+
+    private fun forwardedLabel(attribution: ForwardAttribution, strings: BubbleAccessibilityStrings, locale: Locale): String =
+        when (attribution) {
+            is ForwardAttribution.Group ->
+                if (strings.forwardedFromGroup.isBlank()) strings.forwarded else String.format(locale, strings.forwardedFromGroup, attribution.name)
+            is ForwardAttribution.Person ->
+                if (strings.forwardedFromPerson.isBlank()) strings.forwarded else String.format(locale, strings.forwardedFromPerson, attribution.name)
+            ForwardAttribution.Anonymous -> strings.forwarded
+        }
 }

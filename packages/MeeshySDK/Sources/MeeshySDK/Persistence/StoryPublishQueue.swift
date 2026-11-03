@@ -196,6 +196,16 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
 /// `localFilePath` exists before each retry; if missing, the item is failed
 /// permanently and surfaced via `publishFailed` so the UI can ask the user
 /// to retake the lost media.
+/// Ce qu'a fait l'annulation d'une story en attente (#10331).
+public enum StoryPendingCancellation: Equatable, Sendable {
+    /// Retirée de la file, médias locaux compris : rien ne partira.
+    case removed
+    /// En train de partir : la file la garde.
+    case inFlight
+    /// Plus dans la file — partie, ou déjà classée en échec.
+    case notFound
+}
+
 public struct StoryMediaReference: Codable, Sendable {
     public let elementId: String
     /// "image", "video" or "audio" — kept as a free string for forward
@@ -208,6 +218,39 @@ public struct StoryMediaReference: Codable, Sendable {
         self.elementId = elementId
         self.mediaType = mediaType
         self.localFilePath = localFilePath
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case elementId, mediaType, localFilePath
+    }
+
+    /// **Le chemin relu suit le conteneur de l'app** (#14879). Le dossier
+    /// `…/Data/Application/<UUID>/` change d'un lancement à l'autre (mise à
+    /// jour, réinstallation, simulateur) : un chemin absolu persisté visait
+    /// l'ANCIEN conteneur, et le fichier, bien présent, était déclaré
+    /// introuvable — la story partait en échec « média local introuvable ».
+    /// Le format écrit ne change pas : seul le décodage rebase.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        elementId = try container.decode(String.self, forKey: .elementId)
+        mediaType = try container.decode(String.self, forKey: .mediaType)
+        localFilePath = Self.rebasing(
+            try container.decode(String.self, forKey: .localFilePath),
+            ontoHome: NSHomeDirectory()
+        )
+    }
+
+    /// Réécrit `path` sous `home` quand il vise un AUTRE conteneur d'app ; tout
+    /// autre chemin (déjà sous `home`, hors conteneur, `home` hors conteneur)
+    /// reste tel quel.
+    public static func rebasing(_ path: String, ontoHome home: String) -> String {
+        let marker = "/Data/Application/"
+        guard !path.hasPrefix(home + "/"),
+              home.contains(marker),
+              let markerRange = path.range(of: marker) else { return path }
+        let afterMarker = path[markerRange.upperBound...]
+        guard let containerEnd = afterMarker.firstIndex(of: "/") else { return path }
+        return home + afterMarker[containerEnd...]
     }
 
     /// File extensions (case-insensitive) treated as video containers.
@@ -298,6 +341,11 @@ public struct StoryPublishFailure: Sendable {
 /// to the rest of the app via Combine publishers.
 public actor StoryPublishQueue {
     public static let shared = StoryPublishQueue()
+
+    /// La trace qu'un échec `.missingLocalMedia` laisse dans `lastError`.
+    /// Persistée telle quelle depuis toujours : l'app la reconnaît pour la
+    /// dire dans la langue de l'interface, jamais en l'affichant brute.
+    public static let missingLocalMediaError = "Un média local est introuvable"
 
     /// Emitted when a pending publication reaches the server and is assigned
     /// a real post id. ViewModels listen to swap their optimistic
@@ -462,6 +510,12 @@ public actor StoryPublishQueue {
         items
     }
 
+    /// Les items EN ATTENTE que personne ne publie en ce moment (#10331) —
+    /// ceux qu'une annulation retirerait.
+    public var waitingItems: [StoryPublishQueueItem] {
+        items.filter { !inFlightIds.contains($0.id) }
+    }
+
     /// Items that failed permanently and are waiting for a manual retry or
     /// discard from the UI (`MyStoriesView`). Their local media is preserved
     /// (unlike `pendingItems`' terminal successes) so a retry can reuse it.
@@ -510,6 +564,19 @@ public actor StoryPublishQueue {
         let item = failedItems.remove(at: idx)
         removeLocalMedia(of: item)
         saveFailedItemsToDisk()
+    }
+
+    /// **Annuler une story EN ATTENTE d'envoi** (#10331) — le geste de
+    /// l'auteur, avant que la file ne la publie. Un item revendiqué
+    /// (`inFlightIds`) est en train de partir : il n'est pas retiré sous les
+    /// pieds de son téléversement, et l'appelant le dit.
+    public func cancelPendingItem(_ itemId: String) -> StoryPendingCancellation {
+        guard let idx = items.firstIndex(where: { $0.id == itemId }) else { return .notFound }
+        guard !inFlightIds.contains(itemId) else { return .inFlight }
+        let item = items.remove(at: idx)
+        removeLocalMedia(of: item)
+        saveToDisk()
+        return .removed
     }
 
     /// Draft recovery — the most recent queued story that has been stuck
@@ -685,7 +752,7 @@ public actor StoryPublishQueue {
             var item = items.remove(at: idx)
             switch failurePayloads.first(where: { $0.queueId == id })?.reason {
             case .missingLocalMedia:
-                item.lastError = "Un média local est introuvable"
+                item.lastError = Self.missingLocalMediaError
             case .unrecoverable(let message):
                 item.lastError = message
             case .maxRetriesReached, .none:

@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.card.title",
+          "androidName": "signup_card_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.email.placeholder",
+          "androidName": "signup_email_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.identity.displayName",
+          "androidName": "signup_identity_display_name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.identity.username",
+          "androidName": "signup_identity_username",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.password.placeholder",
+          "androidName": "signup_password_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.password.why",
+          "androidName": "signup_password_why",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.password.why.detail",
+          "androidName": "signup_password_why_detail",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.phone.benefit",
+          "androidName": "signup_phone_benefit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.phone.country.hint",
+          "androidName": "signup_phone_country_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.phone.placeholder",
+          "androidName": "signup_phone_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.phone.required",
+          "androidName": "signup_phone_required",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.submit",
+          "androidName": "signup_phased_submit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.submit.inProgress",
+          "androidName": "signup_submit_in_progress",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.username.invalidCharacters",
+          "androidName": "signup_username_invalid_characters",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.username.tooLong",
+          "androidName": "signup_username_too_long",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.close",
+          "androidName": "signup_close",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -144,14 +144,20 @@ class PostDetailViewModel: ObservableObject {
         // `ConversationViewModel.loadMessages` draining NSEPendingMessageConsumer).
         await NSEPendingPostConsumer.shared.consumeAll()
         let cacheResult = await CacheCoordinator.shared.feed.load(for: postId)
+        // Une publication encore dans la file (#14929) n'existe pas côté
+        // serveur : sa carte optimiste est servie par l'hôte, et un GET sur son
+        // cmid ne rendrait qu'une absence.
+        let mayAskServer = !ClientMutationId.isValid(postId)
         switch cacheResult {
         case .fresh(let cached, _):
             post = cached.first
             return
         case .stale(let cached, _):
             post = cached.first
+            guard mayAskServer else { return }
             await refreshPost(postId)
         case .expired, .empty:
+            guard mayAskServer else { return }
             isLoading = post == nil
             await refreshPost(postId)
         }
@@ -170,7 +176,7 @@ class PostDetailViewModel: ObservableObject {
     /// porte qui l'a amenée : tap d'un listing, notification, lien) donne la
     /// source de l'impression et la provenance de la vue ; sans marque, `direct`.
     func registerDetailOpen(_ postId: String) async {
-        guard countedOpenPostIds.insert(postId).inserted else { return }
+        guard !ClientMutationId.isValid(postId), countedOpenPostIds.insert(postId).inserted else { return }
         if post != nil {
             post?.impressionCount += 1
             post?.postOpenCount += 1
@@ -212,6 +218,7 @@ class PostDetailViewModel: ObservableObject {
     }
 
     func loadComments(_ postId: String) async {
+        guard !ClientMutationId.isValid(postId) else { return }
         let outcome = await onThread(postId).loadRoots()
         guard outcome != .skipped else { return }
         if outcome == .failed { warnIfNoComments() }

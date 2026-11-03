@@ -140,22 +140,20 @@ object MessageMergePolicy {
     }
 
     /** Remise et lecture : jamais en arrière, quel que soit le canal le plus lent. */
-    private fun mergedReceipts(next: ApiMessage, existing: ApiMessage, incoming: ApiMessage): ApiMessage =
-        next.copy(
-            deliveredCount = maxOf(existing.deliveredCount, incoming.deliveredCount),
-            readCount = maxOf(existing.readCount, incoming.readCount),
-            deliveredToAllAt = incoming.deliveredToAllAt ?: existing.deliveredToAllAt,
-            readByAllAt = incoming.readByAllAt ?: existing.readByAllAt,
-            recipientCount = incoming.recipientCount ?: existing.recipientCount,
+    private fun mergedReceipts(next: ApiMessage, existing: ApiMessage, incoming: ApiMessage): ApiMessage {
+        val counters = ReceiptMergePolicy.merged(ReceiptMergePolicy.countersOf(existing), ReceiptMergePolicy.countersOf(incoming))
+        return ReceiptMergePolicy.withCounters(next, counters).copy(
             viewOnceCount = maxOf(existing.viewOnceCount, incoming.viewOnceCount),
             consumedByMe = if (existing.consumedByMe == true) true else incoming.consumedByMe ?: existing.consumedByMe,
         )
+    }
 
     private fun mergedReactions(next: ApiMessage, existing: ApiMessage, guards: MessageMergeGuards): ApiMessage =
         if (!guards.pendingReaction) {
-            next
+            next.copy(reactionRows = ReactionLedger.reconciled(next.reactionRows ?: existing.reactionRows, next.reactionSummary, null))
         } else {
             next.copy(
+                reactionRows = existing.reactionRows,
                 reactionSummary = existing.reactionSummary,
                 currentUserReactions = existing.currentUserReactions,
                 reactionCount = existing.reactionCount,

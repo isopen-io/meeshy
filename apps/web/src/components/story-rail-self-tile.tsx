@@ -1,4 +1,5 @@
 import { Avatar } from '@/components/avatar';
+import { ringDecorSpill } from '@/components/avatar-ring';
 import { Glyph } from '@/components/glyph';
 import { MIN_TOUCH_TARGET, railCellWidth, railRingBox, railStroke } from '@/components/rail-tile';
 import { translate } from '@/lib/i18n-catalog';
@@ -102,6 +103,13 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
   const badge = selfBadgeDiameter(size);
   const hit = Math.max(0, (MIN_TOUCH_TARGET - badge) / 2);
   const emoji = entry.moodEmoji;
+  /* MON CADRE ILLUSTRÉ À SA TAILLE (#15157) : la tuile réserve ce que son film demande — sur les
+     côtés au-delà de la cellule, au-dessus et au-dessous au-delà de l'anneau de story — et le déclare. */
+  const spill = ringDecorSpill(myRing, size);
+  const reserve = {
+    block: Math.max(0, spill - (anneau - size) / 2),
+    inline: Math.max(0, spill - (cellule - size) / 2),
+  };
 
   /* L'ANNEAU ET L'AVATAR — le même corps que `StoryTile`, à ceci près qu'il
      n'est un LIEN que si j'ai quelque chose à ouvrir. Sans story, c'est un
@@ -115,6 +123,7 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
       style={{
         width: anneau,
         height: anneau,
+        ...(spill === 0 ? {} : { marginBlock: reserve.block, marginInline: reserve.inline }),
         boxShadow: `inset 0 0 0 ${trait}px ${
           entry.hasActiveStory
             ? 'var(--color-ios-brand)'
@@ -133,7 +142,7 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
         /* MA PHOTO (#6975) — résolue par `selfRailEntry`, pas ici : cette
            tuile est un rendu, la descente est une loi. */
         {...(entry.avatar === undefined ? {} : { src: entry.avatar })}
-        {...(myRing === null ? {} : { ring: myRing })}
+        {...(myRing === null ? {} : { ring: myRing, ringRoom: spill })}
       />
     </span>
   );

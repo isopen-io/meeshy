@@ -111,7 +111,7 @@ class CallViewModelSocketRejoinTest {
         }),
         CallWaitingController(signalManager, silentTimer, mockk(relaxed = true)),
         CallWatchdogsController(signalManager, object : CallHeartbeatTicker { override val beats: Flow<Unit> = emptyFlow() }, silentTimer, silentTimer),
-        CallAnalyticsController(signalManager, clock),
+        CallAnalyticsController(signalManager, clock, InMemoryCallQualitySummaryStore(), silentAnalyticsSnapshots),
         CallExtensionPoints(
             controllers = CallFeatureControllerRegistry(emptySet()),
             overlays = CallOverlayRegistry(emptySet()),
@@ -124,6 +124,8 @@ class CallViewModelSocketRejoinTest {
         recordingCallPreview(),
         silentTurnCredentials(signalManager),
         testGroupTitleWording,
+        CallEndReconciler(signalManager),
+        CallTeardownController(emptySet()),
     )
 
     private fun socketDropsAndReturns() {

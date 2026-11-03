@@ -163,7 +163,11 @@ struct PublicationDestructiveMenuItems: View {
                 onDelete(postId)
                 HapticFeedback.medium()
             } label: {
-                Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+                if PendingPublicationMarker.isPending(postId: postId) {
+                    Label(UnsentPublicationsCopy.cancelSend, systemImage: "xmark.circle")
+                } else {
+                    Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+                }
             }
         }
         if let onRemove {

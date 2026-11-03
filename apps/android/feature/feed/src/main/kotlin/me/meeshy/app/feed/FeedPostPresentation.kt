@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.lang.ReaderPrism
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.theme.authorAccentHex
@@ -15,9 +16,9 @@ import me.meeshy.sdk.model.card.PostCommentCardPost
 import me.meeshy.sdk.model.composesScene
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
+import me.meeshy.sdk.model.trackedLinkMap
 import me.meeshy.sdk.model.resolvedLayout
 import me.meeshy.sdk.model.resolvedCaption
-import me.meeshy.sdk.lang.LanguageResolver.preferredContentLanguages
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.story.sceneItems
 import me.meeshy.sdk.story.toStoryItem
@@ -101,6 +102,10 @@ data class FeedPostPresentation(
     val isBookmarked: Boolean,
     val commentCount: Int,
     val repostCount: Int,
+    /** Les partages du post (iOS `FeedPost.shareCount`), 0 quand la passerelle n'en sert pas. */
+    val shareCount: Int = 0,
+    /** L'accent de l'auteur (hex), passé en PARAMÈTRE à la barre d'actions ; `null` : teintes neutres. */
+    val accentHex: String? = null,
     /** Le lecteur a republié ce post — servi par la passerelle, ou posé au geste en attendant sa réponse (#14456). */
     val isReposted: Boolean = false,
     val isPinned: Boolean,
@@ -109,6 +114,10 @@ data class FeedPostPresentation(
     val repostEmbed: RepostEmbedPresentation?,
     val viewCount: Int,
     val impressionCount: Int,
+    /** Points que ce post a rapportés au lecteur (#9569) ; `null` : non servi. La marque « · ✦+N » les montre. */
+    val viewerPoints: Int? = null,
+    /** Personnes distinctes ayant ouvert le post (`uniqueViewCount`) — montrée à l'auteur seul. */
+    val uniqueViewCount: Int? = null,
     /** True when the signed-in viewer authored this post — gates the author-only reach line. */
     val isAuthor: Boolean,
     /** The post's shared place, or null when none — mirror of iOS `post.location`. */
@@ -131,6 +140,14 @@ data class FeedPostPresentation(
     val commentCardSupport: PostCommentCardPost? = null,
     /** Les premiers commentaires que la carte montre sous ses actions (#14314) ; `null` : aucun à montrer. */
     val commentsPreview: FeedCommentsPreviewState? = null,
+    /** `pseudo (minuscules) -> userId` des personnes que le post mentionne : seules ces @mentions se rendent cliquables. */
+    val mentionUserIds: Map<String, String> = emptyMap(),
+    /** `pseudo -> nom d'affichage` des personnes mentionnées (le texte montre `@Nom`). */
+    val mentionDisplayNames: Map<String, String> = emptyMap(),
+    /** `urlBrute -> jeton` des liens suivis : le toucher passe par la redirection de la passerelle. */
+    val trackedLinks: Map<String, String> = emptyMap(),
+    /** La langue d'origine du texte du post : le porteur de la langue d'un audio sans transcription (Prisme audio). */
+    val originalLanguage: String? = null,
 ) {
     /**
      * Le réel que ce réel republie, quand il n'a pas de média propre : la carte montre alors UNE couverture, celle du
@@ -174,7 +191,7 @@ object FeedPostBuilder {
         activeLanguageCode: String? = null,
         currentUserId: String? = null,
     ): FeedPostPresentation {
-        val preferredLanguages = preferredContentLanguages(preferences)
+        val preferredLanguages = ReaderPrism.resolve(preferences)
         val media = FeedMediaMapper.map(post.media, preferredLanguages, mediaBaseUrl)
         val images = media
             .filter { it.type == FeedMediaType.IMAGE }
@@ -212,6 +229,8 @@ object FeedPostBuilder {
                 soundCredit = PostSceneSound.credit(read.items, post.storyEffects?.canvas?.sound),
             )
         }
+        val mentioned = post.mentionedUsers.orEmpty().filter { it.username.isNotBlank() }.map { Triple(it.username, it.userId, it.displayName) } +
+            post.mentions.orEmpty().filter { it.display.isPubliclyVisible && it.username.isNotBlank() }.map { Triple(it.username, it.userId, it.displayName) }
         val composedReel = if (isReel) post.toStoryItem().takeIf { it.storyEffects.composesScene() } else null
         return FeedPostPresentation(
             id = post.id,
@@ -241,6 +260,8 @@ object FeedPostBuilder {
             isBookmarked = post.isBookmarkedByMe == true,
             commentCount = post.commentCount ?: 0,
             repostCount = post.repostCount ?: 0,
+            shareCount = post.shareCount ?: 0,
+            accentHex = post.authorAccentHex(),
             isReposted = post.isRepostedByMe == true,
             isPinned = post.isPinned == true,
             isEdited = post.isEdited == true,
@@ -248,6 +269,8 @@ object FeedPostBuilder {
             repostEmbed = RepostEmbedBuilder.forPost(post, preferences, mediaBaseUrl),
             viewCount = post.viewCount ?: 0,
             impressionCount = post.impressionCount ?: 0,
+            viewerPoints = post.viewerPoints,
+            uniqueViewCount = post.uniqueViewCount,
             isAuthor = currentUserId != null && post.author?.id == currentUserId,
             location = FeedPostLocationBuilder.build(post.location),
             distanceMeters = post.distanceMeters,
@@ -259,6 +282,10 @@ object FeedPostBuilder {
             imagerScenes = PostImaging.of(scenes, composedReel, post.authorAccentHex()),
             commentCardSupport = CommentCardReading.support(post, content),
             commentsPreview = FeedCommentsPreviewBuilder.build(post.comments, post.commentCount ?: 0, preferences, mediaBaseUrl),
+            mentionUserIds = mentioned.associate { it.first.lowercase() to it.second },
+            mentionDisplayNames = mentioned.mapNotNull { (u, _, n) -> n?.takeIf(String::isNotBlank)?.let { u to it } }.toMap(),
+            trackedLinks = post.trackedLinkMap,
+            originalLanguage = post.originalLanguage,
         )
     }
 

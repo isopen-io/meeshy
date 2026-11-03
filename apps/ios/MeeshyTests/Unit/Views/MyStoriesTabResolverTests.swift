@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+import MeeshySDK
 
 // MARK: - MyStoriesTabResolverTests
 //
@@ -140,5 +141,21 @@ final class MyStoriesTabResolverTests: XCTestCase {
             tab: .archive, hasPublishedStories: false,
             hasDrafts: false, hasActiveUpload: false, hasFailedItems: false, hasArchivedStories: true
         ))
+    }
+
+    // MARK: - #15127 — une story en attente ne vit que dans « File »
+
+    func test_sentStories_leavesThePendingStoriesToTheQueue() {
+        let pending = story(id: "\(StoryViewModel.pendingStoryIdPrefix)\(UUID().uuidString)#0")
+        let sent = story(id: "665f1c2e9b1d4a0012345678")
+
+        XCTAssertEqual(MyStoriesTabResolver.sentStories([pending, sent]).map(\.id), [sent.id],
+                       "« Publiées » et « Archive » ne montrent que ce que le serveur connaît")
+        XCTAssertTrue(PendingStoryMarker.isPending(storyId: pending.id))
+        XCTAssertFalse(PendingStoryMarker.isPending(storyId: sent.id))
+    }
+
+    private func story(id: String) -> StoryItem {
+        StoryItem(id: id, content: id, media: [], storyEffects: nil, createdAt: Date(), expiresAt: nil, isViewed: false)
     }
 }

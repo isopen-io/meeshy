@@ -130,6 +130,12 @@ enum ComposerCaptureCopy {
         String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)
     }
 
+    /// « Annuler » du recadrage, tel que VoiceOver le lit : il rend le cadre
+    /// d'avant, la retouche reste (#15355).
+    static var cancelCrop: String {
+        String(localized: "composer.capture.crop.cancel.a11y", defaultValue: "Annuler le recadrage", bundle: .main)
+    }
+
     /// Ce que VoiceOver lit de la scène en édition : le média s'y recadre.
     static var reframe: String {
         String(localized: "composer.object.editor.crop", defaultValue: "Recadrer", bundle: .main)

@@ -11,25 +11,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.language.InterfaceLanguageStore
 import me.meeshy.sdk.model.AppThemeMode
-import me.meeshy.sdk.model.DndDay
-import me.meeshy.sdk.model.DndWindow
-import me.meeshy.sdk.model.NotificationType
-import me.meeshy.sdk.model.NotificationTypeCatalog
 import me.meeshy.sdk.model.UpdateProfileRequest
-import me.meeshy.sdk.model.UserNotificationPreferences
-import me.meeshy.sdk.model.relation.CircleNotify
-import me.meeshy.sdk.model.relation.RelationAudienceChoice
 import me.meeshy.sdk.model.next
-import me.meeshy.sdk.notification.NotificationPreferencesStore
-import me.meeshy.sdk.notification.NotificationPreferencesSyncRepository
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.preferences.ApplicationPreferencesSyncRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.theme.ThemeStore
 import me.meeshy.sdk.user.UserRepository
-import java.time.OffsetDateTime
 import javax.inject.Inject
-
-private const val SECONDS_PER_MINUTE = 60
 
 data class SettingsUiState(
     val userId: String? = null,
@@ -42,8 +31,6 @@ data class SettingsUiState(
     val systemLanguage: String? = null,
     val regionalLanguage: String? = null,
     val regionalLanguageQuery: String = "",
-    val notifications: UserNotificationPreferences = UserNotificationPreferences(),
-    val notificationTypeQuery: String = "",
     val isLoading: Boolean = false,
 ) {
     /** iOS `SettingsView.profileCard` : le nom affiché en titre, le pseudo à défaut. */
@@ -59,9 +46,8 @@ class SettingsViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val themeStore: ThemeStore,
     private val interfaceLanguageStore: InterfaceLanguageStore,
-    private val notificationPreferencesStore: NotificationPreferencesStore,
-    private val notificationPreferencesSyncRepository: NotificationPreferencesSyncRepository,
     private val workManager: WorkManager,
+    private val applicationSync: ApplicationPreferencesSyncRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -93,21 +79,23 @@ class SettingsViewModel @Inject constructor(
                 _state.update { it.copy(interfaceLanguage = code) }
             }
         }
-        viewModelScope.launch {
-            notificationPreferencesStore.preferences.collect { prefs ->
-                _state.update { it.copy(notifications = prefs) }
-            }
-        }
     }
 
     /** Persists an explicit appearance choice (light/dark/system). */
     fun setThemeMode(mode: AppThemeMode) {
-        viewModelScope.launch { themeStore.setThemeMode(mode) }
+        viewModelScope.launch { applyTheme(mode) }
     }
 
     /** Advances the appearance to the next mode — the tap-to-cycle gesture. */
     fun cycleTheme() {
-        viewModelScope.launch { themeStore.setThemeMode(themeStore.themeMode.value.next()) }
+        viewModelScope.launch { applyTheme(themeStore.themeMode.value.next()) }
+    }
+
+    /** Peint le thème à l'instant depuis le magasin local, puis le met en file vers le compte (un seul PATCH par rafale). */
+    private suspend fun applyTheme(mode: AppThemeMode) {
+        themeStore.setThemeMode(mode)
+        val cmid = applicationSync.enqueueTheme(mode)
+        if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
     }
 
     /** Persists the interface (UI chrome) language; `null` follows the device locale. */
@@ -133,124 +121,5 @@ class SettingsViewModel @Inject constructor(
     /** Updates the UI-only search query that filters the regional-language picker. */
     fun setRegionalLanguageQuery(query: String) {
         _state.update { it.copy(regionalLanguageQuery = query) }
-    }
-
-    /** Toggles push notifications, persisting the whole block (other toggles preserved). */
-    fun setPushEnabled(enabled: Boolean) {
-        updateNotifications { it.copy(pushEnabled = enabled) }
-    }
-
-    /** Toggles email notifications — an independent delivery channel from push,
-     * never gated on [setPushEnabled] (mirrors iOS `NotificationSettingsView`'s
-     * `emailEnabled` toggle, which carries no push dependency either). */
-    fun setEmailEnabled(enabled: Boolean) {
-        updateNotifications { it.copy(emailEnabled = enabled) }
-    }
-
-    /** Toggles the notification sound. */
-    fun setSoundEnabled(enabled: Boolean) {
-        updateNotifications { it.copy(soundEnabled = enabled) }
-    }
-
-    /** Toggles notification vibration. */
-    fun setVibrationEnabled(enabled: Boolean) {
-        updateNotifications { it.copy(vibrationEnabled = enabled) }
-    }
-
-    /** Toggles new-message notifications. */
-    fun setNewMessageEnabled(enabled: Boolean) {
-        updateNotifications { it.copy(newMessageEnabled = enabled) }
-    }
-
-    /**
-     * Toggles the message-content preview shown in the lock-screen push and the in-app banner
-     * (`NotificationBannerHost`, `feature/notifications`, enforces it — replacing the body with
-     * a generic label, mirroring the gateway's own `showPreview:false` substitution for the push
-     * payload). Sender identity is a separate toggle ([setShowSenderName]).
-     */
-    fun setShowPreview(enabled: Boolean) {
-        updateNotifications { it.copy(showPreview = enabled) }
-    }
-
-    /** Toggles the sender's name shown on a notification (independent of [setShowPreview]). */
-    fun setShowSenderName(enabled: Boolean) {
-        updateNotifications { it.copy(showSenderName = enabled) }
-    }
-
-    /** Toggles grouping multiple notifications from the same conversation into one thread. */
-    fun setGroupNotifications(enabled: Boolean) {
-        updateNotifications { it.copy(groupNotifications = enabled) }
-    }
-
-    /** Toggles the app icon's unread badge count. */
-    fun setNotificationBadgeEnabled(enabled: Boolean) {
-        updateNotifications { it.copy(notificationBadgeEnabled = enabled) }
-    }
-
-    /** Toggles the Do-Not-Disturb (quiet-hours) schedule on/off. */
-    fun setDndEnabled(enabled: Boolean) {
-        updateDnd { it.copy(dndEnabled = enabled) }
-    }
-
-    /** Sets the quiet-hours start, formatting the picked time into the stored `HH:mm`. */
-    fun setDndStart(hour: Int, minute: Int) {
-        updateDnd { it.copy(dndStartTime = DndWindow.formatTimeOfDay(hour, minute)) }
-    }
-
-    /** Sets the quiet-hours end, formatting the picked time into the stored `HH:mm`. */
-    fun setDndEnd(hour: Int, minute: Int) {
-        updateDnd { it.copy(dndEndTime = DndWindow.formatTimeOfDay(hour, minute)) }
-    }
-
-    /** Adds/removes a day from the quiet-hours schedule (empty ⇒ every day). */
-    fun toggleDndDay(day: DndDay) {
-        updateDnd { it.copy(dndDays = DndWindow.toggleDay(it.dndDays, day)) }
-    }
-
-    /** Sets a single per-event notification type on/off, preserving every other toggle. */
-    fun setNotificationTypeEnabled(type: NotificationType, enabled: Boolean) {
-        updateNotifications { NotificationTypeCatalog.toggle(it, type, enabled) }
-    }
-
-    /**
-     * « Qui est prévenu » (#14064) : règle le cran d'entourage d'UNE action. Peint aussitôt (le bloc local est la
-     * source de l'écran) puis mis en file vers la passerelle, hors ligne compris ; un envoi refusé jusqu'au bout rend
-     * le bloc à la vérité du serveur (`UpdateSettingsHandler.onExhausted`). Une clé inconnue est ignorée.
-     */
-    fun setCircleAudience(key: String, choice: RelationAudienceChoice) {
-        if (key !in CircleNotify.KEYS) return
-        updateNotifications { it.copy(circleAudience = it.circleAudience + (key to choice)) }
-    }
-
-    /** Updates the search query that filters the per-event notification-type list. */
-    fun setNotificationTypeQuery(query: String) {
-        _state.update { it.copy(notificationTypeQuery = query) }
-    }
-
-    /**
-     * A quiet-hours edit also records the device's current UTC offset, so the gateway judges
-     * the 22:00-08:00 window in the user's LOCAL time, never in UTC (GW7).
-     */
-    private fun updateDnd(edit: (UserNotificationPreferences) -> UserNotificationPreferences) {
-        updateNotifications { DndWindow.withRecordedOffset(edit(it), deviceUtcOffsetMinutes()) }
-    }
-
-    private fun deviceUtcOffsetMinutes(): Int = OffsetDateTime.now().offset.totalSeconds / SECONDS_PER_MINUTE
-
-    /**
-     * The single funnel every persisted notification toggle flows through: it paints the
-     * device-local store instantly (UI source of truth) and then queues a durable
-     * `UPDATE_SETTINGS` sync so the choice reaches the gateway offline-safely, waking the
-     * flush worker only when a real row was enqueued (a superseded/sessionless enqueue
-     * returns `null` and there is nothing to flush). The UI-only search query does NOT go
-     * through here, so it never triggers a backend write.
-     */
-    private fun updateNotifications(edit: (UserNotificationPreferences) -> UserNotificationPreferences) {
-        viewModelScope.launch {
-            val updated = edit(notificationPreferencesStore.preferences.value)
-            notificationPreferencesStore.setPreferences(updated)
-            val cmid = notificationPreferencesSyncRepository.enqueueSync(updated)
-            if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
-        }
     }
 }

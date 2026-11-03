@@ -399,7 +399,7 @@ final class ComposerRailGeometryTests: XCTestCase {
                       "La bande se calcule depuis la scène libre et la carte MESURÉES.")
         XCTAssertTrue(surface.contains(".padding(.top,trailingBand.top).padding(.trailing,edge).padding(.bottom,trailingBand.bottom)"),
                       "Le rail droit porte les marges de la bande.")
-        XCTAssertTrue(surface.contains(".onPreferenceChange(ComposerFreeZoneFrameKey.self){freeZoneFrame=$0}"),
+        XCTAssertTrue(surface.contains(".onPreferenceChange(ComposerFreeZoneFrameKey.self){cadreinfreeZoneFrame=cadre"),
                       "La scène libre se mesure par préférence, jamais par la fenêtre.")
         XCTAssertTrue(surface.contains("inlinePanel.padding(.top,trailingBand.top-ComposerRailGeometry.gutter)"),
                       "Le panneau d'options reste aligné sur le haut de la colonne qu'il voisine.")

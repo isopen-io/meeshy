@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.audio.BackgroundAudioAnnouncement
 import me.meeshy.sdk.model.FeedMedia
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.StoryBackgroundValue
@@ -45,7 +46,7 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
             .filterNot { it.isBackground }
             .mapNotNull { it.toForegroundMediaView(clipTransitions, media) }
             .let(SceneObjectNumbers::capped)
-        val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
+        val preferredLanguages = StoryContentResolver.readerLanguages(prefs)
         val textObjects = SceneObjectNumbers.capped(storyEffects?.textObjects.orEmpty())
             .map { StoryTextObjectProjection.project(it, preferredLanguages) }
         // UNE lecture par piste, deux faits chacune (#5129).
@@ -74,7 +75,9 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
             backgroundAudioWindow = backgroundTrack?.window,
             foregroundAudioUrl = foregroundTrack?.url,
             foregroundAudioWindow = foregroundTrack?.window,
-            autoAdvanceMillis = StorySlideDuration.computeMillis(storyEffects),
+            autoAdvanceMillis = StorySlideDuration.computeMillis(storyEffects, background.videoSeconds),
+            opening = storyEffects?.opening,
+            closing = storyEffects?.closing,
             background = storyEffects?.background
                 ?.takeIf { it.isNotBlank() }
                 ?.let { StoryBackgroundValue.parse(it) },
@@ -87,6 +90,7 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
                 media.firstOrNull { it.id == mediaId }?.url?.let { resolveMediaUrl(it, apiBaseUrl) }
             },
             audioChips = StorySceneObjectsProjection.audioChips(storyEffects),
+            backgroundAudio = BackgroundAudioAnnouncement.of(storyEffects),
             places = storyEffects?.locationObjects.orEmpty().filter { it.place.name?.isNotBlank() == true || it.place.address?.isNotBlank() == true },
             isViewed = isViewed,
             createdAtMillis = isoToEpochMillis(createdAt).takeIf { it > 0L },
@@ -103,6 +107,8 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
         /** L'affiche d'un fond VIDÉO : la vignette du serveur, son ThumbHash à défaut (la scène au repos n'a pas de lecteur). */
         val posterUrl: String? = null,
         val posterThumbHash: String? = null,
+        /** La durée servie du fond VIDÉO ; une slide dont les effets ne nomment aucun fond dure toute sa vidéo (#15225). */
+        val videoSeconds: Double? = null,
     )
 
     /**
@@ -161,6 +167,7 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
                 ),
                 posterUrl = piece?.thumbnailUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, apiBaseUrl) },
                 posterThumbHash = piece?.thumbHash,
+                videoSeconds = piece?.duration?.toDouble(),
             )
         }
         val imageUrl = resolvedUrl

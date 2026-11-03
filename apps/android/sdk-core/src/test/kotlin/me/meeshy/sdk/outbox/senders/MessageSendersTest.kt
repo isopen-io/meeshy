@@ -17,7 +17,10 @@ import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.PinPayload
+import me.meeshy.sdk.outbox.SendAttemptRecorder
 import me.meeshy.sdk.outbox.SendResult
+import me.meeshy.sdk.model.SendOutcome
+import me.meeshy.sdk.model.SendTransport
 import org.junit.Test
 import java.io.IOException
 
@@ -48,6 +51,35 @@ class MessageSendersTest {
 
         assertThat(result).isEqualTo(SendResult.Success)
         coVerify(exactly = 1) { messageRepository.reconcileSent("cmid-1", serverMessage) }
+    }
+
+    @Test
+    fun `chaque envoi journalise sa tentative avec le transport et l issue`() = runTest {
+        val logged = mutableListOf<List<Any?>>()
+        val recorder = object : SendAttemptRecorder {
+            override suspend fun record(
+                localId: String,
+                transport: SendTransport,
+                startedAtMillis: Long,
+                finishedAtMillis: Long,
+                outcome: SendOutcome,
+                errorMessage: String?,
+            ) {
+                logged += listOf(localId, transport, outcome, errorMessage)
+            }
+        }
+        val handler = SendMessageHandler(messageApi, messageRepository, senderJson, ledger, attempts = recorder)
+        coEvery { messageApi.send(any(), any()) } returns refused() andThen accepted(serverMessage)
+
+        handler.send(sendRow())
+        handler.send(sendRow().copy(attempts = 1))
+
+        assertThat(logged.map { it.take(3) }).containsExactly(
+            listOf("cmid-1", SendTransport.REST, SendOutcome.FAILURE),
+            listOf("cmid-1", SendTransport.OUTBOX, SendOutcome.SUCCESS),
+        ).inOrder()
+        assertThat(logged.first()[3]).isNotNull()
+        assertThat(logged.last()[3]).isNull()
     }
 
     @Test
@@ -90,7 +122,7 @@ class MessageSendersTest {
     fun `send message stays retryable when the network is down`() = runTest {
         coEvery { messageApi.send(any(), any()) } throws IOException("offline")
 
-        assertThat(sendHandler().send(sendRow())).isEqualTo(SendResult.TransientFailure)
+        assertThat(sendHandler().send(sendRow())).isEqualTo(SendResult.TransportFailure)
     }
 
     @Test
@@ -153,7 +185,7 @@ class MessageSendersTest {
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
 
         coEvery { messageApi.delete("m1") } throws IOException("offline")
-        assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
+        assertThat(handler.send(row)).isEqualTo(SendResult.TransportFailure)
     }
 
     /** #14656 — only an ACCEPTED deletion lets the end-to-end plaintext leave the vault. */

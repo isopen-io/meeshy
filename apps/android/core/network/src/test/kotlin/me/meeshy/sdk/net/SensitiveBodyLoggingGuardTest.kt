@@ -38,10 +38,14 @@ class SensitiveBodyLoggingGuardTest {
     /** Le corps qu'aucune ligne de journal ne doit contenir. */
     private val motDePasse = "hunter2-ne-doit-jamais-paraitre"
 
-    private fun chain(path: String, jeton: String? = null): Interceptor.Chain {
+    private fun chain(
+        path: String,
+        jeton: String? = null,
+        corps: okhttp3.RequestBody = """{"password":"$motDePasse"}""".toRequestBody("application/json".toMediaType()),
+    ): Interceptor.Chain {
         val builder = Request.Builder()
             .url("https://gate.meeshy.me/api/v1$path")
-            .post("""{"password":"$motDePasse"}""".toRequestBody("application/json".toMediaType()))
+            .post(corps)
         if (jeton != null) builder.header("Authorization", "Bearer $jeton")
         val request = builder.build()
         val response = Response.Builder()
@@ -81,6 +85,11 @@ class SensitiveBodyLoggingGuardTest {
             },
             sensitive = HttpLoggingInterceptor(recueil).apply {
                 level = HttpLoggingInterceptor.Level.BASIC
+                redactHeader("Authorization")
+                redactHeader("Cookie")
+            },
+            bulk = HttpLoggingInterceptor(recueil).apply {
+                level = HttpLoggingInterceptor.Level.HEADERS
                 redactHeader("Authorization")
                 redactHeader("Cookie")
             },
@@ -277,5 +286,77 @@ class SensitiveBodyLoggingGuardTest {
                 lignes.none { it.contains(motDePasse) },
             )
         }
+    }
+
+    /**
+     * (#15315) Un corps de televersement que l'on n'a PAS le droit de lire : il annonce sa taille
+     * (44 Mo, comme la video de la recette du S8) et leve s'il est ecrit. Le logger BODY
+     * l'ecrivait entier dans un tampon puis en faisait une chaine — 89 Mo alloues d'un coup, et
+     * l'app debug tombait en `OutOfMemoryError` a chaque reprise de la file d'envoi.
+     */
+    private class CorpsInterditDeLecture(
+        private val taille: Long,
+        private val type: okhttp3.MediaType?,
+    ) : okhttp3.RequestBody() {
+        val ecritures = java.util.concurrent.atomic.AtomicInteger()
+        override fun contentType(): okhttp3.MediaType? = type
+        override fun contentLength(): Long = taille
+        override fun writeTo(sink: okio.BufferedSink) {
+            ecritures.incrementAndGet()
+            throw AssertionError("le journal a lu le corps d'un televersement")
+        }
+    }
+
+    @Test
+    fun `un televersement multipart n'est jamais lu par le journal`() {
+        val video = CorpsInterditDeLecture(44L * 1024 * 1024, "video/mp4".toMediaType())
+        val multipart = okhttp3.MultipartBody.Builder()
+            .setType(okhttp3.MultipartBody.FORM)
+            .addFormDataPart("files", "r14697b.mp4", video)
+            .build()
+        val lignes = mutableListOf<String>()
+
+        gardeQuiEcritDans(lignes).intercept(chain("/attachments/upload", corps = multipart))
+
+        assertEquals("le journal a ecrit le corps du televersement", 0, video.ecritures.get())
+        assertTrue("la requete n'a pas ete journalisee : $lignes", lignes.any { it.startsWith("--> POST") })
+        assertTrue(
+            "les en-tetes du televersement doivent rester au journal : $lignes",
+            lignes.any { it.startsWith("Content-Type: multipart/form-data") },
+        )
+    }
+
+    @Test
+    fun `un corps binaire nu n'est jamais lu par le journal`() {
+        val audio = CorpsInterditDeLecture(3L * 1024 * 1024, "audio/mp4".toMediaType())
+        val lignes = mutableListOf<String>()
+
+        gardeQuiEcritDans(lignes).intercept(chain("/voice/profile", corps = audio))
+
+        assertEquals(0, audio.ecritures.get())
+        assertTrue(lignes.any { it.startsWith("--> POST") })
+    }
+
+    @Test
+    fun `un corps texte au-dela du seuil n'est pas lu par le journal`() {
+        val enorme = CorpsInterditDeLecture(
+            SensitiveBodyLoggingGuard.MAX_LOGGED_BODY_BYTES + 1,
+            "application/json".toMediaType(),
+        )
+        val lignes = mutableListOf<String>()
+
+        gardeQuiEcritDans(lignes).intercept(chain("/conversations", corps = enorme))
+
+        assertEquals(0, enorme.ecritures.get())
+    }
+
+    @Test
+    fun `un corps de taille inconnue n'est pas lu par le journal`() {
+        val flux = CorpsInterditDeLecture(-1, "application/json".toMediaType())
+        val lignes = mutableListOf<String>()
+
+        gardeQuiEcritDans(lignes).intercept(chain("/conversations", corps = flux))
+
+        assertEquals(0, flux.ecritures.get())
     }
 }

@@ -6,6 +6,12 @@ import MeeshyUI
 /// `PostDetailView.swift` (#10956), mot pour mot.
 extension PostDetailView {
 
+    /// Le post affiché est encore dans la file d'envoi (#14879, #14929) : son
+    /// id est un cmid que le serveur ne connaît pas. Aucun engagement ne part —
+    /// ni cœur, ni réaction, ni republication, ni favori — et la barre qui les
+    /// offre est absente ; l'horloge à la place de l'heure dit pourquoi.
+    var isPendingPublication: Bool { PendingPublicationMarker.isPending(postId: postId) }
+
     /// Première apparition : chargement, état d'engagement semé depuis le
     /// post servi, salle du post, ouverture comptée, brouillon repris.
     func openDetail() async {
@@ -44,6 +50,7 @@ extension PostDetailView {
         if !isRepostInFlight, let p = displayPost, p.isRepostedByMe {
             isPostReposted = true
         }
+        guard !PendingPublicationMarker.isPending(postId: postId) else { return }
         await viewModel.loadComments(postId)
         viewModel.subscribeToSocket(postId)
         // Join the post room for real-time reaction events (single focused post).
@@ -68,5 +75,27 @@ extension PostDetailView {
     func closeDetail() {
         SocialSocketManager.shared.leavePostRoom(postId: postId)
         NotificationToastManager.shared.onPostClosed(postId)
+    }
+}
+
+/// Le favori du détail, écrit au serveur puis annoncé à l'auteur — hors du
+/// type `PostDetailView`, qui ne garde que l'état optimiste et son retour.
+enum PostDetailBookmarkWrite {
+    private struct Payload: Decodable { let bookmarked: Bool? }
+
+    static func send(postId: String, wasBookmarked: Bool) async -> Bool {
+        do {
+            let _: APIResponse<Payload> = try await APIClient.shared.request(
+                PostsEndpoint.byPostIdBookmark(postId: postId),
+                method: wasBookmarked ? "DELETE" : "POST"
+            )
+            FeedbackToastManager.shared.showSuccess(wasBookmarked
+                ? String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main)
+                : String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main))
+            return true
+        } catch {
+            FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
+            return false
+        }
     }
 }

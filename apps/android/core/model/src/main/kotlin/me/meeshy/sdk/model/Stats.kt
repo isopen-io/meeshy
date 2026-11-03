@@ -13,6 +13,9 @@ data class UserStats(
     val memberDays: Int = 0,
     val languages: List<String> = emptyList(),
     val achievements: List<Achievement> = emptyList(),
+    val postsCount: Int? = null,
+    val reelsCount: Int? = null,
+    val storiesCount: Int? = null,
 )
 
 /** A user achievement — port of Achievement (StatsModels.swift). */

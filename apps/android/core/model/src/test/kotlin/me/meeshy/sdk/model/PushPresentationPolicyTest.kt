@@ -25,7 +25,9 @@ class PushPresentationPolicyTest {
         conversationId: String? = "c1",
         activeConversationId: String? = null,
         now: LocalDateTime = awake,
+        appInForeground: Boolean = true,
     ) = PushPresentationPolicy.decide(
+        appInForeground = appInForeground,
         socketConnected = socketConnected,
         preferences = preferences,
         rawType = rawType,
@@ -141,5 +143,47 @@ class PushPresentationPolicyTest {
         assertThat(
             decide(socketConnected = true, preferences = UserNotificationPreferences(pushEnabled = false)),
         ).isEqualTo(PushPresentationDecision.Suppress)
+    }
+
+    @Test
+    fun `en arriere-plan la socket vivante ne supprime pas la banniere`() {
+        assertThat(decide(socketConnected = true, appInForeground = false))
+            .isEqualTo(PushPresentationDecision.Alert(playSound = true))
+    }
+
+    @Test
+    fun `en arriere-plan la conversation ouverte ne supprime pas non plus`() {
+        assertThat(decide(activeConversationId = "c1", appInForeground = false))
+            .isEqualTo(PushPresentationDecision.Alert(playSound = true))
+    }
+
+    @Test
+    fun `au premier plan la socket vivante supprime toujours`() {
+        assertThat(decide(socketConnected = true, appInForeground = true)).isEqualTo(PushPresentationDecision.Suppress)
+    }
+
+    @Test
+    fun `en arriere-plan push coupe ou calme suppriment`() {
+        assertThat(decide(preferences = UserNotificationPreferences(pushEnabled = false), appInForeground = false))
+            .isEqualTo(PushPresentationDecision.Suppress)
+        assertThat(decide(preferences = UserNotificationPreferences(dndEnabled = true), now = quiet, appInForeground = false))
+            .isEqualTo(PushPresentationDecision.Suppress)
+    }
+
+    @Test
+    fun `les sons coupes donnent une banniere sans son`() {
+        assertThat(decide(preferences = UserNotificationPreferences(soundEnabled = false), appInForeground = false))
+            .isEqualTo(PushPresentationDecision.Alert(playSound = false))
+    }
+
+    @Test
+    fun `un appel n est pas coupe par le maitre push ni le calme mais par callsEnabled`() {
+        val noPush = UserNotificationPreferences(pushEnabled = false)
+        assertThat(decide(preferences = noPush, rawType = "incoming_call", appInForeground = false))
+            .isEqualTo(PushPresentationDecision.Alert(playSound = true))
+        assertThat(decide(preferences = UserNotificationPreferences(dndEnabled = true), now = quiet, rawType = "incoming_call", appInForeground = false))
+            .isEqualTo(PushPresentationDecision.Alert(playSound = true))
+        assertThat(decide(preferences = UserNotificationPreferences(callsEnabled = false), rawType = "incoming_call", appInForeground = false))
+            .isEqualTo(PushPresentationDecision.Suppress)
     }
 }

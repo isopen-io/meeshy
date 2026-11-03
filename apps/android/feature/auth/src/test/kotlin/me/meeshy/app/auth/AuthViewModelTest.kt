@@ -13,6 +13,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.auth.InMemorySavedAccountsStore
+import me.meeshy.sdk.auth.LoginHandoffs
+import me.meeshy.sdk.model.auth.LoginAccountIntent
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.AuthSession
@@ -65,7 +67,7 @@ class AuthViewModelTest {
         override suspend fun requestMagicLink(body: me.meeshy.sdk.net.api.MagicLinkRequestBody) =
             me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.MagicLinkRequestData>(success = false)
         override suspend fun listSessions() =
-            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.SessionsListData>(success = false)
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.model.session.UserSessionsPayload>(success = false)
         override suspend fun revokeSession(sessionId: String) =
             me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
         override suspend fun revokeOtherSessions() =
@@ -134,6 +136,7 @@ class AuthViewModelTest {
         config: MeeshyConfig = MeeshyConfig(),
         environmentStore: InMemoryServerEnvironmentStore = InMemoryServerEnvironmentStore(),
         api: FakeAuthApi = FakeAuthApi(response),
+        handoffs: LoginHandoffs = LoginHandoffs(),
     ): AuthViewModel {
         return AuthViewModel(
             AuthRepository(api, store, SessionRepository(api, store), teardown, SyncSeqTracker()),
@@ -142,6 +145,7 @@ class AuthViewModelTest {
             clock,
             config,
             environmentStore,
+            handoffs,
         )
     }
 
@@ -153,6 +157,93 @@ class AuthViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun typingAfterAFailedLogin_clearsTheError() {
+        val vm = viewModel(ApiResponse(success = false))
+        vm.login()
+        assertThat(vm.state.value.errorRes).isNotNull()
+
+        vm.onUsernameChange("a")
+        assertThat(vm.state.value.errorRes).isNull()
+        vm.login()
+        vm.onPasswordChange("b")
+
+        assertThat(vm.state.value.errorRes).isNull()
+        assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    @Test
+    fun anEmailHeldBySignup_prefillsTheIdentifierOnTheCredentialForm() {
+        val handoffs = LoginHandoffs().apply { signupEmail.hold("ada@meeshy.me") }
+        val vm = viewModel(
+            ApiResponse(success = false),
+            savedAccountsStore = InMemorySavedAccountsStore(listOf(account("u1"))),
+            handoffs = handoffs,
+        )
+
+        assertThat(vm.state.value.username).isEqualTo("ada@meeshy.me")
+        assertThat(vm.state.value.showPicker).isFalse()
+        assertThat(handoffs.signupEmail.take()).isNull()
+    }
+
+    @Test
+    fun theAddAccountIntent_opensTheCredentialFormInsteadOfThePicker() {
+        val vm = viewModel(
+            ApiResponse(success = false),
+            savedAccountsStore = InMemorySavedAccountsStore(listOf(account("u1"))),
+            handoffs = LoginHandoffs().apply { account.hold(LoginAccountIntent.AddAccount) },
+        )
+
+        assertThat(vm.state.value.showNormalLogin).isTrue()
+        assertThat(vm.state.value.showPicker).isFalse()
+    }
+
+    @Test
+    fun anAccountIntent_opensThatAccountsPasswordPrompt() {
+        val vm = viewModel(
+            ApiResponse(success = false),
+            savedAccountsStore = InMemorySavedAccountsStore(listOf(account("u1"), account("u2"))),
+            handoffs = LoginHandoffs().apply { account.hold(LoginAccountIntent.Account("u2")) },
+        )
+
+        assertThat(vm.state.value.selectedAccount?.id).isEqualTo("u2")
+        assertThat(vm.state.value.username).isEqualTo("user-u2")
+    }
+
+    @Test
+    fun anAccountIntentForAnUnknownAccount_isIgnored() {
+        val vm = viewModel(
+            ApiResponse(success = false),
+            handoffs = LoginHandoffs().apply { account.hold(LoginAccountIntent.Account("ghost")) },
+        )
+
+        assertThat(vm.state.value.selectedAccount).isNull()
+    }
+
+    @Test
+    fun aValidEmailTypedAsIdentifier_feedsTheRecoveryScreens() {
+        val handoffs = LoginHandoffs()
+        val vm = viewModel(ApiResponse(success = false), handoffs = handoffs)
+
+        vm.onUsernameChange(" ada@meeshy.me ")
+        assertThat(vm.state.value.prefillableEmail).isEqualTo("ada@meeshy.me")
+        vm.holdRecoveryEmail()
+
+        assertThat(handoffs.recoveryEmail.take()).isEqualTo("ada@meeshy.me")
+    }
+
+    @Test
+    fun aPlainUsername_holdsNothingForTheRecoveryScreens() {
+        val handoffs = LoginHandoffs()
+        val vm = viewModel(ApiResponse(success = false), handoffs = handoffs)
+
+        vm.onUsernameChange("ada")
+        vm.holdRecoveryEmail()
+
+        assertThat(vm.state.value.prefillableEmail).isEmpty()
+        assertThat(handoffs.recoveryEmail.take()).isNull()
     }
 
     @Test

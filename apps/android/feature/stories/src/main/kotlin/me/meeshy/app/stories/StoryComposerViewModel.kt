@@ -17,6 +17,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.delay
+import me.meeshy.sdk.model.scene.CanvasFormat
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
@@ -27,20 +31,16 @@ import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
-import me.meeshy.sdk.model.PostMentionInput
-import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.composer.AudienceCandidate
-import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.composer.ComposerPublishChannel
 import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.composer.ComposerHashtags
 import me.meeshy.sdk.model.composer.look.ComposerLookPerson
-import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.media.UnclaimedMediaSweep
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
@@ -92,6 +92,7 @@ class StoryComposerViewModel @Inject constructor(
     private val publications: PublicationOutbox? = null,
     private val postDrafts: PostComposerDraftStore? = null,
     private val network: NetworkMonitor? = null,
+    private val draftCover: StoryDraftCoverSink? = null,
 ) : ViewModel() {
 
     /** Le compte sous lequel ce composeur s'est ouvert (#13621) : toute écriture de brouillon se fait sous lui. */
@@ -105,6 +106,26 @@ class StoryComposerViewModel @Inject constructor(
     val state: StateFlow<StoryComposerUiState> = _state.asStateFlow()
 
     val mediaBaseUrl: String? get() = config.apiBaseUrl
+
+    private var bannerJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            _state.map { it.deck.selectedId to StoryComposerCanvasFormat.expected(it) }.distinctUntilChanged().collect {
+                _state.update(StoryComposerCanvasFormat::conformed)
+                if (_state.value.repositionedCount > 0) armRepositionedBanner()
+            }
+        }
+    }
+
+    /** La bannière « N élément(s) repositionné(s) » disparaît d'elle-même. */
+    private fun armRepositionedBanner() {
+        bannerJob?.cancel()
+        bannerJob = viewModelScope.launch {
+            delay(REPOSITIONED_BANNER_MILLIS)
+            _state.update(StoryComposerCanvasFormat::bannerDismissed)
+        }
+    }
 
     /** The author colour the reader paints a background-less slide with (#12314). */
     val lookPerson: ComposerLookPerson get() = sessionRepository.lookPerson()
@@ -235,12 +256,9 @@ class StoryComposerViewModel @Inject constructor(
                 )
                 when (action) {
                     is StoryDraftPersist.Save -> {
-                        draftStore.save(action.snapshot)
+                        StoryComposerAutosave.saveThenCover({ draftStore.save(action.snapshot) }, { draftCover?.onDraftSaved(action.snapshot) })
                         ownsStoredDraft = true
-                        DraftRelease(
-                            StoryComposerAutosave.orphanedUploads(previous, action.snapshot),
-                            StoryComposerAutosave.namedUploads(action.snapshot),
-                        )
+                        DraftRelease(StoryComposerAutosave.orphanedUploads(previous, action.snapshot), StoryComposerAutosave.namedUploads(action.snapshot))
                     }
                     StoryDraftPersist.Clear -> {
                         draftStore.clear()
@@ -403,58 +421,19 @@ class StoryComposerViewModel @Inject constructor(
     /** Glisser, pincer et tourner un même objet sont UN geste : une seule entrée d'annulation. */
     private fun transformGesture(id: String) = "transform:$id"
 
-    /** Enters the drawing tool (closes the band, clears selections). */
-    fun onEnterDrawingMode() = reduce { StoryComposerDrawingReducer.entered(it) }
-
-    fun onExitDrawingMode() = reduce { StoryComposerDrawingReducer.exited(it) }
-
-    fun onDrawColorSelected(colorHex: String) = reduce { StoryComposerDrawingReducer.colorSelected(it, colorHex) }
-
-    fun onDrawWidthSelected(widthDesign: Double) = reduce { StoryComposerDrawingReducer.widthSelected(it, widthDesign) }
-
-    /** Commits a captured freehand stroke (design-space [points]); a tap is dropped. */
-    fun onStrokeCaptured(points: List<StoryDrawingStrokePoint>) {
-        val id = newStrokeId()
-        val now = Instant.now().epochSecond.toDouble()
-        reduce { StoryComposerDrawingReducer.captured(it, points, id, now) }
-    }
-
-    fun onDrawUndo() = reduce { StoryComposerDrawingReducer.undone(it) }
-
     fun onVisibilityChange(visibility: StoryVisibility) = _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
 
     /** La liste « visible par » / « sauf » : l'appelant l'a déjà bornée aux personnes proposées. */
-    fun onAudienceUserIdsChange(ids: List<String>) {
-        _state.update { it.copy(draft = it.draft.withVisibilityUserIds(ids.distinct().take(ComposerAudienceSelection.MAX_USERS))) }
-    }
+    fun onAudienceUserIdsChange(ids: List<String>) = _state.update { StoryComposerDraftMetaReducer.audienceIdsChanged(it, ids) }
 
     /** Nomme [person] dans la publication (rangée « Avec… »), une seule fois par pseudo. */
-    fun onAddMention(person: AudienceCandidate) {
-        _state.update { current ->
-            val mentions = current.draft.mentions
-            if (mentions.size >= MAX_MENTIONS) return@update current
-            if (mentions.any { it.username.equals(person.username, ignoreCase = true) }) return@update current
-            current.copy(
-                draft = current.draft.copy(
-                    mentions = mentions + PostMentionInput(userId = person.id, username = person.username, display = MENTION_DISPLAY),
-                ),
-            )
-        }
-    }
+    fun onAddMention(person: AudienceCandidate) = _state.update { StoryComposerDraftMetaReducer.mentionAdded(it, person) }
 
-    fun onRemoveMention(username: String) {
-        _state.update { current ->
-            current.copy(draft = current.draft.copy(mentions = current.draft.mentions.filterNot { it.username.equals(username, ignoreCase = true) }))
-        }
-    }
+    fun onRemoveMention(username: String) = _state.update { StoryComposerDraftMetaReducer.mentionRemoved(it, username) }
 
-    fun onMediaAltChange(mediaId: String, text: String) {
-        _state.update { it.copy(draft = it.draft.copy(mediaAlt = MediaDescriptionLaw.with(it.draft.mediaAlt, mediaId, text))) }
-    }
+    fun onMediaAltChange(mediaId: String, text: String) = _state.update { StoryComposerDraftMetaReducer.mediaAltChanged(it, mediaId, text) }
 
-    fun onMediaCaptionChange(mediaId: String, text: String) {
-        _state.update { it.copy(draft = it.draft.copy(mediaCaption = MediaDescriptionLaw.with(it.draft.mediaCaption, mediaId, text))) }
-    }
+    fun onMediaCaptionChange(mediaId: String, text: String) = _state.update { StoryComposerDraftMetaReducer.mediaCaptionChanged(it, mediaId, text) }
 
     fun onAllowSoundExtractionChange(allowed: Boolean) = _state.update { it.copy(draft = it.draft.copy(allowSoundExtraction = allowed)) }
 
@@ -468,9 +447,10 @@ class StoryComposerViewModel @Inject constructor(
      * Opens the composer as a **repost** of [sourceId]: the link rides onto every published
      * slide's wire request. Inert on a blank id; the author's own draft is untouched.
      */
-    fun onRepostSource(sourceId: String) {
+    fun onRepostSource(sourceId: String, sourceFormat: CanvasFormat = CanvasFormat.PORTRAIT) {
         if (sourceId.isBlank()) return
-        _state.update { it.copy(draft = it.draft.withRepostOf(sourceId)) }
+        _state.update { StoryComposerCanvasFormat.reposted(it.copy(draft = it.draft.withRepostOf(sourceId)), sourceFormat) }
+        if (_state.value.repositionedCount > 0) armRepositionedBanner()
     }
 
     /** Tap on a tool of the row: opens, switches to or closes its panel per [ComposerBandState.tapTool]. */
@@ -783,6 +763,7 @@ class StoryComposerViewModel @Inject constructor(
 
     internal companion object {
         const val MENTION_DISPLAY = "NOTE"
+        const val REPOSITIONED_BANNER_MILLIS = 4_000L
         /** Plafond de la passerelle (`mentions.max(50)`) : au-delà, toute la story serait refusée. */
         const val MAX_MENTIONS = 50
         const val MEDIA_FAILED = "Couldn't attach that media"

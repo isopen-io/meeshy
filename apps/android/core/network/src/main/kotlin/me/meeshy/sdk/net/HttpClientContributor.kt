@@ -1,5 +1,6 @@
 package me.meeshy.sdk.net
 
+import me.meeshy.sdk.model.media.MediaClientRole
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 
@@ -22,6 +23,14 @@ interface HttpClientContributor {
     companion object {
         fun of(id: String, priority: Int, block: (OkHttpClient.Builder) -> Unit): HttpClientContributor =
             FunctionContributor(id, priority, block)
+
+        /** Un contributeur qui tient [role] sur les clients des médias : l'épinglage et la frontière de session. */
+        internal fun granted(
+            id: String,
+            priority: Int,
+            role: MediaClientRole,
+            block: (OkHttpClient.Builder) -> Unit,
+        ): HttpClientContributor = FunctionContributor(id, priority, block, role)
     }
 }
 
@@ -29,9 +38,18 @@ private class FunctionContributor(
     override val id: String,
     override val priority: Int,
     private val block: (OkHttpClient.Builder) -> Unit,
+    val mediaRole: MediaClientRole? = null,
 ) : HttpClientContributor {
     override fun contribute(builder: OkHttpClient.Builder) = block(builder)
 }
+
+/**
+ * Le rôle que ce contributeur tient sur les clients des médias (#14613), ou `null`. Seul un contributeur ÉMIS par ce
+ * module en porte un ([HttpClientContributor.granted]) : un contributeur d'un autre module — qu'il reprenne le nom de
+ * l'épinglage ou qu'il délègue à `CertificatePinnerContributor.of()` en ajoutant ses propres intercepteurs — n'en a
+ * aucun, puisque le rôle n'est lisible par aucune API publique.
+ */
+internal fun HttpClientContributor.mediaRole(): MediaClientRole? = (this as? FunctionContributor)?.mediaRole
 
 /** Les priorités du socle ; un lot ultérieur choisit une valeur ENTRE elles. */
 object HttpPriority {
@@ -53,11 +71,17 @@ object HttpPriority {
     const val AUTH = 1_000
     const val CLIENT_INFO = 1_050
     const val CLIENT_CAPABILITIES = 1_100
+
+    /** Déclare la vague du Jeu que ce binaire sait lire, sur les seules routes du jeu. */
+    const val GAME_VERSION = 1_110
     const val DEVICE_LOCALE = 1_200
     const val AUTH_EXPIRY = 1_300
 
     /** Apres l'identite : voit la requete telle qu'elle part, sous son jeton. */
     const val GUEST_SESSION_END = 1_350
+
+    /** Compte supprimé et refus d'âge : voit la réponse AVANT l'expiration, pour poser « en attente de retrait » d'abord. */
+    const val SESSION_REFUSAL = 1_360
     const val AUTHENTICATOR = 1_400
     const val SLOW_REQUEST = 1_500
     const val LOGGING = 9_000
@@ -86,7 +110,7 @@ internal fun builtInContributors(
     transition: SessionTransitionFlags = SessionTransitionFlags(),
     visitorKey: VisitorReaderKeyProviding? = null,
 ): List<HttpClientContributor> = listOfNotNull(
-    HttpClientContributor.of("session-boundary", HttpPriority.SESSION_BOUNDARY) {
+    HttpClientContributor.granted("session-boundary", HttpPriority.SESSION_BOUNDARY, MediaClientRole.SESSION_BOUNDARY) {
         it.addInterceptor(SessionBoundaryInterceptor(transition))
     },
     HttpClientContributor.of("upload-timeouts", HttpPriority.UPLOAD_TIMEOUTS) { it.addInterceptor(UploadTransferTimeoutInterceptor()) },

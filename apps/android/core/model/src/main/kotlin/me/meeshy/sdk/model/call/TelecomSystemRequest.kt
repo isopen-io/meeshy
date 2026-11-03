@@ -17,6 +17,9 @@ public sealed interface TelecomSystemRequest {
 
     /** Le micro a été coupé ou rétabli depuis le système. */
     public data class Mute(val muted: Boolean) : TelecomSystemRequest
+
+    /** Le clavier du système (voiture, montre) envoie des tonalités DTMF au pair, miroir de `CXPlayDTMFCallAction`. */
+    public data class Dtmf(val digits: String) : TelecomSystemRequest
 }
 
 /** Pourquoi le système a mis fin à la connexion, au niveau de précision dont la loi a besoin. */
@@ -56,6 +59,9 @@ public object TelecomRequestPolicy {
         public data object Decline : Action
         public data object HangUp : Action
 
+        /** Relayer ces tonalités (déjà normalisées) au pair. */
+        public data class SendDtmf(val tones: String) : Action
+
         /** Amener le micro à [muted] ; [byHold] = la coupure vient de la mise en attente. */
         public data class SetMuted(val muted: Boolean, val byHold: Boolean) : Action
     }
@@ -75,6 +81,8 @@ public object TelecomRequestPolicy {
         }
         is TelecomSystemRequest.Mute ->
             if (state.isActive && request.muted != isMuted) Action.SetMuted(request.muted, byHold = false) else Action.None
+        is TelecomSystemRequest.Dtmf ->
+            CallDtmfTones.normalize(request.digits)?.takeIf { state is CallState.Connected || state is CallState.Reconnecting }?.let(Action::SendDtmf) ?: Action.None
         is TelecomSystemRequest.Hold -> when {
             !state.isActive -> Action.None
             request.onHold && !isMuted -> Action.SetMuted(true, byHold = true)

@@ -1,8 +1,12 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.lang.ReaderPrism
+import me.meeshy.sdk.model.SocialAudioSurface
+import me.meeshy.sdk.model.servedAudioUrl
+import me.meeshy.sdk.model.CommentLikeState
 import me.meeshy.sdk.model.CommentEffects
 import me.meeshy.sdk.model.CommentPieceKind
-import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.CommentVeilRules
 import me.meeshy.sdk.model.MessageEffects
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
@@ -68,7 +72,7 @@ data class CommentPresentation(
     val place: FeedLocationPresentation? = null,
 ) {
     /** Un commentaire flouté se lit sous un voile, en le touchant (iOS `CommentVeilRules`). */
-    val isBlurred: Boolean get() = effects.has(MessageEffectFlags.BLURRED)
+    val isBlurred: Boolean get() = CommentVeilRules.isVeiled(effects, isRevealed = false)
 
     /** Un commentaire sans texte (un vocal, une photo seule) ne rend aucun corps : pas de ligne vide sous l'auteur (#14289). */
     val hasBody: Boolean get() = content.isNotBlank()
@@ -140,13 +144,17 @@ object CommentProjection {
             isPending = isPending,
             isOwn = currentUserId != null && comment.author?.id == currentUserId,
             depth = depth,
-            media = mediaPreviews(comment, mediaBaseUrl),
+            media = mediaPreviews(comment, mediaBaseUrl, ReaderPrism.resolve(preferences)),
             effects = CommentEffects.served(comment.effectFlags),
             place = FeedPostLocationBuilder.build(comment.location),
         )
     }
 
-    private fun mediaPreviews(comment: ApiPostComment, mediaBaseUrl: String?): List<CommentMediaPreview> =
+    private fun mediaPreviews(
+        comment: ApiPostComment,
+        mediaBaseUrl: String?,
+        readerLanguages: List<String> = emptyList(),
+    ): List<CommentMediaPreview> =
         comment.media.orEmpty().sortedBy { it.order ?: 0 }.map { media ->
             // Un média servi sans type reste une image, comme avant #14386 : seul un type DÉCLARÉ fait un fichier.
             val kind = media.mimeType?.takeIf { it.isNotBlank() }?.let(CommentPieceKind::of) ?: CommentPieceKind.IMAGE
@@ -161,7 +169,11 @@ object CommentProjection {
                 kind = kind,
                 fileName = (media.originalName ?: media.fileName)?.takeIf { it.isNotBlank() },
                 fileSize = media.fileSize,
-                url = media.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
+                url = if (isAudio) {
+                    media.servedAudioUrl(SocialAudioSurface.COMMENT, comment.originalLanguage, readerLanguages) { resolveFeedMediaUrl(it, mediaBaseUrl) }
+                } else {
+                    media.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveFeedMediaUrl(it, mediaBaseUrl) }
+                },
                 width = media.width,
                 height = media.height,
                 durationMillis = media.duration,

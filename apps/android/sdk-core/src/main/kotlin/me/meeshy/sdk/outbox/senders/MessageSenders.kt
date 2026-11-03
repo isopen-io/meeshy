@@ -11,11 +11,17 @@ import me.meeshy.sdk.conversation.MessageMediaWriteBack
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.model.SendOutcome
+import me.meeshy.sdk.model.SendTransport
+import me.meeshy.sdk.model.outbox.ReadListBounds
+import me.meeshy.sdk.model.socket.SocketSendFallbackPolicy
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConsumeAfterReadRequest
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.notification.FirstMessageAcceptedSignal
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
 import me.meeshy.sdk.outbox.OutboxKindKey
@@ -24,9 +30,13 @@ import me.meeshy.sdk.outbox.OutboxPlaintextAdmission
 import me.meeshy.sdk.outbox.ConsumeAfterReadPayload
 import me.meeshy.sdk.outbox.ConsumeViewOncePayload
 import me.meeshy.sdk.outbox.PinPayload
+import me.meeshy.sdk.outbox.SendAttemptRecorder
+import me.meeshy.sdk.outbox.SendFailureClassifier
 import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.outbox.toSendResult
 import me.meeshy.sdk.outbox.withPayload
+import me.meeshy.sdk.socket.MessageSocketOutcome
+import me.meeshy.sdk.socket.MessageSocketSending
 import javax.inject.Inject
 
 /**
@@ -39,20 +49,65 @@ public class SendMessageHandler @Inject constructor(
     private val messageRepository: MessageRepository,
     private val json: Json,
     private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
+    private val firstMessageAccepted: FirstMessageAcceptedSignal = FirstMessageAcceptedSignal(),
+    private val attempts: SendAttemptRecorder = SendAttemptRecorder.None,
+    private val socketFallback: MessageSocketSending = MessageSocketSending.None,
 ) : OutboxKindHandler {
 
     override val payloadGraft: OutboxPayloadGraft = MessageMediaWriteBack::graft
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<SendMessageRequest>(row) { request ->
-            when (val result = apiCall { messageApi.send(row.targetId, request) }) {
+            val startedAt = System.currentTimeMillis()
+            val result = apiCall { messageApi.send(row.targetId, request) }
+            attempts.record(
+                localId = row.cmid,
+                transport = if (row.attempts > 0) SendTransport.OUTBOX else SendTransport.REST,
+                startedAtMillis = startedAt,
+                finishedAtMillis = System.currentTimeMillis(),
+                outcome = if (result is NetworkResult.Success) SendOutcome.SUCCESS else SendOutcome.FAILURE,
+                errorMessage = (result as? NetworkResult.Failure)?.error?.message,
+            )
+            when (result) {
                 is NetworkResult.Success -> {
                     messageRepository.reconcileSent(row.cmid, result.data)
+                    firstMessageAccepted.notifyAccepted()
                     SendResult.Success
                 }
-                is NetworkResult.Failure -> PlaintextRefusal.of(result, row.targetId, ledger) ?: SendResult.TransientFailure
+                is NetworkResult.Failure -> PlaintextRefusal.of(result, row.targetId, ledger)
+                    ?: viaSocket(row, request, SendFailureClassifier.classify(result.error), result.error)
             }
         }
+
+    /**
+     * Repli socket (iOS `sendViaSocketFallback`) : seulement pour un échec réseau / 5xx du REST, jamais un 4xx, avec le MÊME
+     * `clientMessageId`. Un accusé réconcilie la bulle ; un refus définitif abandonne la ligne ; tout le reste rend le
+     * résultat du REST (la ligne reste en file).
+     */
+    private suspend fun viaSocket(row: OutboxEntity, request: SendMessageRequest, rest: SendResult, error: ApiError): SendResult {
+        if (rest is SendResult.PermanentFailure || !SocketSendFallbackPolicy.allowsFallback(error.httpStatus, error.code)) return rest
+        val startedAt = System.currentTimeMillis()
+        val outcome = socketFallback.send(row.targetId, request)
+        if (outcome is MessageSocketOutcome.NotSent) return rest
+        attempts.record(
+            localId = row.cmid,
+            transport = SendTransport.SOCKET_FALLBACK,
+            startedAtMillis = startedAt,
+            finishedAtMillis = System.currentTimeMillis(),
+            outcome = if (outcome is MessageSocketOutcome.Acked) SendOutcome.SUCCESS else SendOutcome.FAILURE,
+            errorMessage = (outcome as? MessageSocketOutcome.Refused)?.refusal?.message,
+        )
+        return when (outcome) {
+            is MessageSocketOutcome.Acked -> {
+                messageRepository.reconcileAcknowledged(row.cmid, outcome.ack)
+                firstMessageAccepted.notifyAccepted()
+                SendResult.Success
+            }
+            is MessageSocketOutcome.Refused ->
+                if (outcome.definitive) SendResult.PermanentFailure("Refused: ${outcome.refusal.code.orEmpty()}".trim()) else rest
+            MessageSocketOutcome.NotSent, MessageSocketOutcome.Unanswered -> rest
+        }
+    }
 
     override suspend fun onExhausted(row: OutboxEntity) {
         messageRepository.markSendFailed(row.cmid, row.lastError)
@@ -168,7 +223,7 @@ public class ConsumeAfterReadHandler @Inject constructor(
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<ConsumeAfterReadPayload>(row) { payload ->
-            apiCall { messageApi.consumeAfterRead(row.targetId, ConsumeAfterReadRequest(payload.messageIds)) }.toSendResult(row.targetId)
+            apiCall { messageApi.consumeAfterRead(row.targetId, ConsumeAfterReadRequest(ReadListBounds.cappedIds(payload.messageIds))) }.toSendResult(row.targetId)
         }
 }
 

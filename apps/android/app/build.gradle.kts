@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 if (file("google-services.json").exists()) {
@@ -169,6 +170,8 @@ dependencies {
     implementation(libs.work.runtime)
     implementation(libs.firebase.messaging)
     implementation(libs.timber)
+    implementation(libs.androidx.metrics.performance)
+    implementation(libs.androidx.tracing.ktx)
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.coil.compose)
     implementation(libs.okhttp)

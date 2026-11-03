@@ -35,15 +35,34 @@ class AudioPreferencesSyncTest {
     }
 
     @Test
-    fun `le corps envoyé ne porte que la transcription automatique`() {
-        val body = AudioPreferenceSyncBody.from(AudioPreferences(autoTranscribeIncoming = false, ttsSpeed = 2.0))
+    fun `le corps envoyé porte les quatre interrupteurs vocaux et rien d'autre`() {
+        val body = AudioPreferenceSyncBody.from(
+            AudioPreferences(autoTranscribeIncoming = false, transcriptionEnabled = false, ttsEnabled = false, ttsSpeed = 2.0),
+        )
         val wire = wireJson.encodeToString(body)
-        assertThat(wire).isEqualTo("""{"autoTranscribeIncoming":false}""")
+        assertThat(wire).isEqualTo(
+            """{"autoTranscribeIncoming":false,"transcriptionEnabled":false,"audioTranslationEnabled":true,"ttsEnabled":false,"voiceProfileEnabled":false}""",
+        )
     }
 
     @Test
-    fun `lire la passerelle ne touche que la transcription automatique du bloc local`() {
-        val local = AudioPreferences(autoTranscribeIncoming = true, ttsSpeed = 1.7)
+    fun `la projection est complète et l'aller-retour garde les champs locaux`() {
+        val local = AudioPreferences(
+            autoTranscribeIncoming = false,
+            transcriptionEnabled = false,
+            audioTranslationEnabled = false,
+            ttsEnabled = false,
+            voiceProfileEnabled = true,
+            ttsSpeed = 1.7,
+            extras = mapOf("futur" to kotlinx.serialization.json.JsonPrimitive(1)),
+        )
+        assertThat(AudioPreferenceSyncBody.from(local).toPreferences(AudioPreferences(ttsSpeed = 1.7, extras = local.extras)))
+            .isEqualTo(local)
+    }
+
+    @Test
+    fun `lire une ligne ancienne ne touche que la transcription automatique`() {
+        val local = AudioPreferences(autoTranscribeIncoming = true, ttsEnabled = false, ttsSpeed = 1.7)
         val folded = AudioPreferenceSyncBody(autoTranscribeIncoming = false).toPreferences(local)
         assertThat(folded).isEqualTo(local.copy(autoTranscribeIncoming = false))
     }

@@ -121,6 +121,9 @@ public class CreateCommentHandler @Inject constructor(
                 content = comment.content,
                 parentId = comment.parentId,
                 originalLanguage = comment.originalLanguage,
+                effectFlags = comment.effectFlags,
+                attachmentIds = comment.attachmentIds?.takeIf { it.isNotEmpty() },
+                location = comment.location,
             )
             val result = apiCall { postApi.addComment(row.targetId, request, row.cmid) }
             when (result) {

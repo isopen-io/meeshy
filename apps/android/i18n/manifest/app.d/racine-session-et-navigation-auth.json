@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "auth.pendingLink.notice", "androidName": "auth_pending_link_notice", "status": "adopted" }
+      ]
+    }
+  }
+}

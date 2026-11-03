@@ -37,8 +37,9 @@ public enum RelationRaiseOffer: Sendable, Equatable {
 }
 
 /// Un lien tel que `GET /relations` le sert (`RelationLinkView`, #13933). `userId` est
-/// l'AUTRE personne ; jamais un nom, une présence ni un cool-down (RG-07) — l'écran
-/// hydrate la personne par ses propres caches.
+/// l'AUTRE personne ; jamais un nom ni une présence — l'écran hydrate la personne par ses
+/// propres caches. `GET /relations/:userId` peut servir en plus `raiseBlockedUntil` et
+/// `canRaise` (#14910) : absents, la proposition de montée reste celle d'avant.
 ///
 /// Le décodage est tolérant et fermé par défaut : un niveau que ce client ne connaît pas
 /// se lit `public` (jamais un niveau plus haut), une éligibilité illisible se lit `nil`.
@@ -49,6 +50,8 @@ public struct RelationLink: Codable, CacheIdentifiable, Identifiable, Sendable, 
     public let since: String?
     public let progress: RelationProgress
     public let eligibleFor: RelationLevel?
+    public let raiseBlockedUntil: Date?
+    public let canRaise: Bool?
 
     public var id: String { userId }
 
@@ -58,7 +61,9 @@ public struct RelationLink: Codable, CacheIdentifiable, Identifiable, Sendable, 
         grantedByMe: RelationLevel,
         since: String? = nil,
         progress: RelationProgress = RelationProgress(),
-        eligibleFor: RelationLevel? = nil
+        eligibleFor: RelationLevel? = nil,
+        raiseBlockedUntil: Date? = nil,
+        canRaise: Bool? = nil
     ) {
         self.userId = userId
         self.effectiveLevel = effectiveLevel
@@ -66,10 +71,12 @@ public struct RelationLink: Codable, CacheIdentifiable, Identifiable, Sendable, 
         self.since = since
         self.progress = progress
         self.eligibleFor = eligibleFor
+        self.raiseBlockedUntil = raiseBlockedUntil
+        self.canRaise = canRaise
     }
 
     private enum CodingKeys: String, CodingKey {
-        case userId, effectiveLevel, grantedByMe, since, progress, eligibleFor
+        case userId, effectiveLevel, grantedByMe, since, progress, eligibleFor, raiseBlockedUntil, canRaise
     }
 
     public init(from decoder: Decoder) throws {
@@ -81,6 +88,8 @@ public struct RelationLink: Codable, CacheIdentifiable, Identifiable, Sendable, 
         progress = (try? c.decodeIfPresent(RelationProgress.self, forKey: .progress)) ?? RelationProgress()
         let served = RelationLevel(wire: try? c.decodeIfPresent(String.self, forKey: .eligibleFor))
         eligibleFor = served == .public ? nil : served
+        raiseBlockedUntil = Self.instant((try? c.decodeIfPresent(String.self, forKey: .raiseBlockedUntil)) ?? nil)
+        canRaise = (try? c.decodeIfPresent(Bool.self, forKey: .canRaise)) ?? nil
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -91,14 +100,42 @@ public struct RelationLink: Codable, CacheIdentifiable, Identifiable, Sendable, 
         try c.encodeIfPresent(since, forKey: .since)
         try c.encode(progress, forKey: .progress)
         try c.encodeIfPresent(eligibleFor?.rawValue, forKey: .eligibleFor)
+        try c.encodeIfPresent(raiseBlockedUntil.map(Self.wireInstant), forKey: .raiseBlockedUntil)
+        try c.encodeIfPresent(canRaise, forKey: .canRaise)
     }
 
-    /// Le cran suivant, ouvert ou verrouillé selon la loi de demande. Le cool-down n'est
-    /// pas servi (un refus ne fuit pas) : le serveur le dit UNE fois, à la demande.
+    /// Le lien après MA baisse : le niveau effectif et mon accord plafonnés au cran visé ; l'éligibilité servie ne
+    /// vaut plus pour ce nouveau niveau, elle se relira au serveur.
+    public func lowered(to level: RelationLevel) -> RelationLink {
+        RelationLink(
+            userId: userId,
+            effectiveLevel: min(effectiveLevel, level),
+            grantedByMe: min(grantedByMe, level),
+            since: since,
+            progress: progress,
+            eligibleFor: nil,
+            raiseBlockedUntil: raiseBlockedUntil,
+            canRaise: canRaise
+        )
+    }
+
+    private static func instant(_ wire: String?) -> Date? {
+        guard let wire else { return nil }
+        return WireDate.date(from: wire)
+    }
+
+    private static func wireInstant(_ date: Date) -> String {
+        WireDate.string(from: date)
+    }
+
+    /// Le cran suivant, ouvert ou verrouillé selon la loi de demande. Le blocage de montée
+    /// (`raiseBlockedUntil`, `canRaise == false`) verrouille quand il est servi ; absent, le
+    /// serveur le dit UNE fois, à la demande.
     public func raiseOffer(now: Date = Date()) -> RelationRaiseOffer {
         guard let target = RelationRequestRule.rung(after: effectiveLevel) else { return .none }
+        guard canRaise != false else { return .locked(target) }
         let verdict = RelationRequestRule.evaluate(
-            target: target, current: effectiveLevel, eligibleFor: eligibleFor, cooldownUntil: nil, now: now
+            target: target, current: effectiveLevel, eligibleFor: eligibleFor, cooldownUntil: raiseBlockedUntil, now: now
         )
         return verdict == .allowed ? .available(target) : .locked(target)
     }

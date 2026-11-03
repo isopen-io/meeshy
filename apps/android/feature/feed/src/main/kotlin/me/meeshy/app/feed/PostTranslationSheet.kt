@@ -24,6 +24,11 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.LanguageInfo
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyGradients
 import me.meeshy.ui.theme.MeeshyPalette
@@ -63,6 +69,11 @@ internal fun PostTranslationSheet(
     onSelectLanguage: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val haptics = rememberMeeshyHaptics()
+    var sheetState by remember { mutableStateOf(PostTranslationSheetState()) }
+    LaunchedEffect(translating, explorer.missing) {
+        sheetState = sheetState.observing(translating, explorer.missing.toSet())
+    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
@@ -77,12 +88,14 @@ internal fun PostTranslationSheet(
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
             ) {
                 OriginalSection(explorer) {
+                    haptics.light()
                     explorer.originalCode?.let(onSelectLanguage)
                     onDismiss()
                 }
                 SectionTitle(stringResource(R.string.feed_translation_available))
                 explorer.translations.forEach { row ->
                     TranslationRow(row) {
+                        haptics.light()
                         onSelectLanguage(row.code)
                         onDismiss()
                     }
@@ -90,7 +103,11 @@ internal fun PostTranslationSheet(
                 if (explorer.missing.isNotEmpty()) {
                     SectionTitle(stringResource(R.string.feed_translation_other_languages))
                     explorer.missing.forEach { code ->
-                        MissingRow(code, isTranslating = code in translating) { onSelectLanguage(code) }
+                        MissingRow(code, status = sheetState.statusOf(code, translating)) {
+                            haptics.light()
+                            sheetState = sheetState.asked(code)
+                            onSelectLanguage(code)
+                        }
                     }
                 }
             }
@@ -168,8 +185,11 @@ private fun OriginalSection(explorer: PostLanguageExplorer, onClick: () -> Unit)
 @Composable
 private fun TranslationRow(row: PostLanguageRow, onClick: () -> Unit) {
     val name = row.info?.name ?: row.code
+    val spoken = row.confidencePercent
+        ?.let { "$name, ${stringResource(R.string.feed_translation_confidence_a11y, "$it%")}" }
+        ?: name
     Row(
-        modifier = rowChrome(selected = row.isActive, onClick = onClick, label = name).padding(MeeshySpacing.md),
+        modifier = rowChrome(selected = row.isActive, onClick = onClick, label = spoken).padding(MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
@@ -190,10 +210,12 @@ private fun TranslationRow(row: PostLanguageRow, onClick: () -> Unit) {
             )
         }
         row.confidencePercent?.let { percent ->
+            val label = stringResource(R.string.feed_translation_confidence_a11y, "$percent%")
             Text(
                 text = "$percent%",
                 style = MaterialTheme.typography.labelMedium,
                 color = MeeshyTheme.tokens.textMuted,
+                modifier = Modifier.semantics { contentDescription = label },
             )
         }
         if (row.isActive) ActiveMark()
@@ -207,7 +229,7 @@ private fun TranslationRow(row: PostLanguageRow, onClick: () -> Unit) {
 }
 
 @Composable
-private fun MissingRow(code: String, isTranslating: Boolean, onRequest: () -> Unit) {
+private fun MissingRow(code: String, status: PostTranslationStatus, onRequest: () -> Unit) {
     val info = LanguageData.info(code)
     val name = info?.name ?: code
     Row(
@@ -221,31 +243,58 @@ private fun MissingRow(code: String, isTranslating: Boolean, onRequest: () -> Un
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         Text(text = flagOf(info, code), style = MaterialTheme.typography.titleMedium)
-        Text(
-            text = name,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            color = MeeshyTheme.tokens.textPrimary,
-            modifier = Modifier.weight(1f),
-        )
-        if (isTranslating) {
-            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-        } else {
-            val translate = stringResource(R.string.feed_translation_translate)
-            Row(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(MeeshyGradients.brand)
-                    .clickable(role = Role.Button, onClick = onRequest)
-                    .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs)
-                    .semantics { contentDescription = "$translate: $name" },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-            ) {
-                Icon(imageVector = MeeshyIcons.Translate, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(14.dp))
-                Text(text = translate, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MeeshyPalette.White)
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MeeshyTheme.tokens.textPrimary,
+            )
+            if (status == PostTranslationStatus.FAILED) {
+                Text(
+                    text = stringResource(R.string.feed_notice_translation_failed),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MeeshyTheme.tokens.error,
+                )
             }
         }
+        when (status) {
+            PostTranslationStatus.TRANSLATING ->
+                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+            PostTranslationStatus.REQUESTED -> RequestedMark(name)
+            PostTranslationStatus.IDLE, PostTranslationStatus.FAILED -> TranslateButton(name, onRequest)
+        }
+    }
+}
+
+@Composable
+private fun RequestedMark(name: String) {
+    val requested = stringResource(R.string.feed_translation_requested)
+    Row(
+        modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "$requested: $name" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Icon(imageVector = MeeshyIcons.CheckCircleFilled, contentDescription = null, tint = MeeshyTheme.tokens.success, modifier = Modifier.size(14.dp))
+        Text(text = requested, style = MaterialTheme.typography.labelMedium, color = MeeshyTheme.tokens.success)
+    }
+}
+
+@Composable
+private fun TranslateButton(name: String, onRequest: () -> Unit) {
+    val translate = stringResource(R.string.feed_translation_translate)
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(MeeshyGradients.brand)
+            .clickable(role = Role.Button, onClick = onRequest)
+            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs)
+            .semantics { contentDescription = "$translate: $name" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Icon(imageVector = MeeshyIcons.Translate, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(14.dp))
+        Text(text = translate, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MeeshyPalette.White)
     }
 }
 

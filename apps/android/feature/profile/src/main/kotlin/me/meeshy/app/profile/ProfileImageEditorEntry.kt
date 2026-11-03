@@ -9,7 +9,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import java.io.ByteArrayInputStream
@@ -17,10 +25,12 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.meeshy.sdk.media.ImageBudgetEncoder
 import me.meeshy.sdk.media.MediaIntake
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ImageUploadTarget
 import me.meeshy.sdk.model.imageedit.ImageEditorContext
+import me.meeshy.sdk.model.media.ImageByteBudget
 import me.meeshy.ui.component.imageedit.MeeshyImageEditorScreen
 import me.meeshy.ui.component.retouch.RetouchSourceDecoder
 
@@ -44,11 +54,14 @@ internal fun MediaUploadItem.decodeForEditing(): Bitmap? =
 internal fun Bitmap.toEditedUploadItem(cacheDir: File, target: ImageUploadTarget): MediaUploadItem? {
     val out = ByteArrayOutputStream()
     if (!compress(Bitmap.CompressFormat.JPEG, EDITED_JPEG_QUALITY, out)) return null
-    val name = if (target == ImageUploadTarget.AVATAR) "avatar.jpg" else "banner.jpg"
+    val name = target.editedFileName()
     return MediaIntake.copy(ByteArrayInputStream(out.toByteArray()), cacheDir, name, "image/jpeg")
 }
 
 private const val EDITED_JPEG_QUALITY = 92
+
+private fun ImageUploadTarget.editedFileName(): String =
+    if (this == ImageUploadTarget.AVATAR) "avatar.jpg" else "banner.jpg"
 
 /**
  * Le trajet « choisir une photo → l'éditer → l'envoyer » du profil : l'éditeur plein écran
@@ -79,6 +92,32 @@ internal class ProfileImageEditorFlow(
         onReady(current.target, current.item)
     }
 
+    /** Vrai pendant que le rendu final est compressé (indicateur de progression). */
+    var compressing by mutableStateOf(false)
+        private set
+
+    /**
+     * « Terminé » : le rendu final est compressé HORS du fil principal jusqu'au budget d'octets de la cible
+     * (500 Ko avatar, 800 Ko bannière), puis envoyé. L'écran ne gèle jamais : l'éditeur reste affiché avec son indicateur.
+     */
+    suspend fun acceptCompressed(target: ImageUploadTarget, source: MediaUploadItem, edited: Bitmap) {
+        if (compressing) return
+        compressing = true
+        try {
+            val bytes = withContext(Dispatchers.Default) {
+                ImageBudgetEncoder.encode(edited, ImageByteBudget.forTarget(target), checkActive = { ensureActive() })
+            }
+            val result = withContext(Dispatchers.IO) {
+                MediaIntake.copy(ByteArrayInputStream(bytes), context.cacheDir, target.editedFileName(), "image/jpeg")
+            }
+            MediaIntake.release(source)
+            pending = null
+            if (result != null) onReady(target, result)
+        } finally {
+            compressing = false
+        }
+    }
+
     fun accept(target: ImageUploadTarget, source: MediaUploadItem, edited: Bitmap) {
         val result = edited.toEditedUploadItem(context.cacheDir, target)
         MediaIntake.release(source)
@@ -103,15 +142,19 @@ internal fun ProfileImageEditorHost(flow: ProfileImageEditorFlow) {
         if (decoded == null) flow.passthrough() else image = decoded
     }
     val bitmap = image ?: return
+    val scope = rememberCoroutineScope()
     Dialog(
         onDismissRequest = flow::cancel,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        MeeshyImageEditorScreen(
-            image = bitmap,
-            context = pending.target.editorContext(),
-            onAccept = { edited -> flow.accept(pending.target, pending.item, edited) },
-            onCancel = flow::cancel,
-        )
+        Box(Modifier.fillMaxSize()) {
+            MeeshyImageEditorScreen(
+                image = bitmap,
+                context = pending.target.editorContext(),
+                onAccept = { edited -> scope.launch { flow.acceptCompressed(pending.target, pending.item, edited) } },
+                onCancel = flow::cancel,
+            )
+            if (flow.compressing) CircularProgressIndicator(Modifier.align(Alignment.Center))
+        }
     }
 }

@@ -82,3 +82,34 @@ class TusUploadMetadataTest {
         assertThat(TusUploadMetadata.TUS_RESUMABLE_VERSION).isEqualTo("1.0.0")
     }
 }
+
+class TusUploadMetadataDeclaredTest {
+    private fun pairs(value: String) = value.split(",").associate { it.substringBefore(" ") to it.substringAfter(" ") }
+    private fun decode(b64: String) = String(Base64.getDecoder().decode(b64))
+
+    @Test
+    fun `thumbhash and capturedinapp ride after uploadcontext, in the iOS order`() {
+        val value = TusUploadMetadata.headerValue("v.mp4", "video/mp4", TusUploadContext.ATTACHMENT, thumbHash = "TH", capturedInApp = true)
+
+        assertThat(value.split(",").map { it.substringBefore(" ") })
+            .containsExactly("filename", "filetype", "uploadcontext", "thumbhash", "capturedinapp").inOrder()
+        assertThat(decode(pairs(value).getValue("thumbhash"))).isEqualTo("TH")
+        assertThat(decode(pairs(value).getValue("capturedinapp"))).isEqualTo("true")
+    }
+
+    @Test
+    fun `the transcription is not encoded twice`() {
+        val t = TusTranscription("salut", "fr")
+        val value = TusUploadMetadata.headerValue("a.m4a", "audio/mp4", TusUploadContext.ATTACHMENT, transcription = t)
+
+        assertThat(pairs(value).getValue("transcription")).isEqualTo(TusMetadataBudget.transcriptionValue(t))
+    }
+
+    @Test
+    fun `an over-budget transcription leaves the voice upload otherwise intact`() {
+        val t = TusTranscription("x".repeat(6_000), "fr")
+        val value = TusUploadMetadata.headerValue("a.m4a", "audio/mp4", TusUploadContext.ATTACHMENT, transcription = t)
+
+        assertThat(pairs(value).keys).containsExactly("filename", "filetype", "uploadcontext")
+    }
+}

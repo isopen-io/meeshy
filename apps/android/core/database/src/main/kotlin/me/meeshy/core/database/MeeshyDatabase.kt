@@ -16,9 +16,11 @@ import me.meeshy.core.database.dao.MediaBlobDao
 import me.meeshy.core.database.dao.MediaIndexDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
+import me.meeshy.core.database.dao.NotificationDao
 import me.meeshy.core.database.dao.PendingIdDao
 import me.meeshy.core.database.dao.PlaintextErasureDao
 import me.meeshy.core.database.dao.ProfileStatsCacheDao
+import me.meeshy.core.database.dao.SendAttemptDao
 import me.meeshy.core.database.dao.StatusBarCacheDao
 import me.meeshy.core.database.dao.StoryDao
 import me.meeshy.core.database.dao.SuggestionDao
@@ -38,9 +40,11 @@ import me.meeshy.core.database.entity.MediaBlobEntity
 import me.meeshy.core.database.entity.MediaIndexEntity
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.core.database.entity.NotificationEntity
 import me.meeshy.core.database.entity.PendingIdEntity
 import me.meeshy.core.database.entity.PlaintextErasureEntity
 import me.meeshy.core.database.entity.ProfileStatsCacheEntity
+import me.meeshy.core.database.entity.SendAttemptEntity
 import me.meeshy.core.database.entity.StatusBarCacheEntity
 import me.meeshy.core.database.entity.StoryEntity
 import me.meeshy.core.database.entity.SuggestionEntity
@@ -78,8 +82,10 @@ import me.meeshy.core.database.entity.TusUploadCheckpointEntity
         KeyedJsonCacheEntity::class,
         PendingIdEntity::class,
         PlaintextErasureEntity::class,
+        NotificationEntity::class,
+        SendAttemptEntity::class,
     ],
-    version = 23,
+    version = 25,
     exportSchema = true,
 )
 public abstract class MeeshyDatabase : RoomDatabase() {
@@ -105,4 +111,6 @@ public abstract class MeeshyDatabase : RoomDatabase() {
     public abstract fun keyedJsonCacheDao(): KeyedJsonCacheDao
     public abstract fun pendingIdDao(): PendingIdDao
     public abstract fun plaintextErasureDao(): PlaintextErasureDao
+    public abstract fun notificationDao(): NotificationDao
+    public abstract fun sendAttemptDao(): SendAttemptDao
 }

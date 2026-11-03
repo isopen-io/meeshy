@@ -15,6 +15,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.getUserDisplayName
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.postTypeFromWire
 import me.meeshy.sdk.net.MeeshyConfig
@@ -58,6 +59,9 @@ data class FeedUiState(
     val newPostsCount: Int = 0,
     /** L'id de l'utilisateur connecte — decide quel menu d'options porte chaque card. */
     val currentUserId: String? = null,
+    /** Le nom et l'avatar de l'utilisateur connecté : le visage du placeholder de composeur (iOS `MeeshyAvatar`, mode `.feedComposer`). */
+    val currentUserName: String? = null,
+    val currentUserAvatarUrl: String? = null,
     /**
      * On-demand post translations in flight, keyed `postId|language`. Guards a
      * double-tap on a translatable flag chip from firing two requests, and lets the
@@ -149,6 +153,11 @@ class FeedViewModel @Inject constructor(
         impressionBatcher.record(postId)
     }
 
+    /** Le fil sort de l'écran ou passe en arrière-plan : le lot d'impressions part, il n'est pas jeté (iOS `flushNow`). */
+    fun flushImpressions() {
+        impressionBatcher.flushNowAsync()
+    }
+
     override fun onCleared() {
         super.onCleared()
         impressionBatcher.flushNowAsync()
@@ -160,6 +169,10 @@ class FeedViewModel @Inject constructor(
         }
         viewModelScope.launch {
             publications.notices.collect { notice -> _state.update { it.copy(notice = notice.feedNotice) } }
+        }
+        viewModelScope.launch {
+            // Un j'aime ou un favori que la file a perdu : le retour arrière est déjà fait, le fil le DIT.
+            postRepository.gestureRefusals.collect { refusal -> _state.update { it.copy(notice = refusal.feedNotice) } }
         }
         viewModelScope.launch {
             combine(
@@ -354,6 +367,11 @@ class FeedViewModel @Inject constructor(
         }
     }
 
+    /** Rend la carte à la résolution du Prisme : défait le choix manuel de langue (iOS `clearTranslationOverride`). */
+    fun clearLanguageOverride(postId: String) {
+        activeLanguageOverride.update { it - postId }
+    }
+
     /**
      * Pick in the post's language explorer sheet (iOS `PostTranslationSheet.onSelectLanguage`):
      * the chosen language becomes the card's text. Unlike a flag chip, picking the language already
@@ -414,7 +432,7 @@ class FeedViewModel @Inject constructor(
      */
     fun openImageViewer(postId: String, imageIndex: Int) {
         val post = _state.value.posts.firstOrNull { it.id == postId } ?: return
-        val gallery = FeedMediaGallery.of(post, imageIndex)
+        val gallery = FeedMediaGallery.ofVisuals(post, imageIndex)
         _state.update { it.copy(imageViewer = gallery.takeUnless(FeedGallery::isEmpty)) }
     }
 
@@ -467,6 +485,12 @@ class FeedViewModel @Inject constructor(
     /** The toast for [FeedUiState.notice] has been shown. */
     fun consumeNotice() {
         _state.update { it.copy(notice = null) }
+    }
+
+    /** Un commentaire de l'utilisateur vient d'être confirmé depuis la feuille : le compteur de la carte suit, sans attendre l'écho. */
+    fun onCommentSent(postId: String) {
+        val current = _state.value.posts.firstOrNull { it.id == postId }?.commentCount ?: return
+        realtimeHead.update { FeedRealtimeReducer.comment(it, postId, me.meeshy.sdk.model.comments.CommentsTitleCount.afterSend(current)) }
     }
 
     /**
@@ -590,56 +614,31 @@ class FeedViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Epingle un de SES PROPRES posts (feature-parity §F) — port fidele d'iOS
-     * (`PostDetailViewModel.pinPost`/`ProfileUserPostsList.pinPost`), qui n'expose
-     * jamais de contrepartie "unpin" dans son UI ; `PostRepository.unpinPost`
-     * existe côté SDK mais reste sans appelant sur les deux plateformes, donc
-     * pas branche ici. Refresh apres succes pour faire remonter `isPinned`.
-     */
-    fun pinPost(postId: String) {
-        viewModelScope.launch {
-            when (postRepository.pinPost(postId)) {
-                is NetworkResult.Success -> postRepository.refresh()
-                is NetworkResult.Failure -> _state.update { it.copy(notice = FeedNotice.PIN_FAILED) }
-            }
-        }
-    }
+    private val postActions = FeedPostActionsDelegate(
+        posts = postRepository,
+        reports = reportRepository,
+        scope = viewModelScope,
+        head = realtimeHead,
+        notify = { notice -> _state.update { it.copy(notice = notice) } },
+    )
 
-    /**
-     * Suppression confirmee cote UI, OPTIMISTE (iOS FeedViewModel+PostActions) : le post
-     * quitte le fil aussitot (tombstone de la tete temps reel, deja relachee par la
-     * reconciliation quand le cache ne le porte plus) ; un echec le fait revenir, avec
-     * le message localise.
-     */
-    fun deletePost(postId: String) {
-        realtimeHead.update { FeedRealtimeReducer.remove(it, postId) }
-        viewModelScope.launch {
-            when (postRepository.delete(postId)) {
-                is NetworkResult.Success -> postRepository.refresh()
-                is NetworkResult.Failure -> {
-                    realtimeHead.update { FeedRealtimeReducer.restore(it, postId) }
-                    _state.update { it.copy(notice = FeedNotice.DELETE_FAILED) }
-                }
-            }
-        }
-    }
+    /** Epingle un de SES PROPRES posts (iOS `pinPost`) ; voir [FeedPostActionsDelegate.pin]. */
+    fun pinPost(postId: String) = postActions.pin(postId)
 
-    /** Signale [postId] pour [reason] et confirme l'envoi — ou dit l'echec (iOS `feed.post.reported`). */
-    fun reportPost(postId: String, reason: ReportReason) {
-        viewModelScope.launch {
-            val result = reportRepository.reportPost(postId, reason, details = null)
-            val notice = if (result is NetworkResult.Success) FeedNotice.REPORTED else FeedNotice.REPORT_FAILED
-            _state.update { it.copy(notice = notice) }
-        }
-    }
+    /** Suppression confirmee, OPTIMISTE (iOS `withdrawPost`) ; voir [FeedPostActionsDelegate.delete]. */
+    fun deletePost(postId: String) = postActions.delete(postId)
+
+    /** Signale [postId] pour [reason] (iOS `feed.post.reported`) ; voir [FeedPostActionsDelegate.report]. */
+    fun reportPost(postId: String, reason: ReportReason) = postActions.report(postId, reason)
 
     /** Bookmark analogue of [toggleLike] — same durable-outbox toggle, same flush schedule. */
     fun toggleBookmark(postId: String) {
+        val adding = cardOf(postId)?.isBookmarkedByMe != true
         viewModelScope.launch {
             try {
-                postRepository.toggleBookmark(postId)
+                val accepted = postRepository.toggleBookmark(postId)
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
+                if (accepted && adding) _state.update { it.copy(notice = FeedNotice.BOOKMARKED) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -760,6 +759,8 @@ private fun FeedUiState.project(
         loadFailed = stillFailed,
         newPostsCount = newPostsCount,
         currentUserId = user?.id,
+        currentUserName = user?.let { getUserDisplayName(it, fallback = "M") },
+        currentUserAvatarUrl = user?.avatar?.takeIf { it.isNotBlank() }?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
     )
 }
 

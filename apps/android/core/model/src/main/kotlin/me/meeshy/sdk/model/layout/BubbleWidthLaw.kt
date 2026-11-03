@@ -14,13 +14,17 @@ object BubbleWidthLaw {
     const val WIDE_RATIO: Float = 0.62f
     const val WIDE_CAP_DP: Float = 560f
 
+    /** Espaceur minimal laisse cote oppose (iOS `Spacer(minLength: 50)`), jamais mange par un conteneur etroit. */
+    const val MIN_SPACER_DP: Float = 50f
+
     /** Largeur maximale en dp ; `0` pour un conteneur vide, negatif ou inconnu (NaN). */
     fun maxWidthDp(containerWidthDp: Float, widthClass: WindowWidthClass): Float {
         if (!(containerWidthDp > 0f)) return 0f
-        return if (widthClass.isWide) {
+        val byRatio = if (widthClass.isWide) {
             minOf(containerWidthDp * WIDE_RATIO, WIDE_CAP_DP)
         } else {
             containerWidthDp * COMPACT_RATIO
         }
+        return minOf(byRatio, maxOf(0f, containerWidthDp - MIN_SPACER_DP))
     }
 }

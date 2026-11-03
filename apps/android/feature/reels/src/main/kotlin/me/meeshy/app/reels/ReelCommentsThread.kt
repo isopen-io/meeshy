@@ -23,6 +23,7 @@ internal fun ReelCommentsThread(
     serverCommentCount: Int?,
     onDismiss: () -> Unit,
     onOpenPost: () -> Unit,
+    onCommentSent: ((String) -> Unit)? = null,
 ) {
     val thread = rememberPostCommentsViewModel(reelId)
     val state by thread.state.collectAsStateWithLifecycle()
@@ -31,6 +32,7 @@ internal fun ReelCommentsThread(
         viewModel = thread,
         title = if (count == 0) stringResource(R.string.reels_comments_title) else pluralStringResource(R.plurals.reels_comments_count, count, count),
         onDismiss = onDismiss,
+        onCommentSent = onCommentSent,
         headerAction = { TextButton(onClick = onOpenPost) { Text(stringResource(R.string.reels_comments_view_post)) } },
     )
 }

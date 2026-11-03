@@ -17,9 +17,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import me.meeshy.sdk.model.story.StoryComposingFocus
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.meeshy.app.feed.PostCommentsViewModel
@@ -27,10 +30,11 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.ui.component.FeedbackToastHost
+import me.meeshy.sdk.model.scene.export.StoryExportMode
+import me.meeshy.sdk.story.isExpired
 import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
-import me.meeshy.ui.theme.hexColor
 
 /**
  * Propriétaire : lot story-viewer-decomposition-and-nav-graph. La coque du lecteur : la carte (cube, glissé, gestes),
@@ -45,6 +49,8 @@ internal fun StoryViewerShell(
     slideDurationMs: Int,
     progress: Animatable<Float, AnimationVector1D>,
     playing: Boolean,
+    lap: Int,
+    waiting: Boolean,
     composing: Boolean,
     railPlan: StoryRailPlan,
     commentThread: PostCommentsViewModel?,
@@ -58,35 +64,75 @@ internal fun StoryViewerShell(
     actions: StoryViewerActions,
     haptics: MeeshyHaptics,
     viewModel: StoryViewerViewModel,
+    groupIntro: StoryGroupIntroUi,
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     var headerHeightPx by remember { mutableIntStateOf(0) }
     var composerHeightPx by remember { mutableIntStateOf(0) }
-    val overlayActiveState = rememberUpdatedState(rail.overlayActive)
+    val surfaceOpenState = rememberUpdatedState(
+        StoryReaderSurfaceRules.hasActiveReaderFeature(
+            showLanguageOptions = rail.languageBarVisible,
+            showFullLanguagePicker = state.languageExplorer != null,
+            showEmojiStrip = rail.reactionBarVisible,
+            showFullEmojiPicker = rail.showFullEmojiPicker,
+            showCommentsOverlay = chrome.showComments,
+        ),
+    )
+    val composerEngagedState = rememberUpdatedState(composing)
+    val focusManager = LocalFocusManager.current
+    val nextLabel = stringResource(R.string.stories_viewer_next)
+    val previousLabel = stringResource(R.string.stories_viewer_previous)
     val hasNextGroupState = rememberUpdatedState(state.hasNextGroup)
     val hasPreviousGroupState = rememberUpdatedState(state.hasPreviousGroup)
+    val dragFrames = remember { StoryDragFrameSource() }
+    val closeSurfaces: () -> Unit = {
+        rail.closeBars()
+        rail.showFullEmojiPicker = false
+        chrome.showComments = false
+        viewModel.closeLanguageExplorer()
+    }
+    val chromeVisible = StoryFullscreenChrome.chromeVisible(isFullscreen = cardMotion.fullscreen.enabled, isHeld = state.isPaused)
+    // Écrire un commentaire fait le silence (iOS StoryComposingFocus) : clavier ouvert sur le composeur épinglé.
+    val isComposingFocus = keyboardVisible && commentThread != null && railPlan.pinsCommentComposer && slide != null && !state.isDismissed
+    val chromeShown = StoryComposingFocus.showsChrome(chromeVisible = chromeVisible, isComposing = isComposingFocus)
+    val chromeAlpha = storyFocusAlpha(chromeShown)
+    StoryDragAxisRelease(cardMotion, groupIndex = state.groupIndex, index = state.index)
     StoryCubeEntryOnAuthorChange(cardMotion, authorKey = state.authorUserId, groupIndex = state.groupIndex)
+    StoryCardAppearOnOpen(cardMotion)
+    StoryViewerImmersiveMode()
+    StoryCloseOnStop {
+        viewModel.endCurrentDwell()
+        actions.onClose()
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .storyNavigationActions(nextLabel, previousLabel, onNext = viewModel::advance, onPrevious = viewModel::back)
             .storyCanvasGestures(
                 groupIndex = state.groupIndex,
                 index = state.index,
                 slideCount = state.slides.size,
-                overlayActive = overlayActiveState,
-                onCloseBars = rail::closeBars,
+                surfaceOpen = surfaceOpenState,
+                composerEngaged = composerEngagedState,
+                onCloseSurfaces = closeSurfaces,
+                onDismissComposer = { focusManager.clearFocus() },
+                onNavigate = haptics::light,
                 viewModel = viewModel,
+                resetToken = cardMotion.resetToken,
             )
-            .storyCardDrag(
+            .storyDragLayer(
                 motion = cardMotion,
                 scope = scope,
+                frames = dragFrames,
+                reactionBar = rail::openBarRegion,
                 hasNextGroup = hasNextGroupState,
                 hasPreviousGroup = hasPreviousGroupState,
-                overlayActive = overlayActiveState,
-                onOverlayDismiss = rail::closeBars,
+                surfaceOpen = surfaceOpenState,
+                composerEngaged = composerEngagedState,
+                onDismissSurfaces = closeSurfaces,
                 onCommit = viewModel::onSwipe,
                 onCommitFeedback = haptics::light,
             ),
@@ -95,12 +141,27 @@ internal fun StoryViewerShell(
             modifier = Modifier
                 .fillMaxSize()
                 .storyCardFrame(cardMotion)
-                .background(hexColor(accent))
                 .onGloballyPositioned { rail.boxOriginInRoot = it.positionInRoot() },
         ) {
             if (slide != null) {
-                StoryViewerCanvas(slide, progress, slideDurationMs, playing, state.isMuted, viewModel)
+                StoryViewerReaderScene(
+                    slide = slide,
+                    item = currentItem,
+                    progress = progress,
+                    slideDurationMs = slideDurationMs,
+                    playing = playing,
+                    lap = lap,
+                    state = state,
+                    commentsOpen = chrome.showComments,
+                    chromeVisible = chromeVisible,
+                    fullscreen = cardMotion.fullscreen.enabled,
+                    viewModel = viewModel,
+                    captionExpanded = chrome.captionExpanded,
+                )
+                StoryReadingScrims(chromeVisible = chromeShown)
             }
+
+            StoryStallIndicator(waiting = waiting, modifier = Modifier.align(Alignment.Center))
 
             val composerPinned = commentThread != null && railPlan.pinsCommentComposer && slide != null &&
                 !state.isDismissed && (!state.isPaused || composing)
@@ -109,26 +170,43 @@ internal fun StoryViewerShell(
                 commentThread = commentThread,
                 composerPinned = composerPinned,
                 onComposerHeight = { composerHeightPx = it },
+                comments = StoryCommentsOverlayRequest(
+                    open = chrome.showComments,
+                    storyId = state.currentStoryId,
+                    isStoryExpired = currentItem?.isExpired(System.currentTimeMillis()) == true,
+                    targetCommentId = chrome.targetCommentId,
+                    targetParentCommentId = chrome.targetParentCommentId,
+                    topReservedPx = headerHeightPx,
+                    onListTop = { dragFrames.scrollableSurfaceTop = it },
+                ),
+                currentItem = currentItem,
+                chrome = chrome,
+                haptics = haptics,
+                viewModel = viewModel,
+                chromeVisible = chromeVisible,
+                decorationsShown = StoryComposingFocus.showsContentDecorations(isComposing = isComposingFocus),
             )
 
-            if (!state.isPaused) {
+            if (chromeAlpha > 0f && chromeVisible) {
+                Box(Modifier.graphicsLayer { alpha = chromeAlpha }) {
                 StoryViewerTopBar(
                     state = state,
                     slide = slide,
                     accent = accent,
                     progress = { progress.value },
                     chrome = chrome,
-                    showsRepost = railPlan.showsRepost,
                     videoExport = videoExport,
                     actions = actions,
                     haptics = haptics,
                     viewModel = viewModel,
                     onHeight = { headerHeightPx = it },
                 )
+                }
             }
 
             val railFrame = StoryRailFrame.of(headerHeightPx, composerHeightPx, composerPinned, with(density) { MeeshySpacing.sm.roundToPx() })
-            if (slide != null && !state.isDismissed && !state.isPaused && !keyboardVisible) {
+            StoryDragFrameSync(dragFrames, railShown = chromeVisible, composerHeightPx = if (composerPinned) composerHeightPx else 0, hasScrollableSurface = chrome.showComments)
+            if (slide != null && !state.isDismissed && chromeAlpha > 0f && chromeVisible && (!keyboardVisible || isComposingFocus)) {
                 StoryActionRail(
                     plan = railPlan,
                     counts = StoryRailCounts(
@@ -144,7 +222,10 @@ internal fun StoryViewerShell(
                         onViews = { rail.closeBars(); haptics.light(); chrome.showViewers = true },
                         onCompose = { rail.closeBars(); haptics.light(); state.currentStoryId?.let { id -> actions.onComposeStory?.invoke(id) } },
                         onComments = { rail.closeBars(); haptics.light(); chrome.showComments = true },
+                        onToggleSound = { haptics.light(); viewModel.toggleMute() },
+                        onSave = { rail.closeBars(); haptics.light(); videoExport.start(StoryExportMode.SAVE) },
                     ),
+                    emphasis = rememberStoryRailEmphasis(state, rail, chrome, commentThread, videoExport.busy),
                     reactionCount = state.reactionCount,
                     hasReacted = state.myReactions.isNotEmpty(),
                     languageBadgeCode = state.activeLanguageCode,
@@ -161,6 +242,8 @@ internal fun StoryViewerShell(
                     onLanguageBounds = { rail.languageButtonBounds = it },
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
+                        .graphicsLayer { alpha = chromeAlpha }
+                        .trackStoryRailRegion(dragFrames)
                         .padding(top = with(density) { railFrame.topPx.toDp() }, bottom = with(density) { railFrame.bottomPx.toDp() })
                         .padding(end = MeeshySpacing.sm),
                 )
@@ -179,6 +262,7 @@ internal fun StoryViewerShell(
                 toasts = viewModel.toasts,
                 modifier = Modifier.padding(bottom = with(density) { (if (composerPinned) composerHeightPx else 0).toDp() }),
             )
+            StoryGroupIntroLayer(groupIntro)
         }
     }
 }

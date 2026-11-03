@@ -255,6 +255,9 @@ public struct MeeshyAvatar: View {
     public var contextMenuItems: [AvatarContextMenuItem]? = nil
     public var enablePulse: Bool = true
     public var kind: AvatarKind = .user
+    /// La place libre (pt) que l'hôte garantit autour de l'empreinte : le cadre illustré s'y montre
+    /// sans réduire l'avatar (#15157). `0` ⇒ le cadre tient dans l'empreinte.
+    public private(set) var ringDecorRoom: CGFloat = 0
 
     // Primary init (AvatarContext)
     public init(name: String, context: AvatarContext, kind: AvatarKind = .user, accentColor: String = "",
@@ -430,7 +433,7 @@ public struct MeeshyAvatar: View {
         .avatarRingWithin(
             ringDesign,
             footprint: context.size,
-            storyRingSize: effectiveStoryState == .none ? nil : context.ringSize
+            storyRingSize: effectiveStoryState == .none ? nil : context.ringSize, decorRoom: ringDecorRoom
         )
         .overlay(alignment: .bottomTrailing) {
             if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
@@ -498,6 +501,13 @@ public struct MeeshyAvatar: View {
             tappable
                 .accessibilityLabel(accessibilityName)
         }
+    }
+
+    /// Déclare la place libre autour de l'empreinte (#15157) : l'hôte l'a réservée, aucun texte ni avatar voisin n'y vit.
+    public func ringDecorRoom(_ room: CGFloat) -> MeeshyAvatar {
+        var copy = self
+        copy.ringDecorRoom = room
+        return copy
     }
 
     // MARK: - Avatar Body

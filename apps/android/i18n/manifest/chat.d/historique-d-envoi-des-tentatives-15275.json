@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.send-history.attempt-count",
+          "androidName": "message_detail_send_history_attempt_count",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.send-history.attempt-number",
+          "androidName": "message_detail_send_history_attempt_number",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.send-history.first-attempt",
+          "androidName": "message_detail_send_history_first_attempt",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.send-history.outcome.failed",
+          "androidName": "message_detail_send_history_outcome_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.send-history.outcome.succeeded",
+          "androidName": "message_detail_send_history_outcome_succeeded",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.send-history.title",
+          "androidName": "message_detail_send_history_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.send-history.transport.auto-retry",
+          "androidName": "message_detail_send_history_transport_auto_retry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.send-history.transport.realtime",
+          "androidName": "message_detail_send_history_transport_realtime",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.send-history.transport.realtime-fallback",
+          "androidName": "message_detail_send_history_transport_realtime_fallback",
+          "status": "adopted"
+        },
+        {
+          "androidName": "chat_send_attempt_transport_rest",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

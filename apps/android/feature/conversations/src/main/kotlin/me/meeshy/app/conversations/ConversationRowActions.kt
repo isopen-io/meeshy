@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.avatar.ConversationHere
+import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.StoryRingState
 
@@ -49,6 +50,21 @@ internal data class ConversationRowActions(
     val onCreateShareLink: (() -> Unit)? = null,
     /** « Gérer les membres » ; la rangée ne l'offre que si la loi l'accorde (#12865). */
     val onManageMembers: ((accent: Color) -> Unit)? = null,
+    /** Les gestes du menu qui ouvrent un dialogue ou une destination (#14897). */
+    val onRequestRename: () -> Unit = {},
+    val onRequestLeave: () -> Unit = {},
+    val onSearch: () -> Unit = {},
+    val onInvite: () -> Unit = {},
+    val onBlock: () -> Unit = {},
+    val onUnblock: () -> Unit = {},
+    val onReport: () -> Unit = {},
+    val onOpenAdmin: () -> Unit = {},
+    /** « Appeler » le pair d'un direct ; `null` = l'hôte ne sait pas ouvrir l'appel, l'entrée est absente. */
+    val onCall: (() -> Unit)? = null,
+    /** L'état de blocage du pair, lu à l'ouverture du menu ; `null` = pas un direct à pair connu. */
+    val peerBlocked: () -> Boolean? = { null },
+    /** L'administration est-elle joignable d'ici (origine web connue) ? */
+    val adminReachable: Boolean = false,
 ) {
     /** Ajoute les destinations de navigation de [conversation] (profil du pair pour une directe). */
     fun withNavigation(
@@ -62,6 +78,8 @@ internal data class ConversationRowActions(
             onViewProfile = peerId?.let { id -> navigation.onViewProfile?.let { open -> { open(id) } } },
             onCreateShareLink = navigation.onCreateShareLink?.let { open -> { open(conversation.id) } },
             onManageMembers = navigation.onManageMembers?.let { open -> { accent -> open(conversation.id, accent) } },
+            onCall = navigation.onCall?.takeIf { conversation.type == "direct" }
+                ?.let { open -> { open(conversation.id, conversation.displayTitle(currentUserId)) } },
         )
     }
 
@@ -86,9 +104,19 @@ internal data class ConversationRowActions(
             onAssignCategory = { viewModel.reassignCategory(conversationId, it) },
             onCreateCategory = { viewModel.createCategoryAndAssign(conversationId, it) },
             onRemoveCategory = { viewModel.removeCategory(conversationId) },
-            onLoadPreview = { viewModel.loadPreviewMessages(conversationId) },
+            onLoadPreview = { viewModel.openPreview(conversationId) },
             onLockToggle = { viewModel.dialogs.requestLock(conversationId) },
             onRemove = { viewModel.dialogs.requestRemoval(conversationId) },
+            onRequestRename = { viewModel.dialogs.requestRename(conversationId) },
+            onRequestLeave = { viewModel.dialogs.requestLeave(conversationId) },
+            onSearch = { viewModel.dialogs.openForSearch(conversationId) },
+            onInvite = { viewModel.dialogs.requestInvite(conversationId) },
+            onBlock = { viewModel.dialogs.requestBlock(conversationId) },
+            onUnblock = { viewModel.dialogs.unblock(conversationId) },
+            onReport = { viewModel.dialogs.requestReport(conversationId) },
+            onOpenAdmin = { viewModel.dialogs.openAdminConsole(conversationId) },
+            peerBlocked = { viewModel.dialogs.isPeerBlocked(conversationId) },
+            adminReachable = viewModel.dialogs.canOpenAdminConsole,
         )
     }
 }
@@ -111,6 +139,7 @@ internal data class ConversationRowModel(
     val typingDisplayName: String?,
     val categories: List<CategoryOption>,
     val previewMessages: List<LocalMessage>?,
+    val previewUnavailable: Boolean = false,
     val isLocked: Boolean,
     /** The list's minute clock: relative time, preview countdowns and heat age with it. */
     val nowMillis: Long,

@@ -93,6 +93,11 @@ data class StoryComposerUiState(
     val drawingBoard: StoryDrawingBoard = StoryDrawingBoard(),
     val drawColorHex: String = StoryDrawingPalette.DEFAULT_COLOR,
     val drawWidthDesign: Double = StoryDrawingPalette.DEFAULT_WIDTH,
+    /** Le pinceau actif (stylo, marqueur, gomme) et son lissage ; un trait sélectionné est édité à leur place. */
+    val drawTool: me.meeshy.sdk.model.StrokeTool = me.meeshy.sdk.model.StrokeTool.PEN,
+    val drawSmoothing: me.meeshy.sdk.model.StrokeSmoothing = me.meeshy.sdk.model.StrokeSmoothing.CURVE,
+    /** Le panneau d'options déplié sous les bulles du dessin ; `null` ⇒ replié. */
+    val drawingExpandedTool: DrawingEditTool? = null,
     val isUploadingMedia: Boolean = false,
     /** Une ligne par média de la sélection en cours d'envoi, avec ses propres octets (#13429). */
     val uploadingMedia: List<MediaUploadProgress> = emptyList(),
@@ -146,6 +151,8 @@ data class StoryComposerUiState(
     val restoredFormats: List<ComposerFormat>? = null,
     /** Les formats qu'un geste de publication n'a pas fait partir (#13919) : la scène dit lesquels. */
     val publishFailedFormats: List<ComposerFormat> = emptyList(),
+    /** Combien d'éléments le dernier changement de forme du cadre a repositionnés : la bannière discrète les annonce, 0 : rien. */
+    val repositionedCount: Int = 0,
 ) {
     internal val variant: ComposerFormatVariant get() = ComposerFormatVariant.of(format)
 
@@ -170,7 +177,7 @@ data class StoryComposerUiState(
      * off-screen slide, or media/elements on an off-screen slide, all count.
      */
     val canPublish: Boolean
-        get() = (writesPostText && postText.isNotBlank() || deck.hasText && captionsSlides || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing || deck.hasAudio || deck.hasPlaces) &&
+        get() = (writesPostText && postText.isNotBlank() || deck.hasText && captionsSlides || deck.hasPublishMatter) &&
             publishBlock == null &&
             ComposerAudienceSelection.isPublishable(draft.visibility, draft.visibilityUserIds) &&
             !isPublishing &&

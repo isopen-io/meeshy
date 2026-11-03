@@ -44,6 +44,7 @@ import me.meeshy.sdk.net.api.ParticipantRoleUpdate
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.apiCallUnit
 import me.meeshy.sdk.outbox.ConversationPrefsPayload
+import me.meeshy.sdk.outbox.CreateConversationPayload
 import me.meeshy.sdk.outbox.ConversationPrefsPrevious
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
@@ -137,6 +138,9 @@ class ConversationRepository @Inject constructor(
      * conversation list itself).
      */
     fun totalUnreadCount(): Flow<Int> = conversationDao.totalUnreadCount()
+
+    /** Le nombre de conversations non lues (SQL `COUNT`, aucun decodage) : le chiffre du badge de la liste. */
+    fun unreadConversationCount(): Flow<Int> = conversationDao.unreadConversationCount()
 
     /**
      * Une empreinte de la fenêtre que lisent les widgets ([recentCachedConversations]) : elle change
@@ -322,6 +326,50 @@ class ConversationRepository @Inject constructor(
             .also { if (it is NetworkResult.Success) noteCreated(it.data.id) }
 
     /**
+     * Crée une conversation sans attendre le réseau (#15179, iOS `createConversation` hors ligne) : la ligne optimiste
+     * `pending_<uuid>` entre dans la liste à l'instant, la création part par l'outbox au retour du réseau, et
+     * [reconcileCreated] la remplace par l'identifiant serveur. Rend l'id optimiste, ou `null` quand la file est pleine
+     * (rien n'est alors laissé dans la liste).
+     */
+    suspend fun createOptimistic(
+        type: String,
+        title: String?,
+        participantIds: List<String>,
+        encryptionMode: String? = null,
+    ): String? {
+        val pendingId = PENDING_PREFIX + java.util.UUID.randomUUID().toString()
+        val stamp = java.time.Instant.now().toString()
+        cacheSource.remember(ApiConversation(id = pendingId, type = type, title = title, createdAt = stamp, updatedAt = stamp))
+        noteCreated(pendingId)
+        val payload = CreateConversationPayload(type, title, participantIds, encryptionMode)
+        val queued = outboxRepository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.CREATE_CONVERSATION,
+                lane = OutboxLanes.CONVERSATION,
+                targetId = pendingId,
+                payload = MeeshyApi.json.encodeToString(payload),
+            ),
+        )
+        if (queued == null) discardPending(pendingId)
+        return queued?.let { pendingId }
+    }
+
+    /** La création a abouti : la ligne serveur prend la place de la ligne optimiste, en une transaction (aucun doublon). */
+    suspend fun reconcileCreated(pendingId: String, created: ApiConversation) {
+        database.withTransaction {
+            cacheSource.rememberServed(created)
+            conversationDao.deleteByIds(listOf(pendingId))
+        }
+        outboxRepository.resolveLocalId(pendingId, created.id)
+    }
+
+    /** La création a échoué pour de bon : la ligne optimiste part, et les lignes qui l'attendaient avec elle. */
+    suspend fun discardPending(pendingId: String) {
+        conversationDao.deleteByIds(listOf(pendingId))
+        outboxRepository.cancelHeldFor(pendingId)
+    }
+
+    /**
      * La conversation directe la plus récente avec [userId] qui existe DÉJÀ dans le cache local —
      * une lecture Room, sans réseau, donc ouverte aussi hors ligne. Un direct du cache qui nomme
      * [userId] est forcément entre le lecteur et lui : le cache ne contient que les conversations
@@ -350,6 +398,22 @@ class ConversationRepository @Inject constructor(
     suspend fun findDirectWith(userId: String): NetworkResult<ApiConversation?> {
         cachedDirectWith(userId)?.let { return NetworkResult.Success(it) }
         return fetchDirectWith(userId)
+    }
+
+    /**
+     * Les conversations que je partage avec [userId] (miroir de `ConversationService.listSharedWith`
+     * iOS) : `GET /conversations?withUserId=…&limit=…`. Chaque ligne servie est rangée dans le cache
+     * pour que l'écran de discussion l'ait sous la main — et que son rang LRU soit rafraîchi.
+     */
+    suspend fun listSharedWith(userId: String, limit: Int = SHARED_CONVERSATIONS_LIMIT): NetworkResult<List<ApiConversation>> {
+        if (userId.isBlank()) return NetworkResult.Success(emptyList())
+        return when (val result = apiCall { conversationApi.sharedWith(withUserId = userId, limit = limit) }) {
+            is NetworkResult.Success -> {
+                result.data.forEach { cacheSource.rememberServed(it) }
+                result
+            }
+            is NetworkResult.Failure -> result
+        }
     }
 
     private suspend fun fetchDirectWith(userId: String): NetworkResult<ApiConversation?> =
@@ -588,8 +652,20 @@ class ConversationRepository @Inject constructor(
                 )
                 true
             }
-        } ?: false
+        }?.also { if (it) readLocallySignal.tryEmit(id) } ?: false
     }
+
+    /** Une lecture locale appliquee : le coordinateur de non-lus la rejoue de facon optimiste. */
+    private val readLocallySignal = kotlinx.coroutines.flow.MutableSharedFlow<String>(
+        extraBufferCapacity = 32,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
+    )
+
+    val readLocally: Flow<String> get() = readLocallySignal
+
+    /** L'instantane id -> non-lus du cache : il seme le registre, il ne l'ecrase jamais. */
+    fun unreadSnapshot(): Flow<Map<String, Int>> =
+        cachedConversations().map { rows -> rows.associate { it.id to it.unreadCount } }
 
     /**
      * Optimistic mark-as-read (ARCHITECTURE.md §5): the cached badge drops to
@@ -875,6 +951,9 @@ class ConversationRepository @Inject constructor(
     }
 
     companion object {
+        /** Le préfixe d'une conversation créée sur cet appareil et pas encore connue du serveur. */
+        private const val PENDING_PREFIX: String = "pending_"
+
         /** [ApiError.code] of a call that never reached the server (airplane mode, DNS, timeout). */
         private const val OFFLINE_ERROR_CODE: String = "NETWORK"
 
@@ -899,5 +978,8 @@ class ConversationRepository @Inject constructor(
          * cached table (#5190).
          */
         const val RECENT_WINDOW: Int = 100
+
+        /** Conversations en commun demandées à la passerelle pour l'onglet d'une fiche (iOS `limit: 50`). */
+        const val SHARED_CONVERSATIONS_LIMIT: Int = 50
     }
 }

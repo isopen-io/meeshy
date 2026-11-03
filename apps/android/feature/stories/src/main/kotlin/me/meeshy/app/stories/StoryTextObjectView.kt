@@ -207,12 +207,10 @@ object StoryTextObjectProjection {
                 color = textObject.borderColor,
             ),
             zIndex = textObject.zIndex,
-            frame = StoryTextFrame(
-                shape = StoryTextFrameShape.fromWire(textObject.frameShape),
-                paddingScale = textObject.framePaddingScale?.toFloat()?.takeIf { it.isFinite() }
-                    ?.coerceIn(0f, StoryTextFrame.MAX_PADDING) ?: StoryTextFrame.DEFAULT_PADDING,
-                borderWidth = textObject.frameBorderWidth?.toFloat()?.takeIf { it.isFinite() && it > 0f }
-                    ?.coerceAtMost(StoryTextFrame.MAX_BORDER) ?: 0f,
+            frame = StoryTextFrame.fromWire(
+                shape = textObject.frameShape,
+                paddingScale = textObject.framePaddingScale,
+                borderWidth = textObject.frameBorderWidth,
                 borderColor = textObject.frameBorderColor,
             ),
         )

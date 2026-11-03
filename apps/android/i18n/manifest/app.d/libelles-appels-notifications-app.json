@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        { "catalog": "widgets", "iosKey": "widget.favorites", "androidName": "widget_favorites_header", "status": "adopted" },
+        { "catalog": "widgets", "iosKey": "widget.conversations", "androidName": "widget_conversations", "status": "adopted" },
+        { "catalog": "widgets", "iosKey": "widget.markAsRead", "androidName": "widget_mark_as_read", "status": "adopted" },
+        { "catalog": "widgets", "iosKey": "widget.presence.online", "androidName": "widget_presence_online", "status": "adopted" },
+        { "catalog": "widgets", "iosKey": "widget.presence.away", "androidName": "widget_presence_away", "status": "adopted" },
+        { "catalog": "widgets", "iosKey": "widget.presence.idle", "androidName": "widget_presence_idle", "status": "adopted" },
+        { "catalog": "widgets", "iosKey": "widget.presence.offline", "androidName": "widget_presence_offline", "status": "adopted" },
+        { "catalog": "widgets", "iosKey": "widget.unreadCount", "androidName": "widget_unread_count", "kind": "plurals", "fillMissingQuantities": true, "status": "adopted" },
+        { "catalog": "widgets", "iosKey": "widget.unreadMessagesCount", "androidName": "widget_unread_messages_count", "kind": "plurals", "fillMissingQuantities": true, "status": "adopted" },
+        { "catalog": "app", "iosKey": "widget.preview.groupCount", "androidName": "widget_preview_group_count", "kind": "plurals", "fillMissingQuantities": true, "status": "adopted" },
+        { "catalog": "app", "iosKey": "widget.preview.linkCount", "androidName": "widget_preview_link_count", "kind": "plurals", "fillMissingQuantities": true, "status": "adopted" },
+        { "catalog": "app", "iosKey": "widget.preview.memberCount", "androidName": "widget_preview_member_count", "kind": "plurals", "fillMissingQuantities": true, "status": "adopted" },
+        { "catalog": "share", "iosKey": "CFBundleDisplayName", "androidName": "share_target_label", "status": "adopted" }
+      ]
+    }
+  }
+}

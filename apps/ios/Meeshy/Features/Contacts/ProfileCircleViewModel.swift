@@ -9,6 +9,8 @@ import MeeshyUI
 /// - **Rien n'est fabriqué** : sans lien servi (ou sous Connaissance), `shownLevel` est `nil` et le profil garde son
 ///   badge d'avant.
 /// - **Optimiste** : la demande s'applique localement avant la file durable, et se défait si la file y renonce.
+/// - **Rétrograder / annuler le lien** (#14910) : un cran sous le niveau EFFECTIF à la fois, `public` à Connaissance ;
+///   appliqué localement, envoyé, défait en cas d'échec ; le cache des liens est invalidé, l'amitié oubliée sous Ami.
 @MainActor
 final class ProfileCircleViewModel: ObservableObject {
 
@@ -19,6 +21,8 @@ final class ProfileCircleViewModel: ObservableObject {
     @Published private(set) var link: RelationLink?
     @Published private(set) var pendingLevel: RelationLevel?
     @Published var notice: String?
+    @Published private(set) var isLowering = false
+    @Published private(set) var didUnlink = false
 
     private let relations: RelationsProviding
     private let friendService: FriendServiceProviding
@@ -26,6 +30,7 @@ final class ProfileCircleViewModel: ObservableObject {
     private let networkMonitor: any NetworkMonitorProviding
     private let now: () -> Date
     private let linksStore: @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink>
+    private let forgetFriendship: @MainActor (String) async -> Void
 
     init(
         userId: String,
@@ -34,7 +39,8 @@ final class ProfileCircleViewModel: ObservableObject {
         offlineQueue: OfflineQueueing,
         networkMonitor: any NetworkMonitorProviding,
         now: @escaping () -> Date = { Date() },
-        linksStore: @escaping @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink> = CirclesLinkStore.live
+        linksStore: @escaping @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink> = CirclesLinkStore.live,
+        forgetFriendship: @escaping @MainActor (String) async -> Void
     ) {
         self.userId = userId
         self.relations = relations
@@ -43,6 +49,7 @@ final class ProfileCircleViewModel: ObservableObject {
         self.networkMonitor = networkMonitor
         self.now = now
         self.linksStore = linksStore
+        self.forgetFriendship = forgetFriendship
     }
 
     nonisolated deinit {}
@@ -61,6 +68,15 @@ final class ProfileCircleViewModel: ObservableObject {
         return target
     }
 
+    /// Le cercle occupe l'emplacement de la fiche : un lien est montré, ou vient d'être annulé ici.
+    var claimsTheSlot: Bool { shownLevel != nil || didUnlink }
+
+    /// Le geste de baisse proposé : un cran sous le niveau affiché, l'annulation du lien à Connaissance.
+    var offeredLowering: ProfileCircleLowering? {
+        guard let level = shownLevel, let below = RelationRequestRule.rung(below: level) else { return nil }
+        return below == .public ? .unlink : .demote(below)
+    }
+
     var summary: String? {
         link.flatMap { CircleProgressSummary.make($0, now: now()).text(levelTitle: CircleLevelNames.title(of:)) }
     }
@@ -76,7 +92,30 @@ final class ProfileCircleViewModel: ObservableObject {
         }
         let revalidation = await loader.load(fetch: fetch, setLoadState: { _ in }, apply: apply)
         await revalidation?.value
+        await loadServedDetail()
         await loadPendingRequest()
+    }
+
+    /// `GET /relations/:userId` : le blocage de montée quand la passerelle le sert, et le lien lui-même quand la liste
+    /// ne le portait pas encore. Un échec garde ce qui est affiché.
+    private func loadServedDetail() async {
+        guard let served = try? await relations.link(userId: userId), served.userId.lowercased() == userId.lowercased() else {
+            return
+        }
+        guard let current = link else {
+            if served.effectiveLevel >= .acquaintance { link = served }
+            return
+        }
+        link = RelationLink(
+            userId: current.userId,
+            effectiveLevel: current.effectiveLevel,
+            grantedByMe: current.grantedByMe,
+            since: current.since,
+            progress: current.progress,
+            eligibleFor: current.eligibleFor,
+            raiseBlockedUntil: served.raiseBlockedUntil ?? current.raiseBlockedUntil,
+            canRaise: served.canRaise ?? current.canRaise
+        )
     }
 
     private func loadPendingRequest() async {
@@ -103,6 +142,98 @@ final class ProfileCircleViewModel: ObservableObject {
             notice = String(localized: "circles.notice.requestFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .main)
             HapticFeedback.error()
             return false
+        }
+    }
+
+    /// Instantané -> local -> réseau -> retour arrière. Silencieux pour l'autre (RG-07).
+    @discardableResult
+    func lower() async -> Bool {
+        guard !isLowering, let current = link, let lowering = offeredLowering else { return false }
+        let target = lowering.level
+        let pendingBefore = pendingLevel
+        isLowering = true
+        defer { isLowering = false }
+        link = current.lowered(to: target)
+        if let waiting = pendingLevel, waiting > target { pendingLevel = nil }
+        do {
+            let served = try await relations.lower(userId: userId, to: target)
+            link = served.effectiveLevel <= target ? served : current.lowered(to: target)
+            didUnlink = target == .public
+            await linksStore().invalidate(for: CirclesViewModel.cacheKey)
+            if target < .friend { await forgetFriendship(userId) }
+            HapticFeedback.success()
+            return true
+        } catch {
+            link = current
+            pendingLevel = pendingBefore
+            notice = String(localized: "circles.notice.lowerFailed", defaultValue: "La modification n'a pas pu être enregistrée.", bundle: .main)
+            HapticFeedback.error()
+            return false
+        }
+    }
+}
+
+/// Le geste de baisse d'un lien : un cran plus bas, ou la sortie du cercle à Connaissance.
+enum ProfileCircleLowering: Equatable {
+    case demote(RelationLevel)
+    case unlink
+
+    var level: RelationLevel {
+        switch self {
+        case .demote(let level): return level
+        case .unlink: return .public
+        }
+    }
+}
+
+/// Les libellés IMPÉRATIFS d'un lien (#14910, décision porteur) : une clé par cercle visé, jamais un gabarit
+/// « Promouvoir en X » / « Rétrograder en X ». Monter : Soyons amis, Soyons proches, Devenons sang ; descendre : Restons
+/// proches, Restons amis, Restons en contact ; à Connaissance, « Annuler le lien ».
+enum ProfileCircleWording {
+    static func promote(to level: RelationLevel) -> String? {
+        switch level {
+        case .friend: return String(localized: "circles.promote.friend", defaultValue: "Soyons amis", bundle: .main)
+        case .close: return String(localized: "circles.promote.close", defaultValue: "Soyons proches", bundle: .main)
+        case .blood: return String(localized: "circles.promote.blood", defaultValue: "Devenons sang", bundle: .main)
+        case .public, .community, .acquaintance: return nil
+        }
+    }
+
+    static func promoteAccessibility(to level: RelationLevel, name: String) -> String? {
+        switch level {
+        case .friend:
+            return String(format: String(localized: "circles.promote.friend.a11y", defaultValue: "Soyons amis : demander le niveau Ami à %@", bundle: .main), name)
+        case .close:
+            return String(format: String(localized: "circles.promote.close.a11y", defaultValue: "Soyons proches : demander le niveau Proche à %@", bundle: .main), name)
+        case .blood:
+            return String(format: String(localized: "circles.promote.blood.a11y", defaultValue: "Devenons sang : demander le niveau Sang à %@", bundle: .main), name)
+        case .public, .community, .acquaintance:
+            return nil
+        }
+    }
+}
+
+extension ProfileCircleLowering {
+    /// Le libellé du bouton ET de l'action destructive du dialogue.
+    var label: String {
+        switch self {
+        case .demote(.close): return String(localized: "circles.demote.close", defaultValue: "Restons proches", bundle: .main)
+        case .demote(.friend): return String(localized: "circles.demote.friend", defaultValue: "Restons amis", bundle: .main)
+        case .demote: return String(localized: "circles.demote.acquaintance", defaultValue: "Restons en contact", bundle: .main)
+        case .unlink: return String(localized: "circles.action.unlink", defaultValue: "Annuler le lien", bundle: .main)
+        }
+    }
+
+    func confirmationTitle(name: String) -> String {
+        switch self {
+        case .demote(.close):
+            return String(format: String(localized: "circles.demote.close.confirm.title", defaultValue: "Rester seulement proches avec %@ ?", bundle: .main), name)
+        case .demote(.friend):
+            return String(format: String(localized: "circles.demote.friend.confirm.title", defaultValue: "Rester seulement amis avec %@ ?", bundle: .main), name)
+        case .demote:
+            return String(format: String(localized: "circles.demote.acquaintance.confirm.title", defaultValue: "Rester seulement en contact avec %@ ?", bundle: .main), name)
+        case .unlink:
+            return String(format: String(localized: "circles.unlink.confirm.title", defaultValue: "Annuler le lien avec %@ ?", bundle: .main), name)
         }
     }
 }

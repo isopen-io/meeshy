@@ -39,6 +39,18 @@ class OutboxKindDiskValuesLockTest {
         "CREATE_COMMENT",
         "CONSUME_AFTER_READ",
         "CONSUME_VIEW_ONCE",
+        "SEND_E2EE_MESSAGE",
+        "UPDATE_APPLICATION_SETTINGS",
+        "REPOST_POST",
+        "CREATE_CONVERSATION",
+        "UPDATE_CONVERSATION",
+        "SETTINGS_ACTION",
+        "REACT_STORY",
+        "HIDE_FOR_ME",
+        "RESTORE_FOR_ME",
+        "REMOVE_ATTACHMENT",
+        "MODERATION_DELETE",
+        "MARK_RECEIVED",
     )
 
     @Test

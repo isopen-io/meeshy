@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_sticker_save">حفظ في ملصقاتي</string>
+    <string name="story_sticker_save_done">تمت الإضافة إلى ملصقاتي</string>
+    <string name="story_sticker_save_already">موجود بالفعل في ملصقاتي</string>
+    <string name="story_sticker_save_failed">تعذر حفظ هذا الملصق</string>
+</resources>

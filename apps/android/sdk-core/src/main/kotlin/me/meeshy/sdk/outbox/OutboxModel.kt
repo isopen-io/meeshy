@@ -37,6 +37,39 @@ public enum class OutboxKind {
 
     /** Un message chiffré de bout en bout (#14591) : la ligne ne porte aucun clair, il attend au coffre E2EE. */
     SEND_E2EE_MESSAGE,
+
+    /** Le thème du bloc application (`PATCH /me/preferences/application`) : jamais de consentement (#4180). */
+    UPDATE_APPLICATION_SETTINGS,
+
+    /** Une republication directe (#15067) : la story d'un autre repart en story, en post ou en réel, hors ligne comprise. */
+    REPOST_POST,
+
+    /** Une conversation créée hors ligne (#15179) : sa ligne optimiste `pending_<uuid>` est réconciliée avec l'id serveur. */
+    CREATE_CONVERSATION,
+
+    /** Titre, description et avatar d'une conversation (#15179) : fusionnés champ par champ, le dernier gagne. */
+    UPDATE_CONVERSATION,
+
+    /** Un réglage de compte générique (endpoint, méthode, corps) (#15179) : FIFO entre endpoints, fusion par couple. */
+    SETTINGS_ACTION,
+
+    /** Une réaction de story posée hors ligne : l'emoji affiché reste vrai, il part au retour du réseau. */
+    REACT_STORY,
+
+    /** « Supprimer pour moi » (#15415) : le message disparaît chez moi seul, le rejeu est sans effet de plus. */
+    HIDE_FOR_ME,
+
+    /** Le geste inverse de [HIDE_FOR_ME] : il s'annule avec lui s'ils sont encore en file. */
+    RESTORE_FOR_ME,
+
+    /** Une pièce retirée d'un message déjà accusé : le 404 d'un rejeu vaut succès. */
+    REMOVE_ATTACHMENT,
+
+    /** Un message retiré par la modération avec son motif : le 404 d'un rejeu vaut succès. */
+    MODERATION_DELETE,
+
+    /** L'accusé de RÉCEPTION de toute une conversation : informatif, jamais compté dans la pastille de synchronisation. */
+    MARK_RECEIVED,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -82,12 +115,20 @@ public object OutboxLanes {
     public const val POST: String = "post"
     public const val COMMENT: String = "comment"
     public const val CONSUMPTION: String = "consumption"
+    public const val CONVERSATION: String = "conversation"
 
     /**
      * #13820 — une lane dont les lignes ne s'ordonnent pas entre elles : chaque téléversement est indépendant (l'ordre d'un
      * message se tient par son `dependsOn`, jamais par la lane média), donc une pièce qui attend ne retient pas les suivantes.
      */
     public fun isIndependent(lane: String): Boolean = lane == MEDIA
+
+    /**
+     * #14697 — une lane de messages ne retient pas ses messages derrière une pièce qui se téléverse encore : le message qui
+     * l'attend attend SEUL (son ordre se tient par son `dependsOn`), ceux composés après lui partent dans leur ordre. Un échec
+     * transitoire ou une ligne pas encore due, eux, tiennent toujours la lane (FIFO).
+     */
+    public fun passesOverWaitingMedia(lane: String): Boolean = lane.startsWith(forMessage(""))
 }
 
 /**
@@ -135,6 +176,11 @@ public object OutboxLaneMap {
         OutboxKind.UPDATE_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
         OutboxKind.UPDATE_PRIVACY_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
         OutboxKind.UPDATE_AUDIO_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
+        OutboxKind.UPDATE_APPLICATION_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
+        OutboxKind.SETTINGS_ACTION -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
+        OutboxKind.CREATE_CONVERSATION,
+        OutboxKind.UPDATE_CONVERSATION,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION)
         OutboxKind.PUBLISH_STORY -> OutboxLaneAssignment.Shared(OutboxLanes.STORY)
         OutboxKind.UPLOAD_MEDIA -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA)
 
@@ -154,6 +200,8 @@ public object OutboxLaneMap {
         OutboxKind.UNLIKE_POST,
         OutboxKind.BOOKMARK_POST,
         OutboxKind.UNBOOKMARK_POST,
+        OutboxKind.REPOST_POST,
+        OutboxKind.REACT_STORY,
         -> OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL)
 
         OutboxKind.REPORT_ATTACHMENT_STATUS -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA_STATUS)
@@ -162,6 +210,14 @@ public object OutboxLaneMap {
         OutboxKind.CONSUME_AFTER_READ,
         OutboxKind.CONSUME_VIEW_ONCE,
         -> OutboxLaneAssignment.Shared(OutboxLanes.CONSUMPTION)
+
+        OutboxKind.HIDE_FOR_ME,
+        OutboxKind.RESTORE_FOR_ME,
+        -> OutboxLaneAssignment.Shared(OutboxChatLanes.PERSONAL_HIDING)
+        OutboxKind.REMOVE_ATTACHMENT,
+        OutboxKind.MODERATION_DELETE,
+        -> OutboxLaneAssignment.Shared(OutboxChatLanes.CONTENT_REMOVAL)
+        OutboxKind.MARK_RECEIVED -> OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT)
     }
 
     /**
@@ -271,7 +327,26 @@ public data class CommentPayload(
     val content: String,
     val parentId: String? = null,
     val originalLanguage: String? = null,
+    /** Medias already uploaded under the `comment` context that leave with the comment (#15448). Absent on old rows. */
+    val attachmentIds: List<String>? = null,
+    val effectFlags: Int? = null,
+    val location: me.meeshy.sdk.model.SharedPlace? = null,
 )
+
+/**
+ * Payload of a `REPOST_POST` outbox row (#15067). The row's `targetId` is the source post (a server id: the route
+ * `POST /posts/:id/repost`), its `cmid` the idempotency key sent as `X-Client-Mutation-Id`. [targetType] is the wire type
+ * of the destination (`STORY` | `POST` | `REEL`); a bare repost carries no quote and inherits the original's audience.
+ */
+@kotlinx.serialization.Serializable
+public data class RepostPayload(val targetType: String, val content: String? = null, val isQuote: Boolean = false)
+
+/**
+ * Payload of a `REACT_STORY` outbox row. The row's `targetId` is the story (a server id: the route `POST /posts/:id/like`),
+ * so two taps of the same emoji on the same story coalesce into one row.
+ */
+@kotlinx.serialization.Serializable
+public data class StoryReactionPayload(val emoji: String)
 
 /**
  * Payload of a `PIN_MESSAGE` / `UNPIN_MESSAGE` outbox row. The row's `targetId`

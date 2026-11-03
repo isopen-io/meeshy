@@ -69,6 +69,12 @@ public enum class AuthContentType(
     Username(listOf(AutofillType.Username), KeyboardType.Text),
     Email(listOf(AutofillType.EmailAddress), KeyboardType.Email),
     OneTimeCode(listOf(AutofillType.SmsOtpCode), KeyboardType.Number),
+
+    /**
+     * Un code à six chiffres OU un code de secours `XXXX-XXXX` (lettres et chiffres) : le clavier
+     * numérique ne permettrait pas de TAPER ce dernier. Le remplissage du code SMS/TOTP reste.
+     */
+    TwoFactorCode(listOf(AutofillType.SmsOtpCode), KeyboardType.Ascii, KeyboardCapitalization.Characters),
     Password(listOf(AutofillType.Password), KeyboardType.Password),
     NewPassword(listOf(AutofillType.NewPassword), KeyboardType.Password),
 

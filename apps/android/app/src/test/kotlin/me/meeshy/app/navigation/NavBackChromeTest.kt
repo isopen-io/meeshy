@@ -38,7 +38,9 @@ class NavBackChromeTest {
     private fun sheetHostedRoutes(): List<String> =
         declaredRoutes(Regex("""sheetComposable\(\s*(?:route = )?("[^"]*"|[A-Za-z_.]+)"""))
 
-    private fun declaredRoutes(call: Regex): List<String> = graphDir.listFiles { f -> f.extension == "kt" }.orEmpty()
+    private val chatDestination = File(androidRoot, "app/src/main/kotlin/me/meeshy/app/navigation/ChatDestination.kt")
+
+    private fun declaredRoutes(call: Regex): List<String> = (graphDir.listFiles { f -> f.extension == "kt" }.orEmpty().toList() + chatDestination)
         .flatMap { file ->
             call.findAll(file.readText()).map { m ->
                 val raw = m.groupValues[1]
@@ -171,7 +173,7 @@ class NavBackChromeTest {
             "Routes.LOGIN", "Routes.MAGIC_LINK_VALIDATE", "Routes.VERIFY_EMAIL_LINK", "Routes.CONVERSATIONS", "Routes.FEED",
         )
         assertThat(NavBackChrome.entries.filter { it.chrome == BackChrome.MODAL && !it.viaSheetHost }.map { it.source }).containsExactly(
-            "Routes.MOOD_SPOTLIGHT", "Routes.REELS", "Routes.STORY_VIEWER", "Routes.COMPOSER", "Routes.STORY_COMPOSER_ROUTE",
+            "Routes.MOOD_SPOTLIGHT", "Routes.REELS", "Routes.STORY_VIEWER", "StoryRoutes.STORY_POST", "Routes.COMPOSER", "Routes.STORY_COMPOSER_ROUTE",
             "Routes.PROFILE_USER", "Routes.CALL",
         )
         assertThat(NavBackChrome.edgeSwipeBackEnabled(CommunityRoutes.SETTINGS)).isTrue()

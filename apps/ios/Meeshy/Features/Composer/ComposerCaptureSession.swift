@@ -75,6 +75,8 @@ final class ComposerCaptureSession: ObservableObject {
     /// Les proportions de la scène de retouche — ce qui partira ;
     /// `nil` hors retouche.
     @Published var editAspect: CGFloat?
+    /// Ce qu'« Annuler » rend pendant le recadrage (#15355).
+    var cropEntry: ComposerCropEntry?
     /// Les outils de retouche actifs — Crop, Trim, Son, ensemble ;
     /// vide hors retouche.
     @Published var activeEditTools: Set<ComposerEditTool> = []

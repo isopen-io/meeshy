@@ -54,6 +54,8 @@
     <string name="change_password_hint_match">Passwords match</string>
     <string name="change_password_hint_different">Different from your current password</string>
     <string name="change_password_error_current">Current password is incorrect</string>
+    <string name="change_password_error_weak">New password is too weak. Choose a longer, less predictable one.</string>
+    <string name="change_password_error_rejected">Password rejected. Check it and try again.</string>
     <!-- Email / phone change (§K) -->
     <string name="account_contact_title">Email &amp; phone</string>
     <string name="account_contact_email_resend">Resend email</string>
@@ -109,7 +111,6 @@
     <string name="about_version_label">Version %1$s</string>
     <string name="about_info_application_id">Application ID</string>
     <string name="settings_help_support">Help &amp; Support</string>
-    <string name="licenses_intro">Meeshy is built with the following open-source libraries.</string>
     <string name="licenses_type_mit">MIT</string>
     <string name="licenses_type_apache">Apache 2.0</string>
     <string name="licenses_type_bsd">BSD</string>

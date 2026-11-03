@@ -74,6 +74,14 @@ public interface ConversationDao {
     @Query("DELETE FROM conversations")
     public suspend fun clear()
 
+    /** Purge du cache : une page de charges (l'attribution des médias les relit). */
+    @Query("SELECT payload FROM conversations ORDER BY id LIMIT :limit OFFSET :offset")
+    public suspend fun payloadPage(limit: Int, offset: Int): List<String>
+
+    /** Octets réels des charges en cache (longueur des octets, pas des caractères). */
+    @Query("SELECT COALESCE(SUM(LENGTH(CAST(payload AS BLOB))), 0) FROM conversations")
+    public suspend fun payloadBytes(): Long
+
     /**
      * The unread total across every cached conversation — a SQL `SUM`, never a
      * decode. #5190: five call sites (home-screen widgets, the dashboard badge,
@@ -85,4 +93,20 @@ public interface ConversationDao {
      */
     @Query("SELECT COALESCE(SUM(unreadCount), 0) FROM conversations")
     public fun totalUnreadCount(): Flow<Int>
+
+    /**
+     * Le nombre de CONVERSATIONS non lues (pas de messages), comme le badge de la liste et
+     * `aps.badge` : une conversation compte pour 1 des que son `unreadCount` denormalise est
+     * positif. `COUNT` rend 0 sur une table vide, jamais NULL.
+     */
+    @Query("SELECT COUNT(*) FROM conversations WHERE unreadCount > 0")
+    public fun unreadConversationCount(): Flow<Int>
+
+    /**
+     * Le total des non-lus des AUTRES conversations que les [openIds] — la conversation que
+     * l'utilisateur regarde ne pèse pas sur le badge (rang 1 du registre de lecture). Un `SUM` SQL,
+     * aucun décodage ; [openIds] vide = le total entier.
+     */
+    @Query("SELECT COALESCE(SUM(unreadCount), 0) FROM conversations WHERE id NOT IN (:openIds)")
+    public fun totalUnreadExcludingOpen(openIds: List<String>): Flow<Int>
 }

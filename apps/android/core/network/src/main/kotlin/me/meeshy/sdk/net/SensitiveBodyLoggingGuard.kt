@@ -1,6 +1,9 @@
 package me.meeshy.sdk.net
 
 import okhttp3.Interceptor
+import okhttp3.MediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
 
@@ -33,22 +36,55 @@ import okhttp3.logging.HttpLoggingInterceptor
  * BASIC (methode + URL + statut, sans corps ni en-tetes), [full] au niveau
  * demande. Le choix se fait par route, sur la pile du fil appelant, sans etat
  * partage — il n'y a donc plus de course a avoir.
+ *
+ * **Un corps de televersement ne se lit jamais (#15315).** Au niveau BODY,
+ * `HttpLoggingInterceptor` ecrit le corps entier dans un tampon puis en fait une
+ * chaine : une video de 44 Mo devenait 89 Mo alloues d'un coup, et l'app debug
+ * tombait en `OutOfMemoryError` a chaque reprise de la file d'envoi. Un corps
+ * multipart, binaire, de taille inconnue ou au-dela de [MAX_LOGGED_BODY_BYTES]
+ * passe donc par [bulk], fixe a HEADERS : la ligne de requete, les en-tetes
+ * (rediges), et jamais un octet du corps.
  */
 class SensitiveBodyLoggingGuard(
     private val full: HttpLoggingInterceptor,
     private val sensitive: HttpLoggingInterceptor,
+    private val bulk: HttpLoggingInterceptor,
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
-        val path = chain.request().url.encodedPath
-        val logger = if (isSensitive(path)) sensitive else full
+        val request = chain.request()
+        val logger = when {
+            isSensitive(request.url.encodedPath) -> sensitive
+            isBulk(request.body) -> bulk
+            else -> full
+        }
         return logger.intercept(chain)
+    }
+
+    private fun isBulk(body: RequestBody?): Boolean {
+        if (body == null) return false
+        if (body is MultipartBody || body.isOneShot() || body.isDuplex()) return true
+        val length = runCatching { body.contentLength() }.getOrDefault(-1L)
+        if (length < 0L || length > MAX_LOGGED_BODY_BYTES) return true
+        return length > 0L && !isTextual(body.contentType())
+    }
+
+    private fun isTextual(type: MediaType?): Boolean {
+        if (type == null) return false
+        if (type.type.equals("text", ignoreCase = true)) return true
+        val subtype = type.subtype.lowercase()
+        return TEXTUAL_SUBTYPES.any { it in subtype }
     }
 
     private fun isSensitive(path: String): Boolean =
         SENSITIVE_PATHS.any { path.endsWith(it) } || SENSITIVE_SEGMENTS.any { it in path }
 
     companion object {
+        /** Au-dela, un corps meme textuel ne se journalise pas : il n'apprend rien qu'une ligne d'en-tete ne dise. */
+        const val MAX_LOGGED_BODY_BYTES: Long = 64L * 1024
+
+        private val TEXTUAL_SUBTYPES = listOf("json", "xml", "x-www-form-urlencoded", "graphql")
+
         /**
          * Routes dont le corps de requete porte un mot de passe ou un code de
          * second facteur en clair. `/auth/login` et `/auth/register` (le mot
@@ -134,6 +170,11 @@ class SensitiveBodyLoggingGuard(
                 },
                 sensitive = HttpLoggingInterceptor().apply {
                     level = HttpLoggingInterceptor.Level.BASIC
+                    redactHeader("Authorization")
+                    redactHeader("Cookie")
+                },
+                bulk = HttpLoggingInterceptor().apply {
+                    level = HttpLoggingInterceptor.Level.HEADERS
                     redactHeader("Authorization")
                     redactHeader("Cookie")
                 },

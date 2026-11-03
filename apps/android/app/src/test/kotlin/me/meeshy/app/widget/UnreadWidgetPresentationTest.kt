@@ -44,4 +44,12 @@ class UnreadWidgetPresentationTest {
         assertThat(state.hasUnread).isFalse()
         assertThat(state.count).isEqualTo(0)
     }
+
+    @Test
+    fun `le widget compte les autres conversations comme le badge`() {
+        val state = UnreadWidgetPresentation.fromCounts(mapOf("a" to 3, "open" to 75), open = setOf("open"))
+
+        assertThat(state.count).isEqualTo(3)
+        assertThat(state.hasUnread).isTrue()
+    }
 }

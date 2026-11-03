@@ -11,6 +11,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -26,6 +27,8 @@ import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.component.video.ReelPlayerHandle
 import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.story.canvas.SceneLookChain
+import me.meeshy.ui.story.canvas.SceneRootTransitionSpec
+import me.meeshy.ui.story.canvas.sceneRootTransition
 import me.meeshy.ui.theme.hexColor
 
 private fun androidx.compose.ui.graphics.GraphicsLayerScope.frame(bg: StoryBackgroundObjectTransform) {
@@ -53,6 +56,8 @@ internal fun StorySceneBackground(
     loads: Boolean = true,
     rewindWhenInactive: Boolean = false,
     onAudioFocusLost: () -> Unit = {},
+    onAudioFocusGained: () -> Unit = {},
+    onAudioFocusLostForGood: () -> Unit = {},
     onImageResolved: (String) -> Unit = {},
     onBackgroundPlayer: (ReelPlayerHandle?) -> Unit = {},
     stillFrame: Boolean = false,
@@ -70,12 +75,15 @@ internal fun StorySceneBackground(
                 loads = loads,
                 // Un vocal ou un appel prend le son : la scène se fige avec la vidéo.
                 onAudioFocusLost = onAudioFocusLost,
+                onAudioFocusGained = onAudioFocusGained,
+                onAudioFocusLostForGood = onAudioFocusLostForGood,
                 // La fenêtre de lecture que l'auteur a posée (#5129) — `null` quand la source joue en entier.
                 sourceStartMs = slide.backgroundVideoWindow?.startMs,
                 sourceEndMs = slide.backgroundVideoWindow?.endMs,
                 onPlayer = onBackgroundPlayer,
                 fit = slide.backgroundFits,
                 modifier = Modifier.fillMaxSize().graphicsLayer { frame(bg) },
+                effects = rememberSceneVideoEffects(slide.backgroundVideoUrl, slide.backgroundPosterUrl, slide.composerLooks),
             )
         }
         // Au repos le fond vidéo n'a pas de lecteur : son affiche (vignette, sinon ThumbHash) garde le cadre, l'aplat dessous.
@@ -98,7 +106,7 @@ internal fun StorySceneBackground(
             val bg = slide.backgroundTransform
             if (slide.backgroundFits) SceneBackdropLayer(slide.backdrop, imageUrl)
             AsyncImage(
-                model = imageUrl,
+                model = rememberSceneMediaModel(imageUrl, slide.composerLooks),
                 contentDescription = null,
                 contentScale = if (slide.backgroundFits) ContentScale.Fit else ContentScale.Crop,
                 colorFilter = SceneLookChain.colorFilter(slide.lookRecipe),
@@ -129,13 +137,14 @@ internal fun StorySceneAudio(
     rewindWhenInactive: Boolean = false,
     lap: Int = 0,
 ) {
+    val gain = LocalStoryAudioGain.current()
     slide.backgroundAudioUrl?.let { url ->
         key(url, StorySceneLoop.restartKey(loops = slide.backgroundLoop, lap = lap)) {
             AudioTrackSurface(
                 mediaUrl = url,
                 isActive = playing,
                 rewindWhenInactive = rewindWhenInactive,
-                volume = if (muted) 0f else 1f,
+                volume = if (muted) 0f else gain,
                 loop = slide.backgroundLoop,
                 sourceStartMs = slide.backgroundAudioWindow?.startMs,
                 sourceEndMs = slide.backgroundAudioWindow?.endMs,
@@ -148,7 +157,7 @@ internal fun StorySceneAudio(
                 mediaUrl = url,
                 isActive = playing,
                 rewindWhenInactive = rewindWhenInactive,
-                volume = if (muted) 0f else 1f,
+                volume = if (muted) 0f else gain,
                 loop = false,
                 // Un vocal rogné compte autant qu'une vidéo rognée (#5129).
                 sourceStartMs = slide.foregroundAudioWindow?.startMs,
@@ -204,30 +213,42 @@ fun StoryScenePlayer(
     LaunchedEffect(rewindWhenIdle) {
         if (rewindWhenIdle) progress.snapTo(0f)
     }
+    var started by remember(slide.id) { mutableStateOf(false) }
+    if (playing) started = true
+    val totalSeconds = durationMs / 1000.0
+    val rootTransition = if (resting || !started) null else SceneRootTransitionSpec(
+        opening = slide.opening,
+        closing = slide.closing,
+        totalDurationSeconds = totalSeconds,
+        restartKey = slide.id to lap,
+        playing = playing,
+    )
     Box(modifier.fillMaxSize().background(if (floor == SceneFloor.BLACK) Color.Black else hexColor(slide.accentHex))) {
-        StorySceneBackground(
-            slide = slide,
-            playing = playing,
-            muted = muted,
-            loads = loads,
-            rewindWhenInactive = rewindWhenIdle,
-            onAudioFocusLost = onAudioFocusLost,
-            onBackgroundPlayer = onBackgroundPlayer,
-            stillFrame = resting,
-            floor = floor,
-        )
-        if (loads) {
-            StorySceneOverlays(
+        Box(Modifier.fillMaxSize().sceneRootTransition(rootTransition) { progress.value * totalSeconds }) {
+            StorySceneBackground(
                 slide = slide,
-                progress = progress,
-                slideDurationMs = durationMs,
                 playing = playing,
                 muted = muted,
+                loads = loads,
                 rewindWhenInactive = rewindWhenIdle,
                 onAudioFocusLost = onAudioFocusLost,
-                players = !resting,
+                onBackgroundPlayer = onBackgroundPlayer,
+                stillFrame = resting,
+                floor = floor,
             )
-            if (!resting) StorySceneAudio(slide = slide, playing = playing, muted = muted, rewindWhenInactive = rewindWhenIdle, lap = lap)
+            if (loads) {
+                StorySceneOverlays(
+                    slide = slide,
+                    progress = progress,
+                    slideDurationMs = durationMs,
+                    playing = playing,
+                    muted = muted,
+                    rewindWhenInactive = rewindWhenIdle,
+                    onAudioFocusLost = onAudioFocusLost,
+                    players = !resting,
+                )
+                if (!resting) StorySceneAudio(slide = slide, playing = playing, muted = muted, rewindWhenInactive = rewindWhenIdle, lap = lap)
+            }
         }
     }
 }

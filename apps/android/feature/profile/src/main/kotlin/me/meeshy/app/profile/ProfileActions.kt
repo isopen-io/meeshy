@@ -79,6 +79,8 @@ internal data class ProfileActionCallbacks(
     val onCall: ((isVideo: Boolean) -> Unit)? = null,
     /** Demander le cran suivant du cercle (#13940). */
     val onRaise: () -> Unit = {},
+    /** Rétrograder d'un cran ou annuler le lien, après confirmation (#14910). */
+    val onLower: () -> Unit = {},
 )
 
 /**
@@ -120,8 +122,16 @@ internal fun ProfileActionsSection(
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
                 group.banner?.let { ConnectionContextRow(banner = it, name = displayName) }
                 group.actions.forEach { ConnectionActionButton(action = it, callbacks = callbacks) }
-                if (group.showsConnected) {
-                    if (circle != null) ProfileCircleRow(circle, displayName, callbacks.onRaise) else ConnectedPill()
+                if (circle != null) {
+                    ProfileCircleRow(
+                        circle = circle,
+                        displayName = displayName,
+                        onRaise = callbacks.onRaise,
+                        onLower = callbacks.onLower,
+                        allowPromote = group.actions.isEmpty(),
+                    )
+                } else if (group.showsConnected) {
+                    ConnectedPill()
                 }
             }
         }
@@ -203,7 +213,7 @@ private fun ConnectionActionButton(action: ProfileConnectionAction, callbacks: P
 }
 
 @Composable
-private fun SendMessageButton(isOpening: Boolean, onClick: () -> Unit) {
+internal fun SendMessageButton(isOpening: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     val haptics = rememberMeeshyHaptics()
     Row(

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="login_two_factor_error_invalid_code">That code isn\'t right. Check your authenticator app and try again.</string>
+    <string name="login_two_factor_error_too_many_attempts">Too many attempts. Try again in a few minutes.</string>
+    <string name="login_two_factor_error_token_expired">This sign-in has expired. Enter your password again.</string>
+    <string name="login_two_factor_description_with_backup">Enter the 6-digit verification code from your authenticator app, or one of your backup codes.</string>
+</resources>

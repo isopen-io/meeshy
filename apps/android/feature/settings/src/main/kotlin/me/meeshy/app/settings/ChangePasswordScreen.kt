@@ -1,64 +1,60 @@
 package me.meeshy.app.settings
 
 import me.meeshy.ui.icons.MeeshyIcons
-import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.foundation.text.KeyboardOptions
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.ChangePasswordValidation
-import me.meeshy.sdk.model.PasswordStrength
-import me.meeshy.sdk.model.PasswordStrengthLevel
+import me.meeshy.ui.component.auth.AuthContentType
+import me.meeshy.ui.component.auth.AuthTextField
+import me.meeshy.ui.component.auth.PasswordStrengthIndicator
 import me.meeshy.ui.component.chrome.CollapsibleHeaderPage
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.formColumnWidth
@@ -78,12 +74,30 @@ fun ChangePasswordScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    // On success, briefly show the confirmation then leave.
-    LaunchedEffect(state.isSuccess) {
-        if (state.isSuccess) onBack()
+    val haptics = rememberMeeshyHaptics()
+    val focusManager = LocalFocusManager.current
+
+    // The VM closes the screen 1.5 s after the success overlay appears.
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                ChangePasswordEffect.Close -> onBack()
+            }
+        }
+    }
+    LaunchedEffect(state.isSuccess) { if (state.isSuccess) haptics.success() }
+    LaunchedEffect(state.error) { if (state.error != null) haptics.error() }
+
+    val submit = {
+        if (state.canSubmit) {
+            focusManager.clearFocus()
+            haptics.medium()
+            viewModel.submit()
+        }
     }
 
     MeeshyBackground {
+      Box {
         CollapsibleHeaderPage(
             title = stringResource(R.string.change_password_title),
             onBack = onBack,
@@ -98,26 +112,44 @@ fun ChangePasswordScreen(
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
             ) {
-                PasswordField(
-                    label = stringResource(R.string.change_password_current_label),
-                    value = state.currentPassword,
-                    onValueChange = viewModel::onCurrentPasswordChange,
-                )
+                if (state.asksCurrentPassword) {
+                    SectionHeader(stringResource(R.string.change_password_section_current), MeeshyIcons.Lock)
+                    AuthTextField(
+                        value = state.currentPassword,
+                        onValueChange = viewModel::onCurrentPasswordChange,
+                        title = stringResource(R.string.change_password_current_label),
+                        icon = MeeshyIcons.Lock,
+                        isSecure = true,
+                        contentType = AuthContentType.Password,
+                        enabled = !state.isSaving,
+                    )
+                }
 
-                PasswordField(
-                    label = stringResource(R.string.change_password_new_label),
+                SectionHeader(stringResource(R.string.change_password_section_new), MeeshyIcons.Lock)
+                AuthTextField(
                     value = state.newPassword,
                     onValueChange = viewModel::onNewPasswordChange,
+                    title = stringResource(R.string.change_password_new_label),
+                    icon = MeeshyIcons.Lock,
+                    isSecure = true,
+                    contentType = AuthContentType.NewPassword,
+                    enabled = !state.isSaving,
                 )
 
                 if (state.newPassword.isNotEmpty()) {
-                    StrengthMeter(level = state.strength)
+                    PasswordStrengthIndicator(password = state.newPassword)
                 }
 
-                PasswordField(
-                    label = stringResource(R.string.change_password_confirm_label),
+                AuthTextField(
                     value = state.confirmPassword,
                     onValueChange = viewModel::onConfirmPasswordChange,
+                    title = stringResource(R.string.change_password_confirm_label),
+                    icon = MeeshyIcons.Lock,
+                    isSecure = true,
+                    contentType = AuthContentType.NewPassword,
+                    imeAction = ImeAction.Done,
+                    onImeAction = { submit() },
+                    enabled = !state.isSaving,
                 )
 
                 ValidationHints(state = state)
@@ -133,7 +165,7 @@ fun ChangePasswordScreen(
                 }
 
                 Button(
-                    onClick = viewModel::submit,
+                    onClick = { submit() },
                     enabled = state.canSubmit,
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = MeeshyPalette.Indigo500),
@@ -146,65 +178,72 @@ fun ChangePasswordScreen(
                         )
                         Spacer(Modifier.size(MeeshySpacing.sm))
                     }
-                    Text(stringResource(R.string.change_password_submit))
+                    Text(
+                        stringResource(
+                            if (state.asksCurrentPassword) R.string.change_password_submit else R.string.change_password_set_submit,
+                        ),
+                    )
                 }
 
                 Spacer(Modifier.height(MeeshySpacing.xl))
             }
         }
+        SuccessOverlay(visible = state.isSuccess, isChange = state.asksCurrentPassword, modifier = Modifier.align(Alignment.Center))
+      }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PasswordField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-) {
-    var visible by remember { mutableStateOf(false) }
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        singleLine = true,
-        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-        trailingIcon = {
-            IconButton(onClick = { visible = !visible }) {
-                Icon(
-                    imageVector = if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                    contentDescription = stringResource(
-                        if (visible) R.string.change_password_hide else R.string.change_password_show,
-                    ),
-                    tint = MeeshyTheme.tokens.textSecondary,
-                )
-            }
-        },
-        modifier = Modifier.fillMaxWidth(),
-    )
+private fun SectionHeader(title: String, icon: ImageVector) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
+        modifier = Modifier.padding(start = MeeshySpacing.xs).semantics(mergeDescendants = true) { heading() },
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(14.dp))
+        Text(
+            text = title.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MeeshyPalette.Indigo500,
+        )
+    }
 }
 
+/** Confirmation transitoire : bouclier coché, scale + fondu en spring 0,4 / 0,8 (iOS `successOverlay`). */
 @Composable
-private fun StrengthMeter(level: PasswordStrengthLevel) {
-    val color = level.barColor()
-    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-            repeat(PasswordStrength.MAX_SCORE) { index ->
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(if (index < level.score) color else MeeshyTheme.tokens.inputBorder),
+private fun SuccessOverlay(visible: Boolean, isChange: Boolean, modifier: Modifier = Modifier) {
+    val spec = spring<Float>(dampingRatio = 0.8f, stiffness = MeeshyMotion.stiffnessForResponse(0.4f))
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier,
+        enter = scaleIn(animationSpec = spec) + fadeIn(animationSpec = spec),
+        exit = scaleOut(animationSpec = spec) + fadeOut(animationSpec = spec),
+    ) {
+        Surface(
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(MeeshyRadius.xl),
+            color = MeeshyTheme.tokens.backgroundPrimary.copy(alpha = 0.92f),
+            border = BorderStroke(1.dp, MeeshyPalette.Success.copy(alpha = 0.3f)),
+        ) {
+            Column(
+                modifier = Modifier.padding(MeeshySpacing.xxxl).semantics(mergeDescendants = true) {},
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+            ) {
+                Icon(
+                    imageVector = MeeshyIcons.VerifiedUser,
+                    contentDescription = null,
+                    tint = MeeshyPalette.Success,
+                    modifier = Modifier.size(56.dp),
+                )
+                Text(
+                    text = stringResource(if (isChange) R.string.change_password_success else R.string.change_password_set_success),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MeeshyTheme.tokens.textPrimary,
                 )
             }
         }
-        Text(
-            text = stringResource(level.labelRes()),
-            style = MaterialTheme.typography.labelSmall,
-            color = color,
-        )
     }
 }
 
@@ -221,7 +260,7 @@ private fun ValidationHints(state: ChangePasswordUiState) {
             met = validation.passwordsMatch,
         )
         // Only surface the "must differ" hint once a new password is actually being typed.
-        if (state.newPassword.isNotEmpty()) {
+        if (state.asksCurrentPassword && state.newPassword.isNotEmpty()) {
             HintRow(
                 text = stringResource(R.string.change_password_hint_different),
                 met = validation.isNewDifferent,
@@ -247,23 +286,10 @@ private fun HintRow(text: String, met: Boolean) {
     }
 }
 
-private fun PasswordStrengthLevel.barColor(): Color = when (this) {
-    PasswordStrengthLevel.TOO_WEAK, PasswordStrengthLevel.WEAK -> MeeshyPalette.Error
-    PasswordStrengthLevel.MEDIUM, PasswordStrengthLevel.GOOD -> MeeshyPalette.Warning
-    PasswordStrengthLevel.STRONG, PasswordStrengthLevel.EXCELLENT -> MeeshyPalette.Success
-}
-
-private fun PasswordStrengthLevel.labelRes(): Int = when (this) {
-    PasswordStrengthLevel.TOO_WEAK -> R.string.change_password_strength_0
-    PasswordStrengthLevel.WEAK -> R.string.change_password_strength_1
-    PasswordStrengthLevel.MEDIUM -> R.string.change_password_strength_2
-    PasswordStrengthLevel.GOOD -> R.string.change_password_strength_3
-    PasswordStrengthLevel.STRONG -> R.string.change_password_strength_4
-    PasswordStrengthLevel.EXCELLENT -> R.string.change_password_strength_5
-}
-
 private fun ChangePasswordError.messageRes(): Int = when (this) {
     ChangePasswordError.INCORRECT_CURRENT -> R.string.change_password_error_current
+    ChangePasswordError.WEAK -> R.string.change_password_error_weak
+    ChangePasswordError.REJECTED -> R.string.change_password_error_rejected
     ChangePasswordError.NETWORK -> R.string.change_password_error_network
     ChangePasswordError.GENERIC -> R.string.change_password_error_generic
 }

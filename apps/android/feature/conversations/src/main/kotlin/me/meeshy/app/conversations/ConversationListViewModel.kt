@@ -23,8 +23,10 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.lock.ConversationUnlockSessionStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationFilter
+import me.meeshy.sdk.model.conversationlist.ConversationFilterComposition
 import me.meeshy.sdk.model.conversationlist.ConversationListLoadState
 import me.meeshy.sdk.model.search.ListMessageSearchState
 import me.meeshy.sdk.search.ListMessageSearchSource
@@ -37,6 +39,7 @@ import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusRepository
+import me.meeshy.sdk.link.ConversationListEntryRequests
 import me.meeshy.sdk.story.StoryRepository
 import java.util.Locale
 import javax.inject.Inject
@@ -60,6 +63,7 @@ class ConversationListViewModel @Inject constructor(
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
     lockStore: ConversationLockStore,
+    unlockSession: ConversationUnlockSessionStore,
     storyRepository: StoryRepository,
     statusBarCache: StatusBarCache,
     messagePrefetch: ConversationListMessagePrefetchTriggers,
@@ -70,6 +74,7 @@ class ConversationListViewModel @Inject constructor(
     private val loadingDeps: ConversationListLoadingDeps = ConversationListLoadingDeps.detached(),
     dialogDeps: ConversationListDialogDeps = ConversationListDialogDeps.detached(),
     messageSearchSource: ListMessageSearchSource = NoListMessageSearch,
+    entryRequests: ConversationListEntryRequests = ConversationListEntryRequests(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -98,6 +103,7 @@ class ConversationListViewModel @Inject constructor(
         state = _state,
         lockStore = lockStore,
         openConversation = { dialogs.onConversationOpened(it); openConversationRequests.trySend(it) },
+        unlockSession = unlockSession,
     )
     private val actions = ConversationListRowActions(
         scope = viewModelScope,
@@ -198,6 +204,7 @@ class ConversationListViewModel @Inject constructor(
             }
         }
 
+        viewModelScope.launch { entryRequests.requested.collect { filter -> if (filter != null) selectFilter(filter).also { entryRequests.consume() } } }
         loader.start(networkMonitor.isOnline, socketManager.connectionState.map { it == SocketConnectionState.CONNECTED })
         viewModelScope.launch { lock.observe() }
         observers.startCategories()
@@ -209,9 +216,16 @@ class ConversationListViewModel @Inject constructor(
     /** La conversation brute de [id], même hors du filtre courant : la ligne d'un message trouvé la nomme. */
     fun conversationFor(id: String): ApiConversation? = rawConversations.firstOrNull { it.id == id }
 
-    /** Selects a filter tab and re-derives the visible list from the cached conversations (no network). */
+    /** Remplace la sélection par le seul [filter] (entrée par lien profond) et re-dérive la liste, sans réseau. */
     fun selectFilter(filter: ConversationFilter) {
-        _state.update { it.copy(selectedFilter = filter).withVisible(rawConversations) }
+        _state.update { it.copy(selectedFilters = setOf(filter)).withVisible(rawConversations) }
+    }
+
+    /** Un appui pose le [filter], un second le retire ; vider la sélection ramène à Tous (iOS `ConversationFilterComposition`). */
+    fun toggleFilter(filter: ConversationFilter) {
+        _state.update {
+            it.copy(selectedFilters = ConversationFilterComposition.toggling(filter, it.selectedFilters)).withVisible(rawConversations)
+        }
     }
 
     /** Updates the free-text search query and re-derives the visible list (no network). */
@@ -260,6 +274,7 @@ class ConversationListViewModel @Inject constructor(
 
     /** Loads (once, cache-only) the hard-press preview card's recent messages. */
     fun loadPreviewMessages(conversationId: String) = actions.loadPreviewMessages(conversationId)
+    fun openPreview(conversationId: String) = actions.openPreview(conversationId)
 
     /** Row tap: opens straight through, or gates behind the lock code when locked. */
     fun onConversationTap(id: String) {

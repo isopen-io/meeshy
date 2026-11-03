@@ -1,7 +1,10 @@
 package me.meeshy.sdk.post
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -18,6 +21,8 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.FeedGeneration
 import me.meeshy.sdk.model.FeedMergeLaws
 import me.meeshy.sdk.model.PostReactionSummaryLaw
+import me.meeshy.sdk.model.PostReactionSyncLaw
+import me.meeshy.sdk.model.SocketPostReactionSyncData
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.DiscoverabilityPrecision
@@ -101,6 +106,14 @@ class PostRepository @Inject constructor(
     private val likeFlips = GestureTraces()
     private val bookmarkFlips = GestureTraces()
     private val _feedHasMore = MutableStateFlow(true)
+
+    private val _gestureRefusals = MutableSharedFlow<GestureRefusal>(extraBufferCapacity = 16)
+
+    /**
+     * Un geste optimiste (j'aime, favori) que la file a définitivement perdu ET dont l'effet vient d'être défait : le fil
+     * le dit (« Impossible d'aimer la publication ») au lieu de laisser le cœur s'éteindre sans explication (iOS `FeedbackToastManager`).
+     */
+    val gestureRefusals: SharedFlow<GestureRefusal> = _gestureRefusals.asSharedFlow()
 
     /** Whether older feed pages remain to be fetched (drives the infinite-scroll trigger). */
     val feedHasMore: StateFlow<Boolean> = _feedHasMore.asStateFlow()
@@ -278,7 +291,7 @@ class PostRepository @Inject constructor(
      * state is reverted and the served count is kept: applying the delta to it would
      * double-count (#13588).
      */
-    suspend fun rollbackLike(postId: String, liked: Boolean, cmid: String? = null) {
+    suspend fun rollbackLike(postId: String, liked: Boolean, cmid: String? = null, reason: String? = null) {
         val refusal = likeFlips.take(postId, cmid, liked)?.takeUnless { it.overridden } ?: return
         val flip = refusal.trace
         rewriteRow(fence?.currentTicket(), postId) {
@@ -288,6 +301,7 @@ class PostRepository @Inject constructor(
                 else -> it.copy(isLikedByMe = flip.revertTo)
             }
         }
+        _gestureRefusals.tryEmit(GestureRefusal(postId, PostGesture.LIKE, reason))
     }
 
     /** La ligne [cmid] est livrée : la trace de son geste n'a plus de retour arrière à porter. */
@@ -402,7 +416,7 @@ class PostRepository @Inject constructor(
      * state). [bookmarked] is the value to revert TO; the count is recomputed as
      * the inverse of the delta [toggleBookmark]'s [applyBookmark] applied.
      */
-    suspend fun rollbackBookmark(postId: String, bookmarked: Boolean, cmid: String? = null) {
+    suspend fun rollbackBookmark(postId: String, bookmarked: Boolean, cmid: String? = null, reason: String? = null) {
         val refusal = bookmarkFlips.take(postId, cmid, bookmarked)?.takeUnless { it.overridden } ?: return
         val flip = refusal.trace
         rewriteRow(fence?.currentTicket(), postId) {
@@ -412,6 +426,7 @@ class PostRepository @Inject constructor(
                 else -> it.copy(isBookmarkedByMe = flip.revertTo)
             }
         }
+        _gestureRefusals.tryEmit(GestureRefusal(postId, PostGesture.BOOKMARK, reason))
     }
 
     /** Pagination infinie : la page apres le curseur, sans doublon ; le filigrane de fraicheur ne bouge pas. Rend s'il reste des pages. */
@@ -795,8 +810,8 @@ class PostRepository @Inject constructor(
      * sibling of [applyTranslationUpdate].
      *
      * Returns `true` only when the cache actually changed. Inert (`false`, nothing
-     * stored) when the post is not in the cache, [commentId] is non-null (comment-level
-     * media isn't modeled on Android yet), or the merge is a no-op (blank language,
+     * stored) when the post is not in the cache, [commentId] names a comment the row does not
+     * carry, or the merge is a no-op (blank language,
      * blank text, unknown [mediaId], or the identical entry already present).
      */
     suspend fun applyMediaCaptionTranslationUpdate(
@@ -839,6 +854,10 @@ class PostRepository @Inject constructor(
     /** Le compte absolu de [emoji] (`post:reaction-*`) sur la ligne du fil ; `false` : ligne absente ou compte deja a jour. */
     suspend fun applyReactionCount(postId: String, emoji: String, count: Int): Boolean =
         fence.commitOrWrite(fence?.currentTicket()) { foldIntoCache(postId) { PostReactionSummaryLaw.applying(it, emoji, count) } } ?: false
+
+    /** L'agrégat complet rendu par `post:reaction-request-sync` remplace le résumé de la ligne du fil ; `false` : rien à changer. */
+    suspend fun applyReactionSync(sync: SocketPostReactionSyncData): Boolean =
+        fence.commitOrWrite(fence?.currentTicket()) { foldIntoCache(sync.postId) { PostReactionSyncLaw.applying(it, sync) } } ?: false
 
     /**
      * On-demand translation for a post the caller already holds (the post-detail
@@ -926,14 +945,22 @@ class PostRepository @Inject constructor(
      * compteur du post, s'il est dans le cache du fil, monte tout de suite. [parentId] `null` = commentaire racine.
      * Rend le `cmid` de la ligne, ou `null` si la file a refusé l'écriture (compte clos entre-temps).
      */
-    suspend fun queueComment(postId: String, content: String, parentId: String? = null, originalLanguage: String? = null): String? {
+    suspend fun queueComment(
+        postId: String,
+        content: String,
+        parentId: String? = null,
+        originalLanguage: String? = null,
+        attachmentIds: List<String>? = null,
+        effectFlags: Int? = null,
+        location: SharedPlace? = null,
+    ): String? {
         val ticket = fence?.currentTicket()
         val cmid = outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.CREATE_COMMENT,
                 lane = OutboxLanes.COMMENT,
                 targetId = postId,
-                payload = MeeshyApi.json.encodeToString(CommentPayload.serializer(), CommentPayload(content, parentId, originalLanguage)),
+                payload = MeeshyApi.json.encodeToString(CommentPayload.serializer(), CommentPayload(content, parentId, originalLanguage, attachmentIds?.takeIf { it.isNotEmpty() }, effectFlags, location)),
             ),
             ticket,
         ) ?: return null

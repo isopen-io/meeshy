@@ -1,5 +1,6 @@
 package me.meeshy.app.calls
 
+import me.meeshy.sdk.model.call.CallVideoNotice
 import me.meeshy.sdk.model.call.CallConnectedLayoutLaw
 import me.meeshy.sdk.model.call.CallDuration
 import me.meeshy.sdk.model.call.CallEndReason
@@ -168,6 +169,8 @@ data class CallUiState(
      * phases of a VIDEO call.
      */
     val isVideoAutoPaused: Boolean = false,
+    /** L'indicateur discret : image réduite par la chaleur ou lumière insuffisante ([CallVideoHealth]). */
+    val videoNotice: CallVideoNotice = CallVideoNotice.None,
     /**
      * La disposition connectée est gardée : `CONNECTED`, ou `RECONNECTING` APRÈS un média établi
      * (un creux réseau ne vide pas l'écran) — jamais l'écran de connexion à ce moment-là.
@@ -177,6 +180,8 @@ data class CallUiState(
     val durationSeconds: Long = 0,
     /** La caméra avant capte : seul son aperçu local se rend en miroir (l'arrière filme le monde à l'endroit). */
     val isFrontCamera: Boolean = true,
+    /** L'appel est en attente (appel GSM, alarme) : la surcouche « En attente » s'affiche, micro et caméra s'atténuent. */
+    val isOnHold: Boolean = false,
 ) {
     /** Le chrono tourne : connecté, ou en reconnexion avec un média déjà établi. */
     val hasLiveClock: Boolean
@@ -257,6 +262,7 @@ object CallPresenter {
         videoAutoPaused: Boolean = false,
         mediaEstablished: Boolean = false,
         peerScreenSharing: Boolean = false,
+        videoNotice: CallVideoNotice = CallVideoNotice.None,
     ): CallUiState {
         val status = statusOf(state)
         val onMediaPhase = status == CallStatus.CONNECTED || status == CallStatus.RECONNECTING
@@ -285,6 +291,7 @@ object CallPresenter {
             isPeerCameraOff = onMediaPhase && config.isVideo && !peerVideoEnabled && !peerScreenSharing,
             isPeerScreenSharing = onMediaPhase && peerScreenSharing,
             isVideoAutoPaused = onMediaPhase && config.isVideo && videoAutoPaused,
+            videoNotice = if (onMediaPhase && config.isVideo && media.isCameraOn) videoNotice else CallVideoNotice.None,
             showsConnectedLayout = CallConnectedLayoutLaw.showsConnectedLayout(state, mediaEstablished),
             durationSeconds = elapsedSeconds.coerceAtLeast(0),
         )

@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -45,6 +46,10 @@ import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationCategoryPicker
 import me.meeshy.sdk.model.conversationoptions.ConversationTagsEditor
+import me.meeshy.ui.component.field.CategoryPickerField
+import me.meeshy.ui.component.field.CategoryPickerLabels
+import me.meeshy.ui.component.field.TagInputField
+import me.meeshy.ui.component.field.TagInputLabels
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -145,7 +150,7 @@ internal fun ConversationCustomNameField(draft: String, color: Color, onEdit: (S
     }
 }
 
-/** « Catégorie » (iOS `CategoryPickerField`) : la catégorie choisie (et son ✕ qui la retire), la recherche, les autres et la création. */
+/** « Catégorie » (iOS `CategoryPickerField`) : champ partagé de `:sdk-ui`, habillé de son libellé de rangée. */
 @Composable
 internal fun ConversationCategoryField(
     categories: List<CategoryOption>,
@@ -155,77 +160,25 @@ internal fun ConversationCategoryField(
     onCreate: (String) -> Unit,
     onRemove: () -> Unit,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
-    val picker = ConversationCategoryPicker.resolve(categories, selectedId, query)
-    val selected = categories.firstOrNull { it.id == selectedId }
+    val context = LocalContext.current
+    val labels = CategoryPickerLabels(
+        placeholderEmpty = stringResource(R.string.conversation_options_category_placeholder),
+        placeholderChange = stringResource(R.string.conversation_options_category_placeholder),
+        clearInput = stringResource(R.string.conversation_options_custom_name_clear),
+        remove = { context.getString(R.string.conversation_options_category_remove, it) },
+        select = { context.getString(R.string.conversation_options_category_select, it) },
+        create = { context.getString(R.string.conversation_options_category_create, it) },
+    )
     Column(
         modifier = Modifier.padding(horizontal = MeeshySpacing.mdPlus, vertical = MeeshySpacing.smPlus),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
     ) {
         FieldLabel(MeeshyIcons.GridViewFilled, stringResource(R.string.conversation_options_category), color)
-        selected?.let { category -> SelectedCategoryChip(category.name, color, onRemove) }
-        OptionsTextField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = stringResource(R.string.conversation_options_category_placeholder),
-        )
-        if (query.isNotBlank() || selected == null) {
-            picker.displayed.forEach { category ->
-                val label = stringResource(R.string.conversation_options_category_select, category.name)
-                CategoryLine(category.name, MeeshyIcons.Folder, color, label) {
-                    onSelect(category.id)
-                    query = ""
-                }
-            }
-        }
-        if (picker.canCreate) {
-            val name = query.trim()
-            val label = stringResource(R.string.conversation_options_category_create, name)
-            CategoryLine(label, MeeshyIcons.Add, color, label) {
-                onCreate(name)
-                query = ""
-            }
-        }
+        CategoryPickerField(categories, selectedId, color, labels, onSelect, onCreate, onRemove)
     }
 }
 
-/** La pastille de la catégorie choisie ; son ✕ la retire (iOS `selectedChip`, `category.remove`). */
-@Composable
-private fun SelectedCategoryChip(name: String, color: Color, onRemove: () -> Unit) {
-    val removeLabel = stringResource(R.string.conversation_options_category_remove, name)
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(MeeshyRadius.pill))
-            .background(color.copy(alpha = 0.15f))
-            .padding(start = MeeshySpacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(text = name, color = color, fontWeight = FontWeight.SemiBold)
-        IconButton(onClick = onRemove, modifier = Modifier.semantics { contentDescription = removeLabel }) {
-            Icon(MeeshyIcons.Close, contentDescription = null, tint = color.copy(alpha = 0.8f), modifier = Modifier.size(14.dp))
-        }
-    }
-}
-
-@Composable
-private fun CategoryLine(text: String, icon: ImageVector, color: Color, spoken: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(MeeshyRadius.sm))
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics(mergeDescendants = true) { contentDescription = spoken }
-            .padding(vertical = MeeshySpacing.sm, horizontal = MeeshySpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-    ) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
-        Text(text = text, color = MeeshyTheme.tokens.textPrimary)
-    }
-}
-
-/** « Étiquettes » (iOS `TagInputField`) : les étiquettes posées, la saisie et les étiquettes déjà connues. */
-@OptIn(ExperimentalLayoutApi::class)
+/** « Étiquettes » (iOS `TagInputField`) : champ partagé de `:sdk-ui`, habillé de son libellé de rangée. */
 @Composable
 internal fun ConversationTagsField(
     tags: List<String>,
@@ -234,58 +187,19 @@ internal fun ConversationTagsField(
     onAdd: (String) -> Unit,
     onRemove: (String) -> Unit,
 ) {
-    var entry by remember { mutableStateOf("") }
-    val submit = {
-        if (entry.isNotBlank()) onAdd(entry)
-        entry = ""
-    }
+    val context = LocalContext.current
+    val labels = TagInputLabels(
+        placeholder = stringResource(R.string.conversation_options_tag_placeholder),
+        clearInput = stringResource(R.string.conversation_options_custom_name_clear),
+        remove = { context.getString(R.string.conversation_options_tag_remove, it) },
+        add = { context.getString(R.string.conversation_options_tag_add, it) },
+        create = { context.getString(R.string.conversation_options_tag_add, it) },
+    )
     Column(
         modifier = Modifier.padding(horizontal = MeeshySpacing.mdPlus, vertical = MeeshySpacing.smPlus),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
     ) {
         FieldLabel(MeeshyIcons.TagFilled, stringResource(R.string.conversation_options_tags), color)
-        if (tags.isNotEmpty()) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-            ) {
-                tags.forEach { tag ->
-                    val removeLabel = stringResource(R.string.conversation_options_tag_remove, tag)
-                    InputChip(
-                        selected = false,
-                        onClick = { onRemove(tag) },
-                        label = { Text(tag) },
-                        trailingIcon = { Icon(MeeshyIcons.Close, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                        modifier = Modifier.semantics { contentDescription = removeLabel },
-                    )
-                }
-            }
-        }
-        val addLabel = stringResource(R.string.conversation_options_tag_add, entry.trim())
-        OptionsTextField(
-            value = entry,
-            onValueChange = { entry = it },
-            placeholder = stringResource(R.string.conversation_options_tag_placeholder),
-            onDone = submit,
-            trailing = if (entry.isBlank()) {
-                null
-            } else {
-                {
-                    IconButton(onClick = submit, modifier = Modifier.semantics { contentDescription = addLabel }) {
-                        Icon(MeeshyIcons.AddCircleFilled, contentDescription = null, tint = color)
-                    }
-                }
-            },
-        )
-        val suggestions = ConversationTagsEditor.suggestions(knownTags, tags, entry).take(MAX_SUGGESTIONS)
-        if (suggestions.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-                suggestions.forEach { tag ->
-                    SuggestionChip(onClick = { onAdd(tag); entry = "" }, label = { Text(tag) })
-                }
-            }
-        }
+        TagInputField(tags, knownTags, color, labels, onAdd, onRemove)
     }
 }
-
-private const val MAX_SUGGESTIONS = 8

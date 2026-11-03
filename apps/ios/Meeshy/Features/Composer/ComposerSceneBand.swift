@@ -110,7 +110,7 @@ nonisolated enum ComposerSceneBand: String, CaseIterable, Equatable, Sendable {
 nonisolated enum ComposerLowZone: Equatable {
 
     /// Les propriétés de l'objet édité (#13957, R6) : elles passent avant
-    /// tout, la scène se réduisant au-dessus d'elles.
+    /// tout, posées par-dessus la scène (#15226).
     case properties
     /// Un outil est déplié : ses options prennent le bas.
     case toolOptions

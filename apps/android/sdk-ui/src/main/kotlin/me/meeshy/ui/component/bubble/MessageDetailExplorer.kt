@@ -2,6 +2,7 @@ package me.meeshy.ui.component.bubble
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.LanguageInfo
 
@@ -26,7 +27,18 @@ public data class LanguageExplorerRow(
     val isTranslating: Boolean,
     val isSelected: Boolean,
     val canRetranslate: Boolean,
+    /** Pourquoi la dernière demande a échoué, ou `null` : la ligne le dit au lieu de rester muette. */
+    val failure: RowFailure? = null,
 )
+
+/** Ce que la ligne d'une langue dit d'une demande qui n'a rien rendu. */
+public enum class RowFailure {
+    /** Chiffrée de bout en bout : la traduction passe par l'appareil, jamais par le serveur. */
+    SERVER_REFUSED,
+
+    /** La demande est partie et n'a rien rendu. */
+    FAILED,
+}
 
 /**
  * The projected state of a message's language explorer: the original-language
@@ -89,6 +101,7 @@ public object MessageDetailExplorer {
         candidates: List<LanguageInfo> = LanguageData.allLanguagesCommonFirst,
         translatingCodes: Set<String> = emptySet(),
         selectedCode: String? = null,
+        failures: Map<String, RowFailure> = emptyMap(),
         previewLength: Int = 60,
     ): MessageLanguageExplorer {
         val original = originalLanguage.normalized()
@@ -96,7 +109,7 @@ public object MessageDetailExplorer {
         val inFlight = translatingCodes.mapNotNull { it.normalized() }.toSet()
 
         val ordered = LinkedHashSet<String>()
-        for (language in LanguageResolver.preferredContentLanguages(preferences)) {
+        for (language in ReaderPrism.resolve(preferences)) {
             val code = language.normalized() ?: continue
             if (code != original) ordered.add(code)
         }
@@ -118,6 +131,7 @@ public object MessageDetailExplorer {
                 isTranslating = isTranslating,
                 isSelected = code == selected,
                 canRetranslate = translated != null && !isTranslating,
+                failure = failures[code].takeIf { !isTranslating && translated == null },
             )
         }
 

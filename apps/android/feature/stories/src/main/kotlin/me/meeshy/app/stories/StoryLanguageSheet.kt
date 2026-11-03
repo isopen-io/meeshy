@@ -59,6 +59,7 @@ internal fun StoryLanguageSheet(
     explorer: StoryLanguageExplorer,
     onSelectLanguage: (String) -> Unit,
     onTranslate: (String) -> Unit,
+    onRetranslate: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(
@@ -108,7 +109,7 @@ internal fun StoryLanguageSheet(
                                 onTranslate(row.code)
                             }
                         },
-                        onRetranslate = { onTranslate(row.code) },
+                        onRetranslate = { onRetranslate(row.code) },
                     )
                 }
             }

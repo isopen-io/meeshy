@@ -22,9 +22,6 @@ import me.meeshy.sdk.model.NotificationFilterCategory
 import me.meeshy.sdk.model.NotificationQuickAction
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationRepository
-import me.meeshy.sdk.notification.observeNotificationSync
-import me.meeshy.sdk.socket.MessageSocketManager
-import me.meeshy.sdk.sync.SyncSeqTracker
 import javax.inject.Inject
 
 data class NotificationsUiState(
@@ -68,15 +65,14 @@ sealed interface NotificationsEvent {
  * Cache-first (ARCHITECTURE.md §4, feature-parity §M): [NotificationRepository.notificationsStream]
  * and [NotificationRepository.unreadCountStream] are the single source of truth — this ViewModel
  * only projects them into [NotificationsUiState], it never holds a second copy of the list.
- * `markAsRead`/`markAllRead`/a live socket arrival ([observeRealtime]) all mutate the SAME
+ * `markAsRead`/`markAllRead` and the app-level `NotificationIngestPipeline` (live arrivals) all mutate the SAME
  * repository-owned cache, so every consumer of the stream (a pull-to-refresh, another screen)
- * stays in sync without a manual merge here.
+ * stays in sync without a manual merge here. Live arrivals and gap/reconnect resyncs are app-level
+ * (`NotificationIngestPipeline`, `NotificationGapResyncCoordinator`): this screen owns none of them.
  */
 @HiltViewModel
 class NotificationsViewModel @Inject constructor(
     private val notificationRepository: NotificationRepository,
-    private val messageSocketManager: MessageSocketManager,
-    private val syncSeqTracker: SyncSeqTracker,
     private val quickActionPerformer: NotificationQuickActionPerformer,
 ) : ViewModel() {
 
@@ -90,8 +86,6 @@ class NotificationsViewModel @Inject constructor(
         observeNotifications()
         observeUnreadCount()
         observeHasMore()
-        observeRealtime()
-        observeSyncGaps()
     }
 
     private fun observeNotifications() {
@@ -123,52 +117,6 @@ class NotificationsViewModel @Inject constructor(
         viewModelScope.launch {
             notificationRepository.hasMoreStream.collect { hasMore ->
                 _state.update { it.copy(hasMore = hasMore) }
-            }
-        }
-    }
-
-    /**
-     * A `notification:new` arriving while this screen is alive/backing the badge, plus the four
-     * lifecycle events a notification emits afterward (`notification:read`,
-     * `notification:read-bulk`, `notification:deleted`, `notification:deleted-bulk`) and the
-     * server-authoritative `notification:counts` resync (issue notif-sync) — all applied to the
-     * SAME repository-owned cache via [observeNotificationSync]. That binding is ALSO run from an
-     * app-scoped ViewModel ([me.meeshy.app.navigation.ChromeViewModel]): this screen's own copy
-     * only covers the SharedFlow events (`replay = 0`) that happen to arrive while it is open —
-     * every apply here is idempotent, so running it from both scopes at once is safe, never a
-     * double count. Mirrors iOS/web's equivalent socket handlers
-     * (`notification-socketio.singleton.ts`).
-     */
-    private fun observeRealtime() {
-        viewModelScope.observeNotificationSync(notificationRepository, messageSocketManager)
-    }
-
-    /**
-     * SyncEngine — décision APP-SIDE sur le hook que le SDK expose
-     * ([SyncSeqTracker.gapDetected], alimenté par `MessageSocketManager`) : un trou
-     * de séquence prouve que des `notification:new` ne sont jamais arrivés (socket
-     * coupée, event perdu), et rien d'autre ne les rattraperait tant que le cache
-     * reste frais. Miroir du coordinateur iOS `NotificationGapResyncCoordinator`.
-     *
-     * [NotificationRepository.refresh] est IDEMPOTENT (il réécrit la vérité serveur,
-     * déduplication par id inhérente), donc sans doublon vis-à-vis de la
-     * persistance temps réel de [observeRealtime].
-     *
-     * Pas de débounce, contrairement à iOS : un trou avance le curseur, donc une
-     * rafale d'events n'en produit qu'UN. L'échec est absorbé — laisser
-     * l'exception remonter tuerait le collecteur, et avec lui toute resync
-     * ultérieure pour la durée de vie du ViewModel.
-     */
-    private fun observeSyncGaps() {
-        viewModelScope.launch {
-            syncSeqTracker.gapDetected.collect {
-                try {
-                    notificationRepository.refresh()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    _state.update { it.failed(e.message) }
-                }
             }
         }
     }

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lot photo-d-entite-recadrage-et-compression : libellés TalkBack propres à Android. -->
+    <string name="photo_crop_editor_avatar">قصّ صورة الملف الشخصي. اقرص للتكبير واسحب للتحريك.</string>
+    <string name="photo_crop_editor_banner">قصّ صورة الغلاف. اقرص للتكبير واسحب للتحريك.</string>
+    <string name="photo_crop_zoom_in">تكبير</string>
+    <string name="photo_crop_zoom_out">تصغير</string>
+    <string name="photo_crop_move_left">تحريك لليسار</string>
+    <string name="photo_crop_move_right">تحريك لليمين</string>
+    <string name="photo_crop_move_up">تحريك للأعلى</string>
+    <string name="photo_crop_move_down">تحريك للأسفل</string>
+</resources>

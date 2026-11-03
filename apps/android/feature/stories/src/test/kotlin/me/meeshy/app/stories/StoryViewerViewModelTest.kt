@@ -322,6 +322,18 @@ class StoryViewerViewModelTest {
     // `posts/{id}/view` endpoint the impression already uses, carrying `duration`. ---
 
     @Test
+    fun `clearing the viewer leaves the post room and closes the dwell`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        dwellClock.now = 1000
+
+        StoryViewerViewModel::class.java.getDeclaredMethod("onCleared").apply { isAccessible = true }.invoke(vm)
+
+        coVerify(exactly = 1) { socialSocket.leavePostRoom("a1") }
+        coVerify(exactly = 1) { postRepository.viewPost("a1", 1000) }
+    }
+
+    @Test
     fun `advancing past the dwell floor records the left slide's measured watch-time`() = runTest {
         dwellClock.now = 0
         val vm = viewModel(startUserId = "a", posts = twoAuthors()) // begins a1's dwell at 0
@@ -1979,5 +1991,51 @@ class StoryViewerViewModelTest {
 
         // …and it is actionable: the overlay repaints in the tapped language.
         assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hallo")
+    }
+
+    // --- Suppression optimiste et retrait par la modération ---
+
+    @Test
+    fun `deleting the current story drops it at once and keeps the viewer on the surviving slide`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors()) // at b1, group b = [b1, b2]
+        coEvery { storyRepository.delete("b1") } returns NetworkResult.Success(Unit)
+
+        vm.deleteCurrentStory()
+
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("b2")
+        assertThat(vm.state.value.isDismissed).isFalse()
+        coVerify(exactly = 1) { storyRepository.delete("b1") }
+    }
+
+    @Test
+    fun `a refused deletion puts the story back where it was`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+        coEvery { storyRepository.delete("b1") } returns NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "nope"))
+
+        vm.deleteCurrentStory()
+
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("b1", "b2").inOrder()
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+    }
+
+    @Test
+    fun `a removal without a valid reason sends nothing`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+
+        vm.removeCurrentStory("  ab ")
+
+        coVerify(exactly = 0) { storyRepository.delete(any(), any()) }
+        assertThat(vm.state.value.slides).hasSize(2)
+    }
+
+    @Test
+    fun `a removal carries its trimmed reason`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+        coEvery { storyRepository.delete("b1", "contenu illicite") } returns NetworkResult.Success(Unit)
+
+        vm.removeCurrentStory("  contenu illicite ")
+
+        coVerify(exactly = 1) { storyRepository.delete("b1", "contenu illicite") }
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("b2")
     }
 }

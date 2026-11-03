@@ -2,6 +2,9 @@ package me.meeshy.sdk.socket
 
 import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -148,6 +151,18 @@ class CallSignalManager internal constructor(
     private val _participantArrivals = SocketInboundRoute.subject<CallParticipantArrival>()
     val participantArrivals: SharedFlow<CallParticipantArrival> = _participantArrivals.exposed()
 
+    private val _lastParticipantArrival = MutableStateFlow<CallParticipantArrival?>(null)
+
+    /**
+     * Le dernier participant arrivé, mémorisé pour les abonnés tardifs (iOS `lastParticipantJoined`) : un écran qui
+     * s'abonne après la trame le lit ici ; [participantArrivals] reste chaud, sans rejeu. Le consommateur filtre par `callId`.
+     */
+    val lastParticipantArrival: StateFlow<CallParticipantArrival?> = _lastParticipantArrival.asStateFlow()
+
+    /** La requête accessoire récente à laquelle ce `call:error` répond (fenêtre de [CallAccessoryRequestLedger]), sinon `false`. */
+    fun accessoryRequestAnswered(error: CallErrorSignal): Boolean =
+        social.accessoryRequests.requestAnsweredBy(error.callId) != null
+
     private val _participantLeft = SocketInboundRoute.subject<CallParticipantLeftPayload>()
     val participantLeft: SharedFlow<CallParticipantLeftPayload> = _participantLeft.exposed()
 
@@ -277,13 +292,30 @@ class CallSignalManager internal constructor(
             JSONObject().put("callId", callId).apply { reason?.let { put("reason", it) } },
         )
 
+    /** `true` quand la socket est ouverte : sinon un emit est jeté et la fin d'appel doit être différée. */
+    val isSocketConnected: Boolean get() = socketManager.isConnected
+
+    /**
+     * Comme [emitEnd], avec l'accusé de la passerelle : [onResult] reçoit `true` quand elle a pris la fin en compte,
+     * `false` sur un refus, une session finie ou un accusé absent. Sert à la réconciliation des fins différées.
+     */
+    fun emitEndAcked(callId: String, reason: String? = null, onResult: (Boolean) -> Unit) =
+        socketManager.emit(
+            SocketEventNames.CALL_END,
+            JSONObject().put("callId", callId).apply { reason?.let { put("reason", it) } },
+        ) { args -> onResult((args.firstOrNull() as? JSONObject)?.optBoolean("success", false) == true) }
+
     /** Signal the peer that the local microphone was muted/unmuted. */
-    fun emitToggleAudio(callId: String, enabled: Boolean) =
+    fun emitToggleAudio(callId: String, enabled: Boolean) {
+        accessory(CallAccessoryRequest.MediaToggle, callId)
         socketManager.emit(SocketEventNames.CALL_TOGGLE_AUDIO, JSONObject().put("callId", callId).put("enabled", enabled))
+    }
 
     /** Signal the peer that the local camera was turned off/on. */
-    fun emitToggleVideo(callId: String, enabled: Boolean) =
+    fun emitToggleVideo(callId: String, enabled: Boolean) {
+        accessory(CallAccessoryRequest.MediaToggle, callId)
         socketManager.emit(SocketEventNames.CALL_TOGGLE_VIDEO, JSONObject().put("callId", callId).put("enabled", enabled))
+    }
 
     /** Forward an SDP/ICE [signal] to the peer through the gateway relay. */
     fun emitSignal(callId: String, signal: JSONObject) =
@@ -337,7 +369,10 @@ class CallSignalManager internal constructor(
      * with `call:ice-servers-refreshed`. Fired on the TURN-credential-TTL refresh
      * timer and on ICE-restart. Parity with iOS `emitRequestIceServers`.
      */
-    fun emitRequestIceServers(callId: String) = emit(SocketEventNames.CALL_REQUEST_ICE_SERVERS, callId)
+    fun emitRequestIceServers(callId: String) {
+        accessory(CallAccessoryRequest.TurnCredentials, callId)
+        emit(SocketEventNames.CALL_REQUEST_ICE_SERVERS, callId)
+    }
 
     /**
      * Le device passe en arrière-plan pendant CET appel — le gateway étend la
@@ -386,7 +421,10 @@ class CallSignalManager internal constructor(
      * sans lui, un callee Android qui (re)connecte mid-ring laisse l'appel
      * sonner dans le vide jusqu'au missed.
      */
-    fun emitCheckActive() = socketManager.emit(SocketEventNames.CALL_CHECK_ACTIVE, JSONObject())
+    fun emitCheckActive() {
+        accessory(CallAccessoryRequest.StateQuery, null)
+        socketManager.emit(SocketEventNames.CALL_CHECK_ACTIVE, JSONObject())
+    }
 
     /**
      * Télémétrie de cycle de vie émise UNE fois à la fin de l'appel (parité iOS
@@ -440,6 +478,9 @@ class CallSignalManager internal constructor(
             JSONObject().put("callId", callId).put("participantId", participantId),
         )
 
+    private fun accessory(request: CallAccessoryRequest, callId: String?) =
+        social.accessoryRequests.record(request, callId)
+
     private fun emit(event: String, callId: String) =
         socketManager.emit(event, JSONObject().put("callId", callId))
 
@@ -466,7 +507,10 @@ class CallSignalManager internal constructor(
             CallSignalMapper.iceServersRefreshed(raw)?.let(_iceServersRefreshed::emitArrived)
         }
         if (event == PARTICIPANT_JOINED_EVENT) {
-            CallSignalMapper.participantArrival(raw)?.let(_participantArrivals::emitArrived)
+            CallSignalMapper.participantArrival(raw)?.let { arrival ->
+                _lastParticipantArrival.value = arrival
+                _participantArrivals.emitArrived(arrival)
+            }
         }
         if (event == PARTICIPANT_LEFT_EVENT) {
             CallSignalMapper.participantLeft(raw)?.let(_participantLeft::emitArrived)

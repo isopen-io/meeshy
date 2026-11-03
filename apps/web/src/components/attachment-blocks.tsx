@@ -9,6 +9,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import { reportAttachmentStatus } from '@/lib/api/attachments';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
+import { localAwarePreload } from '@/lib/media/local-media';
 import { useLoudnessLevel } from '@/lib/media/loudness-level';
 import { RecentMediaScopeContext, messagesRecentMediaScope, useRememberSeenAttachment } from '@/lib/media/recent-media-scope';
 import { coqueCourante } from '@/lib/native-shell';
@@ -240,8 +241,9 @@ function VoiceAttachment({
   const activeSegment = useKaraokeIndex(playingElement, segments, status === 'playing');
 
   const waves = waveformOf(attachment);
-  // `duration` voyage en MILLISECONDES sur la charge du dépôt.
-  const seconds = Math.round((attachment.duration ?? 0) / 1000);
+  // `duration` voyage en MILLISECONDES sur la charge du dépôt ; un audio pas
+  // encore servi (#15111) prend celle que l'élément lit sur ses octets locaux.
+  const seconds = attachment.duration !== undefined ? Math.round(attachment.duration / 1000) : Math.round(duration);
   const servedFraction =
     consumption?.listenedComplete === true
       ? 1
@@ -325,7 +327,7 @@ function VoiceAttachment({
       <audio
         key={`${track.url}${loudness.remountKey}`}
         ref={bindAudio}
-        preload="none"
+        preload={localAwarePreload(trackSrc, 'none')}
         data-np-attachment={attachment.id}
         data-track-language={track.language}
         className="hidden"

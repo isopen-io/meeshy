@@ -20,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -60,6 +61,7 @@ import me.meeshy.ui.component.composer.SlideRailGeometry
 import me.meeshy.sdk.model.composer.SlideThumbEditAffordance
 import me.meeshy.ui.component.composer.SlideRailTile
 import me.meeshy.ui.component.composer.rememberConfirmedSlideDeletion
+import me.meeshy.ui.component.retouch.LocalComposerLookAuthor
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
@@ -103,6 +105,7 @@ internal fun ComposerSlideRail(
     var dragPx by remember { mutableFloatStateOf(0f) }
     var lastTarget by remember { mutableIntStateOf(NO_DRAG) }
     val requestRemoval = rememberConfirmedSlideDeletion(onRemove)
+    SceneThumbnailLifecycle(deck)
     var menuFor by remember { mutableStateOf<String?>(null) }
     val target = if (dragFrom == NO_DRAG) NO_DRAG else SlideReorderResolver.targetIndex(dragFrom, dragPx * if (rtl) -1f else 1f, slotPx, deck.size)
     LaunchedEffect(target) {
@@ -153,6 +156,29 @@ internal fun ComposerSlideRail(
 
 private const val NO_DRAG = -1
 
+/**
+ * The store's lifecycle (iOS `SceneThumbnailStore`): the system taking memory back empties it, and removing a scene drops the
+ * pictures it painted — the deck shrinking is the only moment a whole scene's tiles are certainly dead.
+ */
+@Composable
+private fun SceneThumbnailLifecycle(deck: StorySlideDeck) {
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        val callbacks = object : android.content.ComponentCallbacks2 {
+            override fun onTrimMemory(level: Int) { if (SceneThumbnailPressure.purges(level)) SlideThumbnailStore.shared.clear() }
+            override fun onConfigurationChanged(newConfig: android.content.res.Configuration) = Unit
+            override fun onLowMemory() = SlideThumbnailStore.shared.clear()
+        }
+        context.applicationContext.registerComponentCallbacks(callbacks)
+        onDispose { context.applicationContext.unregisterComponentCallbacks(callbacks) }
+    }
+    var lastCount by remember { mutableIntStateOf(deck.size) }
+    LaunchedEffect(deck.size) {
+        if (deck.size < lastCount) SlideThumbnailStore.shared.clear()
+        lastCount = deck.size
+    }
+}
+
 /** How far a tile steps aside while [dragFrom] is carried toward [target]: one slot, toward the gap the dragged tile leaves. */
 internal fun slotShift(index: Int, dragFrom: Int, target: Int, slotPx: Float, rtl: Boolean): Float {
     if (dragFrom == NO_DRAG || index == dragFrom) return 0f
@@ -184,6 +210,7 @@ private fun rememberTileSpec(
                 heightPx = SlideRailGeometry.TileHeight.roundToPx(),
                 canvasWidthPx = canvasWidthPx,
                 placedMedia = placed,
+                backgroundLook = background?.look,
             )
         }
     }
@@ -287,6 +314,7 @@ private fun SlideTile(
 @Composable
 private fun SlideThumbnail(spec: SlideThumbnailSpec, backgroundModel: Any?, placedModels: List<ThumbnailPlaced>, modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val author = LocalComposerLookAuthor.current
     var shown by remember { mutableStateOf<Bitmap?>(SlideThumbnailStore.shared.get(spec)) }
     LaunchedEffect(spec) {
         SlideThumbnailStore.shared.get(spec)?.let { shown = it; return@LaunchedEffect }
@@ -294,8 +322,10 @@ private fun SlideThumbnail(spec: SlideThumbnailSpec, backgroundModel: Any?, plac
             delay(SlideThumbnailRefresh.DEBOUNCE_MILLIS)
         }
         val painted = withContext(Dispatchers.Default) {
-            val image = backgroundModel?.let { loadThumbnailBackground(context, it, spec) }
-            val placed = placedModels.mapNotNull { media -> loadThumbnailPlaced(context, media.model, spec)?.let { media.key to it } }.toMap()
+            val image = backgroundModel?.let { loadThumbnailBackground(context, it, spec) }?.let { SlideThumbnailLook.painted(it, spec.backgroundLook, author) }
+            val placed = placedModels.mapNotNull { media ->
+                loadThumbnailPlaced(context, media.model, spec)?.let { media.key to SlideThumbnailLook.painted(it, media.look, author) }
+            }.toMap()
             SlideThumbnailRenderer.render(spec, image, placed).also { bitmap ->
                 if ((backgroundModel == null || image != null) && placed.size == placedModels.size) SlideThumbnailStore.shared.put(spec, bitmap)
             }

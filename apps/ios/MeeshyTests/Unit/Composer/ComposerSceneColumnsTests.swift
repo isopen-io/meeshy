@@ -201,30 +201,50 @@ final class ComposerSceneColumnsTests: XCTestCase {
                                                     from: .init(opening: nil, closing: nil)))
     }
 
-    // MARK: - La scène REMONTE, jamais ne descend (#8712)
+    // MARK: - La scène garde sa taille sous ce qui se pose par-dessus (#15226)
 
-    func test_bottomInset_panneauOuvert_remonteDeSaHauteur() {
-        XCTAssertEqual(ComposerSceneLift.bottomInset(panelIsOpen: true, panelHeight: 96), 96)
+    func test_overlaysScene_reglagesDOutilEtBande_sePosentParDessus() {
+        XCTAssertTrue(ComposerSceneLift.overlaysScene(lowZone: .toolOptions, bottomPanelIsOpen: false,
+                                                      drawingBarIsShown: false),
+                      "les réglages d'un outil se posent sur la scène, qui garde sa taille")
+        XCTAssertTrue(ComposerSceneLift.overlaysScene(lowZone: .band(.frame), bottomPanelIsOpen: true,
+                                                      drawingBarIsShown: false),
+                      "le cadrage du fond aussi, sur tout écran")
+        XCTAssertTrue(ComposerSceneLift.overlaysScene(lowZone: .band(.palette), bottomPanelIsOpen: true,
+                                                      drawingBarIsShown: false))
     }
 
-    func test_bottomInset_auRepos_garderSaMarge() {
-        XCTAssertEqual(ComposerSceneLift.bottomInset(panelIsOpen: false, panelHeight: 96),
-                       ComposerSceneLift.restingInset)
+    func test_overlaysScene_friseEffetsEtDessin_sePosentParDessus() {
+        XCTAssertTrue(ComposerSceneLift.overlaysScene(lowZone: .nothing, bottomPanelIsOpen: true,
+                                                      drawingBarIsShown: false),
+                      "la frise et le carrousel d'effets ne réduisent pas la scène")
+        XCTAssertTrue(ComposerSceneLift.overlaysScene(lowZone: .nothing, bottomPanelIsOpen: false,
+                                                      drawingBarIsShown: true),
+                      "la barre du dessin se pose sur la scène")
+        XCTAssertFalse(ComposerSceneLift.overlaysScene(lowZone: .nothing, bottomPanelIsOpen: false,
+                                                       drawingBarIsShown: false), "au repos, rien ne se pose")
     }
 
-    func test_panelIsOpen_reglagesDeLOutilOuBande_surToutEcran() {
-        XCTAssertTrue(ComposerSceneLift.panelIsOpen(lowZone: .toolOptions, toolOptionsServed: true))
-        XCTAssertFalse(ComposerSceneLift.panelIsOpen(lowZone: .toolOptions, toolOptionsServed: false),
-                       "un outil sans panneau (le texte) ne pousse rien")
-        XCTAssertTrue(ComposerSceneLift.panelIsOpen(lowZone: .band(.frame), toolOptionsServed: false),
-                      "la bande se pose sous la scène sur tout écran, grand écran compris (#13839, L6) : elle la réduit")
-        XCTAssertFalse(ComposerSceneLift.panelIsOpen(lowZone: .nothing, toolOptionsServed: true))
+    func test_overlaysScene_lesProprietesDUnObjet_sePosentParDessus() {
+        XCTAssertTrue(ComposerSceneLift.overlaysScene(lowZone: .properties, bottomPanelIsOpen: false,
+                                                      drawingBarIsShown: false),
+                      "le cadrage, l'apparition ou la frise d'un objet ne réduisent pas la scène")
     }
 
-    func test_bottomInset_neDescendJamaisSousLeRepos() {
-        for hauteur in [-20.0, 0, 1, 3, 250] as [CGFloat] {
-            XCTAssertGreaterThanOrEqual(ComposerSceneLift.bottomInset(panelIsOpen: true, panelHeight: hauteur),
-                                        ComposerSceneLift.restingInset)
-        }
+    func test_floorTop_sousUnEtagePoseParDessus_laSceneLitLeHautDuRepos() {
+        XCTAssertEqual(ComposerSceneLift.floorTop(measured: 520, rest: 760, overlaid: true), 760)
+        XCTAssertEqual(ComposerSceneLift.floorTop(measured: 520, rest: 760, overlaid: false), 520,
+                       "sous une feuille, la scène remonte au-dessus de son haut")
+        XCTAssertEqual(ComposerSceneLift.floorTop(measured: 760, rest: nil, overlaid: true), 760,
+                       "sans repos relevé, la mesure en direct")
+        XCTAssertNil(ComposerSceneLift.floorTop(measured: nil, rest: nil, overlaid: false))
+    }
+
+    func test_restFloorTop_neSeReleveQuAuRepos() {
+        XCTAssertEqual(ComposerSceneLift.restFloorTop(measured: 760, isRest: true, current: nil), 760)
+        XCTAssertEqual(ComposerSceneLift.restFloorTop(measured: 520, isRest: false, current: 760), 760,
+                       "une mesure prise sous une bande ne remplace pas le repos")
+        XCTAssertEqual(ComposerSceneLift.restFloorTop(measured: 700, isRest: true, current: 760), 700,
+                       "une rotation au repos relève le nouveau haut")
     }
 }

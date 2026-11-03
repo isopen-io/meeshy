@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 /// **Les mesures d'un point d'entrée de story, en GRAND (#10925).**
@@ -30,4 +31,28 @@ enum StoryEntryMetrics {
     static let paddingHorizontal: CGFloat = MeeshySpacing.lg
     static let paddingVertical: CGFloat = MeeshySpacing.sm
     static let height: CGFloat = 120
+
+    /// #15157 — la place que l'entrée « Moi » réserve pour que son cadre illustré se montre à sa
+    /// taille, l'avatar intact : le débordement latéral tient dans l'espacement entre entrées (sans
+    /// toucher l'anneau du voisin), le débordement vertical écarte le libellé et grandit la bande.
+    struct DecorReserve: Equatable {
+        let room: CGFloat
+        let top: CGFloat
+        let bottom: CGFloat
+        let side: CGFloat
+        static let none = DecorReserve(room: 0, top: 0, bottom: 0, side: 0)
+    }
+
+    static func decorReserve(_ design: AvatarRingDesign?) -> DecorReserve {
+        let room = AvatarRingLayout.fullSpill(design, box: avatar)
+        guard room > 0 else { return .none }
+        let halo = (ring - avatar) / 2
+        let lateral = (labelWidth - avatar) / 2 + itemSpacing + (labelWidth - ring) / 2
+        return DecorReserve(
+            room: room,
+            top: max(0, room - halo - paddingVertical),
+            bottom: max(0, room - halo - labelSpacing),
+            side: max(0, room - lateral)
+        )
+    }
 }

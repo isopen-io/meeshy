@@ -10,6 +10,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.CompositionLocalProvider
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import java.time.ZoneId
 import java.util.Locale
@@ -221,7 +224,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     FileViewerHost(fileViewer, accentColor, host.navigation.onOpenConversation) { fileViewer = null }
     FileAttachmentDownloadOverlay(
         download = state.fileDownload,
-        onOpenInApp = { fileViewer = it.copy(contactScope = state.messages.contactScopeOf(it.attachmentId, contactGate, hubContactSeeds)) },
+        onOpenInApp = { fileViewer = it.copy(contactScope = state.messages.contactScopeOf(it.attachmentId, contactGate, hubContactSeeds)).guardedBy(state.messages) },
         onDismiss = actions.dismissFileDownload,
         onRetry = { actions.retryFileDownload() },
     )
@@ -255,7 +258,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             }
             // Moderator+ viewers of a group get the conversation-settings sheet (write-role /
             // announcement / slow-mode); the share link is the « Partager » button of the Options.
-            if (state.slowModeExempt) {
+            if (host.capabilities?.rename == true) {
                 add(ConversationInfoEntry(MeeshyIcons.Tune, stringResource(R.string.conversation_settings_title), openFrom { sheets.settings = true }))
             }
         }
@@ -310,10 +313,14 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 }
             },
         )
+        val infoViewModel: ConversationInfoViewModel = hiltViewModel(key = "conversation-info")
+        LaunchedEffect(state.conversationId) { if (state.conversationId.isNotBlank()) infoViewModel.start(state.conversationId) }
+        val hero by infoViewModel.hero.collectAsStateWithLifecycle()
         ConversationInfoSheet(
+            hero = hero,
             title = infoTitle,
             subtitle = if (state.isGroup && state.memberCount > 0) {
-                stringResource(R.string.chat_header_members, state.memberCount)
+                pluralStringResource(R.plurals.chat_header_members, state.memberCount, state.memberCount)
             } else {
                 null
             },
@@ -506,23 +513,6 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 pins = state.pinnedMessages,
                 accentColor = accentColor,
                 onTap = actions.onPinnedMessageTap,
-                modifier = Modifier.navigationBarsPadding(),
-            )
-        }
-    }
-
-    if (state.isEffectsPickerOpen) {
-        ModalBottomSheet(
-            onDismissRequest = actions.dismissEffectsPicker,
-            containerColor = MeeshyTheme.tokens.backgroundPrimary,
-        ) {
-            EffectsPickerSheet(
-                effects = state.pendingEffects,
-                accentColor = accentColor,
-                onToggle = actions.toggleEffect,
-                onSelectDuration = actions.selectEphemeralDuration,
-                onClear = actions.clearEffects,
-                onDone = actions.dismissEffectsPicker,
                 modifier = Modifier.navigationBarsPadding(),
             )
         }

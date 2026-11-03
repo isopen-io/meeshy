@@ -41,7 +41,11 @@ import me.meeshy.feature.reels.R
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
+import me.meeshy.sdk.chrome.FloatingButtonPositionStore
+import me.meeshy.sdk.chrome.InMemoryFloatingButtonPositionStore
+import me.meeshy.sdk.playback.PlaybackCoordinator
 import javax.inject.Inject
+import me.meeshy.sdk.call.CallActivityGate
 
 data class ReelsUiState(
     val reels: List<ReelPresentation> = emptyList(),
@@ -69,7 +73,24 @@ class ReelsViewModel @Inject constructor(
     private val privacyPreferencesStore: PrivacyPreferencesStore,
     private val reportRepository: ReportRepository,
     private val emojiUsageStore: EmojiUsageStore = InMemoryEmojiUsageStore(),
+    private val playbackCoordinator: PlaybackCoordinator = PlaybackCoordinator(),
+    floatingButtonPositions: FloatingButtonPositionStore = InMemoryFloatingButtonPositionStore(),
+    callGate: CallActivityGate = CallActivityGate(),
 ) : ViewModel() {
+
+    /** Un appel est en cours : aucun réel ne démarre sous la voix, et la lecture reprend à sa fin. */
+    val isCallActive: StateFlow<Boolean> = callGate.isActiveFlow
+
+    /** Où le bouton Flux est rangé : le dévoilement des réels naît à son centre exact (iOS `feedButtonPosition`). */
+    val feedButtonStorage: StateFlow<String> = floatingButtonPositions.leftStorage
+
+    /**
+     * La fermeture coupe tout ce qui joue — vidéo partagée ET réel-audio (iOS `SharedAVPlayerManager.pause()` +
+     * `PlaybackCoordinator.stopAllAudio()`) : pendant le rétrécissement du disque, rien ne doit encore sonner.
+     */
+    fun stopAllMedia() {
+        playbackCoordinator.stopAll()
+    }
 
     /** Les émojis de la palette : les mêmes, dans le même ordre que messages et stories (récents d'abord). */
     val quickEmojis: StateFlow<List<String>> = emojiUsageStore.usage
@@ -504,10 +525,13 @@ class ReelsViewModel @Inject constructor(
         }
     }
 
-    /** Signalement direct, motif « inapproprié » comme sur iOS (`reportPost`). */
-    fun report(reelId: String) {
+    /** Un commentaire parti depuis la feuille : le compteur du rail gagne 1 aussitôt (iOS `onCommentSent`). */
+    fun commentSent(reelId: String) = updateReel(reelId) { it.copy(commentCount = it.commentCount + 1) }
+
+    /** Signalement : le motif choisi dans le dialogue, « inapproprié » par défaut comme sur iOS (`reportPost`). */
+    fun report(reelId: String, reason: ReportReason = ReportReason.INAPPROPRIATE) {
         viewModelScope.launch {
-            when (reportRepository.reportPost(reelId, ReportReason.INAPPROPRIATE, details = null)) {
+            when (reportRepository.reportPost(reelId, reason, details = null)) {
                 is NetworkResult.Success -> toast(R.string.reels_toast_reported, FeedbackKind.Success)
                 else -> toast(R.string.reels_toast_report_failed, FeedbackKind.Error)
             }

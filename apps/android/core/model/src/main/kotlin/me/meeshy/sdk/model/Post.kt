@@ -167,6 +167,8 @@ data class ApiPostComment(
     val trackingLinks: List<TrackedLink>? = null,
     @Serializable(with = TolerantTrackingMetadataSerializer::class)
     val metadata: TrackingLinksMetadata? = null,
+    /** Le résumé de réactions `emoji -> compte` du commentaire ; absent d'une vieille passerelle ou d'une vieille ligne. */
+    val reactionSummary: Map<String, Int>? = null,
 )
 
 /** `[urlBrute: jeton]` d'un commentaire : la carte hissée d'abord, celle de `metadata` sinon. */

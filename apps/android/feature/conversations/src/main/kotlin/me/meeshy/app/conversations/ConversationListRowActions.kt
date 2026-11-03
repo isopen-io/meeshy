@@ -4,6 +4,8 @@ import androidx.work.WorkManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.category.CategoryRepository
@@ -15,6 +17,7 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.conversation.PreferenceWrite
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.conversationlist.ConversationPreviewIntent
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 
@@ -42,8 +45,25 @@ internal class ConversationListRowActions(
         workManager.enqueue(OutboxFlushWorker.buildRequest())
     }
 
-    /** Ids dont [loadPreviewMessages] est en vol : garde contre un double chargement. */
-    private val previewLoadingIds = mutableSetOf<String>()
+    /** Le chargeur de l'aperçu d'appui long ; ses états se projettent dans [ConversationListUiState]. */
+    private val previewLoader = ConversationPreviewLoader(
+        scope = scope,
+        source = RepositoryConversationPreviewSource(messageRepository),
+        prefs = { state.value.currentUser },
+        isLocked = { state.value.isLocked(it) },
+        ownerId = { state.value.currentUserId },
+    )
+
+    init {
+        scope.launch {
+            state.map { it.lockedConversationIds }.distinctUntilChanged().collect { previewLoader.dropLocked() }
+        }
+        scope.launch {
+            previewLoader.states.collect { states ->
+                state.update { it.copy(previewMessages = states.loadedMessages(), previewUnavailable = states.unavailableIds()) }
+            }
+        }
+    }
 
     fun togglePin(id: String) {
         val pinned = prefsOf(id)?.isPinned ?: false
@@ -207,22 +227,16 @@ internal class ConversationListRowActions(
     }
 
     /**
-     * Charge (une fois, cache seul) les derniers messages de l'apercu de [conversationId].
-     * Une conversation verrouillee ne lit rien : l'apercu est scelle (parite iOS
-     * `ConversationListPreviewLoader.load`, `guard !isLocked`).
+     * Précharge (cache seul, jamais le réseau) les derniers messages de l'aperçu de [conversationId].
+     * Une conversation verrouillée ne lit rien : l'aperçu est scellé (parité iOS `LoadIntent.prefetch`).
      */
-    fun loadPreviewMessages(conversationId: String) {
-        if (state.value.isLocked(conversationId)) return
-        if (state.value.previewMessages.containsKey(conversationId)) return
-        if (!previewLoadingIds.add(conversationId)) return
-        scope.launch {
-            try {
-                val recent = messageRepository.recentMessages(conversationId)
-                state.update { it.copy(previewMessages = it.previewMessages + (conversationId to recent)) }
-            } finally {
-                previewLoadingIds -= conversationId
-            }
-        }
+    fun loadPreviewMessages(conversationId: String) = runPreview(conversationId, ConversationPreviewIntent.Prefetch)
+
+    /** L'aperçu s'ouvre : ce qui est servi reste à l'écran et le réseau revalide en silence (iOS `LoadIntent.open`). */
+    fun openPreview(conversationId: String) = runPreview(conversationId, ConversationPreviewIntent.Open)
+
+    private fun runPreview(conversationId: String, intent: ConversationPreviewIntent) {
+        scope.launch { previewLoader.load(conversationId, intent) }
     }
 
     private fun prefsOf(id: String) =

@@ -20,6 +20,7 @@ internal class BubbleAttachments(
     val locations: List<BubbleLocation>,
     val audios: List<BubbleAudio>,
     val contactCards: List<BubbleContactCard>,
+    val videos: List<BubbleVideo> = emptyList(),
 )
 
 /**
@@ -74,6 +75,8 @@ internal object BubbleAttachmentBuilder {
                     thumbnailUrl = if (sealed) null else attachment.thumbnailUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
                     width = if (sealed) null else attachment.width,
                     height = if (sealed) null else attachment.height,
+                    mimeType = if (sealed) null else attachment.mimeType,
+                    pageCount = if (sealed) null else attachment.pageCount,
                 )
             }
         return BubbleAttachments(
@@ -92,6 +95,25 @@ internal object BubbleAttachmentBuilder {
             audios = visibleAttachments
                 .filter { it.isAudio }
                 .map { attachment -> buildAudio(attachment, preferences, mediaBaseUrl) },
+            videos = visibleAttachments
+                .filter { it.isVideo && !it.isContactCard && !PieceSealing.isSealed(it) }
+                .map { attachment ->
+                    BubbleVideo(
+                        attachmentId = attachment.id,
+                        url = attachment.fileUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                        thumbnailUrl = attachment.thumbnailUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                        width = attachment.width,
+                        height = attachment.height,
+                        durationSeconds = attachment.duration?.let { it / 1000 },
+                        sizeBytes = attachment.fileSize,
+                        isProtected = attachment.isProtected,
+                        isOnDevice = attachment.fileUrl.isLocalUri() || attachment.awaitsUpload,
+                        servedConsumption = attachment.currentUserConsumption,
+                        isBlurred = attachment.declaresBlur,
+                        isViewOnce = attachment.declaresViewOnce,
+                        viewOnceCount = attachment.viewOnceCount ?: 0,
+                    )
+                },
             contactCards = visibleAttachments
                 .filter { it.isContactCard }
                 .map { attachment ->
@@ -110,7 +132,7 @@ internal object BubbleAttachmentBuilder {
         mediaBaseUrl: String?,
         displayDensity: Float,
     ): List<BubbleImage> {
-        val imageAttachments = visibleAttachments.filter { it.isImage && it.fileUrl != null }
+        val imageAttachments = visibleAttachments.filter { it.isImage && it.paintableUrl != null }
         // La vignette d'une bulle est la plus petite variante qui COUVRE la case, jamais
         // l'original multi-Mo. Un message flouté ou à vue unique garde ses URL d'avant :
         // aucune URL de plus ne part pour un contenu protégé.
@@ -122,11 +144,12 @@ internal object BubbleAttachmentBuilder {
             !effects.has(MessageEffectFlags.BLURRED) &&
             !effects.has(MessageEffectFlags.VIEW_ONCE)
         return imageAttachments
-            .map { attachment ->
+            .mapNotNull { attachment ->
+                val paintable = attachment.paintableUrl ?: return@mapNotNull null
                 val lighterPreview = if (lighterPreviewsAllowed) attachment.lighterPreviewUrl(previewWidthPx) else null
                 BubbleImage(
                     attachmentId = attachment.id,
-                    url = resolveMediaUrl(attachment.fileUrl!!, mediaBaseUrl),
+                    url = resolveMediaUrl(paintable, mediaBaseUrl),
                     thumbnailUrl = (lighterPreview ?: attachment.thumbnailUrl)
                         ?.let { resolveMediaUrl(it, mediaBaseUrl) },
                     width = attachment.width,
@@ -134,9 +157,19 @@ internal object BubbleAttachmentBuilder {
                     alt = attachment.alt?.trim()?.ifBlank { null },
                     reactionLabel = if (lighterPreviewsAllowed && attachment.showsItsContent()) tileReactionLabel(attachment.reactionSummary) else null,
                     sizeBytes = attachment.fileSize?.toLong(),
+                    isBlurred = attachment.declaresBlur,
+                    isViewOnce = attachment.declaresViewOnce,
+                    viewOnceCount = attachment.viewOnceCount ?: 0,
                 )
             }
     }
+
+    /** Le flou déclaré par la pièce : son drapeau booléen OU le bit du bitfield (les canaux sont un OU). */
+    private val ApiMessageAttachment.declaresBlur: Boolean
+        get() = isBlurred == true || MessageEffectFlags.has(effectFlags ?: 0L, MessageEffectFlags.BLURRED)
+
+    private val ApiMessageAttachment.declaresViewOnce: Boolean
+        get() = isViewOnce == true || MessageEffectFlags.has(effectFlags ?: 0L, MessageEffectFlags.VIEW_ONCE)
 
     /** Une pièce à vue unique, floutée ou à effets ne montre rien d'elle, réactions comprises. */
     private fun ApiMessageAttachment.showsItsContent(): Boolean =
@@ -170,6 +203,7 @@ internal object BubbleAttachmentBuilder {
     ): BubbleAudio {
         val resolved = resolveTranscription(attachment, preferences)
         val translatedAudio = resolveTranslatedAudio(attachment, preferences)
+            ?.takeIf { track -> resolved == null || (resolved.isTranslated && resolved.language.equals(track.language, ignoreCase = true)) }
         val playableUrl = translatedAudio?.url ?: attachment.fileUrl
         val durationSeconds = translatedAudio?.durationMs?.let { it / 1000 }
             ?: attachment.duration?.let { it / 1000 }
@@ -217,40 +251,16 @@ internal object BubbleAttachmentBuilder {
         }
     }
 
-    private data class ResolvedAudio(
-        val url: String,
-        val language: String,
-        val durationMs: Int?,
-    )
-
     /**
-     * Prisme rule 1 for the audio source: prefer a cloned-voice translation targeting one
-     * of the viewer's preferred languages (in priority order). When the highest-priority
-     * preferred language is the attachment's original transcription language the original
-     * voice wins (returns null) — never an arbitrary translation. Returns null when no
-     * preferred-language translation carries a playable audio url, in which case the
-     * caller falls back to the original voice note. Mirrors [resolveTranscription] so the
-     * played voice and the surfaced transcription line resolve to the same language.
+     * The played voice: [AttachmentTranscriptPrism.track], the SAME single Prisme descent as the
+     * transcription line next to it, so the voice and the text are always in one language. Null
+     * means the original voice note.
      */
     private fun resolveTranslatedAudio(
         attachment: ApiMessageAttachment,
         preferences: LanguageResolver.ContentLanguagePreferences,
-    ): ResolvedAudio? {
-        val originalLanguage = attachment.transcription?.language?.trim()?.ifBlank { null }
-        val translations = attachment.translations.orEmpty()
-
-        for (language in LanguageResolver.preferredContentLanguages(preferences)) {
-            if (originalLanguage != null && originalLanguage.equals(language, ignoreCase = true)) {
-                return null
-            }
-            val translated = translations.entries
-                .firstOrNull { it.key.equals(language, ignoreCase = true) }
-                ?.value
-            val url = translated?.url?.trim()?.ifBlank { null }
-            if (url != null) return ResolvedAudio(url, language, translated.durationMs)
-        }
-        return null
-    }
+    ): AttachmentTranscriptPrism.Track? =
+        AttachmentTranscriptPrism.track(attachment.transcription, attachment.translations, preferences)
 
     /** The Prisme-served transcription line — [AttachmentTranscriptPrism], the site the transcription fiche reads too. */
     private fun resolveTranscription(
@@ -268,6 +278,14 @@ internal object BubbleAttachmentBuilder {
         if (isEncrypted == true || isProtected) return null
         return ImageVariantPicker.lighterPreviewUrl(imageVariants, fileUrl.orEmpty(), width, targetWidthPx)
     }
+
+    /** Le fichier de l'image ; en attente d'envoi, ses octets scellés, l'aperçu local qui le remplace (#15104). */
+    private val ApiMessageAttachment.paintableUrl: String?
+        get() = fileUrl ?: thumbnailUrl?.takeIf { it.isLocalUri() }
+
+    /** En attente d'envoi : ses octets sont scellés sur l'appareil, seul son aperçu local se lit (#15104). */
+    private val ApiMessageAttachment.awaitsUpload: Boolean
+        get() = fileUrl == null && thumbnailUrl.isLocalUri()
 
     private fun String?.isLocalUri(): Boolean = this != null && (startsWith("file://") || startsWith("content://"))
 

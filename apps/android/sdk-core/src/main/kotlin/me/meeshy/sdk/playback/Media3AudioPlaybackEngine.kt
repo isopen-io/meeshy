@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.playback.AudioPlaybackAction
 import me.meeshy.sdk.model.playback.AudioPlaybackReducer
 import me.meeshy.sdk.model.playback.AudioPlaybackState
 import me.meeshy.sdk.model.playback.ListenSegmentTracker
+import me.meeshy.sdk.model.playback.MediaSessionEvent
 import me.meeshy.sdk.model.playback.MediaResumeMerge
 import me.meeshy.sdk.model.playback.PlaybackCommand
 import me.meeshy.sdk.model.playback.PlaybackCommandOrigin
@@ -48,7 +49,8 @@ internal class Media3AudioPlaybackEngine(
     private val callActive: () -> Boolean,
     dispatcher: CoroutineDispatcher,
     private val nowEpochMs: () -> Long = System::currentTimeMillis,
-) : AudioPlaybackEngine, AudioPlayerPort.Listener {
+    private val coordinator: PlaybackCoordinator? = null,
+) : AudioPlaybackEngine, AudioPlayerPort.Listener, CoordinatedPlayer {
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val mutableState = MutableStateFlow(AudioPlaybackState())
@@ -64,6 +66,18 @@ internal class Media3AudioPlaybackEngine(
     private var ticker: Job? = null
     private var held: Pair<String, MeeshyMediaConsumption?>? = null
     private var languageProvider: (() -> String?)? = null
+
+    private val interruptions = InterruptionResumeAdapter(
+        isPlaying = { mutableState.value.isPlaying },
+        pause = ::pauseNow,
+        resume = ::resumeFromInterruption,
+    )
+
+    override val kind: CoordinatedPlayerKind = CoordinatedPlayerKind.Audio
+    override val isPlayingAudibly: Boolean get() = mutableState.value.isPlaying
+    override val respondsToSessionInterruptions: Boolean = true
+
+    override fun handleSessionEvent(event: MediaSessionEvent) = interruptions.onSessionEvent(event)
 
     private fun player(): AudioPlayerPort =
         port ?: portFactory.create().also { it.setListener(this); port = it }
@@ -84,6 +98,7 @@ internal class Media3AudioPlaybackEngine(
 
     private fun start(attachmentId: String, source: AudioSource?, origin: PlaybackCommandOrigin): Boolean {
         if (!PlaybackPermissionGuard.allows(PlaybackCommand.Start, origin, callActive())) return false
+        coordinator?.willStartPlaying(this)
         releaseCurrent(StopReason.Superseded)
         if (source == null) {
             dispatch(AudioPlaybackAction.Stopped)
@@ -134,6 +149,11 @@ internal class Media3AudioPlaybackEngine(
     }
 
     override fun pause() {
+        interruptions.onUserPaused()
+        pauseNow()
+    }
+
+    private fun pauseNow() {
         val current = mutableState.value
         if (!loaded || !current.isPlaying) return
         val position = positionNow()
@@ -151,6 +171,7 @@ internal class Media3AudioPlaybackEngine(
 
     private fun resume(command: PlaybackCommand, origin: PlaybackCommandOrigin) {
         if (!PlaybackPermissionGuard.allows(command, origin, callActive())) return
+        if (origin != PlaybackCommandOrigin.Automatic) interruptions.onUserStarted()
         dispatch(AudioPlaybackAction.Resumed)
         val player = player()
         player.setSpeed(mutableState.value.speed.rate)
@@ -282,6 +303,7 @@ internal class Media3AudioPlaybackEngine(
 
     /** Sauve la position, clôt l'écoute en cours et décharge le lecteur. */
     private fun releaseCurrent(@Suppress("UNUSED_PARAMETER") reason: StopReason) {
+        interruptions.onContentReleased()
         stopTicker()
         if (loaded) {
             val position = positionNow()

@@ -49,7 +49,7 @@ import org.json.JSONObject
 import timber.log.Timber
 
 /** Ce dont la famille a besoin pour émettre : un événement, sa charge et l'accusé de la passerelle. */
-fun interface SocketAckEmitter {
+fun interface SocketRawAckEmitter {
     fun emit(event: String, data: JSONObject, ack: (Array<Any>) -> Unit)
 }
 
@@ -71,7 +71,7 @@ fun interface SocketAckEmitter {
 class ConversationSocketEventsManager internal constructor(
     private val router: SocketEventRouter,
     private val json: Json,
-    private val emitter: SocketAckEmitter,
+    private val emitter: SocketRawAckEmitter,
 ) : RealtimeBinding {
 
     @Inject
@@ -79,7 +79,7 @@ class ConversationSocketEventsManager internal constructor(
         socketManager: SocketManager,
         json: Json,
         router: SocketEventRouter,
-    ) : this(router, json, SocketAckEmitter { event, data, ack -> socketManager.emit(event, data, ack) })
+    ) : this(router, json, SocketRawAckEmitter { event, data, ack -> socketManager.emit(event, data, ack) })
 
     private val installed = AtomicBoolean(false)
     private val _events = SocketInboundRoute.subject<ConversationSocketEvent>()

@@ -88,7 +88,7 @@ private fun FavoriteContactsWidgetContent(presentation: FavoriteContactsWidgetPr
             .padding(12.dp),
     ) {
         Text(
-            text = context.getString(R.string.widget_favorite_contacts_title),
+            text = context.getString(R.string.widget_favorites_header),
             style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = WidgetTheme.title),
         )
         if (presentation.isEmpty) {
@@ -143,7 +143,7 @@ private const val AVATAR_DP = 30
 private fun openConversationIntent(context: Context, conversationId: String): Intent =
     Intent(
         Intent.ACTION_VIEW,
-        Uri.parse("meeshy://conversation/$conversationId"),
+        Uri.parse(WidgetDeepLink.conversation(conversationId)),
         context,
         MainActivity::class.java,
     )

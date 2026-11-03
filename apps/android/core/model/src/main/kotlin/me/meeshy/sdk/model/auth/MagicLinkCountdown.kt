@@ -1,5 +1,8 @@
 package me.meeshy.sdk.model.auth
 
+import me.meeshy.sdk.model.format.LocalizedNumber
+import java.util.Locale
+
 /**
  * Strict email gate for passwordless magic-link login — faithful port of the
  * `isValidEmail` regex in iOS `MagicLinkView`
@@ -55,6 +58,13 @@ data class MagicLinkCountdown(
     /** The `"m:ss"` clock (iOS `formattedCountdown`), minutes un-padded, seconds zero-padded. */
     val formatted: String
         get() = "%d:%02d".format(remaining / 60, remaining % 60)
+
+    /**
+     * The remaining time as a spoken duration (« 4 minutes 32 secondes »), for the screen reader.
+     * The « 4:32 » clock read as-is is announced « 4 hours 32 » — wrong by a factor of sixty on
+     * the only thing this countdown says (iOS `MediaFormat.duration(_, style: .spoken)`).
+     */
+    fun spoken(locale: Locale): String = LocalizedNumber.spokenDuration(remaining, locale)
 
     /**
      * Whether the resend button is enabled — mirrors iOS

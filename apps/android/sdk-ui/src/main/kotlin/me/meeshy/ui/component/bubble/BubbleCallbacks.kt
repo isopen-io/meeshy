@@ -23,6 +23,11 @@ public data class BubbleCallbacks(
     val onImageClick: ((Int) -> Unit)? = null,
     /** Long press on one image of the grid, with its index: that piece alone is previewed (#13461). */
     val onImageLongClick: ((Int) -> Unit)? = null,
+    /**
+     * Double tap sur une case de la grille de la rangée plate : réagir à CETTE pièce (son identifiant). Nul ⇒ le geste
+     * n'est pas monté et le tap simple n'attend aucune désambiguïsation ; une pièce seule ou protégée ne l'offre jamais.
+     */
+    val onReactToAttachment: ((attachmentId: String) -> Unit)? = null,
     /** Tap on a shared location that has coordinates. */
     val onLocationClick: ((BubbleLocation) -> Unit)? = null,
     /** Tap on a playable audio attachment. */
@@ -33,18 +38,30 @@ public data class BubbleCallbacks(
     val onFileClick: ((BubbleFile) -> Unit)? = null,
     /** Tap on the quoted-reply preview (only wired when the quoted message id is known). */
     val onReplyPreviewClick: (() -> Unit)? = null,
+    /** Tap sur le NOM de l'auteur cité : sa fiche profil (armé seulement s'il y en a une). */
+    val onQuotedAuthorTap: (() -> Unit)? = null,
+    /** Tap sur la miniature du média cité : la visionneuse (repli hôte : le saut à l'original). */
+    val onQuotedMediaTap: (() -> Unit)? = null,
     /** Tap on the citation card of a quoted story (only wired when the story still opens, #13296). */
     val onStoryCitationClick: (() -> Unit)? = null,
     /** Tap on a language flag of the Prisme strip, with its language code. */
     val onFlagTap: ((String) -> Unit)? = null,
-    /** Tap sur le smiley d'ajout du dernier message reçu : le sélecteur d'emoji. */
+    /** Tap sur le bouton traduire du pied (iOS `onTranslate`) : l'explorateur des langues du message. */
+    val onTranslate: (() -> Unit)? = null,
+    /** Tap sur le smiley d'ajout du dernier message reçu : la réaction rapide. */
     val onAddReaction: (() -> Unit)? = null,
+    /** Appui long de 0,4 s sur le smiley d'ajout : le sélecteur complet. */
+    val onOpenReactPicker: (() -> Unit)? = null,
     /** Tap sur la bande orange d'un envoi échoué (iOS `BubbleFailedRetryBar`) : renvoyer. */
     val onRetry: (() -> Unit)? = null,
     /** Tap sur l'avatar de l'auteur dans le pied d'identité (et « Voir le profil » de son menu). */
     val onSenderTap: (() -> Unit)? = null,
     /** Tap sur « dis-leur salut » de la ligne d'arrivées groupées : la réponse rapide s'ouvre. */
     val onSayHi: (() -> Unit)? = null,
+    /** Double toucher (« Voir la fiche » en TalkBack) sur un avis d'arrivée : la fiche de participation de l'arrivant. */
+    val onOpenJoinProfile: ((participantId: String) -> Unit)? = null,
+    /** Tap sur les coches de livraison d'une rangée plate envoyée : les détails de lecture. */
+    val onShowReadStatus: (() -> Unit)? = null,
     /**
      * The TalkBack actions of the bubble body, in order. The host passes exactly what the
      * message's law offers (#12760): an empty list exposes none.

@@ -15,6 +15,7 @@ extension PostDetailView {
     // de portée fichier le lui interdirait — même piège que `viewModel`,
     // documenté dans `apps/ios/CLAUDE.md`.
     func toggleDetailPostHeart() {
+        guard !isPendingPublication else { return }
         Task {
             guard !postHeartInFlightIds.contains(postId) else { return }
             postHeartInFlightIds.insert(postId)

@@ -1,6 +1,8 @@
 package me.meeshy.sdk.composer
 
 import me.meeshy.sdk.model.AttachmentMessageType
+import me.meeshy.sdk.model.ComposerClosure
+import me.meeshy.sdk.model.ConversationWriteRestriction
 
 /**
  * The kind of payload a single composer send delivers. The attachment path derives
@@ -37,6 +39,9 @@ public enum class ComposerSendKind {
 public enum class SendBlockReason {
     /** The viewer cannot post text at all — the composer is a read-only viewer. */
     READ_ONLY,
+
+    /** The conversation is closed to this viewer's writing (ended, or Global under 18): nothing of any kind leaves. */
+    WRITE_RESTRICTED,
 
     /** The viewer lacks the capability for this specific attachment kind. */
     CAPABILITY_DENIED,
@@ -88,7 +93,11 @@ public object ComposerSendGate {
         kind: ComposerSendKind,
         affordances: ComposerAffordances,
         slowMode: SlowModeState,
+        closure: ComposerClosure? = null,
     ): SendDecision {
+        if (closure != null) {
+            return SendDecision(allowed = false, blockReason = SendBlockReason.WRITE_RESTRICTED, cooldownSeconds = 0)
+        }
         if (!affordances.permits(kind)) {
             val reason =
                 if (kind == ComposerSendKind.TEXT) SendBlockReason.READ_ONLY
@@ -104,6 +113,16 @@ public object ComposerSendGate {
         }
         return SendDecision.ALLOWED
     }
+
+    /**
+     * The restriction a refused send REVEALS: the `403 GLOBAL_ADULTS_ONLY` of a send that left before the
+     * client knew (a birth date declared elsewhere, a cache older than the declaration). `null` for any other
+     * refusal. A definitive refusal: it is never replayed, and the thread turns read-only.
+     */
+    public fun restrictionRevealedBy(httpStatus: Int?, code: String?): ConversationWriteRestriction? =
+        if (httpStatus == FORBIDDEN) ConversationWriteRestriction.fromRefusalCode(code) else null
+
+    private const val FORBIDDEN = 403
 
     private fun ComposerAffordances.permits(kind: ComposerSendKind): Boolean =
         when (kind) {

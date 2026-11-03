@@ -57,7 +57,6 @@ class ComposerKeyboardStyleBarTest {
                 Box(Modifier.size(width = 360.dp, height = 692.dp)) {
                     StorySceneFirstLayout(
                         onDismiss = {},
-                        reduced = false,
                         scene = { modifier -> Box(modifier.testTag(SCENE)) },
                         top = { Text(CLOSE_OVERLAY) },
                         trailing = { Text(TOOLS_OVERLAY) },

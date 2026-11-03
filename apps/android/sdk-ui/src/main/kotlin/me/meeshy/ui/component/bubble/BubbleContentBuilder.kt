@@ -4,6 +4,9 @@ import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.JoinNoticePresentation
+import me.meeshy.sdk.model.MessageSenderIdentity
+import me.meeshy.sdk.model.ReactionSummaryReconstruction
+import me.meeshy.sdk.model.sourceKind
 import me.meeshy.sdk.model.SystemNoticeText
 import java.time.ZoneId
 import java.util.Locale
@@ -16,6 +19,7 @@ import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.BubbleStickerSpec
 import me.meeshy.sdk.model.StickerPicture
 import me.meeshy.sdk.model.DeliveryStatusResolver
+import me.meeshy.sdk.model.ForwardAttribution
 import me.meeshy.sdk.model.ForwardBadgePolicy
 import me.meeshy.sdk.model.ForwardReference
 import me.meeshy.sdk.model.MessageEffectFlags
@@ -59,8 +63,16 @@ public object BubbleContentBuilder {
         readerLanguage: String? = null,
         /** Fuseau IANA du lecteur pour l'heure d'un avis de capture ; défaut : celui de l'appareil. */
         readerTimeZoneId: String? = null,
+        /** Mon identité de session : l'écho allégé de MON message (sans expéditeur imbriqué) n'a pas de nom vide. */
+        sessionIdentity: MessageSenderIdentity.Session? = null,
+        /**
+         * Couture inerte tant que le rendu du scellé n'est pas câblé : vrai, une vue unique non ouverte par CE lecteur
+         * ne porte ni texte, ni légende, ni pièce (iOS `viewOnceSealed`).
+         */
+        sealUnopenedViewOnce: Boolean = false,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
+        val viewOnceSealed = sealUnopenedViewOnce && BubbleKindBuilder.isViewOnceSealed(message, isDeleted)
         // #13106 — un blob chiffré de bout en bout scelle la bulle entière, même servie en clair.
         val isEndToEndSealed = !isDeleted && (message.isEndToEndSealed || message.attachments.any { it.isEndToEndBlob })
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
@@ -88,11 +100,9 @@ public object BubbleContentBuilder {
             recipientCount = recipientCount,
             showReadReceipts = showReadReceipts,
         )
-        val reactions = message.reactionSummary
-            ?.map { (emoji, count) ->
-                ReactionEntry(emoji = emoji, count = count, includesMe = emoji in ownReactions)
-            }
-            ?: emptyList()
+        val reactions = ReactionSummaryReconstruction
+            .reconstruct(message.reactionSummary, ownReactions)
+            .map { ReactionEntry(emoji = it.emoji, count = it.count, includesMe = it.includesMe) }
         val quoted = BubbleQuotedReplyBuilder.build(message.replyTo, preferences, mediaBaseUrl)
         val replyToDeleted = quoted?.isDeleted == true
         // Story/mood-reply preview. A message reply (`replyTo`) takes precedence,
@@ -104,7 +114,7 @@ public object BubbleContentBuilder {
             message.replyTo != null -> null
             else -> BubbleStoryReplyBuilder.build(message.postReplyTo, message.storyReplyToId, mediaBaseUrl)
         }
-        val visibleAttachments = if (isDeleted || isEndToEndSealed) emptyList() else message.attachments
+        val visibleAttachments = if (isDeleted || isEndToEndSealed || viewOnceSealed) emptyList() else message.attachments
         val attachments = BubbleAttachmentBuilder.build(
             visibleAttachments = visibleAttachments,
             effects = message.effects,
@@ -114,7 +124,7 @@ public object BubbleContentBuilder {
             contactScope = ContactCardResolutionScope.of(message),
         )
         val messagePlace = message.location
-            ?.takeUnless { isDeleted || isEndToEndSealed }
+            ?.takeUnless { isDeleted || isEndToEndSealed || viewOnceSealed }
             ?.let { BubbleLocation.fromPlace(message.id, it) }
         // Une pièce qui disparaît (vue unique, floue, éphémère) ou que la loi de sortie retient ne s'ouvre ni ne se
         // télécharge : sa rangée ne promet rien (#13492) — le même verdict que l'aperçu et le contrôleur.
@@ -122,7 +132,7 @@ public object BubbleContentBuilder {
         val files = attachments.files.map { if (it.attachmentId in protectedIds) it.copy(isProtected = true) else it }
         // Un avis système (capture, arrivées) se compose CHEZ LE LECTEUR, dans sa langue et son fuseau ;
         // une métadonnée qui ne se lit pas retombe sur le `content` (repli français). Jamais une bulle.
-        val noticeText = if (isDeleted || isEndToEndSealed) {
+        val noticeText = if (isDeleted || isEndToEndSealed || viewOnceSealed) {
             null
         } else {
             SystemNoticeText.of(
@@ -134,7 +144,7 @@ public object BubbleContentBuilder {
         }
         val text = when {
             noticeText != null -> noticeText
-            isDeleted || isEndToEndSealed -> ""
+            isDeleted || isEndToEndSealed || viewOnceSealed -> ""
             activeIsOriginal -> message.content
             else -> message.translations
                 .firstOrNull {
@@ -143,7 +153,7 @@ public object BubbleContentBuilder {
                 ?.translatedContent
                 ?: message.displayContent(preferences)
         }
-        val languageStrip = if (isDeleted) {
+        val languageStrip = if (isDeleted || viewOnceSealed) {
             emptyList()
         } else {
             MessageLanguageStrip.build(
@@ -155,8 +165,15 @@ public object BubbleContentBuilder {
                 includeTranslatable = true,
             )
         }
+        val identity = MessageSenderIdentity.resolve(
+            sender = message.sender,
+            source = message.sourceKind,
+            isMe = isOutgoing,
+            session = sessionIdentity,
+        )
         val senderName = (message.sender?.displayName ?: message.sender?.username)
             ?.takeIf { it.isNotBlank() }
+            ?: identity.name.takeIf { message.sender == null }
         return BubbleContent(
             messageId = message.id,
             viewingConversationId = message.conversationId.takeIf { it.isNotBlank() },
@@ -164,15 +181,21 @@ public object BubbleContentBuilder {
             isOutgoing = isOutgoing,
             isTranslated = isTranslated,
             isShowingOriginal = isShowingOriginal,
-            originalText = if (isTranslated && !isShowingOriginal) message.content else null,
+            originalText = if (isTranslated && !isShowingOriginal && !viewOnceSealed) message.content else null,
             languageStrip = languageStrip,
+            primaryLanguageCode = preferredCode ?: originalCode,
+            secondaryTexts = secondaryTexts(languageStrip, message.translations),
             senderName = senderName,
             showSenderName = showSenderName && !isOutgoing,
             senderId = message.senderId,
             senderProfile = if (isOutgoing || message.isSystemMessage) null else ProfileSheetUser.from(message),
-            senderUsername = (message.sender?.username ?: message.sender?.user?.username)
-                ?.takeIf { it.isNotBlank() },
-            senderAvatarUrl = message.sender?.resolvedAvatar,
+            senderUsername = identity.username,
+            senderAvatarUrl = identity.avatarUrl,
+            senderIsAnonymous = identity.isAnonymous,
+            senderHasAccount = identity.hasAccount,
+            senderRing = identity.avatarRing,
+            sourceKind = message.sourceKind,
+            servedMentionNames = if (isDeleted || isEndToEndSealed || viewOnceSealed) emptyMap() else servedMentionNames(message),
             senderColorHex = (senderName ?: message.senderId)?.let(DynamicColorGenerator::colorForName),
             isEdited = message.isEdited,
             isDeleted = isDeleted,
@@ -205,23 +228,23 @@ public object BubbleContentBuilder {
             expiresAtIso = if (isDeleted) null else message.expiresAt?.trim()?.ifBlank { null },
             pinnedAtIso = if (isDeleted) null else message.pinnedAt?.trim()?.ifBlank { null },
             isForwarded = !isDeleted && !message.forwardedFromId.isNullOrBlank(),
-            // Name the SOURCE conversation for a group forward (else null → the
-            // generic "Forwarded" label). Mirrors iOS building a `ForwardReference`
-            // from `forwardedFromConversation` (`title ?? identifier`, `type`), then
-            // running `ForwardBadgePolicy`. A deleted tombstone never names a source.
-            forwardedFromName = if (isDeleted) {
-                null
+            // Qui a le droit d'être nommé sous un transfert : trois issues (groupe, personne, personne)
+            // décidées par `ForwardBadgePolicy` (iOS `ForwardReference` → `ForwardAttribution`). Un
+            // tombeau supprimé ne nomme jamais sa source.
+            forwardAttribution = if (isDeleted) {
+                ForwardAttribution.Anonymous
             } else {
-                ForwardBadgePolicy.conversationName(
+                ForwardBadgePolicy.attribution(
                     message.forwardedFromConversation?.let { conv ->
                         ForwardReference(
+                            senderName = message.forwardedFrom?.sender?.let { it.displayName ?: it.user?.displayName ?: it.username }.orEmpty(),
                             conversationName = conv.title ?: conv.identifier,
                             conversationType = conv.type,
                         )
                     },
                 )
             },
-            blurReveal = if (isDeleted) null else buildBlurReveal(message.effects),
+            blurReveal = if (isDeleted || viewOnceSealed) null else buildBlurReveal(message.effects),
             // Visual-treatment effects (glow / pulse / rainbow / one-shot appearance)
             // fed to `Modifier.messageEffects` — lifecycle bits stripped, empty when
             // deleted (a tombstone never glows). The played-appearance gate is resolved
@@ -245,10 +268,25 @@ public object BubbleContentBuilder {
             exitOffer = message.exitOffer(),
             replyToIsMe = !replyToDeleted && currentUserId != null &&
                 message.replyTo?.senderId == currentUserId,
+            replyToAuthor = quotedAuthorProfile(message.replyTo, quoted?.senderName, currentUserId),
             isSlowSend = isOutgoing && isSlowSend,
-            sticker = if (isDeleted || isEndToEndSealed) null else stickerOf(message, visibleAttachments, attachments.images),
+            sticker = if (isDeleted || isEndToEndSealed || viewOnceSealed) null else stickerOf(message, visibleAttachments, attachments.images),
+            videos = attachments.videos,
+            attachmentLayout = BubbleKindBuilder.layout(visibleAttachments.filterNot { it.isEndToEndBlob }),
+            protection = BubbleKindBuilder.protection(message),
+            isViewOnceSealed = viewOnceSealed,
+            callSummary = message.callSummary?.takeIf { message.isSystemMessage && !isDeleted },
         )
     }
+
+    /** Les noms servis pour les mentions : une mention d'un absent du roster affiche pourtant son nom. */
+    private fun servedMentionNames(message: ApiMessage): Map<String, String> =
+        message.mentionedUsers.orEmpty()
+            .mapNotNull { user ->
+                val name = user.displayName?.takeIf { it.isNotBlank() && it != user.username }
+                if (user.username.isBlank() || name == null) null else user.username to name
+            }
+            .toMap()
 
     /** Le sticker et la PREMIÈRE image jointe, à l'adresse servie (iOS `resolveSticker`) ; rien sur un message masqué. */
     private fun stickerOf(
@@ -288,7 +326,8 @@ public object BubbleContentBuilder {
                 DeliveryStatusResolver.resolve(
                     deliveredCount = message.deliveredCount,
                     readCount = message.readCount,
-                    recipientCount = recipientCount,
+                    recipientCount = message.recipientCount?.takeIf { it > 0 } ?: recipientCount,
+                    deliveredToAllAt = message.deliveredToAllAt,
                     readByAllAt = message.readByAllAt,
                     showReadReceipts = showReadReceipts,
                 )
@@ -332,4 +371,16 @@ public object BubbleContentBuilder {
         this == originalCode || message.translations.any {
             it.targetLanguage.normalizedCode() == this && it.translatedContent.isNotBlank()
         }
+
+    /** `langue -> texte` des langues du pied qui portent un contenu : la matière du panneau secondaire. */
+    private fun secondaryTexts(
+        strip: List<LanguageChip>,
+        translations: List<LanguageResolver.TranslationLike>,
+    ): Map<String, String> {
+        val offered = strip.filter { !it.isTranslatable && !it.isOriginal }.map { it.code }.toSet()
+        if (offered.isEmpty()) return emptyMap()
+        return translations
+            .filter { it.translatedContent.isNotBlank() && it.targetLanguage.normalizedCode() in offered }
+            .associate { it.targetLanguage.normalizedCode().orEmpty() to it.translatedContent }
+    }
 }

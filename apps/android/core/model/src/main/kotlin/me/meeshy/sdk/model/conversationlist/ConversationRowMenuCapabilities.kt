@@ -41,6 +41,14 @@ data class ConversationRowMenuCapabilities(
      * et actifs (`hide`) ; jamais Global.
      */
     val obsolete: Boolean = false,
+    /**
+     * « Appeler » : l'appel du menu compose UN pair, donc jamais un groupe ni soi-même
+     * (`CallPermission.canStartCall`, miroir de `ConversationRowMenuCapabilities.call` d'iOS).
+     */
+    val call: Boolean = false,
+    val videoCall: Boolean = false,
+    /** « Supprimer pour tous » : la porte de la loi (administrateur et plus d'un type à autorité, ouvert). */
+    val deleteForAll: Boolean = false,
 ) {
 
     /**
@@ -75,6 +83,8 @@ data class ConversationRowMenuCapabilities(
             val direct = conversation.isDirect
             val talksToSelf = direct && currentUser != null && conversation.participants.isNotEmpty() &&
                 conversation.participants.all { it.userId == currentUser.id }
+            val talksToPeer = direct && !talksToSelf && currentUser != null &&
+                conversation.participants.any { it.userId != currentUser.id }
             return ConversationRowMenuCapabilities(
                 rename = actions.rename,
                 invite = actions.invite,
@@ -86,7 +96,19 @@ data class ConversationRowMenuCapabilities(
                 manageMembers = actions.manageMembers,
                 obsolete = actions.deleteForAll ||
                     (direct && !conversation.actionPolicyConversation.isClosed && actions.hide),
+                deleteForAll = actions.deleteForAll,
+                call = actions.call && talksToPeer,
+                videoCall = actions.videoCall && talksToPeer,
             )
+        }
+
+        /**
+         * Les verdicts pour le lecteur d'une conversation OUVERTE : le rôle servi sur la ligne, à défaut celui de sa
+         * participation (#15269). Une conversation qui ne le dit pas laisse le lecteur simple membre — fermé par défaut.
+         */
+        fun forViewer(conversation: ApiConversation, currentUser: MeeshyUser?): ConversationRowMenuCapabilities {
+            val participantRole = conversation.participants.firstOrNull { currentUser != null && it.userId == currentUser.id }?.role
+            return make(conversation.copy(currentUserRole = conversation.currentUserRole ?: participantRole), currentUser)
         }
 
         /** Le lecteur tel que la loi le lit, pour une rangée de SA liste. */

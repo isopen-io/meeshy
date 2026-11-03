@@ -12,6 +12,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import me.meeshy.core.common.IoDispatcher
+import me.meeshy.sdk.model.sync.MessageMutationApplier
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.RealtimeBinding
 import me.meeshy.sdk.socket.collectArrived
@@ -40,7 +41,7 @@ class MessageEditBinding @Inject constructor(
         job = scope.launch {
             socket.messageEdited.collectArrived { message ->
                 try {
-                    messages.applyServerEdit(message)
+                    messages.applyServerEdit(MessageMutationApplier.normalizedEdit(message))
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (failure: Exception) {

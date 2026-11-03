@@ -59,6 +59,8 @@ data class ChatUiState(
      * from the initial unread count captured before the conversation is marked
      * read (null = nothing unread on open). */
     val firstUnreadMessageId: String? = null,
+    /** Le compte SERVEUR de non-lus capturé à l'ouverture : c'est lui que le séparateur annonce (#7525). */
+    val unreadAtOpening: Int = 0,
     /** Flips true the moment the unread-boundary latch settles — whether it found
      * a boundary or not. The one-shot open scroll waits for this so it never fires
      * against an unresolved (possibly empty) window. */

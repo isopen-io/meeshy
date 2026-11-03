@@ -110,13 +110,16 @@ public fun CaptureViewfinder(
 
     val dispatchHolder = remember { arrayOfNulls<(CaptureEvent) -> Unit>(1) }
     val dispatch: (CaptureEvent) -> Unit = { event -> dispatchHolder[0]?.invoke(event) }
+    val engineHolder = remember { arrayOfNulls<CaptureCameraEngine>(1) }
     val engine = remember {
         CameraXCaptureEngine(context, lifecycleOwner) { signal ->
             when (signal) {
                 is CaptureEngineSignal.Bound -> {
                     lensMin = signal.lens.minZoom
                     lensMax = signal.lens.maxZoom
-                    dispatch(CaptureEvent.FlipFinishedIfSwitching)
+                    if (state.switching && signal.facing == state.facing) dispatch(CaptureEvent.FlipRefused)
+                    else dispatch(CaptureEvent.FlipFinishedIfSwitching)
+                    if (state.stage == CaptureStage.RECORDING) engineHolder[0]?.setTorch(CaptureFlash.torch(state.flash, signal.facing))
                     hold?.attach { signal -> holdSink[0]?.invoke(signal) }
                 }
                 is CaptureEngineSignal.BindFailed -> unavailable = true
@@ -132,6 +135,8 @@ public fun CaptureViewfinder(
             }
         }
     }
+
+    engineHolder[0] = engine
 
     fun abandonPendingFilm() {
         val token = pendingFilm[0] ?: return

@@ -23,7 +23,10 @@ import me.meeshy.sdk.model.relation.RelationLinkWire
 import me.meeshy.sdk.model.relation.RelationProgressWire
 import me.meeshy.sdk.model.relation.RelationRitualPhase
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.api.RelationLevelResponse
+import me.meeshy.sdk.net.api.RelationLowerBody
 import me.meeshy.sdk.net.api.RelationsApi
+import me.meeshy.sdk.model.relation.RelationRaiseGate
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.user.UserRepository
 import org.junit.After
@@ -122,5 +125,61 @@ class RelationsRepositoryTest {
             "p", CirclePerson("p", "Paul Dupont", "paul", null),
         )
         coVerify(exactly = 0) { users.getPublicProfile("f", any()) }
+    }
+
+    @Test
+    fun `retrograder poste le cran vise et reecrit le lien en cache`() = runTest {
+        val close = friendLink.copy(userId = "u1", effectiveLevel = "CLOSE", grantedByMe = "CLOSE")
+        coEvery { api.links() } returns ApiResponse(success = true, data = listOf(close, friendLink.copy(userId = "u2")))
+        coEvery { api.lower("u1", RelationLowerBody("FRIEND")) } returns ApiResponse(success = true, data = friendLink)
+        val repository = repository()
+        repository.refreshLinks()
+
+        val lowered = (repository.lower("u1", RelationLevel.FRIEND) as NetworkResult.Success).data
+
+        assertThat(lowered.effectiveLevel).isEqualTo(RelationLevel.FRIEND)
+        assertThat(repository.cachedLinks()?.associate { it.userId to it.effectiveLevel })
+            .containsExactly("u1", RelationLevel.FRIEND, "u2", RelationLevel.FRIEND)
+    }
+
+    @Test
+    fun `annuler le lien retire la personne du cache des cercles et de l'amitie`() = runTest {
+        coEvery { api.links() } returns ApiResponse(success = true, data = listOf(friendLink))
+        coEvery { api.lower("u1", RelationLowerBody("PUBLIC")) } returns
+            ApiResponse(success = true, data = friendLink.copy(effectiveLevel = "PUBLIC", grantedByMe = "PUBLIC"))
+        val friendship = FriendshipCache().apply { didAcceptRequest("u1") }
+        val repository = repository(friendship)
+        repository.refreshLinks()
+
+        repository.lower("u1", RelationLevel.PUBLIC)
+
+        assertThat(repository.cachedLinks()).isEmpty()
+        assertThat(friendship.isFriend("u1")).isFalse()
+    }
+
+    @Test
+    fun `un refus de la passerelle remonte type et laisse le cache intact`() = runTest {
+        coEvery { api.links() } returns ApiResponse(success = true, data = listOf(friendLink))
+        coEvery { api.lower("u1", any()) } returns
+            ApiResponse(success = false, error = "Une montée se demande", code = "RELATION_NOT_A_DROP")
+        val repository = repository()
+        repository.refreshLinks()
+
+        val outcome = repository.lower("u1", RelationLevel.ACQUAINTANCE)
+
+        assertThat((outcome as NetworkResult.Failure).error.code).isEqualTo("RELATION_NOT_A_DROP")
+        assertThat(repository.cachedLinks()?.single()?.effectiveLevel).isEqualTo(RelationLevel.FRIEND)
+    }
+
+    @Test
+    fun `le verrou de remontee se lit sur relations userId, et une panne ne verrouille rien`() = runTest {
+        coEvery { api.byUserId("u1") } returns ApiResponse(
+            success = true,
+            data = RelationLevelResponse("u1", "FRIEND", canRaise = false, raiseBlockedUntil = "2026-12-01T00:00:00Z"),
+        )
+        coEvery { api.byUserId("u2") } throws IOException("offline")
+
+        assertThat(repository().raiseGate("u1")).isEqualTo(RelationRaiseGate(false, "2026-12-01T00:00:00Z"))
+        assertThat(repository().raiseGate("u2")).isNull()
     }
 }

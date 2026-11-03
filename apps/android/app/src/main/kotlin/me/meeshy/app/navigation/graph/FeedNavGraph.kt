@@ -1,5 +1,6 @@
 package me.meeshy.app.navigation.graph
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
@@ -15,10 +16,13 @@ import me.meeshy.app.feed.HashtagResultsViewModel
 import me.meeshy.app.feed.MoodSpotlightScreen
 import me.meeshy.app.feed.MoodSpotlightViewModel
 import me.meeshy.app.feed.NearbyScreen
+import me.meeshy.app.feed.PendingPostDetailScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.navigation.MeeshyStoryRail
+import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.LegacyStoryComposerRedirect
 import me.meeshy.app.navigation.storyDoor
 import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.sheetComposable
@@ -75,6 +79,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onCreateStory = { navController.navigateKeepingSheet(storyDoor) },
             onOpenStory = { userId -> navController.navigateKeepingSheet(Routes.story(userId)) },
             onEditStory = { storyId -> navController.navigateKeepingSheet(Routes.storyComposerEdit(storyId)) },
+            onResumeDraft = { navController.navigateKeepingSheet(storyDoor) },
         )
     }
     composable(Routes.SAVED_POSTS) {
@@ -101,8 +106,13 @@ internal fun NavGraphBuilder.feedNavGraph(
             navArgument(PostDetailViewModel.COMMENT_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
             navArgument(PostDetailViewModel.PARENT_COMMENT_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
         ),
-        deepLinks = (Routes.POST_SHARE_DEEP_LINKS + Routes.STORY_SHARE_DEEP_LINKS).map { pattern -> navDeepLink { uriPattern = pattern } },
-    ) {
+        deepLinks = (Routes.POST_SHARE_DEEP_LINKS + Routes.STORY_SHARE_DEEP_LINKS.filter { "/story/" !in it }).map { pattern -> navDeepLink { uriPattern = pattern } },
+    ) { entry ->
+        val postId = entry.arguments?.getString(PostDetailViewModel.POST_ID_ARG)
+        if (postId != null && OutboxIds.isCmid(postId)) {
+            PendingPostDetailScreen(cmid = postId, onBack = { navController.popBackStack() })
+            return@composable
+        }
         PostDetailScreen(
             onBack = { navController.popBackStack() },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
@@ -126,6 +136,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onClose = { navController.popBackStack() },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+            onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
         )
     }
     composable(
@@ -182,12 +193,21 @@ internal fun NavGraphBuilder.feedNavGraph(
             },
         ),
     ) { entry ->
-        StoryComposerScreen(
-            onClose = { navController.popBackStack() },
-            repostOfId = entry.arguments?.getString(Routes.STORY_COMPOSER_REPOST_ARG),
-            initialVisibility = StoryComposerSeedAudience.fromRouteArg(entry.arguments?.getString(Routes.STORY_COMPOSER_AUDIENCE_ARG)),
-            editStoryId = entry.arguments?.getString(Routes.STORY_COMPOSER_EDIT_ARG),
-            recomposeStoryId = entry.arguments?.getString(Routes.STORY_COMPOSER_RECOMPOSE_ARG),
-        )
+        val repostOfId = entry.arguments?.getString(Routes.STORY_COMPOSER_REPOST_ARG)
+        val audienceArg = entry.arguments?.getString(Routes.STORY_COMPOSER_AUDIENCE_ARG)
+        val editStoryId = entry.arguments?.getString(Routes.STORY_COMPOSER_EDIT_ARG)
+        val recomposeStoryId = entry.arguments?.getString(Routes.STORY_COMPOSER_RECOMPOSE_ARG)
+        val host = remember(entry) { LegacyStoryComposerRedirect.target(repostOfId, audienceArg, editStoryId, recomposeStoryId) }
+        if (host != null) {
+            LaunchedEffect(host) { navController.navigate(host) { popUpTo(Routes.STORY_COMPOSER_ROUTE) { inclusive = true } } }
+        } else {
+            StoryComposerScreen(
+                onClose = { navController.popBackStack() },
+                repostOfId = repostOfId,
+                initialVisibility = StoryComposerSeedAudience.fromRouteArg(audienceArg),
+                editStoryId = editStoryId,
+                recomposeStoryId = recomposeStoryId,
+            )
+        }
     }
 }

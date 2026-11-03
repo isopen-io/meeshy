@@ -5,6 +5,9 @@ import java.time.Instant
 import kotlinx.serialization.decodeFromString
 import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.media.MediaLoss
+import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.PendingMediaPreview
+import me.meeshy.sdk.media.PendingMediaPreviewing
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
@@ -126,24 +129,39 @@ class MessageSendCoordinatorTest {
 
     @Test
     fun `reply, story reply and forward references travel on the bubble and on the request`() = runHarnessTest { harness ->
-        val cid = coordinator(harness).sendOptimistic(
-            "c1", "salut", "fr", sender,
-            replyToId = "r1",
-            storyReplyToId = "s1",
-            forwardedFromId = "f1",
-            forwardedFromConversationId = "fc1",
-        )
+        val coordinator = coordinator(harness)
 
-        val bubble = harness.cachedMessage(cid)
-        assertThat(bubble.replyToId).isEqualTo("r1")
-        assertThat(bubble.storyReplyToId).isEqualTo("s1")
+        val reply = coordinator.sendOptimistic("c1", "salut", "fr", sender, replyToId = "r1")
+        assertThat(harness.cachedMessage(reply).replyToId).isEqualTo("r1")
+        assertThat(harness.queuedRequest().replyToId).isEqualTo("r1")
+
+        val story = coordinator.sendOptimistic("c2", "salut", "fr", sender, storyReplyToId = "s1")
+        assertThat(harness.cachedMessage(story).storyReplyToId).isEqualTo("s1")
+        assertThat(harness.queuedRequest("c2").storyReplyToId).isEqualTo("s1")
+
+        val forward = coordinator.sendOptimistic(
+            "c3", "salut", "fr", sender, forwardedFromId = "f1", forwardedFromConversationId = "fc1",
+        )
+        val bubble = harness.cachedMessage(forward)
         assertThat(bubble.forwardedFromId).isEqualTo("f1")
         assertThat(bubble.forwardedFromConversationId).isEqualTo("fc1")
-        val request = harness.queuedRequest()
-        assertThat(request.replyToId).isEqualTo("r1")
-        assertThat(request.storyReplyToId).isEqualTo("s1")
+        val request = harness.queuedRequest("c3")
         assertThat(request.forwardedFromId).isEqualTo("f1")
         assertThat(request.forwardedFromConversationId).isEqualTo("fc1")
+    }
+
+    @Test
+    fun `a request carries ONE relation, as on iOS - the story wins over the reply, the reply over the forward`() = runHarnessTest { harness ->
+        coordinator(harness).sendOptimistic(
+            "c1", "salut", "fr", sender,
+            replyToId = "r1", storyReplyToId = "s1", forwardedFromId = "f1", forwardedFromConversationId = "fc1",
+        )
+
+        val request = harness.queuedRequest()
+        assertThat(request.storyReplyToId).isEqualTo("s1")
+        assertThat(request.replyToId).isNull()
+        assertThat(request.forwardedFromId).isNull()
+        assertThat(request.forwardedFromConversationId).isNull()
     }
 
     @Test
@@ -190,7 +208,7 @@ class MessageSendCoordinatorTest {
             .isEqualTo((MessageEffectFlags.VIEW_ONCE or MessageEffectFlags.EPHEMERAL).toInt())
         assertThat(request.isViewOnce).isTrue()
         assertThat(request.ephemeralDuration).isEqualTo(300)
-        assertThat(request.expiresAt).isEqualTo("1970-01-01T00:05:00Z")
+        assertThat(request.expiresAt).isNull()
         assertThat(request.maxViewOnceCount).isEqualTo(2)
         val bubble = harness.cachedMessage(cid)
         assertThat(bubble.isViewOnce).isTrue()
@@ -250,7 +268,6 @@ class MessageSendCoordinatorTest {
         val cid = coordinator.sendOptimistic(
             "c1", "secret", "es", sender,
             replyToId = "r1",
-            forwardedFromId = "f1",
             effects = MessageEffects(flags = MessageEffectFlags.VIEW_ONCE),
         )
         harness.outbox.markSucceeded(cid)
@@ -263,7 +280,6 @@ class MessageSendCoordinatorTest {
         assertThat(request.content).isEqualTo("secret")
         assertThat(request.originalLanguage).isEqualTo("es")
         assertThat(request.replyToId).isEqualTo("r1")
-        assertThat(request.forwardedFromId).isEqualTo("f1")
         assertThat(request.isViewOnce).isTrue()
         assertThat(harness.cachedSendState(cid)).isEqualTo(LocalSendState.SENDING.name)
     }
@@ -342,5 +358,68 @@ class MessageSendCoordinatorTest {
 
         assertThat(harness.database.messageDao().find(cid)).isNull()
         assertThat(harness.outbox.row(cid)).isNull()
+    }
+
+    private class RecordingPreviews : PendingMediaPreviewing {
+        val released = mutableListOf<List<ApiMessageAttachment>>()
+        override suspend fun keep(cmid: String, thumbnailPath: String?, effects: MessageEffects): String? = null
+        override suspend fun render(cmid: String, item: MediaUploadItem, effects: MessageEffects): PendingMediaPreview? = null
+        override suspend fun release(attachments: List<ApiMessageAttachment>) {
+            released += attachments
+        }
+    }
+
+    private val previewed = ApiMessageAttachment(
+        id = "cmid_up",
+        mimeType = "image/jpeg",
+        thumbnailUrl = "file:///cache/pending-previews/cmid_up.jpg",
+    )
+
+    @Test
+    fun `the server ACK releases the local previews of the bubble it replaces`() = runHarnessTest { harness ->
+        val previews = RecordingPreviews()
+        val coordinator = MessageSendCoordinator(harness.database, harness.database.messageDao(), harness.outbox, harness.clock, previews = previews)
+        val cid = coordinator.sendOptimistic("c1", "", "fr", sender, messageType = "image", attachmentUploadCmids = listOf("cmid_up"), attachments = listOf(previewed))
+
+        coordinator.reconcileSent(cid, ApiMessage(id = "srv1", conversationId = "c1", createdAt = "2026-06-01T10:00:00Z", clientMessageId = cid))
+
+        assertThat(previews.released).containsExactly(listOf(previewed))
+    }
+
+    @Test
+    fun `cancelling a pending send releases its previews with its bubble`() = runHarnessTest { harness ->
+        val previews = RecordingPreviews()
+        val coordinator = MessageSendCoordinator(harness.database, harness.database.messageDao(), harness.outbox, harness.clock, previews = previews)
+        val cid = coordinator.sendOptimistic("c1", "", "fr", sender, messageType = "image", attachmentUploadCmids = listOf("cmid_up"), attachments = listOf(previewed))
+
+        coordinator.cancelPendingSend(cid)
+
+        assertThat(harness.database.messageDao().find(cid)).isNull()
+        assertThat(previews.released).containsExactly(listOf(previewed))
+    }
+
+    @Test
+    fun `clearing a failed send releases its previews with its bubble`() = runHarnessTest { harness ->
+        val previews = RecordingPreviews()
+        val coordinator = MessageSendCoordinator(harness.database, harness.database.messageDao(), harness.outbox, harness.clock, previews = previews)
+        val cid = coordinator.sendOptimistic("c1", "", "fr", sender, messageType = "image", attachmentUploadCmids = listOf("cmid_up"), attachments = listOf(previewed))
+        coordinator.markSendFailed(cid)
+
+        coordinator.clearSendMessageRow(cid)
+
+        assertThat(previews.released).containsExactly(listOf(previewed))
+    }
+
+    @Test
+    fun `a bubble removed because its media was lost releases its previews`() = runHarnessTest { harness ->
+        val previews = RecordingPreviews()
+        val coordinator = MessageSendCoordinator(harness.database, harness.database.messageDao(), harness.outbox, harness.clock, previews = previews)
+        val cid = coordinator.sendOptimistic("c1", "", "fr", sender, messageType = "image", attachmentUploadCmids = listOf("cmid_up"), attachments = listOf(previewed))
+        harness.outbox.markExhausted(cid, MediaLoss.REASON)
+        coordinator.markSendFailed(cid, MediaLoss.REASON)
+
+        coordinator.retrySend(cid)
+
+        assertThat(previews.released).containsExactly(listOf(previewed))
     }
 }

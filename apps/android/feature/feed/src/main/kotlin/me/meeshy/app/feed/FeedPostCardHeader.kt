@@ -24,6 +24,7 @@ import java.util.Locale
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.bubble.PendingSendClock
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.format.RelativeTimeFormat
@@ -49,6 +50,8 @@ internal fun FeedPostCardHeader(
     onPin: () -> Unit,
     onReport: () -> Unit,
     onDelete: () -> Unit,
+    onOpen: (() -> Unit)? = null,
+    pendingSend: PendingSendActions? = null,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -78,12 +81,24 @@ internal fun FeedPostCardHeader(
                 }
                 post.repostAttribution?.let { handle -> RepostAttribution(handle) }
             }
-            post.createdAtIso?.let {
-                Text(
-                    text = postRelativeTime(it),
-                    style = MaterialTheme.typography.bodySmall,
+            if (post.isPendingSend) {
+                PendingSendClock(
                     color = MeeshyTheme.tokens.textSecondary,
+                    description = stringResource(R.string.feed_pending_waiting),
+                    modifier = Modifier.padding(top = MeeshySpacing.xxs),
                 )
+            } else {
+                post.createdAtIso?.let {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = postRelativeTime(it),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MeeshyTheme.tokens.textSecondary,
+                        )
+                        PostViewerPointsMark(postId = post.id, seed = post.viewerPoints, color = MeeshyTheme.tokens.textSecondary)
+                    }
+                }
+                if (isOwn) AuthorReachLine(post)
             }
         }
         PostOptionsButton(
@@ -100,6 +115,8 @@ internal fun FeedPostCardHeader(
             onReport = onReport,
             onDelete = onDelete,
             onImager = rememberPostImager(post),
+            onOpen = onOpen,
+            pendingSend = pendingSend,
         )
     }
 }
@@ -150,4 +167,35 @@ private fun RepostAttribution(handle: String) {
             modifier = Modifier.padding(start = MeeshySpacing.xs),
         )
     }
+}
+
+/**
+ * La portée, pour l'auteur SEUL : impressions puis vues (iOS `reachMetrics`). Les nombres seulement ; la liste des
+ * vues n'est offerte qu'à ADMIN/BIGBOSS (`PostMenuEntry.ViewViewers`). Un lecteur n'en voit rien.
+ */
+@Composable
+private fun AuthorReachLine(post: FeedPostPresentation) {
+    val reach = PostReachFormatter.components(username = post.authorUsername, isAuthor = true, viewCount = post.viewCount, impressionCount = post.impressionCount)
+    val impressions = stringResource(R.string.feed_reel_impressions)
+    val views = stringResource(R.string.feed_reel_views)
+    val spoken = "$impressions ${reach.impressions}, $views ${reach.views}"
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = spoken },
+    ) {
+        ReachFigure(MeeshyIcons.ChartBar, reach.impressions.orEmpty())
+        Spacer(Modifier.width(MeeshySpacing.sm))
+        ReachFigure(MeeshyIcons.EyeFilled, reach.views.orEmpty())
+    }
+}
+
+@Composable
+private fun ReachFigure(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+    Icon(imageVector = icon, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(12.dp))
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MeeshyTheme.tokens.textSecondary,
+        modifier = Modifier.padding(start = MeeshySpacing.xs),
+    )
 }

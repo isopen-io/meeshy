@@ -245,6 +245,7 @@ extension ComposerCaptureSession {
         editSource = nil
         framing = .identity
         editAspect = nil
+        cropEntry = nil
         activeEditTools = []
         editChromeShown = false
         takeSound = ComposerTakeSound()
@@ -411,7 +412,7 @@ extension ComposerCaptureSession {
         phase.isEditing && editChromeShown && ComposerEditTools.showsBrackets(active: activeEditTools)
     }
 
-    /// **La prise se réduit-elle ?** Au recadrage montré, et seulement là (#10930).
+    /// **La prise se pose-t-elle dans un cadre ?** Au recadrage montré, seulement là (#10930, #15193).
     var editFramesScene: Bool {
         phase.isEditing && ComposerEditTools.framesScene(active: activeEditTools, chromeShown: editChromeShown)
     }
@@ -439,7 +440,10 @@ extension ComposerCaptureSession {
     /// « Terminé » plus rien ne bouge.
     func toggleEditTool(_ tool: ComposerEditTool) {
         guard phase.isEditing, !isRenderingLook, editTools.contains(tool) else { return }
+        let avant = activeEditTools
         activeEditTools = ComposerEditTools.toggled(activeEditTools, tapping: tool, familyOpen: openFamily != nil)
+        cropEntry = ComposerCropEntry.after(cropEntry, before: avant, after: activeEditTools,
+                                            current: ComposerCropEntry(aspect: editAspect, framing: framing))
         if activeEditTools.contains(tool) { openFamily = nil }
         if tool == .text { activeEditTools.contains(.text) ? retouchTexts.begin() : retouchTexts.endTyping() }
         HapticFeedback.light()
@@ -470,15 +474,6 @@ extension ComposerCaptureSession {
     func setEditAspect(_ aspect: CGFloat) {
         guard phase.isEditing, !isRenderingLook else { return }
         editAspect = ComposerEditScene.clampedAspect(aspect)
-    }
-
-    func applyCropPreset(_ preset: ComposerCropPreset) {
-        setEditAspect(preset.aspect(source: editExtent?.size ?? .zero))
-    }
-
-    /// Le preset que la scène réalise ; `nil` pour un recadrage libre.
-    var cropPreset: ComposerCropPreset? {
-        editAspect.flatMap { ComposerCropPreset.matching($0, source: editExtent?.size ?? .zero) }
     }
 
     // MARK: - La découpe (#9353)

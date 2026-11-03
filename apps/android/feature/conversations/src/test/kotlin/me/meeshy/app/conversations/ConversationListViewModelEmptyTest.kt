@@ -33,6 +33,7 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.lock.ConversationUnlockSessionStore
 import me.meeshy.sdk.lock.InMemoryConversationLockStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
@@ -103,6 +104,8 @@ class ConversationListViewModelEmptyTest {
             every { this@mockk.participantUnbanned } returns MutableSharedFlow()
             every { this@mockk.unreadUpdated } returns unreadUpdated
             every { this@mockk.messageReceived } returns messageReceived
+            every { this@mockk.messageEdited } returns MutableSharedFlow()
+            every { this@mockk.messageDeleted } returns MutableSharedFlow()
             every { this@mockk.conversationUpdated } returns conversationUpdated
             every { this@mockk.conversationDeleted } returns conversationDeleted
             every { this@mockk.conversationRestored } returns conversationRestored
@@ -189,7 +192,7 @@ class ConversationListViewModelEmptyTest {
         statusBarCache: StatusBarCache = statusBarCache(),
     ) = ConversationListViewModel(
         repo, messageRepo, socket, workManager, draftStore, starredStore,
-        categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore,
+        categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore, ConversationUnlockSessionStore(),
         storyRepository, statusBarCache, io.mockk.mockk(relaxed = true),
         me.meeshy.sdk.network.InMemoryNetworkMonitor(),
         io.mockk.mockk(relaxed = true),

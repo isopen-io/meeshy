@@ -123,3 +123,20 @@ internal object BubbleQuotedReplyBuilder {
     private val ApiMessageAttachment.isQuotedImage: Boolean
         get() = mimeType?.startsWith("image/") == true
 }
+
+/** La fiche de l'auteur cité : jamais pour soi, un message supprimé ni un auteur sans compte (rien à ouvrir). */
+internal fun quotedAuthorProfile(
+    reply: ApiMessageReplyPreview?,
+    senderName: String?,
+    currentUserId: String?,
+): me.meeshy.sdk.model.profile.ProfileSheetUser? {
+    if (reply == null || reply.deletedAt != null) return null
+    val userId = reply.authorUserId?.takeIf { it.isNotBlank() } ?: return null
+    if (userId == currentUserId) return null
+    return me.meeshy.sdk.model.profile.ProfileSheetUser(
+        userId = userId,
+        username = reply.sender?.username ?: senderName.orEmpty(),
+        displayName = senderName,
+        avatarUrl = reply.authorAvatarUrl,
+    )
+}

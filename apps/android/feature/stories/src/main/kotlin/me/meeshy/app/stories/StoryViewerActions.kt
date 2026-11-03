@@ -1,14 +1,21 @@
 package me.meeshy.app.stories
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import me.meeshy.app.feed.rememberContentShareOut
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.composer.StoryRepostAudience
+import me.meeshy.sdk.model.story.StoryRepostDestination
 import me.meeshy.sdk.model.share.ShareCard
 import me.meeshy.sdk.model.share.ShareCards
 import me.meeshy.sdk.model.share.ShareSubject
+import me.meeshy.sdk.model.story.StoryOptionsMenuEntry
+import me.meeshy.sdk.model.story.StoryTranscriptState
 import me.meeshy.feature.stories.R
 import me.meeshy.ui.haptics.MeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.share.LocalShareLauncher
 import me.meeshy.ui.share.open
 
@@ -25,6 +32,17 @@ internal class StoryViewerActions(
     val share: () -> Unit,
     val openSendTo: () -> Unit,
     val repost: () -> Unit,
+    /** « Republier » en post ou en réel, du sous-menu Partager (#15067) ; `null` : pas la story d'un autre, ou audience qui ne se repartage pas. */
+    val repostTo: ((StoryRepostDestination) -> Unit)? = null,
+    /** Les entrées du menu ⋮ qu'un autre lot branche (plein écran, transcription, imager, rendre privée). */
+    val entryHandlers: Map<StoryOptionsMenuEntry, StoryMenuEntryAction> = emptyMap(),
+)
+
+/** Une entrée de menu branchée de l'extérieur : son libellé, son icône et son geste. */
+internal class StoryMenuEntryAction(
+    @StringRes val labelRes: Int,
+    val icon: ImageVector,
+    val onClick: () -> Unit,
 )
 
 /** L'audience d'une story qui s'ouvre sans compte — la seule qui reçoit un lien suivi (#14315). */
@@ -36,6 +54,7 @@ internal fun rememberStoryViewerActions(
     currentItem: StoryItem?,
     chrome: StoryViewerChromeState,
     haptics: MeeshyHaptics,
+    fullscreen: StoryFullscreenSession,
     viewModel: StoryViewerViewModel,
     onClose: () -> Unit,
     onOpenProfile: (String) -> Unit,
@@ -75,5 +94,35 @@ internal fun rememberStoryViewerActions(
             haptics.light()
             viewModel.repostCurrentStory()
         },
+        repostTo = { destination: StoryRepostDestination ->
+            haptics.light()
+            viewModel.repostCurrentStory(destination)
+        }.takeIf { !state.isOwnStory && StoryRepostAudience.isRepublishable(currentItem?.visibility) },
+        entryHandlers = buildMap {
+            put(StoryOptionsMenuEntry.Fullscreen, fullscreenMenuEntry(fullscreen, haptics))
+            if (StoryTranscriptState.isAvailable(currentItem?.storyEffects)) put(StoryOptionsMenuEntry.Transcript, transcriptMenuEntry(chrome, haptics))
+        },
     )
 }
+
+/** « Transcription » du menu ⋮ : éteinte par défaut, elle remplace la légende tant qu'elle est demandée. */
+private fun transcriptMenuEntry(chrome: StoryViewerChromeState, haptics: MeeshyHaptics): StoryMenuEntryAction =
+    StoryMenuEntryAction(
+        labelRes = R.string.story_viewer_transcript_title,
+        icon = MeeshyIcons.Subtitles,
+        onClick = {
+            haptics.light()
+            chrome.transcript = chrome.transcript.toggled()
+        },
+    )
+
+/** « Plein écran » / « Quitter le plein écran » du menu ⋮ : la même bascule que le glissé haut (iOS, un comportement, deux entrées). */
+private fun fullscreenMenuEntry(fullscreen: StoryFullscreenSession, haptics: MeeshyHaptics): StoryMenuEntryAction =
+    StoryMenuEntryAction(
+        labelRes = if (fullscreen.enabled) R.string.stories_viewer_fullscreen_exit else R.string.stories_viewer_fullscreen_enter,
+        icon = if (fullscreen.enabled) MeeshyIcons.CloseFullscreen else MeeshyIcons.OpenInFull,
+        onClick = {
+            haptics.light()
+            fullscreen.toggle()
+        },
+    )

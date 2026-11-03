@@ -145,7 +145,7 @@ class CallExtensionPointsWiringTest {
         CallPeerIndicatorsController(signalManager, silentTimer, silentRecording),
         CallWaitingController(signalManager, silentTimer, mockk(relaxed = true)),
         CallWatchdogsController(signalManager, silentBeats, silentTimer, silentTimer),
-        CallAnalyticsController(signalManager, clock),
+        CallAnalyticsController(signalManager, clock, InMemoryCallQualitySummaryStore(), silentAnalyticsSnapshots),
         CallExtensionPoints(
             controllers = CallFeatureControllerRegistry(setOfNotNull(controller)),
             overlays = CallOverlayRegistry(emptySet()),
@@ -158,6 +158,8 @@ class CallExtensionPointsWiringTest {
         recordingCallPreview(),
         silentTurnCredentials(signalManager),
         testGroupTitleWording,
+        CallEndReconciler(signalManager),
+        CallTeardownController(emptySet()),
     )
 
     @Test

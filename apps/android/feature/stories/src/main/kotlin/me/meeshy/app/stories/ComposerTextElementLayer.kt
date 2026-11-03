@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
+import me.meeshy.ui.story.canvas.SceneTextFontResolver
 import me.meeshy.ui.theme.hexColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -153,7 +154,7 @@ internal fun TextElementLayer(
                 fontSize = canvasFontSize,
                 fontWeight = FontWeight(typography.fontWeight),
                 fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
-                fontFamily = typography.family.toFontFamily(),
+                fontFamily = SceneTextFontResolver.familyOf(typography.face),
                 letterSpacing = typography.letterSpacingEm.em,
             ),
         ) {
@@ -167,7 +168,7 @@ internal fun TextElementLayer(
                     fontSize = canvasFontSize,
                     fontWeight = FontWeight(typography.fontWeight),
                     fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
-                    fontFamily = typography.family.toFontFamily(),
+                    fontFamily = SceneTextFontResolver.familyOf(typography.face),
                     letterSpacing = typography.letterSpacingEm.em,
                     textAlign = element.align.toTextAlign(),
                     style = baseStyle.copy(drawStyle = Stroke(width = element.previewOutlinePx(canvasWidthPx))),
@@ -183,7 +184,7 @@ internal fun TextElementLayer(
                         fontSize = canvasFontSize,
                         fontWeight = FontWeight(typography.fontWeight),
                         fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
-                        fontFamily = typography.family.toFontFamily(),
+                        fontFamily = SceneTextFontResolver.familyOf(typography.face),
                         letterSpacing = typography.letterSpacingEm.em,
                         textAlign = element.align.toTextAlign(),
                     ),
@@ -194,7 +195,7 @@ internal fun TextElementLayer(
                             fontSize = canvasFontSize,
                             fontWeight = FontWeight(typography.fontWeight),
                             fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
-                            fontFamily = typography.family.toFontFamily(),
+                            fontFamily = SceneTextFontResolver.familyOf(typography.face),
                             letterSpacing = typography.letterSpacingEm.em,
                             textAlign = element.align.toTextAlign(),
                             drawStyle = Stroke(width = element.previewOutlinePx(canvasWidthPx)),
@@ -210,7 +211,7 @@ internal fun TextElementLayer(
                     fontSize = canvasFontSize,
                     fontWeight = FontWeight(typography.fontWeight),
                     fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
-                    fontFamily = typography.family.toFontFamily(),
+                    fontFamily = SceneTextFontResolver.familyOf(typography.face),
                     letterSpacing = typography.letterSpacingEm.em,
                     textAlign = element.align.toTextAlign(),
                     style = baseStyle,

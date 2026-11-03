@@ -1,5 +1,6 @@
 package me.meeshy.sdk.mention
 
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MentionedUser
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,6 +34,19 @@ class UserDisplayNameCache(private val capacity: Int) {
         val pairs = users.mapNotNull { user ->
             val name = user.displayName
             if (name != null && isTrackable(user.username, name)) user.username.lowercase() to name else null
+        }
+        if (pairs.isEmpty()) return
+        synchronized(lock) { pairs.forEach { (key, name) -> store(key, name) } }
+    }
+
+    /** Les auteurs et les mentions servis avec des messages : un nom connu une fois se résout hors ligne. */
+    fun trackFromMessages(messages: List<ApiMessage>) {
+        val pairs = messages.flatMap { message ->
+            val sender = message.sender
+            val author = sender?.let { (it.username ?: it.user?.username) to (it.displayName ?: it.user?.displayName) }
+            listOfNotNull(author) + message.mentionedUsers.orEmpty().map { it.username to it.displayName }
+        }.mapNotNull { (username, name) ->
+            if (username != null && name != null && isTrackable(username, name)) username.lowercase() to name else null
         }
         if (pairs.isEmpty()) return
         synchronized(lock) { pairs.forEach { (key, name) -> store(key, name) } }

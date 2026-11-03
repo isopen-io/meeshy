@@ -55,6 +55,7 @@ import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageEffectsEditor
 import me.meeshy.sdk.model.composer.ComposerCapability
 import me.meeshy.sdk.model.composer.ComposerConfiguration
+import me.meeshy.sdk.model.composer.ComposerCounterState
 import me.meeshy.sdk.model.composer.ComposerIconTint
 import me.meeshy.sdk.model.composer.ComposerProtection
 import me.meeshy.sdk.model.composer.ComposerToolbarDoors
@@ -112,6 +113,7 @@ internal fun ComposerToolbar(
     onFold: (() -> Unit)? = null,
     configuration: ComposerConfiguration = ComposerConfiguration.CONVERSATION,
     onSticker: (() -> Unit)? = null,
+    counter: ComposerCounterState = ComposerCounterState.Hidden,
 ) {
     val iconTint = composerIconTint(effects.flags)
     val flags = effects.flags
@@ -224,9 +226,11 @@ internal fun ComposerToolbar(
                     tint = iconTint,
                     accentColor = accentColor,
                     onPick = onPickLanguage,
+                    collapsed = scroll.maxValue > 0,
                 )
             }
         }
+        ComposerCharacterCounter(counter)
         val doors = ComposerToolbarDoors.trailing(
             offersLibrary = onLibrary != null,
             offersCamera = onCamera != null,
