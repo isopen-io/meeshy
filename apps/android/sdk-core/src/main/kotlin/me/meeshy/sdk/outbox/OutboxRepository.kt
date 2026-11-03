@@ -144,6 +144,22 @@ class OutboxRepository @Inject constructor(
      */
     suspend fun stateOf(cmid: String): OutboxState? = outboxDao.find(cmid)?.stateEnum
 
+    private val liveSends: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /**
+     * #14697 — [send] runs with [cmid] `INFLIGHT` and held LIVE in this process: a concurrent flush pass's
+     * [recoverInflight] leaves it alone, so sending another message during a long upload never restarts that upload.
+     */
+    suspend fun <T> sendingLive(cmid: String, send: suspend () -> T): T {
+        liveSends += cmid
+        try {
+            markInflight(cmid)
+            return send()
+        } finally {
+            liveSends -= cmid
+        }
+    }
+
     suspend fun markInflight(cmid: String) {
         val row = outboxDao.find(cmid) ?: return
         outboxDao.updateState(cmid, OutboxState.INFLIGHT.name, row.attempts, now())
@@ -352,8 +368,11 @@ class OutboxRepository @Inject constructor(
         return changed
     }
 
-    /** Crash-safe boot recovery (ARCHITECTURE.md §5) — any orphaned `INFLIGHT` row becomes `PENDING`. */
-    suspend fun recoverInflight(): Int = outboxDao.resetInflight(now())
+    /**
+     * Crash-safe recovery (ARCHITECTURE.md §5) — any orphaned `INFLIGHT` row becomes `PENDING`; a row a live pass of this
+     * process is still sending ([sendingLive]) is not orphaned (#14697).
+     */
+    suspend fun recoverInflight(): Int = outboxDao.resetInflightExcept(liveSends.toList(), now())
 
     /**
      * The account a write beginning NOW belongs to (#13555) — taken by a caller when the user ACTS, before any work that
