@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -180,7 +178,7 @@ private fun LoginRecoveryLinks(
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(0.dp)) {
         TextButton(onClick = onMagicLink, enabled = enabled) {
             Icon(
-                imageVector = Icons.Filled.AutoFixHigh,
+                imageVector = MeeshyIcons.MagicWand,
                 contentDescription = null,
                 tint = MeeshyPalette.Purple500,
                 modifier = Modifier.size(16.dp),

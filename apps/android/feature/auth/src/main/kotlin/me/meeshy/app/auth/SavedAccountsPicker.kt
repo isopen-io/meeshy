@@ -7,9 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -30,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.auth.R
 import me.meeshy.sdk.model.auth.SavedAccount
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -113,7 +111,7 @@ internal fun SavedAccountRow(
                 }
 
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    imageVector = MeeshyIcons.ChevronForward,
                     contentDescription = null,
                     tint = MeeshyTheme.tokens.textMuted,
                 )
@@ -121,7 +119,7 @@ internal fun SavedAccountRow(
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
                     text = { Text(removeLabel, color = MeeshyTheme.tokens.error) },
-                    leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null, tint = MeeshyTheme.tokens.error) },
+                    leadingIcon = { Icon(MeeshyIcons.Close, contentDescription = null, tint = MeeshyTheme.tokens.error) },
                     onClick = {
                         menuOpen = false
                         onRemove()
