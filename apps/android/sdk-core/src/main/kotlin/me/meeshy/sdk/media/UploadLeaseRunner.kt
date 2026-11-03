@@ -8,7 +8,7 @@ import javax.inject.Inject
 /**
  * Le bail d'un worker WorkManager : `setForeground` pose la notification « Envoi en cours… » (type `dataSync`) AVANT
  * le premier octet ; WorkManager la retire quand le worker se termine, donc aucune notification n'est orpheline.
- * [expire] est appelé par `onStopped` : l'arrêt par le système (timeout `dataSync`, contraintes perdues) annule le PATCH
+ * [expire] est appelé quand le worker est annulé : l'arrêt par le système (timeout `dataSync`, contraintes perdues) annule le PATCH
  * en cours — le point de reprise TUS est déjà écrit après chaque tronçon accepté.
  */
 class WorkerUploadLeaseProvider(
@@ -40,7 +40,7 @@ class WorkerUploadLeaseProvider(
  * Exécute un travail d'envoi sous bail quand [leased] ; sans fournisseur ([Passthrough]) le travail court nu.
  * Rend `null` quand le système a repris la main : l'appelant laisse alors la ligne à reprendre.
  */
-/** Un worker qui veut être prévenu de son bail pour l'expirer depuis `onStopped`. */
+/** Un worker qui veut être prévenu de son bail pour l'expirer quand il est annulé. */
 interface LeaseExpiringWorker {
     fun attachLease(provider: UploadLeaseProvider)
 }

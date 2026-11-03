@@ -1,6 +1,9 @@
 package me.meeshy.sdk.call
 
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,12 +21,18 @@ public class CallActivityGate @Inject constructor() {
     private val lock = Any()
     private var pending: (() -> Unit)? = null
 
+    private val activeFlow = MutableStateFlow(false)
+
     public val isActive: Boolean get() = active.get()
+
+    /** Observable : un lecteur (les réels) se met en pause à l'appel et reprend à sa fin. */
+    public val isActiveFlow: StateFlow<Boolean> = activeFlow.asStateFlow()
 
     /** Bascule l'état ; le passage à `false` rejoue l'opération différée, hors verrou. */
     public fun setActive(value: Boolean) {
         val replay = synchronized(lock) {
             active.set(value)
+            activeFlow.value = value
             if (value) null else pending.also { pending = null }
         }
         replay?.invoke()

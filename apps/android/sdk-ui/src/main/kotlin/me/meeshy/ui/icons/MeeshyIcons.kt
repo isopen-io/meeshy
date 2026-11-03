@@ -263,7 +263,6 @@ import androidx.compose.material.icons.outlined.Warning as OuWarning
 import androidx.compose.material.icons.outlined.AddPhotoAlternate as OuAddPhotoAlternate
 import androidx.compose.material.icons.filled.Archive as FiArchive
 import androidx.compose.material.icons.outlined.AttachFile as OuAttachFile
-import androidx.compose.material.icons.automirrored.filled.ArrowBack as AfArrowBack
 import androidx.compose.material.icons.filled.Badge as FiBadge
 import androidx.compose.material.icons.filled.BugReport as FiBugReport
 import androidx.compose.material.icons.filled.Build as FiBuild
@@ -577,7 +576,6 @@ public object MeeshyIcons {
     public val AddPhotoAlternateOutlined: ImageVector get() = Icons.Outlined.OuAddPhotoAlternate
     public val Archive: ImageVector get() = Icons.Filled.FiArchive
     public val AttachFileOutlined: ImageVector get() = Icons.Outlined.OuAttachFile
-    public val BackArrow: ImageVector get() = Icons.AutoMirrored.Filled.AfArrowBack
     public val Badge: ImageVector get() = Icons.Filled.FiBadge
     public val BugReport: ImageVector get() = Icons.Filled.FiBugReport
     public val Build: ImageVector get() = Icons.Filled.FiBuild
