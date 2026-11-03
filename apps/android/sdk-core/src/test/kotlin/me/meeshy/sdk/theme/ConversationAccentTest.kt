@@ -4,6 +4,13 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ApiParticipant
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import me.meeshy.sdk.model.appearance.AppearanceGamut
+import me.meeshy.sdk.model.appearance.AppearanceGamutEntry
+import me.meeshy.sdk.model.appearance.AppearanceGamutShade
+import me.meeshy.sdk.model.appearance.AppearanceScheme
 import org.junit.Test
 
 class ConversationAccentTest {
@@ -254,5 +261,76 @@ class ConversationAccentTest {
             .copy(preferences = ApiConversationPreferences(customName = "Mon ami"))
 
         assertThat(renamed.displayTitle(currentUserId = "me")).isEqualTo("Mon ami")
+    }
+
+    private val gamut = AppearanceGamut(
+        listOf(
+            AppearanceGamutEntry(
+                key = "coral",
+                name = "Coral",
+                light = AppearanceGamutShade(surface = "#FFE4E1", accent = "#E4572E"),
+                dark = AppearanceGamutShade(surface = "#3A1C14", accent = "#FF8A65"),
+            ),
+        ),
+    )
+
+    private fun conversationWithAccent(key: String?) = ApiConversation(
+        id = "c1",
+        title = "Team",
+        type = "group",
+        preferences = ApiConversationPreferences(
+            appearance = JsonObject(mapOf("v" to JsonPrimitive(1), "accent" to (key?.let(::JsonPrimitive) ?: JsonNull))),
+        ),
+    )
+
+    @Test
+    fun `without a personal accent displayPalette serves the computed palette unchanged`() {
+        val conversation = ApiConversation(id = "c1", title = "Team", type = "group")
+
+        assertThat(conversation.displayPalette(gamut, AppearanceScheme.LIGHT)).isEqualTo(conversation.accentColorPalette())
+    }
+
+    @Test
+    fun `an automatic accent keeps the computed palette`() {
+        val conversation = conversationWithAccent(null)
+
+        assertThat(conversation.displayPalette(gamut, AppearanceScheme.DARK)).isEqualTo(conversation.accentColorPalette())
+    }
+
+    @Test
+    fun `a chosen accent is derived at plus and minus 30 degrees in the light range`() {
+        val conversation = conversationWithAccent("coral")
+
+        val palette = conversation.displayPalette(gamut, AppearanceScheme.LIGHT)
+
+        assertThat(palette).isEqualTo(
+            DynamicColorGenerator.ColorPalette.derived("E4572E", conversation.accentColorPalette().saturationBoost),
+        )
+        assertThat(palette.secondary).isNotEqualTo(palette.accent)
+    }
+
+    @Test
+    fun `the dark scheme selects the dark range`() {
+        val conversation = conversationWithAccent("coral")
+
+        assertThat(conversation.displayPalette(gamut, AppearanceScheme.DARK).primary).isEqualTo("FF8A65")
+    }
+
+    @Test
+    fun `an accent outside the gamut falls back to the computed palette`() {
+        val conversation = conversationWithAccent("unknown")
+
+        assertThat(conversation.displayPalette(gamut, AppearanceScheme.LIGHT)).isEqualTo(conversation.accentColorPalette())
+    }
+
+    @Test
+    fun `the personal accent is never written into the computed palette`() {
+        val conversation = conversationWithAccent("coral")
+
+        conversation.displayPalette(gamut, AppearanceScheme.LIGHT)
+
+        assertThat(conversation.accentColorPalette()).isEqualTo(
+            ApiConversation(id = "c1", title = "Team", type = "group").accentColorPalette(),
+        )
     }
 }

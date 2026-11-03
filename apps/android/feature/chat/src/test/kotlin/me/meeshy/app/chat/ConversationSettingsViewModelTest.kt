@@ -13,7 +13,10 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.appearance.AppearanceCatalogLoader
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.model.appearance.AppearanceCatalog
+import me.meeshy.sdk.model.appearance.ConversationAppearance
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MemberRole
@@ -70,8 +73,13 @@ class ConversationSettingsViewModelTest {
         every { it.currentUser } returns MutableStateFlow(user)
     }
 
+    private fun loader(): AppearanceCatalogLoader = mockk<AppearanceCatalogLoader>(relaxed = true).also {
+        every { it.current } returns AppearanceCatalog.EMPTY
+        coEvery { it.catalog() } returns AppearanceCatalog.EMPTY
+    }
+
     private fun viewModel(repository: ConversationRepository, user: MeeshyUser? = MeeshyUser(id = "me", username = "me")) =
-        ConversationSettingsViewModel(repository, session(user))
+        ConversationSettingsViewModel(repository, session(user), loader())
 
     @Test
     fun `load seeds a clean form from the cached conversation`() = runTest {
@@ -211,5 +219,47 @@ class ConversationSettingsViewModelTest {
             advanceUntilIdle()
             assertThat(vm.state.value.mayEdit).isFalse()
         }
+    }
+
+    @Test
+    fun `setAccent writes the personal accent through the optimistic mutation`() = runTest {
+        val repository = repo()
+        coEvery { repository.setAppearanceOptimistic(any(), any()) } returns true
+        val vm = viewModel(repository)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        vm.setAccent("coral")
+        advanceUntilIdle()
+
+        io.mockk.coVerify { repository.setAppearanceOptimistic("c1", ConversationAppearance.DEFAULT.withAccent("coral")) }
+        assertThat(vm.state.value.appearance.accent).isEqualTo("coral")
+    }
+
+    @Test
+    fun `setAccent returns to the previous choice when the write is refused`() = runTest {
+        val repository = repo()
+        coEvery { repository.setAppearanceOptimistic(any(), any()) } returns false
+        val vm = viewModel(repository)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        vm.setAccent("coral")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.appearance.accent).isNull()
+    }
+
+    @Test
+    fun `setAccent with the current choice writes nothing`() = runTest {
+        val repository = repo()
+        val vm = viewModel(repository)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        vm.setAccent(null)
+        advanceUntilIdle()
+
+        io.mockk.coVerify(exactly = 0) { repository.setAppearanceOptimistic(any(), any()) }
     }
 }
