@@ -344,6 +344,15 @@
     <string name="conversation_stats_type_text">Texto</string>
     <string name="conversation_stats_type_video">Vídeos</string>
     <string name="conversation_stats_words">Palavras</string>
+    <string name="dashboard_health">Saúde</string>
+    <string name="dashboard_period_all">Desde o início</string>
+    <string name="dashboard_period_month">Últimos 30 dias</string>
+    <string name="dashboard_period_week">Últimos 7 dias</string>
+    <string name="dashboard_section_participant_activity">Atividade por participante</string>
+    <string name="dashboard_section_statistics">Estatísticas</string>
+    <string name="dashboard_stat_documents">Documentos</string>
+    <string name="dashboard_stat_links">Links</string>
+    <string name="dashboard_tone">Tom: %1$s</string>
     <string name="encryption_close">Fechar</string>
     <string name="encryption_detail_activate">Ativar a criptografia</string>
     <string name="encryption_detail_activation_footer_final">A criptografia de ponta a ponta nunca é desativada, nem a criptografia em nossos servidores. Você sempre poderá abrir outra conversa, sem criptografia de ponta a ponta, com as mesmas pessoas.</string>

@@ -344,6 +344,15 @@
     <string name="conversation_stats_type_text">Texto</string>
     <string name="conversation_stats_type_video">Vídeos</string>
     <string name="conversation_stats_words">Palabras</string>
+    <string name="dashboard_health">Salud</string>
+    <string name="dashboard_period_all">Todo el tiempo</string>
+    <string name="dashboard_period_month">Últimos 30 días</string>
+    <string name="dashboard_period_week">Últimos 7 días</string>
+    <string name="dashboard_section_participant_activity">Actividad por participante</string>
+    <string name="dashboard_section_statistics">Estadísticas</string>
+    <string name="dashboard_stat_documents">Documentos</string>
+    <string name="dashboard_stat_links">Enlaces</string>
+    <string name="dashboard_tone">Tono: %1$s</string>
     <string name="encryption_close">Cerrar</string>
     <string name="encryption_detail_activate">Activar el cifrado</string>
     <string name="encryption_detail_activation_footer_final">El cifrado de extremo a extremo nunca se desactiva, ni tampoco el cifrado en nuestros servidores. Siempre podrás abrir otra conversación, sin cifrado de extremo a extremo, con las mismas personas.</string>

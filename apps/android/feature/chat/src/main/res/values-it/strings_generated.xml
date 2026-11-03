@@ -344,6 +344,15 @@
     <string name="conversation_stats_type_text">Testo</string>
     <string name="conversation_stats_type_video">Video</string>
     <string name="conversation_stats_words">Parole</string>
+    <string name="dashboard_health">Salute</string>
+    <string name="dashboard_period_all">Dall\'inizio</string>
+    <string name="dashboard_period_month">Ultimi 30 giorni</string>
+    <string name="dashboard_period_week">Ultimi 7 giorni</string>
+    <string name="dashboard_section_participant_activity">Attività per partecipante</string>
+    <string name="dashboard_section_statistics">Statistiche</string>
+    <string name="dashboard_stat_documents">Documenti</string>
+    <string name="dashboard_stat_links">Link</string>
+    <string name="dashboard_tone">Tono: %1$s</string>
     <string name="encryption_close">Chiudi</string>
     <string name="encryption_detail_activate">Attiva la crittografia</string>
     <string name="encryption_detail_activation_footer_final">La crittografia end-to-end non si disattiva mai, e nemmeno quella sui nostri server. Potrai sempre aprire un’altra conversazione, senza crittografia end-to-end, con le stesse persone.</string>
