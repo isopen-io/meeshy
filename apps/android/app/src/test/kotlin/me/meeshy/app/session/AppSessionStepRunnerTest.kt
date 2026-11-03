@@ -102,7 +102,9 @@ class AppSessionStepRunnerTest {
         runner.run(SessionClosingStep.ResetNotifications)
         runner.run(SessionClosingStep.ClearFriendships)
 
-        verify { workManager.cancelAllWork() }
+        AppSessionStepRunner.SESSION_WORK_TAGS.forEach { verify { workManager.cancelAllWorkByTag(it) } }
+        verify(exactly = 0) { workManager.cancelAllWork() }
+        assertThat(AppSessionStepRunner.SESSION_WORK_TAGS).doesNotContain(me.meeshy.sdk.auth.ServerLogoutWorker::class.java.name)
         verify { realtime.closeRealtime() }
         verify { activeCall.hangUp() }
         verify { callService.sync(null) }

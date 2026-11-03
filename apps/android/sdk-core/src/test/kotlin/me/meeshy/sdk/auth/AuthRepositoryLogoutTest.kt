@@ -5,6 +5,8 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.MeeshyUser
@@ -179,6 +181,37 @@ class AuthRepositoryLogoutTest {
 
         assertThat(order).containsExactly("close", "wipe").inOrder()
         assertThat(tokensWhenClosing).isNull()
+    }
+
+    @Test
+    fun `avec l'executeur de fermeture, la deconnexion rend la main et lui remet les jetons d'avant l'effacement`() = runTest {
+        val store = InMemoryTokenStore(jwt = "jwt-a", sessionToken = "sess-a")
+        val api = mockk<AuthApi>()
+        val handed = mutableListOf<Pair<String?, String?>>()
+        val scheduler = object : ServerLogoutScheduler {
+            override fun schedule(jwt: String?, sessionToken: String?) {
+                handed += jwt to sessionToken
+            }
+        }
+        val quiet = object : ServerLogoutLog {
+            override fun info(message: String) = Unit
+            override fun warn(message: String) = Unit
+            override fun error(message: String) = Unit
+        }
+        coEvery { api.logout(any(), any()) } throws IOException("offline")
+        val serverLogout = ServerLogout(api, scheduler, quiet, backgroundScope)
+        val repository = AuthRepository(
+            api, store, SessionRepository(api, store), RecordingTeardown(), SyncSeqTracker(), serverLogout = serverLogout,
+        )
+
+        repository.logout()
+
+        assertThat(store.isAuthenticated).isFalse()
+        // Les tâches du backgroundScope sont ignorées par advanceUntilIdle : on avance le temps virtuel (0 s, 1 s, 5 s).
+        advanceTimeBy(6_001)
+        runCurrent()
+        coVerify(exactly = 3) { api.logout("Bearer jwt-a", "sess-a") }
+        assertThat(handed).containsExactly("jwt-a" to "sess-a")
     }
 
     @Test
