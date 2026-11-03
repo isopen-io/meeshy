@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.first
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.ConversationPreferencesUpdate
+import me.meeshy.sdk.net.api.MarkReadBody
+import me.meeshy.sdk.outbox.ReadReceiptPayload
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.outbox.ConversationPrefsPayload
 import me.meeshy.sdk.outbox.OutboxKind
@@ -28,10 +30,21 @@ import javax.inject.Inject
 /** `READ_RECEIPT`: marks the row's conversation as read. */
 public class ReadReceiptHandler @Inject constructor(
     private val conversationApi: ConversationApi,
+    private val json: Json,
 ) : OutboxKindHandler {
 
-    override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { conversationApi.markRead(row.targetId) }.toSendResult()
+    override suspend fun send(row: OutboxEntity): SendResult {
+        val declared = runCatching { json.decodeFromString<ReadReceiptPayload>(row.payload) }.getOrNull()
+        val body = declared?.takeIf { it.language != null || it.messageIds != null }?.let {
+            MarkReadBody(
+                messageIds = it.messageIds,
+                language = it.language,
+                messageLanguages = it.messageLanguages?.takeIf(Map<String, String>::isNotEmpty),
+                caughtUpToMessageId = it.caughtUpToMessageId,
+            )
+        } ?: return apiCall { conversationApi.markRead(row.targetId) }.toSendResult()
+        return apiCall { conversationApi.markReadDeclaring(row.targetId, body) }.toSendResult()
+    }
 }
 
 /** `MARK_UNREAD`: marks the row's conversation as unread. */
