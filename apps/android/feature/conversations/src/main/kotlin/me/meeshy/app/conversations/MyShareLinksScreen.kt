@@ -35,7 +35,6 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -75,6 +74,7 @@ import me.meeshy.sdk.model.displayName
 import me.meeshy.sdk.model.isExpired
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyCard
+import me.meeshy.ui.component.skeleton.SkeletonLinkList
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -116,12 +116,9 @@ fun MyShareLinksScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 when {
-                    state.showColdSpinner -> Box(Modifier.fillMaxSize().headerReserve()) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.align(Alignment.Center),
-                            color = MeeshyPalette.Indigo500,
-                        )
-                    }
+                    state.showColdSpinner -> SkeletonLinkList(
+                        Modifier.fillMaxSize().headerReserve().padding(horizontal = MeeshySpacing.lg),
+                    )
 
                     state.showEmptyState -> EmptyLinks()
 

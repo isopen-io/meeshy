@@ -44,6 +44,7 @@ internal fun ComposerInputCapsule(
     focusRequester: FocusRequester = remember { FocusRequester() },
     onFocusChange: (Boolean) -> Unit = {},
     placeholder: String? = null,
+    fieldModifier: Modifier = Modifier,
 ) {
     val micLabel = stringResource(R.string.chat_record_voice)
     MessageComposerCapsule(
@@ -72,5 +73,6 @@ internal fun ComposerInputCapsule(
         },
         focusRequester = focusRequester,
         onFocusChange = onFocusChange,
+        fieldModifier = fieldModifier,
     )
 }

@@ -26,6 +26,7 @@ import coil.request.ImageRequest
 import me.meeshy.sdk.mediahub.BackgroundPhotoSource
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.appearance.ConversationAppearance
+import me.meeshy.sdk.model.appearance.ConversationBackgroundPhotoVerdict
 import me.meeshy.sdk.model.appearance.ConversationBackgroundResolution
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.appearance.AppearanceDesignView
@@ -104,7 +105,7 @@ private fun PhotoLayer(photo: ConversationBackgroundResolution.Photo, host: Conv
             host.photoHeaders(source).forEach { (name, value) -> addHeader(name, value) }
         }.build()
     }
-    // Une pièce disparue, refusée ou chiffrée rend Signature : la couche s'efface plutôt que de peindre un fond mort.
+    // Une pièce disparue ou refusée (403/404/410) rend Signature ; une panne passagère garde la couche (verdict iOS).
     var failed by remember(photo.attachmentId) { mutableStateOf(false) }
     if (failed) return
     val backdrop = MeeshyTheme.tokens.backgroundPrimary
@@ -113,7 +114,10 @@ private fun PhotoLayer(photo: ConversationBackgroundResolution.Photo, host: Conv
             model = request,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            onError = { failed = true },
+            onError = { error ->
+                val status = (error.result.throwable as? coil.network.HttpException)?.response?.code
+                if (ConversationBackgroundPhotoVerdict.of(status) == ConversationBackgroundPhotoVerdict.GONE) failed = true
+            },
             modifier = Modifier.fillMaxSize().blur(photo.blur.dp),
         )
         Box(

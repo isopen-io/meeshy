@@ -11,7 +11,9 @@ import androidx.work.Configuration
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.auth.WorkManagerServerLogoutScheduler
 import me.meeshy.app.push.DeclinedCallStore
 import me.meeshy.app.push.NotificationChannelInstaller
 import me.meeshy.app.settings.CrashDiagnosticsRecorder
@@ -65,6 +67,9 @@ class MeeshyApplication : Application(), Configuration.Provider, ImageLoaderFact
     @Inject
     lateinit var lifecycleRunner: AppLifecycleRunner
 
+    @Inject
+    lateinit var serverLogoutScheduler: WorkManagerServerLogoutScheduler
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -97,6 +102,7 @@ class MeeshyApplication : Application(), Configuration.Provider, ImageLoaderFact
         appInitializerRunner.runAll()
         lifecycleDispatcher.onAppCreate()
         lifecycleRunner.runStartup()
+        ProcessLifecycleOwner.get().lifecycleScope.launch(Dispatchers.IO) { serverLogoutScheduler.resumeOrphans() }
     }
 
     override fun onTrimMemory(level: Int) {

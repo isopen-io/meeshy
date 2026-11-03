@@ -165,6 +165,7 @@
     <string name="call_transcript_participant">Teilnehmer</string>
     <string name="call_transcript_show_original">Originaltext anzeigen</string>
     <string name="call_transcript_show_translated">Übersetzung anzeigen</string>
+    <string name="call_video_permission_denied">Kamera: Zugriff verweigert — zum Öffnen der Einstellungen tippen</string>
     <string name="call_zoom_cycle_hint">Tippen, um zur nächsten Zoomstufe zu wechseln</string>
     <string name="call_zoom_hint">Nach oben oder unten wischen, um zu zoomen. Auf dem Bildschirm dein Bild auseinanderziehen; zweimal tippen für 1×</string>
     <string name="call_zoom_label">Zoom meiner Kamera</string>

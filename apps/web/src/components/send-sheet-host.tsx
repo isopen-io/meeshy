@@ -27,8 +27,10 @@ const LazySendSheet = lazy(loadSheet);
    chaque `import()` de l'entrée y paie sa liste de dépendances (#10974). Au lancement, la file relit ce qui n'était pas
    parti (IndexedDB) et le rejoue ; une file vide ne charge aucun port réseau. */
 const LazySendQueue = lazy(() =>
-  import('./send-toast-host').then(({ SendToastHost, startSendQueue }) => {
+  import('./send-toast-host').then(({ SendToastHost, startSendQueue, startOutboxDurability }) => {
     startSendQueue();
+    /* Les envois du fil posés hors ligne (#14698) : relus et rejoués par la même frontière. */
+    startOutboxDurability();
     return { default: SendToastHost };
   }),
 );

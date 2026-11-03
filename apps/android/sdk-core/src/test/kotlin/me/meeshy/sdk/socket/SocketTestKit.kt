@@ -24,6 +24,7 @@ internal class FakeRealtimeSocket(val auth: Map<String, Any>) : RealtimeSocket {
     var disconnectCalls = 0
     var removedAll = false
     var live = false
+    var reconnectsStopped = false
     val emitted = mutableListOf<String>()
     val acks = mutableListOf<Pair<String, (Array<Any>) -> Unit>>()
 
@@ -41,6 +42,9 @@ internal class FakeRealtimeSocket(val auth: Map<String, Any>) : RealtimeSocket {
     override fun disconnect() {
         disconnectCalls++
         live = false
+    }
+    override fun stopReconnecting() {
+        reconnectsStopped = true
     }
     override fun emit(event: String, data: JSONObject) {
         emitted += event

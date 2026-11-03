@@ -164,6 +164,7 @@ class ChatPlainSignalGestureTest {
             SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1")),
             ownReactionWithdrawals = OwnReactionWithdrawals(),
             outOfThreadSendGate = OutOfThreadSendGate { OutOfThreadAdmission.SEND },
+            openConversations = io.mockk.mockk(relaxed = true),
             endToEnd = endToEnd,
         )
         return Harness(vm, repo, workManager, hidden)
