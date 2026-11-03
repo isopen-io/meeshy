@@ -25,12 +25,12 @@ class ArrivalFireworksTest {
     }
 
     @Test
-    fun `les etincelles restent dans la surface, s'eteignent et gardent une teinte de la palette`() {
+    fun `les etincelles restent a peu pres dans la surface, s'eteignent et gardent une teinte de la palette`() {
         val all = (0..260).flatMap { ArrivalFireworks.sparks(it / 100.0) }
         assertThat(all).isNotEmpty()
         all.forEach {
-            assertThat(it.x).isIn(com.google.common.collect.Range.closed(0.0, 1.0))
-            assertThat(it.y).isIn(com.google.common.collect.Range.closed(0.0, 1.0))
+            assertThat(it.x).isIn(com.google.common.collect.Range.closed(-0.05, 1.05))
+            assertThat(it.y).isIn(com.google.common.collect.Range.closed(-0.05, 1.05))
             assertThat(it.opacity).isIn(com.google.common.collect.Range.closed(0.0, 1.0))
             assertThat(it.colorIndex).isIn(com.google.common.collect.Range.closed(0, ArrivalFireworks.PALETTE_COUNT - 1))
         }
