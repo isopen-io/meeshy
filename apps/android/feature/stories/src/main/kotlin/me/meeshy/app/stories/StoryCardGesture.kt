@@ -56,6 +56,9 @@ internal class StoryCardMotion {
     val offsetX = Animatable(0f)
     val dragY = Animatable(0f)
     val dismissal = Animatable(0f)
+
+    /** 0 = carte à 0,92 / coin 24 dp, 1 = plein écran : le lecteur grandit à l'ouverture. */
+    val appear = Animatable(0f)
     var dragging by mutableStateOf(false)
     var transitioning = false
     var width = 0f
@@ -63,6 +66,17 @@ internal class StoryCardMotion {
 
 @Composable
 internal fun rememberStoryCardMotion(): StoryCardMotion = remember { StoryCardMotion() }
+
+private val AppearSpring = spring<Float>(
+    dampingRatio = StoryViewerCardTransform.APPEAR_DAMPING,
+    stiffness = 246.7f,
+)
+
+/** L'ouverture : la carte grandit de 0,92 à 1 en perdant son coin, sans flash (iOS `viewerDidAppear`). */
+@Composable
+internal fun StoryCardAppearOnOpen(motion: StoryCardMotion) {
+    LaunchedEffect(motion) { motion.appear.animateTo(1f, AppearSpring) }
+}
 
 /**
  * Un changement d'auteur qui ne vient pas d'un glissé (tap en bord, fin du dernier
@@ -91,21 +105,18 @@ internal fun Modifier.storyCardFrame(motion: StoryCardMotion): Modifier = this
         rotationY = StoryCubeTransform.faceDegrees(offset, width)
         transformOrigin = TransformOrigin(StoryCubeTransform.pivotFractionX(offset), 0.5f)
         cameraDistance = StoryCubeTransform.cameraDistance(width)
-        val progress = StoryCubeTransform.dismissProgress(
-            motion.dragY.value,
-            StoryCubeTransform.DISMISS_TRAVEL_DP.dp.toPx(),
+        val frame = StoryViewerCardTransform.frame(
+            appear = motion.appear.value,
+            dragY = motion.dragY.value,
+            dismissal = motion.dismissal.value,
+            screenHeight = size.height,
+            travelPx = StoryCubeTransform.DISMISS_TRAVEL_DP.dp.toPx(),
         )
-        val leaving = motion.dismissal.value
-        val scale = lerp(StoryCubeTransform.dismissScale(progress), 0.12f, leaving)
-        scaleX = scale
-        scaleY = scale
-        translationY = lerp(motion.dragY.value, size.height * 0.35f, leaving)
-        alpha = lerp(StoryCubeTransform.dismissAlpha(progress), 0f, leaving).coerceIn(0f, 1f)
-        val corner = lerp(
-            StoryCubeTransform.DISMISS_CORNER_DP * progress,
-            StoryCubeTransform.DISMISSING_CORNER_DP,
-            leaving,
-        ).dp.toPx()
+        scaleX = frame.scale
+        scaleY = frame.scale
+        translationY = frame.offsetY
+        alpha = frame.alpha
+        val corner = frame.cornerDp.dp.toPx()
         clip = corner > 0f
         if (clip) shape = RoundedCornerShape(corner)
     }
@@ -246,5 +257,3 @@ internal fun Modifier.storyCardDrag(
 }
 
 private enum class DragAxis { Undecided, Horizontal, Vertical, Ignored }
-
-private fun lerp(start: Float, stop: Float, fraction: Float): Float = start + (stop - start) * fraction
