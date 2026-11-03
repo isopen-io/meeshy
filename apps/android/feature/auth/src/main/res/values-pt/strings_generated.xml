@@ -297,6 +297,11 @@
     <string name="visitor_shared_by_story">%1$s compartilhou este story com você</string>
     <string name="visitor_signup">Criar uma conta</string>
     <string name="visitor_title">Entre no Meeshy</string>
+    <string name="welcome_createAccount">Criar conta</string>
+    <string name="welcome_createAccount_hint">Abre o formulário de cadastro</string>
+    <string name="welcome_signIn">Entrar</string>
+    <string name="welcome_signIn_hint">Abre a tela de login</string>
+    <string name="welcome_tagline">Escreva no seu idioma. Todos leem você no deles.</string>
     <string name="world_entry_back">Voltar</string>
     <string name="world_entry_close">Fechar</string>
     <string name="world_entry_continue">Continuar</string>

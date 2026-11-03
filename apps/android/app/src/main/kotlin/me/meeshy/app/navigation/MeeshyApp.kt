@@ -36,6 +36,7 @@ import me.meeshy.app.calls.IncomingCallViewModel
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.onboarding.OnboardingViewModel
+import me.meeshy.app.navigation.auth.WelcomeHost
 import me.meeshy.app.onboarding.BeneathOnboarding
 import me.meeshy.app.onboarding.hiddenBehindOnboarding
 import me.meeshy.app.navigation.graph.GameRoutes
@@ -328,6 +329,8 @@ fun MeeshyApp(
         }
 
         VisitorContentHost(navController = navController, isAuthenticated = authState.isAuthenticated)
+
+        WelcomeHost(navController, authViewModel, authState.isAuthenticated)
 
         NotificationPermissionOnArrival(isAuthenticated = authState.isAuthenticated)
 
