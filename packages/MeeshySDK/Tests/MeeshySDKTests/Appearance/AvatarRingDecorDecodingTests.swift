@@ -41,9 +41,45 @@ final class AvatarRingDecorDecodingTests: XCTestCase {
         XCTAssertNotEqual(again, try ring(decor: nil))
     }
 
-    func test_canvas_isCenteredAndReachTimesTheBox() {
-        let decor = AvatarRingDecor(reach: 1.4, back: nil, front: PackAssetRef(src: "bbbbbbbbbbbbbbbb.json", bytes: 1, sha256: String(repeating: "b", count: 64)))
-        XCTAssertEqual(decor?.side(forBox: 100) ?? 0, 140, accuracy: 0.001)
+    private func masque(reach: Double = 1.4) -> AvatarRingDecor {
+        AvatarRingDecor(reach: reach, back: nil, front: PackAssetRef(src: "bbbbbbbbbbbbbbbb.json", bytes: 1, sha256: String(repeating: "b", count: 64)))!
+    }
+
+    /// #15157 — miroir de `ringDecorFit` : sans place déclarée, le cadre tient dans la boîte de l'anneau seul.
+    func test_fit_withoutRoom_shrinksEverythingIntoTheRingBox() throws {
+        let fit = try XCTUnwrap(masque().fit(box: 100))
+        XCTAssertEqual(fit.scale, 1 / 1.4, accuracy: 1e-9)
+        XCTAssertEqual(fit.side, 100, accuracy: 1e-9)
+        XCTAssertEqual(fit.offset, 0, accuracy: 1e-9)
+    }
+
+    func test_fit_takesTheDeclaredRoom_neverMoreThanTheFilmAsks() throws {
+        let partial = try XCTUnwrap(masque().fit(box: 100, room: 10))
+        XCTAssertEqual(partial.side, 120, accuracy: 1e-9)
+        XCTAssertEqual(partial.scale, 120.0 / 140, accuracy: 1e-9)
+        XCTAssertEqual(partial.offset, -10, accuracy: 1e-9)
+        let full = try XCTUnwrap(masque().fit(box: 100, room: 40))
+        XCTAssertEqual(full.side, 140, accuracy: 1e-9)
+        XCTAssertEqual(full.scale, 1, accuracy: 1e-9)
+    }
+
+    func test_fit_neverPaintsPastTheBoxPlusTheRoom_atEverySize() {
+        for box in [44.0, 62, 88, 107, 140] {
+            for reach in [1.0, 1.2, 1.4, AvatarRingDecor.maxReach] {
+                for room in [0.0, 4, 12] {
+                    guard let fit = masque(reach: reach).fit(box: box, room: room) else { continue }
+                    XCTAssertLessThanOrEqual(fit.side, box + 2 * room + 1e-9)
+                    XCTAssertEqual(fit.side, box * reach * fit.scale, accuracy: 1e-9)
+                    XCTAssertLessThanOrEqual(fit.scale, 1)
+                }
+            }
+        }
+    }
+
+    func test_fit_tooSmallToRead_fallsBackToTheRingAlone() {
+        XCTAssertNil(masque().fit(box: 52))
+        XCTAssertNotNil(masque().fit(box: AvatarRingDecor.minBox * 1.4))
+        XCTAssertNil(masque(reach: 1).fit(box: 32))
     }
 
     func test_catalog_embedsTheShowcaseOfIllustratedFrames_eachWithBothFilms() throws {
