@@ -424,4 +424,9 @@
     <string name="viewer_save">Salva</string>
     <string name="viewer_saving">Salvataggio…</string>
     <string name="viewer_share_outside">Condividi</string>
+    <string name="voiceProfile_recording_createProfile">Crea il profilo vocale</string>
+    <string name="voiceProfile_recording_languagePicker">Lingua di registrazione</string>
+    <string name="voiceProfile_recording_min_duration">min %1$d s</string>
+    <string name="voiceProfile_recording_readAloud">Leggi questo testo ad alta voce</string>
+    <string name="voiceProfile_recording_sample">Campione %1$d</string>
 </resources>
