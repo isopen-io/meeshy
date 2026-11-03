@@ -75,14 +75,14 @@ final class ComposerCaptureTakesTests: XCTestCase {
         session.photoInFlightIntent = .gallery
         Self.publishPhoto(on: session)
         await Self.waitUntil { galerie.saveImageCount == 1 && session.takeWrite == nil }
-        let formatDeLaPrise = session.cropPreset
+        let formatDeLaPrise = ComposerCropFlow.preset(of: session)
         XCTAssertEqual(session.takeSaveState, .saved)
-        session.applyCropPreset(.square)
+        ComposerCropFlow.apply(.square, to: session)
         XCTAssertEqual(session.takeSaveState, .idle, "le carré n'est pas dans Photos : « Enregistrer » revient")
         session.saveTakeToPhotos()
         await Self.waitUntil { galerie.saveImageCount == 2 && session.takeWrite == nil }
         XCTAssertEqual(session.takeSaveState, .saved)
-        if let formatDeLaPrise { session.applyCropPreset(formatDeLaPrise) } else { XCTFail("la prise a un format") }
+        if let formatDeLaPrise { ComposerCropFlow.apply(formatDeLaPrise, to: session) } else { XCTFail("la prise a un format") }
         XCTAssertEqual(session.takeSaveState, .saved, "le format de la prise est déjà dans Photos")
         XCTAssertEqual(galerie.saveImageCount, 2, "aucun doublon")
     }

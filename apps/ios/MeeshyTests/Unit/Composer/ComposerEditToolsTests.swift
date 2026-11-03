@@ -454,7 +454,7 @@ final class ComposerEditToolsTests: XCTestCase {
         let photo = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
         photo.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
         photo.toggleEditTool(.crop)
-        photo.applyCropPreset(.square)
+        ComposerCropFlow.apply(.square, to: photo)
         let cadre = photo.editAspect
         photo.rezoom(from: photo.framing, scale: 2)
         XCTAssertEqual(photo.framing.scale, 2, accuracy: 0.001, "le pincement zoome l'image")
