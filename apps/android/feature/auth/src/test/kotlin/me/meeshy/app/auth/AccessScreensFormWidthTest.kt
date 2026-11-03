@@ -107,7 +107,7 @@ class AccessScreensFormWidthTest {
         val viewModel = signupViewModel()
         show { SignupScreen(onClose = {}, onRegistered = {}, viewModel = viewModel) }
 
-        compose.assertInCenteredFormColumn(hasSetTextAction())
+        compose.assertInCenteredFormColumn(hasSetTextAction().or(hasTestTag(SIGNUP_PRIMARY_TAG)))
     }
 
     @Test
