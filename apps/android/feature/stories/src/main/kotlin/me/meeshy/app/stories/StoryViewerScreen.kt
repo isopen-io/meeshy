@@ -63,13 +63,17 @@ fun StoryViewerScreen(
     val commentThread = rememberStoryCommentThread(state.currentStoryId)
     val currentItem = state.currentStoryId?.let(viewModel::rawItem)
     val commentCount = rememberStoryCommentCount(commentThread, currentItem?.commentCount ?: 0)
-    val railPlan = StoryRailPlan.resolve(
+    val liveRailPlan = StoryRailPlan.resolve(
         isOwnStory = state.isOwnStory,
         hasTranslatableContent = state.availableLanguages.isNotEmpty(),
         canReply = StoryReplyRules.canReply(state.isOwnStory, state.currentStoryId, state.authorUserId),
         canCompose = onComposeStory != null && state.canCompose,
         commentCount = commentCount,
         isRepublishable = StoryRepostAudience.isRepublishable(currentItem?.visibility),
+        hasAudibleSound = slide?.hasSound == true,
+    )
+    val railPlan = rememberFrozenRailPlan(
+        StoryRailFreezeInput(state.currentStoryId, liveRailPlan, slide?.hasSound == true, rememberStoryCommentsReconciled(commentThread)),
     )
     val composing = railPlan.pinsCommentComposer && storyCommentHolds(commentThread)
     val cover = StoryViewerCover(

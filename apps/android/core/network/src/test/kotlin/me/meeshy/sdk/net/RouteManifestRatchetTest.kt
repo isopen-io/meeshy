@@ -102,8 +102,11 @@ class RouteManifestRatchetTest {
          * servie par la passerelle avant le tour client ; Android la portera avec sa boîte de demandes.
          * 205 : plus `GET /messages/search` (8a734141de : la recherche trouve les messages du lecteur), servie par la
          * passerelle ; l'écran de recherche globale d'Android la portera.
+         * 192 : moins douze routes du jeu et du décor (#14563 : la vitrine d'un autre membre, les archives de saison et de
+         * semaine de ligue, le calendrier, les cadres d'atmosphère, les trois routes des moments photo et les quatre des
+         * autocollants), que portent `GameApi.kt` et `ProfileDecorApi.kt`.
          */
-        const val TO_PORT_CEILING = 204
+        const val TO_PORT_CEILING = 192
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

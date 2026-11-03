@@ -62,6 +62,8 @@ internal fun ChatListRow(
     /** Le mode sélection est ouvert (#13294) ; [selectedIds] est lu pour CETTE rangée seule. */
     selecting: Boolean = false,
     selectedIds: Set<String> = emptySet(),
+    /** Le message que l'overlay d'appui long présente : sa cellule s'efface pendant ce temps. */
+    overlayMessageId: String? = null,
 ) {
     when (item) {
         is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
@@ -84,6 +86,7 @@ internal fun ChatListRow(
             focalScale = focalScale,
             selecting = selecting,
             selected = selecting && item.bubble.messageId in selectedIds,
+            hiddenForOverlay = overlayMessageId != null && item.bubble.messageId == overlayMessageId,
         )
     }
 }

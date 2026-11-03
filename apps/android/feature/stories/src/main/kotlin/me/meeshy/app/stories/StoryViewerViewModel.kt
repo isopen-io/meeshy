@@ -610,7 +610,7 @@ class StoryViewerViewModel @Inject constructor(
             val item = rawItems[slideView.id] ?: return@map slideView
             val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
             val resolved = StoryContentResolver.resolve(item, prefs, override)
-            val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
+            val preferredLanguages = StoryContentResolver.readerLanguages(prefs)
             val textObjects = item.storyEffects?.textObjects.orEmpty()
                 .map { StoryTextObjectProjection.project(it, preferredLanguages, override) }
             slideView.copy(

@@ -90,6 +90,8 @@ class ConversationObsoleteFromListTest {
             repository = mockk(relaxed = true),
             messageSocketManager = mockk<MessageSocketManager> {
                 every { messageReceived } returns MutableSharedFlow()
+                every { messageEdited } returns MutableSharedFlow()
+                every { messageDeleted } returns MutableSharedFlow()
                 every { conversationUpdated } returns MutableSharedFlow()
                 every { unreadUpdated } returns MutableSharedFlow()
                 every { conversationRestored } returns MutableSharedFlow()

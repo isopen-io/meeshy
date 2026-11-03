@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_members_open_participation_a11y">Teilnahmedetails von %1$s öffnen</string>
+</resources>

@@ -266,13 +266,13 @@ class ComposerBackgroundEditComposeTest {
     }
 
     @Test
-    fun `a background video offers Trim, Sound, Loop and Rotate, Loop switched in the rail itself`() {
+    fun `a background video offers Trim, Frames, Sound, Loop and Rotate, Loop switched in the rail itself`() {
         val vm = viewModel()
         withBackgroundVideo(vm)
         show(vm)
         modify()
 
-        railShows("Framing", "Trim", "Filters", "Adjust", "Sound", "Loop", "Rotate", "Describe", *actions)
+        railShows("Framing", "Trim", "Filters", "Frames", "Adjust", "Sound", "Loop", "Rotate", "Describe", *actions)
         compose.onNodeWithTag(BACKGROUND_LOOP_TAG).assertIsOn()
         compose.onNodeWithTag(BACKGROUND_LOOP_TAG).performClick()
 

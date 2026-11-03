@@ -1,6 +1,6 @@
 ## Un signalement ouvert gèle la purge, et l'expéditeur d'une demande non acceptée ne rend pas la directe obsolète (2026-11-02, #14676)
 
-**Statut** : Accepté
+**Statut** : Accepté — option (a) REMPLACÉE le 2026-11-03 par [la décision #14691](2026-11-03-une-conversation-obsolete-n-est-pas-un-objet-de-signalement-elle-est-detruite-a-48-h-14691.md) : aucun signalement ne gèle plus la purge. L'option (c) reste en vigueur. Le texte ci-dessous décrit l'état du 2026-11-02.
 
 ### Contexte
 

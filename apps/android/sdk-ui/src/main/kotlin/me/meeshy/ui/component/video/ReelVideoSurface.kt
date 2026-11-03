@@ -22,6 +22,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.ui.R
+import me.meeshy.ui.component.media.ComposerLiveEffects
 import me.meeshy.ui.component.media.MeeshyMediaCache
 import me.meeshy.ui.component.media.PlayerCensus
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -113,10 +114,17 @@ fun ReelVideoSurface(
     textured: Boolean = false,
     /** Le gain d'auteur (0..1 ; ExoPlayer n'amplifie pas) — sans effet quand [muted]. */
     volume: Float = 1f,
+    /**
+     * Le look d'une vidéo réglée du compositeur, que son aperçu peint par le GPU (#14848) : les mêmes effets que la scène
+     * ([me.meeshy.ui.component.retouch.rememberStoryVideoLookEffects]). `null` (une publication, déjà cuite) n'ouvre aucun
+     * pipeline d'effets.
+     */
+    effects: ComposerLiveEffects? = null,
 ) {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
-    val player = remember(mediaUrl, sourceStartMs, sourceEndMs, loads, cached) {
+    val painted = effects != null
+    val player = remember(mediaUrl, sourceStartMs, sourceEndMs, loads, cached, painted) {
         if (!loads) return@remember null
         PlayerCensus.record()
         // Lecture par le cache disque (clé canonique) : un média déjà vu se rouvre sans réseau.
@@ -150,9 +158,11 @@ fun ReelVideoSurface(
             repeatMode = Player.REPEAT_MODE_ONE
             this.volume = if (muted) 0f else volume.coerceIn(0f, 1f)
             playWhenReady = false
+            if (painted) setVideoEffects(emptyList())
             prepare()
         }
     }
+    LaunchedEffect(player, effects) { effects?.let { player?.setVideoEffects(it.effects) } }
 
     // Le volume suit [muted] a chaud : le player est memoize par URL, donc la
     // valeur passee au constructeur ne refleterait jamais un toggle ulterieur.

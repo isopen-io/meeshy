@@ -25,17 +25,19 @@ public fun SceneCanvas(
     mediaUrlOf: (String) -> String? = { null },
     strokes: List<StoryDrawingStroke> = emptyList(),
     events: SceneCanvasEvents = SceneCanvasEvents.None,
+    drawingBelowObjects: Boolean = false,
     background: @Composable () -> Unit = {},
 ) {
     Box(modifier.fillMaxSize()) {
         SceneBackdropHost(content = background)
+        if (drawingBelowObjects) SceneDrawingLayer(strokes)
         items.forEach { item ->
             key(item.kind, item.id) {
                 val url = remember(item.signature) { item.resolvedUrl(mediaUrlOf) }
                 SceneItemRenderer(remember(item.signature, url) { SceneNode(item, url) }, events)
             }
         }
-        SceneDrawingLayer(strokes)
+        if (!drawingBelowObjects) SceneDrawingLayer(strokes)
     }
 }
 
