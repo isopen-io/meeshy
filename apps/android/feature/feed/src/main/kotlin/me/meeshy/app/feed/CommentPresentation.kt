@@ -72,7 +72,7 @@ data class CommentPresentation(
     val place: FeedLocationPresentation? = null,
 ) {
     /** Un commentaire flouté se lit sous un voile, en le touchant (iOS `CommentVeilRules`). */
-    val isBlurred: Boolean get() = effects.has(MessageEffectFlags.BLURRED)
+    val isBlurred: Boolean get() = me.meeshy.sdk.model.CommentVeilRules.isVeiled(effects, isRevealed = false)
 
     /** Un commentaire sans texte (un vocal, une photo seule) ne rend aucun corps : pas de ligne vide sous l'auteur (#14289). */
     val hasBody: Boolean get() = content.isNotBlank()
