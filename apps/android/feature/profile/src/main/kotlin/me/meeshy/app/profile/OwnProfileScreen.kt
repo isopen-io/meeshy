@@ -114,10 +114,10 @@ fun OwnProfileScreen(
     val pickImage = rememberOwnProfileImagePicker(imageEditor::offer)
     val capsule = rememberOwnProfileErrorCapsule(
         errorMessage = state.errorMessage,
-        uploadErrorMessage = uploadState.error?.let { stringResource(it.messageRes()) },
-        onUploadErrorShown = uploadViewModel::dismissError,
     )
     val toasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 1) }
+    OwnProfileUploadEffects(uploadViewModel.effects, toasts, onShown = uploadViewModel::dismissError)
+    val openHaptics = rememberMeeshyHaptics()
     OwnProfileSaveEffects(
         effects = viewModel.effects,
         onSaveFailedMessage = { capsule.value = it },
@@ -155,6 +155,7 @@ fun OwnProfileScreen(
                 onPickBanner = { pickImage(ImageUploadTarget.BANNER) },
                 onPickAvatar = { pickImage(ImageUploadTarget.AVATAR) },
                 onOpenImage = { image ->
+                    openHaptics.light()
                     fullscreen = resolveServedImageUrl(image.url, mediaBaseUrl)?.let { image.copy(url = it) }
                 },
                 onMoodTap = onMoodTap,
@@ -219,22 +220,40 @@ private fun OwnProfileSaveEffects(
     }
 }
 
+/** Le résultat d'un téléversement d'avatar / de bannière : toast + haptique, succès ou erreur (iOS `FeedbackToastManager`). */
+@Composable
+private fun OwnProfileUploadEffects(
+    effects: Flow<AvatarBannerUploadEffect>,
+    toasts: MutableSharedFlow<FeedbackToastRequest>,
+    onShown: () -> Unit,
+) {
+    val haptics = rememberMeeshyHaptics()
+    LaunchedEffect(effects) {
+        effects.collect { effect ->
+            when (effect) {
+                is AvatarBannerUploadEffect.Succeeded -> {
+                    haptics.success()
+                    val message = if (effect.target == ImageUploadTarget.AVATAR) R.string.profile_avatar_updated else R.string.profile_banner_updated
+                    toasts.tryEmit(FeedbackToastRequest(message, FeedbackKind.Success))
+                }
+                is AvatarBannerUploadEffect.Failed -> {
+                    haptics.error()
+                    toasts.tryEmit(FeedbackToastRequest(effect.error.messageRes(), FeedbackKind.Error))
+                    onShown()
+                }
+            }
+        }
+    }
+}
+
 /** La capsule d'erreur : le dernier message (enregistrement ou téléversement), effacé après 3 s. */
 @Composable
 private fun rememberOwnProfileErrorCapsule(
     errorMessage: String?,
-    uploadErrorMessage: String?,
-    onUploadErrorShown: () -> Unit,
 ): MutableState<String?> {
     val capsuleState = remember { mutableStateOf<String?>(null) }
     var capsule by capsuleState
     LaunchedEffect(errorMessage) { errorMessage?.let { capsule = it } }
-    LaunchedEffect(uploadErrorMessage) {
-        uploadErrorMessage?.let {
-            capsule = it
-            onUploadErrorShown()
-        }
-    }
     LaunchedEffect(capsule) {
         if (capsule != null) {
             delay(ERROR_CAPSULE_MILLIS)
