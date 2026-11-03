@@ -60,7 +60,7 @@ struct FeedPostActionsBar: View, Equatable {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
+        PublishedPostActionsRow(postId: postId) {
             // Like with heart burst animation (socket-driven — see FeedView.postLikedIds)
             Button {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
@@ -274,5 +274,19 @@ struct FeedPostActionsBar: View, Equatable {
         }
         .padding(.top, MeeshySpacing.xs)
         .modifier(MeeshySendSheet(sent: $sent))
+    }
+}
+
+/// La rangée d'engagement d'une publication EN LIGNE. Encore dans la file
+/// d'envoi (#15123), la publication n'a qu'un cmid : la rangée est absente,
+/// et seule l'horloge à la place de l'heure dit l'attente (#14879).
+struct PublishedPostActionsRow<Content: View>: View {
+    let postId: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if !PendingPublicationMarker.isPending(postId: postId) {
+            HStack(spacing: 0, content: content)
+        }
     }
 }

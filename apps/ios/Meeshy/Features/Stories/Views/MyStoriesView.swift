@@ -117,7 +117,7 @@ struct MyStoriesView: View {
     /// expirées confondues (l'archive drainée par `loadMyStoriesArchive`
     /// rejoint le même groupe, cf. `StoryViewModel.loadMyStoriesArchive`).
     private var stories: [StoryItem] {
-        (viewModel.storyGroupForUser(userId: userId)?.stories ?? [])
+        MyStoriesTabResolver.sentStories(viewModel.storyGroupForUser(userId: userId)?.stories ?? [])
             .sorted { $0.createdAt > $1.createdAt }
     }
 

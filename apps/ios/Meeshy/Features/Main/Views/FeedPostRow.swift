@@ -15,6 +15,17 @@ struct FeedPostRowActions {
     let onAuthorMoodTap: (String, CGPoint) -> Void
     let moodLookup: (String) -> (emoji: String?, tapHandler: ((CGPoint) -> Void)?)
     let onViewAuthorStory: (String) -> Void
+
+    /// Une carte encore dans la file d'envoi (#15123) n'engage rien : ses
+    /// gestes n'atteignent pas l'hôte, qui les enverrait sous un cmid.
+    func offered(for post: FeedPost) -> FeedPostRowActions {
+        guard PendingPublicationMarker.isPending(postId: post.id) else { return self }
+        return FeedPostRowActions(
+            onHeart: { _ in }, onRepost: { _ in }, onBookmark: { _ in }, onShare: { _ in },
+            onQuote: { _ in }, onEdit: { _ in }, onOpenReelComments: { _ in },
+            onAuthorMoodTap: onAuthorMoodTap, moodLookup: moodLookup, onViewAuthorStory: onViewAuthorStory
+        )
+    }
 }
 
 nonisolated struct FeedPostRowRenderInputs: Equatable {
@@ -68,7 +79,19 @@ struct FeedPostRow: View {
     let engagement: FeedPostEngagementSnapshot
     let authorStoryRing: StoryRingState
     let authorMoodEmoji: String?
-    let actions: FeedPostRowActions
+    private let actions: FeedPostRowActions
+
+    init(post: FeedPost, viewModel: FeedViewModel, reelAutoplay: ReelFeedAutoplayCoordinator,
+         engagement: FeedPostEngagementSnapshot, authorStoryRing: StoryRingState,
+         authorMoodEmoji: String?, actions: FeedPostRowActions) {
+        self.post = post
+        self.viewModel = viewModel
+        self.reelAutoplay = reelAutoplay
+        self.engagement = engagement
+        self.authorStoryRing = authorStoryRing
+        self.authorMoodEmoji = authorMoodEmoji
+        self.actions = actions.offered(for: post)
+    }
 
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }

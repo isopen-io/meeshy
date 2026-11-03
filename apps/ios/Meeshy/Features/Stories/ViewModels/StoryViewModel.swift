@@ -384,10 +384,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     // MARK: - Optimistic offline stories (visibilité auteur hors-ligne)
 
-    /// Préfixe d'id des stories optimistes (non encore publiées). Permet de les
-    /// repérer pour la réconciliation et pour les préserver à travers un refetch
-    /// réseau (`fetchStoriesFromNetwork`).
-    static let pendingStoryIdPrefix = "pending_"
+    /// Préfixe d'id des stories optimistes, voir `PendingStoryMarker`.
+    static let pendingStoryIdPrefix = PendingStoryMarker.prefix
 
     // MARK: - Reprise d'un échec de publication (spec 2026-08-01, incrément 5)
 
@@ -402,6 +400,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     // MARK: - Delete Story
 
     func deleteStory(storyId: String, reason: String? = nil) async -> Bool {
+        guard !PendingStoryMarker.isPending(storyId: storyId) else { return false }
         do {
             try await Self.deleteRemotely(storyId: storyId, reason: reason, with: storyService)
             // Même chemin que les tombstones et l'event socket. Une suppression
