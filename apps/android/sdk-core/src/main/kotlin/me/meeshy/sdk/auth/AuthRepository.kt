@@ -53,6 +53,7 @@ class AuthRepository @Inject constructor(
     private val sessionBackup: SessionBackup = NoSessionBackup,
     private val keepSignedIn: KeepSignedInConsent? = null,
     private val accountShelf: AccountShelf = NoAccountShelf,
+    private val sessionClosing: me.meeshy.sdk.session.SessionClosing? = null,
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
 
@@ -453,6 +454,9 @@ class AuthRepository @Inject constructor(
     private suspend fun purgeLocalSession() {
         tokenStore.clear()
         sessionRepository.clear()
+        // Un seul plan de fermeture (surfaces d'extension d'abord), comme iOS : jetons deja vides, donc widgets et
+        // raccourcis se repeignent deconnectes.
+        sessionClosing?.closeSession()
         sessionTeardown.wipe()
         // Le curseur `_seq` est en MÉMOIRE, donc hors du périmètre de
         // [SessionTeardown] (stores persistés) — il se purge ici, comme iOS le
