@@ -62,6 +62,7 @@ class MetricsSummaryStore(
     }
 
     @Synchronized
+    @JvmName("consumeSignposts")
     fun consume(signposts: List<SignpostInput>): Int {
         val kept = TrackedSignpostAggregate.fromInputs(signposts, trackedCategories, clock())
         if (kept.isEmpty()) return 0
