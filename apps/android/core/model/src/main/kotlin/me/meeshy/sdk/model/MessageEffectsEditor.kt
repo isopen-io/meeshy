@@ -81,6 +81,20 @@ object MessageEffectsEditor {
         }
     }
 
+    /**
+     * Les drapeaux que le petit panneau arme (animations d'entrée + effets permanents) —
+     * iOS `EffectsPickerView.panelFlags`. Les protections (éphémère, flou, vue unique)
+     * n'en font pas partie : la barre d'outils les règle.
+     */
+    const val PANEL_FLAGS: Long = MessageEffectFlags.APPEARANCE_MASK or MessageEffectFlags.PERSISTENT_MASK
+
+    /** « Tout effacer » du panneau : ne retire que [PANEL_FLAGS], jamais les protections. */
+    fun clearPanelFlags(effects: MessageEffects): MessageEffects =
+        effects.copy(flags = effects.flags and PANEL_FLAGS.inv())
+
+    /** Vrai si au moins un effet du panneau est armé (le lien « Tout effacer » n'apparaît qu'alors). */
+    fun hasPanelEffect(effects: MessageEffects): Boolean = effects.flags and PANEL_FLAGS != 0L
+
     /** The empty effects — the picker's "Tout effacer" resetting to iOS `.none`. */
     fun cleared(): MessageEffects = MessageEffects()
 

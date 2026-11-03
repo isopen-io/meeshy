@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.meeshy.sdk.model.BubbleSkinLaw
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.ui.R
 import me.meeshy.ui.icons.MeeshyIcons
@@ -49,8 +50,6 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
-import me.meeshy.ui.theme.hexColor
-import me.meeshy.sdk.theme.DynamicColorGenerator
 
 /**
  * Rendering options of a standard bubble that are not callbacks: the visual-effect override and
@@ -100,11 +99,12 @@ internal fun BubbleStandardLayout(
             ),
         horizontalArrangement = if (content.isOutgoing) Arrangement.End else Arrangement.Start,
     ) {
+        val skin = LocalBubbleSkin.current
         val isFreeEmoji =
             content.emojiOnlyCount > 0 && content.replyToText == null && !content.isDeleted
         val onColor = when {
             isFreeEmoji -> MeeshyTheme.tokens.textPrimary
-            content.isOutgoing -> MeeshyPalette.White
+            content.isOutgoing -> skin.ink
             else -> MeeshyTheme.tokens.textPrimary
         }
         val isDark = MeeshyTheme.isDark
@@ -113,7 +113,7 @@ internal fun BubbleStandardLayout(
         }
         val bubbleBackground = when {
             isFreeEmoji -> Color.Transparent
-            content.isOutgoing -> outgoingColor
+            content.isOutgoing -> if (skin == BubbleSkin.Brand) outgoingColor else skin.sentFill
             else -> receivedTint.fill
         }
         val bubbleBorder = if (isFreeEmoji || content.isOutgoing) null else receivedTint.stroke
@@ -177,7 +177,7 @@ private fun BubbleBody(
     audioPlayback: BubbleAudioPlayback?,
     options: BubbleRenderOptions,
 ) {
-    val bubbleShape = RoundedCornerShape(MeeshyRadius.lgPlus)
+    val bubbleShape = RoundedCornerShape(BubbleSkinLaw.CORNER_RADIUS_DP.dp)
     val accessibilityLabel = options.accessibilityLabel
     val onLongPress = callbacks.onLongPress
     val namedActions = callbacks.accessibilityActions
@@ -498,32 +498,7 @@ private fun BubbleBlurRevealBoundary(
         BubbleBlurReveal(
             messageId = messageId,
             spec = spec,
-            shape = RoundedCornerShape(MeeshyRadius.lgPlus),
+            shape = RoundedCornerShape(BubbleSkinLaw.CORNER_RADIUS_DP.dp),
         ) { content() }
-    }
-}
-
-/**
- * Teinte d'une bulle REÇUE, port d'iOS `BubbleBackground` : la couleur de l'auteur fondue à 30 %
- * dans l'indigo de marque (`otherBubbleColor`), posée OPAQUE sur la surface à 16 % (clair) / 28 %
- * (sombre), et cernée d'un trait de 1 dp de cette même couleur à 26 % / 34 %.
- */
-internal class ReceivedBubbleTint(val fill: Color, val stroke: Color) {
-    companion object {
-        private const val BRAND_INDIGO = "6366F1"
-        private const val LIGHT_SURFACE = "FFFFFF"
-        private const val DARK_SURFACE = "09090B"
-
-        fun of(senderColorHex: String?, isDark: Boolean): ReceivedBubbleTint {
-            val other = DynamicColorGenerator.blendTwo(senderColorHex ?: BRAND_INDIGO, 0.30, BRAND_INDIGO, 0.70)
-            val weight = if (isDark) 0.28 else 0.16
-            val fill = DynamicColorGenerator.blendTwo(
-                other, weight, if (isDark) DARK_SURFACE else LIGHT_SURFACE, 1.0 - weight,
-            )
-            return ReceivedBubbleTint(
-                fill = hexColor(fill, MeeshyPalette.Indigo50),
-                stroke = hexColor(other, MeeshyPalette.Indigo500).copy(alpha = if (isDark) 0.34f else 0.26f),
-            )
-        }
     }
 }

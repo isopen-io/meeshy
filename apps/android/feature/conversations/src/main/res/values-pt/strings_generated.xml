@@ -10,6 +10,15 @@
     <string name="common_inactive">Inativo</string>
     <string name="common_retry">Tentar novamente</string>
     <string name="common_share">Compartilhar</string>
+    <string name="context_admin_open">Abrir na administração</string>
+    <string name="context_call">Ligar</string>
+    <string name="context_details">Detalhes</string>
+    <string name="context_favorite">Favorito</string>
+    <string name="context_invite_friends">Convidar meus amigos</string>
+    <string name="context_more_options">Mais opções</string>
+    <string name="context_rename">Renomear</string>
+    <string name="context_report">Denunciar</string>
+    <string name="context_search">Buscar</string>
     <string name="conversationCard_expired">Link expirado</string>
     <string name="conversations_action_archive">Arquivar</string>
     <string name="conversations_action_create_category">Criar \"%1$s\"</string>
@@ -205,6 +214,7 @@
     <string name="invite_share">Compartilhar</string>
     <string name="invite_title">Convite</string>
     <string name="invite_unlimited">Ilimitado</string>
+    <string name="lentille_mode_menu_title">Modo de leitura</string>
     <string name="links_affiliate_action_copy">Copiar o link de indicação</string>
     <string name="links_affiliate_action_create">Criar um link de indicação</string>
     <string name="links_affiliate_action_delete">Excluir o link de indicação</string>

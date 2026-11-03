@@ -292,7 +292,7 @@ private const val FEED_STORY_RAIL_KEY = "feed_story_rail"
 private const val FEED_COMPOSER_HEAD_KEY = "feed_composer_head"
 
 /** La carte d'un post pour ses deux gestes de partage : « 🔗 Publication de X : lien », la forme de la story. */
-private fun FeedPostPresentation.shareCard(context: android.content.Context): ShareCard {
+internal fun FeedPostPresentation.shareCard(context: android.content.Context): ShareCard {
     val link = PostShareLink.webLink(id)
     val sentence = authorName?.takeIf { it.isNotBlank() }?.let { context.getString(R.string.share_post_text, it, link) } ?: link
     return ShareCards.post(id, title = content, authorId = authorId, messageText = sentence)

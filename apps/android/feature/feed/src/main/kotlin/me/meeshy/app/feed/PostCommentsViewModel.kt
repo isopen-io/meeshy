@@ -240,6 +240,29 @@ class PostCommentsViewModel @Inject constructor(
         viewModelScope.launch {
             socialSocket.commentTranslationUpdated.collect { event -> onCommentTranslationUpdated(event) }
         }
+        viewModelScope.launch {
+            try {
+                socialSocket.reconnected.collect { resyncHead() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // a flow that cannot be collected is simply not listened to
+            }
+        }
+    }
+
+    /** After a reconnection the comments emitted during the cut are lost: the first page is read again, silently. */
+    private suspend fun resyncHead() {
+        socialSocket.joinPostRoom(postId)
+        try {
+            (postRepository.getComments(postId, null, PAGE_SIZE) as? NetworkResult.Success)?.let { ok ->
+                thread.update { it.headResynced(ok.data) }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // best-effort — the thread on screen stays
+        }
     }
 
     /**
