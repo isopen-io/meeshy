@@ -1,6 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="a11y_message_location">position partagée</string>
+    <string name="attachment_sticker">Sticker</string>
     <string name="chat_action_copy_link">Copier le lien</string>
     <string name="chat_action_open_link">Ouvrir le lien</string>
     <string name="chat_action_reactions">Réactions</string>
@@ -293,6 +294,11 @@
     <string name="export_card_typeface_systeme">Système</string>
     <string name="export_discussion_title">Discussion</string>
     <string name="forward_image_discussion">Imager la discussion</string>
+    <string name="forward_media_placeholder">[Média]</string>
+    <string name="forward_preview_audio">Audio</string>
+    <string name="forward_preview_file">Fichier</string>
+    <string name="forward_preview_image">Photo</string>
+    <string name="forward_preview_video">Vidéo</string>
     <string name="guest_attach_cancel">Annuler</string>
     <string name="guest_attach_create_account">Créez un compte pour partager le reste.</string>
     <string name="guest_attach_inline_audio">audio</string>
@@ -419,9 +425,17 @@
     <string name="share_community_channels">Les canaux où vous pouvez écrire</string>
     <string name="share_community_no_channel">Aucun canal où vous pouvez écrire</string>
     <string name="share_content_messages_kept">Ce qui part · %1$d messages sur %2$d</string>
+    <string name="share_content_move_backward">Reculer</string>
+    <string name="share_content_move_forward">Avancer</string>
     <string name="share_content_over_budget">Fichiers non copiés : %1$d. Un partage emporte au plus %2$d fichiers et %3$s.</string>
+    <string name="share_content_over_limit">dépasse la limite</string>
+    <string name="share_content_piece_number">Pièce %1$d</string>
+    <string name="share_content_piece_of">Pièce %1$d sur %2$d</string>
     <string name="share_content_refused_source">Cette app n’a remis qu’un chemin de fichier, que Meeshy n’ouvre pas. Partagez le fichier lui-même, ou enregistrez-le d’abord dans Photos ou Fichiers.</string>
+    <string name="share_content_remove">Retirer</string>
+    <string name="share_content_remove_last">Retirer les %1$d derniers</string>
     <string name="share_content_unprepared">Des fichiers n’ont pas pu être préparés. Téléchargez-les d’abord, puis réessayez.</string>
+    <string name="share_content_whole_message">Tout le message</string>
     <string name="share_copied">Copié</string>
     <string name="share_detail_channel">Canal de %1$s</string>
     <string name="share_detail_direct">Conversation</string>
@@ -458,6 +472,7 @@
     <string name="share_toast_open">Ouvrir</string>
     <string name="share_toast_sent_to">Envoyé à %1$s</string>
     <string name="share_withdrawn_after_read">Un message qui disparaît après lecture reste dans cette conversation.</string>
+    <string name="share_withdrawn_others_leave">Les %1$d autres messages partent.</string>
     <string name="share_withdrawn_unavailable">Un message qui n’est plus disponible ne part pas.</string>
     <string name="share_withdrawn_view_once">Un message à vue unique reste dans cette conversation.</string>
     <string name="share_withheld_blurred">Un message flouté se transfère flouté ; rien d’autre ne sort.</string>
