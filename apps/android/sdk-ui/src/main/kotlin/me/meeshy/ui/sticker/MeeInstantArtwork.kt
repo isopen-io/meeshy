@@ -38,9 +38,10 @@ public fun MeeInstantArtwork(
     side: Dp,
     modifier: Modifier = Modifier,
     animates: Boolean = true,
+    bleeds: Boolean = false,
 ) {
     Box(modifier.size(side)) {
-        MeeFigure(filmId = instant.id, side = side, animates = animates)
+        MeeFigure(filmId = instant.id, side = side, animates = animates, bleeds = bleeds)
         androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
             drawIntoCanvas { MeeInstantPainter.draw(it.nativeCanvas, instant, typed, size.width) }
         }

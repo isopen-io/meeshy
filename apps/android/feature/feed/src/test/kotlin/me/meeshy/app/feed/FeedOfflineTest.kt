@@ -53,6 +53,9 @@ class FeedOfflineTest {
         every { commentDeleted } returns MutableSharedFlow()
         every { postTranslationUpdated } returns MutableSharedFlow()
         every { mediaCaptionTranslationUpdated } returns MutableSharedFlow()
+        every { postReactionAdded } returns MutableSharedFlow()
+        every { postReactionRemoved } returns MutableSharedFlow()
+        every { reconnected } returns kotlinx.coroutines.flow.emptyFlow()
         every { postUpdated } returns MutableSharedFlow()
         every { postReposted } returns MutableSharedFlow()
     }
@@ -73,6 +76,7 @@ class FeedOfflineTest {
     ): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         every { repository.feedHasMore } returns MutableStateFlow(true)
+        every { repository.gestureRefusals } returns MutableSharedFlow()
         every { repository.feedStream(any(), any()) } answers { feed(secondArg()) }
         return FeedViewModel(
             repository, session, socialSocket, MeeshyConfig(), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),

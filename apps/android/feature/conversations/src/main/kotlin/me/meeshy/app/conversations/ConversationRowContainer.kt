@@ -91,10 +91,10 @@ internal fun ConversationRowContainer(
         ),
     )
     val line2 = ConversationRowPrecedence.line2(hasTyping = typingLine != null, hasDraft = draftLine != null)
-    val managesMembers = remember(conversation, model.currentUserPrefs, model.isLocked) {
+    val capabilities = remember(conversation, model.currentUserPrefs) {
         ConversationRowMenuCapabilities.make(conversation, model.currentUserPrefs)
-            .offersManageMembers(isLocked = model.isLocked)
     }
+    val managesMembers = capabilities.offersManageMembers(isLocked = model.isLocked)
     val palette = remember(conversation) { conversation.accentColorPalette() }
     val accent = hexColor(palette.primary)
     val secondary = hexColor(palette.secondary)
@@ -223,6 +223,7 @@ internal fun ConversationRowContainer(
             onManageMembers = actions.onManageMembers
                 ?.takeIf { managesMembers }
                 ?.let { open -> { open(accent) } },
+            onMakeObsolete = actions.onMakeObsolete.takeIf { capabilities.obsolete },
         )
     }
 }

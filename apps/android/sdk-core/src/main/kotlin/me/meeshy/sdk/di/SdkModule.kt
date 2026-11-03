@@ -330,6 +330,7 @@ object SdkModule {
         perAccountCaches: Set<@JvmSuppressWildcards PerAccountCache>,
         guestSessions: me.meeshy.sdk.session.AnonymousSessionStore,
         fence: me.meeshy.sdk.session.AccountFence,
+        feedbackToasts: me.meeshy.sdk.feedback.FeedbackToastCenter,
     ): SessionTeardown =
         DefaultSessionTeardown(
             database,
@@ -344,6 +345,7 @@ object SdkModule {
             perAccountCaches,
             guestSessions,
             fence,
+            feedbackToasts,
         )
 
     @Provides

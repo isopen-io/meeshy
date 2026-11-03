@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_options_obsolete">Tornar obsoleta</string>
+    <string name="conversation_options_obsolete_title">Tornar esta conversa obsoleta?</string>
+    <string name="conversation_options_obsolete_message">Desaparece de imediato para todos os membros e o conteúdo é apagado em 48 horas. Não é possível desfazer.</string>
+    <string name="conversation_options_error_obsolete">Não foi possível tornar a conversa obsoleta.</string>
+</resources>

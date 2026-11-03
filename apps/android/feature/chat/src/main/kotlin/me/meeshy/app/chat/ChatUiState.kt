@@ -109,6 +109,8 @@ data class ChatUiState(
      * its presence dot from (`rememberPresence`). Port of iOS `ConversationView.headerPresenceState`'s
      * `conversation?.participantUserId` guard. */
     val directPeerUserId: String? = null,
+    /** #14591 — cet appareil chiffre et lit le bout en bout (pile libsignal prête à servir le fil). */
+    val endToEndAvailable: Boolean = false,
     /** Mirrors the same `networkConditionMonitor` reading already threaded into
      * `toBubbles` (the per-message hourglass) — feeds the scroll-to-bottom control's
      * offline indicator ([ScrollControlContent.of]'s `isOffline`), port of iOS
@@ -150,7 +152,22 @@ data class ChatUiState(
         get() = composerPermissions?.attachmentAllowance ?: GuestAttachmentAllowance.UNRESTRICTED
 
     val composerAffordances: ComposerAffordances
-        get() = if (isEndToEnd) ComposerAffordances.CLOSED else ComposerAttachmentPolicy.affordances(composerPermissions, guestAttachmentAllowance)
+        get() = when {
+            endToEndTextOpen -> ComposerAffordances.TEXT_ONLY
+            isEndToEnd -> ComposerAffordances.CLOSED
+            else -> ComposerAttachmentPolicy.affordances(composerPermissions, guestAttachmentAllowance)
+        }
+
+    /**
+     * #14591 — le TEXTE d'un tête-à-tête chiffré de bout en bout s'écrit ici, scellé par libsignal pour chaque appareil
+     * de la paire (comme iOS). Un groupe chiffré, ou un appareil sans pile prête, reste fermé ([composerClosedForEndToEnd]).
+     */
+    val endToEndTextOpen: Boolean
+        get() = isEndToEnd && endToEndAvailable && directPeerUserId != null
+
+    /** Le composeur dit où la conversation s'écrit, au lieu d'offrir la saisie (groupe chiffré, pile absente). */
+    val composerClosedForEndToEnd: Boolean
+        get() = isEndToEnd && !endToEndTextOpen
 
     /**
      * La conversation est servie chiffrée de bout en bout (#13110). L'Android natif ne
@@ -170,7 +187,7 @@ data class ChatUiState(
 
     /** Whether the reader may write here — what the message law reads before offering « Répondre ». */
     val viewerMayWrite: Boolean
-        get() = !isEndToEnd && composerPermissions?.canSendMessages != false
+        get() = (!isEndToEnd || endToEndTextOpen) && composerPermissions?.canSendMessages != false
     val isEditing: Boolean get() = editingMessageId != null
 
     /** Whether the end-to-end-encryption notice sits at the top of the list — the

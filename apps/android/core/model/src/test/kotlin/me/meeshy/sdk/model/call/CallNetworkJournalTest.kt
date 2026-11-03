@@ -231,4 +231,19 @@ class CallNetworkJournalTest {
 
         assertThat(CallNetworkJournalPresentation.of(journal).summary).containsExactly(CallNetworkSummaryRow.Reconnections(0))
     }
+
+    @Test
+    fun `a data profile is journaled when it first appears and at each change, never twice in a row`() {
+        val events = record(
+            call,
+            1L to CallNetworkJournalInput.Profile(CallDataProfile.WIFI),
+            2L to CallNetworkJournalInput.Profile(CallDataProfile.WIFI),
+            3L to CallNetworkJournalInput.Profile(CallDataProfile.DEGRADED),
+        )
+
+        assertThat(events.map { it.kind }).containsExactly(
+            CallNetworkEventKind.Profile("wifi"),
+            CallNetworkEventKind.Profile("degraded"),
+        ).inOrder()
+    }
 }

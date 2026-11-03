@@ -48,7 +48,8 @@ final class ReaderPrismReadingSurfacesGuardTests: XCTestCase {
     /// chemins d'ingestion des messages affichent ou gravent.
     private static let conversations = [
         "Main/ViewModels/ConversationIncomingMessageReconciler.swift", "Main/ViewModels/Conversation/ConversationSearchHandler.swift",
-        "Main/Views/ConversationListView.swift", "Main/ViewModels/GlobalSearchViewModel.swift", "Main/Services/WidgetDataManager.swift",
+        "Main/Views/ConversationListView.swift", "Main/Services/ConversationMessageSearchService.swift",
+        "Main/Services/PostSearchService.swift", "Main/Services/WidgetDataManager.swift",
         "Main/Views/WidgetPreviewView.swift", "Main/Services/NSEPendingMessageConsumer.swift", "Main/Views/RootViewComponents.swift",
         "Main/Services/LanguageProviding.swift",
     ]

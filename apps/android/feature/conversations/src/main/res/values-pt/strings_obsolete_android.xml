@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversations_action_make_obsolete">Tornar obsoleta</string>
+    <string name="conversations_obsolete_confirm_title">Tornar esta conversa obsoleta?</string>
+    <string name="conversations_obsolete_confirm_message">«%1$s» desaparece de imediato para todos os membros e o conteúdo é apagado em 48 horas. Não é possível desfazer.</string>
+    <string name="conversations_obsolete_confirm_button">Tornar obsoleta</string>
+</resources>

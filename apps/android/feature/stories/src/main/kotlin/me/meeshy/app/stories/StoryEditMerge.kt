@@ -188,7 +188,7 @@ internal object StoryEditMerge {
         return (listOfNotNull(background) + foreground).ifEmpty { null }
     }
 
-    /** Le fond servi, dont seuls les traits que le geste a changés (cadrage, boucle, réglages, coupe, quart de tour, volume) prennent la forme du composeur. */
+    /** Le fond servi, dont seuls les traits que le geste a changés (cadrage, boucle, réglages, coupe, quart de tour, volume, recadrage) prennent la forme du composeur. */
     private fun changedBackground(served: StoryMediaObject, fresh: StoryMediaObject, slide: StorySlide, hydrated: StorySlide): StoryMediaObject =
         BACKGROUND_TRAITS.filter { (changed, _) -> changed(slide, hydrated) }.fold(served) { background, (_, take) -> take(background, fresh) }
 
@@ -200,6 +200,7 @@ internal object StoryEditMerge {
         { a: StorySlide, b: StorySlide -> a.backgroundSetting.rotationDeg != b.backgroundSetting.rotationDeg } to { o: StoryMediaObject, w: StoryMediaObject -> o.copy(rotation = w.rotation) },
         { a: StorySlide, b: StorySlide -> a.backgroundSetting.volume != b.backgroundSetting.volume || a.backgroundSetting.mutedVolumeMemento != b.backgroundSetting.mutedVolumeMemento } to
             { o: StoryMediaObject, w: StoryMediaObject -> o.copy(volume = w.volume, mutedVolumeMemento = w.mutedVolumeMemento) },
+        { a: StorySlide, b: StorySlide -> a.backgroundSetting.crop != b.backgroundSetting.crop } to { o: StoryMediaObject, w: StoryMediaObject -> o.copy(crop = w.crop) },
     )
 
     /** Les médias que la slide tenait et qu'elle ne tient plus : seuls ceux-là sont retirés du post. */

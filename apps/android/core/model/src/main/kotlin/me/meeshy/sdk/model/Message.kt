@@ -323,6 +323,8 @@ data class ApiMessage(
 
     val arrivalsNotice: ArrivalsNoticeMetadata? by lazy { MessageRichMetadata.arrivalsNotice(metadata) }
 
+    val captureNotice: CaptureNoticeMetadata? by lazy { MessageRichMetadata.captureNotice(metadata) }
+
     /**
      * The resolved visual/lifecycle effects for this message. A positive
      * [effectFlags] bitfield is authoritative; otherwise lifecycle flags are

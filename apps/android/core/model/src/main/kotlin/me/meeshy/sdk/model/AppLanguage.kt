@@ -58,6 +58,27 @@ public object AppLanguage {
     public fun resolveInterfaceLocaleTag(code: String?): String? =
         code.normalized()?.takeIf { it in supportedCodes }
 
+    /** Langues dont l'app livre les chaines : celles du selecteur plus le portugais (`values-pt`). */
+    public val shippedCodes: List<String> = supportedCodes + "pt"
+
+    /** Vrai si [code] designe une langue dont les ressources sont livrees. */
+    public fun isShipped(code: String?): Boolean {
+        val cleaned = code.normalized() ?: return false
+        return cleaned in shippedCodes
+    }
+
+    /**
+     * La langue d'interface effective : le choix explicite livre, sinon la langue principale du
+     * profil (`systemLanguage`, reduite a sa base : `pt-BR` -> `pt`), sinon `null` = suivre
+     * l'appareil (la resolution de ressources Android retombe sur la source pour une locale non
+     * traduite). Un profil ne remplace jamais un choix explicite.
+     */
+    public fun resolveEffectiveTag(explicit: String?, profileLanguage: String?): String? =
+        explicit.normalized()?.takeIf { it in shippedCodes }
+            ?: profileLanguage.normalized()
+                ?.split('-', '_')?.first()
+                ?.takeIf { it in shippedCodes }
+
     /** The static metadata for a supported interface language, or `null` (System/unsupported). */
     public fun info(code: String?): LanguageInfo? {
         val cleaned = code.normalized() ?: return null

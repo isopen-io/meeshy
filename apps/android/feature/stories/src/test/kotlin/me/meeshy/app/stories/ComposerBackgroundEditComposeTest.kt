@@ -184,7 +184,7 @@ class ComposerBackgroundEditComposeTest {
 
         modify()
 
-        railShows("Framing", "Filters", "Frames", "Adjust", "Effects", "Rotate", "Describe", *actions)
+        railShows("Framing", "Crop", "Filters", "Frames", "Adjust", "Effects", "Rotate", "Describe", *actions)
         compose.onNodeWithText("Edit").assertDoesNotExist()
         compose.onNodeWithText("Back").assertDoesNotExist()
         compose.onNodeWithTag(BACKGROUND_BAND_TAG).assertDoesNotExist()
@@ -221,7 +221,7 @@ class ComposerBackgroundEditComposeTest {
         compose.onNodeWithText("Back").performClick()
 
         compose.onNodeWithTag(BACKGROUND_BAND_TAG).assertDoesNotExist()
-        railShows("Framing", "Filters", "Frames", "Adjust", "Effects", "Rotate", "Describe", *actions)
+        railShows("Framing", "Crop", "Filters", "Frames", "Adjust", "Effects", "Rotate", "Describe", *actions)
         compose.onNodeWithText("Back").assertDoesNotExist()
         assertThat(vm.state.value.deck).isEqualTo(framed)
         assertThat(vm.state.value.selectedSlideBackdropMediaId).isEqualTo("bg")
@@ -266,13 +266,13 @@ class ComposerBackgroundEditComposeTest {
     }
 
     @Test
-    fun `a background video offers Trim, Sound, Loop and Rotate, Loop switched in the rail itself`() {
+    fun `a background video offers Trim, Frames, Sound, Loop and Rotate, Loop switched in the rail itself`() {
         val vm = viewModel()
         withBackgroundVideo(vm)
         show(vm)
         modify()
 
-        railShows("Framing", "Trim", "Filters", "Adjust", "Sound", "Loop", "Rotate", "Describe", *actions)
+        railShows("Framing", "Trim", "Filters", "Frames", "Adjust", "Sound", "Loop", "Rotate", "Describe", *actions)
         compose.onNodeWithTag(BACKGROUND_LOOP_TAG).assertIsOn()
         compose.onNodeWithTag(BACKGROUND_LOOP_TAG).performClick()
 
@@ -312,6 +312,36 @@ class ComposerBackgroundEditComposeTest {
         assertThat(vm.state.value.deck.selectedSlide.backgroundSetting.volume).isEqualTo(0f)
         compose.onNodeWithText("Mute").performClick()
         assertThat(vm.state.value.deck.selectedSlide.backgroundSetting.volume).isWithin(1e-4f).of(0.4f)
+    }
+
+    @Test
+    fun `Crop of a background photo lays its proportions under the scene, the choice written at once and Original undoing it`() {
+        val vm = viewModel()
+        withBackgroundPhoto(vm)
+        show(vm)
+        modify()
+
+        tapRail("Crop")
+        compose.onNodeWithTag(BACKGROUND_CROP_TAG).assertExists()
+        compose.onNodeWithText("1:1").performClick()
+
+        val square = vm.state.value.deck.selectedSlide.backgroundSetting.crop
+        assertThat(square).isNotNull()
+        assertThat(square!!.width * 1080).isWithin(1.0).of(square.height * 1920)
+        assertThat(vm.state.value.backgroundCropPreset).isEqualTo(me.meeshy.sdk.model.composer.look.ComposerCropPreset.SQUARE)
+
+        compose.onNodeWithText("Original").performClick()
+        assertThat(vm.state.value.deck.selectedSlide.backgroundSetting.crop).isNull()
+    }
+
+    @Test
+    fun `a background video is not cropped`() {
+        val vm = viewModel()
+        withBackgroundVideo(vm)
+        show(vm)
+        modify()
+
+        compose.onNodeWithText("Crop").assertDoesNotExist()
     }
 
     @Test

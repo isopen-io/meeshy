@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.media.MediaIntake
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.lang.LanguageIdentifying
@@ -27,6 +26,9 @@ import me.meeshy.sdk.model.card.PostCommentCardSubject
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ComposerLanguage
 import me.meeshy.sdk.model.ComposerLanguageState
+import me.meeshy.sdk.model.CommentEffects
+import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MeeshyUser
@@ -76,6 +78,10 @@ data class PostCommentsUiState(
     val attachments: CommentAttachmentTray = CommentAttachmentTray(),
     /** La langue que montre la pastille du composeur (#14384) : choisie, sinon détectée, sinon celle du lecteur. */
     val composerLanguageCode: String = ComposerLanguage.DEFAULT,
+    /** Le flou et les effets permanents posés sur le commentaire en cours (#14385). */
+    val effects: MessageEffects = MessageEffects(),
+    /** Le lieu joint au commentaire en cours (#14387) ; il part avec le texte ou une pièce. */
+    val place: SharedPlace? = null,
 ) {
     /** Envoyer : du texte ou une pièce, rien qui se téléverse encore, aucun envoi en vol. */
     val canSubmit: Boolean get() = (draft.isNotBlank() || attachments.hasMedia) && !attachments.isUploading && !isSubmitting
@@ -387,6 +393,24 @@ class PostCommentsViewModel @Inject constructor(
         composerDraft.update { it.copy(language = it.language.withManualPick(code)) }
     }
 
+    /** #14385 — le flou ou un effet permanent se pose ou se retire du commentaire en cours (iOS `commentEffects`). */
+    fun toggleCommentEffect(flag: Long) {
+        composerDraft.update { it.copy(effects = CommentEffects.toggle(it.effects, flag)) }
+    }
+
+    fun clearCommentEffects() {
+        composerDraft.update { it.copy(effects = MessageEffects()) }
+    }
+
+    /** #14387 — le lieu choisi au sélecteur rejoint le commentaire en cours ; un second remplace le premier (iOS `pendingPlace`). */
+    fun attachPlace(place: SharedPlace) {
+        composerDraft.update { it.copy(place = place) }
+    }
+
+    fun removePlace() {
+        composerDraft.update { it.copy(place = null) }
+    }
+
     /** Un emoji rapide part aussitôt comme commentaire (iOS `sendQuickEmoji`) — jamais par-dessus un brouillon. */
     fun sendQuickEmoji(emoji: String) {
         if (composerDraft.value.text.isNotBlank() || attachments.value.hasMedia) return
@@ -416,36 +440,38 @@ class PostCommentsViewModel @Inject constructor(
         val tray = attachments.value
         if ((content.isEmpty() && !tray.hasMedia) || tray.isUploading || postId.isBlank() || status.value.isSubmitting) return
         val attachmentIds = tray.attachmentIds.takeIf { it.isNotEmpty() }
-        val declaredLanguage = composerDraft.value.language.manualOverride
+        val pill = composerDraft.value.language
+        val effectFlags = CommentEffects.wire(composerDraft.value.effects)
+        val place = composerDraft.value.place
         attachments.value = CommentAttachmentTray()
         tray.pieces.forEach { MediaIntake.release(it.item) }
         composer.value?.let { target ->
             clearDraft()
-            sendReply(target.parentId, content, attachmentIds, declaredLanguage)
+            sendReply(target.parentId, content, attachmentIds, pill, CommentExtras(effectFlags, place))
             return
         }
         val tempId = "pending-${pendingSeq++}"
-        thread.update { it.optimistic(optimisticRow(tempId, content)) }
+        thread.update { it.optimistic(optimisticRow(tempId, content).copy(effectFlags = effectFlags, location = place)) }
         clearDraft()
         status.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             try {
-                val language = declaredLanguage ?: ComposeLanguageDetector.authoredLanguage(content, languageIdentifier)
-                when (val result = postRepository.addComment(postId, content, originalLanguage = language, attachmentIds = attachmentIds)) {
+                val language = languageAtSend(pill, content)
+                when (val result = postRepository.addComment(postId, content, effectFlags = effectFlags, originalLanguage = language, attachmentIds = attachmentIds, location = place)) {
                     is NetworkResult.Success -> {
                         thread.update { it.confirmed(tempId, result.data) }
                         status.update { it.copy(isSubmitting = false, error = null) }
                     }
                     is NetworkResult.Failure -> {
                         thread.update { it.failed(tempId) }
-                        sendFailed(result.error.message, content, CommentNotice.SEND_FAILED)
+                        sendFailed(result.error.message, content, CommentNotice.SEND_FAILED, place)
                     }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 thread.update { it.failed(tempId) }
-                sendFailed(e.message, content, CommentNotice.SEND_FAILED)
+                sendFailed(e.message, content, CommentNotice.SEND_FAILED, place)
             }
         }
     }
@@ -592,17 +618,17 @@ class PostCommentsViewModel @Inject constructor(
         }
     }
 
-    private fun sendReply(parentId: String, content: String, attachmentIds: List<String>?, declaredLanguage: String?) {
+    private fun sendReply(parentId: String, content: String, attachmentIds: List<String>?, pill: ComposerLanguageState, extras: CommentExtras) {
         val tempId = "pending-${pendingSeq++}"
-        val row = optimisticRow(tempId, content).copy(parentId = parentId)
+        val row = optimisticRow(tempId, content).copy(parentId = parentId, effectFlags = extras.effectFlags, location = extras.place)
         replies.update { it.optimisticReply(parentId, row) }
         thread.update { it.bumpReplyCount(parentId, 1) }
         composer.value = null
         status.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             try {
-                val language = declaredLanguage ?: ComposeLanguageDetector.authoredLanguage(content, languageIdentifier)
-                when (val result = postRepository.addComment(postId, content, parentId, originalLanguage = language, attachmentIds = attachmentIds)) {
+                val language = languageAtSend(pill, content)
+                when (val result = postRepository.addComment(postId, content, parentId, effectFlags = extras.effectFlags, originalLanguage = language, attachmentIds = attachmentIds, location = extras.place)) {
                     is NetworkResult.Success -> {
                         replies.update { it.confirmedReply(parentId, tempId, result.data) }
                         status.update { it.copy(isSubmitting = false, error = null) }
@@ -610,7 +636,7 @@ class PostCommentsViewModel @Inject constructor(
                     is NetworkResult.Failure -> {
                         replies.update { it.failedReply(parentId, tempId) }
                         thread.update { it.bumpReplyCount(parentId, -1) }
-                        sendFailed(result.error.message, content, CommentNotice.REPLY_FAILED)
+                        sendFailed(result.error.message, content, CommentNotice.REPLY_FAILED, extras.place)
                     }
                 }
             } catch (e: CancellationException) {
@@ -618,18 +644,26 @@ class PostCommentsViewModel @Inject constructor(
             } catch (e: Exception) {
                 replies.update { it.failedReply(parentId, tempId) }
                 thread.update { it.bumpReplyCount(parentId, -1) }
-                sendFailed(e.message, content, CommentNotice.REPLY_FAILED)
+                sendFailed(e.message, content, CommentNotice.REPLY_FAILED, extras.place)
             }
         }
     }
+
+    /** #14502 — la langue part toujours : la pastille, sinon la détection, sinon ce que la pastille affiche. */
+    private suspend fun languageAtSend(pill: ComposerLanguageState, content: String): String =
+        pill.atSend(content, fallback = readerLanguage(sessionRepository.currentUser.value), identifier = languageIdentifier)
+
+    private fun readerLanguage(user: MeeshyUser?): String =
+        user?.let(LanguageResolver::resolveUserLanguage) ?: ComposerLanguage.DEFAULT
 
     /**
      * A send the server refused: the localized notice, and the text goes back to the composer
      * (when the author has not started another one) — never lost (iOS `CommentUnsentBadge`).
      */
-    private fun sendFailed(message: String?, content: String, notice: CommentNotice) {
+    private fun sendFailed(message: String?, content: String, notice: CommentNotice, place: SharedPlace?) {
         status.update { it.copy(isSubmitting = false, error = message, notice = notice) }
         if (composerDraft.value.text.isBlank()) composerDraft.update { it.copy(text = content) }
+        if (place != null && composerDraft.value.place == null) composerDraft.update { it.copy(place = place) }
     }
 
     /**
@@ -859,7 +893,9 @@ class PostCommentsViewModel @Inject constructor(
             loadFailed = st.error != null && !st.isLoading && !thread.hasLoaded && thread.comments.isEmpty(),
             notice = st.notice,
             translatingLanguages = translatingLanguages,
-            composerLanguageCode = draft.language.display(inputs.user?.let(LanguageResolver::resolveUserLanguage) ?: ComposerLanguage.DEFAULT),
+            composerLanguageCode = draft.language.display(readerLanguage(inputs.user)),
+            effects = draft.effects,
+            place = draft.place,
         )
     }
 
@@ -898,7 +934,12 @@ private data class ComposerDraft(
     val text: String = "",
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
     val language: ComposerLanguageState = ComposerLanguageState(),
+    val effects: MessageEffects = MessageEffects(),
+    val place: SharedPlace? = null,
 )
+
+/** Ce qui part avec un commentaire en plus de son texte et de ses pièces (#14385, #14387). */
+private data class CommentExtras(val effectFlags: Int?, val place: SharedPlace?)
 
 /** The projection inputs accumulated before the final [translatingLanguages] fold, threaded
  *  through as one value so the chained `combine` stays within its 5-arg cap. */

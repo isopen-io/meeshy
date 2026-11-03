@@ -21,9 +21,12 @@ internal fun StorySceneOverlays(
     muted: Boolean,
     rewindWhenInactive: Boolean = false,
     onAudioFocusLost: () -> Unit = {},
+    onAudioFocusGained: () -> Unit = {},
+    onAudioFocusLostForGood: () -> Unit = {},
     players: Boolean = true,
 ) {
     val playheadSeconds = if (slide.needsPlayhead) progress.value * slideDurationMs / 1000f else 0f
+    val focusHolder = StorySceneAudioFocus.holder(slide)
 
     StorySceneLayerOrder.order(slide).forEach { layer ->
         key(layer.key) {
@@ -36,7 +39,11 @@ internal fun StorySceneOverlays(
                         muted = muted,
                         rewindWhenInactive = rewindWhenInactive,
                         onAudioFocusLost = onAudioFocusLost,
+                        onAudioFocusGained = onAudioFocusGained,
+                        onAudioFocusLostForGood = onAudioFocusLostForGood,
                         players = players,
+                        holdsAudioFocus = focusHolder == StorySceneAudioFocus.Holder.Placed(layer.view.id),
+                        looks = slide.composerLooks,
                     )
                 }
                 is StorySceneLayer.Text -> if (layer.view.isVisible(playheadSeconds)) {

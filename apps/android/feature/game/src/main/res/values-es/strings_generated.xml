@@ -938,7 +938,12 @@
     <string name="game_notebook_remove_failed">La Crónica no pudo quitar esta foto.</string>
     <string name="game_notebook_size">La Crónica ocupa %1$s.</string>
     <string name="game_photo_a11y">Foto: %1$s</string>
+    <string name="game_photo_author_caption_achievement">Hazaña de</string>
+    <string name="game_photo_author_caption_mission">Sueño hecho realidad por</string>
+    <string name="game_photo_author_caption_rank">Rango alcanzado por</string>
     <string name="game_photo_author_label_achievement">Hazaña de %1$s</string>
+    <string name="game_photo_author_label_mission">Sueño hecho realidad por %1$s</string>
+    <string name="game_photo_author_label_rank">Rango alcanzado por %1$s</string>
     <string name="game_photo_camera_denied">La cámara está denegada. Permítela en los ajustes de tu dispositivo, o elige una foto de tu galería.</string>
     <string name="game_photo_camera_unavailable">La cámara no está disponible (¿la usa otra aplicación?). Elige una foto de tu galería, o quédate solo con la tarjeta.</string>
     <string name="game_photo_camera_unsupported">Este dispositivo no permite la cámara aquí. Elige una foto de tu galería, o quédate solo con la tarjeta.</string>

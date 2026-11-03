@@ -130,7 +130,8 @@ public object OutboxCoalescer {
         val pending = superseded.asReversed().mapNotNull { decodePrefs(it.payload) }
         val appearance = next.appearance ?: pending.firstNotNullOfOrNull { it.appearance }
         val clearCategory = next.clearCategory || (next.categoryId == null && pending.any { it.clearCategory })
-        val grafted = next.copy(appearance = appearance, clearCategory = clearCategory)
+        val previous = pending.lastOrNull { it.previous != null }?.previous ?: next.previous
+        val grafted = next.copy(appearance = appearance, clearCategory = clearCategory, previous = previous)
         if (grafted == next) return incoming
         return incoming.copy(payload = MeeshyApi.json.encodeToString(ConversationPrefsPayload.serializer(), grafted))
     }

@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { decideDirectOpening, requestRecipientFields } from '../../services/messaging/messageRequests';
 import { MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -196,6 +197,9 @@ export function registerInviteRoute(
       if (!userToInvite) {
         return sendNotFound(reply, 'User not found');
       }
+      // #14107 (MSG-03, RG-22) — invité par quelqu'un qui n'est pas au moins sa
+      // Connaissance : il entre par sa boîte de demandes, et l'invitation ne s'annonce pas.
+      const opening = await decideDirectOpening(fastify.prisma, { senderId: inviterId, recipientId: userId });
 
       // `conversation.participants` est chargé avec `where: { isActive: true }` :
       // il ne pouvait donc PAS voir la ligne d'un banni ni celle d'un ancien
@@ -239,7 +243,8 @@ export function registerInviteRoute(
         // #9711 — la langue de l'INVITÉ, descendue de son prisme, jamais le
         // défaut `"en"` du schéma.
         language: recipientLanguage(userToInvite, 'fr'),
-        permissions: { ...NEW_MEMBER_PERMISSIONS }
+        permissions: { ...NEW_MEMBER_PERMISSIONS },
+        ...requestRecipientFields(opening, new Date(), inviterId)
       };
 
       // La mise en garde qui vivait ici — « ne rien charger qu'aucune surface ne
@@ -270,7 +275,7 @@ export function registerInviteRoute(
       const newMember = entry.outcome === 'rejoin' && entry.participantId
         ? await fastify.prisma.participant.update({
             where: { id: entry.participantId },
-            data: { ...invitedMemberFields, ...REJOIN_PARTICIPANT_STATE },
+            data: { ...REJOIN_PARTICIPANT_STATE, ...invitedMemberFields },
             include: invitedMemberInclude
           })
         : await fastify.prisma.participant.create({
@@ -326,7 +331,7 @@ export function registerInviteRoute(
       }
 
       // Envoyer une notification à l'utilisateur invité
-      const notificationService = fastify.notificationService;
+      const notificationService = opening.kind === 'direct' ? fastify.notificationService : undefined;
       if (notificationService) {
         try {
           // Récupérer les informations de l'inviteur

@@ -1,7 +1,12 @@
 package me.meeshy.ui.component.bubble
 
+import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.JoinNoticePresentation
+import me.meeshy.sdk.model.SystemNoticeText
+import java.time.ZoneId
+import java.util.Locale
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.isEndToEndBlob
@@ -50,6 +55,10 @@ public object BubbleContentBuilder {
         isOffline: Boolean = false,
         displayDensity: Float = DEFAULT_DISPLAY_DENSITY,
         isSlowSend: Boolean = false,
+        /** Langue d'interface du lecteur pour les avis système ; défaut : `systemLanguage`, puis l'appareil. */
+        readerLanguage: String? = null,
+        /** Fuseau IANA du lecteur pour l'heure d'un avis de capture ; défaut : celui de l'appareil. */
+        readerTimeZoneId: String? = null,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         // #13106 — un blob chiffré de bout en bout scelle la bulle entière, même servie en clair.
@@ -111,7 +120,20 @@ public object BubbleContentBuilder {
         // télécharge : sa rangée ne promet rien (#13492) — le même verdict que l'aperçu et le contrôleur.
         val protectedIds = message.attachments.filter { MessagePieceTarget.isProtected(it, message) }.mapTo(HashSet()) { it.id }
         val files = attachments.files.map { if (it.attachmentId in protectedIds) it.copy(isProtected = true) else it }
+        // Un avis système (capture, arrivées) se compose CHEZ LE LECTEUR, dans sa langue et son fuseau ;
+        // une métadonnée qui ne se lit pas retombe sur le `content` (repli français). Jamais une bulle.
+        val noticeText = if (isDeleted || isEndToEndSealed) {
+            null
+        } else {
+            SystemNoticeText.of(
+                message = message,
+                language = readerLanguage ?: preferences.systemLanguage ?: preferences.deviceLocale
+                    ?: Locale.getDefault().language,
+                timeZoneId = readerTimeZoneId ?: ZoneId.systemDefault().id,
+            )
+        }
         val text = when {
+            noticeText != null -> noticeText
             isDeleted || isEndToEndSealed -> ""
             activeIsOriginal -> message.content
             else -> message.translations
@@ -155,6 +177,7 @@ public object BubbleContentBuilder {
             isEdited = message.isEdited,
             isDeleted = isDeleted,
             isEndToEndSealed = isEndToEndSealed,
+            isEndToEndOpened = !isDeleted && !isEndToEndSealed && EndToEndRegime.isEndToEnd(message.encryptionMode),
             isReadByServer = PlainSignalAdmission.rowReadByServer(message),
             sealedPieceIds = if (isEndToEndSealed && !isDeleted) message.attachments.map { it.id } else emptyList(),
             holdsEndToEndSend = isEndToEndSealed || EndToEndRegimeMemory.messageHoldsSend(message),
@@ -213,6 +236,9 @@ public object BubbleContentBuilder {
             // A conversation notice (join/leave/legacy summary) renders as a centered
             // notice, never a signed bubble — resolved FIRST in `BubbleRenderKind`.
             isSystem = message.isSystemMessage,
+            joinNotice = message.joinNotice?.takeIf { message.isSystemMessage && !isDeleted }
+                ?.let(JoinNoticePresentation::of),
+            isArrivalsNotice = message.isSystemMessage && message.arrivalsNotice != null,
             videoCount = files.count { it.isVideo },
             contactCards = attachments.contactCards,
             isBlurred = !isDeleted && message.effects.has(MessageEffectFlags.BLURRED),

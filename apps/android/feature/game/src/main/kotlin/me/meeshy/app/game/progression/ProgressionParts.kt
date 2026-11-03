@@ -45,6 +45,7 @@ import me.meeshy.sdk.model.game.progression.ProgressionNotice
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.game.RankBlason
+import me.meeshy.ui.component.game.MeeshCoinGlyph
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
@@ -99,7 +100,7 @@ private fun MeeshEntry(meesh: EngagementMeeshProgress, onOpen: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        Icon(MeeshyIcons.MonetizationOn, contentDescription = null, tint = MeeshyPalette.Warning, modifier = Modifier.size(20.dp))
+        MeeshCoinGlyph(size = 20.dp)
         Text(held, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MeeshyTheme.tokens.textPrimary)
     }
 }

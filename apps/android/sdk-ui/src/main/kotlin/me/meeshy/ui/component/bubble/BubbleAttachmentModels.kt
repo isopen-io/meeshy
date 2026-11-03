@@ -20,6 +20,8 @@ public data class BubbleImage(
     val reactionLabel: String? = null,
     /** À vue unique, floutée, éphémère ou retenue par la loi de sortie : la carte d'« Imager » ne la peint jamais (#14330). */
     val isProtected: Boolean = false,
+    /** Le poids du fichier original, s'il est connu : sous 100 Ko, il descend seul (#14639). */
+    val sizeBytes: Long? = null,
 )
 
 @Immutable

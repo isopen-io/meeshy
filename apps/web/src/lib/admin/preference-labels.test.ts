@@ -65,7 +65,7 @@ describe('chaque clé des *_PREFERENCE_DEFAULTS est étiquetée', () => {
 
   test('la table ne connaît pas de clé que les schémas ignorent, hors les clés facultatives sans défaut', () => {
     const optional: Readonly<Record<AdminPreferenceCategory, readonly string[]>> = {
-      privacy: ['allowCallsFromNonContacts'],
+      privacy: ['allowCallsFromNonContacts', 'autoAcquaintance'],
       audio: ['ttsVoice'],
       message: [],
       notification: [],

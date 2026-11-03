@@ -52,6 +52,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.BubbleStickerSpec
+import me.meeshy.sdk.model.StickerBoxLaw
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import me.meeshy.sdk.model.reading.focal.LongMessageExcerpt
@@ -61,6 +63,7 @@ import me.meeshy.ui.component.bubble.BubbleBlurReveal
 import me.meeshy.ui.component.bubble.RichMessageText
 import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
+import me.meeshy.ui.sticker.MessageStickerArtwork
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -175,7 +178,23 @@ private fun SpeechRow(content: RiverBubbleContent, contentWidth: Dp, actions: Ri
             .combinedClickable(onClick = { actions.onTap(messageId) }, onLongClick = { actions.onLongPress(messageId) }),
     ) {
         if (content.bubble.isFirstInGroup) IdentityHeader(content, laneColor, contentWidth, actions)
-        MessageBox(content, contentWidth, laneColor, actions)
+        val sticker = content.sticker
+        if (sticker == null) MessageBox(content, contentWidth, laneColor, actions) else StickerBox(sticker, content, contentWidth)
+    }
+}
+
+/**
+ * Le sticker de la Rivière (#14534, iOS `FocalRow.stickerBlock`) : ni fond ni contour, le dessin posé dans le couloir
+ * de sa voix, l'heure dessous comme sous une bulle. Un couloir trop étroit réduit le film, jamais sa marge.
+ */
+@Composable
+private fun StickerBox(sticker: BubbleStickerSpec, content: RiverBubbleContent, contentWidth: Dp) {
+    val side = StickerBoxLaw.filmSideWithin(width = contentWidth.value, preferred = FocalMetrics.Sticker.SIDE.toFloat()).dp
+    Column(verticalArrangement = Arrangement.spacedBy(RiverMetrics.Bubble.BASE_GAP.dp), modifier = Modifier.width(contentWidth)) {
+        MessageStickerArtwork(sticker, side = side)
+        if (content.timeString.isNotEmpty()) {
+            Text(text = content.timeString, color = metaTint(), fontSize = FocalMetrics.Time.SIZE.toFloat().sp)
+        }
     }
 }
 

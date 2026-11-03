@@ -79,6 +79,11 @@ import { Link, href, navigate } from '@/routes/route-table';
  * de la loi partagée, jugée sur le rôle SERVI (`useServedGlobalRole`, jamais
  * deviné) ; le mode qui part est toujours un mode offert et disponible
  * (`chosenCreationMode`). Changer de mode (direct ↔ groupe) garde le choix.
+ *
+ * LA FEUILLE ALLÉGÉE (#14646, directive porteur du 2026-11-02) : elle se ferme
+ * par (X) ; l'essentiel d'abord (le mode, la recherche, les personnes, le nom
+ * du groupe), le secondaire replié (le chiffrement, la description). Un groupe
+ * se crée aussi avec soi pour seul membre, son nom suffit.
  */
 
 /** Le temps qu'une frappe se pose — jamais une requête par caractère. */
@@ -256,11 +261,12 @@ export default function ConversationNewScreen() {
       <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
         <Link
           to="list"
-          aria-label={translate(currentInterfaceLanguage(), 'common.back')}
-          className="grid size-11 shrink-0 place-items-center rounded-chip"
-          style={{ color: 'var(--color-ios-ink)' }}
+          data-new-close
+          aria-label={translate(currentInterfaceLanguage(), 'common.close')}
+          className="grid size-11 shrink-0 place-items-center rounded-full"
+          style={{ color: 'var(--color-ios-ink)', backgroundColor: 'var(--color-ios-card)' }}
         >
-          <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
+          <Glyph name="x" size={18} />
         </Link>
         <h1 className="flex-1 truncate text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
           {translate(currentInterfaceLanguage(), mode === 'direct' ? 'newConversation.title.direct' : 'newConversation.title.group')}

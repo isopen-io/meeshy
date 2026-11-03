@@ -71,7 +71,11 @@ class CallViewModel @Inject constructor(
     private val preview: CallPreviewCoordinator,
     private val turnCredentials: CallTurnCredentialsController,
     private val groupTitleWording: GroupCallTitleWordingSource,
+    private val reliability: CallReliability = CallReliability.Inert,
 ) : ViewModel() {
+
+    /** Appel établi, socket de signalisation tombée : la bannière « Signalisation interrompue » (le média tient). */
+    val signalingDegraded: StateFlow<Boolean> get() = reliability.signalingDegraded
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
     private val selfId: String get() = sessionRepository.currentUser.value?.id.orEmpty()
@@ -114,6 +118,8 @@ class CallViewModel @Inject constructor(
     /** The signalling socket's last known edge (`null` before the first), and the rejoin it started (#13765). */
     private var socketWasConnected: Boolean? = null
     private var rejoinJob: Job? = null
+
+    private val errors = CallErrorController(signalManager, turnCredentials) { rejoinJob?.isActive == true }
 
     /** What the collaborators may read of this session, and the one door back into it. */
     private val host = object : CallSessionHost {
@@ -160,9 +166,11 @@ class CallViewModel @Inject constructor(
         coordinator.onPrimaryVacated = ::onPrimaryVacated
         peers.attach(host)
         waiting.attach(host)
-        watchdogs.attach(host)
+        watchdogs.attach(host) { reliability.catchUpConnected() }
+        reliability.attach(host, coordinator)
         analytics.attach(host)
         turnCredentials.attach(host)
+        errors.attach(host)
         ongoing.attach(viewModelScope, state, onHangUp = ::hangUp, onToggleMute = ::toggleMute, onAnswer = ::accept, onDecline = ::decline)
         viewModelScope.launch {
             signalManager.events.collect(::onRemoteEvent)
@@ -336,6 +344,7 @@ class CallViewModel @Inject constructor(
         stopTicker()
         stopQuality()
         watchdogs.reset()
+        reliability.reset()
         peers.clear()
         resolvePeerVisual(config)
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
@@ -599,6 +608,7 @@ class CallViewModel @Inject constructor(
         syncTicker()
         syncQuality()
         watchdogs.onTransition(callState)
+        reliability.onTransition(callState)
         peers.onTransition(callState)
         if (callState != previous) extensions.controllers.notifyTransition(previous, callState, session())
         publish()

@@ -26,6 +26,8 @@ internal data class ConversationRowActions(
     val onLeaveConversation: () -> Unit = {},
     val onDeleteForMe: () -> Unit = {},
     val onDeleteForAll: () -> Unit = {},
+    /** « Rendre obsolète » (#14645) ; la rangée ne l'offre que si la loi l'accorde. */
+    val onMakeObsolete: () -> Unit = {},
     val onRename: (String) -> Unit = {},
     val onSetReaction: (String?) -> Unit = {},
     val onSetTags: (List<String>) -> Unit = {},
@@ -74,6 +76,7 @@ internal data class ConversationRowActions(
             onLeaveConversation = { viewModel.leaveConversation(conversationId) },
             onDeleteForMe = { viewModel.deleteConversationForMe(conversationId) },
             onDeleteForAll = { viewModel.deleteConversationForAll(conversationId) },
+            onMakeObsolete = { viewModel.makeConversationObsolete(conversationId) },
             onRename = { viewModel.setCustomName(conversationId, it) },
             onSetReaction = { viewModel.setReaction(conversationId, it) },
             onSetTags = { viewModel.setTags(conversationId, it) },

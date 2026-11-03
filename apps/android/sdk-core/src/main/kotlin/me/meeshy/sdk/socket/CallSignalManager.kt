@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.call.CallEndedSignal
+import me.meeshy.sdk.model.call.CallErrorSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateAckParser
 import me.meeshy.sdk.model.call.CallInitiateResult
@@ -112,6 +113,13 @@ class CallSignalManager internal constructor(
      */
     private val _incomingSignals = SocketInboundRoute.subject<CallSignalEnvelope>()
     val incomingSignals: SharedFlow<CallSignalEnvelope> = _incomingSignals.exposed()
+
+    /**
+     * Les `call:error` décodés, avec l'appel qu'ils visent. Ils ne passent PAS par [events] : leur sort dépend de
+     * l'appel en cours (un refus de rafraîchissement TURN ne termine jamais l'appel — `CallErrorDisposition`).
+     */
+    private val _callErrors = SocketInboundRoute.subject<CallErrorSignal>()
+    val callErrors: SharedFlow<CallErrorSignal> = _callErrors.exposed()
 
     /**
      * `true` while the signalling socket is connected, one value per edge. The gateway takes a dropped socket
@@ -443,6 +451,10 @@ class CallSignalManager internal constructor(
     }
 
     private fun publish(event: String, raw: String) {
+        if (event == SocketEventNames.CALL_ERROR) {
+            CallSignalMapper.callError(raw)?.let(_callErrors::emitArrived)
+            return
+        }
         CallSignalMapper.map(event, raw)?.let(_events::emitArrived)
         if (event == INITIATED_EVENT) {
             CallSignalMapper.incomingOffer(raw)?.let(_incomingOffers::emitArrived)

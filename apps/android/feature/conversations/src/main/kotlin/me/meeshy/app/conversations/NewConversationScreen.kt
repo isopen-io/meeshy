@@ -7,28 +7,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PersonOff
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,8 +34,6 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -57,10 +45,7 @@ import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
-import me.meeshy.ui.component.chrome.leadingNavigationIcon
-import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewConversationScreen(
     onBack: () -> Unit,
@@ -75,172 +60,29 @@ fun NewConversationScreen(
         onConversationCreated(id)
     }
 
-    Scaffold(
-        containerColor = MeeshyTheme.tokens.backgroundPrimary,
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.new_conversation_title), fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            leadingNavigationIcon(),
-                            contentDescription = leadingNavigationLabel(stringResource(R.string.new_conversation_back)),
-                        )
-                    }
-                },
-                actions = {
-                    TextButton(onClick = viewModel::create, enabled = state.canCreate) {
-                        Text(stringResource(R.string.new_conversation_create))
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            if (state.selected.isNotEmpty()) {
-                SelectedChips(
-                    selected = state.selected,
-                    onRemove = viewModel::toggleSelection,
-                )
-            }
-
-            if (state.isGroup) {
-                OutlinedTextField(
-                    value = state.groupTitle,
-                    onValueChange = viewModel::onGroupTitleChange,
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.new_conversation_group_title)) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
-                )
-            }
-
-            if (state.selected.isNotEmpty()) {
-                NewConversationEncryptionSection(
-                    offer = state.encryptionOffer,
-                    checked = state.encryptionMode,
-                    enabled = !state.isCreating,
-                    onSelect = viewModel::selectEncryptionMode,
-                )
-            }
-
-            OutlinedTextField(
-                value = state.query,
-                onValueChange = viewModel::onQueryChange,
-                singleLine = true,
-                label = { Text(stringResource(R.string.new_conversation_search_hint)) },
-                trailingIcon = {
-                    if (state.query.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.onQueryChange("") }) {
-                            Icon(
-                                Icons.Filled.Cancel,
-                                contentDescription = stringResource(R.string.conversations_search_clear),
-                                tint = MeeshyTheme.tokens.textMuted,
-                            )
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
-            )
-
-            state.error?.let { error ->
-                Text(
-                    text = stringResource(error.messageRes()),
-                    color = MeeshyPalette.Error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
-                )
-            }
-
-            if (state.showsContacts) {
-                ContactsSection(state = state, onToggle = viewModel::toggleSelection)
-                return@Column
-            }
-
-            Box(modifier = Modifier.fillMaxSize()) {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(state.results, key = { it.id }) { user ->
-                        UserRow(user = user, onClick = { viewModel.toggleSelection(user.id) })
-                        viewModel.loadMoreIfNeeded(user.id)
-                    }
-                    if (state.isLoadingMore) {
-                        item {
-                            Box(modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.md)) {
-                                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center).size(24.dp))
-                            }
-                        }
-                    }
-                }
-                if (state.showsNoResults) {
-                    NoUserFound(modifier = Modifier.align(Alignment.TopCenter))
-                }
-                if (state.isSearching && state.results.isEmpty()) {
-                    CircularProgressIndicator(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = MeeshySpacing.xl),
-                    )
-                }
-            }
-        }
-    }
+    NewConversationSheet(
+        state = state,
+        actions = NewConversationActions(
+            onClose = onBack,
+            onCreate = viewModel::create,
+            onQueryChange = viewModel::onQueryChange,
+            onToggleGroup = viewModel::toggleGroupRequested,
+            onGroupTitleChange = viewModel::onGroupTitleChange,
+            onToggleEncryption = viewModel::toggleEncryptionOptions,
+            onSelectEncryption = viewModel::selectEncryptionMode,
+            onToggleUser = viewModel::toggleSelection,
+            onRowShown = viewModel::loadMoreIfNeeded,
+        ),
+    )
 }
 
-private fun NewConversationError.messageRes(): Int = when (this) {
+internal fun NewConversationError.messageRes(): Int = when (this) {
     NewConversationError.BLOCKED -> R.string.new_conversation_error_blocked
     NewConversationError.CREATE_FAILED -> R.string.new_conversation_error_create
 }
 
-/**
- * The surface the picker opens on (iOS `NewConversationView.contactsSection`): « Your contacts »,
- * served from the cache first; a loading state only on a cold cache; « No contacts » with a hint
- * to search once the roster answered with nobody.
- */
 @Composable
-private fun ContactsSection(state: NewConversationUiState, onToggle: (String) -> Unit) {
-    val loadingLabel = stringResource(R.string.new_conversation_contacts_loading)
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        item(key = "contacts-header") {
-            Text(
-                text = stringResource(R.string.new_conversation_contacts_section),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MeeshyTheme.tokens.textSecondary,
-                modifier = Modifier
-                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm)
-                    .semantics { heading() },
-            )
-        }
-        items(state.contacts, key = { "contact-${it.id}" }) { user ->
-            UserRow(user = user, onClick = { onToggle(user.id) })
-        }
-        if (state.isLoadingContacts && state.contacts.isEmpty()) {
-            item(key = "contacts-loading") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(MeeshySpacing.xl)
-                        .semantics { contentDescription = loadingLabel },
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center).size(24.dp))
-                }
-            }
-        }
-        if (state.showsNoContacts) {
-            item(key = "contacts-empty") { NoContacts() }
-        }
-    }
-}
-
-@Composable
-private fun NoContacts() {
+internal fun NoContacts() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -272,7 +114,7 @@ private fun NoContacts() {
 
 /** « Aucun utilisateur trouvé » (parity iOS `NewConversationView.emptyState`). */
 @Composable
-private fun NoUserFound(modifier: Modifier = Modifier) {
+internal fun NoUserFound(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxWidth()
