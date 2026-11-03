@@ -11,7 +11,7 @@ import {
   type CursorSort,
 } from '../../utils/cursor-pagination';
 import { parseRequestLevel } from '@meeshy/shared/types/relation';
-import { judgeRelationRequest } from '../../services/relations/relationRequestGate';
+import { hasStandingRequest, judgeRelationRequest } from '../../services/relations/relationRequestGate';
 import {
   INCLUDE_PARTIES,
   clauseHorsBlocage,
@@ -107,16 +107,7 @@ export async function envoyerDemande(
   // une réponse différente dirait le refus (RG-07, audit #13933). Il la retire
   // lui-même (`cancel`) pour redemander, et le cool-down juge alors. Une demande
   // acceptée est l'histoire d'un cran déjà franchi : la loi des crans dit le reste.
-  const existante = await fastify.prisma.friendRequest.findFirst({
-    where: {
-      OR: [
-        { status: 'pending', senderId: emetteurId, receiverId: receveurId },
-        { status: 'pending', senderId: receveurId, receiverId: emetteurId },
-        { status: 'rejected', senderId: emetteurId, receiverId: receveurId },
-      ],
-    },
-    select: { id: true },
-  });
+  const existante = await hasStandingRequest(fastify.prisma, { requesterId: emetteurId, otherId: receveurId });
 
   if (existante) {
     return { refus: { code: 409, message: 'Une demande d\'ami existe deja entre vous' } };

@@ -72,6 +72,7 @@ const ALLOWED: readonly string[] = [
   'services/relations/relationConsent.ts',
   'services/relations/bloodRitual.ts',
   'routes/relations/settings.ts',
+  'services/relations/ritualShareWithdrawal.ts',
   'services/relations/relationExport.ts',
   'routes/me/export-relations.ts',
 ];
