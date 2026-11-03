@@ -189,6 +189,17 @@
     <string name="post_detail_back">Indietro</string>
     <string name="post_detail_title">Post</string>
     <string name="post_detail_viewers">Visualizzazioni</string>
+    <string name="profile_posts_empty">Nessun post</string>
+    <string name="profile_posts_empty_filter_subtitle">Tocca di nuovo il riquadro per rivedere tutto</string>
+    <string name="profile_posts_empty_posts">Nessun post</string>
+    <string name="profile_posts_empty_reels">Nessun reel</string>
+    <string name="profile_posts_empty_subtitle">I post appariranno qui</string>
+    <string name="profile_posts_end_of_content">Hai visto tutto</string>
+    <string name="profile_posts_first_published_at">Primo contenuto pubblicato il %1$s</string>
+    <string name="profile_posts_load_error">Errore durante il caricamento dei post</string>
+    <string name="profile_posts_stat_posts">Post</string>
+    <string name="profile_posts_stat_reels">Reel</string>
+    <string name="profile_posts_stat_stories">Storie</string>
     <string name="status_bubble_republish">Ricondividi</string>
     <string name="status_bubble_via">via @%1$s</string>
     <string name="status_composer_bare_add">Aggiungi una parola</string>

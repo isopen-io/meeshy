@@ -180,6 +180,17 @@
     <string name="post_detail_back">Back</string>
     <string name="post_detail_title">Post</string>
     <string name="post_detail_viewers">Views</string>
+    <string name="profile_posts_empty">No posts</string>
+    <string name="profile_posts_empty_filter_subtitle">Tap the tile again to see everything</string>
+    <string name="profile_posts_empty_posts">No posts</string>
+    <string name="profile_posts_empty_reels">No reels</string>
+    <string name="profile_posts_empty_subtitle">Posts will appear here</string>
+    <string name="profile_posts_end_of_content">You\'ve seen it all</string>
+    <string name="profile_posts_first_published_at">First content published on %1$s</string>
+    <string name="profile_posts_load_error">Error loading posts</string>
+    <string name="profile_posts_stat_posts">Posts</string>
+    <string name="profile_posts_stat_reels">Reels</string>
+    <string name="profile_posts_stat_stories">Stories</string>
     <string name="status_bubble_republish">Repost</string>
     <string name="status_bubble_via">via @%1$s</string>
     <string name="status_composer_bare_add">Add a word</string>

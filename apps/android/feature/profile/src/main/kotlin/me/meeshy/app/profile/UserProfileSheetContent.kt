@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -95,6 +96,8 @@ internal fun ProfileSheetLoadedContent(
     val signs = ProfileHeaderSigns.of(live, profile, isBlockedByMe, state.isBlockedByTarget, now)
     val showsTabs = plan?.showsTabs ?: true
     val reduceMotion = LocalReduceMotion.current
+    val postsEmit: (LazyListScope.() -> Unit)? =
+        if (showsTabs && tabs.selected == ProfileTab.POSTS) environment.postsItems?.invoke(profile.id, state.isSelf) else null
 
     val listState = rememberLazyListState()
     val density = LocalDensity.current
@@ -139,6 +142,10 @@ internal fun ProfileSheetLoadedContent(
                         onSelect = { tabs.select(it) },
                         topInset = ProfileHeaderMetrics.tabBarTopInsetDp(progress).dp + statusInset * progress.coerceIn(0f, 1f),
                     )
+                }
+                if (postsEmit != null) {
+                    postsEmit()
+                    return@LazyColumn
                 }
                 item(key = "tab-content", contentType = "tab-content") {
                     Column(
