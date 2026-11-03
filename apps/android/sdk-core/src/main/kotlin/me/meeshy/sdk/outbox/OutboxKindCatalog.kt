@@ -61,6 +61,9 @@ public object OutboxKindCatalog {
         OutboxKind.CREATE_COMMENT,
         OutboxKind.SEND_E2EE_MESSAGE,
         OutboxKind.REPOST_POST,
+        OutboxKind.CREATE_CONVERSATION,
+        OutboxKind.UPDATE_CONVERSATION,
+        OutboxKind.SETTINGS_ACTION,
         -> true
     }
 
@@ -98,6 +101,9 @@ public object OutboxKindCatalog {
         OutboxKind.CREATE_POST,
         OutboxKind.CREATE_COMMENT,
         OutboxKind.REPOST_POST,
+        OutboxKind.CREATE_CONVERSATION,
+        OutboxKind.UPDATE_CONVERSATION,
+        OutboxKind.SETTINGS_ACTION,
         -> false
     }
 
