@@ -330,6 +330,10 @@
     <string name="story_media_soundExtraction_a11yHint">سيتمكن أشخاص آخرون من إعادة استخدام مسار صوت مقاطع الفيديو في هذا المنشور في منشوراتهم الخاصة.</string>
     <string name="story_media_soundExtraction_caption">سيتمكن أشخاص آخرون من إعادة استخدام مسار صوت مقاطع الفيديو في هذا المنشور.</string>
     <string name="story_media_soundExtraction_label">السماح بإعادة استخدام الصوت</string>
+    <string name="story_notification_expired_back">العودة إلى الإشعارات</string>
+    <string name="story_notification_expired_cta_create">إنشاء قصة</string>
+    <string name="story_notification_expired_subtitle">لم تعد هذه القصة متاحة.</string>
+    <string name="story_notification_expired_title">قصة منتهية</string>
     <string name="story_reader_buffering">جارٍ تحميل القصة</string>
     <string name="story_reader_loading">جارٍ تحميل القصة…</string>
     <string name="story_repost_error_forbidden">لا يمكن إعادة مشاركة هذه القصة</string>

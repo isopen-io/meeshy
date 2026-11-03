@@ -83,13 +83,26 @@ public object EndpointPolicy {
     private fun retryPolicy(route: String): EndpointRetryPolicy =
         if (route.startsWith("/signal/")) EndpointRetryPolicy.NEVER else EndpointRetryPolicy.STANDARD
 
-    /** L'inscription, la preuve d'adresse et la réinitialisation documentent leurs codes. */
+    /**
+     * L'inscription, la preuve d'adresse et la réinitialisation documentent leurs codes ; le partage d'une traduction
+     * (`SHARED_TRANSLATION_STALE_SOURCE`, #9899), la date de naissance (`BIRTH_DATE_ALREADY_SET`, `AGE_BELOW_MINIMUM`,
+     * #9929) et le jeu (409 d'état, `GameErrorCode`) aussi : l'écran y lit le CODE pour dire pourquoi.
+     */
     private fun rejectionPolicy(route: String): EndpointRejectionPolicy =
-        if (route.startsWith("/auth/register") || route == "/auth/verify-email" || route == "/auth/reset-password") {
-            EndpointRejectionPolicy.STRUCTURED
-        } else {
-            EndpointRejectionPolicy.OPAQUE
-        }
+        if (isStructuredRoute(route)) EndpointRejectionPolicy.STRUCTURED else EndpointRejectionPolicy.OPAQUE
+
+    private fun isStructuredRoute(route: String): Boolean =
+        route.startsWith("/auth/register") ||
+            route == "/auth/verify-email" ||
+            route == "/auth/reset-password" ||
+            route == "/me/birth-date" ||
+            PathSegment.isGameRoute(route) ||
+            isSharedTranslations(route)
+
+    private fun isSharedTranslations(route: String): Boolean {
+        val parts = route.split('/')
+        return parts.size == 4 && parts[1] == "conversations" && parts[3] == "shared-translations"
+    }
 
     /** Vrai pour un chemin à segment vide, double slash ou slash final (`/` seul excepté). */
     public fun hasEmptyPathSegment(path: String): Boolean =

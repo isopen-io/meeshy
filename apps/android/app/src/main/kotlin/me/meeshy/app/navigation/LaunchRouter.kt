@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.sdk.model.link.EmailLinkSecret
 import me.meeshy.sdk.model.push.PushPayload
 import me.meeshy.sdk.model.push.PushTapDestination
+import me.meeshy.sdk.model.story.StoryNotificationContext
 import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.StoryRoutes
 
@@ -85,7 +86,13 @@ object LaunchRouter {
             is PushTapDestination.Reel -> Routes.reels(destination.postId)
             is PushTapDestination.Story -> Routes.story(destination.userId)
             is PushTapDestination.StoryContent ->
-                StoryRoutes.storyPost(destination.postId, destination.action, destination.commentId, destination.parentCommentId)
+                StoryRoutes.storyTarget(
+                    destination.postId,
+                    destination.action,
+                    destination.commentId,
+                    destination.parentCommentId,
+                    StoryNotificationContext.from(payload, System.currentTimeMillis()),
+                )
             is PushTapDestination.Mood -> Routes.moodSpotlight(destination.statusId)
             is PushTapDestination.Profile -> Routes.profile(destination.userId)
             PushTapDestination.Notifications -> Routes.NOTIFICATIONS

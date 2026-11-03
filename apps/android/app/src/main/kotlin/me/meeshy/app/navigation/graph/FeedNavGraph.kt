@@ -128,6 +128,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onClose = { navController.popBackStack() },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+            onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
         )
     }
     composable(
