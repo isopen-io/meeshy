@@ -116,6 +116,10 @@ class StoryViewerViewModel @Inject constructor(
      */
     private val resolvedImageUrls = mutableSetOf<String>()
 
+    /** Focus audio et état des médias de la slide (lot story-playback-hold-and-stall) : lus par l'horloge du lecteur. */
+    internal val interruption = StorySessionInterruptionController()
+    internal val mediaSignal = StoryMediaReadinessSignal()
+
     private val _state = MutableStateFlow(StoryViewerUiState())
     val state: StateFlow<StoryViewerUiState> = _state.asStateFlow()
 

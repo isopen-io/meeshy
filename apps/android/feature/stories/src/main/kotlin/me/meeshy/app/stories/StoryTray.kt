@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.stories.R
+import me.meeshy.ui.component.skeleton.SkeletonStoryTrayRow
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -290,31 +291,13 @@ private fun StoryFailedRow(
 }
 
 /**
- * Cold-start placeholder shown only when the cache is genuinely empty (no rows
- * yet). A warm start paints the real tray straight from Room, so this never
- * flashes over cached data (Instant-App principles).
+ * Cold-start placeholder shown only when the cache is genuinely empty (no rows yet): six rings 96/88 like iOS
+ * `SkeletonStoryTrayRow`. A warm start paints the real tray straight from Room, so this never flashes over cached data.
  */
 @Composable
 private fun StoryTraySkeleton(modifier: Modifier = Modifier) {
-    LazyRow(
-        modifier = modifier.height(StoryEntryMetrics.height).semantics { contentDescription = "" },
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-        contentPadding = PaddingValues(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
-        userScrollEnabled = false,
-    ) {
-        items(SKELETON_PLACEHOLDER_COUNT) {
-            Box(
-                modifier = Modifier
-                    .width(StoryEntryMetrics.labelWidth)
-                    .size(StoryEntryMetrics.ring)
-                    .clip(CircleShape)
-                    .background(MeeshyTheme.tokens.backgroundTertiary),
-            )
-        }
-    }
+    SkeletonStoryTrayRow(modifier = modifier.height(StoryEntryMetrics.height))
 }
-
-private const val SKELETON_PLACEHOLDER_COUNT = 4
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)

@@ -84,11 +84,49 @@ class MediaBlobStore internal constructor(
      * file no longer opens, or it was queued by another account.
      */
     suspend fun get(cmid: String, ownerId: String? = currentOwner()): MediaUploadItem? {
-        val row = mediaBlobDao.find(cmid) ?: return null
-        if (row.bytes.isNotEmpty()) return MediaUploadItem(bytes = row.bytes, fileName = row.fileName, mimeType = row.mimeType)
-        val source = withContext(io) { files.source(cmid, ownerId) } ?: return null
+        val row = mediaBlobDao.meta(cmid) ?: return null
+        val source = withContext(io) { files.source(cmid, ownerId) }
+            ?: legacySource(cmid)
+            ?: return null
         return MediaUploadItem(source = source, fileName = row.fileName, mimeType = row.mimeType)
     }
+
+    /** A row written before the sealed files still holds its octets in the BLOB: streamed in slices, never read whole. */
+    private suspend fun legacySource(cmid: String): MediaUploadSource? {
+        val length = mediaBlobDao.legacyLength(cmid)?.takeIf { it > 0 } ?: return null
+        return LegacyBlobSource(mediaBlobDao, cmid, length)
+    }
+
+    /**
+     * Moves every legacy BLOB to a sealed file and empties the column (#14710). A row whose upload no longer exists
+     * ([ownerOf] answers `null`) is dropped. Returns how many were converted; a failure leaves that row as it was.
+     */
+    internal suspend fun migrateLegacy(ownerOf: suspend (String) -> OwnerLookup): Int {
+        var converted = 0
+        for (cmid in mediaBlobDao.legacyCmids()) {
+            val owner = when (val lookup = ownerOf(cmid)) {
+                OwnerLookup.Gone -> { mediaBlobDao.delete(cmid); continue }
+                is OwnerLookup.Owned -> lookup.ownerId
+            }
+            val length = mediaBlobDao.legacyLength(cmid)?.takeIf { it > 0 } ?: continue
+            val done = runCatching {
+                withContext(io) {
+                    if (!files.exists(cmid)) files.write(cmid, LegacyBlobSource(mediaBlobDao, cmid, length), owner)
+                }
+                mediaBlobDao.clearBytes(cmid)
+            }
+            if (done.isSuccess) converted++ else done.exceptionOrNull()?.let { if (it is CancellationException) throw it }
+        }
+        return converted
+    }
+
+    internal sealed interface OwnerLookup {
+        data object Gone : OwnerLookup
+        data class Owned(val ownerId: String?) : OwnerLookup
+    }
+
+    /** The `cmid`s of blob rows written before [before]. */
+    internal suspend fun heldBefore(before: Long): List<String> = mediaBlobDao.cmidsOlderThan(before)
 
     /**
      * Whether [cmid]'s octets can still be SENT (#13554): a row is held AND its sealed file exists and opens under the
@@ -120,12 +158,53 @@ class MediaBlobStore internal constructor(
         withContext(io) { files.clear() }
     }
 
+    private class LegacyBlobSource(
+        private val dao: MediaBlobDao,
+        private val cmid: String,
+        override val size: Long,
+    ) : MediaUploadSource {
+        override fun open(offset: Long): java.io.InputStream {
+            require(offset in 0..size) { "offset $offset outside 0..$size" }
+            return object : java.io.InputStream() {
+                private var position = offset
+                private var chunk = ByteArray(0)
+                private var index = 0
+
+                override fun read(): Int {
+                    if (!fill()) return -1
+                    return chunk[index++].toInt() and 0xFF
+                }
+
+                override fun read(b: ByteArray, off: Int, len: Int): Int {
+                    if (len == 0) return 0
+                    if (!fill()) return -1
+                    val n = minOf(len, chunk.size - index)
+                    chunk.copyInto(b, off, index, index + n)
+                    index += n
+                    return n
+                }
+
+                private fun fill(): Boolean {
+                    if (index < chunk.size) return true
+                    if (position >= size) return false
+                    val next = kotlinx.coroutines.runBlocking { dao.legacySlice(cmid, position + 1, SLICE_BYTES) } ?: return false
+                    if (next.isEmpty()) return false
+                    chunk = next
+                    index = 0
+                    position += next.size
+                    return true
+                }
+            }
+        }
+    }
+
     private fun now(): Long = System.currentTimeMillis()
 
     private fun currentOwner(): String? = ticket()?.ownerId
 
     internal companion object {
         const val DIRECTORY = "media-outbox"
+        private const val SLICE_BYTES = 1L * 1024 * 1024
         private val EMPTY = ByteArray(0)
 
         /**
