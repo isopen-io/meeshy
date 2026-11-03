@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.ui.component.focal.FocalConversationStartRow
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -69,6 +70,7 @@ internal fun ChatListRow(
         is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
         is ChatListItem.UnreadSeparator -> UnreadSeparatorRow(item.count)
         is ChatListItem.EncryptionNotice -> EncryptionNoticeRow(accentColor)
+        is ChatListItem.ConversationStart -> ConversationStartListRow(item)
         is ChatListItem.Message -> ChatMessageRow(
             bubble = item.bubble.inConversation(isGroup),
             accentColor = accentColor,
@@ -185,4 +187,24 @@ internal fun ReplyCountPill(
             )
         }
     }
+}
+
+/** « Début de la conversation avec <nom> » + le jour du premier message, formaté comme les séparateurs. */
+@Composable
+private fun ConversationStartListRow(item: ChatListItem.ConversationStart) {
+    val today = stringResource(R.string.chat_date_today)
+    val yesterday = stringResource(R.string.chat_date_yesterday)
+    val dayBeforeYesterday = stringResource(R.string.chat_date_day_before_yesterday)
+    val dayLabel = item.firstMessageDayMillis?.let { millis ->
+        MessageDayLabel.label(
+            dayMillis = millis,
+            nowMillis = System.currentTimeMillis(),
+            zone = java.time.ZoneId.systemDefault(),
+            locale = java.util.Locale.getDefault(),
+            today = today,
+            yesterday = yesterday,
+            dayBeforeYesterday = dayBeforeYesterday,
+        )
+    }
+    FocalConversationStartRow(conversationName = item.conversationName, firstMessageDayLabel = dayLabel)
 }
