@@ -159,4 +159,10 @@ class OpenSourceLicenseCardsTest {
     fun `non launchable entries never become cards`() {
         assertThat(OpenSourceLicensePresentationBuilder.cards(listOf(license("Dead", OpenSourceLicenseType.MIT, url = "")))).isEmpty()
     }
+
+    @Test
+    fun `the Android catalog keeps every dependency as one card`() {
+        val grouped = OpenSourceLicenseCatalog.groups().flatMap { it.licenses }
+        assertThat(OpenSourceLicenseCatalog.cards().map { it.name }).containsExactlyElementsIn(grouped.map { it.name }).inOrder()
+    }
 }
