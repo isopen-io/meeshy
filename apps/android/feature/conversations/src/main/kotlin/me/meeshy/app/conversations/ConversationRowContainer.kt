@@ -40,7 +40,7 @@ import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.model.currentUserRole
 import me.meeshy.sdk.model.isMeaningful
 import me.meeshy.sdk.model.resolvedLastMessagePreview
-import me.meeshy.sdk.theme.accentColorPalette
+import me.meeshy.ui.theme.displayPaletteInTheme
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.chrome.conversationEngagementDescription
 import me.meeshy.ui.theme.LentilleMetrics
@@ -95,7 +95,7 @@ internal fun ConversationRowContainer(
     val capabilities = remember(conversation, model.currentUserPrefs) {
         ConversationRowMenuCapabilities.make(conversation, model.currentUserPrefs)
     }
-    val palette = remember(conversation) { conversation.accentColorPalette() }
+    val palette = conversation.displayPaletteInTheme()
     val accent = hexColor(palette.primary)
     val secondary = hexColor(palette.secondary)
     val timeLabel = conversationRowRelativeTime(conversation, model.nowMillis)

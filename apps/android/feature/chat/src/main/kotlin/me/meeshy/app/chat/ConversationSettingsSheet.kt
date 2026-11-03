@@ -107,6 +107,14 @@ internal fun ConversationSettingsSheet(
                 return@Column
             }
 
+            SectionLabel(stringResource(R.string.conversation_appearance_section_accent))
+            ConversationAccentPicker(
+                catalog = state.catalog,
+                selectedKey = state.appearance.accent,
+                autoColor = accentColor,
+                onSelect = viewModel::setAccent,
+            )
+
             SectionLabel(stringResource(R.string.conversation_settings_write_role))
             MemberRole.entries.forEach { role ->
                 SettingRadioRow(
