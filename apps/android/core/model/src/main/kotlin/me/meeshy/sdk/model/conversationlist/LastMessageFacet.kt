@@ -193,3 +193,15 @@ fun ApiConversation.admitsLastMessage(id: String?, createdAtMillis: Long?, alias
     val known = isoToEpochMillisOrNull(current.createdAt) ?: return true
     return incoming > known
 }
+
+/**
+ * Le dernier message de la ligne vient d'être SUPPRIMÉ : elle revient au message PRÉCÉDENT que le
+ * serveur sert désormais ([server], la ligne relue ; il filtre les messages supprimés). Seul un
+ * remplaçant inconnu (`null`, ou qui sert encore le supprimé) vide la ligne. `null` rendu quand la
+ * ligne ne décrit plus le message supprimé : un `conversation:updated` plus récent fait autorité.
+ */
+fun ApiConversation.revertingDeletion(deletedMessageId: String, server: ApiConversation?): ApiConversation? {
+    if (lastMessage?.id != deletedMessageId) return null
+    val replacement = server?.lastMessageFacet()?.takeIf { it.id != null && it.id != deletedMessageId }
+    return replacement?.let(::applyingLastMessage) ?: clearingLastMessage()
+}

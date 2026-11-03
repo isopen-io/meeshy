@@ -12,6 +12,7 @@ import me.meeshy.core.database.entity.ConversationEntity
 import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.MessageDeletedEvent
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
 import me.meeshy.sdk.model.ParticipantBannedEvent
 import me.meeshy.sdk.model.ParticipantJoinedEvent
@@ -21,6 +22,7 @@ import me.meeshy.sdk.model.conversationlist.ConversationLivePatch
 import me.meeshy.sdk.model.conversationlist.LastMessageFacet
 import me.meeshy.sdk.model.conversationlist.admitsLastMessage
 import me.meeshy.sdk.model.conversationlist.applyingLastMessage
+import me.meeshy.sdk.model.conversationlist.revertingDeletion
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.ConversationApi
@@ -66,6 +68,41 @@ class ConversationLivePatcher @Inject constructor(
         }
         if (known == Known.ABSENT) discover(message.conversationId)
         return known != Known.ABSENT
+    }
+
+    /**
+     * `message:edited` : si le message édité EST le dernier de la ligne, la facette entière est remplacée
+     * (jamais l'auteur de l'ancien état sous le texte du nouveau) ; sinon la ligne ne bouge pas.
+     */
+    suspend fun applyEdited(message: ApiMessage): Boolean {
+        val facet = LastMessageFacet.of(
+            message = message,
+            readerId = readerId(),
+            youLabel = readerLabel.youLabel(),
+            viewerLanguages = viewerLanguages(),
+        )
+        val known = mutate(message.conversationId) { row ->
+            if (row.lastMessage?.id != message.id) row else row.applyingLastMessage(facet)
+        }
+        return known != Known.ABSENT
+    }
+
+    /**
+     * `message:deleted` : le dernier message supprimé, la ligne revient au précédent que le serveur sert
+     * (vide seulement si la relecture échoue) ; un `conversation:updated` plus récent n'est pas écrasé.
+     */
+    suspend fun applyDeleted(event: MessageDeletedEvent) {
+        val current = conversationDao.find(event.conversationId)
+            ?.let { runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }.getOrNull() }
+        if (current?.lastMessage?.id != event.messageId) return
+        val server = try {
+            conversationApi.getById(event.conversationId).data
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+        mutate(event.conversationId) { row -> row.revertingDeletion(event.messageId, server) ?: row }
     }
 
     /** `conversation:updated` : métadonnées et groupe d'aperçu ; inconnue ⇒ découverte. */
