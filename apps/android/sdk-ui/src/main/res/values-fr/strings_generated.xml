@@ -240,6 +240,7 @@
     <string name="media_trim_of_total">sur %1$s</string>
     <string name="media_trim_window">Portion conservée</string>
     <string name="media_video_pip_enter">Picture in Picture</string>
+    <string name="media_video_unavailable_retry">Vidéo indisponible. Réessayer.</string>
     <string name="media_voice_message">Message vocal</string>
     <string name="media_voice_recording">Message vocal (%1$s)</string>
     <string name="message_long_collapse">Réduire</string>

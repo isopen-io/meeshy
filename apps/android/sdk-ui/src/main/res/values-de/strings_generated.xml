@@ -238,6 +238,7 @@
     <string name="media_trim_of_total">von %1$s</string>
     <string name="media_trim_window">Beibehaltener Ausschnitt</string>
     <string name="media_video_pip_enter">Bild-in-Bild</string>
+    <string name="media_video_unavailable_retry">Video nicht verfügbar. Erneut versuchen.</string>
     <string name="media_voice_message">Sprachnachricht</string>
     <string name="media_voice_recording">Sprachnachricht (%1$s)</string>
     <string name="message_long_collapse">Weniger anzeigen</string>

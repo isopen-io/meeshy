@@ -140,7 +140,7 @@ private enum class VideoAutoDownload { IDLE, RUNNING, DONE }
  * paraît, et le dit par son badge : progression, puis « prêt ». Hors politique, le badge de l'hôte est rendu tel quel.
  */
 @Composable
-private fun rememberVideoAutoDownloadBadge(file: BubbleFile, hostBadge: PieceBadge): PieceBadge {
+internal fun rememberVideoAutoDownloadBadge(file: BubbleFile, hostBadge: PieceBadge): PieceBadge {
     val starts = bubbleAutoDownloadsVideo(LocalBubbleMediaAutoDownload.current, file, hostBadge)
     val prefetcher = rememberBubbleVideoPrefetcher()
     var progress by remember(file.attachmentId, file.url) { mutableStateOf(VideoAutoDownload.IDLE) }

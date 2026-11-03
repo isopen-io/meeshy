@@ -238,6 +238,7 @@
     <string name="media_trim_of_total">of %1$s</string>
     <string name="media_trim_window">Kept portion</string>
     <string name="media_video_pip_enter">Picture in Picture</string>
+    <string name="media_video_unavailable_retry">Video unavailable. Retry.</string>
     <string name="media_voice_message">Voice message</string>
     <string name="media_voice_recording">Voice message (%1$s)</string>
     <string name="message_long_collapse">Show less</string>

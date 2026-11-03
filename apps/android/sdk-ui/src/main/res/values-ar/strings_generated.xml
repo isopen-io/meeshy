@@ -246,6 +246,7 @@
     <string name="media_trim_of_total">من %1$s</string>
     <string name="media_trim_window">الجزء المحتفظ به</string>
     <string name="media_video_pip_enter">صورة داخل صورة</string>
+    <string name="media_video_unavailable_retry">الفيديو غير متاح. أعد المحاولة.</string>
     <string name="media_voice_message">رسالة صوتية</string>
     <string name="media_voice_recording">رسالة صوتية (%1$s)</string>
     <string name="message_long_collapse">عرض أقل</string>
