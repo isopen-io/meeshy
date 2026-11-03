@@ -16,9 +16,9 @@ import javax.inject.Inject
 
 /** La couture de la garde de sonnerie : le ViewModel ne connaît que ce contrat. */
 interface CallRingGuarding {
-    override fun attach(host: CallSessionHost)
-    override fun onTransition(next: CallState)
-    override fun reset()
+    fun attach(host: CallSessionHost)
+    fun onTransition(next: CallState)
+    fun reset()
 
     companion object {
         /** Sans garde : le comportement d'avant elle. */
@@ -62,7 +62,7 @@ class CallRingGuardController @Inject constructor(
     }
 
     /** Un nouvel appel commence : aucune garde du précédent ne lui survit. */
-    override fun reset() = stop()
+    fun reset() = stop()
 
     private fun expire(host: CallSessionHost, guard: CallRingGuard) {
         armed = null
