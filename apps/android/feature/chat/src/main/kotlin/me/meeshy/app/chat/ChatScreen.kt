@@ -193,22 +193,14 @@ fun ChatScreen(
                     topInset = headerHeight,
                     bottomInset = listBottomInset,
                 )
-                // Rangée plate (Script) : pendant un défilement du doigt, l'en-tête ET le composeur
-                // s'effacent par opacité — aucun inset ne bouge — et reviennent à l'arrêt ; sauf
-                // recherche ouverte ou suggestions de mention (iOS `FocalChromeReturn`).
-                val chromeHidden = host.readingMode?.state?.mode?.usesFlatRow == true &&
-                    host.chrome.isUserScrolling &&
-                    !state.search.isActive &&
-                    !state.mention.isActive
-                val chromeAlpha by animateFloatAsState(
-                    targetValue = if (chromeHidden) 0f else 1f,
-                    animationSpec = tween((FocalMetrics.HiddenChrome.EASE_OUT_SECONDS * 1000).toInt()),
-                    label = "flat-chrome",
-                )
+                // Pendant le geste du doigt l'en-tête et la barre de saisie glissent vers leur bord en se
+                // fondant, et reviennent doigt levé (iOS `EdgeHiddenChrome`, `FocalChromeReturn`) ; sauf
+                // recherche ouverte ou suggestions de mention.
+                val chromeHidden = host.chrome.threadScroll.chromeHidden && !state.search.isActive && !state.mention.isActive
                 Box(
                     Modifier
                         .onSizeChanged { headerHeightPx = it.height }
-                        .graphicsLayer { alpha = chromeAlpha },
+                        .hiddenTowardsEdge(chromeHidden, ChromeEdge.Top),
                 ) {
                     ChatHeaderHost(host, remember(viewModel) { viewModel.controllers.find<ChatServerSearch>() })
                 }
@@ -216,7 +208,7 @@ fun ChatScreen(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .onSizeChanged { composerHeightPx = it.height }
-                        .graphicsLayer { alpha = chromeAlpha },
+                        .hiddenTowardsEdge(chromeHidden, ChromeEdge.Bottom),
                 ) {
                     ChatBottomBarHost(host)
                 }
