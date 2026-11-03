@@ -71,6 +71,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.syncpill.SyncPillDotStyle
 import me.meeshy.sdk.model.syncpill.SyncPillGlyph
 import me.meeshy.sdk.model.syncpill.SyncPillMarquee
