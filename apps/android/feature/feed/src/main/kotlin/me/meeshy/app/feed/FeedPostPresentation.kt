@@ -114,6 +114,8 @@ data class FeedPostPresentation(
     val repostEmbed: RepostEmbedPresentation?,
     val viewCount: Int,
     val impressionCount: Int,
+    /** Points que ce post a rapportés au lecteur (#9569) ; `null` : non servi. La marque « · ✦+N » les montre. */
+    val viewerPoints: Int? = null,
     /** Personnes distinctes ayant ouvert le post (`uniqueViewCount`) — montrée à l'auteur seul. */
     val uniqueViewCount: Int? = null,
     /** True when the signed-in viewer authored this post — gates the author-only reach line. */
@@ -265,6 +267,7 @@ object FeedPostBuilder {
             repostEmbed = RepostEmbedBuilder.forPost(post, preferences, mediaBaseUrl),
             viewCount = post.viewCount ?: 0,
             impressionCount = post.impressionCount ?: 0,
+            viewerPoints = post.viewerPoints,
             uniqueViewCount = post.uniqueViewCount,
             isAuthor = currentUserId != null && post.author?.id == currentUserId,
             location = FeedPostLocationBuilder.build(post.location),

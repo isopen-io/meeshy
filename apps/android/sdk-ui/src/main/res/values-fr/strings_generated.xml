@@ -156,6 +156,11 @@
     <string name="emoji_category_travel">Voyages</string>
     <string name="emoji_picker_expand">Autres emojis</string>
     <string name="emoji_picker_title">Réactions</string>
+    <string name="engagement_pill_a11y_streak">%1$s · Étincelles : %2$d · Aujourd\'hui : %3$d</string>
+    <string name="engagement_pill_a11y_streak_days_one">%1$d jour</string>
+    <string name="engagement_pill_a11y_streak_days_other">%1$d jours</string>
+    <string name="engagement_pill_a11y_total_one">%1$s étincelle gagnée dans cette conversation</string>
+    <string name="engagement_pill_a11y_total_other">%1$s étincelles gagnées dans cette conversation</string>
     <string name="focal_focus_add_reaction">Ajouter une réaction</string>
     <string name="focal_focus_translation_detail">Détails de traduction</string>
     <string name="focal_row_anonymousSender">Sans compte</string>
@@ -265,6 +270,8 @@
     <string name="post_daily_limit_comment_untimed">Vous avez fait tous les commentaires permis aujourd’hui. La limite compte vos gestes, jamais vos étincelles.</string>
     <string name="post_daily_limit_reaction">Vous avez fait toutes les réactions permises aujourd’hui. La limite compte vos gestes, jamais vos étincelles : vous pourrez réagir de nouveau à %1$s.</string>
     <string name="post_daily_limit_reaction_untimed">Vous avez fait toutes les réactions permises aujourd’hui. La limite compte vos gestes, jamais vos étincelles.</string>
+    <string name="post_points_a11y_one">Ce post t’a rapporté %1$s étincelle</string>
+    <string name="post_points_a11y_other">Ce post t’a rapporté %1$s étincelles</string>
     <string name="presence_away">Absent</string>
     <string name="presence_here">Dans la conversation</string>
     <string name="presence_idle">Inactif</string>
@@ -415,6 +422,15 @@
     <string name="viewer_caption_see_less_hint">Replie la légende</string>
     <string name="viewer_caption_see_more">voir plus</string>
     <string name="viewer_caption_see_more_hint">Affiche la légende entière</string>
+    <string name="viewer_engagement_comments_one">%1$d commentaire</string>
+    <string name="viewer_engagement_comments_other">%1$d commentaires</string>
+    <string name="viewer_engagement_reactions">Réactions : %1$s</string>
+    <string name="viewer_engagement_replies_one">%1$d réponse</string>
+    <string name="viewer_engagement_replies_other">%1$d réponses</string>
+    <string name="viewer_engagement_reposts_one">%1$d republication</string>
+    <string name="viewer_engagement_reposts_other">%1$d republications</string>
+    <string name="viewer_engagement_shares_one">%1$d partage</string>
+    <string name="viewer_engagement_shares_other">%1$d partages</string>
     <string name="viewer_media_unavailable">Ce média n\'est plus disponible</string>
     <string name="viewer_more">Plus</string>
     <string name="viewer_position">Média %1$d sur %2$d</string>

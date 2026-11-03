@@ -156,6 +156,11 @@
     <string name="emoji_category_travel">Viajes</string>
     <string name="emoji_picker_expand">Más emojis</string>
     <string name="emoji_picker_title">Reacciones</string>
+    <string name="engagement_pill_a11y_streak">%1$s · Chispas: %2$d · Hoy: %3$d</string>
+    <string name="engagement_pill_a11y_streak_days_one">%1$d día</string>
+    <string name="engagement_pill_a11y_streak_days_other">%1$d días</string>
+    <string name="engagement_pill_a11y_total_one">%1$s chispa ganada en esta conversación</string>
+    <string name="engagement_pill_a11y_total_other">%1$s chispas ganadas en esta conversación</string>
     <string name="focal_focus_add_reaction">Añadir una reacción</string>
     <string name="focal_focus_translation_detail">Detalles de la traducción</string>
     <string name="focal_row_anonymousSender">Sin cuenta</string>
@@ -265,6 +270,8 @@
     <string name="post_daily_limit_comment_untimed">Has hecho todos los comentarios permitidos hoy. El límite cuenta tus gestos, nunca tus chispas.</string>
     <string name="post_daily_limit_reaction">Has hecho todas las reacciones permitidas hoy. El límite cuenta tus gestos, nunca tus chispas: podrás volver a reaccionar a las %1$s.</string>
     <string name="post_daily_limit_reaction_untimed">Has hecho todas las reacciones permitidas hoy. El límite cuenta tus gestos, nunca tus chispas.</string>
+    <string name="post_points_a11y_one">Esta publicación te ha dado %1$s chispa</string>
+    <string name="post_points_a11y_other">Esta publicación te ha dado %1$s chispas</string>
     <string name="presence_away">Ausente</string>
     <string name="presence_here">En la conversación</string>
     <string name="presence_idle">Inactivo</string>
@@ -415,6 +422,15 @@
     <string name="viewer_caption_see_less_hint">Contrae la leyenda</string>
     <string name="viewer_caption_see_more">ver más</string>
     <string name="viewer_caption_see_more_hint">Muestra la leyenda completa</string>
+    <string name="viewer_engagement_comments_one">%1$d comentario</string>
+    <string name="viewer_engagement_comments_other">%1$d comentarios</string>
+    <string name="viewer_engagement_reactions">Reacciones: %1$s</string>
+    <string name="viewer_engagement_replies_one">%1$d respuesta</string>
+    <string name="viewer_engagement_replies_other">%1$d respuestas</string>
+    <string name="viewer_engagement_reposts_one">%1$d republicación</string>
+    <string name="viewer_engagement_reposts_other">%1$d republicaciones</string>
+    <string name="viewer_engagement_shares_one">%1$d compartido</string>
+    <string name="viewer_engagement_shares_other">%1$d compartidos</string>
     <string name="viewer_media_unavailable">Este archivo ya no está disponible</string>
     <string name="viewer_more">Más</string>
     <string name="viewer_position">Archivo %1$d de %2$d</string>
