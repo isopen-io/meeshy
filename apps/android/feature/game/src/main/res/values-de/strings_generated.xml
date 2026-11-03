@@ -412,6 +412,7 @@
     <string name="game_concept_elans_use">Sieh nach, welche Familien aktiv sind, und mach eine Aktion in einer fehlenden Familie. Solange der Schwung hält, lässt jede Aktion mehr Funken sprühen.</string>
     <string name="game_concept_elans_what">Ein Schwung ist ein Funken-Multiplikator. Er springt an, wenn du in diesen Tagen in mehreren Aktionsfamilien aktiv bist.</string>
     <string name="game_concept_elans_why">Ein Schwung vervielfacht die Funken deiner nächsten Aktionen.</string>
+    <string name="game_concept_fact_after">Danach</string>
     <string name="game_concept_fact_balance">Du hast</string>
     <string name="game_concept_fact_closes">Schluss in</string>
     <string name="game_concept_fact_cost">Nötig</string>
@@ -426,6 +427,7 @@
     <string name="game_concept_fact_prism_hour">Prisma-Stunde</string>
     <string name="game_concept_fact_record">Am hellsten</string>
     <string name="game_concept_fact_remaining">Noch offen</string>
+    <string name="game_concept_fact_required">Benötigt</string>
     <string name="game_concept_fact_seal">Siegel</string>
     <string name="game_concept_fact_state">Zustand</string>
     <string name="game_concept_fact_tier">Gestalt deines Lichts</string>
@@ -1081,9 +1083,11 @@
     <string name="game_sparks_pocket_label">Dein Licht</string>
     <string name="game_sparks_record_line">%1$s seit jeher empfangen</string>
     <string name="game_spend_missing_freeze">Es fehlen %1$s, um eine Hüterin zu rufen.</string>
+    <string name="game_spend_missing_mint">Deinem Licht fehlen %1$s, um Meesh Nr. %2$s zu prägen.</string>
     <string name="game_spend_missing_relight">Es fehlen %1$s, um deine Flamme neu zu entzünden.</string>
     <string name="game_spend_missing_reroll">Es fehlen %1$s, um diesen Akt zu tauschen.</string>
     <string name="game_spend_missing_seal">Es fehlen %1$s, um das Siegel der Reise zu holen.</string>
+    <string name="game_spend_missing_unlock">Es fehlen %1$s bis zur Öffnung.</string>
     <string name="game_starFragments_one">%1$s Sternfragment</string>
     <string name="game_starFragments_other">%1$s Sternfragmente</string>
     <string name="game_state_atlas_progress">Gestempelte Sprachen: %1$s von %2$s. Halbe Austausche: %3$s.</string>
@@ -1175,6 +1179,9 @@
     <string name="game_treasury_tresor">Schatz</string>
     <string name="progression_a11y_bar_level">Auf dem Weg zu Level %1$d</string>
     <string name="progression_a11y_bar_meesh">Zur nächsten Meesh</string>
+    <string name="progression_a11y_bar_streak">Deine Flamme, auf dem Weg zum nächsten Meilenstein</string>
+    <string name="progression_a11y_tier_pending">Stufe %1$d noch offen</string>
+    <string name="progression_a11y_tier_reached">Stufe %1$d erreicht</string>
     <string name="progression_achievement_a11y_hint">Tippe, um diese Heldentat groß zu sehen.</string>
     <string name="progression_achievement_all_content_types_condition">Eine Sprachnachricht, eine Textnachricht, ein Beitrag, eine Story und ein Reel</string>
     <string name="progression_achievement_all_content_types_title">Alleskönner</string>

@@ -412,6 +412,7 @@
     <string name="game_concept_elans_use">See which families are active, then make a move in a family that’s missing. While the momentum holds, every move makes more sparks fly.</string>
     <string name="game_concept_elans_what">Momentum is a spark multiplier. It switches on when you are active in several families of actions these days.</string>
     <string name="game_concept_elans_why">Momentum multiplies the sparks of your next actions.</string>
+    <string name="game_concept_fact_after">After</string>
     <string name="game_concept_fact_balance">You have</string>
     <string name="game_concept_fact_closes">Closes in</string>
     <string name="game_concept_fact_cost">Needed</string>
@@ -426,6 +427,7 @@
     <string name="game_concept_fact_prism_hour">Prism Hour</string>
     <string name="game_concept_fact_record">At your highest</string>
     <string name="game_concept_fact_remaining">Still to win</string>
+    <string name="game_concept_fact_required">Required</string>
     <string name="game_concept_fact_seal">Seal</string>
     <string name="game_concept_fact_state">Status</string>
     <string name="game_concept_fact_tier">Phase of your light</string>
@@ -1081,9 +1083,11 @@
     <string name="game_sparks_pocket_label">Your light</string>
     <string name="game_sparks_record_line">%1$s received since the beginning</string>
     <string name="game_spend_missing_freeze">You lack %1$s to take a Vigil.</string>
+    <string name="game_spend_missing_mint">Your light lacks %1$s to mint Meesh no. %2$s.</string>
     <string name="game_spend_missing_relight">Still missing to relight your Flame: %1$s.</string>
     <string name="game_spend_missing_reroll">You lack %1$s to change this act.</string>
     <string name="game_spend_missing_seal">You lack %1$s to take the Journey Seal.</string>
+    <string name="game_spend_missing_unlock">Still missing to unlock it: %1$s.</string>
     <string name="game_starFragments_one">%1$s star fragment</string>
     <string name="game_starFragments_other">%1$s star fragments</string>
     <string name="game_state_atlas_progress">Languages stamped: %1$s of %2$s. Half-finished exchanges: %3$s.</string>
@@ -1175,6 +1179,9 @@
     <string name="game_treasury_tresor">Treasure</string>
     <string name="progression_a11y_bar_level">Towards level %1$d</string>
     <string name="progression_a11y_bar_meesh">Toward the next Meesh</string>
+    <string name="progression_a11y_bar_streak">Your Flame, towards its next landmark</string>
+    <string name="progression_a11y_tier_pending">Milestone %1$d to reach</string>
+    <string name="progression_a11y_tier_reached">Milestone %1$d reached</string>
     <string name="progression_achievement_a11y_hint">Tap to see this great deed in full.</string>
     <string name="progression_achievement_all_content_types_condition">A voice message, a text message, a post, a story and a reel</string>
     <string name="progression_achievement_all_content_types_title">Jack of all trades</string>
