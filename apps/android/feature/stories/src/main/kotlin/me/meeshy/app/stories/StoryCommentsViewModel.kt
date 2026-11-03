@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.ContentRemovalReason
 import me.meeshy.sdk.model.STORY_COMMENT_HEART
 import me.meeshy.sdk.model.SocketCommentReactionUpdateData
 import me.meeshy.sdk.model.StoryCommentChase
@@ -19,8 +20,11 @@ import me.meeshy.sdk.model.StoryCommentChaseOutcome
 import me.meeshy.sdk.model.StoryCommentPage
 import me.meeshy.sdk.model.StoryCommentsReducer
 import me.meeshy.sdk.model.StoryCommentsState
+import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.model.toStoryComment
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.PostModerationRepository
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.StoryCommentsRepository
@@ -37,6 +41,11 @@ data class StoryCommentsUiState(
     val showingOriginal: Set<String> = emptySet(),
     /** `null` hors chasse ; vrai quand le commentaire ciblé est chargé, faux quand le serveur ne le sert pas. */
     val targetFound: Boolean? = null,
+    /** Le commentaire auquel le composeur répond (bouton « Répondre », glissé) ; `null` : commentaire de premier niveau. */
+    val replyTarget: me.meeshy.sdk.model.StoryComment? = null,
+    /** Le lecteur : d'où se lisent les entrées du menu « … » de chaque ligne (auteur, modération, autre). */
+    val viewerId: String? = null,
+    val viewerRole: String? = null,
 )
 
 /**
@@ -50,6 +59,8 @@ class StoryCommentsViewModel @Inject constructor(
     private val repository: StoryCommentsRepository,
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
+    private val moderation: PostModerationRepository,
+    private val reports: ReportRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoryCommentsUiState())
@@ -76,7 +87,12 @@ class StoryCommentsViewModel @Inject constructor(
         storyId?.let { socialSocket.leavePostRoom(it) }
         loadJob?.cancel()
         storyId = newStoryId?.takeIf { it.isNotBlank() }
-        _state.value = StoryCommentsUiState(comments = StoryCommentsState(count = payloadCount))
+        val viewer = sessionRepository.currentUser.value
+        _state.value = StoryCommentsUiState(
+            comments = StoryCommentsState(count = payloadCount),
+            viewerId = viewer?.id,
+            viewerRole = viewer?.role,
+        )
         val id = storyId ?: return
         socialSocket.joinPostRoom(id)
         loadJob = viewModelScope.launch { loadRoots(id) }
@@ -172,6 +188,39 @@ class StoryCommentsViewModel @Inject constructor(
         viewModelScope.launch {
             val result = guarded { repository.delete(id, commentId) }
             if (result is NetworkResult.Success && isViewing(id)) update { StoryCommentsReducer.removed(it, commentId) }
+        }
+    }
+
+    /** « Répondre » : le composeur épinglé répond à ce commentaire ; le fil le met en vue. */
+    fun setReplyTarget(comment: me.meeshy.sdk.model.StoryComment) {
+        _state.update { it.copy(replyTarget = comment) }
+    }
+
+    fun clearReplyTarget() {
+        _state.update { it.copy(replyTarget = null) }
+    }
+
+    /**
+     * Retrait par la modération, avec son motif (3 à 500 caractères, sinon rien ne part). Optimiste : la ligne
+     * quitte le fil aussitôt, et revient telle quelle si la passerelle refuse.
+     */
+    fun remove(commentId: String, reason: String) {
+        val id = storyId ?: return
+        val clean = ContentRemovalReason.normalized(reason) ?: return
+        val snapshot = _state.value.comments
+        if (!snapshot.contains(commentId)) return
+        update { StoryCommentsReducer.removed(it, commentId) }
+        viewModelScope.launch {
+            val result = guarded { moderation.removeComment(id, commentId, clean) }
+            if (result !is NetworkResult.Success && isViewing(id)) update { snapshot }
+        }
+    }
+
+    /** Signale un commentaire d'un autre ; [done] reçoit l'issue (vrai : le signalement est parti). */
+    fun report(commentId: String, reason: ReportReason, details: String?, done: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val result = guarded { reports.reportComment(commentId, reason, details?.trim()?.takeIf { it.isNotEmpty() }) }
+            done(result is NetworkResult.Success)
         }
     }
 

@@ -27,12 +27,15 @@ internal fun rememberBubbleRenderKind(
     isViewOnce: Boolean = false,
     isViewOnceOpenedByMe: Boolean = false,
     isSystem: Boolean = false,
+    isViewOnceSealed: Boolean = false,
 ): BubbleRenderKind.Kind {
     // A system notice is resolved FIRST (iOS `case .system` precedes every other kind):
     // it never reads the clock, so it also short-circuits the ephemeral tick loop below.
     if (isSystem) return BubbleRenderKind.Kind.System
     if (isDeleted) return BubbleRenderKind.Kind.Deleted
     if (isViewOnce && isViewOnceOpenedByMe) return BubbleRenderKind.Kind.Burned
+
+    if (isViewOnceSealed) return BubbleRenderKind.Kind.ViewOnceSealed
 
     val expiresAt: Instant? = remember(expiresAtIso) {
         isoToEpochMillisOrNull(expiresAtIso)?.let(Instant::ofEpochMilli)

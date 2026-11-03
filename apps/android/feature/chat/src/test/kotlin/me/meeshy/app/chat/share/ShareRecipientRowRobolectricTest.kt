@@ -69,8 +69,10 @@ class ShareRecipientRowRobolectricTest {
     fun `touching a row ticks it, and a served row is inert`() {
         var toggles = 0
         show {
-            ShareRecipientRow(ShareRecipientRowModel(conv("1", "Léa"), null, false, null), MeeshyPalette.Indigo500, { toggles++ }, {})
-            ShareRecipientRow(ShareRecipientRowModel(conv("2", "Marc"), null, false, ShareDelivery.Sent), MeeshyPalette.Indigo500, { toggles += 10 }, {})
+            androidx.compose.foundation.layout.Column {
+                ShareRecipientRow(ShareRecipientRowModel(conv("1", "Léa"), null, false, null), MeeshyPalette.Indigo500, { toggles++ }, {})
+                ShareRecipientRow(ShareRecipientRowModel(conv("2", "Marc"), null, false, ShareDelivery.Sent), MeeshyPalette.Indigo500, { toggles += 10 }, {})
+            }
         }
         compose.onAllNodesWithTag(ShareRecipientRowTestTag).let {
             it[0].performClick()
