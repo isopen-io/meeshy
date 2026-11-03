@@ -27,6 +27,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import me.meeshy.app.onboarding.rememberOnboardingReduceMotion
@@ -176,15 +177,23 @@ private fun LoginBody(
             onCancel = viewModel::cancelTwoFactor,
             modifier = Modifier.fillMaxWidth(),
         )
-        verificationPending != null -> EmailVerificationSection(
-            state = state,
-            pending = verificationPending,
-            onCodeChange = viewModel::onVerificationCodeChange,
-            onSubmit = viewModel::submitVerification,
-            onResend = viewModel::resendVerification,
-            onClose = viewModel::cancelVerification,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        verificationPending != null -> {
+            val verification: EmailVerificationViewModel = hiltViewModel(key = verificationPending.email)
+            LaunchedEffect(verificationPending) {
+                verification.begin(
+                    email = verificationPending.email,
+                    password = state.password,
+                    accountCreated = verificationPending.accountCreated,
+                    pendingSessionToken = verificationPending.pendingSessionToken,
+                )
+            }
+            EmailVerificationSheet(
+                viewModel = verification,
+                onVerified = viewModel::completeEmailProof,
+                onClose = viewModel::cancelVerification,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         state.showPicker && selected != null -> SelectedAccountForm(
             account = selected,
             state = state,

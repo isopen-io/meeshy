@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "emailVerification.error.weakPassword",
+          "status": "adopted",
+          "androidName": "email_verification_error_weak_password"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "emailVerification.provenElsewhere.title",
+          "status": "adopted",
+          "androidName": "email_verification_proven_elsewhere_title"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "emailVerification.provenElsewhere.body",
+          "status": "adopted",
+          "androidName": "email_verification_proven_elsewhere_body"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "emailVerification.success",
+          "status": "adopted",
+          "androidName": "email_verification_success"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "emailVerification.verifying.a11y",
+          "status": "adopted",
+          "androidName": "email_verification_verifying_a11y"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "emailVerification.resending.a11y",
+          "status": "adopted",
+          "androidName": "email_verification_resending_a11y"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "emailVerification.code.a11yHint",
+          "status": "adopted",
+          "androidName": "email_verification_code_a11y_hint"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "emailVerification.nav.title",
+          "status": "adopted",
+          "androidName": "email_verification_nav_title"
+        }
+      ]
+    }
+  }
+}

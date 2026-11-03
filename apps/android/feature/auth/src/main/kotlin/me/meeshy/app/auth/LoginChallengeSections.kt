@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MarkEmailUnread
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,7 +29,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import me.meeshy.feature.auth.R
-import me.meeshy.sdk.model.auth.PendingEmailVerification
 import me.meeshy.ui.component.auth.AuthActionButton
 import me.meeshy.ui.component.auth.AuthContentType
 import me.meeshy.ui.component.auth.AuthTextField
@@ -67,97 +64,6 @@ internal fun LoginPasswordField(
         enabled = enabled,
         modifier = modifier,
     )
-}
-
-/**
- * iOS `EmailVerificationView` : la passerelle a envoyé un code à l'adresse (`verification-required`).
- * Titre, pourquoi (compte créé, activation, code envoyé), code à 6 chiffres, « Vérifier »,
- * « Renvoyer le code », « Fermer ».
- */
-@Composable
-internal fun EmailVerificationSection(
-    state: AuthUiState,
-    pending: PendingEmailVerification,
-    onCodeChange: (String) -> Unit,
-    onSubmit: () -> Unit,
-    onResend: () -> Unit,
-    onClose: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        delay(CODE_FOCUS_DELAY_MS)
-        focus.requestFocus()
-    }
-    val subtitleRes = when {
-        pending.accountCreated -> R.string.email_verification_subtitle_account_created
-        state.password.isNotEmpty() -> R.string.email_verification_subtitle_activation_required
-        else -> R.string.email_verification_subtitle
-    }
-    val fieldLabel = stringResource(R.string.email_verification_code_a11y_label)
-    ChallengeColumn(
-        icon = {
-            Icon(Icons.Filled.MarkEmailUnread, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(48.dp))
-        },
-        title = stringResource(R.string.email_verification_title),
-        description = stringResource(subtitleRes, pending.email),
-        modifier = modifier,
-    ) {
-        Text(
-            text = stringResource(R.string.email_verification_inbox_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MeeshyTheme.tokens.textSecondary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        AuthTextField(
-            value = state.verificationCode,
-            onValueChange = onCodeChange,
-            title = stringResource(R.string.email_verification_code_placeholder),
-            icon = MeeshyIcons.Mail,
-            contentType = AuthContentType.OneTimeCode,
-            imeAction = ImeAction.Go,
-            onImeAction = onSubmit,
-            enabled = !state.isSubmitting,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = MeeshySpacing.md)
-                .focusRequester(focus)
-                .semantics { contentDescription = fieldLabel },
-        )
-        ChallengeError(state)
-        AuthActionButton(
-            title = stringResource(R.string.email_verification_verify_button),
-            onClick = onSubmit,
-            enabled = state.canSubmitVerification,
-            isLoading = state.isSubmitting,
-            modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.md),
-        )
-        Text(
-            text = stringResource(R.string.email_verification_no_code),
-            style = MaterialTheme.typography.bodySmall,
-            color = MeeshyTheme.tokens.textMuted,
-            modifier = Modifier.padding(top = MeeshySpacing.md),
-        )
-        TextButton(
-            onClick = onResend,
-            enabled = !state.isSubmitting && state.verificationResend == VerificationResend.IDLE,
-        ) {
-            Text(
-                text = stringResource(
-                    if (state.verificationResend == VerificationResend.SENT) {
-                        R.string.email_verification_resend_confirmed
-                    } else {
-                        R.string.email_verification_resend_button
-                    },
-                ),
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-        TextButton(onClick = onClose, enabled = !state.isSubmitting, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.email_verification_nav_close), color = MeeshyTheme.tokens.textMuted)
-        }
-    }
 }
 
 @Composable
