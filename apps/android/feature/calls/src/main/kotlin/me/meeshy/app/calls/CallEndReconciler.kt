@@ -12,8 +12,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.call.CallEndDecision
+import me.meeshy.sdk.model.call.CallEndEmission
 import me.meeshy.sdk.model.call.CallPendingEnd
-import me.meeshy.sdk.model.call.CallPendingEndLedger
 import me.meeshy.sdk.socket.CallSignalManager
 import me.meeshy.sdk.socket.RealtimeBinding
 import timber.log.Timber
@@ -31,13 +32,22 @@ class CallEndReconciler @Inject constructor(
     private val signals: CallSignalManager,
 ) {
     private val lock = Any()
-    private var ledger = CallPendingEndLedger()
+    private var emission = CallEndEmission()
 
     /** Les fins encore en attente d'un rejeu (lecture pour les témoins). */
-    val pending: List<CallPendingEnd> get() = synchronized(lock) { ledger.pending }
+    val pending: List<CallPendingEnd> get() = synchronized(lock) { emission.ledger.pending }
 
+    /** Demande la fin de [callId] : idempotente (une seconde demande est sans effet), raison hors schéma retirée. */
     fun end(callId: String, reason: String? = null) {
-        if (callId.isBlank()) return
+        val decision = synchronized(lock) {
+            val (decision, next) = emission.request(callId, reason)
+            emission = next
+            decision
+        }
+        if (decision is CallEndDecision.Emit) send(decision.callId, decision.reason)
+    }
+
+    private fun send(callId: String, reason: String?) {
         if (!signals.isSocketConnected) {
             // Émission au mieux (la socket peut se rouvrir sous la main), puis rejeu garanti à la reconnexion.
             signals.emitEnd(callId, reason)
@@ -51,18 +61,18 @@ class CallEndReconciler @Inject constructor(
         }
     }
 
-    /** La socket est revenue : toutes les fins différées repartent, refus compris, dans l'ordre. */
+    /** La socket est revenue : toutes les fins différées repartent, refus compris, dans l'ordre, une fois chacune. */
     fun onSocketConnected() {
         val entries = synchronized(lock) {
-            val (drained, rest) = ledger.drain()
-            ledger = rest
+            val (drained, next) = emission.replayOnReconnect()
+            emission = next
             drained
         }
-        entries.forEach { end(it.callId, it.reason) }
+        entries.forEach { send(it.callId, it.reason) }
     }
 
     private fun arm(callId: String, reason: String?) {
-        synchronized(lock) { ledger = ledger.arm(callId, reason) }
+        synchronized(lock) { emission = emission.unacknowledged(callId, reason) }
     }
 }
 
