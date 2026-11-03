@@ -482,6 +482,12 @@ class FeedViewModel @Inject constructor(
         _state.update { it.copy(notice = null) }
     }
 
+    /** Un commentaire de l'utilisateur vient d'être confirmé depuis la feuille : le compteur de la carte suit, sans attendre l'écho. */
+    fun onCommentSent(postId: String) {
+        val current = _state.value.posts.firstOrNull { it.id == postId }?.commentCount ?: return
+        realtimeHead.update { FeedRealtimeReducer.comment(it, postId, me.meeshy.sdk.model.comments.CommentsTitleCount.afterSend(current)) }
+    }
+
     /**
      * Toggles the post's like state through the durable outbox
      * ([PostRepository.toggleLike]'s KDoc), then schedules [OutboxFlushWorker] —

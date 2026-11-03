@@ -148,7 +148,8 @@ final class ImpressionBatcher: ObservableObject {
     }
 
     private func enqueue(_ postId: String, listing: SocialListing?) -> String? {
-        guard !postId.isEmpty else { return nil }
+        // Une publication encore dans la file n'a qu'un cmid (#15123).
+        guard !postId.isEmpty, !PendingPublicationMarker.isPending(postId: postId) else { return nil }
         RecentDisplayCaptureSource.shared.noteDisplayed(postId: postId, source: source, surface: surface)
         adoptCurrentAccount()
         let impression = PendingImpression(postId: postId, stamp: .minted(at: clock()), listing: listing)

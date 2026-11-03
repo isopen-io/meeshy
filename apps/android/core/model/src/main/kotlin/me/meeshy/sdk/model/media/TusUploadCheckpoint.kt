@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model.media
 
+import java.security.MessageDigest
+
 /**
  * Deterministic identity for a TUS upload attempt, stable across retries of the same
  * content but distinct for genuinely different content. [totalBytes] rides in the key
@@ -19,6 +21,38 @@ package me.meeshy.sdk.model.media
 public object TusCheckpointKey {
     public fun of(context: TusUploadContext, fileName: String, mimeType: String, totalBytes: Long): String =
         "${context.wire}:$fileName:$mimeType:$totalBytes"
+
+    /**
+     * La clé par CONTENU (miroir de `TusUploadManager.checkpointKey`, iOS) : l'empreinte SHA-256 des octets, puis l'OBJET
+     * serveur que la session créera (`postMedia` pour post/story/status/comment, sinon le contexte) et l'empreinte de ce que
+     * son POST déclare (aperçu flou, transcription, capture dans l'app). Renommer le fichier ne casse donc pas la reprise,
+     * et une session ouverte sans transcription ne sert jamais un vocal qui en porte une.
+     */
+    public fun ofContent(
+        digest: String,
+        context: TusUploadContext?,
+        thumbHash: String? = null,
+        transcription: TusTranscription? = null,
+        capturedInApp: Boolean = false,
+    ): String {
+        val kind = context?.let { if (it in POST_MEDIA_CONTEXTS) "postMedia" else it.wire }
+        val declared = listOf(
+            thumbHash.orEmpty(),
+            transcription?.let(TusMetadataBudget::transcriptionValue).orEmpty(),
+            if (capturedInApp) "inApp" else "",
+        )
+        val fingerprint = declared.takeUnless { parts -> parts.all { it.isEmpty() } }?.let { parts ->
+            MessageDigest.getInstance("SHA-256").digest(parts.joinToString("\u001F").toByteArray(Charsets.UTF_8))
+                .take(FINGERPRINT_BYTES).joinToString("") { "%02x".format(it) }
+        }
+        if (kind == null && fingerprint == null) return digest
+        return "$digest|${kind ?: "-"}|${fingerprint ?: "-"}"
+    }
+
+    private val POST_MEDIA_CONTEXTS = setOf(
+        TusUploadContext.POST, TusUploadContext.STORY, TusUploadContext.STATUS, TusUploadContext.COMMENT,
+    )
+    private const val FINGERPRINT_BYTES = 8
 }
 
 /**

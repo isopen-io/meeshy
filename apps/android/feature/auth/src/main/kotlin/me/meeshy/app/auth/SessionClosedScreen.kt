@@ -15,7 +15,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -46,6 +56,9 @@ fun SessionClosedScreen(onContinue: () -> Unit, modifier: Modifier = Modifier) {
     )
 }
 
+/** 72 dp qui suit la taille de police, plafonnée à 110 dp (iOS `@ScaledMetric`, `min(symbolSize, 110)`). */
+internal fun refusalIconSize(fontScale: Float): Dp = minOf((72f * fontScale).dp, 110.dp)
+
 /** La page de refus plein écran partagée : une icône, un titre, un message, UN bouton. */
 @Composable
 internal fun RefusalPage(
@@ -55,21 +68,39 @@ internal fun RefusalPage(
     action: String,
     onAction: () -> Unit,
     modifier: Modifier = Modifier,
+    iconBrush: Brush? = null,
 ) {
     val tokens = MeeshyTheme.tokens
+    val iconSize = refusalIconSize(LocalDensity.current.fontScale)
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(tokens.backgroundPrimary)
             // Le calque couvre l'app : aucun toucher n'atteint ce qui est dessous.
             .pointerInput(Unit) {}
+            .semantics { paneTitle = title; isTraversalGroup = true }
             .safeDrawingPadding()
             .padding(horizontal = MeeshySpacing.xxl)
             .padding(bottom = MeeshySpacing.xxl),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xl, Alignment.CenterVertically),
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(72.dp))
+        if (iconBrush == null) {
+            Icon(imageVector = icon, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(iconSize))
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color.Black,
+                modifier = Modifier
+                    .size(iconSize)
+                    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(brush = iconBrush, blendMode = BlendMode.SrcIn)
+                    },
+            )
+        }
         Text(
             text = title,
             style = MaterialTheme.typography.headlineSmall,

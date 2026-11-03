@@ -22,9 +22,14 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.delay
 import me.meeshy.sdk.model.StorySourceWindowMs
+import me.meeshy.sdk.model.scene.DriftSeekGate
+import me.meeshy.sdk.model.scene.PlayheadTickClock
+import me.meeshy.sdk.model.scene.VideoDriftCorrection
 import me.meeshy.ui.component.viewer.VideoFirstFrameExtractor
 
 internal const val SCENE_MEDIA_POSTER_TAG: String = "scene-media-poster"
@@ -43,6 +48,7 @@ internal fun SceneVideoSurface(
     loop: Boolean,
     play: Boolean,
     modifier: Modifier = Modifier,
+    expectedPositionMs: (() -> Long?)? = null,
 ) {
     val poster by produceState(initialValue = knownPoster, url, knownPoster) {
         if (knownPoster != null) return@produceState
@@ -56,7 +62,7 @@ internal fun SceneVideoSurface(
     var firstFrameRendered by remember(url) { mutableStateOf(false) }
     Box(modifier.fillMaxSize()) {
         if (play) {
-            ScenePlayerView(url, window, volume, loop) { firstFrameRendered = true }
+            ScenePlayerView(url, window, volume, loop, expectedPositionMs) { firstFrameRendered = true }
         }
         val shown = poster
         if (shown != null && (!play || !firstFrameRendered)) {
@@ -71,10 +77,54 @@ internal fun SceneVideoSurface(
 }
 
 @Composable
-private fun ScenePlayerView(url: String, window: StorySourceWindowMs?, volume: Float, loop: Boolean, onFirstFrame: () -> Unit) {
+private fun ScenePlayerView(
+    url: String,
+    window: StorySourceWindowMs?,
+    volume: Float,
+    loop: Boolean,
+    expectedPositionMs: (() -> Long?)?,
+    onFirstFrame: () -> Unit,
+) {
     val context = LocalContext.current
     val player = remember(url, window, loop) { createScenePlayer(context, url, window, loop) }
     LaunchedEffect(player, volume) { player.volume = volume.coerceIn(0f, 1f) }
+    if (expectedPositionMs != null) {
+        LaunchedEffect(player) {
+            val gate = DriftSeekGate()
+            val seekDone = object : Player.Listener {
+                override fun onPositionDiscontinuity(
+                    oldPosition: Player.PositionInfo,
+                    newPosition: Player.PositionInfo,
+                    reason: Int,
+                ) {
+                    if (reason == Player.DISCONTINUITY_REASON_SEEK) gate.release()
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY) gate.release()
+                }
+            }
+            player.addListener(seekDone)
+            try {
+              while (true) {
+                delay((PlayheadTickClock.DRIFT_CHECK_INTERVAL_SECONDS * 1000).toLong())
+                val expected = expectedPositionMs() ?: continue
+                val target = VideoDriftCorrection.driftCorrectionMs(
+                    expectedSeconds = expected / 1000.0,
+                    actualSeconds = player.currentPosition / 1000.0,
+                ) ?: continue
+                if (gate.claim()) {
+                    player.setSeekParameters(
+                        SeekParameters(VideoDriftCorrection.SEEK_TOLERANCE_MS * 1000, VideoDriftCorrection.SEEK_TOLERANCE_MS * 1000),
+                    )
+                    player.seekTo(target)
+                }
+              }
+            } finally {
+                player.removeListener(seekDone)
+            }
+        }
+    }
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() = onFirstFrame()

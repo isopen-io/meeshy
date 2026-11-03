@@ -200,6 +200,10 @@ public data class BubbleContent(
     val isViewOnceSealed: Boolean = false,
     /** Le résumé d'un appel (message système d'appel), décodé de `metadata` ; nul pour tout autre message. */
     val callSummary: CallSummaryMetadata? = null,
+    /** Une édition part au serveur : le pied montre des flèches qui tournent à la place du crayon. */
+    val isEditSaving: Boolean = false,
+    /** La dernière modification est celle d'un modérateur : le pied le dit en mots. */
+    val editedByModerator: Boolean = false,
 )
 
 /**

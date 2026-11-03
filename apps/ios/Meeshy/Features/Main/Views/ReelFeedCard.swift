@@ -519,7 +519,7 @@ struct ReelFeedCard: View, Equatable {
     }
 
     private var actionsRow: some View {
-        HStack(spacing: 0) {
+        PublishedPostActionsRow(postId: post.id) {
             likeButton
             Spacer()
             reelButton(outline: "bubble.right", filled: "bubble.right.fill",
@@ -562,37 +562,41 @@ struct ReelFeedCard: View, Equatable {
         } label: {
             Label(String(localized: "feed.post.copy_text", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
         }
-        Button {
-            onShare(post.id)
-            HapticFeedback.light()
-        } label: {
-            Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
-        }
-        if canSaveMedia {
+        // Encore dans la file (#15123) : rien de ce qui suit n'existe côté
+        // serveur — même règle que `FeedPostOnlineMenuItems`.
+        if !PendingPublicationMarker.isPending(postId: post.id) {
             Button {
-                requestSaveMedia()
-            } label: {
-                Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "arrow.down.to.line")
-            }
-        }
-        ImagerMenuButton(action: PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator))
-        if PublicationViewersAccess.mayList(postType: post.type, isAuthor: isAuthor, viewerRole: AuthManager.shared.currentUser?.role) {
-            PublicationViewersMenuButton { showViewersSheet = true }
-        }
-        if let onPin {
-            Button {
-                onPin(post.id)
+                onShare(post.id)
                 HapticFeedback.light()
             } label: {
-                Label(String(localized: "feed.post.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin")
+                Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
             }
-        }
-        if let onEdit {
-            Button {
-                onEdit(post)
-                HapticFeedback.light()
-            } label: {
-                Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+            if canSaveMedia {
+                Button {
+                    requestSaveMedia()
+                } label: {
+                    Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "arrow.down.to.line")
+                }
+            }
+            ImagerMenuButton(action: PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator))
+            if PublicationViewersAccess.mayList(postType: post.type, isAuthor: isAuthor, viewerRole: AuthManager.shared.currentUser?.role) {
+                PublicationViewersMenuButton { showViewersSheet = true }
+            }
+            if let onPin {
+                Button {
+                    onPin(post.id)
+                    HapticFeedback.light()
+                } label: {
+                    Label(String(localized: "feed.post.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin")
+                }
+            }
+            if let onEdit {
+                Button {
+                    onEdit(post)
+                    HapticFeedback.light()
+                } label: {
+                    Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+                }
             }
         }
         PublicationDestructiveMenuItems(postId: post.id, onDelete: onDelete, onRemove: onRemove)

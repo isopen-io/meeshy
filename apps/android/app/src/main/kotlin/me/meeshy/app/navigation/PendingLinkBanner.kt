@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Link
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.app.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -63,7 +62,7 @@ internal fun PendingLinkBanner(isVisible: Boolean, modifier: Modifier = Modifier
                 .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md)
                 .semantics(mergeDescendants = true) {},
         ) {
-            Icon(imageVector = Icons.Filled.Link, contentDescription = null, tint = brand)
+            Icon(imageVector = MeeshyIcons.Link, contentDescription = null, tint = brand)
             Text(
                 text = stringResource(R.string.auth_pending_link_notice),
                 style = MaterialTheme.typography.bodySmall,

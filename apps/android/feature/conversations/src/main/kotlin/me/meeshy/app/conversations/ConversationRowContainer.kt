@@ -214,6 +214,7 @@ internal fun ConversationRowContainer(
                 ),
                 accent = accent,
                 previewMessages = model.previewMessages,
+                previewUnavailable = model.previewUnavailable,
                 previewShowSender = conversation.type != "direct",
                 currentUserId = model.currentUserId,
                 currentUserPrefs = model.currentUserPrefs,

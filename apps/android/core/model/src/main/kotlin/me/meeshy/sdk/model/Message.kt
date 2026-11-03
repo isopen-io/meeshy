@@ -356,40 +356,6 @@ data class ApiMessage(
         get() = messageSource == "system"
 }
 
-@Serializable
-data class SendMessageRequest(
-    val content: String,
-    val originalLanguage: String,
-    val messageType: String = "text",
-    val replyToId: String? = null,
-    // Wire twin of `ApiMessage.storyReplyToId` above — the RECEIVE side already
-    // carried it; the SEND side never did, so no client could ever construct a
-    // request the gateway's `storyReplyToId` (SendMessageBodySchema) accepts.
-    val storyReplyToId: String? = null,
-    val clientMessageId: String,
-    val attachmentIds: List<String>? = null,
-    val forwardedFromId: String? = null,
-    val forwardedFromConversationId: String? = null,
-    /**
-     * Les seules pièces de `forwardedFromId` que la passerelle recopie (#9914, #13596) ; absent ⇒ tout le lot.
-     * Une pièce étrangère au message source est refusée (`forwarded-attachment-not-in-source`).
-     */
-    val forwardedAttachmentIds: List<String>? = null,
-    val effectFlags: Int? = null,
-    val isBlurred: Boolean? = null,
-    val isViewOnce: Boolean? = null,
-    val ephemeralDuration: Int? = null,
-    val expiresAt: String? = null,
-    val maxViewOnceCount: Int? = null,
-    /** Lieu partagé : champ dédié que la passerelle valide (`parseSharedPlace`) et écrit dans `metadata.location`. */
-    val location: SharedPlace? = null,
-    /**
-     * Le sticker du message (#14334) : champ dédié que la passerelle valide (`parseMessageSticker`) et écrit dans
-     * `metadata.sticker` ; l'image jointe en est le rendu de repli. Absent pour tout autre message.
-     */
-    val sticker: MessageSticker? = null,
-)
-
 internal object TolerantPostReplyTargetSerializer :
     KSerializer<ApiPostReplyTarget?> by TolerantSerializer(ApiPostReplyTarget.serializer())
 

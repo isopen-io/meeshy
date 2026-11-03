@@ -1683,7 +1683,10 @@
    "symbol": "square",
    "status": "mapped",
    "role": "CheckBoxBlank",
-   "reason": "Icons.Filled.CheckBoxOutlineBlank"
+   "reason": "Icons.Filled.CheckBoxOutlineBlank",
+   "aliases": [
+    "CheckBoxChecked"
+   ]
   },
   {
    "symbol": "square.and.arrow.down",
@@ -2245,6 +2248,10 @@
    "directional": false
   },
   "CheckBoxBlank": {
+   "origin": "material",
+   "directional": false
+  },
+  "CheckBoxChecked": {
    "origin": "material",
    "directional": false
   },

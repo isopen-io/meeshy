@@ -3,7 +3,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
 import { Avatar, MoodPeekTarget } from '@/components/avatar';
-import { AvatarRing, ringBoxSize } from '@/components/avatar-ring';
+import { AvatarRing, ringBoxSize, ringDecorSpill } from '@/components/avatar-ring';
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { Field } from '@/components/field';
 import { Glyph, GlyphSvg } from '@/components/glyph';
@@ -291,6 +291,8 @@ export function ProfileHero({
   const name = profile.displayName ?? profile.username;
   const scheme = useScheme();
   const ringExtra = decor.ring === null ? 0 : (ringBoxSize(90) - 90) / 2;
+  /* Le film d'un cadre illustré déborde au-dessus sur la bannière, et le nom passe dessous (#15157). */
+  const decorSpill = ringDecorSpill(decor.ring, ringBoxSize(90));
   const banner = pending.banner ?? profile.banner;
   const paint = bannerPaint({ image: banner, design: decor.banner });
   const avatar = pending.avatar ?? profile.avatar;
@@ -355,9 +357,9 @@ export function ProfileHero({
         ) : null}
         {pending.banner === undefined ? null : <UploadVeil language={language} kind="banner" round={false} onCancel={onCancelUpload} />}
       </div>
-      <div className="relative" style={{ marginTop: -45 - ringExtra }} aria-busy={pending.avatar === undefined ? undefined : true}>
+      <div className="relative" style={{ marginTop: -45 - ringExtra, marginBottom: decorSpill }} aria-busy={pending.avatar === undefined ? undefined : true}>
         <span className="block rounded-chip" style={{ padding: 4, backgroundColor: 'var(--color-ios-surface)' }}>
-          <AvatarRing ring={decor.ring} size={90}>
+          <AvatarRing ring={decor.ring} size={90} room={decorSpill}>
             {viewable('avatar') ? (
               <ProfileImageButton kind="avatar" onOpen={open} className="rounded-chip">
                 {avatarImage}

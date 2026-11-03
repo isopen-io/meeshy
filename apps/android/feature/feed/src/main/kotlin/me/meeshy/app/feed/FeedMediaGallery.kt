@@ -1,6 +1,13 @@
 package me.meeshy.app.feed
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.GalleryAttribution
+import me.meeshy.sdk.model.GalleryPage
+import me.meeshy.sdk.model.GalleryPageKind
+import me.meeshy.sdk.model.SocialMediaGallery
+import me.meeshy.sdk.model.SocialMediaGalleryPresentation
 
 /**
  * One page of a feed post's fullscreen media gallery: the full-resolution image
@@ -23,6 +30,8 @@ data class FeedGalleryPage(
     val createdAtIso: String? = null,
     /** This page's own [FeedPostImage.alt] (#6739) — unlike [caption], per-image, not shared across pages. */
     val alt: String? = null,
+    /** L'identifiant du média du post que la page montre — l'ancre d'une citation « commenter ce média ». */
+    val mediaId: String? = null,
 )
 
 /**
@@ -36,6 +45,13 @@ data class FeedGalleryPage(
 data class FeedGallery(
     val pages: List<FeedGalleryPage>,
     val startIndex: Int,
+    /** Le post dont la galerie feuillette aussi les médias de commentaires ; `null` : la galerie reste celle de ses images. */
+    val postId: String? = null,
+    val commentCount: Int = 0,
+    val authorId: String? = null,
+    val authorAvatarUrl: String? = null,
+    /** L'accent de l'auteur (hex), passé en paramètre à la pellicule. */
+    val accentHex: String? = null,
 ) {
     /** The full-resolution image URLs, one per page, in post order. */
     val imageUrls: List<String> get() = pages.map { it.url }
@@ -107,9 +123,47 @@ object FeedMediaGallery {
                 authorName = authorName,
                 createdAtIso = createdAtIso,
                 alt = image.alt,
+                mediaId = image.id,
             )
         }
-        return FeedGallery(pages, imageIndex.coerceIn(0, pages.lastIndex))
+        return FeedGallery(
+            pages = pages,
+            startIndex = imageIndex.coerceIn(0, pages.lastIndex),
+            postId = post.id,
+            commentCount = post.commentCount,
+            authorId = post.authorId,
+            authorAvatarUrl = post.authorAvatarUrl,
+            accentHex = post.accentHex,
+        )
+    }
+
+    /**
+     * La galerie sociale de [gallery] : ses images (légendes déjà servies par le Prisme, auteur par page) suivies des médias
+     * des [comments] du post — la composition commune de `SocialMediaGalleryPresentation`, que le fil rejoint avec ce qu'il tient.
+     */
+    fun social(
+        gallery: FeedGallery,
+        comments: List<ApiPostComment>,
+        prefs: LanguageResolver.ContentLanguagePreferences,
+    ): SocialMediaGallery {
+        val publication = gallery.pages.mapIndexed { index, page ->
+            GalleryPage(
+                id = page.mediaId ?: "${gallery.postId.orEmpty()}#$index",
+                kind = GalleryPageKind.IMAGE,
+                url = page.url,
+                thumbnailUrl = page.thumbnailUrl,
+                caption = page.caption,
+                alt = page.alt?.takeIf { it.isNotBlank() },
+                attribution = GalleryAttribution(
+                    name = page.authorName,
+                    avatarUrl = gallery.authorAvatarUrl,
+                    createdAtIso = page.createdAtIso,
+                    userId = gallery.authorId,
+                ),
+                postMediaId = page.mediaId,
+            )
+        }
+        return SocialMediaGalleryPresentation.following(publication, comments, prefs)
     }
 
     private fun mediaCaption(own: String?, carrierText: String?): String? =

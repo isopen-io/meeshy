@@ -9,17 +9,6 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckBox
-import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.IndeterminateCheckBox
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -44,6 +33,7 @@ import me.meeshy.sdk.model.mediacache.CachePurgeSelection
 import me.meeshy.ui.component.settings.SettingsCard
 import me.meeshy.ui.component.settings.SettingsSeparator
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -132,7 +122,7 @@ private fun CachePurgeCellRow(
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {
                 Icon(
-                    imageVector = if (selected) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
+                    imageVector = if (selected) MeeshyIcons.CheckBoxChecked else MeeshyIcons.CheckBoxBlank,
                     contentDescription = null,
                     tint = if (selected) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textMuted,
                     modifier = Modifier.size(24.dp),
@@ -163,7 +153,7 @@ private fun CachePurgeCellRow(
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {
                 Icon(
-                    imageVector = Icons.Filled.IndeterminateCheckBox,
+                    imageVector = MeeshyIcons.IndeterminateBox,
                     contentDescription = null,
                     tint = MeeshyTheme.tokens.textMuted,
                     modifier = Modifier.size(24.dp),
@@ -198,13 +188,13 @@ internal fun CacheDataKind.labelRes(): Int = when (this) {
 }
 
 internal fun CacheDataKind.icon() = when (this) {
-    CacheDataKind.IMAGES -> Icons.Filled.Image
-    CacheDataKind.VIDEOS -> Icons.Filled.Videocam
-    CacheDataKind.AUDIO -> Icons.Filled.GraphicEq
-    CacheDataKind.DOCUMENTS -> Icons.Filled.Description
-    CacheDataKind.MESSAGES -> Icons.Filled.ChatBubble
-    CacheDataKind.REACTIONS -> Icons.Filled.Favorite
-    CacheDataKind.PAYLOADS -> Icons.Filled.Storage
+    CacheDataKind.IMAGES -> MeeshyIcons.PhotoFilled
+    CacheDataKind.VIDEOS -> MeeshyIcons.Video
+    CacheDataKind.AUDIO -> MeeshyIcons.Waveform
+    CacheDataKind.DOCUMENTS -> MeeshyIcons.Document
+    CacheDataKind.MESSAGES -> MeeshyIcons.ChatBubble
+    CacheDataKind.REACTIONS -> MeeshyIcons.HeartFilled
+    CacheDataKind.PAYLOADS -> MeeshyIcons.Storage
 }
 
 internal fun CacheDomain.labelRes(): Int = when (this) {

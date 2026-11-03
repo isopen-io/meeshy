@@ -274,6 +274,7 @@ class ConversationListViewModel @Inject constructor(
 
     /** Loads (once, cache-only) the hard-press preview card's recent messages. */
     fun loadPreviewMessages(conversationId: String) = actions.loadPreviewMessages(conversationId)
+    fun openPreview(conversationId: String) = actions.openPreview(conversationId)
 
     /** Row tap: opens straight through, or gates behind the lock code when locked. */
     fun onConversationTap(id: String) {

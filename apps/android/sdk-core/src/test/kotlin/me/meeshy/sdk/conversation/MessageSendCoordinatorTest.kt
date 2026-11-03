@@ -126,24 +126,39 @@ class MessageSendCoordinatorTest {
 
     @Test
     fun `reply, story reply and forward references travel on the bubble and on the request`() = runHarnessTest { harness ->
-        val cid = coordinator(harness).sendOptimistic(
-            "c1", "salut", "fr", sender,
-            replyToId = "r1",
-            storyReplyToId = "s1",
-            forwardedFromId = "f1",
-            forwardedFromConversationId = "fc1",
-        )
+        val coordinator = coordinator(harness)
 
-        val bubble = harness.cachedMessage(cid)
-        assertThat(bubble.replyToId).isEqualTo("r1")
-        assertThat(bubble.storyReplyToId).isEqualTo("s1")
+        val reply = coordinator.sendOptimistic("c1", "salut", "fr", sender, replyToId = "r1")
+        assertThat(harness.cachedMessage(reply).replyToId).isEqualTo("r1")
+        assertThat(harness.queuedRequest().replyToId).isEqualTo("r1")
+
+        val story = coordinator.sendOptimistic("c2", "salut", "fr", sender, storyReplyToId = "s1")
+        assertThat(harness.cachedMessage(story).storyReplyToId).isEqualTo("s1")
+        assertThat(harness.queuedRequest("c2").storyReplyToId).isEqualTo("s1")
+
+        val forward = coordinator.sendOptimistic(
+            "c3", "salut", "fr", sender, forwardedFromId = "f1", forwardedFromConversationId = "fc1",
+        )
+        val bubble = harness.cachedMessage(forward)
         assertThat(bubble.forwardedFromId).isEqualTo("f1")
         assertThat(bubble.forwardedFromConversationId).isEqualTo("fc1")
-        val request = harness.queuedRequest()
-        assertThat(request.replyToId).isEqualTo("r1")
-        assertThat(request.storyReplyToId).isEqualTo("s1")
+        val request = harness.queuedRequest("c3")
         assertThat(request.forwardedFromId).isEqualTo("f1")
         assertThat(request.forwardedFromConversationId).isEqualTo("fc1")
+    }
+
+    @Test
+    fun `a request carries ONE relation, as on iOS - the story wins over the reply, the reply over the forward`() = runHarnessTest { harness ->
+        coordinator(harness).sendOptimistic(
+            "c1", "salut", "fr", sender,
+            replyToId = "r1", storyReplyToId = "s1", forwardedFromId = "f1", forwardedFromConversationId = "fc1",
+        )
+
+        val request = harness.queuedRequest()
+        assertThat(request.storyReplyToId).isEqualTo("s1")
+        assertThat(request.replyToId).isNull()
+        assertThat(request.forwardedFromId).isNull()
+        assertThat(request.forwardedFromConversationId).isNull()
     }
 
     @Test
@@ -190,7 +205,7 @@ class MessageSendCoordinatorTest {
             .isEqualTo((MessageEffectFlags.VIEW_ONCE or MessageEffectFlags.EPHEMERAL).toInt())
         assertThat(request.isViewOnce).isTrue()
         assertThat(request.ephemeralDuration).isEqualTo(300)
-        assertThat(request.expiresAt).isEqualTo("1970-01-01T00:05:00Z")
+        assertThat(request.expiresAt).isNull()
         assertThat(request.maxViewOnceCount).isEqualTo(2)
         val bubble = harness.cachedMessage(cid)
         assertThat(bubble.isViewOnce).isTrue()
@@ -250,7 +265,6 @@ class MessageSendCoordinatorTest {
         val cid = coordinator.sendOptimistic(
             "c1", "secret", "es", sender,
             replyToId = "r1",
-            forwardedFromId = "f1",
             effects = MessageEffects(flags = MessageEffectFlags.VIEW_ONCE),
         )
         harness.outbox.markSucceeded(cid)
@@ -263,7 +277,6 @@ class MessageSendCoordinatorTest {
         assertThat(request.content).isEqualTo("secret")
         assertThat(request.originalLanguage).isEqualTo("es")
         assertThat(request.replyToId).isEqualTo("r1")
-        assertThat(request.forwardedFromId).isEqualTo("f1")
         assertThat(request.isViewOnce).isTrue()
         assertThat(harness.cachedSendState(cid)).isEqualTo(LocalSendState.SENDING.name)
     }

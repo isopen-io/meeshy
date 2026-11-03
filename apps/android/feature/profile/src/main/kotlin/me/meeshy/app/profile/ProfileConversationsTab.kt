@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -203,7 +201,7 @@ internal fun SendMessagePill(isOpening: Boolean, onClick: () -> Unit) {
         if (isOpening) {
             CircularProgressIndicator(modifier = Modifier.size(12.dp), color = Color.White, strokeWidth = 2.dp)
         } else {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+            Icon(MeeshyIcons.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
         }
         Spacer(Modifier.width(6.dp))
         Text(

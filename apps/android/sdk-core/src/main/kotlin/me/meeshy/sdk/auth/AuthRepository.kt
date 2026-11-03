@@ -450,7 +450,7 @@ class AuthRepository @Inject constructor(
      */
     suspend fun endGuestSession(refusedToken: String?): Boolean {
         if (tokenStore.jwt != null || !GuestSessionEnd.targets(tokenStore.sessionToken, refusedToken)) return false
-        purgeLocalSession()
+        purgeLocalSession(serverInvalidated = true)
         return true
     }
 
@@ -459,10 +459,10 @@ class AuthRepository @Inject constructor(
      * mais rien ne part vers la passerelle — le compte n'y est plus, `POST /auth/logout` n'aurait personne à fermer.
      */
     suspend fun closeDeletedAccountSession() {
-        purgeLocalSession()
+        purgeLocalSession(serverInvalidated = true)
     }
 
-    private suspend fun purgeLocalSession() {
+    private suspend fun purgeLocalSession(serverInvalidated: Boolean = false) {
         val leaving = tokenStore.userId?.takeIf { it.isNotBlank() } ?: sessionRepository.currentUserId
         tokenStore.clear()
         sessionRepository.clear()
@@ -471,7 +471,7 @@ class AuthRepository @Inject constructor(
         // Un seul plan de fermeture (surfaces d'extension d'abord), comme iOS : jetons deja vides, donc widgets et
         // raccourcis se repeignent deconnectes.
         sessionClosing?.closeSession()
-        sessionTeardown.wipe()
+        if (serverInvalidated) sessionTeardown.wipeAfterServerInvalidation() else sessionTeardown.wipe()
         // Le curseur `_seq` est en MÉMOIRE, donc hors du périmètre de
         // [SessionTeardown] (stores persistés) — il se purge ici, comme iOS le
         // purge dans `AuthManager` et le web dans `disconnect()`. Il est alloué

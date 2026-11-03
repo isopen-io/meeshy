@@ -41,6 +41,11 @@
     <string name="audio_editor_use">Utiliser l\'audio</string>
     <string name="audio_editor_volume_normal">Normal</string>
     <string name="audio_fullscreen_dial">Position dans le vocal</string>
+    <string name="audio_recorder_micDenied">Permission micro refusée</string>
+    <string name="audio_recorder_micDeniedSettings">Micro refusé — autorisez-le dans Réglages</string>
+    <string name="audio_recorder_record">Enregistrer</string>
+    <string name="audio_recorder_recording">Enregistrement</string>
+    <string name="audio_recorder_tapToRecord">Appuyez pour enregistrer</string>
     <string name="audio_split_handle_end">Fin de la coupe</string>
     <string name="audio_split_handle_start">Début de la coupe</string>
     <string name="audio_trim_handle_end">Fin de la sélection</string>
@@ -393,6 +398,11 @@
     <string name="sticker_sheet_unpin">Retirer des favoris</string>
     <string name="story_sticker_a11y">Autocollant %1$s</string>
     <string name="story_sticker_title">Stickers</string>
+    <string name="story_voiceRecorder_fromFiles">Fichiers</string>
+    <string name="story_voiceRecorder_fromLibrary">Bibliothèque</string>
+    <string name="story_voiceRecorder_start">Enregistrer</string>
+    <string name="story_voiceRecorder_stop">Arrêter l\'enregistrement</string>
+    <string name="story_voiceRecorder_title">Enregistrement</string>
     <string name="time_lastSeen_beforeYesterdayAt">Vu avant-hier à %1$s</string>
     <string name="time_lastSeen_dateAt">Vu le %1$s à %2$s</string>
     <string name="time_lastSeen_online">En ligne</string>
