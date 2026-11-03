@@ -65,6 +65,7 @@ fun FeedScreen(
     onRefreshRail: () -> Unit = {},
     storyRail: @Composable () -> Unit = {},
     viewModel: FeedViewModel = hiltViewModel(),
+    autoplayHost: FeedAutoplayViewModel = hiltViewModel(),
     unsent: UnsentPublicationsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -78,7 +79,7 @@ fun FeedScreen(
     // Une seule scène joue dans le fil, la plus visible ; les autres sont une image fixe sans lecteur (#13663).
     val sceneCoordinator = remember { FeedSceneCoordinator() }
     val sceneIds = remember(state.posts) { feedSceneIds(state.posts) }
-    FeedSceneElectionEffect(coordinator = sceneCoordinator, listState = listState, sceneIds = sceneIds)
+    val autoplay = rememberFeedAutoplay(autoplayHost, sceneCoordinator, listState, sceneIds)
     val impressionTracker = remember(viewModel) {
         FeedImpressionTracker(record = { id, _ -> viewModel.trackImpression(id) }, flush = viewModel::flushImpressions)
     }
@@ -120,7 +121,7 @@ fun FeedScreen(
     }
 
     MeeshyBackground {
-    CompositionLocalProvider(LocalFeedSceneCoordinator provides sceneCoordinator) {
+    CompositionLocalProvider(LocalFeedSceneCoordinator provides sceneCoordinator, LocalFeedAutoplayCoordinator provides autoplay) {
     Scaffold(
         topBar = {
             FeedHeader(
