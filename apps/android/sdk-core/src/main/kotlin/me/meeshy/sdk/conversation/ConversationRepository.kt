@@ -355,6 +355,22 @@ class ConversationRepository @Inject constructor(
         return fetchDirectWith(userId)
     }
 
+    /**
+     * Les conversations que je partage avec [userId] (miroir de `ConversationService.listSharedWith`
+     * iOS) : `GET /conversations?withUserId=…&limit=…`. Chaque ligne servie est rangée dans le cache
+     * pour que l'écran de discussion l'ait sous la main — et que son rang LRU soit rafraîchi.
+     */
+    suspend fun listSharedWith(userId: String, limit: Int = SHARED_CONVERSATIONS_LIMIT): NetworkResult<List<ApiConversation>> {
+        if (userId.isBlank()) return NetworkResult.Success(emptyList())
+        return when (val result = apiCall { conversationApi.sharedWith(withUserId = userId, limit = limit) }) {
+            is NetworkResult.Success -> {
+                result.data.forEach { cacheSource.rememberServed(it) }
+                result
+            }
+            is NetworkResult.Failure -> result
+        }
+    }
+
     private suspend fun fetchDirectWith(userId: String): NetworkResult<ApiConversation?> =
         when (
             val result = apiCall {
@@ -914,5 +930,8 @@ class ConversationRepository @Inject constructor(
          * cached table (#5190).
          */
         const val RECENT_WINDOW: Int = 100
+
+        /** Conversations en commun demandées à la passerelle pour l'onglet d'une fiche (iOS `limit: 50`). */
+        const val SHARED_CONVERSATIONS_LIMIT: Int = 50
     }
 }

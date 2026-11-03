@@ -213,7 +213,7 @@ private fun ConnectionActionButton(action: ProfileConnectionAction, callbacks: P
 }
 
 @Composable
-private fun SendMessageButton(isOpening: Boolean, onClick: () -> Unit) {
+internal fun SendMessageButton(isOpening: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     val haptics = rememberMeeshyHaptics()
     Row(
