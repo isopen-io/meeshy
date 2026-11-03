@@ -49,6 +49,17 @@ public interface SessionTeardown {
     public suspend fun wipeAfterServerInvalidation() {
         wipe()
     }
+
+    /**
+     * La purge d'un appareil qui démarre déconnecté : [stillSignedOut] est relu À L'INTÉRIEUR de la barrière de compte,
+     * juste avant de vider — une restauration de session survenue entre-temps n'est jamais effacée. Rend `true` quand
+     * la purge a eu lieu.
+     */
+    public suspend fun wipeIfStillSignedOut(stillSignedOut: () -> Boolean): Boolean {
+        if (!stillSignedOut()) return false
+        wipe()
+        return true
+    }
 }
 
 public class DefaultSessionTeardown(
@@ -81,15 +92,25 @@ public class DefaultSessionTeardown(
         purge(PurgeCause.SERVER_INVALIDATION)
     }
 
-    /** La purge est inconditionnelle ([LogoutPurgePolicy]) ; seul l'avertissement dépend de la cause et de la file. */
-    private suspend fun purge(cause: PurgeCause) {
+    override suspend fun wipeIfStillSignedOut(stillSignedOut: () -> Boolean): Boolean =
+        purge(PurgeCause.SIGNED_OUT_AT_LAUNCH, stillSignedOut)
+
+    /**
+     * La purge est inconditionnelle ([LogoutPurgePolicy]) ; seul l'avertissement dépend de la cause et de la file.
+     * [admitted] est relu sous la barrière, après l'arrêt des envois en vol : faux, rien n'est vidé.
+     */
+    private suspend fun purge(cause: PurgeCause, admitted: () -> Boolean = { true }): Boolean {
         var decision = LogoutPurgePolicy.decide(cause, pendingSends = 0)
-        val run: suspend () -> Unit = {
+        var purged = false
+        val run: suspend () -> Unit = body@{
+            if (!admitted()) return@body
             decision = LogoutPurgePolicy.decide(cause, pendingSends())
             clearAll()
+            purged = true
         }
         if (fence == null) run() else fence.close { run() }
-        if (decision.warnLostSends) lostSends?.notify(decision.lostSends)
+        if (purged && decision.warnLostSends) lostSends?.notify(decision.lostSends)
+        return purged
     }
 
     private suspend fun pendingSends(): Int = try {

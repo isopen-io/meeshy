@@ -7,7 +7,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /** Les jalons d'une ouverture de base qui n'a pas été nominale, dans l'ordre où ils se produisent. */
-public enum class DatabaseInitStage { FIRST_FAILURE, QUARANTINED, RECREATED, OUTBOX_SALVAGED, FELL_BACK_SECONDARY, FELL_BACK_MEMORY }
+public enum class DatabaseInitStage {
+    FIRST_FAILURE,
+    QUARANTINED,
+    RECREATED,
+    OUTBOX_SALVAGED,
+    ERASURES_SALVAGED,
+    PENDING_IDS_SALVAGED,
+    FELL_BACK_SECONDARY,
+    FELL_BACK_MEMORY,
+}
 
 public data class DatabaseInitEvent(val stage: DatabaseInitStage, val detail: String, val atMillis: Long)
 

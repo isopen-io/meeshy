@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.category.InMemoryCategorySnapshotStore
@@ -73,6 +74,7 @@ class SessionTeardownTest {
         guestSessions: AnonymousSessionStore? = null,
         feedbackToasts: me.meeshy.sdk.feedback.FeedbackToastCenter? = null,
         lostSends: LostSendsNotifier? = null,
+        fence: AccountFence? = null,
     ) = DefaultSessionTeardown(
         db,
         categoryStore,
@@ -85,6 +87,7 @@ class SessionTeardownTest {
         preferenceSnapshots,
         perAccountCaches,
         guestSessions,
+        fence = fence,
         feedbackToasts = feedbackToasts,
         lostSends = lostSends,
     )
@@ -414,6 +417,68 @@ class SessionTeardownTest {
         teardown(lostSends = notifier(toasts)).wipe()
 
         assertThat(toasts.current.value).isNull()
+        assertThat(outboxRepository.observeAll().first()).isEmpty()
+    }
+
+    @Test
+    fun wipe_deletesTheUnencryptedDatabaseCopiesLeftByARecovery() = runTest {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val primary = context.getDatabasePath("teardown-leftovers.db").also { it.parentFile?.mkdirs() }
+        val quarantined = java.io.File(primary.path + ".corrupted.7").apply { writeText("history of A") }
+        val fallback = java.io.File(context.cacheDir, "teardown-fallback.db").apply { writeText("history of A") }
+        val leftovers = me.meeshy.core.database.DatabaseLeftovers(primary, fallback)
+
+        teardown(perAccountCaches = setOf(DatabaseLeftoversTeardown(leftovers))).wipe()
+
+        assertThat(quarantined.exists()).isFalse()
+        assertThat(fallback.exists()).isFalse()
+    }
+
+    @Test
+    fun wipeAfterServerInvalidation_aDeletedAccountLeavesNoDatabaseCopyBehind() = runTest {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val primary = context.getDatabasePath("deleted-leftovers.db").also { it.parentFile?.mkdirs() }
+        val quarantined = java.io.File(primary.path + ".corrupted.8-wal").apply { writeText("history of A") }
+        val leftovers = me.meeshy.core.database.DatabaseLeftovers(primary, java.io.File(context.cacheDir, "absent.db"))
+
+        teardown(perAccountCaches = setOf(DatabaseLeftoversTeardown(leftovers))).wipeAfterServerInvalidation()
+
+        assertThat(quarantined.exists()).isFalse()
+    }
+
+    @Test
+    fun wipeIfStillSignedOut_rereadsTheSessionUnderTheFenceAndSparesOneRestoredMeanwhile() = runTest {
+        val fence = AccountFence(me.meeshy.sdk.outbox.OutboxOwnerSource { "A" })
+        var restored = false
+        outboxRepository.enqueue(pendingSend())
+        val started = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val send = launch {
+            fence.guard(fence.ticket()) {
+                started.complete(Unit)
+                try {
+                    kotlinx.coroutines.awaitCancellation()
+                } finally {
+                    restored = true
+                }
+            }
+        }
+        started.await()
+
+        val purged = teardown(fence = fence).wipeIfStillSignedOut { !restored }
+
+        assertThat(purged).isFalse()
+        assertThat(outboxRepository.observeAll().first()).isNotEmpty()
+        send.join()
+    }
+
+    @Test
+    fun wipeIfStillSignedOut_purgesADeviceThatIsStillSignedOut() = runTest {
+        outboxRepository.enqueue(pendingSend())
+
+        val purged = teardown(fence = AccountFence(me.meeshy.sdk.outbox.OutboxOwnerSource { null }))
+            .wipeIfStillSignedOut { true }
+
+        assertThat(purged).isTrue()
         assertThat(outboxRepository.observeAll().first()).isEmpty()
     }
 }
