@@ -23,7 +23,6 @@
     <!-- Profile screen -->
     <string name="call_channel_description">Chamadas de voz e vídeo recebidas</string>
     <string name="a11y_floating_menu">Menu de navegação</string>
-    <string name="a11y_floating_menu_unread">Menu, %1$d notificações pendentes</string>
 
     <!-- Widget de tela inicial: contador de não lidas -->
 

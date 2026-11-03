@@ -23,7 +23,6 @@
     <!-- Profile screen -->
     <string name="call_channel_description">مكالمات صوتية ومرئية واردة</string>
     <string name="a11y_floating_menu">قائمة التنقّل</string>
-    <string name="a11y_floating_menu_unread">القائمة، %1$d إشعارات معلّقة</string>
 
     <!-- Widget écran d'accueil : compteur de non-lus -->
 

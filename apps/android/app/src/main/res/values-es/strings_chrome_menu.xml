@@ -4,7 +4,6 @@
     <!-- a11y.floating.feed.hint -->
     <!-- a11y.floating.menu.hint -->
     <!-- a11y.floating.menu.notifications-value -->
-    <string name="a11y_floating_menu_notifications_value">%1$d notificaciones pendientes</string>
     <!-- a11y.menu.item.hint -->
     <!-- root.menu.communities -->
 </resources>

@@ -23,7 +23,6 @@
     <!-- Profile screen -->
     <string name="call_channel_description">Incoming voice and video calls</string>
     <string name="a11y_floating_menu">Navigation menu</string>
-    <string name="a11y_floating_menu_unread">Menu, %1$d notifications pending</string>
 
     <!-- Home-screen widget: unread count -->
 

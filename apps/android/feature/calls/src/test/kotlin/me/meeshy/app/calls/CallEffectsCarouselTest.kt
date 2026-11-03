@@ -53,10 +53,10 @@ class CallEffectsCarouselTest {
             }
         }
 
-        assertThat(actions("Face")).containsAtLeast("Take a photo", "Record")
+        assertThat(actions("Face")).containsAtLeast("Take a photo", "Record video")
         rule.onNodeWithText("Double tap: photo · Long press: video", useUnmergedTree = true).assertExists()
         rule.runOnIdle { action("Face", "Take a photo")() }
-        rule.runOnIdle { action("Face", "Record")() }
+        rule.runOnIdle { action("Face", "Record video")() }
 
         assertThat(photos).isEqualTo(1)
         assertThat(films).isEqualTo(1)
@@ -96,7 +96,7 @@ class CallEffectsCarouselTest {
         }
 
         carousel("Colour").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Recording"))
-        assertThat(actions("Colour")).containsNoneOf("Take a photo", "Record")
+        assertThat(actions("Colour")).containsNoneOf("Take a photo", "Record video")
         rule.onNodeWithText("Double tap: photo · Long press: video", useUnmergedTree = true).assertDoesNotExist()
     }
 
@@ -113,7 +113,7 @@ class CallEffectsCarouselTest {
         )
         rule.setContent { MeeshyTheme { CallMontageCaptureLayer(capture, emptyMap(), reduceMotion = true) } }
 
-        assertThat(actions("Montage preview")).isEmpty()
+        assertThat(actions("Collage preview")).isEmpty()
         rule.onNodeWithText("Double tap: photo · Long press: video", useUnmergedTree = true).assertDoesNotExist()
     }
 }

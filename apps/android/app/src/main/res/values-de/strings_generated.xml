@@ -3,6 +3,7 @@
     <string name="a11y_edit_profile">Profil bearbeiten</string>
     <string name="a11y_floating_feed_hint">Öffnet den Aktivitäts-Feed</string>
     <string name="a11y_floating_menu_hint">Öffnet das Navigationsmenü</string>
+    <string name="a11y_floating_menu_notifications_value">%1$d ausstehende Benachrichtigungen</string>
     <string name="a11y_menu_item_hint">Diesen Bereich öffnen</string>
     <string name="a11y_state_open">Öffnen</string>
     <string name="app_name">Meeshy</string>

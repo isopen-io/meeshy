@@ -23,7 +23,6 @@
     <!-- Profile screen -->
     <string name="call_channel_description">Eingehende Sprach- und Videoanrufe</string>
     <string name="a11y_floating_menu">Navigationsmenü</string>
-    <string name="a11y_floating_menu_unread">Menü, %1$d ausstehende Benachrichtigungen</string>
 
     <!-- Widget écran d'accueil : compteur de non-lus -->
 
