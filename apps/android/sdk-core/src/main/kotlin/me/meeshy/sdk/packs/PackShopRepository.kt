@@ -15,7 +15,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import me.meeshy.core.database.dao.KeyedJsonCacheDao
 import me.meeshy.sdk.cache.CacheClock
-import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.KeyedJsonCache
 import me.meeshy.sdk.cache.SystemCacheClock
@@ -36,6 +35,7 @@ import me.meeshy.sdk.net.api.purchase
 import me.meeshy.sdk.net.api.setInstalled
 import me.meeshy.sdk.net.api.shop
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.pack.PackShopSnapshotStore
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.PerAccountCache
@@ -88,20 +88,24 @@ class PackShopRepository(
     private var localWrites = 0L
     private var appliedGameRevision: Long? = null
 
-    fun shop(onSyncError: (Throwable) -> Unit = {}): Flow<CacheResult<PackShopResponse>> = cacheFirstFlowOf(
+    /** Fraîche une minute, servable périmée sept jours ([PackShopSnapshotStore]) ; la clé est l'ensemble des [domains]. */
+    fun shop(
+        onSyncError: (Throwable) -> Unit = {},
+        domains: List<AppearancePackDomain> = PackShopResponse.OFFERED,
+    ): Flow<CacheResult<PackShopResponse>> = cacheFirstFlowOf(
         policy = POLICY,
-        snapshots = cache.observeSnapshot(NAMESPACE, KEY, PackShopResponse.serializer()),
-        revalidate = ::refresh,
+        snapshots = cache.observeSnapshot(NAMESPACE, PackShopSnapshotStore.key(domains), PackShopResponse.serializer()),
+        revalidate = { refresh(domains) },
         clock = clock,
         onRevalidateError = onSyncError,
     )
 
-    suspend fun refresh() {
+    suspend fun refresh(domains: List<AppearancePackDomain> = PackShopResponse.OFFERED) {
         val ticket = cache.ticket()
         val before = writes.withLock { localWrites }
-        val served = fetchShop()
+        val served = fetchShop(domains)
         writes.withLock {
-            if (localWrites == before) cache.put(NAMESPACE, KEY, served, PackShopResponse.serializer(), ticket)
+            if (localWrites == before) cache.put(NAMESPACE, PackShopSnapshotStore.key(domains), served, PackShopResponse.serializer(), ticket)
         }
     }
 
@@ -198,17 +202,17 @@ class PackShopRepository(
      * La vitrine unique ; un ancien serveur qui la répond 404 est relu domaine par domaine (iOS `PackShopService`). Toute
      * autre panne remonte telle quelle : le cache garde ce qu'il a, jamais une vitrine vide fabriquée.
      */
-    private suspend fun fetchShop(): PackShopResponse =
-        when (val result = apiCall { api.shop(PackShopResponse.OFFERED) }) {
+    private suspend fun fetchShop(domains: List<AppearancePackDomain>): PackShopResponse =
+        when (val result = apiCall { api.shop(domains) }) {
             is NetworkResult.Success -> result.data
             is NetworkResult.Failure ->
-                if (result.error.httpStatus == NOT_FOUND) composedFromDomains()
+                if (result.error.httpStatus == NOT_FOUND) composedFromDomains(domains)
                 else throw PackShopUnavailableException(result.error.httpStatus)
         }
 
     /** Un domaine que ce serveur ne sert pas est vide, jamais une erreur ; toute autre panne annule la recomposition. */
-    private suspend fun composedFromDomains(): PackShopResponse = PackShopResponse.composed(
-        PackShopResponse.OFFERED.map { domain ->
+    private suspend fun composedFromDomains(domains: List<AppearancePackDomain>): PackShopResponse = PackShopResponse.composed(
+        domains.map { domain ->
             domain to when (val result = apiCall { api.catalogue(domain) }) {
                 is NetworkResult.Success -> result.data.packs
                 is NetworkResult.Failure ->
@@ -223,12 +227,10 @@ class PackShopRepository(
 
     private companion object {
         const val NOT_FOUND = 404
-        const val NAMESPACE = "pack-shop"
-        const val KEY = "offered"
-        const val HOUR_MILLIS = 60 * 60_000L
-        const val JUST_READ_MILLIS = 5_000L
+        const val NAMESPACE = PackShopSnapshotStore.NAMESPACE
+        const val KEY = PackShopSnapshotStore.KEY_OFFERED
 
-        val POLICY = CachePolicy(freshForMillis = JUST_READ_MILLIS, keepForMillis = 6 * HOUR_MILLIS)
+        val POLICY = PackShopSnapshotStore.POLICY
     }
 }
 
