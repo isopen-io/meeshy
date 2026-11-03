@@ -3,7 +3,6 @@ package me.meeshy.app.conversations
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodes
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
