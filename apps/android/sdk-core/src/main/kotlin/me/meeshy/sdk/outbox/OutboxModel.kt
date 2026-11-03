@@ -43,6 +43,15 @@ public enum class OutboxKind {
 
     /** Une republication directe (#15067) : la story d'un autre repart en story, en post ou en réel, hors ligne comprise. */
     REPOST_POST,
+
+    /** Une conversation créée hors ligne (#15179) : sa ligne optimiste `pending_<uuid>` est réconciliée avec l'id serveur. */
+    CREATE_CONVERSATION,
+
+    /** Titre, description et avatar d'une conversation (#15179) : fusionnés champ par champ, le dernier gagne. */
+    UPDATE_CONVERSATION,
+
+    /** Un réglage de compte générique (endpoint, méthode, corps) (#15179) : FIFO entre endpoints, fusion par couple. */
+    SETTINGS_ACTION,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -88,6 +97,7 @@ public object OutboxLanes {
     public const val POST: String = "post"
     public const val COMMENT: String = "comment"
     public const val CONSUMPTION: String = "consumption"
+    public const val CONVERSATION: String = "conversation"
 
     /**
      * #13820 — une lane dont les lignes ne s'ordonnent pas entre elles : chaque téléversement est indépendant (l'ordre d'un
@@ -149,6 +159,10 @@ public object OutboxLaneMap {
         OutboxKind.UPDATE_PRIVACY_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
         OutboxKind.UPDATE_AUDIO_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
         OutboxKind.UPDATE_APPLICATION_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
+        OutboxKind.SETTINGS_ACTION -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
+        OutboxKind.CREATE_CONVERSATION,
+        OutboxKind.UPDATE_CONVERSATION,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION)
         OutboxKind.PUBLISH_STORY -> OutboxLaneAssignment.Shared(OutboxLanes.STORY)
         OutboxKind.UPLOAD_MEDIA -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA)
 

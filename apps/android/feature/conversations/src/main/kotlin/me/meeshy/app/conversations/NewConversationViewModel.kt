@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.CreationEncryptionMode
 import me.meeshy.sdk.model.CreationEncryptionOffer
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.friend.ContactList
+import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.user.UserRepository
@@ -38,6 +39,8 @@ data class NewConversationUiState(
     val error: NewConversationError? = null,
     val answeredQuery: String? = null,
     val createdConversationId: String? = null,
+    /** Hors ligne : la conversation est en file (ligne `pending_` dans la liste) ; l'écran se referme sans ouvrir de fil. */
+    val queuedOffline: Boolean = false,
     val contacts: List<SelectableUser> = emptyList(),
     val isLoadingContacts: Boolean = false,
     /** Le `User.role` brut de l'utilisateur connecté : il décide si le bout en bout s'offre. */
@@ -184,8 +187,7 @@ class NewConversationViewModel @Inject constructor(
                 when (val result = conversationRepository.create(request.type, request.title, request.participantIds, request.encryptionMode)) {
                     is NetworkResult.Success ->
                         _state.update { it.copy(isCreating = false, createdConversationId = result.data.id) }
-                    is NetworkResult.Failure ->
-                        _state.update { it.copy(isCreating = false, error = creationErrorOf(result.error.code)) }
+                    is NetworkResult.Failure -> onCreateFailed(request, result.error.code)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -193,6 +195,22 @@ class NewConversationViewModel @Inject constructor(
                 _state.update { it.copy(isCreating = false, error = NewConversationError.CREATE_FAILED) }
             }
         }
+    }
+
+    private suspend fun onCreateFailed(request: CreateConversationRequest, code: String?) {
+        val pendingId = if (code == OFFLINE_CODE) {
+            conversationRepository.createOptimistic(request.type, request.title, request.participantIds, request.encryptionMode)
+        } else {
+            null
+        }
+        _state.update {
+            if (pendingId != null) it.copy(isCreating = false, queuedOffline = true)
+            else it.copy(isCreating = false, error = creationErrorOf(code))
+        }
+    }
+
+    fun consumeQueued() {
+        _state.update { it.copy(queuedOffline = false) }
     }
 
     fun consumeCreated() {
@@ -364,5 +382,6 @@ class NewConversationViewModel @Inject constructor(
         private const val MIN_QUERY_LENGTH = NewConversationLogic.MIN_QUERY_LENGTH
         private const val LOAD_MORE_THRESHOLD = 5
         private const val USER_BLOCKED_CODE = "USER_BLOCKED"
+        private const val OFFLINE_CODE = "NETWORK"
     }
 }

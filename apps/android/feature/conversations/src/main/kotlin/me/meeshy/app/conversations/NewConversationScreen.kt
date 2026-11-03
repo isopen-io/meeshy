@@ -60,6 +60,12 @@ fun NewConversationScreen(
         onConversationCreated(id)
     }
 
+    LaunchedEffect(state.queuedOffline) {
+        if (!state.queuedOffline) return@LaunchedEffect
+        viewModel.consumeQueued()
+        onBack()
+    }
+
     NewConversationSheet(
         state = state,
         actions = NewConversationActions(
