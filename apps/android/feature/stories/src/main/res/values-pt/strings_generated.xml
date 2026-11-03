@@ -414,6 +414,7 @@
     <string name="story_sound_library_trending">Em alta</string>
     <string name="story_sound_library_untitled">Som original</string>
     <string name="story_sound_library_use">Usar</string>
+    <string name="story_timeline_transport_zoomReset">Redefinir o zoom</string>
     <string name="story_tool_audio">Som</string>
     <string name="story_tool_drawing">Desenho</string>
     <string name="story_tool_media">Mídia</string>

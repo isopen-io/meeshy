@@ -408,6 +408,7 @@
     <string name="story_sound_library_trending">Trending</string>
     <string name="story_sound_library_untitled">Original sound</string>
     <string name="story_sound_library_use">Use</string>
+    <string name="story_timeline_transport_zoomReset">Reset zoom</string>
     <string name="story_tool_audio">Sound</string>
     <string name="story_tool_drawing">Drawing</string>
     <string name="story_tool_media">Media</string>

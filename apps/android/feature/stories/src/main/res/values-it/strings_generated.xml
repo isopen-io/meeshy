@@ -414,6 +414,7 @@
     <string name="story_sound_library_trending">Di tendenza</string>
     <string name="story_sound_library_untitled">Suono originale</string>
     <string name="story_sound_library_use">Usa</string>
+    <string name="story_timeline_transport_zoomReset">Reimposta lo zoom</string>
     <string name="story_tool_audio">Suono</string>
     <string name="story_tool_drawing">Disegno</string>
     <string name="story_tool_media">Media</string>

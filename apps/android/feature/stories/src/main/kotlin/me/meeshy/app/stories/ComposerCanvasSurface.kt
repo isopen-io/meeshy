@@ -5,7 +5,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -26,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
@@ -50,7 +48,10 @@ import me.meeshy.sdk.model.scene.SceneManipulationLayerRule
 import me.meeshy.ui.component.imageedit.sceneLook
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.story.canvas.edit.SceneGuidesOverlay
+import me.meeshy.ui.story.canvas.edit.sceneBackgroundGestures
 import me.meeshy.ui.story.canvas.edit.sceneManipulationGestures
+import me.meeshy.ui.story.canvas.edit.sceneThreeFingerPinch
+import me.meeshy.sdk.model.scene.CanvasViewportZoomPolicy
 
 /**
  * The 9:16 story canvas for the **selected** slide. Renders that slide's first
@@ -118,10 +119,14 @@ internal fun StoryCanvasSurface(
     canvasFormat: me.meeshy.sdk.model.scene.CanvasFormat = me.meeshy.sdk.model.scene.CanvasFormat.PORTRAIT,
     manipulationOverride: SceneManipulationLayer? = null,
     onBackgroundRotate: ((Float) -> Unit)? = null,
+    onBackgroundDoubleTap: (() -> Unit)? = null,
+    viewportScale: Float = 1f,
+    onViewportScale: ((Float) -> Unit)? = null,
 ) {
     val canvasLabel = formatLabel(ComposerFormatLabel.CANVAS)
     val backgroundTap by rememberUpdatedState(onBackgroundTap)
     val backgroundLongPress by rememberUpdatedState(onBackgroundLongPress)
+    val backgroundDoubleTap by rememberUpdatedState(onBackgroundDoubleTap)
     val frameShape = RoundedCornerShape(16.dp)
     val warnBorder = if (snapFeedback?.withinSafeZone == false) {
         BorderStroke(2.dp, MaterialTheme.colorScheme.error)
@@ -140,17 +145,32 @@ internal fun StoryCanvasSurface(
     var backgroundGesturing by remember { mutableStateOf(false) }
     var objectGesturing by remember { mutableStateOf(false) }
     val haptics = rememberMeeshyHaptics()
+    // Le pincement à trois doigts : [pinchScale] est le facteur du geste en cours, [viewportScale] l'échelle posée.
+    var pinchScale by remember { mutableFloatStateOf(1f) }
+    val settledViewport by rememberUpdatedState(viewportScale)
+    val shownViewport = (viewportScale * pinchScale).coerceIn(CanvasViewportZoomPolicy.MIN_SCALE, CanvasViewportZoomPolicy.MAX_SCALE)
     val engagedVertical = snapFeedback?.verticalGuide
     val engagedHorizontal = snapFeedback?.horizontalGuide
     LaunchedEffect(engagedVertical, engagedHorizontal) {
         if (engagedVertical != null || engagedHorizontal != null) haptics.light()
     }
     Box(
-        modifier = modifier,
+        modifier = modifier.sceneThreeFingerPinch(
+            enabled = onViewportScale != null && !isDrawingActive,
+            onScale = { pinchScale = it },
+            onEnd = { final ->
+                pinchScale = 1f
+                if (final != null) onViewportScale?.invoke(CanvasViewportZoomPolicy.settledScale(settledViewport, final))
+            },
+        ),
         contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier = Modifier
+                .graphicsLayer {
+                    scaleX = shownViewport
+                    scaleY = shownViewport
+                }
                 .then(if (canvasFormat == me.meeshy.sdk.model.scene.CanvasFormat.PORTRAIT) Modifier.fillMaxHeight() else Modifier.fillMaxWidth())
                 .aspectRatio(canvasFormat.ratio.toFloat())
                 .clip(frameShape)
@@ -175,12 +195,11 @@ internal fun StoryCanvasSurface(
                         Modifier
                     } else {
                         Modifier
-                            .pointerInput(onBackgroundLongPress != null) {
-                                detectTapGestures(
-                                    onLongPress = if (onBackgroundLongPress != null) ({ _ -> backgroundLongPress?.invoke() }) else null,
-                                    onTap = { backgroundTap() },
-                                )
-                            }
+                            .sceneBackgroundGestures(
+                                onTap = { backgroundTap() },
+                                onDoubleTap = onBackgroundDoubleTap?.let { { backgroundDoubleTap?.invoke() } },
+                                onLongPress = onBackgroundLongPress?.let { { backgroundLongPress?.invoke() } },
+                            )
                             .sceneManipulationGestures(
                                 enabled = manipulationLayer == SceneManipulationLayer.BACKGROUND,
                                 onBegin = { backgroundGesturing = true },

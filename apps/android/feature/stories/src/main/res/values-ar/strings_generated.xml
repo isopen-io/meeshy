@@ -432,6 +432,7 @@
     <string name="story_sound_library_trending">الرائجة</string>
     <string name="story_sound_library_untitled">صوت أصلي</string>
     <string name="story_sound_library_use">استخدام</string>
+    <string name="story_timeline_transport_zoomReset">إعادة ضبط التكبير</string>
     <string name="story_tool_audio">صوت</string>
     <string name="story_tool_drawing">رسم</string>
     <string name="story_tool_media">وسائط</string>
