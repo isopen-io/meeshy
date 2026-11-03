@@ -46,6 +46,42 @@ final class RelationsServiceTests: XCTestCase {
         XCTAssertEqual(served.label(for: .blood, language: "fr"), "Sang")
     }
 
+    func test_link_getsTheLinkWithThisPerson() async throws {
+        let (service, api) = makeSUT()
+        api.stub("/relations/u1", result: APIResponse<RelationLink>(success: true, data: link("u1", .friend), error: nil))
+
+        let served = try await service.link(userId: "u1")
+
+        XCTAssertEqual(api.lastRequest?.endpoint, "/relations/u1")
+        XCTAssertEqual(api.lastRequest?.method, "GET")
+        XCTAssertEqual(served.effectiveLevel, .friend)
+    }
+
+    // MARK: - Baisser (#14910)
+
+    func test_lower_postsTheTargetLevelAndReadsTheServedLink() async throws {
+        let (service, api) = makeSUT()
+        api.stub("/relations/u1/level", result: APIResponse<RelationLink>(
+            success: true, data: link("u1", .acquaintance), error: nil))
+
+        let served = try await service.lower(userId: "u1", to: .acquaintance)
+
+        XCTAssertEqual(api.lastRequest?.endpoint, "/relations/u1/level")
+        XCTAssertEqual(api.lastRequest?.method, "POST")
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["level"] as? String, "ACQUAINTANCE")
+        XCTAssertEqual(served.effectiveLevel, .acquaintance)
+    }
+
+    func test_unlink_postsPublic() async throws {
+        let (service, api) = makeSUT()
+        api.stub("/relations/u1/level", result: APIResponse<RelationLink>(
+            success: true, data: link("u1", .public), error: nil))
+
+        _ = try await service.lower(userId: "u1", to: .public)
+
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["level"] as? String, "PUBLIC")
+    }
+
     // MARK: - Rituel
 
     func test_ritualStart_postsThePhaseWithoutTokenNorConsents() async throws {

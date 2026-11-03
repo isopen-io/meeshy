@@ -42,3 +42,67 @@ class ProfileCircleTest {
         assertThat(circle?.offeredRaise).isNull()
     }
 }
+
+/** Rétrograder d'un cran, ou annuler le lien à Connaissance (#14910) — iso la spec commune. */
+class ProfileCircleLoweringTest {
+
+    private fun circle(level: RelationLevel, granted: RelationLevel = level, eligibleFor: RelationLevel? = null) =
+        ProfileCircle(RelationLink("a", level, granted, eligibleFor = eligibleFor))
+
+    @Test
+    fun `on descend d'un seul cran sous le niveau effectif, et a Connaissance on annule le lien`() {
+        assertThat(circle(RelationLevel.BLOOD).lowering).isEqualTo(RelationLevel.CLOSE)
+        assertThat(circle(RelationLevel.CLOSE).lowering).isEqualTo(RelationLevel.FRIEND)
+        assertThat(circle(RelationLevel.FRIEND).lowering).isEqualTo(RelationLevel.ACQUAINTANCE)
+        assertThat(circle(RelationLevel.ACQUAINTANCE).lowering).isEqualTo(RelationLevel.PUBLIC)
+    }
+
+    @Test
+    fun `le cran vise part du niveau EFFECTIF, pas de mon accord plus haut`() {
+        assertThat(circle(RelationLevel.FRIEND, granted = RelationLevel.BLOOD).lowering).isEqualTo(RelationLevel.ACQUAINTANCE)
+    }
+
+    @Test
+    fun `l'instantane optimiste prend le cran vise, et l'annulation retire le cercle`() {
+        val lowered = circle(RelationLevel.CLOSE, eligibleFor = RelationLevel.BLOOD).copy(pending = RelationLevel.BLOOD).lowered()
+
+        assertThat(lowered?.level).isEqualTo(RelationLevel.FRIEND)
+        assertThat(lowered?.link?.grantedByMe).isEqualTo(RelationLevel.FRIEND)
+        assertThat(lowered?.pending).isNull()
+        assertThat(lowered?.offeredRaise).isNull()
+        assertThat(circle(RelationLevel.ACQUAINTANCE).lowered()).isNull()
+    }
+
+    @Test
+    fun `un cool-down servi masque Promouvoir`() {
+        val open = circle(RelationLevel.FRIEND, eligibleFor = RelationLevel.CLOSE)
+
+        assertThat(open.offeredRaise).isEqualTo(RelationLevel.CLOSE)
+        assertThat(open.copy(raiseBlocked = true).offeredRaise).isNull()
+    }
+}
+
+/** Le verrou de remontée que `GET /relations/:userId` sert (#14910) : absent = comportement d'avant. */
+class RelationRaiseGateTest {
+
+    private val now = java.time.Instant.parse("2026-11-03T12:00:00Z").toEpochMilli()
+
+    @Test
+    fun `sans champ servi rien n'est bloque`() {
+        assertThat(RelationRaiseGate().blocks(now)).isFalse()
+    }
+
+    @Test
+    fun `une echeance future bloque, une echeance passee ou illisible non`() {
+        assertThat(RelationRaiseGate(raiseBlockedUntil = "2026-11-20T00:00:00.000Z").blocks(now)).isTrue()
+        assertThat(RelationRaiseGate(raiseBlockedUntil = "2026-11-01T00:00:00Z").blocks(now)).isFalse()
+        assertThat(RelationRaiseGate(raiseBlockedUntil = "demain").blocks(now)).isFalse()
+    }
+
+    @Test
+    fun `canRaise faux bloque, vrai laisse l'echeance decider`() {
+        assertThat(RelationRaiseGate(canRaise = false).blocks(now)).isTrue()
+        assertThat(RelationRaiseGate(canRaise = true, raiseBlockedUntil = "2026-11-20T00:00:00Z").blocks(now)).isTrue()
+        assertThat(RelationRaiseGate(canRaise = true).blocks(now)).isFalse()
+    }
+}

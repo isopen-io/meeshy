@@ -410,6 +410,14 @@ class StoryViewerViewModel @Inject constructor(
         if (isHoldPaused) resume() else pauseByHold()
     }
 
+    /** Vrai tant qu'un appui long a figé la story (iOS `isLongPressPaused`). */
+    val isHeldPaused: Boolean get() = isHoldPaused
+
+    /** Le toucher de reprise : relance une story figée par un appui long, sans naviguer. */
+    fun resumeFromTouch() {
+        if (isHoldPaused) resume()
+    }
+
     private fun resume() {
         isHoldPaused = false
         _state.update { it.copy(isPaused = false) }

@@ -11,6 +11,8 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
+import androidx.compose.ui.unit.width
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.story.StoryRailContour
 import me.meeshy.sdk.model.story.StoryViewerParticipation

@@ -8,6 +8,7 @@ import { cooldownEnd, lowerGrant } from '../../services/relations/userRelationWr
 import { loadRelationLink } from '../../services/relations/relationLinks';
 import { thresholdsNow } from '../../services/relations/relationRequestGate';
 import { forgetFriends } from '../../services/relations/relationCaches';
+import { withdrawRitualSharesBetween } from '../../services/relations/ritualShareWithdrawal';
 import { asseoirLienHerite, retirerDemandesAuDessus } from '../directory/friend-request-withdraw';
 import { errorResponses, otherUserOf, relationLimiter, relationLinkSchema, sendCoded, userIdParams } from './shared';
 
@@ -24,6 +25,9 @@ const corpsNiveau = z.object({ level: z.unknown() });
  * apprend rien ; il se voit seulement retenir de redemander une montée pendant 30 jours
  * (RG-08), et ne l'apprend qu'en essayant. Monter par cette porte est refusé : une
  * montée est une demande, qui veut l'accord de l'autre.
+ *
+ * Sous le Sang, les partages consentis au rituel s'éteignent des DEUX côtés (#14910) :
+ * le consentement a été donné à un Sang, pas au cercle d'en dessous.
  */
 export function registerRelationLower(fastify: FastifyInstance): void {
   const writes = relationLimiter(fastify, 'rel:level:u', 30);
@@ -61,7 +65,10 @@ export function registerRelationLower(fastify: FastifyInstance): void {
       // Rejouée sans condition : une baisse écrite dont le retrait aurait échoué se solde au rejeu.
       await retirerDemandesAuDessus(fastify.prisma, viewerId, otherId);
       if (outcome === 'lowered') await forgetFriends(fastify, [viewerId, otherId]);
-      return sendSuccess(reply, await loadRelationLink(fastify.prisma, { viewerId, otherId, now }));
+      const link = await loadRelationLink(fastify.prisma, { viewerId, otherId, now });
+      // Rejoué sans condition, comme le retrait des demandes : sous le Sang, aucun partage du rituel ne reste allumé.
+      if (link.effectiveLevel !== 'BLOOD') await withdrawRitualSharesBetween(fastify.prisma, { actorId: viewerId, otherId, at: now });
+      return sendSuccess(reply, link);
     } catch (error) {
       if (error instanceof z.ZodError) return sendBadRequest(reply, 'Donnees invalides');
       logError(fastify.log, 'Lower relation error:', error);
