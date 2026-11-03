@@ -21,6 +21,8 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.FeedGeneration
 import me.meeshy.sdk.model.FeedMergeLaws
 import me.meeshy.sdk.model.PostReactionSummaryLaw
+import me.meeshy.sdk.model.PostReactionSyncLaw
+import me.meeshy.sdk.model.SocketPostReactionSyncData
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.DiscoverabilityPrecision
@@ -852,6 +854,10 @@ class PostRepository @Inject constructor(
     /** Le compte absolu de [emoji] (`post:reaction-*`) sur la ligne du fil ; `false` : ligne absente ou compte deja a jour. */
     suspend fun applyReactionCount(postId: String, emoji: String, count: Int): Boolean =
         fence.commitOrWrite(fence?.currentTicket()) { foldIntoCache(postId) { PostReactionSummaryLaw.applying(it, emoji, count) } } ?: false
+
+    /** L'agrégat complet rendu par `post:reaction-request-sync` remplace le résumé de la ligne du fil ; `false` : rien à changer. */
+    suspend fun applyReactionSync(sync: SocketPostReactionSyncData): Boolean =
+        fence.commitOrWrite(fence?.currentTicket()) { foldIntoCache(sync.postId) { PostReactionSyncLaw.applying(it, sync) } } ?: false
 
     /**
      * On-demand translation for a post the caller already holds (the post-detail

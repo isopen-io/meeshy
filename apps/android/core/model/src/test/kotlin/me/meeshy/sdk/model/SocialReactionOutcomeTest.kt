@@ -37,3 +37,19 @@ class SocialReactionOutcomeTest {
         assertThat(SocialReactionOutcome.from(SocketAck.Timeout, minimal)).isEqualTo(SocialReactionOutcome.TimedOut)
     }
 }
+
+class PostReactionSyncLawTest {
+    private fun post(summary: Map<String, Int>?) = ApiPost(id = "p1", reactionSummary = summary)
+
+    @Test
+    fun `l'agregat du serveur remplace le resume local`() {
+        val sync = SocketPostReactionSyncData("p1", listOf(SocketPostReactionAggregation("a", 2), SocketPostReactionAggregation("b", 0)))
+        assertThat(PostReactionSyncLaw.applying(post(mapOf("a" to 1, "c" to 4)), sync)!!.reactionSummary).containsExactly("a", 2)
+    }
+
+    @Test
+    fun `un resume deja identique ne change rien`() {
+        val sync = SocketPostReactionSyncData("p1", listOf(SocketPostReactionAggregation("a", 2)))
+        assertThat(PostReactionSyncLaw.applying(post(mapOf("a" to 2)), sync)).isNull()
+    }
+}

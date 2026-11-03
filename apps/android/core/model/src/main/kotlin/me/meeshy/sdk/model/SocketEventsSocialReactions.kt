@@ -53,3 +53,13 @@ sealed interface SocialReactionOutcome<out T> {
         }
     }
 }
+
+/** Resynchronisation d'un agrégat : le compte absolu de CHAQUE emoji remplace le résumé, sans delta. */
+object PostReactionSyncLaw {
+    /** `null` : rien ne change (résumé déjà identique). Les comptes nuls ou négatifs et les emojis vides sont écartés. */
+    fun applying(post: ApiPost, sync: SocketPostReactionSyncData): ApiPost? {
+        val next = sync.reactions.filter { it.emoji.isNotBlank() && it.count > 0 }.associate { it.emoji to it.count }
+        val current = post.reactionSummary.orEmpty()
+        return if (next == current) null else post.copy(reactionSummary = next)
+    }
+}
