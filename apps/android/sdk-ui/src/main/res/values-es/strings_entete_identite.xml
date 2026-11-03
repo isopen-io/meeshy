@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="identity_role_creator">Creador</string>
+    <string name="identity_role_admin">Admin</string>
+    <string name="identity_role_moderator">Moderador</string>
+</resources>

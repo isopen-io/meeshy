@@ -389,6 +389,9 @@
     <string name="time_lastSeen_online">En ligne</string>
     <string name="time_lastSeen_seen">Vu %1$s</string>
     <string name="time_lastSeen_yesterdayAt">Vu hier à %1$s</string>
+    <string name="userIdentity_language_show_a11y">Afficher en %1$s</string>
+    <string name="userIdentity_read">Lu</string>
+    <string name="userIdentity_translation_available">Traduction disponible</string>
     <string name="viewer_caption_see_less">voir moins</string>
     <string name="viewer_caption_see_less_hint">Replie la légende</string>
     <string name="viewer_caption_see_more">voir plus</string>
