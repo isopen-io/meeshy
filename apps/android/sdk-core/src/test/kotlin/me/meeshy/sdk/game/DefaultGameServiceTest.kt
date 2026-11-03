@@ -118,7 +118,12 @@ class DefaultGameServiceTest {
     fun `le calendrier garde l ETag et un 304 confirme la copie`() = runTest {
         val body = ApiResponse<JsonElement>(success = true, data = Json.parseToJsonElement("""{"seasons":[]}"""))
         coEvery { api.seasonCalendar(null) } returns Response.success(body, okhttp3.Headers.headersOf("ETag", "W/\"1\""))
-        coEvery { api.seasonCalendar("W/\"1\"") } returns Response.error(304, "".toResponseBody())
+        coEvery { api.seasonCalendar("W/\"1\"") } returns Response.error(
+            "".toResponseBody(),
+            okhttp3.Response.Builder()
+                .request(okhttp3.Request.Builder().url("http://localhost/").build())
+                .protocol(okhttp3.Protocol.HTTP_1_1).code(304).message("Not Modified").build(),
+        )
 
         val fresh = (service.fetchSeasonCalendar() as GameServiceResult.Done).value as GameSeasonCalendarRead.Fresh
         val again = service.fetchSeasonCalendar("W/\"1\"")
