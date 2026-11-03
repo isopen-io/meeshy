@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- « Mes cercles » (#13938) : android-only tant que les clés circles.* ne sont pas au catalogue iOS de dev ; texte exact de la branche lot/ui-cercles-ios-13938. Partagées par « Mes cercles » et le profil. -->
 <resources>
+    <string name="circles_action_demote">Zu %1$s herabstufen</string>
+    <string name="circles_action_promote">Zu %1$s befördern</string>
+    <string name="circles_action_promote_a11y">%2$s zu %1$s befördern</string>
     <string name="circles_action_request">%1$s anfragen</string>
     <string name="circles_action_request_a11y">%2$s um die Stufe %1$s bitten</string>
+    <string name="circles_action_unlink">Verbindung aufheben</string>
+    <string name="circles_confirm_cancel">Abbrechen</string>
+    <string name="circles_demote_confirm_action">Herabstufen</string>
+    <string name="circles_demote_confirm_body">%1$s wechselt von %2$s zu %3$s. Du verlierst, was %2$s teilt. %1$s wird nicht benachrichtigt und kann dich 30 Tage lang nicht bitten, wieder aufzusteigen.</string>
+    <string name="circles_demote_confirm_title">%1$s zu %2$s herabstufen?</string>
     <string name="circles_level_acquaintance">Bekannter</string>
     <string name="circles_level_blood">Blut</string>
     <string name="circles_level_close">Nah</string>
@@ -14,8 +22,11 @@
     <string name="circles_missing_other">eine Interaktion</string>
     <string name="circles_missing_post_view">ein Beitragsaufruf</string>
     <string name="circles_missing_reaction">eine Reaktion</string>
+    <string name="circles_notice_lower_failed">Die Änderung konnte nicht gespeichert werden.</string>
     <string name="circles_pending">Anfrage gesendet · %1$s</string>
     <string name="circles_progress_eligible">Bereit für %1$s</string>
     <string name="circles_progress_missing">Es fehlt: %1$s</string>
     <string name="circles_progress_weeks">Wochen in Folge: %1$d von %2$d</string>
+    <string name="circles_unlink_confirm_body">Ihr seid nicht mehr verbunden: kein gemeinsamer Kreis mehr. %1$s wird nicht benachrichtigt und kann dich 30 Tage lang nicht um eine Verbindung bitten.</string>
+    <string name="circles_unlink_confirm_title">Verbindung mit %1$s aufheben?</string>
 </resources>
