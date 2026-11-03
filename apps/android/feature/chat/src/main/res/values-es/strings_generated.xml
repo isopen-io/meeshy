@@ -550,6 +550,19 @@
     <string name="message_detail_reactions_empty">Sin reacciones</string>
     <string name="message_detail_report_confirm_message">El mensaje se enviará a moderación.</string>
     <string name="message_detail_report_confirm_title">¿Denunciar este mensaje?</string>
+    <plurals name="message_detail_send_history_attempt_count">
+        <item quantity="one">%1$d intento</item>
+        <item quantity="many">%1$d intentos</item>
+        <item quantity="other">%1$d intentos</item>
+    </plurals>
+    <string name="message_detail_send_history_attempt_number">Intento %1$d</string>
+    <string name="message_detail_send_history_first_attempt">1.º intento</string>
+    <string name="message_detail_send_history_outcome_failed">Fallido</string>
+    <string name="message_detail_send_history_outcome_succeeded">Correcto</string>
+    <string name="message_detail_send_history_title">Historial de envío</string>
+    <string name="message_detail_send_history_transport_auto_retry">Reintento automático</string>
+    <string name="message_detail_send_history_transport_realtime">Tiempo real</string>
+    <string name="message_detail_send_history_transport_realtime_fallback">Alternativa en tiempo real</string>
     <string name="message_detail_sentiment_a11y_label">Sentimiento</string>
     <string name="message_detail_sentiment_a11y_value">%1$s, puntuación %2$.2f</string>
     <string name="message_detail_sentiment_score">Puntuación: %1$.2f</string>

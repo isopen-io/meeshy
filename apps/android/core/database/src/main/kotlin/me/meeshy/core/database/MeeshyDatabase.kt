@@ -20,6 +20,7 @@ import me.meeshy.core.database.dao.NotificationDao
 import me.meeshy.core.database.dao.PendingIdDao
 import me.meeshy.core.database.dao.PlaintextErasureDao
 import me.meeshy.core.database.dao.ProfileStatsCacheDao
+import me.meeshy.core.database.dao.SendAttemptDao
 import me.meeshy.core.database.dao.StatusBarCacheDao
 import me.meeshy.core.database.dao.StoryDao
 import me.meeshy.core.database.dao.SuggestionDao
@@ -43,6 +44,7 @@ import me.meeshy.core.database.entity.NotificationEntity
 import me.meeshy.core.database.entity.PendingIdEntity
 import me.meeshy.core.database.entity.PlaintextErasureEntity
 import me.meeshy.core.database.entity.ProfileStatsCacheEntity
+import me.meeshy.core.database.entity.SendAttemptEntity
 import me.meeshy.core.database.entity.StatusBarCacheEntity
 import me.meeshy.core.database.entity.StoryEntity
 import me.meeshy.core.database.entity.SuggestionEntity
@@ -81,8 +83,9 @@ import me.meeshy.core.database.entity.TusUploadCheckpointEntity
         PendingIdEntity::class,
         PlaintextErasureEntity::class,
         NotificationEntity::class,
+        SendAttemptEntity::class,
     ],
-    version = 24,
+    version = 25,
     exportSchema = true,
 )
 public abstract class MeeshyDatabase : RoomDatabase() {
@@ -109,4 +112,5 @@ public abstract class MeeshyDatabase : RoomDatabase() {
     public abstract fun pendingIdDao(): PendingIdDao
     public abstract fun plaintextErasureDao(): PlaintextErasureDao
     public abstract fun notificationDao(): NotificationDao
+    public abstract fun sendAttemptDao(): SendAttemptDao
 }

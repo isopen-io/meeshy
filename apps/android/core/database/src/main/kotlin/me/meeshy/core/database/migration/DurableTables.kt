@@ -81,6 +81,12 @@ internal object CacheTables {
         indexSql = listOf("CREATE INDEX IF NOT EXISTS `index_notifications_scopeKey_createdAt` ON `notifications` (`scopeKey`, `createdAt`)"),
     )
 
+    /** Version 25 : le journal des tentatives d'envoi d'un message sortant (une ligne par tentative). */
+    val sendAttempts = CacheTableDefinition(
+        name = "send_attempts",
+        createSql = "CREATE TABLE IF NOT EXISTS `send_attempts` (`localId` TEXT NOT NULL, `attemptNumber` INTEGER NOT NULL, `transport` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, `finishedAt` INTEGER, `outcome` TEXT NOT NULL, `errorMessage` TEXT, PRIMARY KEY(`localId`, `attemptNumber`))",
+    )
+
     /** The columns version 20 appended to `messages`, exactly as Room declares them. */
     val messageColumnsAddedIn20: List<String> = listOf(
         "`serverId` TEXT",
@@ -149,6 +155,7 @@ internal object CacheTables {
         keyedJsonCache,
         pendingIds,
         notifications,
+        sendAttempts,
     )
 
     val names: Set<String> = all.map { it.name }.toSet()

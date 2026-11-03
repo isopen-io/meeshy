@@ -571,6 +571,22 @@
     <string name="message_detail_reactions_empty">لا توجد تفاعلات</string>
     <string name="message_detail_report_confirm_message">سيتم إرسال الرسالة إلى الإشراف.</string>
     <string name="message_detail_report_confirm_title">الإبلاغ عن هذه الرسالة؟</string>
+    <plurals name="message_detail_send_history_attempt_count">
+        <item quantity="zero">%1$d محاولة</item>
+        <item quantity="one">%1$d محاولة</item>
+        <item quantity="two">%1$d محاولتان</item>
+        <item quantity="few">%1$d محاولات</item>
+        <item quantity="many">%1$d محاولة</item>
+        <item quantity="other">%1$d محاولة</item>
+    </plurals>
+    <string name="message_detail_send_history_attempt_number">المحاولة %1$d</string>
+    <string name="message_detail_send_history_first_attempt">المحاولة الأولى</string>
+    <string name="message_detail_send_history_outcome_failed">فشل</string>
+    <string name="message_detail_send_history_outcome_succeeded">نجح</string>
+    <string name="message_detail_send_history_title">سجل الإرسال</string>
+    <string name="message_detail_send_history_transport_auto_retry">إعادة محاولة تلقائية</string>
+    <string name="message_detail_send_history_transport_realtime">الوقت الفعلي</string>
+    <string name="message_detail_send_history_transport_realtime_fallback">بديل الوقت الفعلي</string>
     <string name="message_detail_sentiment_a11y_label">المشاعر</string>
     <string name="message_detail_sentiment_a11y_value">%1$s، النتيجة %2$.2f</string>
     <string name="message_detail_sentiment_score">النتيجة: %1$.2f</string>

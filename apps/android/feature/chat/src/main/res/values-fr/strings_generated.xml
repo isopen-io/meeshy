@@ -550,6 +550,19 @@
     <string name="message_detail_reactions_empty">Aucune réaction</string>
     <string name="message_detail_report_confirm_message">Le message sera transmis à la modération.</string>
     <string name="message_detail_report_confirm_title">Signaler ce message ?</string>
+    <plurals name="message_detail_send_history_attempt_count">
+        <item quantity="one">%1$d tentative</item>
+        <item quantity="many">%1$d tentatives</item>
+        <item quantity="other">%1$d tentatives</item>
+    </plurals>
+    <string name="message_detail_send_history_attempt_number">Tentative %1$d</string>
+    <string name="message_detail_send_history_first_attempt">1re tentative</string>
+    <string name="message_detail_send_history_outcome_failed">Échec</string>
+    <string name="message_detail_send_history_outcome_succeeded">Réussi</string>
+    <string name="message_detail_send_history_title">Historique d\'envoi</string>
+    <string name="message_detail_send_history_transport_auto_retry">Nouvelle tentative automatique</string>
+    <string name="message_detail_send_history_transport_realtime">Temps réel</string>
+    <string name="message_detail_send_history_transport_realtime_fallback">Repli temps réel</string>
     <string name="message_detail_sentiment_a11y_label">Sentiment</string>
     <string name="message_detail_sentiment_a11y_value">%1$s, score %2$.2f</string>
     <string name="message_detail_sentiment_score">Score : %1$.2f</string>
