@@ -135,10 +135,6 @@ public object GameLevelWire {
     }
 }
 
-/** Les faits des étapes que le serveur a servis ; `null` devant un serveur d'avant les étapes. */
-public val GameBlock.levelStepFacts: LevelStepFacts?
-    get() = level.ladder?.steps?.let { LevelStepFacts(it, glory.glory, glory.rank) }
-
 /**
  * Le trésor à [held] Meeshes gardées. Les réserves suivent la loi partagée sur la Gloire DU BLOC ; un serveur d'avant
  * les réserves n'en sert pas, et rien ne s'invente.

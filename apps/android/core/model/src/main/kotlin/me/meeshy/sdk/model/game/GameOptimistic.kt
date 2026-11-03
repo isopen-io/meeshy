@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.game
 
 import me.meeshy.sdk.model.game.engagement.ApiEngagementProgress
+import me.meeshy.sdk.model.game.progression.levelStepFacts
 import kotlin.math.max
 
 /**
