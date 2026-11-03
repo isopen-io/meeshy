@@ -89,6 +89,10 @@ fun ReelVideoSurface(
     fit: Boolean = false,
     /** Un autre son (un vocal, un appel) a pris le focus : la vidéo vient de se mettre en pause d'elle-même. */
     onAudioFocusLost: () -> Unit = {},
+    /** Le focus est revenu après une perte PASSAGÈRE (fin d'un appel, d'une alarme) : la vidéo reprend d'elle-même. */
+    onAudioFocusGained: () -> Unit = {},
+    /** La perte est DÉFINITIVE (un autre lecteur a pris le focus pour de bon) : aucun gain ne suivra. */
+    onAudioFocusLostForGood: () -> Unit = {},
     /**
      * `false` : le média ne passe PAS par le cache disque (un contenu protégé — flamme, vue unique — ne laisse
      * aucune copie durable sur l'appareil). Le défaut garde le comportement des réels et des stories.
@@ -171,6 +175,8 @@ fun ReelVideoSurface(
     // Bail de lecture : la ressource jouée est à l'abri de l'éviction LRU tant que le player vit.
     val currentOnPlayer by rememberUpdatedState(onPlayer)
     val currentOnAudioFocusLost by rememberUpdatedState(onAudioFocusLost)
+    val currentOnAudioFocusGained by rememberUpdatedState(onAudioFocusGained)
+    val currentOnAudioFocusLostForGood by rememberUpdatedState(onAudioFocusLostForGood)
     DisposableEffect(player) {
         val live = player ?: return@DisposableEffect onDispose { }
         val releaseLease = if (cached) mediaCache.lease(mediaUrl) else ({ })
@@ -179,6 +185,7 @@ fun ReelVideoSurface(
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS) {
                     currentOnAudioFocusLost()
+                    currentOnAudioFocusLostForGood()
                 }
             }
 
@@ -188,6 +195,8 @@ fun ReelVideoSurface(
             override fun onPlaybackSuppressionReasonChanged(playbackSuppressionReason: Int) {
                 if (playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS) {
                     currentOnAudioFocusLost()
+                } else if (playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE) {
+                    currentOnAudioFocusGained()
                 }
             }
         }

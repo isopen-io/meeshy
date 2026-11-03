@@ -317,6 +317,7 @@
     <string name="story_media_soundExtraction_a11yHint">Andere Personen können den Ton der Videos dieses Beitrags in ihren eigenen Beiträgen wiederverwenden.</string>
     <string name="story_media_soundExtraction_caption">Andere Personen können den Ton der Videos dieses Beitrags wiederverwenden.</string>
     <string name="story_media_soundExtraction_label">Wiederverwendung des Tons erlauben</string>
+    <string name="story_reader_buffering">Story wird geladen</string>
     <string name="story_repost_error_forbidden">Diese Story kann nicht erneut geteilt werden</string>
     <string name="story_repost_error_generic">Erneutes Teilen fehlgeschlagen</string>
     <string name="story_repost_error_unavailable">Diese Story ist nicht mehr verfügbar</string>

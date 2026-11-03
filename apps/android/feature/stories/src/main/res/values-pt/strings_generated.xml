@@ -319,6 +319,7 @@
     <string name="story_media_soundExtraction_a11yHint">Outras pessoas poderão reaproveitar a trilha sonora dos vídeos desta publicação em suas próprias publicações.</string>
     <string name="story_media_soundExtraction_caption">Outras pessoas poderão reaproveitar a trilha sonora dos vídeos desta publicação.</string>
     <string name="story_media_soundExtraction_label">Permitir reaproveitamento do som</string>
+    <string name="story_reader_buffering">Carregando a story</string>
     <string name="story_repost_error_forbidden">Este story não pode ser repostado</string>
     <string name="story_repost_error_generic">Falha ao repostar</string>
     <string name="story_repost_error_unavailable">Este story não está mais disponível</string>

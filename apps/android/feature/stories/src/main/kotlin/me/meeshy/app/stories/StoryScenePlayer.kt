@@ -53,6 +53,8 @@ internal fun StorySceneBackground(
     loads: Boolean = true,
     rewindWhenInactive: Boolean = false,
     onAudioFocusLost: () -> Unit = {},
+    onAudioFocusGained: () -> Unit = {},
+    onAudioFocusLostForGood: () -> Unit = {},
     onImageResolved: (String) -> Unit = {},
     onBackgroundPlayer: (ReelPlayerHandle?) -> Unit = {},
     stillFrame: Boolean = false,
@@ -70,6 +72,8 @@ internal fun StorySceneBackground(
                 loads = loads,
                 // Un vocal ou un appel prend le son : la scène se fige avec la vidéo.
                 onAudioFocusLost = onAudioFocusLost,
+                onAudioFocusGained = onAudioFocusGained,
+                onAudioFocusLostForGood = onAudioFocusLostForGood,
                 // La fenêtre de lecture que l'auteur a posée (#5129) — `null` quand la source joue en entier.
                 sourceStartMs = slide.backgroundVideoWindow?.startMs,
                 sourceEndMs = slide.backgroundVideoWindow?.endMs,
