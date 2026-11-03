@@ -62,7 +62,7 @@ class CallRingGuardController @Inject constructor(
     }
 
     /** Un nouvel appel commence : aucune garde du précédent ne lui survit. */
-    fun reset() = stop()
+    override fun reset() = stop()
 
     private fun expire(host: CallSessionHost, guard: CallRingGuard) {
         armed = null

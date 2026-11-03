@@ -15,7 +15,7 @@ class NavGraphRouteSetTest {
     private val graphDir = File(navigationDir, "graph")
 
     private val registered: List<String> = (
-        graphDir.listFiles { file -> file.name.endsWith("NavGraph.kt") }.orEmpty() + File(navigationDir, "ChatDestination.kt")
+        graphDir.listFiles { file -> file.name.endsWith("NavGraph.kt") }.orEmpty().toList() + File(navigationDir, "ChatDestination.kt")
         )
         .flatMap { file ->
             Regex("""[cC]omposable\(\s*(?:route = )?(?:"\$\{)?Routes\.([A-Z_]+)""").findAll(file.readText()).map { it.groupValues[1] }.toList()
@@ -43,7 +43,7 @@ class NavGraphRouteSetTest {
 
     @Test
     fun `deep links stay declared in the graphs`() {
-        val deepLinks = (graphDir.listFiles().orEmpty() + File(navigationDir, "ChatDestination.kt"))
+        val deepLinks = (graphDir.listFiles().orEmpty().toList() + File(navigationDir, "ChatDestination.kt"))
             .flatMap { Regex("""uriPattern = (Routes\.[A-Z_]+)""").findAll(it.readText()).map { m -> m.groupValues[1] }.toList() }
         assertThat(deepLinks).containsExactly(
             "Routes.GUEST_JOIN_DEEP_LINK", "Routes.GUEST_JOIN_WEB_DEEP_LINK", "Routes.GUEST_JOIN_CHAT_WEB_DEEP_LINK",

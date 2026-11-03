@@ -384,6 +384,9 @@
     <string name="time_lastSeen_online">Online</string>
     <string name="time_lastSeen_seen">Seen %1$s</string>
     <string name="time_lastSeen_yesterdayAt">Seen yesterday at %1$s</string>
+    <string name="userIdentity_language_show_a11y">Show in %1$s</string>
+    <string name="userIdentity_read">Read</string>
+    <string name="userIdentity_translation_available">Translation available</string>
     <string name="viewer_caption_see_less">see less</string>
     <string name="viewer_caption_see_less_hint">Collapses the caption</string>
     <string name="viewer_caption_see_more">see more</string>

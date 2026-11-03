@@ -53,4 +53,16 @@ class ImageViewerTransformTest {
         assertThat(ImageViewerTransform.dismissDragEnabled(scale = 1f)).isTrue()
         assertThat(ImageViewerTransform.dismissDragEnabled(scale = 1.2f)).isFalse()
     }
+
+    @Test
+    fun `the dismiss drag survives the light overshoot of a pinch settling at rest`() {
+        assertThat(ImageViewerTransform.dismissDragEnabled(scale = 1.05f)).isTrue()
+    }
+
+    @Test
+    fun `the zoom ceiling is five and a double tap goes between rest and two and a half`() {
+        assertThat(ImageViewerTransform.clampScale(8f)).isEqualTo(5f)
+        assertThat(ImageViewerTransform.doubleTapTarget(1f)).isEqualTo(2.5f)
+        assertThat(ImageViewerTransform.doubleTapTarget(2.5f)).isEqualTo(1f)
+    }
 }
