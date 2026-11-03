@@ -128,7 +128,10 @@ private fun rememberBubbleAccessibilityLabel(content: BubbleContent): String {
         viewOnce = stringResource(R.string.a11y_message_view_once),
         blurred = stringResource(R.string.a11y_message_blurred),
         edited = stringResource(R.string.bubble_edited),
-        pinned = stringResource(R.string.bubble_a11y_pinned),
+        pinned = stringResource(R.string.bubble_meta_pinned_a11y),
+        forwarded = stringResource(R.string.bubble_forwarded),
+        forwardedFromGroup = stringResource(R.string.bubble_forwarded_from),
+        forwardedFromPerson = stringResource(R.string.bubble_forwarded_from_person),
         ephemeral = stringResource(R.string.bubble_a11y_ephemeral),
         reactions = stringResource(R.string.bubble_a11y_reactions),
         delivery = BubbleDeliveryA11yStrings(

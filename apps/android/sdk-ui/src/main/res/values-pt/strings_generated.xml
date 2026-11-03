@@ -84,6 +84,7 @@
     <string name="bubble_edited">editado</string>
     <string name="bubble_forwarded">Encaminhado</string>
     <string name="bubble_forwarded_from">Encaminhado de %1$s</string>
+    <string name="bubble_forwarded_from_person">Enc. de %1$s</string>
     <string name="bubble_image_description">Imagem</string>
     <string name="bubble_joinNotice_joined">%1$s entrou na conversa</string>
     <string name="bubble_joinNotice_noAccount">sem conta</string>
@@ -98,6 +99,7 @@
     <string name="bubble_location_open">Abrir no Mapas</string>
     <string name="bubble_location_shared">Localização compartilhada</string>
     <string name="bubble_message_deleted">Mensagem excluída</string>
+    <string name="bubble_meta_pinned_a11y">Mensagem fixada</string>
     <string name="bubble_protection_after_read">Desaparece após a leitura</string>
     <string name="bubble_reply_photo">Foto</string>
     <string name="bubble_reply_story">Story</string>

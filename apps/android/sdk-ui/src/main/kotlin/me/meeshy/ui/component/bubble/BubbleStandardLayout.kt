@@ -118,11 +118,8 @@ internal fun BubbleStandardLayout(
         }
         val bubbleBorder = if (isFreeEmoji || content.isOutgoing) null else receivedTint.stroke
         Column(horizontalAlignment = if (content.isOutgoing) Alignment.End else Alignment.Start) {
-            if (content.pinnedAtIso != null && !content.isDeleted) BubblePinnedIndicator()
-            // iOS pose le badge « Transféré » au-dessus de la bulle, hors de son fond.
-            if (content.isForwarded && !content.isDeleted) {
-                BubbleForwardedBadge(content.forwardedFromName, MeeshyTheme.tokens.textMuted)
-            }
+            // iOS pose « épinglé » et « Transféré » au-dessus de la bulle, hors de son fond.
+            BubbleTopChrome(content)
             // iOS `detachedStoryCitation` : la story répondue est CITÉE au-dessus de la bulle, hors de
             // son fond — jamais aplatie sur une ligne (une humeur garde sa ligne, dans la bulle).
             content.storyReply?.takeUnless { it.isMood }?.let { story ->
@@ -432,31 +429,6 @@ private fun FreeEmojiBody(content: BubbleContent, callbacks: BubbleCallbacks) {
             onRetry = callbacks.onRetry,
             retryBandShown = false,
             modifier = Modifier.alignByBaseline(),
-        )
-    }
-}
-
-/** "Forwarded" / "Forwarded from <conversation>" italic badge at the top of the bubble. */
-@Composable
-internal fun BubbleForwardedBadge(forwardedFromName: String?, onColor: Color) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(bottom = MeeshySpacing.xs),
-    ) {
-        Icon(
-            imageVector = MeeshyIcons.Send,
-            contentDescription = null,
-            tint = onColor.copy(alpha = 0.6f),
-            modifier = Modifier.size(13.dp),
-        )
-        Text(
-            text = forwardedFromName
-                ?.let { stringResource(R.string.bubble_forwarded_from, it) }
-                ?: stringResource(R.string.bubble_forwarded),
-            style = MaterialTheme.typography.labelSmall,
-            fontStyle = FontStyle.Italic,
-            color = onColor.copy(alpha = 0.6f),
-            modifier = Modifier.padding(start = 3.dp),
         )
     }
 }
