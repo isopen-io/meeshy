@@ -20,7 +20,13 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.call.montage.CallMontageCaption
+import me.meeshy.sdk.model.call.montage.CallMontageChoice
+import me.meeshy.sdk.model.call.montage.CallMontageStyle
+import me.meeshy.sdk.model.composer.look.ComposerPhotoFrame
+import me.meeshy.sdk.model.composer.look.ComposerPhotoLook
+import me.meeshy.sdk.model.composer.look.ComposerPhotoRecipe
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -50,12 +56,12 @@ class ComposerRetouchScreenTest {
      * la bande et le rail dans un ordre qu'aucun geste ne produisait (« Terminé » jamais revenu, le Crapaud
      * centré mais pas choisi).
      */
-    private fun show() {
+    private fun show(initial: ComposerPhotoRecipe? = null) {
         val photo = Bitmap.createBitmap(90, 160, Bitmap.Config.ARGB_8888).also { it.eraseColor(Color.RED) }
         compose.setContent {
             CompositionLocalProvider(LocalRetouchPaintContext provides EmptyCoroutineContext) {
                 MeeshyTheme {
-                    ComposerRetouchScreen(source = photo, author = author, onDone = { delivered += it }, onCancel = { cancelled++ })
+                    ComposerRetouchScreen(source = photo, author = author, onDone = { delivered += it }, onCancel = { cancelled++ }, initial = initial)
                 }
             }
         }
@@ -103,7 +109,26 @@ class ComposerRetouchScreenTest {
         val rendered = delivered.single() as ComposerRetouchResult.Rendered
         assertThat(rendered.bitmap.width % 2).isEqualTo(0)
         assertThat(rendered.bitmap.getPixel(rendered.bitmap.width / 2, 1)).isNotEqualTo(Color.RED)
+        assertThat(rendered.recipe.look.frame).isEqualTo(screenFrame)
         assertThat(cancelled).isEqualTo(0)
+    }
+
+    private val screenFrame = ComposerPhotoFrame.Montage(CallMontageChoice.Classic(CallMontageStyle.SCREEN))
+
+    @Test
+    fun `rouvrir une piece retouchee rend son cadre et son texte modifiables, et Termine rend la meme recette`() {
+        val recipe = ComposerPhotoRecipe(look = ComposerPhotoLook(frame = screenFrame), texts = listOf(StoryTextObject(id = "t1", text = "MEESHY")))
+        show(initial = recipe)
+        compose.onNodeWithText("Frames").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Screen").assertIsSelected()
+        compose.onNodeWithText("Frames").performClick()
+        compose.waitForIdle()
+        tapDone()
+        compose.waitUntil(10_000) { delivered.isNotEmpty() }
+        val rendered = delivered.single() as ComposerRetouchResult.Rendered
+        assertThat(rendered.recipe).isEqualTo(recipe)
+        assertThat(rendered.bitmap.getPixel(rendered.bitmap.width / 2, 1)).isNotEqualTo(Color.RED)
     }
 
     @Test

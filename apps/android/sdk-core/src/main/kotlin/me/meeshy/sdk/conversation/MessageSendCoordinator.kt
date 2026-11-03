@@ -23,11 +23,13 @@ import me.meeshy.sdk.model.MessageSticker
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.outbox.OutboxEnqueueResult
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.session.AccountClosedException
 
 /**
@@ -148,7 +150,7 @@ internal class MessageSendCoordinator(
             messageDao.upsertAll(listOf(MessageEntityFactory.local(optimistic, now, LocalSendState.SENDING)))
         }
         try {
-            outboxRepository.enqueue(
+            val queued = outboxRepository.tryEnqueue(
                 OutboxMutation(
                     kind = OutboxKind.SEND_MESSAGE,
                     lane = OutboxLanes.forMessage(conversationId),
@@ -159,6 +161,7 @@ internal class MessageSendCoordinator(
                 ),
                 ticket,
             )
+            if (queued is OutboxEnqueueResult.QueueFull) markSendFailed(cid)
         } catch (closed: AccountClosedException) {
             withContext(NonCancellable) { messageDao.deleteByIds(listOf(cid)) }
             throw closed
@@ -245,6 +248,31 @@ internal class MessageSendCoordinator(
                 cmid = cmid,
             ),
         )
+    }
+
+    /** Relance la bulle en échec [cmid] — son état repasse à l'envoi, sa ligne et ses téléversements repartent. */
+    suspend fun retryByClientMessageId(cmid: String) = retrySend(cmid)
+
+    /** Relance tous les envois en échec du compte : chaque bulle relancée repasse à l'envoi. */
+    suspend fun retryAllFailed(): Int {
+        val revived = outboxRepository.retryAll()
+        revived.forEach { messageDao.updateSendState(it, LocalSendState.SENDING.name) }
+        return revived.size
+    }
+
+    /**
+     * L'utilisateur annule l'envoi EN ATTENTE [cmid] : sa ligne d'outbox ET sa bulle optimiste disparaissent. Un envoi déjà
+     * parti (en vol) n'est pas annulé — sa bulle reste.
+     */
+    suspend fun cancelPendingSend(cmid: String) {
+        if (outboxRepository.cancelPendingSend(cmid)) messageDao.deleteByIds(listOf(cmid))
+    }
+
+    /** Retire la ligne d'outbox d'un envoi échoué (quel que soit son état sauf en vol) et sa bulle optimiste. */
+    suspend fun clearSendMessageRow(cmid: String) {
+        if (outboxRepository.row(cmid)?.state == OutboxState.INFLIGHT.name) return
+        outboxRepository.clearSendMessageRow(cmid)
+        messageDao.deleteByIds(listOf(cmid))
     }
 
     private fun isDefinitive(reason: String?): Boolean = MediaLocationRefusal.isReason(reason) || MediaLoss.isReason(reason)

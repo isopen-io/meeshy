@@ -14,6 +14,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.app.stories.StoryComposerUiState
 import me.meeshy.app.stories.isBlankScene
+import me.meeshy.app.stories.selectedSceneObject
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerSceneInvite as SceneInviteLaw
 
