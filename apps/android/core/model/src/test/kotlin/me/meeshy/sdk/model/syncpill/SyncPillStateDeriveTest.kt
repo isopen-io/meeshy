@@ -25,8 +25,8 @@ class SyncPillStateDeriveTest {
     }
 
     @Test
-    fun `offline with an empty queue is offline-less hidden`() {
-        assertThat(SyncPillState.derive(emptyList(), isOffline = true, now = 0)).isEqualTo(SyncPillState.Hidden)
+    fun `offline with an empty queue is still offline, the host just has no entry to show`() {
+        assertThat(SyncPillState.derive(emptyList(), isOffline = true, now = 0)).isEqualTo(SyncPillState.Offline(emptyList()))
     }
 
     @Test

@@ -25,7 +25,7 @@ import me.meeshy.sdk.model.sync.OutboxUiStatus
 public fun OutboxEntity.toUiItem(): OutboxUiItem? {
     val outboxKind = kindEnum ?: return null
     val facts = OutboxRowFacts.pillFacts(outboxKind)
-    val payload = parseObject(payload)
+    val body = parseObject(payload)
     val base = OutboxUiItem(
         id = cmid,
         kind = facts.kind,
@@ -40,10 +40,10 @@ public fun OutboxEntity.toUiItem(): OutboxUiItem? {
     )
     val conversationId = lane.removePrefix(MESSAGE_LANE_PREFIX).takeIf { lane.startsWith(MESSAGE_LANE_PREFIX) && it.isNotBlank() }
     return when (outboxKind) {
-        OutboxKind.SEND_MESSAGE -> messageItem(base, payload, e2ee = false)
-        OutboxKind.SEND_E2EE_MESSAGE -> messageItem(base, payload, e2ee = true)
+        OutboxKind.SEND_MESSAGE -> messageItem(base, body, e2ee = false)
+        OutboxKind.SEND_E2EE_MESSAGE -> messageItem(base, body, e2ee = true)
         OutboxKind.EDIT_MESSAGE -> base.copy(
-            titlePreview = payload.string("content")?.takeIf { it.isNotEmpty() }?.let(OutboxUiProjection::truncatePreview),
+            titlePreview = body.string("content")?.takeIf { it.isNotEmpty() }?.let(OutboxUiProjection::truncatePreview),
             iconKind = OutboxUiIcon.TEXT,
             source = mutationSource(conversationId, targetId),
         )
@@ -52,16 +52,16 @@ public fun OutboxEntity.toUiItem(): OutboxUiItem? {
             source = mutationSource(conversationId, targetId),
         )
         OutboxKind.ADD_REACTION, OutboxKind.REMOVE_REACTION -> base.copy(
-            titlePreview = payload.string("emoji"),
+            titlePreview = body.string("emoji"),
             iconKind = OutboxUiIcon.REACTION,
-            source = mutationSource(payload.string("conversationId"), targetId),
+            source = mutationSource(body.string("conversationId"), targetId),
         )
         OutboxKind.PUBLISH_STORY -> base.copy(
             iconKind = OutboxUiIcon.IMAGE,
             source = OutboxNavigationSource.forStory(targetId.takeUnless { it.startsWith(PENDING_STORY_PREFIX) }),
         )
         OutboxKind.CREATE_COMMENT -> base.copy(
-            titlePreview = payload.string("content")?.takeIf { it.isNotEmpty() }?.let(OutboxUiProjection::truncatePreview),
+            titlePreview = body.string("content")?.takeIf { it.isNotEmpty() }?.let(OutboxUiProjection::truncatePreview),
             iconKind = OutboxUiIcon.TEXT,
             source = OutboxNavigationSource.forPost(targetId),
         )
@@ -71,7 +71,7 @@ public fun OutboxEntity.toUiItem(): OutboxUiItem? {
             source = OutboxNavigationSource.forPost(targetId),
         )
         OutboxKind.CREATE_POST -> base.copy(
-            titlePreview = payload.string("content")?.takeIf { it.isNotEmpty() }?.let(OutboxUiProjection::truncatePreview),
+            titlePreview = body.string("content")?.takeIf { it.isNotEmpty() }?.let(OutboxUiProjection::truncatePreview),
             iconKind = OutboxUiIcon.TEXT,
         )
         else -> base
@@ -88,7 +88,7 @@ private fun OutboxEntity.messageItem(base: OutboxUiItem, payload: JsonObject?, e
     val protectedContent = e2ee || payload.flag("isViewOnce") || payload.flag("isBlurred") ||
         payload.string("expiresAt") != null || (payload.int("ephemeralDuration") ?: 0) > 0
     val content = payload.string("content")?.takeIf { it.isNotEmpty() && !protectedContent }
-    val mediaIcon = mediaIcon(payload.string("messageType"), attachmentIds)
+    val mediaIcon = iconForMedia(payload.string("messageType"), attachmentIds)
     val (icon, preview) = when {
         content != null -> OutboxUiIcon.TEXT to OutboxUiProjection.truncatePreview(content)
         mediaIcon != null -> mediaIcon to mediaGlyph(mediaIcon)
@@ -102,7 +102,7 @@ private fun OutboxEntity.messageItem(base: OutboxUiItem, payload: JsonObject?, e
     )
 }
 
-private fun mediaIcon(messageType: String?, attachmentCount: Int): OutboxUiIcon? = when (messageType?.lowercase()) {
+private fun iconForMedia(messageType: String?, attachmentCount: Int): OutboxUiIcon? = when (messageType?.lowercase()) {
     "audio" -> OutboxUiIcon.AUDIO
     "image" -> OutboxUiIcon.IMAGE
     "video" -> OutboxUiIcon.VIDEO
