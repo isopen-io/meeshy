@@ -521,11 +521,6 @@ struct ComposerSceneSurface: View {
     @State private var sceneCardFrame: CGRect = .null
     @State private var restSceneSideInset: CGFloat = 0
 
-    /// Un panneau, une feuille ou le clavier réduisent la scène (`visibleBottom`).
-    private var sceneIsLifted: Bool {
-        sceneLiftInset > 0 || anchoredSheetTop != nil || editingTextId != nil
-    }
-
     /// Le cadre de la scène LIBRE, dans le même repère que la carte : le rail
     /// droit s'y borne à la hauteur de la carte (#10542).
     @State private var freeZoneFrame: CGRect = .null
@@ -590,11 +585,7 @@ struct ComposerSceneSurface: View {
         }
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
         .onPreferenceChange(ComposerSceneCardWidthPreferenceKey.self) { sceneCardWidth = $0 }
-        .onPreferenceChange(ComposerSceneCardFrameKey.self) { carte in
-            sceneCardFrame = carte
-            restSceneSideInset = ComposerRestChrome.sceneSideInset(card: carte, sceneIsLifted: sceneIsLifted,
-                                                                   current: restSceneSideInset)
-        }
+        .onPreferenceChange(ComposerSceneCardFrameKey.self) { sceneCardFrame = $0 }
         .onPreferenceChange(ComposerFreeZoneFrameKey.self) { freeZoneFrame = $0 }
         .onPreferenceChange(ComposerLowerFloorsHeightKey.self) { lowerFloorsHeight = $0 }
         // **La bascule outil <-> scène se fait en fondu**, coupé sous
@@ -687,6 +678,9 @@ struct ComposerSceneSurface: View {
                 .offset(y: zone.minY + lift.offsetY)
                 .animation(keyboard.liftAnimation(reduceMotion: reduceMotion, now: Date()), value: lift)
         }
+        .onGeometryChange(for: CGFloat.self) {
+            ComposerRestChrome.sceneSideInset(layer: $0.frame(in: .global), aspectRatio: aspectRatio)
+        } action: { restSceneSideInset = $0 }
         .padding(ComposerSceneRailsInsets.insets(arrangement: arrangement, showsSlideRow: showsRailsSlideRow))
         .ignoresSafeArea(.container, edges: arrangement == .rails ? [] : .bottom)
         .ignoresSafeArea(.keyboard)

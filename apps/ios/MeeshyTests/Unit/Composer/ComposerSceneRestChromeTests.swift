@@ -17,23 +17,35 @@ final class ComposerSceneRestChromeTests: XCTestCase {
 
     // MARK: - La scène plus étroite que l'écran
 
-    /// Relevé au simulateur iPhone SE : la scène dessinée commence à 17,5 pt du
-    /// bord ; c'est cet écart que le chrome du repos reprend.
-    func test_sceneSideInset_seLitSurLaCarteDessineeAuRepos() {
-        let carte = CGRect(x: 17.5, y: 12.5, width: 340, height: 604)
-        XCTAssertEqual(ComposerRestChrome.sceneSideInset(card: carte, sceneIsLifted: false, current: 0), 17.5)
-        XCTAssertEqual(ComposerRestChrome.sceneSideInset(card: CGRect(x: -2, y: 0, width: 379, height: 674),
-                                                         sceneIsLifted: false, current: 5), 0,
-                       "une scène plus large que l'écran ne pousse rien")
+    /// Relevé au simulateur iPhone SE : la couche de scène fait 375 × 616 pt,
+    /// la scène 9:16 s'y pose sous 12 pt d'air et commence à 17,6 pt du bord ;
+    /// c'est cet écart que le chrome du repos reprend.
+    func test_sceneSideInset_seLitSurLe916DeLaCoucheDeScene() {
+        let se = ComposerRestChrome.sceneSideInset(layer: CGRect(x: 0, y: 0, width: 375, height: 616),
+                                                   aspectRatio: 9.0 / 16.0)
+        XCTAssertEqual(se, (375 - 604 * 9.0 / 16.0) / 2, accuracy: 0.01)
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(layer: CGRect(x: 20, y: 0, width: 375, height: 616),
+                                                         aspectRatio: 9.0 / 16.0), se + 20, accuracy: 0.01,
+                       "une couche décalée dans la fenêtre décale la scène d'autant")
     }
 
-    func test_sceneSideInset_uneSceneReduite_gardeLEcartDuRepos() {
-        let reduite = CGRect(x: 80, y: 12.5, width: 215, height: 382)
-        XCTAssertEqual(ComposerRestChrome.sceneSideInset(card: reduite, sceneIsLifted: true, current: 17.5), 17.5,
-                       "les options d'une scène réduite ne sautent pas vers elle")
-        XCTAssertEqual(ComposerRestChrome.sceneSideInset(card: .null, sceneIsLifted: false, current: 17.5), 17.5,
-                       "tant que la carte n'est pas mesurée, rien ne bouge")
+    func test_sceneSideInset_uneSceneQuiPrendLaLargeur_nePousseRien() {
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(layer: CGRect(x: 0, y: 0, width: 402, height: 800),
+                                                         aspectRatio: 9.0 / 16.0), 0)
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(layer: .null, aspectRatio: 9.0 / 16.0), 0)
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(layer: .zero, aspectRatio: 9.0 / 16.0), 0)
     }
+
+    /// Le relevé au SE l'a montré : un écart lu sur la carte et suspendu pendant
+    /// une « réduction » restait à 0, la scène passant pour réduite au repos
+    /// (`ComposerSceneLift.restingInset` vaut 4). L'écart se lit sur la couche
+    /// de scène, AVANT toute réduction : aucun état de levée ne le gouverne.
+    func test_lEcartDuRepos_seLitSurLaCoucheDeScene_jamaisSurLaLevee() throws {
+        let surface = try ComposerSceneArrangementTests.source("ComposerSceneSurface.swift")
+        XCTAssertTrue(surface.contains("ComposerRestChrome.sceneSideInset(layer:"))
+        XCTAssertFalse(surface.contains("sceneIsLifted"))
+    }
+
 
     // MARK: - La colonne
 

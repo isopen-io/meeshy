@@ -106,14 +106,17 @@ nonisolated enum ComposerRestChrome {
 
     static func showsSlideRow(slideCount: Int) -> Bool { slideCount >= 2 }
 
-    /// **L'écart entre le bord de l'écran et celui de la scène dessinée**, où
-    /// ✕, ↶ ↷ et la colonne se calent : sur un écran court (iPhone SE), la
-    /// scène 9:16 prend toute la hauteur et laisse une marge de chaque côté.
-    /// Il se lit sur la carte dessinée au REPOS ; une scène réduite (panneau,
-    /// feuille, clavier) le garde, pour que ses options ne sautent pas.
-    static func sceneSideInset(card: CGRect, sceneIsLifted: Bool, current: CGFloat) -> CGFloat {
-        guard !sceneIsLifted, !card.isNull, card.minX.isFinite else { return current }
-        return max(0, card.minX)
+    /// **L'écart entre le bord de l'écran et celui de la scène**, où ✕, ↶ ↷
+    /// et la colonne se calent : sur un écran court (iPhone SE), la scène 9:16
+    /// prend toute la hauteur et laisse une marge de chaque côté. Il se lit sur
+    /// la couche de scène, AVANT toute réduction : un panneau, une feuille ou le
+    /// clavier réduisent la scène sans déplacer ses options.
+    static func sceneSideInset(layer: CGRect, aspectRatio ratio: CGFloat) -> CGFloat {
+        guard !layer.isNull, layer.minX.isFinite else { return 0 }
+        let zone = ComposerSceneFit.zone(in: layer.size, aspectRatio: ratio)
+        let scene = ComposerSceneFit.frame(in: zone, aspectRatio: ratio)
+        guard scene.width > 0 else { return 0 }
+        return max(0, layer.minX + scene.minX)
     }
 
     static func sceneIsReduced(_ state: State) -> Bool {
