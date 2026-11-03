@@ -49,6 +49,7 @@ import java.time.ZoneId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
@@ -201,9 +202,12 @@ internal fun ChatListHost(
     val affordanceMessages = remember(state.messages) {
         state.messages.map { it.toAffordanceMessage() }
     }
+    // Seuil iOS (`nearBottomFollowThreshold`, 200 pt) : sous cette distance au bas, le bouton « dernier
+    // message » reste caché ; la tolérance en rangées d'avant garde son rôle pour les rangées hautes.
+    val nearBottomThresholdPx = with(LocalDensity.current) { ChatScrollGeometry.NEAR_BOTTOM_THRESHOLD_DP.dp.toPx() }
     val isNearBottom by remember(listItems) {
         derivedStateOf {
-            ChatScrollGeometry.isNearBottom(
+            listState.isNearBottomPx(nearBottomThresholdPx) || ChatScrollGeometry.isNearBottom(
                 edgeIndex = ChatScrollGeometry.bottomEdgeIndex(
                     firstVisibleIndex = listState.firstVisibleItemIndex,
                     lastVisibleIndex = listState.lastVisibleItemIndex(),
@@ -337,6 +341,16 @@ internal fun ChatListHost(
     LaunchedEffect(affordanceMessages, isAtPresent) {
         scrollAffordance = ScrollAffordance.next(scrollAffordance, affordanceMessages, isAtPresent)
     }
+    // Un défilement programmatique (saut vers une citation, retour au bas) ne passe par aucun geste :
+    // à son arrêt, le compteur et l'aperçu se resynchronisent sur la position RÉELLE (iOS `noteNearBottomTransition`).
+    val latestAffordanceMessages by rememberUpdatedState(affordanceMessages)
+    val latestAtPresent by rememberUpdatedState(isAtPresent)
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .filter { settled -> !settled }
+            .collect { scrollAffordance = ScrollAffordance.next(scrollAffordance, latestAffordanceMessages, latestAtPresent) }
+    }
 
     // #13995 — la preuve d'affichage de la flamme-œil : les bulles que le fil MONTRE.
     val shownItems by rememberUpdatedState(renderedItems)
@@ -353,23 +367,16 @@ internal fun ChatListHost(
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { actions.consumeAfterReadOnExit() }
     val viewOnceConsumer = remember(actions) { ViewOnceConsumer { id -> actions.consumeViewOnce(id) } }
 
+    // ROULEAU : l'ancien est demandé à 4 hauteurs d'écran du bord chargé — on ne le frappe jamais.
+    // Le nombre de rangées est dans la clé : une page arrivée trop courte relance la demande.
     LaunchedEffect(listState) {
         snapshotFlow {
-            ChatScrollGeometry.topEdgeIndex(
-                firstVisibleIndex = listState.firstVisibleItemIndex,
-                lastVisibleIndex = listState.lastVisibleItemIndex(),
-                orientation = orientation,
-            )
+            val lastIndex = shownItems.lastIndex
+            val viewportPx = (listState.layoutInfo.viewportEndOffset - listState.layoutInfo.viewportStartOffset).toFloat()
+            ChatScrollGeometry.shouldLoadOlder(listState.distanceToOldEdgePx(lastIndex), viewportPx) to lastIndex
         }
             .distinctUntilChanged()
-            .collect { index ->
-                val nearOldEnd = ChatScrollGeometry.isNearOldEnd(
-                    edgeIndex = index,
-                    lastIndex = listItems.lastIndex,
-                    orientation = orientation,
-                )
-                if (nearOldEnd) actions.loadOlder()
-            }
+            .collect { (nearOldEdge, _) -> if (nearOldEdge) actions.loadOlder() }
     }
 
     val storageAccess = rememberPermissionFlow()

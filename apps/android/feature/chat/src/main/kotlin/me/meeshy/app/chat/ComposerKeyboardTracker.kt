@@ -59,12 +59,13 @@ internal fun rememberComposerKeyboardState(): ComposerKeyboardState {
 }
 
 /**
- * La réserve basse du fil : elle suit l'inset tel quel, et ne s'anime sur la durée du clavier que
- * pendant un mouvement sans insets image par image ([ChatScrollGeometry.bottomMarginAnimationMs]).
+ * La réserve basse du fil : elle suit l'inset tel quel pendant un mouvement de clavier avec insets
+ * image par image, la durée du clavier sans eux, et la courbe courte du composeur quand seul
+ * celui-ci change ([ChatScrollGeometry.bottomInsetAnimationMs]) — jamais un saut en une image.
  */
 @Composable
 internal fun rememberKeyboardFollowingInset(target: Dp, keyboard: ComposerKeyboardState): Dp {
-    val ms = ChatScrollGeometry.bottomMarginAnimationMs(keyboard.transition, SystemClock.uptimeMillis())
+    val ms = ChatScrollGeometry.bottomInsetAnimationMs(keyboard.transition, SystemClock.uptimeMillis())
     val animated by animateDpAsState(target, if (ms == 0) snap<Dp>() else tween<Dp>(ms), label = "list-bottom-inset")
     return animated
 }
