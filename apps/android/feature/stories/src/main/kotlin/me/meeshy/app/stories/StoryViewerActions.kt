@@ -10,6 +10,7 @@ import me.meeshy.sdk.model.share.ShareCard
 import me.meeshy.sdk.model.share.ShareCards
 import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.sdk.model.story.StoryOptionsMenuEntry
+import me.meeshy.sdk.model.story.StoryTranscriptState
 import me.meeshy.feature.stories.R
 import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
@@ -89,9 +90,23 @@ internal fun rememberStoryViewerActions(
             haptics.light()
             viewModel.repostCurrentStory()
         },
-        entryHandlers = mapOf(StoryOptionsMenuEntry.Fullscreen to fullscreenMenuEntry(fullscreen, haptics)),
+        entryHandlers = buildMap {
+            put(StoryOptionsMenuEntry.Fullscreen, fullscreenMenuEntry(fullscreen, haptics))
+            if (StoryTranscriptState.isAvailable(currentItem?.storyEffects)) put(StoryOptionsMenuEntry.Transcript, transcriptMenuEntry(chrome, haptics))
+        },
     )
 }
+
+/** « Transcription » du menu ⋮ : éteinte par défaut, elle remplace la légende tant qu'elle est demandée. */
+private fun transcriptMenuEntry(chrome: StoryViewerChromeState, haptics: MeeshyHaptics): StoryMenuEntryAction =
+    StoryMenuEntryAction(
+        labelRes = R.string.story_viewer_transcript_title,
+        icon = MeeshyIcons.Subtitles,
+        onClick = {
+            haptics.light()
+            chrome.transcript = chrome.transcript.toggled()
+        },
+    )
 
 /** « Plein écran » / « Quitter le plein écran » du menu ⋮ : la même bascule que le glissé haut (iOS, un comportement, deux entrées). */
 private fun fullscreenMenuEntry(fullscreen: StoryFullscreenSession, haptics: MeeshyHaptics): StoryMenuEntryAction =
