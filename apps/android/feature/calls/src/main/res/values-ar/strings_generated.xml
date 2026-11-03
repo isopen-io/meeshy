@@ -162,6 +162,7 @@
     <string name="call_signal_fair">إشارة متوسطة</string>
     <string name="call_signal_lost">إشارة ضعيفة جدًا</string>
     <string name="call_signal_poor">إشارة ضعيفة</string>
+    <string name="call_starter_busy">هناك مكالمة جارية بالفعل</string>
     <string name="call_transcript_participant">مشارك</string>
     <string name="call_transcript_show_original">عرض النص الأصلي</string>
     <string name="call_transcript_show_translated">عرض الترجمة</string>
@@ -169,4 +170,5 @@
     <string name="call_zoom_cycle_hint">المس للانتقال إلى مستوى التكبير التالي</string>
     <string name="call_zoom_hint">اسحب لأعلى أو لأسفل للتكبير. على الشاشة، اضغط بإصبعين على صورتك؛ انقر مرتين للعودة إلى 1×</string>
     <string name="call_zoom_label">تكبير كاميرتي</string>
+    <string name="permission_microphone_denied">تم رفض الميكروفون — اضغط لفتح الإعدادات</string>
 </resources>

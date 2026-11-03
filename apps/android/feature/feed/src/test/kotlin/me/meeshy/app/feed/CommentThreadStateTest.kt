@@ -342,3 +342,24 @@ class CommentThreadStateTest {
         assertThat(CommentThreadLayout.remainingReplies(total = 2, shown = 5)).isEqualTo(0)
     }
 }
+
+class CommentThreadHeadResyncTest {
+    private fun comment(id: String) = me.meeshy.sdk.model.ApiPostComment(id = id)
+
+    @org.junit.Test
+    fun `a head resync adds unseen rows on top and keeps the watermark`() {
+        val scrolled = CommentThreadState().appended(listOf(comment("c2"), comment("c1")), "c1", true)
+
+        val next = scrolled.headResynced(listOf(comment("c3"), comment("c2")))
+
+        com.google.common.truth.Truth.assertThat(next.comments.map { it.id }).containsExactly("c3", "c2", "c1").inOrder()
+        com.google.common.truth.Truth.assertThat(next.cursor).isEqualTo("c1")
+    }
+
+    @org.junit.Test
+    fun `a head resync with nothing new is the same thread`() {
+        val scrolled = CommentThreadState().appended(listOf(comment("c1")), null, false)
+
+        com.google.common.truth.Truth.assertThat(scrolled.headResynced(listOf(comment("c1")))).isSameInstanceAs(scrolled)
+    }
+}

@@ -210,6 +210,8 @@ data class ApiMessage(
     @Serializable(with = LossyApiTextTranslationListSerializer::class)
     val translations: List<ApiTextTranslation> = emptyList(),
     val reactionSummary: Map<String, Int>? = null,
+    /** Les lignes de réaction persistées (qui a réagi, hors-ligne) ; absent du fil, écrit par [ReactionLedger]. */
+    val reactionRows: List<ReactionRow>? = null,
     val deliveredCount: Int = 0,
     val readCount: Int = 0,
     val readByAllAt: String? = null,

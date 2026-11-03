@@ -50,6 +50,7 @@
     <string name="route_title_starred">Mensagens favoritas</string>
     <string name="route_title_story">Story</string>
     <string name="route_title_tracking_links">Links de rastreamento</string>
+    <string name="share_sending">Enviando…</string>
     <string name="upgrade_required_action">Atualizar</string>
     <string name="upgrade_required_message">Esta versão do Meeshy não consegue mais se comunicar com o servidor. Instale a versão mais recente para continuar.</string>
     <string name="upgrade_required_min_version">Versão mínima: %1$s</string>

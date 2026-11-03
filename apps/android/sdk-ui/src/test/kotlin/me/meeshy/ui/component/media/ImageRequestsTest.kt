@@ -19,7 +19,7 @@ class ImageRequestsTest {
 
     @Test fun `la cle memoire porte le palier de taille, la cle disque reste l url`() {
         val request = ImageRequests.build(context, url, targetWidthPx = 360, allowNetwork = true)
-        assertThat(request.memoryCacheKey).isEqualTo("$url#w384")
+        assertThat(request.memoryCacheKey?.key).isEqualTo("$url#w384")
         assertThat(request.diskCacheKey).isEqualTo(url)
     }
 

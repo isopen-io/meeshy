@@ -44,6 +44,8 @@ dependencies {
     implementation(libs.work.runtime)
     implementation(libs.coil.compose)
     implementation(libs.play.review.ktx)
+    // lot: cache-purge-attribution-service — la purge par clé lit et vide les SimpleCache Media3 (audio, vidéo).
+    implementation(libs.androidx.media3.datasource)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 
