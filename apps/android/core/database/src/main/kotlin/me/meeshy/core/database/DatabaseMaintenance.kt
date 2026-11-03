@@ -19,7 +19,7 @@ public class DatabaseMaintenance(private val database: MeeshyDatabase) {
     public fun ensureIncrementalAutoVacuum(): Boolean {
         val db = writable() ?: return false
         if (autoVacuumMode(db) == INCREMENTAL) return false
-        return run("PRAGMA auto_vacuum=$INCREMENTAL") && run("VACUUM")
+        return run("PRAGMA auto_vacuum=2") && run("VACUUM")
     }
 
     /** Tout l'entretien, dans l'ordre : mode, pages libres, journal. */
@@ -36,22 +36,8 @@ public class DatabaseMaintenance(private val database: MeeshyDatabase) {
         null
     }
 
-    /**
-     * En WAL, une lecture hors transaction part sur une connexion secondaire, qui garde le mode d'avant le `VACUUM` tant
-     * qu'elle n'a pas relu l'en-tête : l'entretien reconstruirait le fichier à chaque passage. Une transaction prend la
-     * connexion principale, celle du `VACUUM`, et relit l'en-tête.
-     */
-    private fun <T> onPrimary(db: SupportSQLiteDatabase, block: () -> T): T {
-        db.beginTransaction()
-        try {
-            return block().also { db.setTransactionSuccessful() }
-        } finally {
-            db.endTransaction()
-        }
-    }
-
     private fun autoVacuumMode(db: SupportSQLiteDatabase): Int = try {
-        onPrimary(db) { db.query("PRAGMA auto_vacuum").use { if (it.moveToFirst()) it.getInt(0) else 0 } }
+        db.query("PRAGMA auto_vacuum").use { if (it.moveToFirst()) it.getInt(0) else 0 }
     } catch (_: Exception) {
         0
     }

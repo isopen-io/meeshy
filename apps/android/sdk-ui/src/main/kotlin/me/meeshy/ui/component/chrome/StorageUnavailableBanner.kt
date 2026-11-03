@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,7 +20,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.R
-import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.LocalMeeshyTokens
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -41,7 +42,7 @@ public fun StorageUnavailableBanner(onClick: () -> Unit, modifier: Modifier = Mo
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(MeeshyIcons.WarningFilled, contentDescription = null, tint = tokens.warning, modifier = Modifier.size(18.dp))
+        Icon(Icons.Filled.Warning, contentDescription = null, tint = tokens.warning, modifier = Modifier.size(18.dp))
         Text(
             text = stringResource(R.string.storage_unavailable_banner),
             color = tokens.textPrimary,

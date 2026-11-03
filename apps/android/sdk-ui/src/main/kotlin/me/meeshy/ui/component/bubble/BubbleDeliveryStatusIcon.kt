@@ -1,6 +1,12 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -15,7 +21,6 @@ import me.meeshy.sdk.model.DeliveryGlyphTone
 import me.meeshy.sdk.model.DeliveryGlyphs
 import me.meeshy.sdk.model.ReadShade
 import me.meeshy.ui.R
-import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -66,12 +71,12 @@ internal fun DeliveryGlyphIcon(glyph: DeliveryGlyph, metaColor: Color, readTint:
     val description = glyph.label?.let { stringResource(deliveryLabelRes(it)) }
     val (icon, size) = when (glyph.shape) {
         DeliveryGlyphShape.None -> return
-        DeliveryGlyphShape.Clock -> MeeshyIcons.ScheduleFilled to 12.dp
-        DeliveryGlyphShape.Hourglass -> MeeshyIcons.Hourglass to 12.dp
-        DeliveryGlyphShape.Check -> MeeshyIcons.Done to 13.dp
+        DeliveryGlyphShape.Clock -> Icons.Filled.Schedule to 12.dp
+        DeliveryGlyphShape.Hourglass -> Icons.Filled.HourglassEmpty to 12.dp
+        DeliveryGlyphShape.Check -> Icons.Filled.Done to 13.dp
         DeliveryGlyphShape.DoubleCheck ->
-            MeeshyIcons.DoneAll to if (glyph.tone == DeliveryGlyphTone.Read) 15.dp else 14.dp
-        DeliveryGlyphShape.ErrorCircle -> MeeshyIcons.ErrorFilled to 12.dp
+            Icons.Filled.DoneAll to if (glyph.tone == DeliveryGlyphTone.Read) 15.dp else 14.dp
+        DeliveryGlyphShape.ErrorCircle -> Icons.Filled.Error to 12.dp
     }
     Icon(imageVector = icon, contentDescription = description, tint = tint, modifier = Modifier.size(size))
 }

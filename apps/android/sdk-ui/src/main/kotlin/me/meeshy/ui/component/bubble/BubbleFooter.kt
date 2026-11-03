@@ -10,6 +10,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Autorenew
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,7 +34,6 @@ import me.meeshy.sdk.model.DeliveryGlyphs
 import me.meeshy.ui.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
-import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -115,7 +117,7 @@ private fun BubbleResendButton(onRetry: () -> Unit) {
 internal fun BubbleEditMarkView(mark: BubbleEditMark, color: Color) {
     when (mark) {
         BubbleEditMark.Edited -> Icon(
-            imageVector = MeeshyIcons.EditFilled,
+            imageVector = Icons.Filled.Edit,
             contentDescription = stringResource(R.string.bubble_edited),
             tint = color,
             modifier = Modifier.size(10.dp),
@@ -124,7 +126,7 @@ internal fun BubbleEditMarkView(mark: BubbleEditMark, color: Color) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
         ) {
-            Icon(MeeshyIcons.EditFilled, contentDescription = null, tint = color, modifier = Modifier.size(10.dp))
+            Icon(Icons.Filled.Edit, contentDescription = null, tint = color, modifier = Modifier.size(10.dp))
             Text(
                 text = stringResource(R.string.bubble_footer_edited_by_moderator),
                 fontSize = MeeshyFontSize.small,
@@ -145,7 +147,7 @@ internal fun BubbleEditMarkView(mark: BubbleEditMark, color: Color) {
                 ).value
             }
             Icon(
-                imageVector = MeeshyIcons.Autorenew,
+                imageVector = Icons.Filled.Autorenew,
                 contentDescription = stringResource(R.string.bubble_footer_saving_edit),
                 tint = color,
                 modifier = Modifier.size(10.dp).rotate(angle),
