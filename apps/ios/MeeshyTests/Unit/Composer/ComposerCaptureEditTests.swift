@@ -363,9 +363,9 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(session.editAspect), 0.46, accuracy: 0.0001, "on retouche ce qu'on a cadré")
         session.setEditAspect(0.01)
         XCTAssertEqual(try XCTUnwrap(session.editAspect), ComposerEditScene.aspectRange.lowerBound, accuracy: 0.0001)
-        session.applyCropPreset(.original)
+        ComposerCropFlow.apply(.original, to: session)
         XCTAssertEqual(try XCTUnwrap(session.editAspect), 0.75, accuracy: 0.0001)
-        session.applyCropPreset(.square)
+        ComposerCropFlow.apply(.square, to: session)
         XCTAssertEqual(try XCTUnwrap(session.editAspect), 1, accuracy: 0.0001)
         session.cancelEditing()
         XCTAssertNil(session.editAspect, "la scène de retouche part avec la retouche")
@@ -401,7 +401,7 @@ final class ComposerCaptureEditTests: XCTestCase {
         let avant = session.editAspect
         session.isRenderingLook = true
         session.setEditAspect(1.5)
-        session.applyCropPreset(.landscape)
+        ComposerCropFlow.apply(.landscape, to: session)
         XCTAssertEqual(session.editAspect, avant, "ce qui part est ce qu'on voyait en validant")
     }
 
