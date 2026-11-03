@@ -478,9 +478,17 @@ class PostCommentsViewModel @Inject constructor(
                         val page = result.data
                         val more = page.size >= PAGE_SIZE
                         val nextCursor = if (more) page.lastOrNull()?.id else null
+                        val served = persistBaseline
                         persistBaseline = null
                         networkConfirmed = true
-                        thread.update { if (cursor == null) it.mergedFirstPage(page, nextCursor, more) else it.appended(page, nextCursor, more) }
+                        val pageIds = page.mapTo(HashSet()) { it.id }
+                        val vanished = if (cursor == null && served != null) {
+                            served.take(page.size).filter { it.id !in pageIds }.mapTo(HashSet()) { it.id }
+                        } else emptySet()
+                        thread.update {
+                            if (cursor != null) it.appended(page, nextCursor, more)
+                            else it.copy(comments = it.comments.filter { row -> row.id !in vanished }).mergedFirstPage(page, nextCursor, more)
+                        }
                         likes.update { it.seeded(page, HEART_EMOJI) }
                         status.update { it.copy(isLoading = false, isLoadingMore = false, error = null) }
                         preloadReplyPreviews()
