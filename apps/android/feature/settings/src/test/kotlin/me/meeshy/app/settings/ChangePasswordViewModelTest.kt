@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.auth.AuthRepository
@@ -115,10 +116,10 @@ class ChangePasswordViewModelTest {
     }
 
     @Test
-    fun submit_http400_mapsToIncorrectCurrent() = runTest(dispatcher) {
+    fun submit_codeCurrentPasswordIncorrect_mapsToIncorrectCurrent() = runTest(dispatcher) {
         val repository = mockk<UserRepository>()
         coEvery { repository.changePassword(any(), any()) } returns
-            NetworkResult.Failure(ApiError(message = "bad", code = "HTTP_400", httpStatus = 400))
+            NetworkResult.Failure(ApiError(message = "Current password is incorrect", code = "CURRENT_PASSWORD_INCORRECT", httpStatus = 400))
         val sut = vm(repository)
         sut.fillValid()
 
@@ -164,7 +165,7 @@ class ChangePasswordViewModelTest {
     fun editingAField_clearsAPriorError() = runTest(dispatcher) {
         val repository = mockk<UserRepository>()
         coEvery { repository.changePassword(any(), any()) } returns
-            NetworkResult.Failure(ApiError(message = "bad", code = "HTTP_400", httpStatus = 400))
+            NetworkResult.Failure(ApiError(message = "Current password is incorrect", code = "CURRENT_PASSWORD_INCORRECT", httpStatus = 400))
         val sut = vm(repository)
         sut.fillValid()
         sut.submit()
@@ -252,7 +253,7 @@ class ChangePasswordViewModelTest {
     fun `un 400 en mode definition n'est pas un mot de passe actuel incorrect`() = runTest(dispatcher) {
         val repository = mockk<UserRepository>()
         coEvery { repository.changePassword(any(), any()) } returns
-            NetworkResult.Failure(ApiError(message = "Mot de passe trop faible", code = "HTTP_400", httpStatus = 400))
+            NetworkResult.Failure(ApiError(message = "Password requirements: password strength score is 0/4 (minimum: 2/4)", code = "PASSWORD_TOO_WEAK", httpStatus = 400))
         val sut = vm(repository, auth(NetworkResult.Success(false)))
         advanceUntilIdle()
         sut.onNewPasswordChange("newpass12")
@@ -261,24 +262,79 @@ class ChangePasswordViewModelTest {
         sut.submit()
         advanceUntilIdle()
 
-        assertThat(sut.state.value.error).isEqualTo(ChangePasswordError.GENERIC)
-        assertThat(sut.state.value.serverMessage).isEqualTo("Mot de passe trop faible")
+        assertThat(sut.state.value.error).isEqualTo(ChangePasswordError.WEAK)
+    }
+
+    private suspend fun TestScope.submitRejected(error: ApiError, hasPassword: Boolean = true): ChangePasswordUiState {
+        val repository = mockk<UserRepository>()
+        coEvery { repository.changePassword(any(), any()) } returns NetworkResult.Failure(error)
+        val sut = vm(repository, auth(NetworkResult.Success(hasPassword)))
+        advanceUntilIdle()
+        sut.fillValid()
+        sut.submit()
+        advanceUntilIdle()
+        return sut.state.value
     }
 
     @Test
-    fun `une erreur non 400 porte le message du serveur`() = runTest(dispatcher) {
+    fun `un 400 mot de passe trop faible en mode changement n'est pas un actuel incorrect`() = runTest(dispatcher) {
+        val state = submitRejected(
+            ApiError(message = "Password requirements: password strength score is 0/4 (minimum: 2/4)", code = "PASSWORD_TOO_WEAK", httpStatus = 400),
+        )
+        assertThat(state.error).isEqualTo(ChangePasswordError.WEAK)
+    }
+
+    @Test
+    fun `une erreur de validation est un refus generique sans texte brut`() = runTest(dispatcher) {
+        val state = submitRejected(ApiError(message = "Invalid data", code = "VALIDATION_ERROR", httpStatus = 400))
+        assertThat(state.error).isEqualTo(ChangePasswordError.REJECTED)
+    }
+
+    @Test
+    fun `une ancienne passerelle sans code se reconnait au message exact de l'actuel faux`() = runTest(dispatcher) {
+        val state = submitRejected(
+            ApiError(message = "Current password is incorrect", code = "HTTP_400", httpStatus = 400),
+        )
+        assertThat(state.error).isEqualTo(ChangePasswordError.INCORRECT_CURRENT)
+    }
+
+    @Test
+    fun `une ancienne passerelle sans code se reconnait au message trop faible`() = runTest(dispatcher) {
+        val state = submitRejected(
+            ApiError(message = "Password requirements: password strength score is 0/4 (minimum: 2/4)", code = "HTTP_400", httpStatus = 400),
+        )
+        assertThat(state.error).isEqualTo(ChangePasswordError.WEAK)
+    }
+
+    @Test
+    fun `un 400 inconnu sans code n'est jamais un actuel incorrect`() = runTest(dispatcher) {
+        val state = submitRejected(ApiError(message = "bad", code = "HTTP_400", httpStatus = 400))
+        assertThat(state.error).isEqualTo(ChangePasswordError.REJECTED)
+    }
+
+    @Test
+    fun `un 400 actuel faux en mode definition reste un refus sans texte brut`() = runTest(dispatcher) {
+        val state = submitRejected(
+            ApiError(message = "Current password is incorrect", code = "CURRENT_PASSWORD_INCORRECT", httpStatus = 400),
+            hasPassword = false,
+        )
+        assertThat(state.error).isEqualTo(ChangePasswordError.REJECTED)
+    }
+
+    @Test
+    fun `une erreur non 400 reste generique sans texte brut du serveur`() = runTest(dispatcher) {
         val repository = mockk<UserRepository>()
         coEvery { repository.changePassword(any(), any()) } returns
-            NetworkResult.Failure(ApiError(message = "Trop de tentatives", code = "HTTP_429", httpStatus = 429))
+            NetworkResult.Failure(ApiError(message = "Too many requests", code = "HTTP_429", httpStatus = 429))
         val sut = vm(repository)
         sut.fillValid()
 
         sut.submit()
         advanceUntilIdle()
 
-        assertThat(sut.state.value.serverMessage).isEqualTo("Trop de tentatives")
+        assertThat(sut.state.value.error).isEqualTo(ChangePasswordError.GENERIC)
         sut.onNewPasswordChange("newpass123")
-        assertThat(sut.state.value.serverMessage).isNull()
+        assertThat(sut.state.value.error).isNull()
     }
 
     @Test

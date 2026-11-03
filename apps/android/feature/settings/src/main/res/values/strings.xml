@@ -54,6 +54,8 @@
     <string name="change_password_hint_match">Passwords match</string>
     <string name="change_password_hint_different">Different from your current password</string>
     <string name="change_password_error_current">Current password is incorrect</string>
+    <string name="change_password_error_weak">New password is too weak. Choose a longer, less predictable one.</string>
+    <string name="change_password_error_rejected">Password rejected. Check it and try again.</string>
     <!-- Email / phone change (§K) -->
     <string name="account_contact_title">Email &amp; phone</string>
     <string name="account_contact_email_resend">Resend email</string>

@@ -86,7 +86,7 @@ fun ChangePasswordScreen(
         }
     }
     LaunchedEffect(state.isSuccess) { if (state.isSuccess) haptics.success() }
-    LaunchedEffect(state.error, state.serverMessage) { if (state.error != null) haptics.error() }
+    LaunchedEffect(state.error) { if (state.error != null) haptics.error() }
 
     val submit = {
         if (state.canSubmit) {
@@ -156,11 +156,7 @@ fun ChangePasswordScreen(
 
                 state.error?.let { error ->
                     Text(
-                        text = if (error == ChangePasswordError.GENERIC && state.serverMessage != null) {
-                            state.serverMessage.orEmpty()
-                        } else {
-                            stringResource(error.messageRes())
-                        },
+                        text = stringResource(error.messageRes()),
                         style = MaterialTheme.typography.bodySmall,
                         color = MeeshyPalette.Error,
                         textAlign = TextAlign.Center,
@@ -292,6 +288,8 @@ private fun HintRow(text: String, met: Boolean) {
 
 private fun ChangePasswordError.messageRes(): Int = when (this) {
     ChangePasswordError.INCORRECT_CURRENT -> R.string.change_password_error_current
+    ChangePasswordError.WEAK -> R.string.change_password_error_weak
+    ChangePasswordError.REJECTED -> R.string.change_password_error_rejected
     ChangePasswordError.NETWORK -> R.string.change_password_error_network
     ChangePasswordError.GENERIC -> R.string.change_password_error_generic
 }
