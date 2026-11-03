@@ -62,10 +62,17 @@ class SecurityScreensFormWidthTest {
     @get:Rule
     val compose = createComposeRule()
 
+    private fun changePasswordViewModel() = ChangePasswordViewModel(
+        mockk(relaxed = true),
+        mockk<me.meeshy.sdk.auth.AuthRepository>().also {
+            io.mockk.coEvery { it.hasPassword() } returns me.meeshy.sdk.net.NetworkResult.Success(true)
+        },
+    )
+
     @Test
     @Config(qualifiers = TABLET)
     fun `change password fields sit in the centered form column on a tablet`() {
-        val viewModel = ChangePasswordViewModel(mockk(relaxed = true))
+        val viewModel = changePasswordViewModel()
         show { ChangePasswordScreen(onBack = {}, viewModel = viewModel) }
 
         compose.assertInCenteredFormColumn(hasSetTextAction())
@@ -74,7 +81,7 @@ class SecurityScreensFormWidthTest {
     @Test
     @Config(qualifiers = PHONE)
     fun `change password fields keep their phone geometry`() {
-        val viewModel = ChangePasswordViewModel(mockk(relaxed = true))
+        val viewModel = changePasswordViewModel()
         show { ChangePasswordScreen(onBack = {}, viewModel = viewModel) }
 
         compose.assertSpansPhoneWidth(hasSetTextAction(), horizontalPadding = MeeshySpacing.lg)

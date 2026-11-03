@@ -5,6 +5,7 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
+import me.meeshy.core.datastore.SecretVault
 import me.meeshy.core.datastore.TokenVault
 import me.meeshy.sdk.model.security.SecureStore
 import dagger.hilt.components.SingletonComponent
@@ -74,10 +75,11 @@ internal object NetworkModule {
     @Singleton
     fun providesTokenStore(
         @TokenVault store: SecureStore,
+        @SecretVault profileStore: SecureStore,
         backup: SessionBackup,
         consent: SessionBackupConsent,
         shelf: AccountShelf,
-    ): TokenStore = BackedUpTokenStore(EncryptedTokenStore(store), backup, shelf = shelf, consent = consent)
+    ): TokenStore = BackedUpTokenStore(EncryptedTokenStore(store, profileStore), backup, shelf = shelf, consent = consent)
 
     @Provides
     @Singleton

@@ -8,7 +8,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -164,9 +163,6 @@ private fun Modifier.persistentEffects(plan: MessageEffectRenderPlan, shape: Sha
             scaleY = pulseScale
         }
     }
-    if (PersistentEffect.RAINBOW in plan.persistent) {
-        result = result.border(width = 2.dp, brush = RainbowBorderBrush, shape = shape)
-    }
     return result
 }
 
@@ -298,16 +294,3 @@ private fun paletteFor(effect: AppearanceEffect): List<Color> = when (effect) {
     AppearanceEffect.FIREWORKS -> FireworksPalette
     else -> ConfettiPalette
 }
-
-/** Rainbow ring colours — parity with iOS `RainbowEffect`'s angular gradient. */
-private val RainbowBorderBrush: Brush = Brush.sweepGradient(
-    listOf(
-        Color(0xFFEF4444), // red
-        Color(0xFFF97316), // orange
-        Color(0xFFEAB308), // yellow
-        Color(0xFF22C55E), // green
-        Color(0xFF3B82F6), // blue
-        Color(0xFF8B5CF6), // purple
-        Color(0xFFEF4444), // red (loop)
-    ),
-)

@@ -104,6 +104,8 @@ class ConversationListViewModelTest {
             every { this@mockk.participantUnbanned } returns MutableSharedFlow()
             every { this@mockk.unreadUpdated } returns unreadUpdated
             every { this@mockk.messageReceived } returns messageReceived
+            every { this@mockk.messageEdited } returns MutableSharedFlow()
+            every { this@mockk.messageDeleted } returns MutableSharedFlow()
             every { this@mockk.conversationUpdated } returns conversationUpdated
             every { this@mockk.conversationDeleted } returns conversationDeleted
             every { this@mockk.conversationRestored } returns conversationRestored

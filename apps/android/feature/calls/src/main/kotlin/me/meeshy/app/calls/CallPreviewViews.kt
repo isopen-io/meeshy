@@ -41,7 +41,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 import org.webrtc.EglBase
 import org.webrtc.VideoTrack
 
-private const val PREVIEW_SCRIM_ALPHA = 0.45f
+private const val PREVIEW_SCRIM_ALPHA = 0.4f
 
 /**
  * Chez l'appelé : la vidéo de l'appelant plein écran DERRIÈRE l'écran de sonnerie (iOS

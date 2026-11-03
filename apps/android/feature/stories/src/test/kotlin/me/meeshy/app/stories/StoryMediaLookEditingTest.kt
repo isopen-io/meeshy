@@ -74,12 +74,12 @@ class StoryMediaLookEditingTest {
     }
 
     @Test
-    fun `filtres et cadres s offrent a une image posee ou de fond, pas a une video`() {
-        val s = state(placed = listOf("m1", "v1"), background = "bg", videos = setOf("v1"))
+    fun `filtres et cadres s offrent a une image comme a une video, posee ou de fond`() {
+        val s = state(placed = listOf("m1", "v1"), background = "bg", videos = setOf("v1", "bg"))
 
         assertThat(s.mediaSectionsFor("m1")).contains(lookSection)
         assertThat(s.mediaSectionsFor("bg")).contains(lookSection)
-        assertThat(s.mediaSectionsFor("v1")).doesNotContain(lookSection)
+        assertThat(s.mediaSectionsFor("v1")).contains(lookSection)
     }
 
     @Test

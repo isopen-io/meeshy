@@ -45,9 +45,12 @@ class ReelVideoSurfaceAudioFocusTest {
 
     // Media3 1.10 tient le focus audio sur le fil de LECTURE (ExoPlayerImplInternal) : la perte y transite avant de revenir
     // à l'écouteur du fil principal. On fait tourner la boucle principale jusqu'à ce retour, comme runMainLooperUntil de Media3.
+    // La recomposition (donc l'effet qui suit `muted`) n'avance que par l'horloge du test : sans `waitForIdle` DANS la boucle,
+    // un changement d'état posé par le test n'atteignait jamais le lecteur et la condition attendue ne venait jamais.
     private fun idleUntil(condition: () -> Boolean) {
         val deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos()
         while (!condition() && System.nanoTime() < deadline) {
+            compose.waitForIdle()
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(10))
             Thread.sleep(1)
         }
