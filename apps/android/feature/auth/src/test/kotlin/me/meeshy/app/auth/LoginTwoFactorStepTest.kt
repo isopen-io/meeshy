@@ -1,8 +1,9 @@
 package me.meeshy.app.auth
 
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import me.meeshy.ui.theme.MeeshyTheme
@@ -16,7 +17,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class LoginTwoFactorStepTest {
     @get:Rule
-    val compose = createComposeRule()
+    val compose = createAndroidComposeRule<ComponentActivity>()
 
     private fun show(state: AuthUiState, onCancel: () -> Unit = {}) {
         compose.setContent {
@@ -38,6 +39,24 @@ class LoginTwoFactorStepTest {
         show(AuthUiState(twoFactorToken = "t", twoFactorCode = "123456"))
 
         compose.onNodeWithText("Log in").assertIsEnabled()
+    }
+
+    @Test
+    fun `the sign in button is enabled for a full backup code`() {
+        show(AuthUiState(twoFactorToken = "t", twoFactorCode = "K7MP-Q2RX"))
+
+        compose.onNodeWithText("Log in").assertIsEnabled()
+    }
+
+    @Test
+    fun `system back cancels the step`() {
+        var cancelled = 0
+        show(AuthUiState(twoFactorToken = "t"), onCancel = { cancelled++ })
+
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.waitForIdle()
+
+        org.junit.Assert.assertEquals(1, cancelled)
     }
 
     @Test

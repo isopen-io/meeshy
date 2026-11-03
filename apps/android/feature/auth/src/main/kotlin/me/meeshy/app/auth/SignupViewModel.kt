@@ -76,11 +76,23 @@ data class SignupUiState(
     val globalError: SignupSubmitError?
         get() = submitError?.takeIf { it !is SignupSubmitError.Field }
 
-    /** Le nom affiché montré dans la carte : tapé s'il l'a été, dérivé de l'adresse sinon. */
-    val shownDisplayName: String get() = if (displayNameEdited) form.displayName else form.effectiveDisplayName
+    /** Le texte du champ du nom : la frappe (même vidée) s'il a été touché, la dérivation sinon. */
+    val displayNameInput: String get() = if (displayNameEdited) form.displayName else form.effectiveDisplayName
 
-    /** Le pseudo montré dans la carte : tapé (même vidé) s'il l'a été, dérivé sinon. */
-    val shownUsername: String get() = form.username ?: form.effectiveUsername
+    /** Le texte du champ du pseudo : la frappe (même vidée) s'il a été touché, la dérivation sinon. */
+    val usernameInput: String get() = form.username ?: form.effectiveUsername
+
+    /** Le filigrane du nom vidé : la dérivation de l'adresse, celle qui part alors (iOS `placeholder: effectiveDisplayName`). */
+    val displayNamePlaceholder: String get() = form.derivedDisplayName
+
+    /** Le filigrane du pseudo vidé : la dérivation de l'adresse, celle qui part alors (iOS `placeholder: effectiveUsername`). */
+    val usernamePlaceholder: String get() = form.derivedUsername
+
+    /** Le nom que la carte MONTRE — texte, ou filigrane quand le champ est blanc — c'est celui qui part. */
+    val shownDisplayName: String get() = form.effectiveDisplayName
+
+    /** Le pseudo que la carte MONTRE — texte, ou filigrane quand le champ est blanc — c'est celui qui part. */
+    val shownUsername: String get() = form.effectiveUsername
 
     /** Les pseudos LIBRES que la passerelle propose quand le pseudo envoyé est pris. */
     val usernameSuggestions: List<String>
