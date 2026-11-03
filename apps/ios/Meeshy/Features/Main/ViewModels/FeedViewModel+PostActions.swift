@@ -61,6 +61,7 @@ extension FeedViewModel {
     }
 
     func repostPost(_ postId: String, content: String? = nil, isQuote: Bool = false) async {
+        guard !PendingPublicationMarker.isPending(postId: postId) else { return }
         do {
             // La RÉFÉRENCE remonte à la racine, le FORMAT reste celui de la
             // carte : reposter depuis le fil le repost-de-story de quelqu'un
@@ -112,6 +113,7 @@ extension FeedViewModel {
     /// hand it off to a `UIActivityViewController` / `ShareLink`.
     @discardableResult
     func sharePost(_ postId: String, platform: String? = nil, generateLink: Bool = false) async -> String? {
+        guard !PendingPublicationMarker.isPending(postId: postId) else { return nil }
         var body: [String: Any] = [:]
         if let platform { body["platform"] = platform }
         if generateLink { body["generateLink"] = true }
