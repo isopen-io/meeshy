@@ -248,7 +248,6 @@ class ComposerLabeledRailsTest {
                 Box(Modifier.size(width = if (wide) 1280.dp else 360.dp, height = if (wide) 752.dp else 692.dp)) {
                     StorySceneFirstLayout(
                         onDismiss = {},
-                        reduced = false,
                         scene = { modifier ->
                             var taps by remember { mutableIntStateOf(0) }
                             Box(modifier.testTag(SCENE).clickable { taps++ }) { Text("taps $taps") }

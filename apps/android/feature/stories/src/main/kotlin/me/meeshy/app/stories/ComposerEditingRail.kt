@@ -103,7 +103,7 @@ internal val StoryComposerUiState.selectionSubject: ComposerSelectionSubject
 internal fun StoryComposerUiState.editingChrome(
     viewfinderArmed: Boolean,
     gestureOpen: Boolean,
-    sceneReduced: Boolean = false,
+    bottomPanelOpen: Boolean = false,
 ): ComposerEditingChrome =
     ComposerEditingChrome.resolve(
         ComposerEditingChrome.Input(
@@ -111,7 +111,7 @@ internal fun StoryComposerUiState.editingChrome(
             drawing = isDrawingActive,
             viewfinderArmed = viewfinderArmed,
             gestureOpen = gestureOpen,
-            sceneReduced = sceneReduced,
+            bottomPanelOpen = bottomPanelOpen,
         ),
     )
 
