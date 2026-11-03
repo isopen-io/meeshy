@@ -1512,4 +1512,40 @@ final class PostDetailViewModelTests: XCTestCase {
                       "le français (rang 1, langue d'origine) doit primer sur le portugais reçu")
         XCTAssertEqual(sut.post?.translations?["pt"]?.text, "Olá")
     }
+
+    // MARK: - #10331 — une publication en file s'annule, elle ne se supprime pas
+
+    func test_deletePost_onPendingPublication_cancelsTheSendWithoutCallingServer() async {
+        let queue = MockOfflineQueue()
+        queue.cancelPendingPublicationResult = .removed
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+        let cmid = ClientMutationId.generate()
+
+        let closed = await sut.deletePost(cmid)
+
+        XCTAssertTrue(closed, "l'envoi est annulé : l'écran se referme")
+        XCTAssertEqual(queue.cancelPendingPublicationCalls, [cmid])
+        XCTAssertEqual(mock.deleteCallCount, 0, "un cmid n'existe pas côté serveur : aucun DELETE ne part")
+    }
+
+    func test_deletePost_onPendingPublicationAlreadySent_keepsTheScreen() async {
+        let queue = MockOfflineQueue()
+        queue.cancelPendingPublicationResult = .notFound
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+
+        let closed = await sut.deletePost(ClientMutationId.generate())
+
+        XCTAssertFalse(closed)
+        XCTAssertEqual(mock.deleteCallCount, 0)
+    }
+
+    func test_deletePost_onServerPost_neverTouchesTheOutbox() async {
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+
+        _ = await sut.deletePost("665f1c2e9b1d4a0012345678")
+
+        XCTAssertTrue(queue.cancelPendingPublicationCalls.isEmpty)
+        XCTAssertEqual(mock.deleteCallCount, 1)
+    }
 }
