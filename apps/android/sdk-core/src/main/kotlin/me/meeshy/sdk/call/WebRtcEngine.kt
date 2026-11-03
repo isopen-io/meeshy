@@ -65,7 +65,8 @@ class WebRtcEngine internal constructor(
         @ApplicationContext appContext: Context,
         activityGate: CallActivityGate,
         microphoneSamples: CallMicrophoneSamples,
-    ) : this(appContext, { buildStack(appContext, microphoneSamples) }, activityGate)
+        remoteSamples: CallRemoteAudioSamples,
+    ) : this(appContext, { buildStack(appContext, microphoneSamples, remoteSamples) }, activityGate)
 
     private val stack = lazy(stackProvider)
     private val media = CallMediaSources(appContext, stack)
@@ -83,6 +84,7 @@ class WebRtcEngine internal constructor(
     private var groupVideoCeiling: CallVideoBudget? = null
     private var cameraBudget: CallVideoBudget = CallVideoBudget.CAMERA
     private var cameraFrozen: Boolean = false
+    private var audioMaxBitrateBps: Int? = null
 
     /** Le contexte EGL partagé ; le lire avant tout appel construit la pile (rendu vidéo). */
     val eglBase: EglBase get() = stack.value.eglBase
@@ -267,13 +269,31 @@ class WebRtcEngine internal constructor(
         applyCameraEncoding()
     }
 
+    /**
+     * Le plafond de débit de l'émetteur audio (iOS `applyAudioEncoding`) : l'échelle de qualité sous le plafond Opus
+     * voix du profil de données. Retenu et réécrit à chaque négociation, car l'émetteur naît avec l'offre ou la réponse.
+     */
+    fun setAudioMaxBitrate(bitrateBps: Int) {
+        audioMaxBitrateBps = bitrateBps
+        applyAudioEncoding()
+    }
+
+    private fun applyAudioEncoding() {
+        val bitrate = audioMaxBitrateBps ?: return
+        val sender = peerConnection?.let { peer ->
+            runCatching { peer.transceivers }.getOrDefault(emptyList())
+                .firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO && !it.isStopped }
+        }?.sender ?: return
+        runCatching { CallSenderTuner.applyAudio(sender, bitrate) }
+    }
+
     /** La caméra sur l'émetteur vidéo du pair de l'appel, sous le plafond du maillage ; l'écran partagé garde le sien. */
     private fun applyCameraEncoding() {
         if (screenShare.isSharing) return
         val sender = primaryVideoSender() ?: return
         val camera = cameraBudget
         val budget = if (cameraFrozen) camera else groupVideoCeiling?.capping(camera) ?: camera
-        runCatching { VideoSenderEncoding.apply(sender, budget) }
+        runCatching { CallSenderTuner.applyVideo(sender, budget) }
     }
 
     private fun primaryVideoSender(): RtpSender? {
@@ -295,6 +315,7 @@ class WebRtcEngine internal constructor(
         if (isOffer) {
             peerConnection?.let { media.attachForOffer(it) }
             applyCameraEncoding()
+            applyAudioEncoding()
             ensureDataChannel()
         }
         val pc = peerConnection ?: throw WebRtcError.NoPeerConnection()
@@ -304,6 +325,7 @@ class WebRtcEngine internal constructor(
     suspend fun setLocalDescription(desc: SessionDescription) {
         applyDescription(desc, local = true)
         applyCameraEncoding()
+        applyAudioEncoding()
         if (desc.type == SessionDescription.Type.OFFER) remoteDescriptions.onLocalOfferSet()
         if (desc.type == SessionDescription.Type.ROLLBACK) remoteDescriptions.onLocalOfferRolledBack()
     }
@@ -327,6 +349,7 @@ class WebRtcEngine internal constructor(
         if (type == DescriptionType.Offer) {
             media.attachForAnswer(pc)
             applyCameraEncoding()
+            applyAudioEncoding()
         }
         remoteDescriptions.onApplied(type, desc.description).forEach { pc.addIceCandidate(it.toIceCandidate()) }
     }
@@ -403,6 +426,7 @@ class WebRtcEngine internal constructor(
         groupVideoCeiling = null
         cameraBudget = CallVideoBudget.CAMERA
         cameraFrozen = false
+        audioMaxBitrateBps = null
         remoteDescriptions.reset()
         configuration = null
         media.releaseVideo()
@@ -422,13 +446,14 @@ class WebRtcEngine internal constructor(
         @Volatile
         private var globalInitDone = false
 
-        fun buildStack(context: Context, microphoneSamples: CallMicrophoneSamples): WebRtcStack {
+        fun buildStack(context: Context, microphoneSamples: CallMicrophoneSamples, remoteSamples: CallRemoteAudioSamples): WebRtcStack {
             ensureGlobalInit(context)
             val egl = EglBase.create()
             val audioDevice = JavaAudioDeviceModule.builder(context)
                 .setUseHardwareAcousticEchoCanceler(true)
                 .setUseHardwareNoiseSuppressor(true)
                 .setSamplesReadyCallback(microphoneSamples.callback)
+                .also { remoteSamples.attachTo(it) }
                 .createAudioDeviceModule()
             val factory = PeerConnectionFactory.builder()
                 .setAudioDeviceModule(audioDevice)

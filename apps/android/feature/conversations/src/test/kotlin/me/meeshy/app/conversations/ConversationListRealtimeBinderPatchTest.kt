@@ -69,6 +69,8 @@ class ConversationListRealtimeBinderPatchTest {
         messageSocketManager = mockk<MessageSocketManager> {
             every { unreadUpdated } returns frames.unread
             every { messageReceived } returns frames.received
+            every { messageEdited } returns MutableSharedFlow()
+            every { messageDeleted } returns MutableSharedFlow()
             every { conversationUpdated } returns frames.updated
             every { conversationDeleted } returns frames.deleted
             every { conversationRestored } returns frames.restored

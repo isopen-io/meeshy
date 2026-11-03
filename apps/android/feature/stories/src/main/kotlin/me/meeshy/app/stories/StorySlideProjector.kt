@@ -45,7 +45,7 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
             .filterNot { it.isBackground }
             .mapNotNull { it.toForegroundMediaView(clipTransitions, media) }
             .let(SceneObjectNumbers::capped)
-        val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
+        val preferredLanguages = StoryContentResolver.readerLanguages(prefs)
         val textObjects = SceneObjectNumbers.capped(storyEffects?.textObjects.orEmpty())
             .map { StoryTextObjectProjection.project(it, preferredLanguages) }
         // UNE lecture par piste, deux faits chacune (#5129).

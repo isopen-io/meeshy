@@ -33,6 +33,7 @@ import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
 import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.composer.SlowModePolicy
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.conversation.OpenConversationRegistry
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
@@ -120,6 +121,7 @@ class ChatViewModel @Inject constructor(
     mentionContacts: MentionContacts = MentionContacts.None,
     /** #14591 — le texte d'un tête-à-tête chiffré de bout en bout part scellé, et le fil relit son clair au coffre. */
     private val endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
+    private val openConversations: OpenConversationRegistry,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -271,6 +273,7 @@ class ChatViewModel @Inject constructor(
     val controllers: ChatControllers = ChatControllers(contributedControllers)
 
     init {
+        openConversations.open(conversationId)
         // Capture the unread count from the cached conversation BEFORE marking it
         // read (which zeroes it), then mark read. The first Room emission carries
         // the current cached value, so this never blocks beyond it.
@@ -635,6 +638,7 @@ class ChatViewModel @Inject constructor(
     override fun onCleared() {
         composer.release()
         controllers.detachAll()
+        openConversations.close(conversationId)
         super.onCleared()
     }
 

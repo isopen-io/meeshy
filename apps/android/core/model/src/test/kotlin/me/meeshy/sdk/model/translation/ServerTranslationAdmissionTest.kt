@@ -28,4 +28,32 @@ class ServerTranslationAdmissionTest {
         assertThat(ServerTranslationAdmission.admitsOutsideConversation(message())).isTrue()
         assertThat(ServerTranslationAdmission.admitsOutsideConversation(message(isEncrypted = true))).isFalse()
     }
+
+    @Test
+    fun `le refus se publie sur la ligne de la langue demandee`() {
+        val refusal = ServerTranslationAdmission.refusalOrNull(
+            message(mode = "e2ee"), "e2ee", false, "de", TranslationRequestFailure.Kind.AUDIO,
+        )
+        assertThat(refusal).isEqualTo(
+            TranslationRequestFailure.serverRefused("m", "de", TranslationRequestFailure.Kind.AUDIO),
+        )
+        assertThat(refusal?.rowKey).isEqualTo("m|de")
+    }
+
+    @Test
+    fun `un fil qui montre un message scelle refuse meme servi sans mode`() {
+        assertThat(
+            ServerTranslationAdmission.refusalOrNull(message(), null, true, "de", TranslationRequestFailure.Kind.TEXT),
+        ).isNotNull()
+        assertThat(
+            ServerTranslationAdmission.refusalOrNull(message(), null, false, "de", TranslationRequestFailure.Kind.TEXT),
+        ).isNull()
+    }
+
+    @Test
+    fun `un message inconnu dans une conversation chiffree est refuse`() {
+        assertThat(
+            ServerTranslationAdmission.refusalOrNull(null, "e2ee", false, "fr", TranslationRequestFailure.Kind.TEXT),
+        ).isNotNull()
+    }
 }

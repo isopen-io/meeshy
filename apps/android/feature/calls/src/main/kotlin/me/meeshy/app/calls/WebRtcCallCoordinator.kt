@@ -9,6 +9,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.plus
 import me.meeshy.sdk.call.CallQualityStatsFeed
+import me.meeshy.sdk.call.CallStatsCollector
 import me.meeshy.sdk.call.WebRtcEngine
 import me.meeshy.sdk.call.inboundAudioLevel
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
@@ -40,9 +41,11 @@ class WebRtcCallCoordinator @Inject constructor(
     @ApplicationContext appContext: Context,
     names: GroupCallNameSource,
     statsFeed: CallQualityStatsFeed = CallQualityStatsFeed(),
-) {
+    private val dataProfile: CallDataProfileController? = null,
+) : CallReliabilityMedia {
     private val negotiator = CallNegotiator(engine, signals)
     private val iceMonitor = CallIceStateMonitor(engine, signals)
+    private val statsCollector = CallStatsCollector(engine)
     private val audio = CallAudioSession(appContext) { hasFocus ->
         interrupted = !hasFocus
         applyMicrophone()
@@ -84,7 +87,7 @@ class WebRtcCallCoordinator @Inject constructor(
     private val videoEncoding = CallVideoEncodingController(
         ticks = statsFeed.ticks,
         thermal = { appContext.callThermalState() },
-        apply = { budget, frozen -> engine.setCameraVideoBudget(budget, frozen) },
+        apply = { budget, frozen -> engine.setCameraVideoBudget(dataProfile?.capVideo(budget) ?: budget, frozen) },
         onSurvivalFloor = { mesh.setSurvivalFloor(it) },
     )
 
@@ -204,7 +207,12 @@ class WebRtcCallCoordinator @Inject constructor(
         val sendsVideo = isVideo && !videoUnavailable
         mesh.bind(cs, callId, selfId, isOutgoing = isCaller, primaryUserId = peerId, iceServers = iceServers,
             sendsAudio = !userMuted && !interrupted, sendsVideo = sendsVideo, conversationId = conversationId)
+        dataProfile?.let {
+            it.onChanged = videoEncoding::reapply
+            it.begin(cs)
+        }
         videoEncoding.begin(cs, wantsVideo = sendsVideo)
+        videoEncoding.reapply()
         negotiator.observe(cs)
         iceMonitor.observe(cs, restartIce = ::restartIceAndRenegotiate)
         dataChannel.observe(cs) { reason ->
@@ -319,6 +327,7 @@ class WebRtcCallCoordinator @Inject constructor(
 
     private fun teardown() {
         videoEncoding.end()
+        dataProfile?.end()
         mesh.teardown()
         callScope?.cancel()
         callScope = null
@@ -354,4 +363,20 @@ class WebRtcCallCoordinator @Inject constructor(
     }
 
     private fun restartIceAndRenegotiate() = negotiator.restartIce(callScope)
+
+    override val peerConnected: Boolean get() = iceMonitor.isPeerConnected
+
+    override val awaitingRemoteOffer: Boolean get() = callScope == null || negotiator.awaitingRemoteOffer
+
+    override suspend fun packetCounts(): CallPacketCounts? =
+        statsCollector.collect()?.let { CallPacketCounts(it.inboundPacketsReceived, it.outboundPacketsSent) }
+
+    override fun beginReconnectCycle() = iceMonitor.beginExternalCycle()
+
+    override fun catchUpConnected() = iceMonitor.catchUpConnected()
+
+    override fun restartIceNow() {
+        if (callScope == null || mesh.isPrimaryVacated) return
+        restartIceAndRenegotiate()
+    }
 }
