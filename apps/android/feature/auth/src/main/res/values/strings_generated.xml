@@ -343,6 +343,7 @@
     <string name="visitor_shared_by_story">%1$s shared this story with you</string>
     <string name="visitor_signup">Create an account</string>
     <string name="visitor_title">Join Meeshy</string>
+    <string name="welcome_brand_name">Meeshy</string>
     <string name="welcome_createAccount">Create account</string>
     <string name="welcome_createAccount_hint">Opens the sign-up form</string>
     <string name="welcome_signIn">Sign in</string>

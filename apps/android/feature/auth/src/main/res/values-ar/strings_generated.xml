@@ -363,6 +363,7 @@
     <string name="visitor_shared_by_story">شارك %1$s معك هذه القصة</string>
     <string name="visitor_signup">إنشاء حساب</string>
     <string name="visitor_title">انضم إلى Meeshy</string>
+    <string name="welcome_brand_name">Meeshy</string>
     <string name="welcome_createAccount">إنشاء حساب</string>
     <string name="welcome_createAccount_hint">يفتح نموذج التسجيل</string>
     <string name="welcome_signIn">تسجيل الدخول</string>

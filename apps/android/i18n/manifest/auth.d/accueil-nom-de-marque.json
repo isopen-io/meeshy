@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "about.app_name",
+          "androidName": "welcome_brand_name",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
