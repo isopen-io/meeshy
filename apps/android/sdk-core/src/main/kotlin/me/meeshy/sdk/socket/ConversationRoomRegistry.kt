@@ -112,8 +112,8 @@ class ConversationRoomRegistry @Inject constructor(
     private fun listenOnce() {
         if (listening) return
         listening = true
-        socketManager.on(SocketEventNames.CONVERSATION_JOINED) { Timber.d("conversation:joined") }
-        socketManager.on(SocketEventNames.CONVERSATION_LEFT) { Timber.d("conversation:left") }
+        socketManager.on(SocketEventNames.CONVERSATION_JOINED) { Timber.d("%s", SocketEventNames.CONVERSATION_JOINED) }
+        socketManager.on(SocketEventNames.CONVERSATION_LEFT) { Timber.d("%s", SocketEventNames.CONVERSATION_LEFT) }
         socketManager.on(SocketEventNames.CONVERSATION_JOIN_ERROR) { args -> onJoinError(args) }
     }
 
@@ -129,7 +129,7 @@ class ConversationRoomRegistry @Inject constructor(
             session?.launch { participants.invalidate(event.conversationId) }
             _refusals.tryEmit(event)
         } catch (failure: Exception) {
-            Timber.w(failure, "conversation:join-error: décodage en échec")
+            Timber.w(failure, "%s: décodage en échec", SocketEventNames.CONVERSATION_JOIN_ERROR)
         }
     }
 }
