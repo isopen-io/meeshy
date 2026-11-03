@@ -691,6 +691,9 @@ class ChatViewModel @Inject constructor(
     /** The picker's "clear all" — reset the armed selection to no effects. */
     fun clearEffects() = composer.clearEffects()
 
+    /** « Tout effacer » du petit panneau : retire les effets du panneau, jamais les protections. */
+    fun clearPanelEffects() = composer.clearPanelEffects()
+
     fun startEdit(messageId: String) = composer.startEdit(messageId)
 
     fun startReply(messageId: String) = composer.startReply(messageId)
