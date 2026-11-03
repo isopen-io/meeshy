@@ -83,7 +83,7 @@ class FocalQuotedReplyViewTest {
         var jumped = 0
         show(reply(), onJump = { jumped++ })
 
-        compose.onNodeWithText("On se retrouve à 18h ?").performClick()
+        compose.onNodeWithText("On se retrouve à 18h ?", useUnmergedTree = true).performClick()
 
         assertThat(jumped).isEqualTo(1)
     }
