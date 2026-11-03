@@ -34,7 +34,7 @@ class MessageSendRelationTest {
 
         assertThat(harness.queuedRequest().attachmentReplyTo).isEqualTo(QuotedAttachmentSend("att-9"))
 
-        harness.outbox.markSucceeded(cid)
+        harness.outbox.discard(cid)
         coordinator.markSendFailed(cid)
         coordinator.retrySend(cid)
 
@@ -53,7 +53,7 @@ class MessageSendRelationTest {
         assertThat(harness.queuedRequest().expiresAt).isNull()
         assertThat(harness.cachedMessage(cid).expiresAt).isNotNull()
 
-        harness.outbox.markSucceeded(cid)
+        harness.outbox.discard(cid)
         coordinator.markSendFailed(cid)
         coordinator.retrySend(cid)
 
@@ -75,7 +75,7 @@ class MessageSendRelationTest {
         val original = harness.queuedRequest()
         assertThat(original.copyAttachmentsFromMessageId).isEqualTo("src")
 
-        harness.outbox.markSucceeded(cid)
+        harness.outbox.discard(cid)
         coordinator.markSendFailed(cid)
         coordinator.retrySend(cid)
 
