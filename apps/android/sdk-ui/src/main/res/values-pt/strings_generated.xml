@@ -234,6 +234,7 @@
     <string name="media_trim_of_total">de %1$s</string>
     <string name="media_trim_window">Trecho mantido</string>
     <string name="media_video_pip_enter">Picture in Picture</string>
+    <string name="media_video_unavailable_retry">Vídeo indisponível. Tentar novamente.</string>
     <string name="media_voice_message">Mensagem de voz</string>
     <string name="media_voice_recording">Mensagem de voz (%1$s)</string>
     <string name="message_long_collapse">Ver menos</string>

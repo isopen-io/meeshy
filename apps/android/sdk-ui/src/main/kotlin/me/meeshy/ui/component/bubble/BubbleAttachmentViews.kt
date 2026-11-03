@@ -2,9 +2,12 @@ package me.meeshy.ui.component.bubble
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import me.meeshy.sdk.model.AudioTranscriptionReveal
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
@@ -21,6 +24,7 @@ internal fun BubbleAttachmentSections(
     onColor: Color,
     callbacks: BubbleCallbacks,
     audioPlayback: BubbleAudioPlayback?,
+    accent: Color = MeeshyPalette.Indigo500,
 ) {
     if (content.isDeleted) return
     val autoReveal = AudioTranscriptionReveal.autoReveals(content.isOutgoing, LocalAutoRevealTranscription.current)
@@ -35,7 +39,22 @@ internal fun BubbleAttachmentSections(
     content.sealedPieceIds.forEach { _ ->
         BubbleSealedPieceRow(onColor = onColor, modifier = Modifier.padding(bottom = MeeshySpacing.xs))
     }
-    content.files.forEach { file ->
+    val videoIds = content.videos.mapTo(HashSet()) { it.attachmentId }
+    content.videos.forEach { video ->
+        val file = content.files.firstOrNull { it.attachmentId == video.attachmentId } ?: return@forEach
+        key(video.attachmentId) {
+            val transfers = LocalBubbleFileTransfers.current
+            val badge = rememberVideoAutoDownloadBadge(file, remember(file, transfers) { transfers.badgeOf(file) })
+            BubbleVideoRow(
+                video = video,
+                badge = badge,
+                accent = accent,
+                onClick = callbacks.onFileClick?.takeIf { file.opensOnTap }?.let { { it(file) } },
+                modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+            )
+        }
+    }
+    content.files.filterNot { it.attachmentId in videoIds }.forEach { file ->
         BubbleFileRow(
             file = file,
             onColor = onColor,
