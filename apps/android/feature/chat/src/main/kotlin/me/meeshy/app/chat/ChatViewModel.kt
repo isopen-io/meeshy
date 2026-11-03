@@ -910,11 +910,19 @@ class ChatViewModel @Inject constructor(
     }
 
     fun closeSearch() {
+        controllers.find<ChatServerSearch>()?.onQuery("")
         _state.update { it.copy(search = it.search.deactivated()) }
     }
 
     fun onSearchQueryChange(query: String) {
         _state.update { it.copy(search = it.search.withQuery(query, it.messages.toSearchable())) }
+        controllers.find<ChatServerSearch>()?.onQuery(query)
+    }
+
+    /** A server search hit: the thread lands on it (loading the window around it when out of reach). */
+    fun selectSearchResult(messageId: String) {
+        controllers.find<ChatServerSearch>()?.closePanel()
+        landing.land(messageId)
     }
 
     fun nextSearchMatch() {

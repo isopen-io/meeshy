@@ -65,8 +65,11 @@ fun FeedScreen(
     onRefreshRail: () -> Unit = {},
     storyRail: @Composable () -> Unit = {},
     viewModel: FeedViewModel = hiltViewModel(),
+    unsent: UnsentPublicationsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val pendingCards by unsent.cards.collectAsStateWithLifecycle()
+    val pending = pendingCards.orEmpty()
     val snackbar = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -100,6 +103,21 @@ fun FeedScreen(
         }
     }
 
+    LaunchedEffect(unsent) { unsent.reopened.collect { onOpenComposer(ComposerOrigin.FeedComposer) } }
+    val withdrawn = stringResource(R.string.feed_pending_withdrawn)
+    val pendingActions: (PendingFeedCard) -> PendingSendActions = { card ->
+        PendingSendActions(
+            canRetry = card.canRetry,
+            canReopen = card.canReopen,
+            onRetry = { unsent.retry(card.post.id) },
+            onReopen = { unsent.reopen(card.post.id) },
+            onCancel = {
+                unsent.discard(card.post.id)
+                scope.launch { snackbar.showSnackbar(withdrawn) }
+            },
+        )
+    }
+
     MeeshyBackground {
     CompositionLocalProvider(LocalFeedSceneCoordinator provides sceneCoordinator) {
     Scaffold(
@@ -120,7 +138,7 @@ fun FeedScreen(
         ) {
             // La porte du composeur (iOS `FeedView.composerPlaceholder`) SOUS le rail de stories, dans le contenu qui
             // défile (#13653) — it opens the ONE composer on its scene (#13863). Then « Reprendre votre brouillon » (#13430)
-            // and « Publications non envoyées » (#13417), whose reopened post opens the same host.
+            // — a publication still on the device reads as a card of the list, its time replaced by the clock (#14902).
             val composerHead: @Composable () -> Unit = {
                 FeedComposerHead(
                     userName = state.currentUserName,
@@ -154,7 +172,7 @@ fun FeedScreen(
                     },
                 )
             }
-            FeedOfflineBand(visible = state.showsOfflineBand)
+            FeedOfflineBand(visible = state.showsOfflineBand(hasPending = pending.isNotEmpty()))
             PullToRefreshBox(
                 isRefreshing = state.isSyncing,
                 onRefresh = {
@@ -165,7 +183,7 @@ fun FeedScreen(
                     .fillMaxSize()
                     .weight(1f),
             ) {
-            when (state.body) {
+            when (state.body(hasPending = pending.isNotEmpty())) {
                 FeedBody.SKELETON -> FeedHeadColumn(storyRail, composerHead) { FeedSkeleton() }
                 FeedBody.OFFLINE_EMPTY -> FeedHeadColumn(storyRail, composerHead) { FeedOfflineEmptyState(onRetry = viewModel::refresh) }
                 FeedBody.LOAD_ERROR -> FeedHeadColumn(storyRail, composerHead) { FeedErrorCard(onRetry = viewModel::refresh) }
@@ -183,6 +201,21 @@ fun FeedScreen(
                     // `FeedListLayout.HEAD_ITEMS` lignes.
                     item(key = FEED_STORY_RAIL_KEY, contentType = FEED_STORY_RAIL_KEY) { storyRail() }
                     item(key = FEED_COMPOSER_HEAD_KEY, contentType = FEED_COMPOSER_HEAD_KEY) { composerHead() }
+                    items(pending, key = { it.post.id }, contentType = { FEED_POST_CONTENT_TYPE }) { card ->
+                        PostCard(
+                            post = card.post,
+                            onLike = {},
+                            onBookmark = {},
+                            onFlagTap = {},
+                            onClick = { onOpenPost(card.post.id) },
+                            onOpenPost = {},
+                            onImageTap = {},
+                            isOwn = true,
+                            onCopyText = { clipboard.setText(AnnotatedString(card.post.content)) },
+                            pendingSend = pendingActions(card),
+                            modifier = Modifier.animateItem().padding(horizontal = MeeshySpacing.lg),
+                        )
+                    }
                     items(state.posts, key = FeedPostPresentation::listKey, contentType = { FEED_POST_CONTENT_TYPE }) { post ->
                         LaunchedEffect(post.id, state.posts.size) {
                             viewModel.loadMoreIfNeeded(post.id)
@@ -273,7 +306,6 @@ private fun FeedComposerHead(userName: String?, avatarUrl: String?, onCompose: (
         // Le sélecteur initial propre à chaque entrée du « + » attend la couture du composeur : toutes ouvrent la même scène.
         FeedComposerPlaceholder(onClick = onCompose, userName = userName, avatarUrl = avatarUrl, onEntry = { onCompose() })
         DraftResumeSection(onResumePost = onCompose, onResumeStory = onResumeStory)
-        UnsentPublicationsEntry(onReopen = onCompose, onReopenStory = onResumeStory)
     }
 }
 

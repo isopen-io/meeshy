@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import java.time.ZoneId
 import java.util.Locale
@@ -313,7 +314,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         ConversationInfoSheet(
             title = infoTitle,
             subtitle = if (state.isGroup && state.memberCount > 0) {
-                stringResource(R.string.chat_header_members, state.memberCount)
+                pluralStringResource(R.plurals.chat_header_members, state.memberCount, state.memberCount)
             } else {
                 null
             },

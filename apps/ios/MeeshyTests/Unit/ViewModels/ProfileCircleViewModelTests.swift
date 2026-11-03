@@ -315,4 +315,41 @@ final class ProfileCircleViewModelTests: XCTestCase {
         XCTAssertEqual(second.relations.linksCallCount, 1, "le cache invalidé force la relecture")
         XCTAssertEqual(second.sut.shownLevel, .acquaintance)
     }
+
+    // MARK: - Libellés impératifs, un par cercle visé (#14910, décision porteur)
+
+    func test_wording_promote_isOneImperativePerTargetCircle() {
+        let labels = [RelationLevel.friend, .close, .blood].compactMap(ProfileCircleWording.promote(to:))
+        XCTAssertEqual(labels.count, 3)
+        XCTAssertEqual(Set(labels).count, 3, "Soyons amis, Soyons proches, Devenons sang : trois libellés distincts")
+        XCTAssertNil(ProfileCircleWording.promote(to: .acquaintance), "on ne promeut jamais vers Connaissance depuis le profil")
+        XCTAssertNil(ProfileCircleWording.promote(to: .public))
+        for label in labels {
+            XCTAssertFalse(label.contains("%"), "aucun gabarit générique « Promouvoir en %@ »")
+        }
+    }
+
+    func test_wording_promoteAccessibility_namesThePersonAndKeepsTheVisibleLabel() {
+        for level in [RelationLevel.friend, .close, .blood] {
+            let visible = ProfileCircleWording.promote(to: level) ?? ""
+            let spoken = ProfileCircleWording.promoteAccessibility(to: level, name: "Ada") ?? ""
+            XCTAssertTrue(spoken.contains("Ada"), "\(level)")
+            XCTAssertTrue(spoken.hasPrefix(visible), "le nom accessible commence par le libellé visible (\(level))")
+        }
+    }
+
+    func test_wording_lowering_isOneImperativePerArrivalCircle_unlinkUnchanged() {
+        let demotes = [RelationLevel.close, .friend, .acquaintance].map { ProfileCircleLowering.demote($0).label }
+        XCTAssertEqual(Set(demotes).count, 3, "Restons proches, Restons amis, Restons en contact")
+        XCTAssertFalse(demotes.contains(ProfileCircleLowering.unlink.label))
+        XCTAssertEqual(ProfileCircleLowering.unlink.label, String(localized: "circles.action.unlink", defaultValue: "Annuler le lien", bundle: .main))
+        demotes.forEach { XCTAssertFalse($0.contains("%")) }
+    }
+
+    func test_wording_confirmationTitle_isOnePerArrivalCircle_namingThePerson() {
+        let titles = [RelationLevel.close, .friend, .acquaintance].map { ProfileCircleLowering.demote($0).confirmationTitle(name: "Ada") }
+        XCTAssertEqual(Set(titles).count, 3)
+        titles.forEach { XCTAssertTrue($0.contains("Ada")) }
+        XCTAssertTrue(ProfileCircleLowering.unlink.confirmationTitle(name: "Ada").contains("Ada"))
+    }
 }

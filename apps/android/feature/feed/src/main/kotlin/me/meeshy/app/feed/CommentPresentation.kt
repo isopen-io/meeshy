@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.CommentLikeState
 import me.meeshy.sdk.model.CommentEffects
 import me.meeshy.sdk.model.CommentPieceKind
 import me.meeshy.sdk.model.MessageEffectFlags

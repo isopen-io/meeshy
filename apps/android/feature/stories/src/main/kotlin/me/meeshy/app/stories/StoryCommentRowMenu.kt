@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -47,6 +45,7 @@ import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.icons.MeeshyIcons
 
 /** Le « … » de la ligne (iOS `CommentMoreMenu`) : Copier, Modifier, Signaler, Supprimer, Retirer selon [actions]. */
 @Composable
@@ -62,7 +61,7 @@ internal fun StoryCommentMoreMenu(
     Box {
         IconButton(onClick = { expanded = true }, modifier = Modifier.size(48.dp)) {
             Icon(
-                imageVector = Icons.Filled.MoreHoriz,
+                imageVector = MeeshyIcons.MoreHorizontal,
                 contentDescription = stringResource(R.string.stories_comments_overlay_more),
                 tint = MeeshyMediaChromeColors.OnMediaSecondary,
                 modifier = Modifier.size(18.dp),

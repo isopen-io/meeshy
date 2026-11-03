@@ -307,6 +307,29 @@ function isRefusal(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 403 || error.status === 404);
 }
 
+type ThreadQueryOutcome = {
+  readonly data: unknown;
+  readonly error: unknown;
+  readonly isError: boolean;
+  readonly isPaused: boolean;
+};
+
+const unavailable = (query: ThreadQueryOutcome): boolean => query.data === undefined && (query.isError || query.isPaused);
+
+/**
+ * L'ÉTAT DU FIL (#15112) — un refus prime ; puis DES DONNÉES EN CACHE GAGNENT,
+ * même après un échec de relecture : hors ligne après un rechargement, TanStack
+ * croit le réseau présent, la relecture échoue et la requête passe en `error`
+ * en gardant ses données. L'erreur ne se montre que là où le cache est VIDE —
+ * échec, ou requête mise en pause hors ligne (`cold-state.ts`).
+ */
+export function threadDataStatusOf(conversation: ThreadQueryOutcome, messages: ThreadQueryOutcome): ThreadDataStatus {
+  if (isRefusal(conversation.error) || isRefusal(messages.error)) return 'refused';
+  if (conversation.data !== undefined && messages.data !== undefined) return 'success';
+  if (unavailable(conversation) || unavailable(messages)) return 'error';
+  return 'pending';
+}
+
 /**
  * `useThreadData` — compose les DEUX requêtes du fil. `status: 'refused'`
  * (D-6) dès que L'UNE des deux porte un `ApiError` 403/404 — un id qui
@@ -354,11 +377,7 @@ export function useThreadData(id: string) {
   });
 
   const error = conversation.error ?? messages.error ?? null;
-  const refused = isRefusal(conversation.error) || isRefusal(messages.error);
-  const failed = conversation.isError || messages.isError;
-  const ready = conversation.data !== undefined && messages.data !== undefined;
-
-  const status: ThreadDataStatus = refused ? 'refused' : failed ? 'error' : ready ? 'success' : 'pending';
+  const status = threadDataStatusOf(conversation, messages);
 
   return {
     conversationId,

@@ -49,6 +49,13 @@ class PushTapDestinationTest {
     }
 
     @Test
+    fun `contentType designe le reel quand postType est absent`() {
+        assertThat(resolve(PushPayload(type = "friend_new_post", postId = "p1", contentType = "REEL")))
+            .isEqualTo(PushTapDestination.Reel("p1"))
+        assertThat(PushPayload.decode(mapOf("contentType" to "REEL")).contentType).isEqualTo("REEL")
+    }
+
+    @Test
     fun `une reaction a une story ouvre le lecteur sur cette story avec les vues`() {
         assertThat(resolve(PushPayload(type = "story_reaction", postId = "p1", postType = "STORY")))
             .isEqualTo(PushTapDestination.StoryContent("p1", StoryViewerInitialAction.VIEWS, null, null))
