@@ -188,6 +188,10 @@ public interface OutboxDao {
     @Query("SELECT COUNT(*) FROM outbox")
     public suspend fun count(): Int
 
+    /** Envois encore en route (file ou vol) : ce qu'une purge de session ferait perdre. */
+    @Query("SELECT COUNT(*) FROM outbox WHERE state != 'EXHAUSTED'")
+    public suspend fun pendingCount(): Int
+
     @Query("SELECT COUNT(*) FROM outbox")
     public fun observeCount(): Flow<Int>
 

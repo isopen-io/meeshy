@@ -11,6 +11,8 @@ import me.meeshy.sdk.feedback.FeedbackToastCenter
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.model.session.LogoutPurgePolicy
+import me.meeshy.sdk.model.session.PurgeCause
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.story.StoryComposerDraftStore
 import timber.log.Timber
@@ -39,6 +41,14 @@ import timber.log.Timber
 public interface SessionTeardown {
     /** Clears every per-account store. Idempotent — safe to call on an already-clear device. */
     public suspend fun wipe()
+
+    /**
+     * La même purge, quand la passerelle a elle-même clos la session (compte supprimé, accès d'invité retiré) :
+     * si des envois en attente sont perdus, l'utilisateur en est prévenu. Par défaut, une purge ordinaire.
+     */
+    public suspend fun wipeAfterServerInvalidation() {
+        wipe()
+    }
 }
 
 public class DefaultSessionTeardown(
@@ -55,6 +65,7 @@ public class DefaultSessionTeardown(
     private val guestSessions: AnonymousSessionStore? = null,
     private val fence: AccountFence? = null,
     private val feedbackToasts: FeedbackToastCenter? = null,
+    private val lostSends: LostSendsNotifier? = null,
 ) : SessionTeardown {
 
     /**
@@ -63,7 +74,30 @@ public class DefaultSessionTeardown(
      * survives into the next one.
      */
     override suspend fun wipe() {
-        if (fence == null) clearAll() else fence.close { clearAll() }
+        purge(PurgeCause.USER_LOGOUT)
+    }
+
+    override suspend fun wipeAfterServerInvalidation() {
+        purge(PurgeCause.SERVER_INVALIDATION)
+    }
+
+    /** La purge est inconditionnelle ([LogoutPurgePolicy]) ; seul l'avertissement dépend de la cause et de la file. */
+    private suspend fun purge(cause: PurgeCause) {
+        var decision = LogoutPurgePolicy.decide(cause, pendingSends = 0)
+        val run: suspend () -> Unit = {
+            decision = LogoutPurgePolicy.decide(cause, pendingSends())
+            clearAll()
+        }
+        if (fence == null) run() else fence.close { run() }
+        if (decision.warnLostSends) lostSends?.notify(decision.lostSends)
+    }
+
+    private suspend fun pendingSends(): Int = try {
+        withContext(Dispatchers.IO) { database.outboxDao().pendingCount() }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        0
     }
 
     /**

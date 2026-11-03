@@ -333,6 +333,7 @@ object SdkModule {
         guestSessions: me.meeshy.sdk.session.AnonymousSessionStore,
         fence: me.meeshy.sdk.session.AccountFence,
         feedbackToasts: me.meeshy.sdk.feedback.FeedbackToastCenter,
+        lostSends: me.meeshy.sdk.session.LostSendsNotifier,
     ): SessionTeardown =
         DefaultSessionTeardown(
             database,
@@ -348,6 +349,7 @@ object SdkModule {
             guestSessions,
             fence,
             feedbackToasts,
+            lostSends,
         )
 
     @Provides

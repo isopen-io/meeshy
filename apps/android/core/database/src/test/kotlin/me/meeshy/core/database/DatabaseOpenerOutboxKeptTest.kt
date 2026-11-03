@@ -47,14 +47,12 @@ class DatabaseOpenerOutboxKeptTest {
             build = ::realBuild,
         ).open()
 
-        val kept = database.outboxDao().observeAll()
         assertThat(File(file.path + ".corrupted.99").exists()).isTrue()
         assertThat(diagnostics.events.value.map { it.stage }).contains(DatabaseInitStage.OUTBOX_SALVAGED)
         assertThat(database.openHelper.readableDatabase.query("SELECT cmid, ownerId FROM outbox").use {
             it.moveToFirst()
             it.getString(0) to it.getString(1)
         }).isEqualTo("c-1" to "u1")
-        assertThat(kept).isNotNull()
         database.close()
     }
 }

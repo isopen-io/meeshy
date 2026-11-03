@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="degraded_mode_title">Modalità ridotta</string>
+    <string name="degraded_mode_body">Meeshy non è riuscito ad aprire normalmente l\'archivio locale. I tuoi dati sono al sicuro sul server; alcuni dati locali potrebbero mancare.</string>
+    <string name="degraded_mode_retry">Riprova</string>
+    <string name="degraded_mode_export">Esporta rapporto</string>
+</resources>
