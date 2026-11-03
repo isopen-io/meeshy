@@ -166,7 +166,8 @@ class PushPresentationPolicyTest {
     fun `en arriere-plan push coupe ou calme suppriment`() {
         assertThat(decide(preferences = UserNotificationPreferences(pushEnabled = false), appInForeground = false))
             .isEqualTo(PushPresentationDecision.Suppress)
-        assertThat(decide(now = quiet, appInForeground = false)).isEqualTo(PushPresentationDecision.Suppress)
+        assertThat(decide(preferences = UserNotificationPreferences(dndEnabled = true), now = quiet, appInForeground = false))
+            .isEqualTo(PushPresentationDecision.Suppress)
     }
 
     @Test
@@ -180,7 +181,7 @@ class PushPresentationPolicyTest {
         val noPush = UserNotificationPreferences(pushEnabled = false)
         assertThat(decide(preferences = noPush, rawType = "incoming_call", appInForeground = false))
             .isEqualTo(PushPresentationDecision.Alert(playSound = true))
-        assertThat(decide(now = quiet, rawType = "incoming_call", appInForeground = false))
+        assertThat(decide(preferences = UserNotificationPreferences(dndEnabled = true), now = quiet, rawType = "incoming_call", appInForeground = false))
             .isEqualTo(PushPresentationDecision.Alert(playSound = true))
         assertThat(decide(preferences = UserNotificationPreferences(callsEnabled = false), rawType = "incoming_call", appInForeground = false))
             .isEqualTo(PushPresentationDecision.Suppress)
