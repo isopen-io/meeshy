@@ -1,16 +1,6 @@
 package me.meeshy.app.conversations
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.MarkChatRead
-import androidx.compose.material.icons.filled.MarkChatUnread
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.NotificationsOff
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.Unarchive
-import androidx.compose.material.icons.filled.VisibilityOff
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.res.stringResource
@@ -68,31 +58,31 @@ private data class SwipeLabels(
 private fun ConversationSwipeItem.toAction(labels: SwipeLabels, actions: ConversationRowActions): SwipeAction =
     when (kind) {
         SwipeKind.PIN -> SwipeAction(
-            Icons.Filled.PushPin, if (active) labels.unpin else labels.pin,
+            MeeshyIcons.PinFilled, if (active) labels.unpin else labels.pin,
             MeeshyPalette.PinnedBlue, actions.onTogglePin,
         )
         SwipeKind.MUTE -> SwipeAction(
-            if (active) Icons.Filled.Notifications else Icons.Filled.NotificationsOff,
+            if (active) MeeshyIcons.BellFilled else MeeshyIcons.BellOff,
             if (active) labels.unmute else labels.mute,
             MeeshyPalette.Neutral500, actions.onToggleMute,
         )
         SwipeKind.LOCK -> SwipeAction(
-            if (active) Icons.Filled.LockOpen else Icons.Filled.Lock,
+            if (active) MeeshyIcons.LockOpenFilled else MeeshyIcons.LockFilled,
             if (active) labels.unlock else labels.lock,
             MeeshyPalette.Warning, actions.onLockToggle,
         )
         SwipeKind.ARCHIVE -> SwipeAction(
-            if (active) Icons.Filled.Unarchive else Icons.Filled.Archive,
+            if (active) MeeshyIcons.Unarchive else MeeshyIcons.Archive,
             if (active) labels.unarchive else labels.archive,
             MeeshyPalette.Warning, actions.onToggleArchive,
         )
         SwipeKind.MARK_READ -> SwipeAction(
-            Icons.Filled.MarkChatRead, labels.markRead, MeeshyPalette.Indigo400, actions.onMarkRead,
+            MeeshyIcons.MarkChatRead, labels.markRead, MeeshyPalette.Indigo400, actions.onMarkRead,
         )
         SwipeKind.MARK_UNREAD -> SwipeAction(
-            Icons.Filled.MarkChatUnread, labels.markUnread, MeeshyPalette.Indigo400, actions.onMarkUnread,
+            MeeshyIcons.MarkChatUnread, labels.markUnread, MeeshyPalette.Indigo400, actions.onMarkUnread,
         )
         SwipeKind.REMOVE -> SwipeAction(
-            Icons.Filled.VisibilityOff, labels.hide, MeeshyPalette.Error, actions.onRemove,
+            MeeshyIcons.EyeOffFilled, labels.hide, MeeshyPalette.Error, actions.onRemove,
         )
     }

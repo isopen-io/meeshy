@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import me.meeshy.sdk.model.story.StoryTranscriptState
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -50,6 +51,9 @@ internal class StoryViewerChromeState {
     var showReportDialog by mutableStateOf(false)
     var showDeleteDialog by mutableStateOf(false)
     var showRemoveDialog by mutableStateOf(false)
+    /** La légende dépliée et la transcription demandée : la story boucle, la scène s'efface (iOS `isCaptionExpanded`). */
+    var captionExpanded by mutableStateOf(false)
+    var transcript by mutableStateOf(StoryTranscriptState())
 
     val sheetOpen: Boolean get() = showViewers || showComments || showReply || showSendTo
     val dialogOpen: Boolean get() = showReportDialog || showDeleteDialog || showRemoveDialog

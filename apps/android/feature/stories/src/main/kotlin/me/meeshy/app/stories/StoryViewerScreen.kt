@@ -95,6 +95,7 @@ fun StoryViewerScreen(
         menu = chrome.showOptions,
         dialog = chrome.dialogOpen || videoExport.busy,
         composing = composing,
+        reading = chrome.captionExpanded || chrome.transcript.requested,
     )
     val actions = rememberStoryViewerActions(
         state = state,

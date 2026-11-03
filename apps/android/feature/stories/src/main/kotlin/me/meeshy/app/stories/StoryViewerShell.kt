@@ -149,6 +149,7 @@ internal fun StoryViewerShell(
                     chromeVisible = chromeVisible,
                     fullscreen = cardMotion.fullscreen.enabled,
                     viewModel = viewModel,
+                    captionExpanded = chrome.captionExpanded,
                 )
                 StoryReadingScrims(chromeVisible = chromeVisible)
             }
@@ -171,6 +172,11 @@ internal fun StoryViewerShell(
                     topReservedPx = headerHeightPx,
                     onListTop = { dragFrames.scrollableSurfaceTop = it },
                 ),
+                currentItem = currentItem,
+                chrome = chrome,
+                haptics = haptics,
+                viewModel = viewModel,
+                chromeVisible = chromeVisible,
             )
 
             if (chromeVisible) {

@@ -1,14 +1,11 @@
 package me.meeshy.app.settings
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
@@ -43,7 +40,7 @@ internal fun SettingsAppearanceSection(
     viewModel: SettingsViewModel,
 ) {
     val tint = MeeshyPalette.Warning
-    SettingsGroup(stringResource(R.string.settings_section_appearance), Icons.Filled.Palette, tint) {
+    SettingsGroup(stringResource(R.string.settings_section_appearance), MeeshyIcons.Palette, tint) {
         SettingsRows(rows, tint, separatedBefore = { it.id != SettingsHubRowId.INTERFACE_FEATURES }) { row ->
             when (row.id) {
                 SettingsHubRowId.THEME -> ThemePickerRow(
@@ -123,7 +120,7 @@ private fun InterfaceLanguageRow(
     val detail = selected?.let { AppLanguage.info(it)?.nativeName } ?: systemLabel
 
     SettingsChevronRow(
-        icon = Icons.Filled.Translate,
+        icon = MeeshyIcons.Translate,
         title = label,
         color = MeeshyPalette.Indigo600,
         value = detail,
@@ -185,7 +182,7 @@ private fun RegionalLanguageRow(
     val detail = presentation.selectedLabel ?: stringResource(R.string.settings_regional_language_none)
 
     SettingsChevronRow(
-        icon = Icons.Filled.Language,
+        icon = MeeshyIcons.Language,
         title = label,
         color = MeeshyPalette.Success,
         value = detail,

@@ -1,9 +1,5 @@
 package me.meeshy.app.settings
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.IosShare
-import androidx.compose.material.icons.filled.Storage
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.settings.R
@@ -22,13 +18,13 @@ internal fun SettingsDataSection(
     onOpenDataExport: () -> Unit,
 ) {
     val tint = MeeshyPalette.Warning
-    SettingsGroup(stringResource(R.string.settings_section_data), Icons.Filled.Storage, tint) {
+    SettingsGroup(stringResource(R.string.settings_section_data), MeeshyIcons.Storage, tint) {
         SettingsRows(rows, tint) { row ->
             when (row.id) {
-                SettingsHubRowId.STORAGE -> SettingsChevronRow(Icons.Filled.Storage, stringResource(R.string.settings_storage), tint, onOpenMediaCache)
-                SettingsHubRowId.MEDIA_DOWNLOAD -> SettingsChevronRow(Icons.Filled.Download, stringResource(R.string.settings_media_download), tint, onOpenAutoDownload)
+                SettingsHubRowId.STORAGE -> SettingsChevronRow(MeeshyIcons.Storage, stringResource(R.string.settings_storage), tint, onOpenMediaCache)
+                SettingsHubRowId.MEDIA_DOWNLOAD -> SettingsChevronRow(MeeshyIcons.Download, stringResource(R.string.settings_media_download), tint, onOpenAutoDownload)
                 SettingsHubRowId.PACKS -> SettingsChevronRow(MeeshyIcons.Shopping, stringResource(R.string.settings_packs_title), tint, onOpenPacks)
-                SettingsHubRowId.EXPORT_DATA -> SettingsChevronRow(Icons.Filled.IosShare, stringResource(R.string.settings_export_data), tint, onOpenDataExport)
+                SettingsHubRowId.EXPORT_DATA -> SettingsChevronRow(MeeshyIcons.Share, stringResource(R.string.settings_export_data), tint, onOpenDataExport)
                 else -> Unit
             }
         }
