@@ -4,6 +4,8 @@ import androidx.room.withTransaction
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.ConversationDao
 import me.meeshy.sdk.model.ApiConversation
