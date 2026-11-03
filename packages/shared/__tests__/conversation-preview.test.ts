@@ -137,7 +137,7 @@ describe('pièce jointe détaillée — la légende ne fait disparaître ni le n
         ...input.lastMessage!,
         originalLanguage: 'en',
         content: 'By the lake',
-        translations: [{ language: 'fr', content: 'Au bord du lac' }],
+        translations: { fr: 'Au bord du lac' },
       },
     });
     expect(served.segments[0]).toEqual({ kind: 'text', text: 'Au bord du lac', language: 'fr' });
