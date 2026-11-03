@@ -29,6 +29,20 @@ final class SocialEventsV2SurfacesTests: XCTestCase {
         XCTAssertEqual(story.elapsedMs, 3_000)
     }
 
+    /// #15198 — une story en attente n'existe pas pour le catalogue : sa
+    /// position n'est pas lue, aucun événement ne porte son id local.
+    func test_position_pendingStory_isNotRead_andEmitsNothing() {
+        let pending = StoryNavigationTelemetry.position(
+            storyId: "\(PendingStoryMarker.prefix)\(UUID().uuidString)#0", slideIndex: 0, slideCount: 2,
+            fraction: 0.3, durationSeconds: 5)
+        let sent = StoryNavigationTelemetry.position(
+            storyId: "665f1c2e9b1d4a0012345678", slideIndex: 0, slideCount: 2, fraction: 0.3, durationSeconds: 5)
+
+        XCTAssertNil(pending)
+        XCTAssertTrue(StoryNavigationTelemetry.exit(position: pending).isEmpty)
+        XCTAssertEqual(sent?.storyId, "665f1c2e9b1d4a0012345678")
+    }
+
     func test_closingAtTheEndOfTheLastSlide_isNotAnEarlyExit() {
         XCTAssertTrue(StoryNavigationTelemetry.exit(position: position(slide: 3, of: 4, fraction: 1)).isEmpty)
     }
