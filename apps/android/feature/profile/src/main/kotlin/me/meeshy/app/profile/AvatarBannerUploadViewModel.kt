@@ -74,7 +74,7 @@ class AvatarBannerUploadViewModel @Inject constructor(
     fun onImagePicked(target: ImageUploadTarget, item: MediaUploadItem) {
         if (_state.value.uploading != null) return
 
-        when (val validation = ImageUploadValidator.validate(target, item.sizeBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), item.mimeType)) {
+        when (val validation = ImageUploadValidator.validateCompressed(target, item.sizeBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), item.mimeType)) {
             is ImageUploadValidation.Rejected -> {
                 MediaIntake.release(item)
                 _state.update { it.copy(error = validation.reason.toError()) }
