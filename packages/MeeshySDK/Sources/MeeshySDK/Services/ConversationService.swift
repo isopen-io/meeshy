@@ -92,6 +92,10 @@ public protocol ConversationServiceProviding: Sendable {
     /// les projette via `toConversation(currentUserId:)` quand il en a besoin.
     func search(query: String) async throws -> [APIConversation]
     func getById(_ conversationId: String) async throws -> APIConversation
+    /// `GET /conversations/:id` dont un refus 4xx garde le code de la
+    /// passerelle (`TypedRefusals`) : un 404 SERVI se distingue de celui d'un
+    /// intermédiaire (#14693). Les autres appelants gardent `getById`.
+    func getByIdTypedRefusals(_ conversationId: String) async throws -> APIConversation
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse
     func delete(conversationId: String) async throws
     /// `DELETE /conversations/:id/obsolete` (#14643) — rend la conversation
@@ -196,6 +200,13 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
     public func getById(_ conversationId: String) async throws -> APIConversation {
         let response: APIResponse<APIConversation> = try await api.request(
             ConversationsEndpoint.byId(id: conversationId)
+        )
+        return response.data
+    }
+
+    public func getByIdTypedRefusals(_ conversationId: String) async throws -> APIConversation {
+        let response: APIResponse<APIConversation> = try await api.request(
+            TypedRefusals(ConversationsEndpoint.byId(id: conversationId))
         )
         return response.data
     }
@@ -542,6 +553,12 @@ public extension ConversationServiceProviding {
     /// Un service qui ne sait rendre qu'un tête-à-tête n'en rend qu'un.
     func findDirectsWith(userId: String) async throws -> [APIConversation] {
         try await findDirectWith(userId: userId).map { [$0] } ?? []
+    }
+
+    /// Un service qui ne type pas ses refus rend la forme opaque, qu'un
+    /// appelant prudent lit comme transitoire.
+    func getByIdTypedRefusals(_ conversationId: String) async throws -> APIConversation {
+        try await getById(conversationId)
     }
 }
 

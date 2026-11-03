@@ -635,7 +635,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         let service = conversationService
         return NotificationReplyRegime(
             destinationGuard: destinationGuard,
-            servedMode: { try await service.getById($0).encryptionMode }
+            servedMode: { try await service.getByIdTypedRefusals($0).encryptionMode }
         )
     }
 

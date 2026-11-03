@@ -36,8 +36,9 @@ struct NotificationReplyRegime {
         case endToEnd
         /// Le régime n'a pas pu être relu : la réponse attend sa confirmation.
         case unconfirmed
-        /// La passerelle refuse pour de bon (403, 404, 410 : plus membre,
-        /// conversation supprimée) : la réponse ne partira jamais (#14673).
+        /// La passerelle refuse pour de bon, enveloppe et code à l'appui (plus
+        /// membre, conversation supprimée) : la réponse ne partira jamais
+        /// (#14673, #14693).
         case inaccessible
     }
 
@@ -93,24 +94,35 @@ struct NotificationReplyRegime {
         return slot.withLock { $0 }
     }
 
-    /// Un refus qui ne changera pas en réessayant : plus membre (403, ou 404
-    /// que la passerelle sert pour ne pas dire qu'elle existe), conversation
-    /// supprimée (404, 410). Une session expirée (401), un délai ou un 5xx
-    /// restent transitoires.
+    /// Un refus SERVI par la passerelle, et qui ne changera pas en
+    /// réessayant : conversation introuvable (inexistante, supprimée, ou dont
+    /// on n'est plus membre : la passerelle sert le même 404) ou accès refusé.
+    /// Le statut seul ne suffit pas (#14693) : Traefik sert un 404 sans
+    /// enveloppe pendant un déploiement, un proxy d'entreprise un 403. Seuls
+    /// l'enveloppe de la passerelle et son code décident ; tout autre refus,
+    /// une session expirée, un délai ou un 5xx restent transitoires.
     nonisolated static func isDefinitive(_ error: any Error) -> Bool {
+        gatewayRefusalCode(of: error).map(definitiveRefusalCodes.contains) ?? false
+    }
+
+    nonisolated private static func gatewayRefusalCode(of error: any Error) -> String? {
         switch error {
-        case MeeshyError.forbidden:
-            return true
-        case MeeshyError.server(let status, _):
-            return definitiveStatuses.contains(status)
-        case APIError.serverError(let status, _):
-            return definitiveStatuses.contains(status)
+        case MeeshyError.rejected(let rejection) where definitiveStatuses.contains(rejection.statusCode):
+            return rejection.code
+        case MeeshyError.forbidden(_, let body):
+            return APIRejection.gatewayRefusal(statusCode: 403, body: body)?.code
         default:
-            return false
+            return nil
         }
     }
 
     nonisolated private static let definitiveStatuses: Set<Int> = [403, 404, 410]
+    /// Les codes que `GET /conversations/:id` sert pour une conversation qu'il
+    /// ne sert plus (`refuserCommeIntrouvable`, `CODE_NON_MEMBRE` de
+    /// `services/gateway/src/routes/conversations/utils/access-control.ts`).
+    nonisolated private static let definitiveRefusalCodes: Set<String> = [
+        "CONVERSATION_NOT_FOUND", "CONVERSATION_ACCESS_DENIED",
+    ]
 
     private enum Reading: Sendable {
         case served(String?)
@@ -186,6 +198,15 @@ protocol NotificationRepliesAwaitingRegimeStoring: AnyObject {
 /// iCloud ou Finder (#14673) : identifiants de conversation et de message cité
 /// n'ont rien à faire dans une copie qui survit à l'appareil. `fileURL: nil`
 /// les garde en mémoire seulement.
+///
+/// **Un fichier qui existe mais ne se lit pas n'est jamais écrasé** (#14694) :
+/// avant le premier déverrouillage (protection `completeUntilFirstUserAuthentication`)
+/// ou corrompu, il garde des fiches dont le clair attend au coffre. Le magasin
+/// tient alors ses fiches en mémoire, n'écrit rien, et relit le fichier à
+/// chaque accès : relu, il rejoint la mémoire et s'écrit de nouveau. La clé
+/// héritée des préférences ne part qu'une fois le fichier ÉCRIT, et une fiche
+/// migrée y garde la date de sa première lecture, sans quoi la borne de 24 h
+/// reculerait à chaque lancement.
 @MainActor
 final class NotificationRepliesAwaitingRegime: NotificationRepliesAwaitingRegimeStoring {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466) → double-free au démontage
@@ -196,37 +217,85 @@ final class NotificationRepliesAwaitingRegime: NotificationRepliesAwaitingRegime
     /// La clé des préférences sauvegardées, où vivaient les fiches avant #14673.
     static let legacyKey = "meeshy.notificationReply.awaitingRegime"
     private let fileURL: URL?
-    private(set) var awaiting: [NotificationReplyAwaitingRegime]
+    private let legacyDefaults: UserDefaults?
+    private var legacyIds: Set<String>
+    private var held: [NotificationReplyAwaitingRegime]
+    private var fileUnreadable: Bool
+
+    var awaiting: [NotificationReplyAwaitingRegime] {
+        recoverOnceReadable()
+        return held
+    }
 
     init(fileURL: URL?, legacyDefaults: UserDefaults? = nil) {
         self.fileURL = fileURL
+        self.legacyDefaults = legacyDefaults
         let legacy = legacyDefaults?.data(forKey: Self.legacyKey).flatMap(Self.decode) ?? []
-        let stored = fileURL.flatMap { try? Data(contentsOf: $0) }.flatMap(Self.decode) ?? []
-        awaiting = stored + legacy.filter { old in !stored.contains { $0.clientMessageId == old.clientMessageId } }
-        save(awaiting)
-        legacyDefaults?.removeObject(forKey: Self.legacyKey)
+        let reading = Self.read(fileURL)
+        let stored = reading ?? []
+        legacyIds = Set(legacy.map(\.clientMessageId)).subtracting(stored.map(\.clientMessageId))
+        fileUnreadable = reading == nil
+        held = Self.merge(stored, over: legacy)
+        if fileUnreadable {
+            Logger.e2ee.error("notification replies awaiting regime: file unreadable, kept untouched")
+        }
+        persist()
     }
 
     func add(_ reply: NotificationReplyAwaitingRegime) {
-        save(awaiting.filter { $0.clientMessageId != reply.clientMessageId } + [reply])
+        recoverOnceReadable()
+        held = held.filter { $0.clientMessageId != reply.clientMessageId } + [reply]
+        persist()
     }
 
     func remove(_ clientMessageId: String) {
-        save(awaiting.filter { $0.clientMessageId != clientMessageId })
+        recoverOnceReadable()
+        held = held.filter { $0.clientMessageId != clientMessageId }
+        persist()
     }
 
     func withdraw(_ clientMessageId: String, at date: Date) {
-        save(awaiting.map { reply in
+        recoverOnceReadable()
+        held = held.map { reply in
             guard reply.clientMessageId == clientMessageId, reply.withdrawnAt == nil else { return reply }
             var withdrawn = reply
             withdrawn.withdrawnAt = date
             return withdrawn
-        })
+        }
+        persist()
     }
 
-    private func save(_ replies: [NotificationReplyAwaitingRegime]) {
-        awaiting = replies
-        guard let fileURL, let data = try? JSONEncoder().encode(replies) else { return }
+    private func recoverOnceReadable() {
+        guard fileUnreadable, let stored = Self.read(fileURL) else { return }
+        fileUnreadable = false
+        held = Self.merge(held, over: stored)
+        persist()
+    }
+
+    /// Le fichier d'abord ; la clé héritée ne part qu'après lui. Faute de
+    /// fichier écrit, elle garde les fiches migrées, datées.
+    private func persist() {
+        guard !fileUnreadable, write(held) else {
+            keepLegacy()
+            return
+        }
+        legacyIds = []
+        legacyDefaults?.removeObject(forKey: Self.legacyKey)
+    }
+
+    private func keepLegacy() {
+        guard let legacyDefaults, !legacyIds.isEmpty else { return }
+        let migrated = held.filter { legacyIds.contains($0.clientMessageId) }
+        guard !migrated.isEmpty, let data = try? JSONEncoder().encode(migrated) else {
+            legacyIds = []
+            legacyDefaults.removeObject(forKey: Self.legacyKey)
+            return
+        }
+        legacyDefaults.set(data, forKey: Self.legacyKey)
+    }
+
+    private func write(_ replies: [NotificationReplyAwaitingRegime]) -> Bool {
+        guard let fileURL, let data = try? JSONEncoder().encode(replies) else { return false }
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
@@ -234,9 +303,26 @@ final class NotificationRepliesAwaitingRegime: NotificationRepliesAwaitingRegime
             excluded.isExcludedFromBackup = true
             var url = fileURL
             try url.setResourceValues(excluded)
+            return true
         } catch {
             Logger.e2ee.error("notification replies awaiting regime not saved: \(String(describing: type(of: error)), privacy: .public)")
+            return false
         }
+    }
+
+    /// `[]` pour un fichier absent ; `nil` pour un fichier présent mais illisible.
+    private static func read(_ fileURL: URL?) -> [NotificationReplyAwaitingRegime]? {
+        guard let fileURL, FileManager.default.fileExists(atPath: fileURL.path) else { return [] }
+        return (try? Data(contentsOf: fileURL)).flatMap(decode)
+    }
+
+    /// Les fiches de `base`, puis celles de `newer` qu'elle n'a pas : à
+    /// identifiant égal, `newer` l'emporte.
+    private static func merge(
+        _ newer: [NotificationReplyAwaitingRegime], over base: [NotificationReplyAwaitingRegime]
+    ) -> [NotificationReplyAwaitingRegime] {
+        let newerIds = Set(newer.map(\.clientMessageId))
+        return base.filter { !newerIds.contains($0.clientMessageId) } + newer
     }
 
     private static func decode(_ data: Data) -> [NotificationReplyAwaitingRegime]? {

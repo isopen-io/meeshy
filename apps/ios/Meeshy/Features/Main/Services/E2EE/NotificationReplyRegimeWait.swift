@@ -28,7 +28,8 @@ struct NotificationReplyWaitNotices {
 /// Le chemin `.unconfirmed` de `NotificationReplyRegime` range le clair au
 /// coffre sous une fiche sans texte ; ce type tient la suite :
 /// - l'attente se DIT (notification locale) et se retire quand elle se solde ;
-/// - une passerelle qui refuse pour de bon (403, 404, 410) retire la réponse ;
+/// - une passerelle qui refuse pour de bon (son enveloppe et un code de
+///   conversation perdue, #14693) retire la réponse ;
 /// - une fiche plus vieille que `maxAge` est retirée sans relecture ;
 /// - un compte déconnecté (sa session n'est plus gardée au trousseau) voit ses
 ///   fiches retirées — un changement de compte, qui la garde, ne les touche pas ;
@@ -187,11 +188,17 @@ final class NotificationReplyRegimeWait {
     }
 
     /// Le coffre fermé fait attendre ; un clair absent du coffre ouvert ne
-    /// reviendra plus : la fiche part, et l'utilisateur le lit.
+    /// reviendra plus : la fiche part, et l'utilisateur le lit. Un compte
+    /// changé pendant la lecture du coffre fait attendre aussi : la réponse
+    /// ne part que sous son compte.
     private func sendFromVault(_ reply: NotificationReplyAwaitingRegime) async {
         let id = reply.clientMessageId
         guard let stored = await endToEnd.storedMessageIds(as: reply.senderId) else { return }
         let entry = stored.contains(id) ? await endToEnd.plaintexts(for: [id], as: reply.senderId)[id] : nil
+        guard currentUserId() == reply.senderId else {
+            Logger.e2ee.warning("notification reply: account switched while reading the vault, kept for its account")
+            return
+        }
         guard case .readable(let content, _)? = entry, let text = content.text else {
             store.remove(id)
             rules.notices.dropped(reply.conversationId, id)

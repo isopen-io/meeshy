@@ -52,6 +52,25 @@ final class NotificationReplyRegimeTests: XCTestCase {
 
     private struct Unreachable: Error {}
 
+    /// Les refus que la passerelle SERT pour une conversation qu'elle ne sert
+    /// plus (#14693) : enveloppe `sendError` et son code.
+    private static let conversationNotFound = MeeshyError.rejected(APIRejection(
+        statusCode: 404, code: "CONVERSATION_NOT_FOUND", message: "Conversation introuvable"
+    ))
+    private static let notAMember = MeeshyError.forbidden(
+        reason: "Refusé",
+        body: Data(#"{"success":false,"error":"Refusé","message":"Refusé","code":"CONVERSATION_ACCESS_DENIED"}"#.utf8)
+    )
+    /// Ce qu'un intermédiaire sert sans que la passerelle ait parlé : le 404
+    /// de Traefik pendant un déploiement, le 403 d'un proxy d'entreprise.
+    private static let intermediaryRefusals: [Error] = [
+        MeeshyError.server(statusCode: 404, message: "404 page not found"),
+        MeeshyError.rejected(APIRejection(statusCode: 404, message: "404 page not found")),
+        MeeshyError.server(statusCode: 410, message: "Gone"),
+        MeeshyError.forbidden(reason: nil, body: Data("<html><body>Forbidden</body></html>".utf8)),
+        MeeshyError.forbidden(reason: nil, body: nil),
+    ]
+
     private struct SUT {
         let handler: NotificationActionHandler
         let messages: MockMessageService
@@ -319,16 +338,92 @@ final class NotificationReplyRegimeTests: XCTestCase {
     /// Les fiches écrites dans les préférences sauvegardées avant #14673
     /// rejoignent le fichier, sans date, et quittent les préférences.
     func test_awaitingStore_adoptsLegacyPreferenceFiches_andLeavesThePreferences() throws {
-        let suite = "awaiting-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let legacy = #"[{"clientMessageId":"cm1","conversationId":"conv1","senderId":"user1","replyToId":"msg1"}]"#
-        defaults.set(Data(legacy.utf8), forKey: NotificationRepliesAwaitingRegime.legacyKey)
-
-        let store = NotificationRepliesAwaitingRegime(fileURL: nil, legacyDefaults: defaults)
+        let url = Self.temporaryStoreURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let defaults = try legacyDefaults()
+        let store = NotificationRepliesAwaitingRegime(fileURL: url, legacyDefaults: defaults)
 
         XCTAssertEqual(store.awaiting.map(\.clientMessageId), ["cm1"])
+        XCTAssertEqual(NotificationRepliesAwaitingRegime(fileURL: url).awaiting.map(\.clientMessageId), ["cm1"])
         XCTAssertNil(defaults.data(forKey: NotificationRepliesAwaitingRegime.legacyKey))
+    }
+
+    // MARK: - Un fichier illisible n'est jamais écrasé (#14694)
+
+    private static func temporaryStoreURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("awaiting-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("awaiting-regime.json")
+    }
+
+    private func legacyDefaults() throws -> UserDefaults {
+        let suite = "awaiting-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
+        let legacy = #"[{"clientMessageId":"cm1","conversationId":"conv1","senderId":"user1","replyToId":"msg1"}]"#
+        defaults.set(Data(legacy.utf8), forKey: NotificationRepliesAwaitingRegime.legacyKey)
+        return defaults
+    }
+
+    private static func fiche(_ content: String = secret) -> NotificationReplyAwaitingRegime {
+        NotificationReplyAwaitingRegime(
+            OfflineQueueItem(conversationId: "conv1", content: content, replyToId: "msg1"), senderId: "user1"
+        )
+    }
+
+    func test_awaitingStore_corruptedFile_isNeverOverwrittenByAnAdd() throws {
+        let url = Self.temporaryStoreURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let corrupted = Data(#"[{"clientMessageId":"cm-old","conversationId""#.utf8)
+        try corrupted.write(to: url)
+
+        let store = NotificationRepliesAwaitingRegime(fileURL: url)
+        let added = Self.fiche()
+        store.add(added)
+
+        XCTAssertEqual(try Data(contentsOf: url), corrupted, "le fichier illisible reste tel quel")
+        XCTAssertEqual(store.awaiting.map(\.clientMessageId), [added.clientMessageId], "la fiche tient en mémoire")
+    }
+
+    /// Avant le premier déverrouillage, le fichier existe mais ne se lit pas :
+    /// une réponse ajoutée ne l'écrase pas, et le fichier relu ensuite rend
+    /// ses fiches ET la nouvelle.
+    func test_awaitingStore_fileUnreadableUntilUnlock_keepsItsFichesAndMergesOnceReadable() throws {
+        let url = Self.temporaryStoreURL()
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+            try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+        }
+        let earlier = Self.fiche("avant")
+        NotificationRepliesAwaitingRegime(fileURL: url).add(earlier)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: url.path)
+
+        let store = NotificationRepliesAwaitingRegime(fileURL: url)
+        let added = Self.fiche()
+        store.add(added)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+
+        let expected = Set([earlier.clientMessageId, added.clientMessageId])
+        XCTAssertEqual(Set(store.awaiting.map(\.clientMessageId)), expected, "le fichier relu rejoint la mémoire")
+        XCTAssertEqual(Set(NotificationRepliesAwaitingRegime(fileURL: url).awaiting.map(\.clientMessageId)), expected,
+                       "et le disque garde les deux")
+    }
+
+    func test_awaitingStore_migrationNotWritten_keepsTheLegacyKeyAndTheMigratedDate() throws {
+        let blocker = FileManager.default.temporaryDirectory.appendingPathComponent("awaiting-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: blocker) }
+        try Data().write(to: blocker)
+        let unwritable = blocker.appendingPathComponent("awaiting-regime.json")
+        let defaults = try legacyDefaults()
+
+        let first = NotificationRepliesAwaitingRegime(fileURL: unwritable, legacyDefaults: defaults)
+        let second = NotificationRepliesAwaitingRegime(fileURL: unwritable, legacyDefaults: defaults)
+
+        XCTAssertNotNil(defaults.data(forKey: NotificationRepliesAwaitingRegime.legacyKey), "rien n'est perdu tant que le fichier n'est pas écrit")
+        XCTAssertEqual(first.awaiting.map(\.clientMessageId), ["cm1"])
+        XCTAssertEqual(second.awaiting.first?.createdAt, first.awaiting.first?.createdAt,
+                       "la fiche migrée garde sa date : la borne de 24 h s'atteint")
     }
 
     func test_handleReply_gatewayServesReadableMode_sendsTheReply() async {
@@ -381,7 +476,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
     func test_confirmAwaiting_gatewayNoLongerServesTheConversation_withdrawsAndSaysIt() async {
         let sut = makeSUT()
         _ = await waitingReply(sut)
-        sut.conversations.getByIdResult = .failure(MeeshyError.forbidden(reason: nil, body: nil))
+        sut.conversations.getByIdResult = .failure(Self.notAMember)
 
         await sut.handler.confirmRepliesAwaitingRegime()
 
@@ -391,7 +486,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
     func test_confirmAwaiting_conversationGone_withdrawsAndSaysIt() async {
         let sut = makeSUT()
         _ = await waitingReply(sut)
-        sut.conversations.getByIdResult = .failure(MeeshyError.server(statusCode: 404, message: "Not found"))
+        sut.conversations.getByIdResult = .failure(Self.conversationNotFound)
 
         await sut.handler.confirmRepliesAwaitingRegime()
 
@@ -399,7 +494,8 @@ final class NotificationReplyRegimeTests: XCTestCase {
     }
 
     func test_confirmAwaiting_serverErrorOrExpiredSession_keepsWaiting() async {
-        for error: Error in [MeeshyError.server(statusCode: 503, message: "busy"), MeeshyError.auth(.sessionExpired)] {
+        let transient: [Error] = [MeeshyError.server(statusCode: 503, message: "busy"), MeeshyError.auth(.sessionExpired)]
+        for error in transient + Self.intermediaryRefusals {
             let sut = makeSUT()
             _ = await waitingReply(sut)
             sut.conversations.getByIdResult = .failure(error)
@@ -413,12 +509,54 @@ final class NotificationReplyRegimeTests: XCTestCase {
     }
 
     func test_handleReply_gatewayNoLongerServesTheConversation_writesNothingAndSaysIt() async {
-        let sut = makeSUT(served: .failure(MeeshyError.server(statusCode: 404, message: "Not found")))
+        let sut = makeSUT(served: .failure(Self.conversationNotFound))
 
         await reply(sut, userInfo: replyUserInfo())
 
         assertWithdrawn(sut)
         XCTAssertTrue(sut.notices.waiting.isEmpty, "rien n'attend une conversation qui n'est plus servie")
+    }
+
+    func test_handleReply_intermediaryRefusalDuringADeploy_holdsTheReply() async {
+        for error in Self.intermediaryRefusals {
+            let sut = makeSUT(served: .failure(error))
+
+            await reply(sut, userInfo: replyUserInfo())
+
+            assertNoPlaintextLeft(sut)
+            XCTAssertEqual(sut.awaiting.awaiting.count, 1, "\(error) n'est pas la passerelle : la réponse attend")
+            XCTAssertEqual(vaultTexts(sut), [Self.secret])
+            XCTAssertEqual(sut.notices.waiting.count, 1)
+            XCTAssertTrue(sut.notices.dropped.isEmpty)
+        }
+    }
+
+    func test_isDefinitive_onlyTheGatewayCodesOfAConversationNoLongerServed() {
+        XCTAssertTrue(NotificationReplyRegime.isDefinitive(Self.conversationNotFound))
+        XCTAssertTrue(NotificationReplyRegime.isDefinitive(Self.notAMember))
+        for error in Self.intermediaryRefusals {
+            XCTAssertFalse(NotificationReplyRegime.isDefinitive(error), "\(error)")
+        }
+        let otherGatewayRefusal = MeeshyError.forbidden(
+            reason: "Consentement", body: Data(#"{"success":false,"error":"Consentement","code":"CONSENT_REQUIRED"}"#.utf8)
+        )
+        XCTAssertFalse(NotificationReplyRegime.isDefinitive(otherGatewayRefusal), "un autre refus ne dit pas que la conversation est perdue")
+    }
+
+    func test_confirmAwaiting_accountSwitchedWhileReadingTheVault_sendsNothing() async {
+        let sut = makeSUT()
+        _ = await waitingReply(sut)
+        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+        let log = sut.notices
+        sut.vault.onPlaintexts = { @MainActor in log.activeUser = "user2" }
+
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        XCTAssertEqual(sut.messages.sendCallCount, 0, "la réponse de user1 ne part pas sous user2")
+        XCTAssertTrue(sut.queue.enqueuedItems.isEmpty)
+        XCTAssertTrue(sut.persistence.insertedRecords.isEmpty)
+        XCTAssertEqual(sut.awaiting.awaiting.map(\.senderId), ["user1"], "la fiche attend son compte")
+        XCTAssertEqual(vaultTexts(sut), [Self.secret])
     }
 
     func test_confirmAwaiting_pastItsAge_isWithdrawnWithoutReadingTheGateway() async {
