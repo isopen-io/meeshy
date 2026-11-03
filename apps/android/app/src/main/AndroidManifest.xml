@@ -192,6 +192,32 @@
                 <data android:scheme="https" android:host="meeshy.me" android:path="/world" />
                 <data android:scheme="https" android:host="www.meeshy.me" android:path="/world" />
             </intent-filter>
+            <!-- lot: racine-liens-profonds-android — App Links des destinations de DeepLinkParser que le graphe ne
+                 lit pas : la racine (DeepLinkRouter) les ouvre. Les hôtes et les chemins se combinent ; un lien à
+                 jeton d'e-mail n'est JAMAIS ici (filtres dédiés plus haut). /share n'est pas revendiqué. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="meeshy.me" />
+                <data android:host="www.meeshy.me" />
+                <data android:host="app.meeshy.me" />
+                <data android:path="/me" />
+                <data android:pathPrefix="/me/" />
+                <data android:pathPrefix="/c/" />
+                <data android:pathPrefix="/conversation/" />
+                <data android:pathPrefix="/l/" />
+                <data android:pathPrefix="/p/" />
+                <data android:pathPrefix="/s/" />
+                <data android:pathPrefix="/stories/" />
+                <data android:pathPrefix="/users/" />
+                <data android:pathPrefix="/reels" />
+                <data android:pathPrefix="/community/" />
+                <data android:pathPrefix="/communities/" />
+                <data android:pathPrefix="/hashtag/" />
+                <data android:pathPrefix="/signup" />
+            </intent-filter>
         </activity>
 
         <!-- "Share to Meeshy" target (feature-parity §O, #13585) : texte, lien, images, vidéos et FICHIERS quelconques,

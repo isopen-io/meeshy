@@ -29,9 +29,18 @@ internal object DynamicShortcutsPublisher {
 
     fun publish(context: Context, conversations: List<ApiConversation>, currentUserId: String?) {
         val maxCount = ShortcutManagerCompat.getMaxShortcutCountPerActivity(context)
-        val presentation = DynamicShortcutsPresentation.from(conversations, currentUserId, maxCount)
+        val presentation = DynamicShortcutsPresentation.from(conversations, currentUserId, EntryShortcut.conversationSlots(maxCount))
         val icon = IconCompat.createWithResource(context, R.mipmap.ic_launcher)
-        val shortcuts = presentation.rows.map { row ->
+        val entries = EntryShortcut.entries.map { entry ->
+            val label = context.getString(entry.labelRes)
+            ShortcutInfoCompat.Builder(context, entry.shortcutId)
+                .setShortLabel(label)
+                .setLongLabel(label)
+                .setIcon(icon)
+                .setIntent(Intent(Intent.ACTION_VIEW, Uri.parse(entry.address), context, MainActivity::class.java))
+                .build()
+        }
+        val shortcuts = entries + presentation.rows.map { row ->
             ShortcutInfoCompat.Builder(context, row.id)
                 .setShortLabel(row.shortLabel)
                 .setLongLabel(row.shortLabel)

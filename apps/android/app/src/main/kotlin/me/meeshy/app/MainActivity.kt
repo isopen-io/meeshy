@@ -38,6 +38,8 @@ import me.meeshy.app.navigation.LaunchExtras
 import me.meeshy.app.navigation.LaunchRouter
 import me.meeshy.app.navigation.MeeshyApp
 import me.meeshy.app.navigation.ProvideRootSplash
+import me.meeshy.app.navigation.DeepLinkDispatcher
+import me.meeshy.app.navigation.LaunchLinkAdoption
 import me.meeshy.app.navigation.VisitorContentPresenter
 import me.meeshy.app.navigation.VisitorLinkGate
 import me.meeshy.sdk.auth.AuthRepository
@@ -129,6 +131,10 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var authRepository: AuthRepository
 
+    /** Les liens que le graphe ne lit pas (hashtag, communauté, `/c/`, `/l/`, récentes, non lues, invitation). */
+    @Inject
+    lateinit var linkDispatcher: DeepLinkDispatcher
+
     /** La suite d'un toucher de push : ouverture sur le bus, puis notification marquée lue. */
     @Inject
     lateinit var pushTapConsumer: PushTapConsumer
@@ -173,6 +179,7 @@ class MainActivity : ComponentActivity() {
         val restored = savedInstanceState != null
         launchRoute = LaunchRouter.onCreateRoute(launchRouteOf(intent), restored)
         if (!restored) divertVisitorLink(intent, atLaunch = true)
+        LaunchLinkAdoption.adopt(intent, linkDispatcher, restored)?.let { if (warmDeepLink == null) warmDeepLink = it }
         // Restaurée, l'activité relit l'intent ORIGINAL : la demande d'appel a déjà été présentée, elle ne revient pas.
         callLink = callLinkOf(intent).takeUnless { restored }
         callPictureInPicture.attachActivity(
@@ -316,6 +323,7 @@ class MainActivity : ComponentActivity() {
         warmDeepLink = if (launchRoute == null && callLink == null) WarmDeepLink.replayable(intent) else null
         warmDeepLinkAwaitsAccount = false
         divertVisitorLink(intent, atLaunch = false)
+        LaunchLinkAdoption.rememberReferral(intent, linkDispatcher)
     }
 
     /**
