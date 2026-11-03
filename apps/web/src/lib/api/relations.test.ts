@@ -7,9 +7,9 @@ import {
   decodeRelationLink,
   decodeRitualStep,
   loadRelationLinks,
-  loadRelationRaiseBlock,
+  loadRelationRaiseGate,
   lowerRelation,
-  relationRaiseBlockQueryKey,
+  relationRaiseGateQueryKey,
   relationLinksQueryOptions,
   relationRefusalOf,
   runRitualPhase,
@@ -159,21 +159,27 @@ describe('lowerRelation — POST /api/v1/relations/:userId/level (#14910)', () =
   });
 });
 
-describe('le délai avant de redemander (#14910) — `raiseBlockedUntil` de GET /relations/:userId', () => {
-  test('lu quand il est servi, absent sinon (passerelle d’avant)', async () => {
-    const served = fakeTransport({ ok: true, data: servedLink({ raiseBlockedUntil: '2026-12-01T00:00:00.000Z' }) });
-    expect(await loadRelationRaiseBlock({ source: 'gateway', transport: served.transport }, 'u 1')).toEqual({ ok: true, data: '2026-12-01T00:00:00.000Z' });
+describe('la porte de montée (#14910) — `canRaise` et `raiseBlockedUntil` de GET /relations/:userId', () => {
+  test('lus quand ils sont servis, null sinon (passerelle d’avant)', async () => {
+    const served = fakeTransport({ ok: true, data: servedLink({ canRaise: false, raiseBlockedUntil: '2026-12-01T00:00:00.000Z' }) });
+    expect(await loadRelationRaiseGate({ source: 'gateway', transport: served.transport }, 'u 1')).toEqual({
+      ok: true,
+      data: { canRaise: false, raiseBlockedUntil: '2026-12-01T00:00:00.000Z' },
+    });
     expect(served.requests.map((r) => [r.method, r.path])).toEqual([['GET', '/api/v1/relations/u%201']]);
     const old = fakeTransport({ ok: true, data: { userId: 'u1', effectiveLevel: 'FRIEND' } });
-    expect(await loadRelationRaiseBlock({ source: 'gateway', transport: old.transport }, 'u1')).toEqual({ ok: true, data: null });
+    expect(await loadRelationRaiseGate({ source: 'gateway', transport: old.transport }, 'u1')).toEqual({ ok: true, data: { canRaise: null, raiseBlockedUntil: null } });
   });
 
-  test('décodé sur le lien quand il est servi, sans clé sinon', () => {
-    expect(decodeRelationLink(servedLink({ raiseBlockedUntil: '2026-12-01T00:00:00.000Z' }))?.raiseBlockedUntil).toBe('2026-12-01T00:00:00.000Z');
-    expect(decodeRelationLink(servedLink()) ?? {}).not.toHaveProperty('raiseBlockedUntil');
+  test('décodés sur le lien quand ils sont servis, sans clé sinon', () => {
+    const link = decodeRelationLink(servedLink({ canRaise: true, raiseBlockedUntil: '2026-12-01T00:00:00.000Z' }));
+    expect(link?.raiseBlockedUntil).toBe('2026-12-01T00:00:00.000Z');
+    expect(link?.canRaise).toBe(true);
+    expect(Object.keys(decodeRelationLink(servedLink()) ?? {})).not.toContain('raiseBlockedUntil');
+    expect(Object.keys(decodeRelationLink(servedLink({ canRaise: 'yes' })) ?? {})).not.toContain('canRaise');
   });
 
   test('sa clé vit dans la famille `friends`', () => {
-    expect(relationRaiseBlockQueryKey('u1').slice(0, FRIENDS_QUERY_PREFIX.length)).toEqual([...FRIENDS_QUERY_PREFIX]);
+    expect(relationRaiseGateQueryKey('u1').slice(0, FRIENDS_QUERY_PREFIX.length)).toEqual([...FRIENDS_QUERY_PREFIX]);
   });
 });
