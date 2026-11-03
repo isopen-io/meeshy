@@ -1,5 +1,5 @@
 import { fetchCardMediaBlob } from '@/lib/export/message-card-fetch';
-import { saveToGallery } from '@/lib/gallery/save-to-gallery';
+import { isInGallery, saveToGallery } from '@/lib/gallery/save-to-gallery';
 import type { GallerySaver } from '@/lib/gallery/gallery-saver';
 import type { FileDeliveryHost } from '@/lib/media/file-delivery-host';
 
@@ -74,7 +74,7 @@ async function deliverFile(params: {
   readonly gallerySaver: GallerySaver | null;
 }): Promise<SceneDelivery> {
   const gallery = await saveToGallery({ saver: params.gallerySaver, blob: params.blob, fileName: params.fileName, mimeType: params.mimeType });
-  if (gallery !== null) return gallery === 'media.viewer.saved' ? 'delivered' : 'failed';
+  if (gallery !== null) return isInGallery(gallery) ? 'delivered' : 'failed';
   const { fileDeliveryPortal } = await import('@/lib/media/deliver-file');
   const portal = fileDeliveryPortal(params.host);
   return sceneDeliveryOf(portal === null ? 'unavailable' : await portal.deliver(params.blob, params.fileName, params.mimeType));

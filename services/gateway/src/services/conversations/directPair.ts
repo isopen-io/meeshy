@@ -22,6 +22,7 @@
  * quitté n'est plus celui de la paire.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { unsetOrNull } from '../../utils/prisma-unset';
 import { LEAVABLE_ACTIVE_MODES, SERVER_BLIND_REGIME_FILTER, SERVER_READABLE_REGIME_FILTER } from './encryptionRegime';
 
 export type DirectPair = { readonly userId: string; readonly peerId: string };
@@ -29,6 +30,9 @@ export type DirectPair = { readonly userId: string; readonly peerId: string };
 const bothActive = (pair: DirectPair): readonly Record<string, unknown>[] => [
   { participants: { some: { userId: pair.userId, isActive: true } } },
   { participants: { some: { userId: pair.peerId, isActive: true } } },
+  // #14643 — une conversation obsolète (contenu effacé, purge programmée) n'est
+  // plus celle de la paire : la recréer en ouvre une neuve.
+  unsetOrNull('deletedAt'),
 ];
 
 /**

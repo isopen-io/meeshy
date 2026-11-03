@@ -10,12 +10,15 @@ import me.meeshy.sdk.model.sticker.StickerTemplateCatalog
  */
 data class BubbleStickerSpec(val sticker: MessageSticker, val picture: StickerPicture?) {
     val source: StickerRenderSource
-        get() = StickerRenderSource.resolve(
-            sticker = sticker,
-            picture = picture,
-            registryKnows = { StickerTemplateCatalog.template(it) != null },
-            templateFallbackEmoji = StickerTemplateCatalog::fallbackEmoji,
-        )
+        get() = sourceWith { it in StickerTemplateCatalog.composeDrawnIds }
+
+    /** [drawn] : ce que l'hôte sait DESSINER ; un gabarit catalogué mais non dessiné retombe sur son emoji de repli. */
+    fun sourceWith(drawn: (String) -> Boolean): StickerRenderSource = StickerRenderSource.resolve(
+        sticker = sticker,
+        picture = picture,
+        registryKnows = drawn,
+        templateFallbackEmoji = StickerTemplateCatalog::fallbackEmoji,
+    )
 
     companion object {
         fun resolve(sticker: MessageSticker?, firstImage: StickerPicture?): BubbleStickerSpec? {

@@ -8,6 +8,10 @@ struct LicensesView: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     private let accentColor = "6366F1"
+    private let source = SourceOffer(bundle: .main)
+
+    @State private var libsignalNotices: [LicenseNotice] = []
+    @State private var presentedNotice: LicenseNotice?
 
     private let licenses: [OpenSourceLicense] = [
         OpenSourceLicense(name: "Socket.IO Client Swift", author: "Socket.IO", licenseType: "MIT", url: "https://github.com/socketio/socket.io-client-swift"),
@@ -29,13 +33,36 @@ struct LicensesView: View {
                 content: { pageContent }
             )
         }
+        .task { libsignalNotices = await Self.loadLibsignalNotices() }
+        .sheet(item: $presentedNotice) { LicenseTextView(notice: $0) }
+    }
+
+    private static func loadLibsignalNotices() async -> [LicenseNotice] {
+        await Task.detached(priority: .userInitiated) { LicenseNotices.libsignal() }.value
+    }
+
+    private func openAGPL() {
+        guard let text = LicenseNotices.agplText() else { return }
+        presentedNotice = LicenseNotice(
+            title: String(localized: "about.licenses.agpl.title", defaultValue: "Texte de la licence AGPL-3.0", bundle: .main),
+            license: nil,
+            text: text
+        )
     }
 
     // MARK: - Content
 
     private var pageContent: some View {
         VStack(spacing: MeeshySpacing.md) {
-            sectionHeader(title: String(localized: "about.licenses.section.open_source", defaultValue: "Open source", bundle: .main), icon: "checkmark.seal.fill", color: accentColor)
+            LicensesAGPLSection(source: source, accentColor: accentColor, onOpenAGPL: openAGPL)
+
+            if !libsignalNotices.isEmpty {
+                LicensesLibsignalSection(notices: libsignalNotices, accentColor: accentColor) { presentedNotice = $0 }
+                    .padding(.top, MeeshySpacing.md)
+            }
+
+            LicensesSectionHeader(title: String(localized: "about.licenses.section.open_source", defaultValue: "Open source", bundle: .main), icon: "checkmark.seal.fill", color: accentColor)
+                .padding(.top, MeeshySpacing.md)
 
             Text(String(localized: "about.licenses.intro", defaultValue: "Meeshy utilise les bibliothèques open source suivantes.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
@@ -84,7 +111,7 @@ struct LicensesView: View {
 
                 Image(systemName: "arrow.up.right")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
             }
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .padding(.vertical, MeeshySpacing.md)
@@ -103,23 +130,6 @@ struct LicensesView: View {
     }
 
     // MARK: - Helpers
-
-    private func sectionHeader(title: String, icon: String, color: String) -> some View {
-        HStack(spacing: MeeshySpacing.xsPlus) {
-            Image(systemName: icon)
-                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                .foregroundColor(Color(hex: color))
-            Text(title.uppercased())
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
-                .foregroundColor(Color(hex: color))
-                .tracking(1.2)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.leading, MeeshySpacing.xs)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(.isHeader)
-    }
 
     private func badgeColor(for licenseType: String) -> String {
         switch licenseType {

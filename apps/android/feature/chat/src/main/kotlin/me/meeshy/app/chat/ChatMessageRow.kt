@@ -129,7 +129,7 @@ internal fun ChatMessageRow(
     val replyLabel = stringResource(R.string.chat_action_reply)
     val forwardLabel = stringResource(R.string.chat_action_forward)
     val menuLabel = stringResource(R.string.chat_swipe_action_menu)
-    val callbacks = remember(bubble, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel, menuLabel, reacts) {
+    val callbacks = remember(bubble, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel, menuLabel, reacts, canWrite) {
         BubbleCallbacks(
             onLongPress = { actions.onLongPress(messageId) },
             onReactionClick = { emoji: String -> actions.onReactionClick(messageId, emoji) }.takeIf { reacts },
@@ -148,6 +148,7 @@ internal fun ChatMessageRow(
                 ?.let { postId -> { actions.onStoryCitationOpen(postId) } },
             onFlagTap = { code -> actions.onFlagTap(messageId, code) },
             onRetry = { actions.onRetry(messageId) },
+            onSayHi = { actions.onReply(messageId) }.takeIf { canWrite && bubble.isArrivalsNotice },
             onAddReaction = { actions.onAddReaction(messageId) }.takeIf { reacts },
             onSenderTap = if (bubble.senderProfile != null) {
                 { actions.onSenderTap(bubble) }

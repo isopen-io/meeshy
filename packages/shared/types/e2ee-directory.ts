@@ -302,3 +302,23 @@ export type E2EERelayRequest = {
   /** La session (`sid`) de l'appel, qui doit être celle de l'appareil émetteur. */
   readonly sessionId: string | null;
 };
+
+/**
+ * La COUCHE APPAREIL d'un envoi hybride (#14369) : le même relais libsignal
+ * qu'un envoi `e2ee` (une enveloppe opaque par appareil, admise par Sesame),
+ * mais posé À CÔTÉ d'un texte en clair que la passerelle scelle au repos. Elle
+ * ne naît que d'un envoi SANS `encryptedContent` : un chiffré n'a pas de clair
+ * à côté, et un clair n'a de couche appareil que dans une conversation `hybrid`.
+ *
+ * Ce qu'elle apporte au destinataire : l'intégrité et le transit (le texte
+ * scellé par l'appareil émetteur se compare au texte servi), jamais la
+ * confidentialité vis-à-vis du serveur, qui lit la couche serveur.
+ */
+export type E2EEDeviceLayerRequest = {
+  readonly relay: E2EERelayRequest;
+  /** L'époque du régime sous laquelle l'appareil a scellé (#12522), quand il la déclare. */
+  readonly regimeEpoch?: number;
+};
+
+/** La clé de `Message.metadata` qui dit qu'un message hybride porte sa couche appareil (#14369). */
+export const HYBRID_DEVICE_LAYER_METADATA_KEY = 'deviceLayer' as const;

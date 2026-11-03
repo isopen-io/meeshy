@@ -29,6 +29,7 @@ import me.meeshy.sdk.post.ImpressionBatcher
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.post.writeMediaCaptionTranslationsTo
 import me.meeshy.sdk.post.writePostTranslationsTo
+import me.meeshy.sdk.post.writePostReactionsTo
 import me.meeshy.sdk.post.writePostUpdatesTo
 import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.report.ReportRepository
@@ -159,6 +160,10 @@ class FeedViewModel @Inject constructor(
         }
         viewModelScope.launch {
             publications.notices.collect { notice -> _state.update { it.copy(notice = notice.feedNotice) } }
+        }
+        viewModelScope.launch {
+            // Un j'aime ou un favori que la file a perdu : le retour arrière est déjà fait, le fil le DIT.
+            postRepository.gestureRefusals.collect { refusal -> _state.update { it.copy(notice = refusal.feedNotice) } }
         }
         viewModelScope.launch {
             combine(
@@ -298,6 +303,15 @@ class FeedViewModel @Inject constructor(
             // (the broadcast is unpersonalized). Mirror of iOS FeedViewModel's post:updated
             // sink, and the content-edit sibling of post:translation-updated above.
             socialSocket.writePostUpdatesTo(postRepository)
+        }
+        viewModelScope.launch {
+            // post:reaction-added / -removed — le compte ABSOLU d'un emoji s'ecrit dans le fil (iOS handlePostReaction).
+            socialSocket.writePostReactionsTo(postRepository)
+        }
+        viewModelScope.launch {
+            // Reconnexion de la socket : les evenements emis pendant la coupure sont perdus, la tete se relit en silence
+            // (la fusion garde les pages defilees et la tete temps reel) — iOS `didReconnect`.
+            socialSocket.reconnected.collect { postRepository.refresh() }
         }
     }
 
@@ -626,10 +640,12 @@ class FeedViewModel @Inject constructor(
 
     /** Bookmark analogue of [toggleLike] — same durable-outbox toggle, same flush schedule. */
     fun toggleBookmark(postId: String) {
+        val adding = cardOf(postId)?.isBookmarkedByMe != true
         viewModelScope.launch {
             try {
-                postRepository.toggleBookmark(postId)
+                val accepted = postRepository.toggleBookmark(postId)
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
+                if (accepted && adding) _state.update { it.copy(notice = FeedNotice.BOOKMARKED) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

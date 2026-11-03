@@ -105,15 +105,8 @@ export const bringStoppedEventSchema = z.object({
 });
 export type BringStoppedEventData = z.infer<typeof bringStoppedEventSchema>;
 
-/** Les réglages par personne que JE pose pour l'autre (`/relations/:userId/settings`). */
-export const relationPersonSettingsSchema = z.object({
-  userId: z.string(),
-  bringBlocked: z.boolean(),
-});
-export type RelationPersonSettings = z.infer<typeof relationPersonSettingsSchema>;
-
-export const relationPersonSettingsUpdateSchema = z.object({ bringBlocked: z.boolean() }).strict();
-export type RelationPersonSettingsUpdate = z.infer<typeof relationPersonSettingsUpdateSchema>;
+/** Les réglages par personne (`/relations/:userId/settings`) : `./relation-person-settings.ts`. */
+export * from './relation-person-settings.js';
 
 /**
  * Le `data` des pushes du Bring (APNs et FCM : `Record<string, string>`).

@@ -1,6 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="about_app_name">Meeshy</string>
+    <string name="about_copy">Copier</string>
     <string name="about_copyright">2024-2026 Meeshy. Tous droits réservés.</string>
     <string name="about_description_body">Meeshy est une plateforme de messagerie en temps réel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout.</string>
     <string name="about_feature_cloud_sync">Synchronisation cloud</string>
@@ -8,11 +9,19 @@
     <string name="about_feature_themes">Thèmes personnalisables</string>
     <string name="about_feature_translation">Traduction en temps réel</string>
     <string name="about_feature_voice_cloning">Clonage vocal</string>
+    <string name="about_info_media_tier">Profil média</string>
     <string name="about_info_platform">Plateforme</string>
     <string name="about_info_sdk_version">Version du SDK</string>
+    <string name="about_link_about">À propos de Meeshy</string>
+    <string name="about_link_contact">Nous contacter</string>
     <string name="about_link_github">GitHub</string>
+    <string name="about_link_partners">Partenaires</string>
     <string name="about_link_twitter">Twitter / X</string>
     <string name="about_link_website">Site web</string>
+    <string name="about_media_tier_high">Élevé</string>
+    <string name="about_media_tier_low">Basique</string>
+    <string name="about_media_tier_mid">Intermédiaire</string>
+    <string name="about_media_tier_pro">Pro</string>
     <string name="about_section_description">Description</string>
     <string name="about_section_features">Fonctionnalités</string>
     <string name="about_section_informations">Informations</string>
@@ -93,6 +102,17 @@
     <string name="delete_account_warning_conversations">Toutes vos conversations</string>
     <string name="delete_account_warning_messages">Tous vos messages</string>
     <string name="delete_account_warning_preferences">Vos préférences et paramètres</string>
+    <string name="licenses_agpl_title">Texte de la licence AGPL-3.0</string>
+    <string name="licenses_libsignal_body">libsignal et les bibliothèques qu’il intègre, avec le texte de leurs licences.</string>
+    <string name="licenses_libsignal_title">Avis de libsignal</string>
+    <string name="licenses_meeshy_body">Le code source de Meeshy est publié sous licence MIT. Cette application intègre libsignal (Signal Messenger), publié sous licence GNU AGPL-3.0 : l’application distribuée est donc une œuvre sous licence AGPL-3.0 uniquement.</string>
+    <string name="licenses_meeshy_body_mit">Le code source de Meeshy est publié sous licence MIT.</string>
+    <string name="licenses_meeshy_title">Licence de Meeshy</string>
+    <string name="licenses_source_body">Le code source correspondant à cette version, scripts de construction compris, est disponible gratuitement.</string>
+    <string name="licenses_source_commit">Révision %1$s</string>
+    <string name="licenses_source_open">Ouvrir le code source</string>
+    <string name="licenses_source_title">Code source</string>
+    <string name="licenses_text_hint">Affiche le texte intégral de la licence</string>
     <string name="licenses_title">Licences open source</string>
     <string name="licenses_type_other">Autre</string>
     <string name="location_map_style_hybrid">Hybride</string>
@@ -275,6 +295,8 @@
     <string name="settings_transcription_engine">Moteur de transcription</string>
     <string name="settings_transcription_engine_a11y">Moteur de transcription</string>
     <string name="settings_version_label">Version</string>
+    <string name="support_a11y_opens">Ouvre %1$s</string>
+    <string name="support_help_rate">Noter l\'app</string>
     <string name="support_info_build">Build</string>
     <string name="support_info_platform">Plateforme</string>
     <string name="support_info_version">Version</string>

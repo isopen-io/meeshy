@@ -75,6 +75,9 @@ export const byIdMarkRead = (id: string): string => `/api/v1/conversations/${enc
 /** POST /api/v1/conversations/:id/mark-unread */
 export const byIdMarkUnread = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/mark-unread`;
 
+/** POST /api/v1/conversations/:id/message-request/accept */
+export const byIdMessageRequestAccept = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/message-request/accept`;
+
 /** GET · POST /api/v1/conversations/:id/messages */
 export const byIdMessages = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/messages`;
 
@@ -98,6 +101,9 @@ export const byIdMessagesSearch = (id: string): string => `/api/v1/conversations
 
 /** POST /api/v1/conversations/:id/new-link */
 export const byIdNewLink = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/new-link`;
+
+/** DELETE /api/v1/conversations/:id/obsolete */
+export const byIdObsolete = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/obsolete`;
 
 /** GET · POST /api/v1/conversations/:id/participants */
 export const byIdParticipants = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/participants`;

@@ -34,6 +34,9 @@ public enum class OutboxKind {
     CREATE_COMMENT,
     CONSUME_AFTER_READ,
     CONSUME_VIEW_ONCE,
+
+    /** Un message chiffré de bout en bout (#14591) : la ligne ne porte aucun clair, il attend au coffre E2EE. */
+    SEND_E2EE_MESSAGE,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -115,6 +118,7 @@ public object OutboxLaneMap {
         OutboxKind.SEND_MESSAGE,
         OutboxKind.EDIT_MESSAGE,
         OutboxKind.DELETE_MESSAGE,
+        OutboxKind.SEND_E2EE_MESSAGE,
         -> OutboxLaneAssignment.PerConversation
 
         OutboxKind.ADD_REACTION,
@@ -375,6 +379,30 @@ public data class ConversationPrefsPayload(
      * supersedes it.
      */
     val clearCategory: Boolean = false,
+    /**
+     * Ce que la ligne valait AVANT l'application optimiste : de quoi la restaurer si la file abandonne (retour arrière).
+     * Absent d'une ligne écrite avant ce champ ; [OutboxCoalescer] garde celui de la plus ancienne ligne remplacée,
+     * car c'est l'état que le serveur connaît encore.
+     */
+    val previous: ConversationPrefsPrevious? = null,
+)
+
+/**
+ * L'état des préférences avant l'écriture optimiste d'un instantané ([ConversationPrefsPayload.previous]).
+ * [baseVersion] est la version des préférences à cet instant : une diffusion plus récente depuis a déjà fait
+ * foi, et le retour arrière ne la défait pas.
+ */
+@kotlinx.serialization.Serializable
+public data class ConversationPrefsPrevious(
+    val baseVersion: Int = 0,
+    val isPinned: Boolean = false,
+    val isMuted: Boolean = false,
+    val isArchived: Boolean = false,
+    val mentionsOnly: Boolean = false,
+    val categoryId: String? = null,
+    val customName: String? = null,
+    val reaction: String? = null,
+    val tags: List<String>? = null,
 )
 
 /**

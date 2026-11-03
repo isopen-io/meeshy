@@ -49,6 +49,11 @@ const EXEMPTIONS: readonly Exemption[] = [
     pourquoi: 'Découvrir ne peint aucun point, par décision (D-60, `decodePerson`) — `scripts/check-discover.mjs` en compte zéro dans tous les états',
   },
   {
+    fichier: 'components/global-search-results.tsx',
+    combien: 1,
+    pourquoi: 'la recherche de personnes ne peint aucun point, comme Découvrir : `decodePerson` ne projette aucune présence (#14620)',
+  },
+  {
     fichier: 'routes/onboarding-cards.tsx',
     combien: 1,
     pourquoi: 'des suggestions de personnes qu’on ne connaît pas encore : la présence n’est servie qu’aux amis acceptés, aucune ne peut l’être',

@@ -481,4 +481,39 @@ class OutboxCoalescerTest {
 
         assertThat(OutboxCoalescer.decide(audio, listOf(privacy))).isEqualTo(CoalesceDecision.Enqueue(audio))
     }
+
+    @Test
+    fun `two preference snapshots of one conversation keep only the latest`() {
+        val first = row("p1", OutboxKind.UPDATE_CONVERSATION_PREFS, "c1")
+        val second = row("p2", OutboxKind.UPDATE_CONVERSATION_PREFS, "c1")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("p1"), second))
+    }
+
+    @Test
+    fun `preference snapshots of two conversations never merge`() {
+        val first = row("p1", OutboxKind.UPDATE_CONVERSATION_PREFS, "c1")
+        val second = row("p2", OutboxKind.UPDATE_CONVERSATION_PREFS, "c2")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first))).isEqualTo(CoalesceDecision.Enqueue(second))
+    }
+
+    @Test
+    fun `the oldest rollback state is carried onto the snapshot that supersedes`() {
+        fun prefsRow(cmid: String, pinned: Boolean, previous: ConversationPrefsPrevious?) = row(cmid, OutboxKind.UPDATE_CONVERSATION_PREFS, "c1").copy(
+            payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(
+                ConversationPrefsPayload.serializer(),
+                ConversationPrefsPayload(isPinned = pinned, isMuted = false, isArchived = false, mentionsOnly = false, previous = previous),
+            ),
+        )
+        val oldest = ConversationPrefsPrevious(isPinned = false)
+        val first = prefsRow("p1", true, oldest)
+        val second = prefsRow("p2", false, ConversationPrefsPrevious(isPinned = true))
+
+        val decision = OutboxCoalescer.decide(second, listOf(first)) as CoalesceDecision.Replace
+
+        val carried = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString(ConversationPrefsPayload.serializer(), decision.row.payload)
+        assertThat(carried.previous).isEqualTo(oldest)
+    }
 }

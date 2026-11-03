@@ -179,18 +179,11 @@ extension UserProfileSheet {
                     action: { Task { await declineRequest() } }
                 )
             case .connected:
-                HStack(spacing: MeeshySpacing.sm) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: MeeshyIconSize.sm))
-                        .foregroundColor(MeeshyColors.success)
-                    Text(String(localized: "profile.status.connected", defaultValue: "Connectes", bundle: .module))
-                        .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.success)
+                if let relationSection, let userId = resolvedUserId, !userId.isEmpty {
+                    relationSection.build(userId, displayUser.resolvedDisplayName)
+                } else {
+                    ProfileConnectedBadge()
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, MeeshySpacing.md)
-                .background(MeeshyColors.success.opacity(MeeshyOpacity.subtle))
-                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             }
 
             if isBlocked {

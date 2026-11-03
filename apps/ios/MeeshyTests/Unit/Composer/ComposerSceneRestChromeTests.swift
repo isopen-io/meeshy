@@ -15,6 +15,74 @@ final class ComposerSceneRestChromeTests: XCTestCase {
     private let portesDeLaStory = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
                                                            format: .story, allowsCapture: true)
 
+    // MARK: - La scène plus étroite que l'écran
+
+    /// Relevé au simulateur iPhone SE : la couche de scène fait 375 × 667 pt, le
+    /// 9:16 s'y pose sous 12 pt d'air (368,4 × 655), et le socle le réduit, dès
+    /// le repos, à la zone libre au-dessus de lui (604 pt de haut). La scène
+    /// DESSINÉE commence donc à 17,6 pt du bord : c'est cet écart que le chrome
+    /// du repos reprend.
+    func test_sceneSideInset_seLitSurLaSceneDessinee_reduiteParLeSocle() {
+        let couche = CGRect(x: 0, y: 0, width: 375, height: 667)
+        let auRepos: CGFloat = 604.0 / 655.0
+        let se = ComposerRestChrome.sceneSideInset(layer: couche, aspectRatio: 9.0 / 16.0, scale: auRepos)
+        XCTAssertEqual(se, (375 - 604 * 9.0 / 16.0) / 2, accuracy: 0.01)
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(layer: couche.offsetBy(dx: 20, dy: 0),
+                                                         aspectRatio: 9.0 / 16.0, scale: auRepos),
+                       se + 20, accuracy: 0.01, "une couche décalée dans la fenêtre décale la scène d'autant")
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(layer: couche, aspectRatio: 9.0 / 16.0, scale: 1),
+                       (375 - 655 * 9.0 / 16.0) / 2, accuracy: 0.01)
+    }
+
+    func test_sceneSideInset_uneSceneQuiPrendLaLargeur_nePousseRien() {
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(layer: CGRect(x: 0, y: 0, width: 402, height: 800),
+                                                         aspectRatio: 9.0 / 16.0, scale: 1), 0)
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(layer: .null, aspectRatio: 9.0 / 16.0, scale: 1), 0)
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(layer: .zero, aspectRatio: 9.0 / 16.0, scale: 1), 0)
+    }
+
+    /// Le haut de la scène dessinée : la levée s'ancre au haut du 9:16, qui ne
+    /// bouge que du décalage qu'elle applique. Sur le SE, 12 pt d'air au-dessus.
+    func test_sceneTop_estLeHautDu916_plusLeDecalageDeLaLevee() {
+        let couche = CGRect(x: 0, y: 0, width: 375, height: 667)
+        XCTAssertEqual(ComposerRestChrome.sceneTop(layer: couche, aspectRatio: 9.0 / 16.0, offsetY: 0), 12,
+                       accuracy: 0.01)
+        XCTAssertEqual(ComposerRestChrome.sceneTop(layer: couche.offsetBy(dx: 0, dy: 20), aspectRatio: 9.0 / 16.0,
+                                                   offsetY: -5), 27, accuracy: 0.01)
+        XCTAssertEqual(ComposerRestChrome.sceneTop(layer: .null, aspectRatio: 9.0 / 16.0, offsetY: 0), 0)
+    }
+
+    /// ✕ et ↶ ↷ descendent sous le haut de la scène quand elle commence plus bas
+    /// que le chrome ; une scène qui monte au-dessus de lui ne les déplace pas.
+    func test_sceneTopInset_poussseLeChromeSousLeHautDeLaScene_jamaisAuDessus() {
+        XCTAssertEqual(ComposerRestChrome.sceneTopInset(sceneTop: 12, chromeTop: 0), 12)
+        XCTAssertEqual(ComposerRestChrome.sceneTopInset(sceneTop: 50, chromeTop: 62), 0)
+    }
+
+    /// Un panneau, une feuille ou le clavier réduisent la scène davantage : ses
+    /// options ne la suivent pas, elles gardent l'écart du repos.
+    func test_restInset_seFigePendantUneReduction_seRelitAuRepos() {
+        XCTAssertEqual(ComposerRestChrome.restInset(measured: 17.6, sceneIsReduced: false, current: 0), 17.6)
+        XCTAssertEqual(ComposerRestChrome.restInset(measured: 80, sceneIsReduced: true, current: 17.6), 17.6)
+    }
+
+    /// Le relevé au SE l'a montré deux fois : un écart suspendu pendant une
+    /// « levée » restait à 0, la scène passant pour levée au repos
+    /// (`ComposerSceneLift.restingInset` vaut 4) ; lu sans l'échelle du repos, il
+    /// ne valait que 3,3 pt. La réduction qui fige l'écart est celle d'un
+    /// panneau, d'une feuille ou du clavier — jamais `sceneLiftInset`.
+    func test_lEcartDuRepos_suitLEchelleDuRepos_etNeSeFigeQueSurUnPanneau() throws {
+        let surface = try ComposerSceneArrangementTests.source("ComposerSceneSurface.swift")
+        XCTAssertTrue(surface.contains("ComposerRestChrome.sceneSideInset(layer:"))
+        XCTAssertTrue(surface.contains("scale: lift.scale"))
+        XCTAssertTrue(surface.contains("ComposerRestChrome.restInset(measured:"))
+        XCTAssertTrue(surface.contains("ComposerRestChrome.sceneTop(layer:"))
+        XCTAssertTrue(surface.contains("sceneTopInset: restSceneTopInset"))
+        XCTAssertFalse(surface.contains("sceneLiftInset > 0 ||"))
+    }
+
+
+
     // MARK: - La colonne
 
     func test_tools_enStory_lesCinqOutils_puisFondMentionLieu_puisPlus() {
@@ -64,8 +132,10 @@ final class ComposerSceneRestChromeTests: XCTestCase {
     func test_column_scrollsWhenItOverflows() throws {
         let chrome = try ComposerSceneArrangementTests.source("ComposerSceneOverlayChrome.swift")
         XCTAssertTrue(chrome.contains("ViewThatFits(in: .vertical)"), "la colonne se mesure à la hauteur libre")
-        XCTAssertTrue(chrome.contains("ScrollView(.vertical, showsIndicators: false) { toolButtons }"),
-                      "au-delà, elle défile")
+        XCTAssertTrue(chrome.contains("bodyButtons.modifier(ComposerScrollEdgeCue())"),
+                      "au-delà, ses outils défilent, le pied restant posé (#14622)")
+        let defilement = try ComposerSceneArrangementTests.source("ComposerScrollEdgeCue.swift")
+        XCTAssertTrue(defilement.contains("ScrollView(.vertical, showsIndicators: false)"), "le défilement est vertical")
     }
 
     func test_tools_chaqueBoutonAUnLibelleNonVide() {

@@ -1,0 +1,79 @@
+package me.meeshy.app.stories
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
+import me.meeshy.app.feed.rememberContentShareOut
+import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.share.ShareCard
+import me.meeshy.sdk.model.share.ShareCards
+import me.meeshy.sdk.model.share.ShareSubject
+import me.meeshy.feature.stories.R
+import me.meeshy.ui.haptics.MeeshyHaptics
+import me.meeshy.ui.share.LocalShareLauncher
+import me.meeshy.ui.share.open
+
+/**
+ * Propriétaire : lot story-viewer-decomposition-and-nav-graph. Ce que le lecteur FAIT d'une story courante quand
+ * l'utilisateur touche le menu ou le rail : partager, envoyer, republier, ouvrir un profil, fermer. Un lot qui
+ * ajoute un geste de menu l'ajoute ICI, jamais dans l'hôte.
+ */
+internal class StoryViewerActions(
+    val onClose: () -> Unit,
+    val onOpenProfile: (String) -> Unit,
+    val onEditStory: ((String) -> Unit)?,
+    val onComposeStory: ((String) -> Unit)?,
+    val share: () -> Unit,
+    val openSendTo: () -> Unit,
+    val repost: () -> Unit,
+)
+
+/** L'audience d'une story qui s'ouvre sans compte — la seule qui reçoit un lien suivi (#14315). */
+private const val PUBLIC_STORY_VISIBILITY = "PUBLIC"
+
+@Composable
+internal fun rememberStoryViewerActions(
+    state: StoryViewerUiState,
+    currentItem: StoryItem?,
+    chrome: StoryViewerChromeState,
+    haptics: MeeshyHaptics,
+    viewModel: StoryViewerViewModel,
+    onClose: () -> Unit,
+    onOpenProfile: (String) -> Unit,
+    onEditStory: ((String) -> Unit)?,
+    onComposeStory: ((String) -> Unit)?,
+): StoryViewerActions {
+    val shareLauncher = LocalShareLauncher.current
+    val context = LocalContext.current
+    val shareOut = rememberContentShareOut()
+
+    fun storyCard(): ShareCard? = state.currentStoryId?.let { storyId ->
+        ShareCards.story(
+            storyId = storyId,
+            authorId = null,
+            messageText = context.getString(R.string.share_story_text, state.authorName, ShareCards.storyUrl(storyId)),
+            isPublic = currentItem?.visibility.equals(PUBLIC_STORY_VISIBILITY, ignoreCase = true),
+        )
+    }
+
+    // « Envoyer » (#14315) : la feuille Meeshy, qui frappe le lien de l'utilisateur pour une story publique.
+    fun openSendTo() {
+        val card = storyCard() ?: return
+        val launcher = shareLauncher ?: return shareOut(card)
+        chrome.showSendTo = true
+        launcher.open(ShareSubject.Card(card)) { chrome.showSendTo = false }
+    }
+
+    return StoryViewerActions(
+        onClose = onClose,
+        onOpenProfile = onOpenProfile,
+        onEditStory = onEditStory,
+        onComposeStory = onComposeStory,
+        share = { storyCard()?.let(shareOut) },
+        openSendTo = ::openSendTo,
+        // « Republier » (#14443) : un geste publie, comme le rail iOS ; le lecteur reste ouvert et dit l'issue.
+        repost = {
+            haptics.light()
+            viewModel.repostCurrentStory()
+        },
+    )
+}

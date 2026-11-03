@@ -19,6 +19,7 @@ internal fun riverBubble(
     viewOnce: Boolean = false,
     viewOnceOpened: Boolean = false,
     expiresAtIso: String? = null,
+    sticker: me.meeshy.sdk.model.BubbleStickerSpec? = null,
 ): BubbleContent = BubbleContent(
     messageId = id,
     text = text,
@@ -39,4 +40,5 @@ internal fun riverBubble(
     isViewOnce = viewOnce,
     isViewOnceOpenedByMe = viewOnceOpened,
     expiresAtIso = expiresAtIso,
+    sticker = sticker,
 )

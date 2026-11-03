@@ -1,5 +1,7 @@
 package me.meeshy.app.chat
 
+import androidx.activity.compose.BackHandler
+import me.meeshy.sdk.model.media.MediaPresentation
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -34,6 +36,8 @@ import androidx.compose.ui.Modifier
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.model.selection.MessageSelection
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
@@ -160,9 +164,11 @@ internal fun ChatListHost(
     // flag keeps the jump from firing against an empty/unsettled window; the
     // latch guarantees the boundary is stable, so this fires exactly once.
     var didOpenScroll by remember { mutableStateOf(false) }
+    // La conversation s'ouvre SUR un message : ramassé une fois, le saut ne se rejoue pas à la prochaine ouverture.
+    val landingMessageId = remember { host.takeLandingMessageId() }
     LaunchedEffect(state.unreadBoundaryResolved, renderedItems) {
         if (didOpenScroll || !state.unreadBoundaryResolved) return@LaunchedEffect
-        val target = InitialScrollTarget.of(renderedItems, orientation) ?: return@LaunchedEffect
+        val target = InitialScrollTarget.of(renderedItems, orientation, landingMessageId) ?: return@LaunchedEffect
         listState.scrollToItem(target)
         didOpenScroll = true
     }
@@ -171,7 +177,8 @@ internal fun ChatListHost(
     // bottom — or when the message is their own. Reading history must never
     // be yanked down; the scroll-to-bottom control covers that case.
     LaunchedEffect(state.messages.lastOrNull()?.messageId) {
-        if (listItems.isEmpty()) return@LaunchedEffect
+        // A window anchored on an old message does not end at the present: its last row is no arrival.
+        if (listItems.isEmpty() || host.landing.hasMoreNewer) return@LaunchedEffect
         val isOwnMessage = state.messages.lastOrNull()?.isOutgoing == true
         val nearBottom = ChatScrollGeometry.isNearBottom(
             edgeIndex = ChatScrollGeometry.bottomEdgeIndex(
@@ -220,6 +227,10 @@ internal fun ChatListHost(
             )
         }
     }
+    // #14670 — au bas d'une fenêtre ancrée sur un message ancien, la page suivante vers le présent.
+    LaunchedEffect(isNearBottom, host.landing.hasMoreNewer, host.landing.isLoadingNewer) {
+        if (isNearBottom && host.landing.hasMoreNewer && !host.landing.isLoadingNewer) actions.loadNewer()
+    }
     // La pastille de jour flottante suit la loi d'iOS `MessageDayStickyLaw` : elle nomme la rangée
     // réellement en haut du fil, sous la bande d'en-tête, et se tait dès qu'un séparateur de jour
     // est à l'écran — jamais deux pastilles empilées. Masquée quand l'en-tête est déplié.
@@ -266,38 +277,49 @@ internal fun ChatListHost(
         }
     }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
-    var openedPlace by remember { mutableStateOf<OpenedPlace?>(null) }
+    val media = rememberChatMediaHost(actions.dismissImageViewer)
+    LaunchedEffect(state.imageViewer == null) { if (state.imageViewer == null) media.onImageViewerClosed() }
+    BackHandler(enabled = media.active != null && media.active !is MediaPresentation.Image) { media.close() }
     var pieceOverlay by remember { mutableStateOf<PieceOverlayModel?>(null) }
-    // Une vidéo du fil se regarde dans le lecteur de Meeshy, avec son PiP (#13822) ; un autre fichier sort par ACTION_VIEW.
-    var threadVideo by remember { mutableStateOf<ThreadPieceOpening.Video?>(null) }
     val currentMessages by rememberUpdatedState(state.messages)
     val haptics = rememberMeeshyHaptics()
     val selectionContext = LocalContext.current
     val capReachedMessage = stringResource(R.string.chat_selection_cap_reached)
-    val rowActions = remember(actions, bubbleFrames, profileOpener, haptics, capReachedMessage, host.navigation) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val openMessageMenu: (String) -> Unit = { id ->
+        MessageMenuKeyboard.open(id, { focusManager.clearFocus(force = true); keyboardController?.hide() }, actions.onMessageLongPress)
+    }
+    val rowActions = remember(actions, bubbleFrames, profileOpener, haptics, capReachedMessage, host.navigation, media) {
         ChatMessageRowActions(
             onReply = { messageId -> actions.startReply(messageId) },
             onForward = { messageId -> actions.openForward(messageId) },
-            onLongPress = { messageId -> actions.onMessageLongPress(messageId) },
+            onLongPress = { messageId -> openMessageMenu(messageId) },
             onReactionClick = { messageId, emoji -> actions.toggleReaction(messageId, emoji) },
             onReactionLongPress = { messageId -> actions.openReactionDetails(messageId) },
-            onImageClick = { messageId, index -> actions.openImageViewer(messageId, index) },
+            onImageClick = { messageId, index ->
+                media.open(MediaPresentation.Image(messageId, index))
+                actions.openImageViewer(messageId, index)
+            },
             onImageLongPress = { messageId, attachmentId ->
                 val overlay = actions.pieceOverlayFor(messageId, attachmentId)
                 // Message protégé : l'appui long vise le message entier, qui rend sa forme protégée.
-                if (overlay != null) pieceOverlay = overlay else actions.onMessageLongPress(messageId)
+                if (overlay != null) pieceOverlay = overlay else openMessageMenu(messageId)
             },
             onFileClick = { messageId, attachmentId ->
                 val bubble = currentMessages.firstOrNull { it.messageId == messageId }
                 val file = bubble?.files?.firstOrNull { it.attachmentId == attachmentId }
                 val opening = if (bubble != null && file != null) ThreadPieceOpener.of(bubble, file) else ThreadPieceOpening.ExternalFile
                 when (opening) {
-                    is ThreadPieceOpening.Video -> threadVideo = opening
+                    // Une vidéo du fil se regarde dans le lecteur de Meeshy, avec son PiP (#13822) ; un autre fichier sort par ACTION_VIEW.
+                    is ThreadPieceOpening.Video -> media.open(MediaPresentation.Video(opening.url, opening.secure))
                     ThreadPieceOpening.ExternalFile -> actions.onFileAttachmentTap(messageId, attachmentId)
                     ThreadPieceOpening.Nothing -> Unit
                 }
             },
-            onLocationClick = { messageId, location -> openedPlace = OpenedPlace.of(messageId, location) },
+            onLocationClick = { messageId, location ->
+                OpenedPlace.of(messageId, location)?.let { media.open(MediaPresentation.Place(it.messageId, it.place)) }
+            },
             onReplyPreviewClick = { messageId -> actions.onReplyPreviewTap(messageId) },
             onFlagTap = { messageId, code -> actions.onFlagTap(messageId, code) },
             onReplyCountTap = { messageId -> actions.onReplyCountTap(messageId) },
@@ -321,8 +343,10 @@ internal fun ChatListHost(
             },
         )
     }
-    LaunchedEffect(affordanceMessages, isNearBottom) {
-        scrollAffordance = ScrollAffordance.next(scrollAffordance, affordanceMessages, isNearBottom)
+    // #14670 — le bas d'une fenêtre ancrée n'est pas le présent : ↓ reste tant que le fil n'y est pas.
+    val isAtPresent = host.landing.isAtPresent(isNearBottom)
+    LaunchedEffect(affordanceMessages, isAtPresent) {
+        scrollAffordance = ScrollAffordance.next(scrollAffordance, affordanceMessages, isAtPresent)
     }
 
     // #13995 — la preuve d'affichage de la flamme-œil : les bulles que le fil MONTRE.
@@ -366,7 +390,7 @@ internal fun ChatListHost(
             model = overlay,
             accent = remember(state.accentColorHex) { hexColor(state.accentColorHex ?: DEFAULT_PLACE_ACCENT, hexColor(DEFAULT_PLACE_ACCENT)) },
             onReply = { actions.startReply(overlay.messageId) },
-            onWholeMessage = { actions.onMessageLongPress(overlay.messageId) },
+            onWholeMessage = { openMessageMenu(overlay.messageId) },
             onSave = { attachmentId ->
                 // Dès l'API 29 la porte ne demande rien ; en 26–28 elle obtient WRITE_EXTERNAL_STORAGE avant d'écrire.
                 scope.launch {
@@ -391,22 +415,22 @@ internal fun ChatListHost(
             }
         }
     }
-    threadVideo?.let { video ->
-        MeeshyVideoViewer(mediaUrl = video.url, onDismiss = { threadVideo = null }, secure = video.secure)
-    }
-    openedPlace?.let { opened ->
-        LocationFullscreen(
-            place = opened.place,
+    when (val presented = media.active) {
+        is MediaPresentation.Video ->
+            MeeshyVideoViewer(mediaUrl = presented.url, onDismiss = media::close, secure = presented.secure)
+        is MediaPresentation.Place -> LocationFullscreen(
+            place = presented.place,
             accentColor = state.accentColorHex ?: DEFAULT_PLACE_ACCENT,
-            senderName = state.messages.firstOrNull { it.messageId == opened.messageId }?.senderName,
-            onDismiss = { openedPlace = null },
+            senderName = state.messages.firstOrNull { it.messageId == presented.messageId }?.senderName,
+            onDismiss = media::close,
         )
+        else -> Unit
     }
     val fileTransfers = remember(state.fileDownload, host.downloadedFileIds) { bubbleFileTransfersOf(state.fileDownload, host.downloadedFileIds) }
     CompositionLocalProvider(LocalBubbleFileTransfers provides fileTransfers, LocalViewOnceConsumer provides viewOnceConsumer) {
     Box(modifier = modifier.fillMaxSize()) {
         when {
-            state.showSkeleton -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) { ChatSkeleton() }
+            state.loadingPhase(host.landing.isLoadingNewer).isBlockingSpinnerNeeded -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) { ChatSkeleton() }
 
             state.messages.isEmpty() && state.errorMessage != null -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) {
                 ChatNotice(state.errorMessage!!, onRetry = actions.refresh)
@@ -450,6 +474,7 @@ internal fun ChatListHost(
                     typingParticipants = state.typingParticipants,
                     isOffline = state.isOffline,
                     onScrollToBottom = {
+                        actions.returnToPresent()
                         scrollAffordance = ScrollAffordance.next(
                             scrollAffordance,
                             affordanceMessages,
@@ -487,8 +512,11 @@ internal fun ChatListHost(
                         selectedIds = host.selection.ids,
                         overlayMessageId = state.actionMessageId,
                     ) }
+                    val landed = item is ChatListItem.Message && item.bubble.messageId == host.landing.highlightedMessageId
                     if (focalMode) {
                         FocalPassageItem(item.key, focalScene, renderedIndexOf) { elected -> row(elected, focalScene.contentScale) }
+                    } else if (landed) {
+                        LandingHighlight(accentColor) { row(false, 1f) }
                     } else {
                         row(false, 1f)
                     }

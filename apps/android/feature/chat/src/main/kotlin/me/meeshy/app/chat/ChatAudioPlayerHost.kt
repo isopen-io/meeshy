@@ -33,6 +33,7 @@ import me.meeshy.ui.component.audio.NoVoicePlaybackHost
 import me.meeshy.ui.component.audio.VoicePlaybackHost
 import me.meeshy.ui.component.bubble.BubbleAudio
 import me.meeshy.ui.component.bubble.BubbleAudioPlayback
+import timber.log.Timber
 
 /**
  * The screen-scoped voice-note player of the thread: ONE [VoiceNoteEngine] for every bubble,
@@ -81,7 +82,7 @@ internal class ChatAudioPlayer internal constructor(
             next.transport.isLoading && url != null && switched ->
                 runCatching {
                     player.reset()
-                    player.load(url)
+                    if (source?.isProtected == true) player.loadUncached(url) else player.load(url)
                 }.onFailure { playback = next.failed(); return }
             next.transport.isPlaying && !prev.transport.isPlaying -> {
                 if (!startPlayer()) {
@@ -199,8 +200,14 @@ internal class ChatAudioPlayer internal constructor(
         if (playback.transport.isPlaying || playback.transport.isLoading) return
         if (playback.transport.currentUrl == null) return
         handler.removeCallbacks(releaseFocus)
-        if (!startPlayer()) return
+        if (!startPlayer()) return refuseResume()
         playback = playback.resumed()
+        publish()
+    }
+
+    /** The system refused the focus: the card says it is still paused instead of a play that does nothing. */
+    private fun refuseResume() {
+        Timber.w("reprise du vocal refusée : le focus audio est refusé")
         publish()
     }
 

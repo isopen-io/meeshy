@@ -12,6 +12,7 @@ import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.profile.ReportUserViewModel
 import me.meeshy.app.stories.StoryViewerViewModel
 import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.navigation.PostDetailLanding
 import me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility
 import me.meeshy.sdk.model.ProfileShareLink
 import me.meeshy.sdk.model.legal.LegalDocumentKind
@@ -102,7 +103,8 @@ object Routes {
     const val FEED = "feed"
     const val SAVED_POSTS = "feed/saved"
     const val NEARBY_DISCOVERY = "feed/nearby"
-    const val POST_DETAIL = "feed/post/{${PostDetailViewModel.POST_ID_ARG}}"
+    /** `showComments`, `commentId`, `parentCommentId` (facultatifs) : la notification d'un commentaire ou d'une réponse y atterrit (iOS `Route.postDetail`). */
+    const val POST_DETAIL = "feed/post/{${PostDetailViewModel.POST_ID_ARG}}?${PostDetailViewModel.SHOW_COMMENTS_ARG}={${PostDetailViewModel.SHOW_COMMENTS_ARG}}&${PostDetailViewModel.COMMENT_ID_ARG}={${PostDetailViewModel.COMMENT_ID_ARG}}&${PostDetailViewModel.PARENT_COMMENT_ID_ARG}={${PostDetailViewModel.PARENT_COMMENT_ID_ARG}}"
 
     /**
      * The receiving half of [PostShareLink]: the canonical `/feeds/post/{id}` link every
@@ -211,7 +213,12 @@ object Routes {
     fun storyComposerFromOnboarding(audience: OnboardingStoryVisibility): String =
         if (audience == OnboardingStoryVisibility.FRIENDS) "story_composer?$STORY_COMPOSER_AUDIENCE_ARG=FRIENDS" else STORY_COMPOSER
 
-    fun postDetail(postId: String): String = "feed/post/$postId"
+    fun postDetail(
+        postId: String,
+        showComments: Boolean = false,
+        commentId: String? = null,
+        parentCommentId: String? = null,
+    ): String = PostDetailLanding.route(postId, showComments, commentId, parentCommentId)
     fun chat(conversationId: String, highlightMessageId: String? = null): String =
         ChatRouteArgs.route(conversationId, highlightMessageId)
     fun profile(userId: String): String = "profile/$userId"

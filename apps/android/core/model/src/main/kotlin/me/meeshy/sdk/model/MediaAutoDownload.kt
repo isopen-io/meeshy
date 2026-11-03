@@ -85,20 +85,23 @@ public object MediaAutoDownloadDecider {
      * [availability] state, given the live [condition] and the user's [prefs].
      *
      * A `null` [kind] (unclassifiable/unsupported media) short-circuits to
-     * [AutoDownloadDecision.SKIP_UNSUPPORTED] before any network is considered.
+     * [AutoDownloadDecision.SKIP_UNSUPPORTED] before any network is considered. A known
+     * [sizeBytes] under [MediaDownloadPolicyEngine.SMALL_MEDIA_AUTO_DOWNLOAD_BYTES] lets an image
+     * or a video through on any online network (#14639).
      */
     public fun decide(
         kind: MediaKind?,
         availability: MediaAvailability,
         condition: NetworkCondition,
         prefs: MediaDownloadPreferences,
+        sizeBytes: Long? = null,
     ): AutoDownloadDecision {
         if (kind == null) return AutoDownloadDecision.SKIP_UNSUPPORTED
         return when (availability) {
             MediaAvailability.AVAILABLE -> AutoDownloadDecision.SKIP_ALREADY_AVAILABLE
             MediaAvailability.DOWNLOADING -> AutoDownloadDecision.SKIP_IN_FLIGHT
             MediaAvailability.NEEDS_DOWNLOAD ->
-                if (MediaDownloadPolicyEngine.shouldAutoDownload(kind, condition, prefs)) {
+                if (MediaDownloadPolicyEngine.shouldAutoDownload(kind, condition, prefs, sizeBytes)) {
                     AutoDownloadDecision.DOWNLOAD
                 } else {
                     AutoDownloadDecision.SKIP_POLICY
@@ -113,10 +116,12 @@ public object MediaAutoDownloadDecider {
         availability: MediaAvailability,
         condition: NetworkCondition,
         prefs: MediaDownloadPreferences,
+        sizeBytes: Long? = null,
     ): AutoDownloadDecision = decide(
         kind = MediaKindClassifier.fromMimeType(mimeType, isAudioTranslation),
         availability = availability,
         condition = condition,
         prefs = prefs,
+        sizeBytes = sizeBytes,
     )
 }

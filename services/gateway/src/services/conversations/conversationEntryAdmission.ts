@@ -281,4 +281,9 @@ export const REJOIN_PARTICIPANT_STATE = {
   isActive: true,
   leftAt: null,
   historyVisibleFrom: null,
+  // #14107 (audit 3, M-b) — une demande d'un passage précédent ne survit pas au
+  // retour. Les portes qui POSENT une demande répandent cet état AVANT leurs champs.
+  messageRequestAt: null,
+  messageRequestRisk: null,
+  messageRequestFromId: null,
 } as const;

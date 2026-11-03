@@ -373,6 +373,27 @@ final class LocalizationCatalogGuardTests: XCTestCase {
         XCTAssertFalse(source.contains("E2EE + serveur"), "La valeur par défaut du libellé hybride promet encore le bout en bout")
     }
 
+    /// #14369 — la couche appareil d'un hybride ne couvre que le TEXTE d'un
+    /// tête-à-tête entre appareils compatibles, et ne cache rien au serveur :
+    /// le résumé et la description ne disent ni « bout en bout » ni « chaque
+    /// message » (audit adversarial du lot), dans aucune des sept langues.
+    func test_leModeHybrideNePrometNiChaqueMessageNiLeBoutEnBout() throws {
+        let forbidden = [
+            "bout en bout", "end-to-end", "end to end", "Ende-zu-Ende", "extremo a extremo", "ponta a ponta", "طرف إلى طرف",
+            "chaque message", "every message", "each message", "jede Nachricht", "cada mensaje", "ogni messaggio", "cada mensagem", "كل رسالة",
+        ]
+        let app = try XCTUnwrap(try catalogs().first { $0.name == "app" })
+        for key in ["conversation.encryption.mode.hybrid.description", "conversation.encryption.summary.hybrid"] {
+            let byLang = try XCTUnwrap(app.strings[key], "Clé absente du catalogue : \(key)")
+            XCTAssertEqual(byLang.count, 7, "\(key) doit exister dans les sept langues")
+            for (lang, value) in byLang {
+                for word in forbidden {
+                    XCTAssertFalse(value.localizedCaseInsensitiveContains(word), "\(key) [\(lang)] promet trop : « \(value) »")
+                }
+            }
+        }
+    }
+
     // MARK: - Le mode se choisit à la création (directive porteur du 2026-11-01)
 
     /// Les clés de l'écran de création existent dans les sept langues, sous les

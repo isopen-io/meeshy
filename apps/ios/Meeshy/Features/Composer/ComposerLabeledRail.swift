@@ -14,7 +14,8 @@ nonisolated enum ComposerLabeledRailEntry: Hashable, Sendable {
 ///
 /// Fermer · Texte · Média · Sticker · Son · Dessin · Fond · Mention · Lieu (#14050), Texte du post pour le post et le
 /// réel (#14457), puis les entrées de ⋯ qui tiennent dans la hauteur, dans leur ordre du menu, puis « ⋯ Plus » pour le reste. Aucune entrée n'est perdue : ce que le rail ne pose pas, Plus
-/// le sert. Animation (un sous-menu) et Tout effacer (une confirmation) restent toujours derrière Plus.
+/// le sert. Animation (un sous-menu), la reprise du son (une coche) et Tout effacer (une confirmation) restent
+/// toujours derrière Plus.
 nonisolated enum ComposerLabeledRailLayout {
 
     struct Layout: Equatable, Sendable {
@@ -22,7 +23,7 @@ nonisolated enum ComposerLabeledRailLayout {
         let plus: [ComposerMoreMenuEntry]
     }
 
-    private static let keptBehindPlus: Set<ComposerMoreMenuEntry> = [.animation, .clearAll]
+    private static let keptBehindPlus: Set<ComposerMoreMenuEntry> = [.animation, .soundReuse, .clearAll]
 
     static func resolve(tools: [ComposerRestTool], moreEntries: [ComposerMoreMenuEntry],
                         availableHeight: CGFloat, rowHeight: CGFloat, spacing: CGFloat) -> Layout {
@@ -162,6 +163,7 @@ struct ComposerRailPlusActions {
     let onClearAll: () -> Void
     let onAnimation: () -> Void
     let onTimeline: () -> Void
+    var soundReuseAllowed = true
 }
 
 /// **La rangée libellée** : glyphe et mot, 44 pt au moins, surlignée quand son outil est ouvert.
@@ -266,7 +268,8 @@ struct ComposerLabeledRail: View {
         ComposerSceneMoreMenu(label: ComposerOverflowCopy.menu, clearAllAsked: actions.clearAllAsked,
                               onClearAll: actions.onClearAll, railLabel: ComposerLabeledRailCopy.plus) {
             ComposerSceneMoreMenuItems(entries: entries, isAnimated: actions.isAnimated, onEntry: onMore,
-                                       onAnimation: actions.onAnimation, onTimeline: actions.onTimeline)
+                                       onAnimation: actions.onAnimation, onTimeline: actions.onTimeline,
+                                       soundReuseAllowed: actions.soundReuseAllowed)
         }
     }
 

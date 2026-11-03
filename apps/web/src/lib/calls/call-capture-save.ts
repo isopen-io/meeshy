@@ -1,5 +1,5 @@
 import { currentGallerySaver, type GallerySaver } from '@/lib/gallery/gallery-saver';
-import { saveToGallery } from '@/lib/gallery/save-to-gallery';
+import { isInGallery, saveToGallery } from '@/lib/gallery/save-to-gallery';
 import type { FileDeliveryPortal } from '@/lib/media/deliver-file';
 import { browserFileDeliveryHost } from '@/lib/media/file-delivery-host';
 import { PHOTO_MIME } from '@/lib/media/photo-develop';
@@ -29,7 +29,7 @@ const PHOTO = PHOTO_MIME;
 async function saveOne(file: CaptureFile, env: SaveEnv): Promise<'saved' | 'failed' | 'cancelled'> {
   const mimeType = file.mimeType ?? PHOTO;
   const notice = await saveToGallery({ blob: file.blob, fileName: file.fileName, mimeType, saver: env.saver });
-  if (notice !== null) return notice === 'media.viewer.saved' ? 'saved' : 'failed';
+  if (notice !== null) return isInGallery(notice) ? 'saved' : 'failed';
   const portal = await env.portal().catch(() => null);
   if (portal === null) return 'failed';
   const outcome = await portal.deliver(file.blob, file.fileName, mimeType);

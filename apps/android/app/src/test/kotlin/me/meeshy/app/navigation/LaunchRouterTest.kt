@@ -441,4 +441,39 @@ class LaunchRouterTest {
         assertThat(LaunchRouter.onCreateRoute(route, restored = true)).isNull()
         assertThat(LaunchRouter.onCreateRoute(route, restored = false)).isEqualTo(route)
     }
+
+    @Test
+    fun `un push de commentaire sur une story reel ouvre le reel`() {
+        assertThat(tapRoute("type" to "post_comment", "postId" to "p9", "postType" to "REEL", "commentId" to "c1"))
+            .isEqualTo(Routes.reels("p9"))
+    }
+
+    @Test
+    fun `un push sans type ni destination n ouvre rien`() {
+        assertThat(LaunchRouter.route(LaunchExtras())).isNull()
+    }
+
+    @Test
+    fun `l appel entrant garde la priorite sur un push de message`() {
+        val extras = LaunchExtras(
+            callId = "call1",
+            conversationId = "c1",
+            tap = me.meeshy.sdk.model.push.PushPayload.decode(mapOf("type" to "new_message", "conversationId" to "c1")),
+        )
+        assertThat(LaunchRouter.route(extras)).isEqualTo(
+            CallRoute.incoming(callId = "call1", conversationId = "c1", callerName = "", isVideo = false, autoAnswer = false, callerId = ""),
+        )
+    }
+
+    @Test
+    fun `un push destine a un autre compte que celui connecte n ouvre rien`() {
+        val extras = LaunchExtras(
+            tap = me.meeshy.sdk.model.push.PushPayload.decode(
+                mapOf("type" to "new_message", "conversationId" to "c1", "recipientUserId" to "u-other"),
+            ),
+        )
+        assertThat(LaunchRouter.route(extras, signedInUserId = "u-me")).isNull()
+        assertThat(LaunchRouter.route(extras, signedInUserId = "u-other")).isEqualTo(Routes.chat("c1", null))
+        assertThat(LaunchRouter.route(extras, signedInUserId = null)).isEqualTo(Routes.chat("c1", null))
+    }
 }

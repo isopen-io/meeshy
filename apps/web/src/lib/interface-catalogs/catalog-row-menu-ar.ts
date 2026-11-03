@@ -14,6 +14,7 @@ const ar = {
   'rowMenu.manageMembers': 'إدارة الأعضاء',
   'rowMenu.adminOpen': 'فتح في الإدارة',
   'rowMenu.leave': 'مغادرة',
+  'rowMenu.obsolete': 'جعلها قديمة',
   'rowMenu.search': 'بحث',
   'rowMenu.readingMode': 'وضع القراءة',
   'rowMenu.peek': 'معاينة المحادثة',

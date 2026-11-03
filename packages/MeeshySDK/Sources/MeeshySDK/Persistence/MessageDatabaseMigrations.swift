@@ -52,5 +52,6 @@ public enum MessageDatabaseMigrations {
         MessagesPlaintextErasuresProvisionalMigration(identifier: "messages_e2ee_plaintext_erasures_v2"),
         MessagesPlaintextErasuresMigration(),
         MessagesPlaintextErasureAuthenticationMigration(),
+        MessagesServedClientMessageIdMigration(),
     ]
 }

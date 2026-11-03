@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.conversationlist.SectionFoldedUnread
+import me.meeshy.sdk.model.search.ListMessageHit
+import me.meeshy.sdk.model.search.ListMessageSearchState
 import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.CollapsibleSection
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
@@ -48,6 +50,8 @@ internal fun ConversationListBody(
     onRefresh: () -> Unit = {},
     rowNavigation: ConversationRowNavigation = ConversationRowNavigation.None,
     header: @Composable () -> Unit = {},
+    messageSearch: ListMessageSearchState = ListMessageSearchState.Idle,
+    onOpenMessage: (ListMessageHit) -> Unit = {},
 ) {
     val signals by viewModel.rowSignals.collectAsStateWithLifecycle()
     val haptics = rememberMeeshyHaptics()
@@ -74,7 +78,9 @@ internal fun ConversationListBody(
                 onRetry = viewModel::refresh,
                 onNewConversation = onNewConversation,
             ) {
-                populatedItems(state, sections, viewModel, nowMillis, signals, rowNavigation, tailHeight)
+                populatedItems(state, sections, viewModel, nowMillis, signals, rowNavigation, tailHeight) {
+                    messageSearchItems(messageSearch, state.currentUserId, viewModel::conversationFor, onOpenMessage)
+                }
             }
         }
     }
@@ -88,6 +94,7 @@ private fun LazyListScope.populatedItems(
     signals: ConversationRowSignals,
     rowNavigation: ConversationRowNavigation,
     tailHeight: Dp,
+    messages: LazyListScope.() -> Unit,
 ) {
     if (!ConversationSections.showsHeaders(sections)) {
         sections.forEach { section ->
@@ -95,6 +102,7 @@ private fun LazyListScope.populatedItems(
                 ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
             }
         }
+        messages()
         item(key = "list-tail") { Spacer(Modifier.height(tailHeight)) }
         return
     }
@@ -121,6 +129,7 @@ private fun LazyListScope.populatedItems(
             }
         }
     }
+    messages()
     item(key = "list-tail") { Spacer(Modifier.height(tailHeight)) }
 }
 

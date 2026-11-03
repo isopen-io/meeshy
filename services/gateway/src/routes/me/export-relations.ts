@@ -44,6 +44,15 @@ export const relationsExportSchema = {
           locationHistoryShared: { type: 'boolean' },
           proximityShared: { type: 'boolean' },
           consentedAt: { type: 'string' },
+          withdrawnAt: {
+            type: 'object',
+            properties: {
+              listeningTitleShared: { type: 'string', nullable: true },
+              locationShared: { type: 'string', nullable: true },
+              locationHistoryShared: { type: 'string', nullable: true },
+              proximityShared: { type: 'string', nullable: true },
+            },
+          },
         },
       },
     },

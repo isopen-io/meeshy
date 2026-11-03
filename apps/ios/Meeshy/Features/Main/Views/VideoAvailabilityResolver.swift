@@ -87,7 +87,7 @@ struct VideoAvailabilityResolver<Content: View>: View {
                 let condition = NetworkConditionMonitor.shared.condition
                 let prefs = MediaDownloadPreferencesStore.shared.preferences
                 if Self.shouldAutoStart(autoDownload: autoDownload, mayAutoStart: mayAutoStart,
-                                        condition: condition, prefs: prefs) {
+                                        condition: condition, prefs: prefs, byteSize: attachment.fileSize) {
                     downloader.start(attachment: attachment, origin: .automatic, onShare: nil)
                 }
             }
@@ -98,15 +98,17 @@ struct VideoAvailabilityResolver<Content: View>: View {
     /// Hors-ligne : jamais (inutile de lancer un DL sans réseau). Sinon :
     /// `autoDownload` (Feed/Posts) force le téléchargement, ou la politique
     /// réseau de l'utilisateur l'autorise. `kind: .video` figé pour ce resolver.
+    /// Une vidéo de moins de 100 Ko part quel que soit le réseau (#14639).
     static func shouldAutoStart(
         autoDownload: Bool,
         mayAutoStart: Bool = true,
         condition: NetworkCondition,
-        prefs: MediaDownloadPreferences
+        prefs: MediaDownloadPreferences,
+        byteSize: Int? = nil
     ) -> Bool {
         guard mayAutoStart, condition != .offline else { return false }
         return autoDownload || MediaDownloadPolicyEngine.shouldAutoDownload(
-            kind: .video, condition: condition, prefs: prefs
+            kind: .video, condition: condition, prefs: prefs, byteSize: byteSize
         )
     }
 
