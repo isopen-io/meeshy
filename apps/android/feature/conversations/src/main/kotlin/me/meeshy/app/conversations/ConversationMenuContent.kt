@@ -1,6 +1,5 @@
 package me.meeshy.app.conversations
 
-import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box

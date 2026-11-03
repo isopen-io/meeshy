@@ -53,7 +53,11 @@ fun StoryViewerScreen(
 
     val chrome = rememberStoryViewerChromeState()
     LaunchedEffect(state.currentStoryId) {
-        when (viewModel.consumeEntryIntent()?.action) {
+        val intent = viewModel.consumeEntryIntent()
+        chrome.targetCommentId = intent?.targetCommentId
+        chrome.targetParentCommentId = intent?.targetParentCommentId
+        if (intent?.targetCommentId != null) chrome.showComments = true
+        when (intent?.action) {
             StoryViewerInitialAction.COMMENTS -> chrome.showComments = true
             StoryViewerInitialAction.VIEWS -> chrome.showViewers = true
             null -> Unit
@@ -91,6 +95,7 @@ fun StoryViewerScreen(
         menu = chrome.showOptions,
         dialog = chrome.dialogOpen || videoExport.busy,
         composing = composing,
+        reading = chrome.captionExpanded || chrome.transcript.requested,
     )
     val actions = rememberStoryViewerActions(
         state = state,

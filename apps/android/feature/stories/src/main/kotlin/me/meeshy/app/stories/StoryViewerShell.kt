@@ -29,6 +29,7 @@ import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.sdk.model.scene.export.StoryExportMode
+import me.meeshy.sdk.story.isExpired
 import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -148,6 +149,7 @@ internal fun StoryViewerShell(
                     chromeVisible = chromeVisible,
                     fullscreen = cardMotion.fullscreen.enabled,
                     viewModel = viewModel,
+                    captionExpanded = chrome.captionExpanded,
                 )
                 StoryReadingScrims(chromeVisible = chromeVisible)
             }
@@ -161,6 +163,20 @@ internal fun StoryViewerShell(
                 commentThread = commentThread,
                 composerPinned = composerPinned,
                 onComposerHeight = { composerHeightPx = it },
+                comments = StoryCommentsOverlayRequest(
+                    open = chrome.showComments,
+                    storyId = state.currentStoryId,
+                    isStoryExpired = currentItem?.isExpired(System.currentTimeMillis()) == true,
+                    targetCommentId = chrome.targetCommentId,
+                    targetParentCommentId = chrome.targetParentCommentId,
+                    topReservedPx = headerHeightPx,
+                    onListTop = { dragFrames.scrollableSurfaceTop = it },
+                ),
+                currentItem = currentItem,
+                chrome = chrome,
+                haptics = haptics,
+                viewModel = viewModel,
+                chromeVisible = chromeVisible,
             )
 
             if (chromeVisible) {
@@ -179,7 +195,7 @@ internal fun StoryViewerShell(
             }
 
             val railFrame = StoryRailFrame.of(headerHeightPx, composerHeightPx, composerPinned, with(density) { MeeshySpacing.sm.roundToPx() })
-            StoryDragFrameSync(dragFrames, railShown = chromeVisible, composerHeightPx = if (composerPinned) composerHeightPx else 0, hasScrollableSurface = false)
+            StoryDragFrameSync(dragFrames, railShown = chromeVisible, composerHeightPx = if (composerPinned) composerHeightPx else 0, hasScrollableSurface = chrome.showComments)
             if (slide != null && !state.isDismissed && chromeVisible && !keyboardVisible) {
                 StoryActionRail(
                     plan = railPlan,

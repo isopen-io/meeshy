@@ -10,10 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -34,10 +31,13 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import me.meeshy.sdk.model.ReactionAnimationGate
+import me.meeshy.sdk.model.ReactionStripLayout
 import me.meeshy.ui.R
-import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -45,14 +45,17 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /** Nombre de pastilles visibles avant la pastille « +N » (iOS `BubbleReactionsOverlay.maxVisible`). */
-internal const val REACTIONS_MAX_VISIBLE: Int = 4
+internal const val REACTIONS_MAX_VISIBLE: Int = ReactionStripLayout.MAX_VISIBLE
 
 /** Le rebond d'une pastille dont le compte ou la marque du lecteur change (iOS : ressort 0,32 s, amorti 0,55). */
 private const val REACTION_PULSE_PEAK: Float = 1.22f
 private const val REACTION_PULSE_DAMPING: Float = 0.55f
 
 /** Décalage vertical de la bande sous le bord de la bulle (iOS `restingOffset`). */
-internal val ReactionsRestingOffset = 18.dp
+internal val ReactionsRestingOffset = ReactionStripLayout.RESTING_OFFSET_DP.dp
+
+/** Ce dont la cible de 40 dp du smiley déborde la bande de 22 dp, de chaque côté. */
+internal val AddHitOverflow = ((ReactionStripLayout.HIT_DIAMETER_DP - ReactionStripLayout.STRIP_HEIGHT_DP) / 2).dp
 
 /**
  * La bande de réactions, port d'iOS `BubbleReactionsOverlay` : posée HORS de la bulle, à cheval
@@ -70,9 +73,14 @@ internal fun ReactionStrip(
     onReactionLongPress: (() -> Unit)?,
     onAddReaction: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    messageId: String = "",
+    onOpenReactPicker: (() -> Unit)? = null,
+    expandsAddHit: Boolean = false,
+    animationGate: ReactionAnimationGate = ReactionAnimationGate.Shared,
 ) {
-    val visible = reactions.take(REACTIONS_MAX_VISIBLE)
-    val overflow = reactions.size - visible.size
+    val layout = ReactionStripLayout.of(reactions.size, isOutgoing = false, isLastReceivedMessage = showsAddButton)
+    val visible = reactions.take(layout.visibleCount)
+    val overflow = layout.overflowCount
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
@@ -85,13 +93,21 @@ internal fun ReactionStrip(
                 ReactionChip(
                     entry = entry,
                     accent = accent,
+                    isNew = animationGate.shouldAnimate(messageId, entry.emoji),
                     onClick = onReactionClick?.let { { it(entry.emoji) } },
                     onLongClick = onReactionLongPress,
                 )
             }
         }
         if (overflow > 0) OverflowChip(count = overflow, accent = accent, onClick = onReactionLongPress)
-        if (showsAddButton && onAddReaction != null) AddReactionChip(accent = accent, onClick = onAddReaction)
+        if (showsAddButton && onAddReaction != null) {
+            ReactionAddButton(
+                accent = accent,
+                onQuickReact = onAddReaction,
+                onOpenPicker = onOpenReactPicker,
+                expandsHit = expandsAddHit,
+            )
+        }
     }
 }
 
@@ -100,12 +116,19 @@ internal fun ReactionStrip(
 private fun ReactionChip(
     entry: ReactionEntry,
     accent: Color,
+    isNew: Boolean,
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
 ) {
     val isDark = MeeshyTheme.isDark
     val shape = RoundedCornerShape(MeeshyRadius.pill)
     val haptics = rememberMeeshyHaptics()
+    val chipLabel = stringResource(
+        if (entry.includesMe) R.string.bubble_reactions_chip_mine else R.string.bubble_reactions_chip,
+        entry.emoji,
+        entry.count,
+    )
+    val toggleHint = stringResource(R.string.bubble_reactions_toggle_hint)
     val pulse = remember { Animatable(1f) }
     val firstFrame = remember { booleanArrayOf(true) }
     LaunchedEffect(entry.count, entry.includesMe) {
@@ -128,6 +151,7 @@ private fun ReactionChip(
     }
     Row(
         modifier = Modifier
+            .reactionComet(isNew)
             .graphicsLayer { scaleX = pulse.value; scaleY = pulse.value }
             .height(22.dp)
             .let { base ->
@@ -151,7 +175,11 @@ private fun ReactionChip(
                                 longClick()
                             }
                         },
-                    ).semantics { role = Role.Button }
+                    ).semantics(mergeDescendants = true) {
+                        role = Role.Button
+                        contentDescription = chipLabel
+                        stateDescription = toggleHint
+                    }
                 }
             }
             .padding(horizontal = if (entry.count > 1) MeeshySpacing.xsPlus else 5.dp),
@@ -178,6 +206,8 @@ private fun ReactionChip(
 private fun OverflowChip(count: Int, accent: Color, onClick: (() -> Unit)?) {
     val isDark = MeeshyTheme.isDark
     val shape = RoundedCornerShape(MeeshyRadius.pill)
+    val moreLabel = stringResource(R.string.bubble_reactions_more_count, count)
+    val viewAll = stringResource(R.string.bubble_reactions_view_all_hint)
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -185,32 +215,21 @@ private fun OverflowChip(count: Int, accent: Color, onClick: (() -> Unit)?) {
             .clip(shape)
             .background(accent.copy(alpha = if (isDark) 0.15f else 0.08f))
             .border(0.5.dp, accent.copy(alpha = if (isDark) 0.25f else 0.15f), shape)
-            .let { base -> if (onClick == null) base else base.clickable(onClick = onClick) }
+            .let { base ->
+                if (onClick == null) base else base.clickable(onClickLabel = viewAll, onClick = onClick)
+            }
+            .semantics(mergeDescendants = true) {
+                contentDescription = moreLabel
+                role = Role.Button
+            }
             .padding(horizontal = MeeshySpacing.xsPlus),
     ) {
-        Text(text = "+$count", fontSize = MeeshyFontSize.footnote, fontWeight = FontWeight.Bold, color = accent)
-    }
-}
-
-@Composable
-private fun AddReactionChip(accent: Color, onClick: () -> Unit) {
-    val isDark = MeeshyTheme.isDark
-    val label = stringResource(R.string.bubble_add_reaction)
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(24.dp)
-            .clip(CircleShape)
-            .background(accent.copy(alpha = if (isDark) 0.18f else 0.14f))
-            .border(0.5.dp, accent.copy(alpha = if (isDark) 0.4f else 0.28f), CircleShape)
-            .clickable(onClickLabel = label, onClick = onClick)
-            .semantics { contentDescription = label },
-    ) {
-        Icon(
-            imageVector = MeeshyIcons.Emoji,
-            contentDescription = null,
-            tint = accent.copy(alpha = if (isDark) 0.9f else 0.8f),
-            modifier = Modifier.size(14.dp),
+        Text(
+            text = "+$count",
+            fontSize = MeeshyFontSize.footnote,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            color = accent,
         )
     }
 }

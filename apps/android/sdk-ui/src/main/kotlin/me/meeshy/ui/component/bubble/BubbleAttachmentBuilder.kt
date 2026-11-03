@@ -20,6 +20,7 @@ internal class BubbleAttachments(
     val locations: List<BubbleLocation>,
     val audios: List<BubbleAudio>,
     val contactCards: List<BubbleContactCard>,
+    val videos: List<BubbleVideo> = emptyList(),
 )
 
 /**
@@ -92,6 +93,20 @@ internal object BubbleAttachmentBuilder {
             audios = visibleAttachments
                 .filter { it.isAudio }
                 .map { attachment -> buildAudio(attachment, preferences, mediaBaseUrl) },
+            videos = visibleAttachments
+                .filter { it.isVideo && !it.isContactCard && !PieceSealing.isSealed(it) }
+                .map { attachment ->
+                    BubbleVideo(
+                        attachmentId = attachment.id,
+                        url = attachment.fileUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                        thumbnailUrl = attachment.thumbnailUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                        width = attachment.width,
+                        height = attachment.height,
+                        durationSeconds = attachment.duration?.let { it / 1000 },
+                        sizeBytes = attachment.fileSize,
+                        isProtected = attachment.isProtected,
+                    )
+                },
             contactCards = visibleAttachments
                 .filter { it.isContactCard }
                 .map { attachment ->
