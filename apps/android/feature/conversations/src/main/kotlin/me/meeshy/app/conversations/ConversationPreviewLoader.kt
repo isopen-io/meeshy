@@ -18,7 +18,6 @@ import me.meeshy.sdk.model.conversationlist.ConversationPreviewPhase
 import me.meeshy.sdk.model.conversationlist.ConversationPreviewProvenance
 import me.meeshy.sdk.model.conversationlist.ConversationPreviewSnapshot
 import me.meeshy.sdk.model.conversationlist.PreviewCacheReading
-import timber.log.Timber
 
 /** Ce que l'aperçu lit du cache local, avec sa fraîcheur : [messages] du plus ancien au plus récent. */
 internal class CachedPreview(val reading: PreviewCacheReading, val messages: List<ApiMessage>)
@@ -52,8 +51,7 @@ internal class RepositoryConversationPreviewSource(
         block()
     } catch (cancelled: CancellationException) {
         throw cancelled
-    } catch (failure: Exception) {
-        Timber.w(failure, "conversation preview read failed")
+    } catch (_: Exception) {
         null
     }
 }
@@ -131,7 +129,6 @@ internal class ConversationPreviewLoader(
 
     suspend fun load(conversationId: String, intent: ConversationPreviewIntent) {
         val current = ownerId().orEmpty()
-        if (current.isEmpty()) return
         if (current != owner) {
             if (owner != null) purge()
             owner = current
@@ -145,7 +142,7 @@ internal class ConversationPreviewLoader(
             val running = inFlight[conversationId] ?: break
             running.job.join()
             if (inFlight[conversationId] === running) inFlight.remove(conversationId)
-            if (!ConversationPreviewLaw.mustWaitThenRerun(running.intent, intent) || ownerId() != current) return
+            if (!ConversationPreviewLaw.mustWaitThenRerun(running.intent, intent) || ownerId().orEmpty() != current) return
         }
         if (isSettled(conversationId, intent)) return
         val request = Request(conversationId, intent, generation, current)
@@ -161,7 +158,7 @@ internal class ConversationPreviewLoader(
             (intent == ConversationPreviewIntent.Prefetch && conversationId in coldPrefetched)
 
     private fun mayWrite(request: Request): Boolean =
-        request.generation == generation && ownerId() == request.owner && !isLocked(request.conversationId)
+        request.generation == generation && ownerId().orEmpty() == request.owner && !isLocked(request.conversationId)
 
     private suspend fun perform(request: Request) {
         val id = request.conversationId

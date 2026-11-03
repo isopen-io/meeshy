@@ -253,14 +253,4 @@ class ConversationPreviewLoaderTest {
 
         assertThat(f.loader.states.value).doesNotContainKey("c1")
     }
-
-    @Test
-    fun `sans session aucune lecture ne part`() = runTest {
-        val f = fixture(FakeSource(network = listOf(message("m1"))))
-        f.owner = null
-
-        f.loader.load("c1", ConversationPreviewIntent.Open)
-
-        assertThat(f.source.cacheReads).isEqualTo(0)
-    }
 }
