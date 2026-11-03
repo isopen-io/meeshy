@@ -101,4 +101,12 @@ public interface ConversationDao {
      */
     @Query("SELECT COUNT(*) FROM conversations WHERE unreadCount > 0")
     public fun unreadConversationCount(): Flow<Int>
+
+    /**
+     * Le total des non-lus des AUTRES conversations que les [openIds] — la conversation que
+     * l'utilisateur regarde ne pèse pas sur le badge (rang 1 du registre de lecture). Un `SUM` SQL,
+     * aucun décodage ; [openIds] vide = le total entier.
+     */
+    @Query("SELECT COALESCE(SUM(unreadCount), 0) FROM conversations WHERE id NOT IN (:openIds)")
+    public fun totalUnreadExcludingOpen(openIds: List<String>): Flow<Int>
 }

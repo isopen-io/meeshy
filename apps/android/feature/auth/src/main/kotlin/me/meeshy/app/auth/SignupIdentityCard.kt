@@ -120,18 +120,20 @@ private fun IdentityInputs(state: SignupUiState, actions: SignupCardActions) {
     val usernameError = usernameErrorText(state)
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         SignupIdentityInput(
-            value = state.shownDisplayName,
+            value = state.displayNameInput,
             onValueChange = actions.onDisplayNameChange,
             label = stringResource(R.string.signup_identity_display_name),
+            placeholder = state.displayNamePlaceholder,
             prefix = null,
             errorText = nameError,
             enabled = !state.isSubmitting,
             modifier = Modifier.testTag(SIGNUP_DISPLAY_NAME_TAG),
         )
         SignupIdentityInput(
-            value = state.shownUsername,
+            value = state.usernameInput,
             onValueChange = actions.onUsernameChange,
             label = stringResource(R.string.signup_identity_username),
+            placeholder = state.usernamePlaceholder,
             prefix = "@",
             errorText = usernameError,
             enabled = !state.isSubmitting,
@@ -143,13 +145,15 @@ private fun IdentityInputs(state: SignupUiState, actions: SignupCardActions) {
 
 /**
  * Une saisie d'identité, TOUJOURS ouverte : un toucher suffit pour la modifier. Le libellé
- * est au-dessus, le refus en rouge dessous avec sa secousse.
+ * est au-dessus, le refus en rouge dessous avec sa secousse. Un champ blanc montre en filigrane
+ * la valeur qui partira à sa place (la dérivation de l'adresse), jamais un champ vide qui en cache une.
  */
 @Composable
 private fun SignupIdentityInput(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
+    placeholder: String,
     prefix: String?,
     errorText: String?,
     enabled: Boolean,
@@ -210,8 +214,12 @@ private fun SignupIdentityInput(
                 interactionSource = interactionSource,
                 decorationBox = { inner ->
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-                        if (value.isEmpty()) {
-                            Text(text = label, style = MaterialTheme.typography.bodyLarge, color = tokens.textMuted)
+                        if (value.isBlank()) {
+                            Text(
+                                text = placeholder.ifEmpty { label },
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = tokens.textMuted,
+                            )
                         }
                         inner()
                     }

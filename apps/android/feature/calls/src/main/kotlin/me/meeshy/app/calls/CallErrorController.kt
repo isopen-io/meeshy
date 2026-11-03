@@ -35,7 +35,7 @@ class CallErrorController(
             errorCallId = error.callId,
             currentCallId = host.callId.takeIf { it.isNotBlank() },
             isTransientDuringResume = isResuming() && error.code == NOT_A_PARTICIPANT,
-            answersAccessoryRequest = turn.hasPendingRequest,
+            answersAccessoryRequest = turn.hasPendingRequest || signals.accessoryRequestAnswered(error),
             callIsActive = host.callState.isActive,
         )
         when (disposition) {

@@ -60,6 +60,7 @@ fun ChatScreen(
      * « Rejoindre » pill so a minimised call viewing its own chat isn't offered
      * to rejoin the call it's already in. */
     hasLocalLiveCall: Boolean = false,
+    localCall: ChatLocalCall = ChatLocalCall.NONE,
     /** Ouvre le post (story) cité par un message : le toucher de la carte de citation (#13296). */
     onOpenCitedPost: (postId: String) -> Unit = {},
     onOpenConversation: (conversationId: String) -> Unit = {},
@@ -137,6 +138,7 @@ fun ChatScreen(
             onRejoinCall = onRejoinCall,
             onCreateShareLink = onCreateShareLink,
             hasLocalLiveCall = hasLocalLiveCall,
+            localCall = localCall,
             onOpenCitedPost = onOpenCitedPost,
             onOpenConversation = onOpenConversation,
             callEntry = callEntry,
@@ -153,6 +155,7 @@ fun ChatScreen(
         landing = landingState,
         composerClosure = composerClosure,
         capabilities = capabilities,
+        listGate = viewModel.listGate,
     )
 
     val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()

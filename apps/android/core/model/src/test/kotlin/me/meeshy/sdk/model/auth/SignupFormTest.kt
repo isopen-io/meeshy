@@ -440,6 +440,25 @@ class SignupFormPhasedTest {
     }
 
     @Test
+    fun `un pseudo ou un nom vide part sous la derivation que montre le filigrane`() {
+        val form = phased(username = "", displayName = "  ")
+        assertThat(form.derivedUsername).isEqualTo("ada-lovelace")
+        assertThat(form.derivedDisplayName).isEqualTo("Ada Lovelace")
+        assertThat(form.effectiveUsername).isEqualTo(form.derivedUsername)
+        assertThat(form.effectiveDisplayName).isEqualTo(form.derivedDisplayName)
+        val request = form.toPhasedRegisterRequest()
+        assertThat(request.username).isEqualTo("ada-lovelace")
+        assertThat(request.displayName).isEqualTo("Ada Lovelace")
+    }
+
+    @Test
+    fun `un pseudo et un nom saisis partent tels que saisis`() {
+        val request = phased(username = " jdupont ", displayName = "Jean D.").toPhasedRegisterRequest()
+        assertThat(request.username).isEqualTo("jdupont")
+        assertThat(request.displayName).isEqualTo("Jean D.")
+    }
+
+    @Test
     fun `une adresse sans rien de slugifiable ne definit pas l'identite`() {
         val form = phased(email = "a@meeshy.me")
         assertThat(form.effectiveUsername).isEmpty()

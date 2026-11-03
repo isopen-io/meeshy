@@ -1,5 +1,15 @@
 package me.meeshy.app.navigation
 
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModelStoreOwner
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import me.meeshy.sdk.model.call.CallHeaderSnapshot
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -8,6 +18,8 @@ import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import me.meeshy.app.calls.CallPillPresenter
 import me.meeshy.app.calls.CallStatus
+import me.meeshy.app.calls.CallViewModel
+import me.meeshy.app.chat.ChatLocalCall
 import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.chat.conversationcard.ProvideConversationLinkCards
@@ -49,6 +61,7 @@ internal fun NavGraphBuilder.chatDestination(
             ReportsConversationViewing(conversationId)
             ProvideConversationMoods(navController, entry) {
                 ProvideConversationLinkCards {
+                    val localCall = rememberChatLocalCall(navController, callStatus)
                     ChatScreen(
                         onBack = { navController.popBackStack() },
                         onStartCall = { peerName, isVideo ->
@@ -75,6 +88,7 @@ internal fun NavGraphBuilder.chatDestination(
                         // A live local call (minimised/floating) suppresses the rejoin
                         // pill — don't offer to rejoin the call this device is in.
                         hasLocalLiveCall = CallPillPresenter.isMinimizable(callStatus),
+                        localCall = localCall,
                         locationSettingsSheet = { accent, onDismiss -> LocationSharingSettingsSheet(accent = accent, onDismiss = onDismiss) },
                         onOpenCitedPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
                         onOpenConversation = { id -> navController.navigate(Routes.chat(id)) },
@@ -83,4 +97,32 @@ internal fun NavGraphBuilder.chatDestination(
             }
         }
     }
+}
+
+/**
+ * L'appel de CET appareil vu de l'en-tête du fil : la phase et la conversation hôte (deux faits), la durée
+ * vivante lue par la seule pastille, et le retour vers l'écran d'appel déjà ouvert (jamais un nouvel appel).
+ * Le `CallViewModel` est celui de l'activité, comme à la racine ([MinimizedCallPill]).
+ */
+@Composable
+private fun rememberChatLocalCall(navController: NavHostController, callStatus: CallStatus): ChatLocalCall {
+    val owner = LocalContext.current.findViewModelOwner() ?: return ChatLocalCall.NONE
+    val callViewModel: CallViewModel = hiltViewModel(viewModelStoreOwner = owner)
+    val isActive = CallPillPresenter.isMinimizable(callStatus)
+    val hostId = if (isActive) callViewModel.activeConfig.conversationId.takeIf { it.isNotBlank() } else null
+    return remember(callViewModel, isActive, hostId) {
+        ChatLocalCall(
+            snapshot = CallHeaderSnapshot(isActive = isActive, conversationId = hostId),
+            duration = callViewModel.state.map { it.durationLabel }.distinctUntilChanged(),
+            onReturn = {
+                navController.navigate(CallRoute.reopen(callViewModel.activeConfig)) { launchSingleTop = true }
+            },
+        )
+    }
+}
+
+private tailrec fun Context.findViewModelOwner(): ViewModelStoreOwner? = when (this) {
+    is ViewModelStoreOwner -> this
+    is ContextWrapper -> baseContext.findViewModelOwner()
+    else -> null
 }

@@ -40,6 +40,8 @@
     <string name="chat_back">Retour</string>
     <string name="chat_call_audio">Appel audio</string>
     <string name="chat_call_rejoin">Rejoindre</string>
+    <string name="chat_call_rejoin_a11y">Appel en cours, toucher pour rejoindre</string>
+    <string name="chat_call_return">Appel en cours, toucher pour revenir</string>
     <string name="chat_call_video">Appel vidéo</string>
     <string name="chat_camera_chooser_photo">Photo</string>
     <string name="chat_camera_chooser_title">Prendre une photo ou une vidéo</string>
@@ -129,12 +131,14 @@
     </plurals>
     <string name="chat_forward_search_hint">Rechercher une conversation...</string>
     <string name="chat_forward_sent">Transféré</string>
+    <string name="chat_guest_bar_close">Fermer la conversation</string>
     <string name="chat_header_flame_hint">Masque la flamme jusqu\'au prochain dépliement de l\'en-tête</string>
     <plurals name="chat_header_members">
         <item quantity="one">%1$d membre</item>
         <item quantity="many">%1$d membres</item>
         <item quantity="other">%1$d membres</item>
     </plurals>
+    <string name="chat_header_share">Partager la conversation</string>
     <string name="chat_link_open">Ouvrir le lien</string>
     <string name="chat_media_pause">Mettre en pause</string>
     <string name="chat_media_play">Lire</string>
@@ -546,6 +550,19 @@
     <string name="message_detail_reactions_empty">Aucune réaction</string>
     <string name="message_detail_report_confirm_message">Le message sera transmis à la modération.</string>
     <string name="message_detail_report_confirm_title">Signaler ce message ?</string>
+    <plurals name="message_detail_send_history_attempt_count">
+        <item quantity="one">%1$d tentative</item>
+        <item quantity="many">%1$d tentatives</item>
+        <item quantity="other">%1$d tentatives</item>
+    </plurals>
+    <string name="message_detail_send_history_attempt_number">Tentative %1$d</string>
+    <string name="message_detail_send_history_first_attempt">1re tentative</string>
+    <string name="message_detail_send_history_outcome_failed">Échec</string>
+    <string name="message_detail_send_history_outcome_succeeded">Réussi</string>
+    <string name="message_detail_send_history_title">Historique d\'envoi</string>
+    <string name="message_detail_send_history_transport_auto_retry">Nouvelle tentative automatique</string>
+    <string name="message_detail_send_history_transport_realtime">Temps réel</string>
+    <string name="message_detail_send_history_transport_realtime_fallback">Repli temps réel</string>
     <string name="message_detail_sentiment_a11y_label">Sentiment</string>
     <string name="message_detail_sentiment_a11y_value">%1$s, score %2$.2f</string>
     <string name="message_detail_sentiment_score">Score : %1$.2f</string>

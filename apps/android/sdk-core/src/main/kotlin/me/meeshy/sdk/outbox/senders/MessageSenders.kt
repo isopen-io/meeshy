@@ -11,6 +11,8 @@ import me.meeshy.sdk.conversation.MessageMediaWriteBack
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.model.SendOutcome
+import me.meeshy.sdk.model.SendTransport
 import me.meeshy.sdk.model.outbox.ReadListBounds
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConsumeAfterReadRequest
@@ -26,6 +28,7 @@ import me.meeshy.sdk.outbox.OutboxPlaintextAdmission
 import me.meeshy.sdk.outbox.ConsumeAfterReadPayload
 import me.meeshy.sdk.outbox.ConsumeViewOncePayload
 import me.meeshy.sdk.outbox.PinPayload
+import me.meeshy.sdk.outbox.SendAttemptRecorder
 import me.meeshy.sdk.outbox.SendFailureClassifier
 import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.outbox.toSendResult
@@ -43,13 +46,24 @@ public class SendMessageHandler @Inject constructor(
     private val json: Json,
     private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
     private val firstMessageAccepted: FirstMessageAcceptedSignal = FirstMessageAcceptedSignal(),
+    private val attempts: SendAttemptRecorder = SendAttemptRecorder.None,
 ) : OutboxKindHandler {
 
     override val payloadGraft: OutboxPayloadGraft = MessageMediaWriteBack::graft
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<SendMessageRequest>(row) { request ->
-            when (val result = apiCall { messageApi.send(row.targetId, request) }) {
+            val startedAt = System.currentTimeMillis()
+            val result = apiCall { messageApi.send(row.targetId, request) }
+            attempts.record(
+                localId = row.cmid,
+                transport = if (row.attempts > 0) SendTransport.OUTBOX else SendTransport.REST,
+                startedAtMillis = startedAt,
+                finishedAtMillis = System.currentTimeMillis(),
+                outcome = if (result is NetworkResult.Success) SendOutcome.SUCCESS else SendOutcome.FAILURE,
+                errorMessage = (result as? NetworkResult.Failure)?.error?.message,
+            )
+            when (result) {
                 is NetworkResult.Success -> {
                     messageRepository.reconcileSent(row.cmid, result.data)
                     firstMessageAccepted.notifyAccepted()

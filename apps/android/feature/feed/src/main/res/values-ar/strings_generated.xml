@@ -14,6 +14,11 @@
     <string name="feed_action_share">مشاركة</string>
     <string name="feed_action_view_profile">عرض الملف الشخصي</string>
     <string name="feed_bookmark_success">تمت الإضافة إلى المفضلة</string>
+    <string name="feed_caption_collapse">أقل</string>
+    <string name="feed_caption_expand">المزيد…</string>
+    <string name="feed_carousel_a11y_position">الوسائط %1$d من %2$d</string>
+    <string name="feed_carousel_next">الوسائط التالية</string>
+    <string name="feed_carousel_previous">الوسائط السابقة</string>
     <string name="feed_comment_card_folded">+%1$d ردود</string>
     <string name="feed_comment_card_thread">سلسلة التعليقات</string>
     <string name="feed_comment_imagine">حوِّل إلى صورة</string>
@@ -29,6 +34,7 @@
     <string name="feed_load_error">تعذّر تحميل التدفق</string>
     <string name="feed_location_shared">موقع تمت مشاركته</string>
     <string name="feed_media_page_counter">%1$d/%2$d</string>
+    <string name="feed_media_view_fullscreen">اضغط للتكبير</string>
     <plurals name="feed_new_posts">
         <item quantity="zero">%1$d منشورات جديدة</item>
         <item quantity="one">%1$d منشور جديد</item>
@@ -51,6 +57,8 @@
     <string name="feed_pending_waiting">في انتظار الإرسال</string>
     <string name="feed_pending_withdrawn">تم إلغاء الإرسال</string>
     <string name="feed_post_deleted">تم حذف المنشور</string>
+    <string name="feed_post_detail_document">مستند</string>
+    <string name="feed_post_detail_pages">صفحات</string>
     <string name="feed_post_open">فتح</string>
     <string name="feed_post_pinned">تم تثبيت المنشور</string>
     <string name="feed_post_reposted_from">أعاد النشر من @%1$s</string>
@@ -149,6 +157,7 @@
         <item quantity="other">عرض %1$d تعليق</item>
     </plurals>
     <string name="hashtag_results_empty">لا توجد منشورات بالوسم #%1$s</string>
+    <string name="media_download_video">تنزيل الفيديو</string>
     <string name="mood_bubble_react">تفاعل %1$s</string>
     <string name="mood_bubble_reply">رد</string>
     <string name="mood_spotlight_close">إغلاق</string>

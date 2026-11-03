@@ -40,6 +40,8 @@
     <string name="chat_back">Voltar</string>
     <string name="chat_call_audio">Chamada de áudio</string>
     <string name="chat_call_rejoin">Reingressar</string>
+    <string name="chat_call_rejoin_a11y">Chamada em andamento, toque para reingressar</string>
+    <string name="chat_call_return">Chamada em andamento, toque para voltar</string>
     <string name="chat_call_video">Chamada de vídeo</string>
     <string name="chat_camera_chooser_photo">Foto</string>
     <string name="chat_camera_chooser_title">Tirar uma foto ou vídeo</string>
@@ -129,12 +131,14 @@
     </plurals>
     <string name="chat_forward_search_hint">Pesquisar uma conversa...</string>
     <string name="chat_forward_sent">Encaminhado</string>
+    <string name="chat_guest_bar_close">Fechar conversa</string>
     <string name="chat_header_flame_hint">Oculta a chama até o cabeçalho ser expandido novamente</string>
     <plurals name="chat_header_members">
         <item quantity="one">%1$d membro</item>
         <item quantity="many">%1$d membros</item>
         <item quantity="other">%1$d membros</item>
     </plurals>
+    <string name="chat_header_share">Compartilhar a conversa</string>
     <string name="chat_link_open">Abrir link</string>
     <string name="chat_media_pause">Pausar</string>
     <string name="chat_media_play">Reproduzir</string>
@@ -546,6 +550,19 @@
     <string name="message_detail_reactions_empty">Nenhuma reação</string>
     <string name="message_detail_report_confirm_message">A mensagem será enviada à moderação.</string>
     <string name="message_detail_report_confirm_title">Denunciar esta mensagem?</string>
+    <plurals name="message_detail_send_history_attempt_count">
+        <item quantity="one">%1$d tentativa</item>
+        <item quantity="many">%1$d tentativas</item>
+        <item quantity="other">%1$d tentativas</item>
+    </plurals>
+    <string name="message_detail_send_history_attempt_number">Tentativa %1$d</string>
+    <string name="message_detail_send_history_first_attempt">1ª tentativa</string>
+    <string name="message_detail_send_history_outcome_failed">Falhou</string>
+    <string name="message_detail_send_history_outcome_succeeded">Bem-sucedido</string>
+    <string name="message_detail_send_history_title">Histórico de envio</string>
+    <string name="message_detail_send_history_transport_auto_retry">Nova tentativa automática</string>
+    <string name="message_detail_send_history_transport_realtime">Tempo real</string>
+    <string name="message_detail_send_history_transport_realtime_fallback">Alternativa em tempo real</string>
     <string name="message_detail_sentiment_a11y_label">Sentimento</string>
     <string name="message_detail_sentiment_a11y_value">%1$s, pontuação %2$.2f</string>
     <string name="message_detail_sentiment_score">Pontuação: %1$.2f</string>

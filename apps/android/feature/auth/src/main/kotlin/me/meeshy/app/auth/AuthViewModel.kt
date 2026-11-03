@@ -24,7 +24,7 @@ import me.meeshy.sdk.model.auth.LoginAccountIntent
 import me.meeshy.sdk.model.auth.LoginEmailCandidate
 import me.meeshy.sdk.model.auth.LoginFlow
 import me.meeshy.sdk.model.auth.LoginFlowEvent
-import me.meeshy.sdk.model.auth.OtpCodeField
+import me.meeshy.sdk.model.auth.TwoFactorCodeField
 import me.meeshy.sdk.model.auth.TwoFactorRefusal
 import me.meeshy.sdk.model.auth.LoginOutcome
 import me.meeshy.sdk.model.auth.PendingEmailVerification
@@ -88,8 +88,8 @@ data class AuthUiState(
 
     val canSubmit: Boolean get() = username.isNotBlank() && password.isNotBlank() && !isSubmitting
 
-    /** iOS `LoginView` : « Se connecter » de l'étape 2FA reste grisé sous 6 caractères. */
-    val canSubmitTwoFactor: Boolean get() = OtpCodeField.isComplete(twoFactorCode) && !isSubmitting
+    /** « Se connecter » de l'étape 2FA : un code TOTP ou un code de secours complet (iOS `LoginView`, contrat `POST /auth/login/2fa`). */
+    val canSubmitTwoFactor: Boolean get() = TwoFactorCodeField.isComplete(twoFactorCode) && !isSubmitting
 
     /** L'étape de la connexion, lue de l'état : le jeton de second facteur la porte, jamais l'état sauvegardé. */
     val loginFlow: LoginFlow
@@ -312,7 +312,7 @@ class AuthViewModel @Inject constructor(
     }
 
     fun onTwoFactorCodeChange(value: String) {
-        _state.update { it.copy(twoFactorCode = OtpCodeField.sanitize(value), errorMessage = null, errorRes = null) }
+        _state.update { it.copy(twoFactorCode = TwoFactorCodeField.sanitize(value), errorMessage = null, errorRes = null) }
     }
 
     /** iOS `LoginView.attempt2FALogin` → `AuthManager.completeLoginWith2FA`. */
@@ -434,6 +434,7 @@ class AuthViewModel @Inject constructor(
                     isSubmitting = false,
                     twoFactorToken = outcome.twoFactorToken,
                     twoFactorCode = "",
+                    password = "",
                     pendingVerification = null,
                     verificationCode = "",
                 )

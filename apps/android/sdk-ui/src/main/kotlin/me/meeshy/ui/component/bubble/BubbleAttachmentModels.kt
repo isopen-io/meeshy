@@ -45,6 +45,10 @@ public data class BubbleFile(
     val thumbnailUrl: String? = null,
     val width: Int? = null,
     val height: Int? = null,
+    /** Le type MIME déclaré : la carte de document en tire sa famille (PDF distinct de Word) et son icône. */
+    val mimeType: String? = null,
+    /** Le nombre de pages d'un document, quand le serveur le connaît (« N pages » sur la carte). */
+    val pageCount: Int? = null,
 )
 
 /**

@@ -40,6 +40,8 @@
     <string name="chat_back">رجوع</string>
     <string name="chat_call_audio">مكالمة صوتية</string>
     <string name="chat_call_rejoin">الانضمام</string>
+    <string name="chat_call_rejoin_a11y">مكالمة جارية، انقر للانضمام</string>
+    <string name="chat_call_return">مكالمة جارية، اضغط للعودة</string>
     <string name="chat_call_video">مكالمة فيديو</string>
     <string name="chat_camera_chooser_photo">صورة</string>
     <string name="chat_camera_chooser_title">التقاط صورة أو فيديو</string>
@@ -141,6 +143,7 @@
     </plurals>
     <string name="chat_forward_search_hint">ابحث عن محادثة...</string>
     <string name="chat_forward_sent">تمت إعادة التوجيه</string>
+    <string name="chat_guest_bar_close">إغلاق المحادثة</string>
     <string name="chat_header_flame_hint">يُخفي الشعلة حتى يُفتح الرأس مرة أخرى</string>
     <plurals name="chat_header_members">
         <item quantity="zero">لا أعضاء</item>
@@ -150,6 +153,7 @@
         <item quantity="many">%1$d عضوًا</item>
         <item quantity="other">%1$d عضو</item>
     </plurals>
+    <string name="chat_header_share">مشاركة المحادثة</string>
     <string name="chat_link_open">فتح الرابط</string>
     <string name="chat_media_pause">إيقاف مؤقت</string>
     <string name="chat_media_play">تشغيل</string>
@@ -567,6 +571,22 @@
     <string name="message_detail_reactions_empty">لا توجد تفاعلات</string>
     <string name="message_detail_report_confirm_message">سيتم إرسال الرسالة إلى الإشراف.</string>
     <string name="message_detail_report_confirm_title">الإبلاغ عن هذه الرسالة؟</string>
+    <plurals name="message_detail_send_history_attempt_count">
+        <item quantity="zero">%1$d محاولة</item>
+        <item quantity="one">%1$d محاولة</item>
+        <item quantity="two">%1$d محاولتان</item>
+        <item quantity="few">%1$d محاولات</item>
+        <item quantity="many">%1$d محاولة</item>
+        <item quantity="other">%1$d محاولة</item>
+    </plurals>
+    <string name="message_detail_send_history_attempt_number">المحاولة %1$d</string>
+    <string name="message_detail_send_history_first_attempt">المحاولة الأولى</string>
+    <string name="message_detail_send_history_outcome_failed">فشل</string>
+    <string name="message_detail_send_history_outcome_succeeded">نجح</string>
+    <string name="message_detail_send_history_title">سجل الإرسال</string>
+    <string name="message_detail_send_history_transport_auto_retry">إعادة محاولة تلقائية</string>
+    <string name="message_detail_send_history_transport_realtime">الوقت الفعلي</string>
+    <string name="message_detail_send_history_transport_realtime_fallback">بديل الوقت الفعلي</string>
     <string name="message_detail_sentiment_a11y_label">المشاعر</string>
     <string name="message_detail_sentiment_a11y_value">%1$s، النتيجة %2$.2f</string>
     <string name="message_detail_sentiment_score">النتيجة: %1$.2f</string>

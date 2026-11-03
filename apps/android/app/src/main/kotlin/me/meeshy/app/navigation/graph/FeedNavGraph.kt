@@ -79,6 +79,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onCreateStory = { navController.navigateKeepingSheet(storyDoor) },
             onOpenStory = { userId -> navController.navigateKeepingSheet(Routes.story(userId)) },
             onEditStory = { storyId -> navController.navigateKeepingSheet(Routes.storyComposerEdit(storyId)) },
+            onResumeDraft = { navController.navigateKeepingSheet(storyDoor) },
         )
     }
     composable(Routes.SAVED_POSTS) {

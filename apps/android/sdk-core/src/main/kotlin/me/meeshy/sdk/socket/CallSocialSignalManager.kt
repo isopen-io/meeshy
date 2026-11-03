@@ -49,6 +49,9 @@ class CallSocialSignalManager internal constructor(
 
     constructor(socketManager: SocketManager) : this(socketManager, { null })
 
+    /** Les requêtes accessoires émises : rattache un `call:error` à celle qui l'a provoqué ([CallAccessoryRequestLedger]). */
+    val accessoryRequests: CallAccessoryRequestLedger = CallAccessoryRequestLedger()
+
     private val controls = CallControlsSocket(socketManager)
     private val recording = CallRecordingSocket(socketManager)
     private val liveFrame = CallLiveFrameSocket(controls)
@@ -121,14 +124,25 @@ class CallSocialSignalManager internal constructor(
 
     // --- Contrôles à accusé : null d'erreur = accepté, sinon CallControlRefusal / CallRecordingRefusal ---
 
-    suspend fun inviteCallParticipant(callId: String, userId: String): Result<Unit> = controls.invite(callId, userId)
+    suspend fun inviteCallParticipant(callId: String, userId: String): Result<Unit> {
+        accessoryRequests.record(CallAccessoryRequest.Invitation, callId)
+        return controls.invite(callId, userId)
+    }
 
-    suspend fun muteCallParticipant(callId: String, targetUserId: String): Result<Unit> = controls.mute(callId, targetUserId)
+    suspend fun muteCallParticipant(callId: String, targetUserId: String): Result<Unit> {
+        accessoryRequests.record(CallAccessoryRequest.MediaToggle, callId)
+        return controls.mute(callId, targetUserId)
+    }
 
-    suspend fun sendCallReaction(callId: String, emoji: CallReactionEmoji): Result<Unit> = controls.react(callId, emoji)
+    suspend fun sendCallReaction(callId: String, emoji: CallReactionEmoji): Result<Unit> {
+        accessoryRequests.record(CallAccessoryRequest.Reaction, callId)
+        return controls.react(callId, emoji)
+    }
 
-    suspend fun requestCallRecording(callId: String, kind: CallRecordingKind = CallRecordingKind.AUDIO): Result<String> =
-        recording.request(callId, kind)
+    suspend fun requestCallRecording(callId: String, kind: CallRecordingKind = CallRecordingKind.AUDIO): Result<String> {
+        accessoryRequests.record(CallAccessoryRequest.Recording, callId)
+        return recording.request(callId, kind)
+    }
 
     suspend fun answerCallRecording(callId: String, recordingId: String, accepted: Boolean): Result<Unit> =
         recording.answer(callId, recordingId, accepted)

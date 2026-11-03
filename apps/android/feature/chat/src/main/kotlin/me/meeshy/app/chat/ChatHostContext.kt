@@ -35,6 +35,8 @@ internal class ChatNavigationActions(
     val onRejoinCall: (call: ActiveCallSession, peerName: String) -> Unit,
     val onCreateShareLink: () -> Unit,
     val hasLocalLiveCall: Boolean,
+    /** L'appel de cet appareil vu de l'en-tête (pastille « Toucher pour revenir »). */
+    val localCall: ChatLocalCall = ChatLocalCall.NONE,
     /** Ouvre le post (story) cité par un message : la carte de citation du fil (#13296). */
     val onOpenCitedPost: (postId: String) -> Unit = {},
     /** Ouvre une autre conversation (« Écrire » depuis une carte de visite du fil, #13495). */
@@ -82,7 +84,7 @@ internal class ChatSheetVisibility {
  * efface alors sa grappe d'actions (iOS `hiddenWhileScrolling`).
  */
 @Stable
-internal class ChatChromeState {
+internal class ChatChromeState(val listGate: ChatListUpdateGate? = null) {
     var isScrolling by mutableStateOf(false)
     /**
      * Un défilement parti du DOIGT est en cours (glissé puis son élan) — jamais un saut
@@ -181,12 +183,13 @@ internal fun rememberChatHostContext(
     landing: ChatLandingState = ChatLandingState(),
     composerClosure: me.meeshy.sdk.model.ComposerClosure? = null,
     capabilities: me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities? = null,
+    listGate: ChatListUpdateGate? = null,
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
-    val chrome = remember { ChatChromeState() }
+    val chrome = remember(listGate) { ChatChromeState(listGate) }
     return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing, composerClosure, capabilities)
 }
 

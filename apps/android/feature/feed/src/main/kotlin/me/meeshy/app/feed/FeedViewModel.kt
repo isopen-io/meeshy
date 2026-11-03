@@ -432,7 +432,7 @@ class FeedViewModel @Inject constructor(
      */
     fun openImageViewer(postId: String, imageIndex: Int) {
         val post = _state.value.posts.firstOrNull { it.id == postId } ?: return
-        val gallery = FeedMediaGallery.of(post, imageIndex)
+        val gallery = FeedMediaGallery.ofVisuals(post, imageIndex)
         _state.update { it.copy(imageViewer = gallery.takeUnless(FeedGallery::isEmpty)) }
     }
 

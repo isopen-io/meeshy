@@ -146,6 +146,8 @@ data class FeedPostPresentation(
     val mentionDisplayNames: Map<String, String> = emptyMap(),
     /** `urlBrute -> jeton` des liens suivis : le toucher passe par la redirection de la passerelle. */
     val trackedLinks: Map<String, String> = emptyMap(),
+    /** La langue d'origine du texte du post : le porteur de la langue d'un audio sans transcription (Prisme audio). */
+    val originalLanguage: String? = null,
 ) {
     /**
      * Le réel que ce réel republie, quand il n'a pas de média propre : la carte montre alors UNE couverture, celle du
@@ -283,6 +285,7 @@ object FeedPostBuilder {
             mentionUserIds = mentioned.associate { it.first.lowercase() to it.second },
             mentionDisplayNames = mentioned.mapNotNull { (u, _, n) -> n?.takeIf(String::isNotBlank)?.let { u to it } }.toMap(),
             trackedLinks = post.trackedLinkMap,
+            originalLanguage = post.originalLanguage,
         )
     }
 

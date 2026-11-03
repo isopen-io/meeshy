@@ -14,6 +14,11 @@
     <string name="feed_action_share">Compartilhar</string>
     <string name="feed_action_view_profile">Ver o perfil</string>
     <string name="feed_bookmark_success">Adicionado aos favoritos</string>
+    <string name="feed_caption_collapse">menos</string>
+    <string name="feed_caption_expand">mais…</string>
+    <string name="feed_carousel_a11y_position">Mídia %1$d de %2$d</string>
+    <string name="feed_carousel_next">Próxima mídia</string>
+    <string name="feed_carousel_previous">Mídia anterior</string>
     <string name="feed_comment_card_folded">+%1$d respostas</string>
     <string name="feed_comment_card_thread">Conversa de comentários</string>
     <string name="feed_comment_imagine">Criar imagem</string>
@@ -29,6 +34,7 @@
     <string name="feed_load_error">Não foi possível carregar o feed</string>
     <string name="feed_location_shared">Localização compartilhada</string>
     <string name="feed_media_page_counter">%1$d/%2$d</string>
+    <string name="feed_media_view_fullscreen">Toque para ampliar</string>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d nova publicação</item>
         <item quantity="many">%1$d novas publicações</item>
@@ -48,6 +54,8 @@
     <string name="feed_pending_waiting">Aguardando envio</string>
     <string name="feed_pending_withdrawn">Envio cancelado</string>
     <string name="feed_post_deleted">Publicação excluída</string>
+    <string name="feed_post_detail_document">Documento</string>
+    <string name="feed_post_detail_pages">páginas</string>
     <string name="feed_post_open">Abrir</string>
     <string name="feed_post_pinned">Publicação fixada</string>
     <string name="feed_post_reposted_from">repostou de @%1$s</string>
@@ -128,6 +136,7 @@
         <item quantity="other">Ver os %1$d comentários</item>
     </plurals>
     <string name="hashtag_results_empty">Nenhuma postagem com #%1$s</string>
+    <string name="media_download_video">Baixar o vídeo</string>
     <string name="mood_bubble_react">Reação %1$s</string>
     <string name="mood_bubble_reply">Responder</string>
     <string name="mood_spotlight_close">Fechar</string>

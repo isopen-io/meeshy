@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.auth.ArrivalCelebrating
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.auth.ProvenSessionOpener
 import me.meeshy.sdk.model.MeeshyUser
@@ -66,6 +67,7 @@ class MagicLinkValidateViewModel @Inject constructor(
     private val opener: ProvenSessionOpener,
     private val gate: SessionOpeningGate,
     private val sessionRepository: SessionRepository,
+    private val arrival: ArrivalCelebrating,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -205,6 +207,10 @@ class MagicLinkValidateViewModel @Inject constructor(
         if (replacing) authRepository.logout()
         gate.open {
             val opened = opener.open(proven) == ProvenOpenResult.Opened
+            if (opened) {
+                // L'adresse prouvée par le lien fête l'arrivée ; un lien de connexion ne fait que précharger.
+                if (isVerificationLink) arrival.begin(proven.userId) else arrival.prepare(proven.userId)
+            }
             _state.update { it.copy(isValidating = false, isConfirming = false, confirmation = null, isAuthenticated = opened) }
         }
     }

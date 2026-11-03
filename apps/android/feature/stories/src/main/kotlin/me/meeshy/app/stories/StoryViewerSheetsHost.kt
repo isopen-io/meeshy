@@ -113,6 +113,7 @@ internal fun StoryViewerSheetsHost(
             explorer = explorer,
             onSelectLanguage = viewModel::selectLanguage,
             onTranslate = viewModel::requestStoryTranslation,
+            onRetranslate = viewModel::retranslateStory,
             onDismiss = viewModel::closeLanguageExplorer,
         )
     }

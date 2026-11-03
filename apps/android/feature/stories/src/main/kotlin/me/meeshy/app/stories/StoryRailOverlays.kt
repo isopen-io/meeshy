@@ -159,6 +159,10 @@ internal class StoryRailController(
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     viewModel.toggleLanguageOverride(options[hovered].code)
                     closeBars()
+                } else if (hovered != null && hovered == options.size) {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    closeBars()
+                    viewModel.openLanguageExplorer()
                 }
             }
             null -> Unit
