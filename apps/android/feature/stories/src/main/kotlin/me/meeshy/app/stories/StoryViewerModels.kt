@@ -263,6 +263,8 @@ data class StorySlideView(
     val createdAtMillis: Long? = null,
     /** Le look du fond (filtre de slide puis réglages) — neutre : aucun coût de rendu. */
     val lookRecipe: SceneLookRecipe = SceneLookRecipe.NEUTRAL,
+    /** Les filtres, effets et cadres d'une scène PAS ENCORE publiée (aperçu, export du compositeur, #13841) ; `null` partout ailleurs. */
+    val composerLooks: StorySceneMediaLooks? = null,
 ) {
     /** La slide fait du son : vidéo de fond ou de premier plan, ou piste audio. */
     val hasSound: Boolean

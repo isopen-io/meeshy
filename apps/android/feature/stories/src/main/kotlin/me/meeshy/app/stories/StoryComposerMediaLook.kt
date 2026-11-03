@@ -16,15 +16,22 @@ internal fun StoryComposerUiState.mediaLookOf(id: String): StoryMediaLook? = dec
 /** Le look du média que le plateau peint en FOND ; pendant « Comparer » ([comparing] = le fond), son original. */
 internal fun StoryComposerUiState.backgroundMediaLook(comparing: String?): StoryMediaLook? {
     val id = selectedSlideBackdropMediaId ?: return null
-    return if (id == comparing) null else mediaLookOf(id)
+    return if (id == comparing) null else mediaLookOf(id)?.paintedOn(video = placedMediaIsVideo(id))
 }
 
 /**
- * Les filtres, effets et cadres de l'appel s'offrent à une IMAGE de la diapo, posée ou de fond : c'est elle que la
- * publication sait cuire (loi 4 : aucun bouton dont l'effet n'atteindrait pas les lecteurs). La vidéo attend sa cuisson.
+ * Ce qu'un média peint de son look : tout, pour une image ; pour une vidéo, ce que le GPU en grave — sans l'effet de
+ * visage, qu'elle ne peint pas ([StoryMediaLookMapping.videoLook]). `null` : rien.
+ */
+internal fun StoryMediaLook.paintedOn(video: Boolean): StoryMediaLook? =
+    if (video) copy(faceEffect = null).takeIf(StoryMediaLookMapping::videoPaints) else takeIf(StoryMediaLookMapping::paints)
+
+/**
+ * Les filtres et cadres de l'appel s'offrent à tout média de la diapo, image ou vidéo, posé ou de fond : la publication
+ * sait cuire l'un et l'autre (loi 4 : aucun bouton dont l'effet n'atteindrait pas les lecteurs).
  */
 internal fun StoryComposerUiState.offersLook(id: String): Boolean =
-    deck.selectedSlide.mediaFileOf(id) in deck.selectedSlide.mediaIds && !placedMediaIsVideo(id)
+    deck.selectedSlide.mediaFileOf(id) in deck.selectedSlide.mediaIds
 
 /** Le look [look] posé sur le média [mediaId] de la diapo choisie ; un look neutre s'efface. */
 internal fun StorySlideDeck.withSelectedMediaLook(objectId: String, look: StoryMediaLook?): StorySlideDeck {

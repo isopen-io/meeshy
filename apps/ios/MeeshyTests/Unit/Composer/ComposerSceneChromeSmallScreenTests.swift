@@ -82,12 +82,14 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
     private static func postAtTwoSlides(state: ComposerRestChrome.State = rest,
                                         selection: ComposerSelectionColumn? = nil,
                                         paste: Bool = false,
-                                        sceneSideInset: CGFloat = 0) -> ComposerSceneOverlayChrome {
+                                        sceneSideInset: CGFloat = 0,
+                                        sceneTopInset: CGFloat = 0) -> ComposerSceneOverlayChrome {
         ComposerSceneOverlayChrome(state: state, slideRow: slides(), slideCount: 2,
                                    onClose: {}, onUndo: {}, onRedo: {},
                                    tools: ComposerRestTool.allCases, onTool: { _ in },
                                    moreMenu: moreMenu(), pasteEntry: paste ? pasteEntry() : nil,
-                                   selection: selection, sceneSideInset: sceneSideInset)
+                                   selection: selection, sceneSideInset: sceneSideInset,
+                                   sceneTopInset: sceneTopInset)
     }
 
     private static let controls = ["composer.close", "composer.history.undo", "composer.history.redo", "test.socle"]
@@ -193,6 +195,39 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
             XCTAssertLessThanOrEqual(frame.maxX, scene.maxX - MeeshySpacing.xs + 0.5,
                                      "\(id) \(frame) déborde le bord droit de la scène \(scene).")
         }
+    }
+
+    /// Relevé au simulateur iPhone SE : ✕ et ↶ commençaient à 4 pt du haut, la
+    /// scène à 12 — à cheval sur son bord haut. Ils se posent sous lui.
+    func test_surLeSE_laCroixEtLHistorique_sePosentSousLeHautDeLaScene() throws {
+        let scene = Self.sceneOfSE()
+        XCTAssertGreaterThan(scene.minY, 8, "Le cas doit être celui d'une scène qui commence sous le chrome : \(scene).")
+        let chrome = Self.postAtTwoSlides(sceneSideInset: scene.minX, sceneTopInset: scene.minY)
+        let screen = RenderedScreen(Harness(chrome: chrome, size: Self.iPhoneSE), size: Self.iPhoneSE)
+        defer { screen.dismount() }
+
+        for id in ["composer.close", "composer.history.undo", "composer.history.redo"] {
+            let frame = try XCTUnwrap(screen.frame(of: id), "\(id) introuvable dans l'arbre rendu")
+            XCTAssertGreaterThanOrEqual(frame.minY, scene.minY + MeeshySpacing.xs - 0.5,
+                                        "\(id) \(frame) déborde le bord haut de la scène \(scene).")
+        }
+    }
+
+    /// Relevé au simulateur SE : l'invite d'une scène vide (« Toca la escena
+    /// para la cámara »), posée dans le canevas et réduite avec lui par le socle,
+    /// mordait la colonne d'outils une fois celle-ci rentrée dans la scène.
+    func test_surLeSE_lInviteDeLaSceneVide_laisseLaColonneLibre() {
+        let couche = CGRect(origin: .zero, size: Self.iPhoneSE)
+        let zone = ComposerSceneFit.zone(in: couche.size, aspectRatio: SceneShape.aspect)
+        let scene = ComposerSceneFit.frame(in: zone, aspectRatio: SceneShape.aspect)
+        let echelle = (Self.iPhoneSE.height - Self.socleReserve - scene.minY) / scene.height
+        XCTAssertLessThan(echelle, 1, "Le cas doit être celui d'une scène réduite par le socle.")
+        let cote = ComposerRestChrome.sceneSideInset(layer: couche, aspectRatio: SceneShape.aspect, scale: echelle)
+        let colonne = Self.iPhoneSE.width - cote - MeeshySpacing.smPlus - ComposerRestChrome.toolColumnInnerMargin
+            - ComposerSceneRoundGlyph.size
+        let invite = zone.midX + (zone.maxX - ComposerSceneQuickCaptureHint.railClearance - zone.midX) * echelle
+        XCTAssertLessThanOrEqual(invite, colonne - MeeshySpacing.xs,
+                                 "L'invite finit à \(invite), la colonne commence à \(colonne).")
     }
 
     // MARK: - #14622 : le pied de la colonne ne défile jamais

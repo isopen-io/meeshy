@@ -328,8 +328,12 @@
     <string name="new_conversation_contacts_loading">Cargando los contactos</string>
     <string name="new_conversation_contacts_section">Tus contactos</string>
     <string name="new_conversation_create">Crear</string>
+    <string name="new_conversation_encryption_collapsed">Contraída</string>
+    <string name="new_conversation_encryption_expanded">Expandida</string>
     <string name="new_conversation_error_create">No se pudo crear la conversación</string>
-    <string name="new_conversation_group_title">Nombre del grupo</string>
+    <string name="new_conversation_group_solo_hint">Puedes crearlo solo, para una auditoría o para recoger opiniones, e invitar más tarde.</string>
+    <string name="new_conversation_group_title">Nombre del grupo (obligatorio)</string>
+    <string name="new_conversation_group_toggle">Nuevo grupo</string>
     <string name="new_conversation_no_user_found">No se encontró ningún usuario</string>
     <string name="new_conversation_remove">Quitar</string>
     <string name="new_conversation_selected">Seleccionado</string>

@@ -155,4 +155,52 @@ class AuthRepositoryLogoutTest {
 
         coVerify(exactly = 1) { s.api.logout(null, "sess-a") }
     }
+
+    @Test
+    fun `la deconnexion delegue a l'executeur de fermeture, jetons deja vides, avant la purge des caches`() = runTest {
+        val order = mutableListOf<String>()
+        var tokensWhenClosing: String? = "unset"
+        val store = InMemoryTokenStore(jwt = "jwt-a", sessionToken = "sess-a")
+        val api = mockk<AuthApi>().apply { coEvery { logout(any(), any()) } returns ApiResponse(success = true) }
+        val teardown = object : SessionTeardown {
+            override suspend fun wipe() {
+                order += "wipe"
+            }
+        }
+        val closing = me.meeshy.sdk.session.SessionClosing {
+            order += "close"
+            tokensWhenClosing = store.jwt
+        }
+        val repository = AuthRepository(
+            api, store, SessionRepository(api, store), teardown, SyncSeqTracker(), sessionClosing = closing,
+        )
+
+        repository.logout()
+
+        assertThat(order).containsExactly("close", "wipe").inOrder()
+        assertThat(tokensWhenClosing).isNull()
+    }
+
+    @Test
+    fun `la deconnexion efface le profil gardé du compte qui part, pas celui des autres`() = runTest {
+        val forgotten = mutableListOf<String>()
+        val identities = object : me.meeshy.sdk.session.SignedInIdentityStore {
+            override suspend fun recall(userId: String): MeeshyUser? = null
+            override fun remember(user: MeeshyUser) = Unit
+            override suspend fun forget(userId: String) {
+                forgotten += userId
+            }
+        }
+        val store = InMemoryTokenStore(jwt = "jwt-a", sessionToken = "sess-a", userId = "A")
+        val api = mockk<AuthApi>().apply { coEvery { logout(any(), any()) } returns ApiResponse(success = true) }
+        val session = SessionRepository(
+            api, store, me.meeshy.sdk.net.SessionTransitionFlags(),
+            me.meeshy.sdk.session.PendingProfileEdits.NONE, identities,
+        )
+        val repository = AuthRepository(api, store, session, RecordingTeardown(), SyncSeqTracker())
+
+        repository.logout()
+
+        assertThat(forgotten).containsExactly("A")
+    }
 }
