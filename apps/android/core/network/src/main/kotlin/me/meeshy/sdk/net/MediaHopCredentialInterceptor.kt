@@ -8,9 +8,11 @@ import okhttp3.Response
  * saut d'une redirection : il retire tout en-tête d'identité (`Authorization`, `X-Session-Token`, `Cookie`), y compris
  * ceux qu'un appelant aurait posés, puis ne remet que ce que [credentialFor] accorde à l'adresse de CE saut.
  *
- * OkHttp ne retire de lui-même, sur une redirection vers un autre hôte, que `Authorization` : sans cette garde, un
- * `X-Session-Token` posé sur la route des sons suivrait une 302 chez un tiers. Le jeton est relu à chaque saut, donc
- * un changement de compte ou une déconnexion s'applique sans redémarrage.
+ * OkHttp construit chaque saut d'une redirection depuis la requête de l'APPELANT, et n'en retire de lui-même, vers un
+ * autre hôte, que `Authorization` : un `X-Session-Token` ou un `Cookie` posé par l'appelant suivrait donc une 302 chez
+ * un tiers. Ce que cet intercepteur pose ne voyage jamais au saut suivant (il agit au niveau réseau) ; ce qu'il RETIRE,
+ * c'est l'identité que l'appelant aurait posée. Le jeton est relu à chaque saut, donc un changement de compte ou une
+ * déconnexion s'applique sans redémarrage.
  */
 class MediaHopCredentialInterceptor(
     private val credentialFor: (url: String) -> Map<String, String>,

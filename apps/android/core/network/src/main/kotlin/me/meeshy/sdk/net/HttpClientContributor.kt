@@ -20,9 +20,6 @@ interface HttpClientContributor {
     val priority: Int
     fun contribute(builder: OkHttpClient.Builder)
 
-    /** Le droit de monter aussi sur un client des médias (#14613) ; seul ce module en émet. Sans lui, jamais. */
-    val mediaGrant: MediaClientGrant? get() = null
-
     companion object {
         fun of(id: String, priority: Int, block: (OkHttpClient.Builder) -> Unit): HttpClientContributor =
             FunctionContributor(id, priority, block)
@@ -33,7 +30,7 @@ interface HttpClientContributor {
             priority: Int,
             role: MediaClientRole,
             block: (OkHttpClient.Builder) -> Unit,
-        ): HttpClientContributor = FunctionContributor(id, priority, block, MediaClientGrant(role))
+        ): HttpClientContributor = FunctionContributor(id, priority, block, role)
     }
 }
 
@@ -41,10 +38,18 @@ private class FunctionContributor(
     override val id: String,
     override val priority: Int,
     private val block: (OkHttpClient.Builder) -> Unit,
-    override val mediaGrant: MediaClientGrant? = null,
+    val mediaRole: MediaClientRole? = null,
 ) : HttpClientContributor {
     override fun contribute(builder: OkHttpClient.Builder) = block(builder)
 }
+
+/**
+ * Le rôle que ce contributeur tient sur les clients des médias (#14613), ou `null`. Seul un contributeur ÉMIS par ce
+ * module en porte un ([HttpClientContributor.granted]) : un contributeur d'un autre module — qu'il reprenne le nom de
+ * l'épinglage ou qu'il délègue à `CertificatePinnerContributor.of()` en ajoutant ses propres intercepteurs — n'en a
+ * aucun, puisque le rôle n'est lisible par aucune API publique.
+ */
+internal fun HttpClientContributor.mediaRole(): MediaClientRole? = (this as? FunctionContributor)?.mediaRole
 
 /** Les priorités du socle ; un lot ultérieur choisit une valeur ENTRE elles. */
 object HttpPriority {

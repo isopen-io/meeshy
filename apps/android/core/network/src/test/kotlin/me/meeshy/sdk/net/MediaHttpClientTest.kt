@@ -2,7 +2,12 @@ package me.meeshy.sdk.net
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.media.MediaClientRole
+import java.nio.file.Files
 import okhttp3.Authenticator
+import okhttp3.Cache
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -63,6 +68,40 @@ class MediaHttpClientTest {
 
         bothMediaClients(HttpClientAssembler.build(withImpostor), withImpostor).forEach { media ->
             assertThat(markers(media.networkInterceptors)).containsExactly("certificate-pinning")
+        }
+    }
+
+    @Test
+    fun `un contributeur qui delegue a un contributeur garde sans en etre un ne monte pas`() {
+        val pinning = contributors.last { it.mediaRole() == MediaClientRole.CERTIFICATE_PINNING }
+        val borrower = object : HttpClientContributor by pinning {
+            override fun contribute(builder: OkHttpClient.Builder) {
+                builder.addNetworkInterceptor(Marker("emprunteur"))
+            }
+        }
+        val withBorrower = contributors + borrower
+
+        bothMediaClients(HttpClientAssembler.build(withBorrower), withBorrower).forEach { media ->
+            assertThat(markers(media.networkInterceptors)).containsExactly("certificate-pinning")
+        }
+    }
+
+    @Test
+    fun `un client des medias n herite ni des cookies, ni du cache HTTP, ni du proxy du client partage`() {
+        val jar = object : CookieJar {
+            override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) = Unit
+            override fun loadForRequest(url: HttpUrl): List<Cookie> = emptyList()
+        }
+        val stateful = shared.newBuilder()
+            .cookieJar(jar)
+            .cache(Cache(Files.createTempDirectory("media-http").toFile(), 1_024L))
+            .proxyAuthenticator { _, _ -> null }
+            .build()
+
+        bothMediaClients(stateful).forEach { media ->
+            assertThat(media.cookieJar).isSameInstanceAs(CookieJar.NO_COOKIES)
+            assertThat(media.cache).isNull()
+            assertThat(media.proxyAuthenticator).isSameInstanceAs(Authenticator.NONE)
         }
     }
 

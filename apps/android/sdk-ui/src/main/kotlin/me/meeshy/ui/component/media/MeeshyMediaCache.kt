@@ -142,6 +142,9 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
         gateFor(category).close { cache.keys.toList().forEach { key -> runCatching { cache.removeResource(key) } } }
     }
 
+    /** Le dossier des tronçons de [category], tel que `SimpleCache` l'écrit et le relit au démarrage. */
+    internal fun spansDir(category: MediaCacheCategory): File = dirs.spansDirFor(category)
+
     /** Octets que [category] occupe sur le disque, tels que le cache les compte (tronçons validés). */
     public fun diskBytes(category: MediaCacheCategory): Long = cacheFor(category).cacheSpace
 
@@ -201,23 +204,24 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
         stamp: Long,
     ): Boolean {
         val slot = try {
-            cache.startFile(key, 0L, length)
+            gate.within(stamp) { cache.startFile(key, 0L, length).also(gate::track) }
         } catch (failure: IOException) {
             return false
         }
         val written = try {
-            slot.outputStream().use { out -> open().use { input -> copyExactly(input, out, length) } }
+            gate.within(stamp) { slot.outputStream().use { out -> open().use { input -> copyExactly(input, out, length) } } }
         } catch (failure: Exception) {
             false
         }
         if (!written) {
-            slot.delete()
+            gate.abandon(slot)
             return false
         }
         return try {
             var committed = false
             gate.commitIfCurrent(
                 stamp,
+                slot,
                 commit = {
                     cache.applyContentMetadataMutations(
                         key,

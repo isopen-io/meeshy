@@ -11,8 +11,9 @@ import org.junit.Test
 
 /**
  * #14613 — l'identité d'une requête média se décide À CHAQUE SAUT, sur le client que les lecteurs Media3 et l'export de
- * scène utilisent réellement. OkHttp ne retire de lui-même, sur une redirection vers un autre hôte, que
- * `Authorization` : sans la garde, un `X-Session-Token` posé sur la route des sons suivrait une 302 chez un tiers.
+ * scène utilisent réellement. OkHttp construit chaque saut depuis la requête de l'appelant et n'en retire de lui-même,
+ * vers un autre hôte, que `Authorization` : sans la garde, un `X-Session-Token` ou un `Cookie` posé par l'appelant
+ * suivrait une 302 chez un tiers.
  */
 class MediaHopCredentialInterceptorTest {
 
@@ -72,6 +73,21 @@ class MediaHopCredentialInterceptorTest {
         get(signedClient(api, InMemoryTokenStore(jwt = "jwt")), api.url("/api/v1/static/son.m4a").toString())
 
         assertThat(api.takeRequest().getHeader("Authorization")).isEqualTo("Bearer jwt")
+        assertThat(elsewhere.takeRequest().identity()).containsExactly(null, null, null)
+    }
+
+    @Test
+    fun `un jeton pose par l appelant ne part ni vers la route des sons ni apres une redirection`() = servers { api, elsewhere ->
+        api.enqueue(MockResponse().setResponseCode(302).setHeader("Location", elsewhere.url("/api/v1/static/son.m4a")))
+        elsewhere.enqueue(MockResponse().setBody("son"))
+
+        get(
+            signedClient(api, InMemoryTokenStore()),
+            api.url("/api/v1/static/son.m4a").toString(),
+            "X-Session-Token" to "pose-par-l-appelant",
+        )
+
+        assertThat(api.takeRequest().identity()).containsExactly(null, null, null)
         assertThat(elsewhere.takeRequest().identity()).containsExactly(null, null, null)
     }
 

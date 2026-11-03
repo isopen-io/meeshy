@@ -2,6 +2,7 @@ package me.meeshy.sdk.net
 
 import me.meeshy.sdk.model.media.MediaClientDerivation
 import okhttp3.Authenticator
+import okhttp3.CookieJar
 import okhttp3.Dispatcher
 import okhttp3.EventListener
 import okhttp3.OkHttpClient
@@ -10,7 +11,9 @@ import okhttp3.OkHttpClient
  * **Les clients HTTP des médias** — une SEULE dérivation du client partagé : son pool de connexions (HTTP/2), sans
  * aucun de ses intercepteurs d'API ni son authentificateur ; seuls remontent les contributeurs dont le rôle passe
  * [MediaClientDerivation] (épinglage, frontière de session). Ce n'est PAS le client Retrofit. File d'attente propre,
- * et une redirection HTTPS vers HTTP n'est pas suivie — un jeton ne repart jamais en clair.
+ * et une redirection HTTPS vers HTTP n'est pas suivie — un jeton ne repart jamais en clair. Rien de ce qui garde un
+ * état de compte n'est hérité : ni cookies, ni cache HTTP (jamais purgé au changement de compte), ni authentificateur
+ * de proxy.
  *
  * Deux politiques d'identité, toutes deux posées par un intercepteur RÉSEAU, donc réévaluées à chaque saut d'une
  * redirection :
@@ -47,7 +50,10 @@ object MediaHttpClient {
             .authenticator(Authenticator.NONE)
             .eventListener(EventListener.NONE)
             .followSslRedirects(false)
-        val kept = contributors.filter { MediaClientDerivation.keeps(it.mediaGrant?.role) }
+            .cookieJar(CookieJar.NO_COOKIES)
+            .cache(null)
+            .proxyAuthenticator(Authenticator.NONE)
+        val kept = contributors.filter { MediaClientDerivation.keeps(it.mediaRole()) }
         return HttpClientAssembler.build(kept, base).newBuilder()
     }
 }

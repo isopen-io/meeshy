@@ -21,22 +21,48 @@ import kotlin.concurrent.write
  * (`commitFile`) un tronçon APRÈS elle : des octets obtenus avec le jeton du compte quitté restaient sur le disque. La
  * validation et la purge passent donc par le même verrou — validée avant, la purge l'emporte ; demandée après, elle est
  * refusée et le fichier part.
+ *
+ * Un tronçon COMMENCÉ et pas encore validé est déjà sur le disque sous son nom définitif, et `SimpleCache` l'adopterait
+ * au démarrage suivant si le processus mourait avant sa validation : chaque écriture se fait donc [within] son époque,
+ * chaque fichier commencé est [track]é, et la fermeture d'une époque supprime ceux qu'elle laisse en cours. Une écriture
+ * demandée après la fermeture échoue AVANT de toucher le disque ; une écriture en cours la fait attendre.
  */
 internal class AccountEpochGate {
     private val lock = ReentrantReadWriteLock()
+    private val pending: MutableSet<File> = ConcurrentHashMap.newKeySet()
 
     @Volatile
     var epoch: Long = 0L
         private set
 
-    /** Ferme l'époque courante, puis [purge] : rien de ce qui la précède ne se valide après. */
+    /** Ferme l'époque courante, supprime ce qu'elle laisse en cours d'écriture, puis [purge]. */
     fun close(purge: () -> Unit) = lock.write {
         epoch += 1
+        pending.forEach { it.delete() }
+        pending.clear()
         purge()
     }
 
-    /** Valide ce qui a commencé à l'époque [stamp] si elle est toujours la courante ; sinon [discard]. */
-    fun commitIfCurrent(stamp: Long, commit: () -> Unit, discard: () -> Unit) = lock.read {
+    /** Exécute [block] dans l'époque [stamp] ; close, elle lève [AccountChangedException] sans rien écrire. */
+    fun <T> within(stamp: Long, block: () -> T): T = lock.read {
+        if (stamp != epoch) throw AccountChangedException()
+        block()
+    }
+
+    /** [file] s'écrit dans l'époque courante : il part avec elle s'il n'est pas validé avant. À appeler [within]. */
+    fun track(file: File) {
+        pending += file
+    }
+
+    /** [file] n'est plus en cours : son écriture a échoué, il part. */
+    fun abandon(file: File) {
+        pending -= file
+        file.delete()
+    }
+
+    /** Valide [file], commencé à l'époque [stamp], si elle est toujours la courante ; sinon [discard]. */
+    fun commitIfCurrent(stamp: Long, file: File, commit: () -> Unit, discard: () -> Unit) = lock.read {
+        pending -= file
         if (stamp == epoch) commit() else discard()
     }
 }
@@ -80,7 +106,11 @@ internal class AccountFencedDataSource(
     }
 }
 
-/** L'écriture d'un cache média : chaque tronçon porte l'époque de son flux, et ne se valide que dans elle. */
+/**
+ * L'écriture d'un cache média : chaque tronçon porte l'époque de son flux, s'écrit dans elle et ne se valide que dans
+ * elle. L'ouverture et chaque écriture passent [AccountEpochGate.within] : c'est là que `CacheDataSink` commence ses
+ * fichiers, donc aucun ne naît, ni ne grossit, après la fermeture de son époque.
+ */
 @UnstableApi
 internal class AccountFencedSinkFactory(
     private val cache: Cache,
@@ -92,10 +122,11 @@ internal class AccountFencedSinkFactory(
         return object : DataSink {
             override fun open(dataSpec: DataSpec) {
                 fenced.openStream()
-                sink.open(dataSpec)
+                gate.within(fenced.streamEpoch) { sink.open(dataSpec) }
             }
 
-            override fun write(buffer: ByteArray, offset: Int, length: Int) = sink.write(buffer, offset, length)
+            override fun write(buffer: ByteArray, offset: Int, length: Int) =
+                gate.within(fenced.streamEpoch) { sink.write(buffer, offset, length) }
 
             override fun close() = sink.close()
         }
@@ -109,7 +140,8 @@ internal class AccountFencedCache(
     private val gate: AccountEpochGate,
 ) : Cache by delegate {
     @Volatile
-    private var streamEpoch: Long = gate.epoch
+    var streamEpoch: Long = gate.epoch
+        private set
     private val stamps = ConcurrentHashMap<File, Long>()
 
     fun openStream() {
@@ -117,10 +149,13 @@ internal class AccountFencedCache(
     }
 
     override fun startFile(key: String, position: Long, length: Long): File =
-        delegate.startFile(key, position, length).also { stamps[it] = streamEpoch }
+        delegate.startFile(key, position, length).also { file ->
+            stamps[file] = streamEpoch
+            gate.track(file)
+        }
 
     override fun commitFile(file: File, length: Long) {
         val stamp = stamps.remove(file) ?: streamEpoch
-        gate.commitIfCurrent(stamp, commit = { delegate.commitFile(file, length) }, discard = { file.delete() })
+        gate.commitIfCurrent(stamp, file, commit = { delegate.commitFile(file, length) }, discard = { file.delete() })
     }
 }

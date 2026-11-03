@@ -22,22 +22,21 @@ public class SceneAssetRefusedException(reason: String) : IOException(reason)
  * Ramène en local le fond vidéo ou le son d'une scène avant son bake. Annulable (l'appel réseau est coupé, la copie
  * s'arrête), et un transfert qui échoue, s'interrompt ou dépasse [maxBytes] ne laisse JAMAIS de fichier partiel.
  *
- * Le [client] est NU : aucun intercepteur d'identité n'y est monté, donc rien ne part vers une adresse que l'auteur
- * d'une scène aurait écrite. [admits] refuse avant envoi toute adresse hors de la politique média (https, aucune adresse
- * privée), et [headers] ne pose l'identité du compte que sur la route protégée des sons de la bibliothèque
- * (`<api>/static/<fichier>`, `MediaRequestCredential`).
+ * Le fetcher ne pose AUCUNE identité : c'est le [client] qui en décide, à chaque saut (`sceneAssetClient`, #14877) —
+ * le jeton du compte ne part que vers la route protégée des sons de la bibliothèque (`<api>/static/<fichier>`,
+ * `MediaRequestCredential`). [admits] refuse avant envoi toute adresse hors de la politique média (https, aucune
+ * adresse privée).
  */
 public class SceneAssetFetcher(
     private val client: OkHttpClient,
     private val admits: (String) -> Boolean,
-    private val headers: (String) -> Map<String, String> = { emptyMap() },
     private val maxBytes: Long = DEFAULT_MAX_BYTES,
 ) {
 
     public suspend fun fetch(url: String, target: File) {
         if (!admits(url)) throw SceneAssetRefusedException("adresse refusee")
         try {
-            val request = Request.Builder().url(url).apply { headers(url).forEach { (name, value) -> header(name, value) } }.build()
+            val request = Request.Builder().url(url).build()
             execute(request).use { served ->
                 if (!served.isSuccessful) throw IOException("statut ${served.code}")
                 val body = served.body ?: throw IOException("corps vide")
