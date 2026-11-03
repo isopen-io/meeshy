@@ -149,6 +149,9 @@
     </plurals>
     <string name="presence_offline">Offline</string>
     <string name="presence_online">Online</string>
+    <string name="pull_refresh_armed">Loslassen zum Aktualisieren</string>
+    <string name="pull_refresh_done">Aktualisiert</string>
+    <string name="pull_refresh_refreshing">Wird aktualisiert</string>
     <string name="reactions_more">Weitere Reaktionen</string>
     <string name="retouch_crop_original">Original</string>
     <string name="retouch_effect_angel">Engel</string>

@@ -99,15 +99,17 @@ struct NotificationReplyRegime {
     /// on n'est plus membre : la passerelle sert le même 404) ou accès refusé.
     /// Le statut seul ne suffit pas (#14693) : Traefik sert un 404 sans
     /// enveloppe pendant un déploiement, un proxy d'entreprise un 403. Seuls
-    /// l'enveloppe de la passerelle et son code décident ; tout autre refus,
-    /// une session expirée, un délai ou un 5xx restent transitoires.
+    /// l'enveloppe de la passerelle (`success: false`, exigée sur les DEUX
+    /// formes d'erreur, #14708) et son code décident ; tout autre refus, une
+    /// session expirée, un délai ou un 5xx restent transitoires.
     nonisolated static func isDefinitive(_ error: any Error) -> Bool {
         gatewayRefusalCode(of: error).map(definitiveRefusalCodes.contains) ?? false
     }
 
     nonisolated private static func gatewayRefusalCode(of error: any Error) -> String? {
         switch error {
-        case MeeshyError.rejected(let rejection) where definitiveStatuses.contains(rejection.statusCode):
+        case MeeshyError.rejected(let rejection)
+            where rejection.isGatewayEnvelope && definitiveStatuses.contains(rejection.statusCode):
             return rejection.code
         case MeeshyError.forbidden(_, let body):
             return APIRejection.gatewayRefusal(statusCode: 403, body: body)?.code
@@ -176,6 +178,33 @@ struct NotificationReplyAwaitingRegime: Codable, Equatable, Sendable {
         withdrawnAt = try container.decodeIfPresent(Date.self, forKey: .withdrawnAt)
     }
 
+    /// Une fiche telle que le FICHIER l'a écrite : toujours datée. Sans date,
+    /// elle n'est pas intacte — la tolérance de `init(from:)` ne vaut que pour
+    /// les préférences d'avant #14673.
+    init(storedFrom decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard container.contains(.createdAt) else {
+            throw DecodingError.keyNotFound(CodingKeys.createdAt, .init(codingPath: decoder.codingPath, debugDescription: "undated"))
+        }
+        try self.init(from: decoder)
+    }
+
+    /// Une fiche dont le fichier ne dit plus que l'IDENTITÉ (#14707) : un champ
+    /// ne se décode plus (corruption, format d'une version future). Son âge
+    /// est inconnu, elle est donc échue : elle ne part jamais, l'utilisateur
+    /// lit qu'elle n'est pas partie, et son clair quitte le coffre au retour
+    /// de son compte — le chemin de toute fiche de plus de 24 h.
+    init(identityFrom decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        clientMessageId = try container.decode(String.self, forKey: .clientMessageId)
+        conversationId = try container.decode(String.self, forKey: .conversationId)
+        senderId = try container.decode(String.self, forKey: .senderId)
+        replyToId = nil
+        originalLanguage = nil
+        createdAt = .distantPast
+        withdrawnAt = try? container.decodeIfPresent(Date.self, forKey: .withdrawnAt)
+    }
+
     /// La réponse telle que le geste l'avait composée, avec le texte relu au coffre.
     func queueItem(content: String) -> OfflineQueueItem {
         OfflineQueueItem(
@@ -200,10 +229,17 @@ protocol NotificationRepliesAwaitingRegimeStoring: AnyObject {
 /// les garde en mémoire seulement.
 ///
 /// **Un fichier qui existe mais ne se lit pas n'est jamais écrasé** (#14694) :
-/// avant le premier déverrouillage (protection `completeUntilFirstUserAuthentication`)
-/// ou corrompu, il garde des fiches dont le clair attend au coffre. Le magasin
-/// tient alors ses fiches en mémoire, n'écrit rien, et relit le fichier à
-/// chaque accès : relu, il rejoint la mémoire et s'écrit de nouveau. La clé
+/// avant le premier déverrouillage (protection `completeUntilFirstUserAuthentication`),
+/// il garde des fiches dont le clair attend au coffre. Le magasin tient alors
+/// ses fiches en mémoire, n'écrit rien, et relit le fichier à chaque accès :
+/// relu, il rejoint la mémoire et s'écrit de nouveau.
+///
+/// **Un fichier LU mais indécodable part à côté, et le magasin guérit**
+/// (#14707) : ses octets sont gardés à l'identique sous
+/// `awaiting-regime.corrupt-<ms>.json` (même protection, hors sauvegarde),
+/// chaque fiche qui se décode encore est rendue, chaque fiche dont seule
+/// l'identité se lit revient ÉCHUE (`init(identityFrom:)`), et l'écriture
+/// reprend. Faute de pouvoir le déplacer, il est traité comme verrouillé. La clé
 /// héritée des préférences ne part qu'une fois le fichier ÉCRIT, et une fiche
 /// migrée y garde la date de sa première lecture, sans quoi la borne de 24 h
 /// reculerait à chaque lancement.
@@ -231,7 +267,7 @@ final class NotificationRepliesAwaitingRegime: NotificationRepliesAwaitingRegime
         self.fileURL = fileURL
         self.legacyDefaults = legacyDefaults
         let legacy = legacyDefaults?.data(forKey: Self.legacyKey).flatMap(Self.decode) ?? []
-        let reading = Self.read(fileURL)
+        let reading = Self.load(fileURL)
         let stored = reading ?? []
         legacyIds = Set(legacy.map(\.clientMessageId)).subtracting(stored.map(\.clientMessageId))
         fileUnreadable = reading == nil
@@ -266,7 +302,7 @@ final class NotificationRepliesAwaitingRegime: NotificationRepliesAwaitingRegime
     }
 
     private func recoverOnceReadable() {
-        guard fileUnreadable, let stored = Self.read(fileURL) else { return }
+        guard fileUnreadable, let stored = Self.load(fileURL) else { return }
         fileUnreadable = false
         held = Self.merge(held, over: stored)
         persist()
@@ -310,10 +346,52 @@ final class NotificationRepliesAwaitingRegime: NotificationRepliesAwaitingRegime
         }
     }
 
-    /// `[]` pour un fichier absent ; `nil` pour un fichier présent mais illisible.
-    private static func read(_ fileURL: URL?) -> [NotificationReplyAwaitingRegime]? {
+    /// `[]` pour un fichier absent ; `nil` pour un fichier qui ne se LIT pas,
+    /// ou dont les octets indécodables n'ont pas pu être mis de côté.
+    private static func load(_ fileURL: URL?) -> [NotificationReplyAwaitingRegime]? {
         guard let fileURL, FileManager.default.fileExists(atPath: fileURL.path) else { return [] }
-        return (try? Data(contentsOf: fileURL)).flatMap(decode)
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        let elements = try? JSONDecoder().decode([SalvagedFiche].self, from: data)
+        if let elements, elements.allSatisfy(\.isIntact) { return elements.compactMap(\.fiche) }
+        guard setAside(fileURL) else { return nil }
+        let salvaged = (elements ?? []).compactMap(\.fiche)
+        Logger.e2ee.error("notification replies awaiting regime: undecodable file set aside, fiches=\(salvaged.count, privacy: .public) of=\(elements?.count ?? -1, privacy: .public)")
+        return salvaged
+    }
+
+    /// Les octets partent à côté, à l'identique ; le nom suivant est libre.
+    private static func setAside(_ fileURL: URL) -> Bool {
+        let stamp = Int(Date().timeIntervalSince1970 * 1000)
+        var aside = fileURL.deletingPathExtension()
+            .appendingPathExtension("corrupt-\(stamp)")
+            .appendingPathExtension(fileURL.pathExtension)
+        do {
+            try FileManager.default.moveItem(at: fileURL, to: aside)
+            var excluded = URLResourceValues()
+            excluded.isExcludedFromBackup = true
+            try? aside.setResourceValues(excluded)
+            return true
+        } catch {
+            Logger.e2ee.error("notification replies awaiting regime: undecodable file not set aside, kept untouched")
+            return false
+        }
+    }
+
+    /// Un élément du tableau, décodé SEUL : une fiche invalide n'emporte pas
+    /// les autres, et son identité, si elle se lit, survit.
+    private struct SalvagedFiche: Decodable {
+        let fiche: NotificationReplyAwaitingRegime?
+        let isIntact: Bool
+
+        init(from decoder: any Decoder) throws {
+            if let fiche = try? NotificationReplyAwaitingRegime(storedFrom: decoder) {
+                self.fiche = fiche
+                isIntact = true
+                return
+            }
+            fiche = try? NotificationReplyAwaitingRegime(identityFrom: decoder)
+            isIntact = false
+        }
     }
 
     /// Les fiches de `base`, puis celles de `newer` qu'elle n'a pas : à

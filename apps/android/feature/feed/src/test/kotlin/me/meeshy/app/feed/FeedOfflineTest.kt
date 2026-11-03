@@ -76,6 +76,7 @@ class FeedOfflineTest {
     ): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         every { repository.feedHasMore } returns MutableStateFlow(true)
+        every { repository.gestureRefusals } returns MutableSharedFlow()
         every { repository.feedStream(any(), any()) } answers { feed(secondArg()) }
         return FeedViewModel(
             repository, session, socialSocket, MeeshyConfig(), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),

@@ -26,6 +26,11 @@ public enum class SupportLinkKind {
     FEATURE_REQUEST,
 }
 
+/** Une action (et non un lien) d'une section : iOS `supportButton`. */
+public enum class SupportActionKind {
+    RATE_APP,
+}
+
 /** A support link row: its [kind] (label/icon resolved app-side) and the [url] it opens. */
 public data class SupportLink(
     val kind: SupportLinkKind,
@@ -36,6 +41,7 @@ public data class SupportLink(
 public data class SupportLinkSection(
     val key: SupportSectionKey,
     val links: List<SupportLink>,
+    val actions: List<SupportActionKind> = emptyList(),
 )
 
 /** Which fixed information row a value belongs to on the Help & Support screen's INFO section. */

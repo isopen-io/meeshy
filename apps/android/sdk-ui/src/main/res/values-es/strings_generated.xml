@@ -152,6 +152,9 @@
     </plurals>
     <string name="presence_offline">Desconectado</string>
     <string name="presence_online">En línea</string>
+    <string name="pull_refresh_armed">Suelta para actualizar</string>
+    <string name="pull_refresh_done">Actualizado</string>
+    <string name="pull_refresh_refreshing">Actualizando</string>
     <string name="reactions_more">Más reacciones</string>
     <string name="retouch_crop_original">Original</string>
     <string name="retouch_effect_angel">Ángel</string>

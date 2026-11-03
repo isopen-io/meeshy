@@ -161,6 +161,9 @@
     </plurals>
     <string name="presence_offline">غير متصل</string>
     <string name="presence_online">متصل</string>
+    <string name="pull_refresh_armed">أفلِت للتحديث</string>
+    <string name="pull_refresh_done">تم التحديث</string>
+    <string name="pull_refresh_refreshing">جارٍ التحديث</string>
     <string name="reactions_more">مزيد من التفاعلات</string>
     <string name="retouch_crop_original">الأصلي</string>
     <string name="retouch_effect_angel">ملاك</string>

@@ -18,6 +18,13 @@ interface TokenStore {
      */
     var userId: String?
     val isAuthenticated: Boolean
+
+    /**
+     * Quand le dernier jeton a été reçu (epoch ms) — la base d'un refresh proactif (iOS `meeshy_token_date_<id>`).
+     * `null` : aucun jeton reçu sur cet appareil, ou un magasin qui ne la tient pas.
+     */
+    val tokenDateMillis: Long? get() = null
+
     fun clear()
 
     /**
@@ -41,6 +48,7 @@ class InMemoryTokenStore(
     override var jwt: String? = null,
     override var sessionToken: String? = null,
     override var userId: String? = null,
+    override var tokenDateMillis: Long? = null,
 ) : TokenStore {
     private var dormant: Map<String, AccountTokens> = emptyMap()
 
