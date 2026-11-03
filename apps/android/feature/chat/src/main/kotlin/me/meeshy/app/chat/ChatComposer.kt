@@ -403,19 +403,13 @@ internal fun ChatComposer(
                     )
                 }
                 if (inputAvailable && !isEditing && effectsPanelOpen) {
-                    EffectsPickerSheet(
+                    MessageEffectsPanel(
                         effects = effects,
                         accentColor = accentColor,
                         onToggle = onToggleEffect,
-                        onSelectDuration = onSelectEphemeralDuration,
                         onClear = onClearEffects,
-                        onDone = { effectsPanelOpen = false },
-                        inline = true,
                         sections = configuration.effectSections,
-                        modifier = Modifier
-                            .padding(start = MeeshySpacing.sm, end = MeeshySpacing.sm, top = MeeshySpacing.sm)
-                            .clip(RoundedCornerShape(MeeshyRadius.lg))
-                            .background(if (MeeshyTheme.isDark) Color.Black.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.9f)),
+                        modifier = Modifier.padding(start = MeeshySpacing.sm, end = MeeshySpacing.sm, top = MeeshySpacing.sm),
                     )
                 }
                 if (inputAvailable && !isEditing) {
