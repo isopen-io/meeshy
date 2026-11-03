@@ -165,6 +165,21 @@ class SessionTeardownTest {
     }
 
     @Test
+    fun wipe_erasesPendingSharesAndTheirCopies() = runTest {
+        val root = java.nio.file.Files.createTempDirectory("share-teardown").toFile().resolve("root")
+        val store = me.meeshy.sdk.share.SharePendingShareStore(root)
+        store.commit(
+            me.meeshy.sdk.model.share.SharePendingShare.make("s1", 1L, "u1", "hi", emptyList(), listOf("c1")),
+        )
+        store.mediaDirectory("s1").apply { mkdirs() }.resolve("a.jpg").writeText("x")
+
+        teardown(perAccountCaches = setOf(store)).wipe()
+
+        assertThat(store.pending("u1")).isEmpty()
+        assertThat(root.exists()).isFalse()
+    }
+
+    @Test
     fun wipe_clearsTheAccountPreferenceSnapshots() = runTest {
         val snapshots = me.meeshy.sdk.preferences.InMemoryPreferenceSnapshotStore()
         snapshots.save("all", "{}", 5L)
