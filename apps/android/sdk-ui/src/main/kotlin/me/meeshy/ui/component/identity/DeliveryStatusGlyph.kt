@@ -2,11 +2,6 @@ package me.meeshy.ui.component.identity
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -17,6 +12,7 @@ import me.meeshy.sdk.model.DeliveryTier
 import me.meeshy.sdk.model.SendLifecycle
 import me.meeshy.sdk.model.SendLifecycleResolver
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyIconSize
 import me.meeshy.ui.theme.MeeshyOpacity
 import me.meeshy.ui.theme.MeeshyPalette
@@ -93,10 +89,10 @@ public fun DeliveryStatusGlyphView(
     val spec = DeliveryStatusGlyph.of(status)
     val vector = when (spec.glyph) {
         DeliveryGlyph.None -> return
-        DeliveryGlyph.Clock -> Icons.Filled.Schedule
-        DeliveryGlyph.Check -> Icons.Filled.Done
-        DeliveryGlyph.DoubleCheck, DeliveryGlyph.DoubleCheckBold -> Icons.Filled.DoneAll
-        DeliveryGlyph.ErrorCircle -> Icons.Filled.Error
+        DeliveryGlyph.Clock -> MeeshyIcons.ScheduleFilled
+        DeliveryGlyph.Check -> MeeshyIcons.Done
+        DeliveryGlyph.DoubleCheck, DeliveryGlyph.DoubleCheckBold -> MeeshyIcons.DoneAll
+        DeliveryGlyph.ErrorCircle -> MeeshyIcons.ErrorFilled
     }
     val tint = when (spec.tone) {
         DeliveryTone.Secondary -> secondary

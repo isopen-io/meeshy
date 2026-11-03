@@ -156,6 +156,9 @@
     <string name="fullscreen_react">React</string>
     <string name="fullscreen_reply">Reply</string>
     <string name="fullscreen_show_controls">Show controls</string>
+    <string name="identity_role_admin">Admin</string>
+    <string name="identity_role_creator">Creator</string>
+    <string name="identity_role_moderator">Moderator</string>
     <string name="image_editor_before">Original</string>
     <string name="image_editor_cancel">Cancel</string>
     <string name="image_editor_crop_applied">Crop</string>

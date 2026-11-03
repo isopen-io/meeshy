@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -46,6 +43,7 @@ import me.meeshy.ui.component.avatar.AvatarGestureHost
 import me.meeshy.ui.component.avatar.AvatarGestures
 import me.meeshy.ui.component.bubble.CompactFlagChip
 import me.meeshy.ui.component.meeshyPresenceDotColor
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyIconSize
 import me.meeshy.ui.theme.MeeshyOpacity
@@ -195,7 +193,7 @@ private fun TranslateButton(onClick: () -> Unit, modifier: Modifier) {
             .semantics { role = Role.Button; contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Filled.Translate, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(MeeshyIconSize.xs))
+        Icon(MeeshyIcons.Translate, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(MeeshyIconSize.xs))
     }
 }
 
@@ -244,7 +242,7 @@ private fun ActionMenuPill(menu: IdentityBarElement.ActionMenu, modifier: Modifi
     Box(modifier) {
         PillButton(
             label = menu.label,
-            trailing = { Icon(Icons.Filled.KeyboardArrowDown, null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(MeeshyIconSize.xs)) },
+            trailing = { Icon(MeeshyIcons.ChevronDown, null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(MeeshyIconSize.xs)) },
             onClick = { expanded = true },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

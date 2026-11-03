@@ -74,6 +74,8 @@ import androidx.compose.material.icons.filled.Description as FiDescription
 import androidx.compose.material.icons.filled.Devices as FiDevices
 import androidx.compose.material.icons.filled.Diamond as FiDiamond
 import androidx.compose.material.icons.filled.Directions as FiDirections
+import androidx.compose.material.icons.filled.Done as FiDone
+import androidx.compose.material.icons.filled.DoneAll as FiDoneAll
 import androidx.compose.material.icons.filled.Download as FiDownload
 import androidx.compose.material.icons.filled.Drafts as FiDrafts
 import androidx.compose.material.icons.filled.Edit as FiEdit
@@ -400,6 +402,8 @@ public object MeeshyIcons {
     public val DiamondFilled: ImageVector get() = Icons.Filled.FiDiamond
     public val Directions: ImageVector get() = Icons.Filled.FiDirections
     public val Document: ImageVector get() = Icons.Filled.FiDescription
+    public val Done: ImageVector get() = Icons.Filled.FiDone
+    public val DoneAll: ImageVector get() = Icons.Filled.FiDoneAll
     public val Download: ImageVector get() = Icons.Filled.FiDownload
     public val Edit: ImageVector get() = Icons.Outlined.OuEdit
     public val EditFilled: ImageVector get() = Icons.Filled.FiEdit
