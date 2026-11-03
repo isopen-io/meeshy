@@ -49,6 +49,10 @@ internal class ConversationAppearanceHost(
     val resolution: ConversationBackgroundResolution
         get() = catalog?.let { ConversationBackgroundResolution.resolve(appearance, isDark, it) } ?: ConversationBackgroundResolution.Signature
 
+    /** L'accent PERSONNEL choisi (jamais le calculé) : il colore la bulle envoyée ; `null` = indigo de marque. */
+    val personalAccentHex: String?
+        get() = catalog?.let { ConversationBackgroundResolution.personalAccentHex(appearance, isDark, it) }
+
     companion object {
         val NONE = ConversationAppearanceHost(null, ConversationAppearance.DEFAULT, null, { BackgroundPhotoSource(null, "") }, { emptyMap() }, false)
     }
