@@ -1,6 +1,8 @@
 package me.meeshy.core.database.dao
 
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
@@ -69,6 +71,14 @@ public interface MessageDao {
             "ORDER BY createdAt DESC LIMIT :limit",
     )
     public fun observeRecentForConversation(conversationId: String, limit: Int): Flow<List<MessageEntity>>
+
+    /**
+     * INSERT IGNORE : n'écrit que les lignes dont l'identifiant est absent et ne remplace JAMAIS une ligne existante
+     * (préchargement d'un push : jamais d'écrasement d'un payload riche). Rend le rowid de chaque ligne, `-1` pour une
+     * ligne ignorée.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    public suspend fun insertIfAbsent(rows: List<MessageEntity>): List<Long>
 
     @Upsert
     public suspend fun upsertAll(rows: List<MessageEntity>)
