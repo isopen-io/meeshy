@@ -1,5 +1,6 @@
 package me.meeshy.ui.story.canvas
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -8,7 +9,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.scene.MeeshySceneObject
+import me.meeshy.sdk.model.scene.SceneMediaLayerRules
 import me.meeshy.sdk.model.scene.SceneRenderItem
+import java.io.File
 
 /**
  * La surface UNIQUE d'une scène en lecture (iOS `StoryCanvasUIView`) : fond, puis les éléments du plan de rendu dans
@@ -25,22 +28,28 @@ public fun SceneCanvas(
     mediaUrlOf: (String) -> String? = { null },
     strokes: List<StoryDrawingStroke> = emptyList(),
     events: SceneCanvasEvents = SceneCanvasEvents.None,
+    mediaEnvironment: SceneMediaEnvironment = SceneMediaEnvironment.Default,
     background: @Composable () -> Unit = {},
 ) {
     Box(modifier.fillMaxSize()) {
         SceneBackdropHost(content = background)
         items.forEach { item ->
             key(item.kind, item.id) {
-                val url = remember(item.signature) { item.resolvedUrl(mediaUrlOf) }
-                SceneItemRenderer(remember(item.signature, url) { SceneNode(item, url) }, events)
+                val url = remember(item.signature, mediaEnvironment.isReader) { item.resolvedUrl(mediaUrlOf, mediaEnvironment.isReader) }
+                SceneItemRenderer(remember(item.signature, url) { SceneNode(item, url) }, events, mediaEnvironment)
             }
         }
         SceneDrawingLayer(strokes)
     }
 }
 
-private fun SceneRenderItem.resolvedUrl(mediaUrlOf: (String) -> String?): String? = when (val s = source) {
-    is MeeshySceneObject.Media -> s.value.postMediaId.takeIf { it.isNotBlank() }?.let(mediaUrlOf) ?: s.value.mediaURL
+private fun SceneRenderItem.resolvedUrl(mediaUrlOf: (String) -> String?, isReader: Boolean): String? = when (val s = source) {
+    is MeeshySceneObject.Media -> SceneMediaLayerRules.playableUrl(
+        serverUrl = s.value.postMediaId.takeIf { it.isNotBlank() }?.let(mediaUrlOf),
+        mediaUrl = s.value.mediaURL,
+        isReader = isReader,
+        fileExists = { File(Uri.parse(it).path.orEmpty()).exists() },
+    )
     is MeeshySceneObject.Sticker -> s.value.postMediaId.takeIf { it.isNotBlank() }?.let(mediaUrlOf)
     else -> null
 }
