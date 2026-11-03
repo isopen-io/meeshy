@@ -41,7 +41,7 @@ internal class LongMessageExpansionHost(
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private var state by mutableStateOf(LongMessageExpansionState())
-    private var expandedOnScreen by mutableStateOf(false)
+    private var expandedVisible by mutableStateOf(false)
     /** Incrémenté à la fin de la fenêtre de maintien : relance la lecture de l'atténuation au dessin. */
     private var holdTick by mutableLongStateOf(0L)
     private var anchorJob: Job? = null
@@ -52,11 +52,11 @@ internal class LongMessageExpansionHost(
     /** Lu au dessin (`graphicsLayer`) : aucune recomposition de rangée. */
     fun alphaFor(messageId: String): Float {
         if (holdTick < 0L) return 1f
-        return state.alphaFor(messageId, expandedOnScreen, clock())
+        return state.alphaFor(messageId, expandedVisible, clock())
     }
 
     fun setExpandedOnScreen(onScreen: Boolean) {
-        expandedOnScreen = onScreen
+        expandedVisible = onScreen
     }
 
     fun toggle(messageId: String, row: LayoutCoordinates?) {
