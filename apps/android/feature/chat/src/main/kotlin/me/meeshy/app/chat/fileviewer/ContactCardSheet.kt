@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
+import me.meeshy.app.chat.FileAttachmentIntentResolver
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.contacts.vcard.ContactCardField
 import me.meeshy.sdk.model.contacts.vcard.VCard
@@ -217,23 +218,42 @@ private fun ContactCardFieldRow(field: ContactCardField, accent: Color) {
         if (copied) haptics.success() else haptics.error()
         Toast.makeText(context, if (copied) copiedMessage else context.getString(R.string.viewer_load_error), Toast.LENGTH_SHORT).show()
     }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .combinedClickable(onClick = {}, onLongClick = copy)
-            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
-            .clearAndSetSemantics {
-                contentDescription = spoken
-                customActions = listOf(CustomAccessibilityAction(copyLabel) { copy(); true })
-            },
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-    ) {
-        Icon(field.kind.icon(), null, tint = accent, modifier = Modifier.size(24.dp))
-        Column(Modifier.weight(1f)) {
-            Text(label, color = MeeshyTheme.tokens.textSecondary, fontSize = MeeshyFontSize.caption)
-            Text(field.value, color = MeeshyTheme.tokens.textPrimary, fontSize = MeeshyFontSize.body)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 48.dp)
+                .combinedClickable(onClick = {}, onLongClick = copy)
+                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
+                .clearAndSetSemantics {
+                    contentDescription = spoken
+                    customActions = listOf(CustomAccessibilityAction(copyLabel) { copy(); true })
+                },
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+        ) {
+            Icon(field.kind.icon(), null, tint = accent, modifier = Modifier.size(24.dp))
+            Column(Modifier.weight(1f)) {
+                Text(label, color = MeeshyTheme.tokens.textSecondary, fontSize = MeeshyFontSize.caption)
+                Text(field.value, color = MeeshyTheme.tokens.textPrimary, fontSize = MeeshyFontSize.body)
+            }
         }
+        if (field.kind == ContactCardField.Kind.PHONE && FileAttachmentIntentResolver.dialableNumber(field.value) != null) {
+            val callLabel = stringResource(R.string.chat_call_audio)
+            Box(
+                Modifier
+                    .size(48.dp)
+                    .clickable(role = Role.Button) { startDial(context, field.value) }
+                    .semantics { contentDescription = "$callLabel, ${field.value}" },
+                contentAlignment = Alignment.Center,
+            ) { Icon(MeeshyIcons.Call, null, tint = accent, modifier = Modifier.size(20.dp)) }
+        }
+    }
+}
+
+private fun startDial(context: Context, number: String) {
+    val intent = FileAttachmentIntentResolver.dialIntent(number) ?: return
+    if (runCatching { context.startActivity(intent) }.isFailure) {
+        Toast.makeText(context, R.string.chat_file_open_failed, Toast.LENGTH_SHORT).show()
     }
 }
 

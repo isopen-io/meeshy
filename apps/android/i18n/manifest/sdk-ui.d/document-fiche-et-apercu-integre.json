@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "media.document.deleteAttachment",
+          "androidName": "document_delete_attachment",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.document.pages",
+          "androidName": "document_card_pages",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

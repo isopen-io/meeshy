@@ -51,4 +51,17 @@ object FileAttachmentIntentResolver {
         }
         return Intent.createChooser(send, fileName)
     }
+
+    /** Un numéro de carte de visite réduit à ce qu'un composeur accepte : chiffres, `+` initial, `*` et `#` ; `null` sinon. */
+    fun dialableNumber(raw: String?): String? {
+        val trimmed = raw.orEmpty().trim()
+        val plus = if (trimmed.startsWith("+")) "+" else ""
+        val digits = trimmed.filter { it.isDigit() || it == '*' || it == '#' }
+        return (plus + digits).takeIf { digits.any(Char::isDigit) }
+    }
+
+    /** `ACTION_DIAL` : ouvre le composeur, sans jamais lancer l'appel (aucune permission, l'utilisateur confirme). */
+    fun dialIntent(number: String): Intent? = dialableNumber(number)?.let {
+        Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", it, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
 }
