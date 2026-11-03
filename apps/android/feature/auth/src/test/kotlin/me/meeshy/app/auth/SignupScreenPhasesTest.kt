@@ -1,7 +1,5 @@
 package me.meeshy.app.auth
 
-import androidx.compose.ui.test.assertDoesNotExist
-import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasSetTextAction

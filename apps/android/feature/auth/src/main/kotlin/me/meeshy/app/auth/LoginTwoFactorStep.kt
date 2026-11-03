@@ -3,8 +3,6 @@ package me.meeshy.app.auth
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,7 +44,7 @@ internal fun LoginTwoFactorStep(
     }
     val fieldLabel = stringResource(R.string.auth_login_two_factor_label)
     ChallengeColumn(
-        icon = { Icon(Icons.Filled.Shield, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(48.dp)) },
+        icon = { Icon(MeeshyIcons.ShieldFilled, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(48.dp)) },
         title = stringResource(R.string.auth_login_two_factor_title),
         description = stringResource(R.string.auth_login_two_factor_description),
         modifier = modifier,
