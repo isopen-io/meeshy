@@ -25,7 +25,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.app.auth.invite.InviteLandingError
+import me.meeshy.app.auth.invite.InviteLandingPage
+import me.meeshy.app.auth.invite.InviteLandingSkeleton
 import me.meeshy.feature.auth.R
+import me.meeshy.sdk.model.InviteLandingChoice
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
@@ -56,6 +60,7 @@ fun ShareLinkEntryScreen(
     viewModel: ShareLinkEntryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val landingInfo by viewModel.landingInfo.collectAsStateWithLifecycle()
 
     when (val current = state) {
         ShareLinkEntryUiState.GuestForm ->
@@ -68,10 +73,31 @@ fun ShareLinkEntryScreen(
             }
 
         ShareLinkEntryUiState.RequiresAccount ->
-            EntryScaffold(onBack = onBack) { RequiresAccountBody(onSignIn = onSignIn) }
+            landingInfo?.let { info ->
+                InviteLandingPage(
+                    info = info,
+                    isSignedIn = false,
+                    onClose = onBack,
+                    onChoice = { choice -> if (choice == InviteLandingChoice.SIGN_IN || choice == InviteLandingChoice.SIGN_UP) onSignIn() },
+                )
+            } ?: EntryScaffold(onBack = onBack) { RequiresAccountBody(onSignIn = onSignIn) }
 
         is ShareLinkEntryUiState.ChooseIdentity ->
-            EntryScaffold(onBack = onBack) {
+            landingInfo?.let { info ->
+                InviteLandingPage(
+                    info = info,
+                    isSignedIn = true,
+                    resumesGuestSession = current.resumesGuestSession,
+                    onClose = onBack,
+                    onChoice = { choice ->
+                        when (choice) {
+                            InviteLandingChoice.JOIN_WITH_ACCOUNT -> viewModel.chooseAccount()
+                            InviteLandingChoice.JOIN_ANONYMOUSLY -> viewModel.chooseAnonymous()
+                            InviteLandingChoice.SIGN_IN, InviteLandingChoice.SIGN_UP -> Unit
+                        }
+                    },
+                )
+            } ?: EntryScaffold(onBack = onBack) {
                 ChooseIdentityBody(
                     state = current,
                     onContinueWithAccount = viewModel::chooseAccount,
@@ -80,12 +106,10 @@ fun ShareLinkEntryScreen(
             }
 
         is ShareLinkEntryUiState.Failed ->
-            EntryScaffold(onBack = onBack) {
-                FailedBody(message = current.message, onRetry = viewModel::resolve)
-            }
+            InviteLandingError(onRetry = viewModel::resolve, onClose = onBack)
 
         ShareLinkEntryUiState.Resolving ->
-            EntryScaffold(onBack = onBack) { ResolvingBody() }
+            InviteLandingSkeleton(onClose = onBack)
     }
 }
 
@@ -210,30 +234,5 @@ private fun ChooseIdentityBody(
                 ),
             )
         }
-    }
-}
-
-@Composable
-private fun FailedBody(message: String?, onRetry: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-    ) {
-        Text(
-            text = stringResource(R.string.guest_join_preview_error),
-            style = MaterialTheme.typography.titleMedium,
-            color = MeeshyTheme.tokens.textPrimary,
-            textAlign = TextAlign.Center,
-        )
-        message?.takeIf { it.isNotBlank() }?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
-                textAlign = TextAlign.Center,
-            )
-        }
-        OutlinedButton(onClick = onRetry) { Text(stringResource(R.string.guest_join_retry)) }
     }
 }
