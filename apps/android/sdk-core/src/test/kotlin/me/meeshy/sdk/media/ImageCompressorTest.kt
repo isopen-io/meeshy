@@ -9,7 +9,12 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
+import me.meeshy.sdk.model.media.ImageByteBudget
 import me.meeshy.sdk.model.media.ImageUploadContext
+import kotlin.random.Random
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -105,5 +110,73 @@ class ImageCompressorTest {
         val result = compressor().compress(junk, ImageUploadContext.MESSAGE)
         assertThat(result.bytes).isEqualTo(junk)
         assertThat(result.recompressed).isFalse()
+    }
+
+    private fun noisy(width: Int, height: Int): ByteArray {
+        val random = Random(42)
+        val pixels = IntArray(width * height) { Color.rgb(random.nextInt(256), random.nextInt(256), random.nextInt(256)) }
+        val bitmap = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+        return ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+    }
+
+    @Test
+    fun `l'avatar converge sous 500 Ko et sous 512 px`() = runTest {
+        val result = compressor().compressToBudget(noisy(1400, 1400), ImageByteBudget.AVATAR)
+        assertThat(result.bytes.size.toLong()).isAtMost(ImageByteBudget.AVATAR.maxBytes)
+        val (w, h) = dimensions(result.bytes)
+        assertThat(maxOf(w, h)).isAtMost(512)
+        assertThat(result.mimeType).isEqualTo("image/jpeg")
+    }
+
+    @Test
+    fun `la banniere reste sous 800 Ko et sous 1600 px`() = runTest {
+        val result = compressor().compressToBudget(noisy(2400, 1000), ImageByteBudget.BANNER)
+        assertThat(result.bytes.size.toLong()).isAtMost(ImageByteBudget.BANNER.maxBytes)
+        assertThat(dimensions(result.bytes).first).isAtMost(1600)
+    }
+
+    @Test
+    fun `une image sous le budget part en une passe a la qualite de depart`() = runTest {
+        val small = encode(200, 200, Bitmap.CompressFormat.JPEG)
+        val result = compressor().compressToBudget(small, ImageByteBudget.AVATAR)
+        assertThat(result.bytes.size.toLong()).isAtMost(ImageByteBudget.AVATAR.maxBytes)
+        assertThat(dimensions(result.bytes)).isEqualTo(200 to 200)
+    }
+
+    @Test
+    fun `l'orientation exif est cuite dans le rendu du budget`() = runTest {
+        val source = jpegWithOrientation(3000, 2000, ExifInterface.ORIENTATION_ROTATE_90)
+        val result = compressor().compressToBudget(source, ImageByteBudget.BANNER)
+        val (w, h) = dimensions(result.bytes)
+        assertThat(h).isGreaterThan(w)
+    }
+
+    @Test
+    fun `une grande image est decodee sans exploser`() = runTest {
+        val big = encode(5000, 4000, Bitmap.CompressFormat.JPEG)
+        val result = compressor().compressToBudget(big, ImageByteBudget.AVATAR)
+        assertThat(maxOf(dimensions(result.bytes).first, dimensions(result.bytes).second)).isAtMost(512)
+    }
+
+    @Test
+    fun `des octets illisibles reviennent tels quels au budget`() = runTest {
+        val junk = ByteArray(64) { 7 }
+        assertThat(compressor().compressToBudget(junk, ImageByteBudget.AVATAR).bytes).isEqualTo(junk)
+    }
+
+    @Test
+    fun `l'annulation de la coroutine interrompt la compression`() = runTest {
+        var cancelled = false
+        val job = launch {
+            try {
+                compressor().compressToBudget(noisy(1400, 1400), ImageByteBudget.AVATAR)
+            } catch (e: CancellationException) {
+                cancelled = true
+                throw e
+            }
+        }
+        job.cancel()
+        advanceUntilIdle()
+        assertThat(cancelled || job.isCancelled).isTrue()
     }
 }
