@@ -1,5 +1,6 @@
 package me.meeshy.app.navigation.graph
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
@@ -19,6 +20,7 @@ import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.navigation.MeeshyStoryRail
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.LegacyStoryComposerRedirect
 import me.meeshy.app.navigation.storyDoor
 import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.sheetComposable
@@ -182,12 +184,21 @@ internal fun NavGraphBuilder.feedNavGraph(
             },
         ),
     ) { entry ->
-        StoryComposerScreen(
-            onClose = { navController.popBackStack() },
-            repostOfId = entry.arguments?.getString(Routes.STORY_COMPOSER_REPOST_ARG),
-            initialVisibility = StoryComposerSeedAudience.fromRouteArg(entry.arguments?.getString(Routes.STORY_COMPOSER_AUDIENCE_ARG)),
-            editStoryId = entry.arguments?.getString(Routes.STORY_COMPOSER_EDIT_ARG),
-            recomposeStoryId = entry.arguments?.getString(Routes.STORY_COMPOSER_RECOMPOSE_ARG),
-        )
+        val repostOfId = entry.arguments?.getString(Routes.STORY_COMPOSER_REPOST_ARG)
+        val audienceArg = entry.arguments?.getString(Routes.STORY_COMPOSER_AUDIENCE_ARG)
+        val editStoryId = entry.arguments?.getString(Routes.STORY_COMPOSER_EDIT_ARG)
+        val recomposeStoryId = entry.arguments?.getString(Routes.STORY_COMPOSER_RECOMPOSE_ARG)
+        val host = remember(entry) { LegacyStoryComposerRedirect.target(repostOfId, audienceArg, editStoryId, recomposeStoryId) }
+        if (host != null) {
+            LaunchedEffect(host) { navController.navigate(host) { popUpTo(Routes.STORY_COMPOSER_ROUTE) { inclusive = true } } }
+        } else {
+            StoryComposerScreen(
+                onClose = { navController.popBackStack() },
+                repostOfId = repostOfId,
+                initialVisibility = StoryComposerSeedAudience.fromRouteArg(audienceArg),
+                editStoryId = editStoryId,
+                recomposeStoryId = recomposeStoryId,
+            )
+        }
     }
 }

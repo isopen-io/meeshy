@@ -37,6 +37,9 @@ public enum class OutboxKind {
 
     /** Un message chiffré de bout en bout (#14591) : la ligne ne porte aucun clair, il attend au coffre E2EE. */
     SEND_E2EE_MESSAGE,
+
+    /** Le thème du bloc application (`PATCH /me/preferences/application`) : jamais de consentement (#4180). */
+    UPDATE_APPLICATION_SETTINGS,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -88,6 +91,13 @@ public object OutboxLanes {
      * message se tient par son `dependsOn`, jamais par la lane média), donc une pièce qui attend ne retient pas les suivantes.
      */
     public fun isIndependent(lane: String): Boolean = lane == MEDIA
+
+    /**
+     * #14697 — une lane de messages ne retient pas ses messages derrière une pièce qui se téléverse encore : le message qui
+     * l'attend attend SEUL (son ordre se tient par son `dependsOn`), ceux composés après lui partent dans leur ordre. Un échec
+     * transitoire ou une ligne pas encore due, eux, tiennent toujours la lane (FIFO).
+     */
+    public fun passesOverWaitingMedia(lane: String): Boolean = lane.startsWith(forMessage(""))
 }
 
 /**
@@ -135,6 +145,7 @@ public object OutboxLaneMap {
         OutboxKind.UPDATE_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
         OutboxKind.UPDATE_PRIVACY_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
         OutboxKind.UPDATE_AUDIO_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
+        OutboxKind.UPDATE_APPLICATION_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
         OutboxKind.PUBLISH_STORY -> OutboxLaneAssignment.Shared(OutboxLanes.STORY)
         OutboxKind.UPLOAD_MEDIA -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA)
 

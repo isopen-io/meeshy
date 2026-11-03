@@ -16,6 +16,7 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.outbox.senders.SendMessageHandler
 import org.junit.Test
@@ -41,7 +42,7 @@ class OutboxFlushWorkerReconcileTest {
                 appContext: Context,
                 workerClassName: String,
                 workerParameters: WorkerParameters,
-            ): ListenableWorker = OutboxFlushWorker(appContext, workerParameters, outbox, registry)
+            ): ListenableWorker = OutboxFlushWorker(appContext, workerParameters, outbox, registry, InMemoryNetworkMonitor(), RecordingOutboxScheduler())
         }
         val worker = TestListenableWorkerBuilder.from(
             ApplicationProvider.getApplicationContext<Context>(),

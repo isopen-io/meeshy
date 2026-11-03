@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.appearance
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.AttachmentProtection
 import org.junit.Test
 
 class ConversationBackgroundPhotoVerdictTest {

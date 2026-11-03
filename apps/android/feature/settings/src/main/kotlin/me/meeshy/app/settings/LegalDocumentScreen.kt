@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.legal.LegalDocumentCatalog
 import me.meeshy.sdk.model.legal.LegalDocumentKind
+import me.meeshy.sdk.model.legal.LegalDocumentLanguage
 import me.meeshy.sdk.model.legal.LegalSectionKey
 import me.meeshy.ui.component.chrome.CollapsibleHeaderPage
 import me.meeshy.ui.component.chrome.MeeshyBackground

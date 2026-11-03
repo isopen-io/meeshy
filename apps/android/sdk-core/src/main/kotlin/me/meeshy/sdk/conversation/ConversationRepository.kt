@@ -588,8 +588,20 @@ class ConversationRepository @Inject constructor(
                 )
                 true
             }
-        } ?: false
+        }?.also { if (it) readLocallySignal.tryEmit(id) } ?: false
     }
+
+    /** Une lecture locale appliquee : le coordinateur de non-lus la rejoue de facon optimiste. */
+    private val readLocallySignal = kotlinx.coroutines.flow.MutableSharedFlow<String>(
+        extraBufferCapacity = 32,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
+    )
+
+    val readLocally: Flow<String> get() = readLocallySignal
+
+    /** L'instantane id -> non-lus du cache : il seme le registre, il ne l'ecrase jamais. */
+    fun unreadSnapshot(): Flow<Map<String, Int>> =
+        cachedConversations().map { rows -> rows.associate { it.id to it.unreadCount } }
 
     /**
      * Optimistic mark-as-read (ARCHITECTURE.md §5): the cached badge drops to
