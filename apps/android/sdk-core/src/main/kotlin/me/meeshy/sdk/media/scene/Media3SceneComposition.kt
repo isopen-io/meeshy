@@ -46,8 +46,8 @@ internal object Media3SceneComposition {
     }
 
     /**
-     * Les calques de la vidéo, du plus bas au plus haut : à chaque profondeur, les objets à leur instant puis les vidéos
-     * posées au-dessus d'eux ; enfin les cartes de marque qui se fondent.
+     * Les calques de la vidéo, du plus bas au plus haut : les cadres des vidéos de fond réglées sur leur fenêtre (#14875),
+     * puis à chaque profondeur les objets à leur instant et les vidéos posées au-dessus d'eux ; enfin les cartes de marque.
      */
     fun overlaysOf(
         job: SceneExportJob,
@@ -55,7 +55,8 @@ internal object Media3SceneComposition {
         frames: (SceneExportPlacedVideo) -> PlacedVideoFrames = GuardedVideoFrames::of,
     ): List<TextureOverlay> {
         val deepest = (job.overlays.map { it.depth } + job.placedVideos.map { it.depth }).maxOrNull() ?: 0
-        val stack = (0..deepest).flatMap { depth ->
+        val lookFrames = SceneLookFrameOverlay.of(planned.video, job.format)
+        val stack = lookFrames + (0..deepest).flatMap { depth ->
             val layers = job.overlays.filter { it.depth == depth }
             listOfNotNull<TextureOverlay>(layers.takeIf { it.isNotEmpty() }?.let { TimedBitmapOverlay(it, gaps = depth > 0) }) +
                 job.placedVideos.filter { it.depth == depth }.map { PlacedVideoOverlay(it, job.format, frames) }
@@ -71,12 +72,16 @@ internal object Media3SceneComposition {
     }
 
     /**
+     * Une vidéo de fond réglée (#14875) reçoit son look AVANT le cadrage au format, sur chaque tour et sur son image tenue :
+     * la même liste pour toute sa slide, et la chaîne GL ne se refait qu'à l'entrée et à la sortie de la vidéo réglée.
+     *
      * Une plage d'une vidéo de fond (sans son : sa piste, quand elle joue, est une séquence audio du plan), ou une image tenue.
      * Une image porte sa durée sur le [MediaItem] (`imageDurationMs`, que l'[EditedMediaItem] lit depuis Media3 1.5 et qui
      * fait d'un item une image depuis 1.8 — sous 1.4.1, il fallait la recopier par `setDurationUs`, #13986) et sa cadence,
      * sans laquelle l'`ImageAssetLoader` la refuse encore (`frameRate != C.RATE_UNSET_INT`).
      */
-    private fun videoItem(item: SceneVideoItem, format: StoryExportVideoFormat, frame: Effects): EditedMediaItem {
+    private fun videoItem(item: SceneVideoItem, format: StoryExportVideoFormat, shared: Effects): EditedMediaItem {
+        val frame = item.look?.let { Effects(emptyList(), it.effects + shared.videoEffects) } ?: shared
         val clip = item.clip
         if (clip == null) {
             val millis = checkNotNull(item.imageMillis) { "image tenue sans durée : ${item.file.name}" }

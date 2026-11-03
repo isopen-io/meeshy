@@ -90,6 +90,10 @@ public interface OutboxDao {
     @Query("UPDATE outbox SET state = 'PENDING', updatedAt = :now WHERE state = 'INFLIGHT'")
     public suspend fun resetInflight(now: Long): Int
 
+    /** [resetInflight], sparing the rows a live send of this process still holds ([live]). */
+    @Query("UPDATE outbox SET state = 'PENDING', updatedAt = :now WHERE state = 'INFLIGHT' AND cmid NOT IN (:live)")
+    public suspend fun resetInflightExcept(live: List<String>, now: Long): Int
+
     /**
      * Rows the flusher may attempt at [now]: `PENDING`, and either never scheduled or whose
      * `nextAttemptAt` has come. Oldest first, so per-lane FIFO still holds.
