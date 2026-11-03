@@ -2,6 +2,7 @@ package me.meeshy.ui.component.bubble
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.LanguageInfo
 
@@ -108,7 +109,7 @@ public object MessageDetailExplorer {
         val inFlight = translatingCodes.mapNotNull { it.normalized() }.toSet()
 
         val ordered = LinkedHashSet<String>()
-        for (language in LanguageResolver.preferredContentLanguages(preferences)) {
+        for (language in ReaderPrism.resolve(preferences)) {
             val code = language.normalized() ?: continue
             if (code != original) ordered.add(code)
         }

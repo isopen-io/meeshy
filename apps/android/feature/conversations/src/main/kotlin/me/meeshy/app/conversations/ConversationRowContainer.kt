@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.lang.ReaderPrism
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -34,7 +35,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
-import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.model.currentUserRole
@@ -86,7 +86,7 @@ internal fun ConversationRowContainer(
             // Prisme Linguistique: la rangée sert la même traduction que l'aperçu appui long;
             // des préférences absentes (session non hydratée) donnent le prisme vide, donc l'original.
             resolvedContent = conversation.resolvedLastMessagePreview(
-                model.currentUserPrefs?.let(LanguageResolver::preferredContentLanguages).orEmpty(),
+                model.currentUserPrefs?.let { ReaderPrism.resolve(it, java.util.Locale.getDefault()) }.orEmpty(),
             ),
         ),
     )

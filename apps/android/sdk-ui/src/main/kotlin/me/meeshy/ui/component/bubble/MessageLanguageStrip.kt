@@ -2,6 +2,9 @@ package me.meeshy.ui.component.bubble
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.lang.PrismCandidate
+import me.meeshy.sdk.lang.PrismTranslationResolver
+import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.LanguageInfo
 
@@ -76,17 +79,22 @@ public object MessageLanguageStrip {
         activeCodeOverride: String? = null,
         includeTranslatable: Boolean = false,
     ): List<LanguageChip> {
-        val preferred = LanguageResolver.preferredTranslation(translations, preferences)
-            ?: return emptyList()
+        val prism = ReaderPrism.resolve(preferences)
+        val readable = prism.mapNotNull { it.normalized() }.filter { hasContent(it, translations) }
+        if (readable.isEmpty()) return emptyList()
         val original = originalLanguage.normalized()
-        val preferredCode = preferred.targetLanguage.normalized()
+        val preferredCode = PrismTranslationResolver.resolve(
+            originalLanguage = originalLanguage,
+            candidates = translations.map { PrismCandidate(it.targetLanguage, it.translatedContent) },
+            preferredLanguages = prism,
+        )?.language.normalized()
         val activeCode = activeCodeOverride.normalized()
-            ?: if (showingOriginal) original else preferredCode
+            ?: if (showingOriginal) original else (preferredCode ?: original)
 
         // code -> isTranslatable (a configured language still missing content).
         val codes = LinkedHashMap<String, Boolean>()
         original?.let { codes[it] = false }
-        for (language in LanguageResolver.preferredContentLanguages(preferences)) {
+        for (language in prism) {
             val code = language.normalized() ?: continue
             when {
                 code == original -> Unit
