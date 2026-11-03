@@ -276,6 +276,7 @@ internal class ChatHostActions(
     /** #13995 — la vue unique lue et refermée consomme son compteur serveur. */
     val consumeViewOnce: (String) -> Unit = {},
     val clearEffects: () -> Unit,
+    val clearPanelEffects: () -> Unit = {},
     val closeReplyThread: () -> Unit,
     val onReplyThreadReplyTap: (String) -> Unit,
     val closeForward: () -> Unit,
@@ -403,6 +404,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     consumeAfterReadOnExit = { controllers.find<AfterReadController>()?.consumeOnExit() },
     consumeViewOnce = { id -> controllers.find<AfterReadController>()?.consumeViewOnce(id) },
     clearEffects = this::clearEffects,
+    clearPanelEffects = this::clearPanelEffects,
     closeReplyThread = this::closeReplyThread,
     onReplyThreadReplyTap = this::onReplyThreadReplyTap,
     closeForward = this::closeForward,

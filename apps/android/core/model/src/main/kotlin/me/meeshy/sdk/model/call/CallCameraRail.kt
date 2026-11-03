@@ -46,6 +46,9 @@ object CallCameraRail {
     fun foldedMenu(isOpen: Boolean, after: CallCameraFoldedTap): Boolean =
         if (after == CallCameraFoldedTap.Button) !isOpen else false
 
+    /** Une vignette plus étroite que la moyenne ne porte pas deux rangées : elles se replient en un bouton. */
+    fun foldsRows(tileWidthDp: Float): Boolean = tileWidthDp < CallSelfTileScale.X2.widthDp
+
     fun consumesTapElsewhere(isFoldedMenuOpen: Boolean): Boolean = isFoldedMenuOpen
 
     fun isShown(
