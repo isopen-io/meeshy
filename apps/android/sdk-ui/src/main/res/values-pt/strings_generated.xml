@@ -101,8 +101,13 @@
     <string name="bubble_message_deleted">Mensagem excluída</string>
     <string name="bubble_meta_pinned_a11y">Mensagem fixada</string>
     <string name="bubble_protection_after_read">Desaparece após a leitura</string>
+    <string name="bubble_reply_author_hint">Mostra o perfil do autor citado</string>
+    <string name="bubble_reply_media">Mídia</string>
+    <string name="bubble_reply_mood">Humor</string>
+    <string name="bubble_reply_open_media">Abrir a mídia citada</string>
     <string name="bubble_reply_photo">Foto</string>
     <string name="bubble_reply_story">Story</string>
+    <string name="bubble_reply_you">Você</string>
     <string name="bubble_status_delivered">Entregue</string>
     <string name="bubble_status_failed">Falhou</string>
     <string name="bubble_status_pending">Pendente</string>

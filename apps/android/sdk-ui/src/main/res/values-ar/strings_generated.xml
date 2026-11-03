@@ -107,8 +107,13 @@
     <string name="bubble_message_deleted">تم حذف الرسالة</string>
     <string name="bubble_meta_pinned_a11y">رسالة مثبّتة</string>
     <string name="bubble_protection_after_read">يختفي بعد القراءة</string>
+    <string name="bubble_reply_author_hint">يعرض ملف الكاتب المقتبس</string>
+    <string name="bubble_reply_media">الوسائط</string>
+    <string name="bubble_reply_mood">المزاج</string>
+    <string name="bubble_reply_open_media">فتح الوسائط المقتبسة</string>
     <string name="bubble_reply_photo">صورة</string>
     <string name="bubble_reply_story">قصة</string>
+    <string name="bubble_reply_you">أنت</string>
     <string name="bubble_status_delivered">تم التسليم</string>
     <string name="bubble_status_failed">فشل</string>
     <string name="bubble_status_pending">قيد الانتظار</string>

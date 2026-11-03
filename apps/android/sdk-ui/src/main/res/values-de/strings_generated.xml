@@ -99,8 +99,13 @@
     <string name="bubble_message_deleted">Nachricht gelöscht</string>
     <string name="bubble_meta_pinned_a11y">Angeheftete Nachricht</string>
     <string name="bubble_protection_after_read">Verschwindet nach dem Lesen</string>
+    <string name="bubble_reply_author_hint">Zeigt das Profil des zitierten Autors</string>
+    <string name="bubble_reply_media">Medien</string>
+    <string name="bubble_reply_mood">Stimmung</string>
+    <string name="bubble_reply_open_media">Zitiertes Medium öffnen</string>
     <string name="bubble_reply_photo">Foto</string>
     <string name="bubble_reply_story">Story</string>
+    <string name="bubble_reply_you">Du</string>
     <string name="bubble_status_delivered">Zugestellt</string>
     <string name="bubble_status_failed">Fehlgeschlagen</string>
     <string name="bubble_status_pending">Ausstehend</string>
