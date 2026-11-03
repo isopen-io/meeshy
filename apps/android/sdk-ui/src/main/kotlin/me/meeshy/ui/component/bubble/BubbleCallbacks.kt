@@ -47,6 +47,8 @@ public data class BubbleCallbacks(
     val onSenderTap: (() -> Unit)? = null,
     /** Tap sur « dis-leur salut » de la ligne d'arrivées groupées : la réponse rapide s'ouvre. */
     val onSayHi: (() -> Unit)? = null,
+    /** Double toucher (« Voir la fiche » en TalkBack) sur un avis d'arrivée : la fiche de participation de l'arrivant. */
+    val onOpenJoinProfile: ((participantId: String) -> Unit)? = null,
     /**
      * The TalkBack actions of the bubble body, in order. The host passes exactly what the
      * message's law offers (#12760): an empty list exposes none.

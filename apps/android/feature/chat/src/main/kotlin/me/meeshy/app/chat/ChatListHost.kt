@@ -325,6 +325,7 @@ internal fun ChatListHost(
             onReplyCountLongPress = { messageId -> actions.openReplyThread(messageId) },
             onRetry = { messageId -> actions.retryMessage(messageId) },
             onSenderTap = { bubble -> bubble.senderProfile?.let(profileTap) },
+            onOpenJoinProfile = { bubble -> bubble.joinNotice?.toProfileSheetUser()?.let(profileTap) },
             onAddReaction = { messageId ->
                 val quick = state.quickReactions.firstOrNull()
                 if (quick == null) actions.openEmojiPicker(messageId) else actions.toggleReaction(messageId, quick)

@@ -68,6 +68,8 @@ internal class ChatMessageRowActions(
     val onOpenReactPicker: (messageId: String) -> Unit = {},
     /** Tap sur l'avatar de l'auteur (pied d'identité d'une suite reçue en groupe) : sa fiche profil. */
     val onSenderTap: (bubble: BubbleContent) -> Unit = {},
+    /** Double toucher sur un avis d'arrivée : la fiche de participation de l'arrivant. */
+    val onOpenJoinProfile: (bubble: BubbleContent) -> Unit = {},
     /** Icône de traduction de l'élu Focal : l'explorateur des langues du message. */
     val onTranslationDetail: (messageId: String) -> Unit = {},
     /** Window-space frame of the bubble, captured during layout for the long-press hero. */
@@ -151,6 +153,7 @@ internal fun ChatMessageRow(
             onFlagTap = { code -> actions.onFlagTap(messageId, code) },
             onRetry = { actions.onRetry(messageId) },
             onSayHi = { actions.onReply(messageId) }.takeIf { canWrite && bubble.isArrivalsNotice },
+            onOpenJoinProfile = { _: String -> actions.onOpenJoinProfile(bubble) }.takeIf { bubble.joinNotice?.opensProfile == true },
             onAddReaction = { actions.onAddReaction(messageId) }.takeIf { reacts },
             onOpenReactPicker = { actions.onOpenReactPicker(messageId) }.takeIf { reacts },
             onSenderTap = if (bubble.senderProfile != null) {

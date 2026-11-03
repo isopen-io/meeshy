@@ -78,6 +78,8 @@
     <string name="bubble_image_description">Bild</string>
     <string name="bubble_joinNotice_joined">%1$s ist der Unterhaltung beigetreten</string>
     <string name="bubble_joinNotice_noAccount">kein Konto</string>
+    <string name="bubble_joinNotice_openProfile">Profil ansehen</string>
+    <string name="bubble_joinNotice_openProfile_hint_doubleTap">Zum Anzeigen des Profils und der Beitrittsbedingungen doppeltippen</string>
     <string name="bubble_joinNotice_rule_files_allowed">darf Dateien senden</string>
     <string name="bubble_joinNotice_rule_files_denied">darf keine Dateien senden</string>
     <string name="bubble_joinNotice_rule_images_allowed">darf Fotos senden</string>

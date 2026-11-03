@@ -78,6 +78,8 @@
     <string name="bubble_image_description">Image</string>
     <string name="bubble_joinNotice_joined">%1$s joined the conversation</string>
     <string name="bubble_joinNotice_noAccount">no account</string>
+    <string name="bubble_joinNotice_openProfile">View profile</string>
+    <string name="bubble_joinNotice_openProfile_hint_doubleTap">Double-tap to see the profile and join conditions</string>
     <string name="bubble_joinNotice_rule_files_allowed">can send files</string>
     <string name="bubble_joinNotice_rule_files_denied">cannot send files</string>
     <string name="bubble_joinNotice_rule_images_allowed">can send photos</string>

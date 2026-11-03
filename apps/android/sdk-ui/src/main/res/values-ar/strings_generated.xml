@@ -86,6 +86,8 @@
     <string name="bubble_image_description">صورة</string>
     <string name="bubble_joinNotice_joined">انضم %1$s إلى المحادثة</string>
     <string name="bubble_joinNotice_noAccount">بدون حساب</string>
+    <string name="bubble_joinNotice_openProfile">عرض البطاقة</string>
+    <string name="bubble_joinNotice_openProfile_hint_doubleTap">انقر مرتين لعرض البطاقة وشروط الانضمام</string>
     <string name="bubble_joinNotice_rule_files_allowed">يمكنه إرسال الملفات</string>
     <string name="bubble_joinNotice_rule_files_denied">لا يمكنه إرسال الملفات</string>
     <string name="bubble_joinNotice_rule_images_allowed">يمكنه إرسال الصور</string>

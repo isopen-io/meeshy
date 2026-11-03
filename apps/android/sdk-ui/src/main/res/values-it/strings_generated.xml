@@ -80,6 +80,8 @@
     <string name="bubble_image_description">Immagine</string>
     <string name="bubble_joinNotice_joined">%1$s si è unito alla conversazione</string>
     <string name="bubble_joinNotice_noAccount">senza account</string>
+    <string name="bubble_joinNotice_openProfile">Vedi scheda</string>
+    <string name="bubble_joinNotice_openProfile_hint_doubleTap">Tocca due volte per vedere la scheda e le condizioni di ingresso</string>
     <string name="bubble_joinNotice_rule_files_allowed">può inviare file</string>
     <string name="bubble_joinNotice_rule_files_denied">non può inviare file</string>
     <string name="bubble_joinNotice_rule_images_allowed">può inviare foto</string>
