@@ -24,6 +24,9 @@ import me.meeshy.sdk.model.NotificationContext
 import me.meeshy.sdk.model.UserNotificationPreferences
 import me.meeshy.sdk.notification.ActiveConversationStore
 import me.meeshy.sdk.notification.InMemoryNotificationPreferencesStore
+import me.meeshy.sdk.notification.NotificationConsumptionService
+import me.meeshy.sdk.model.NotificationReadScope
+import io.mockk.coVerify
 import me.meeshy.sdk.socket.MessageSocketManager
 import org.junit.After
 import org.junit.Before
@@ -43,6 +46,7 @@ import java.time.LocalDateTime
 class NotificationBannerViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
+    private val consumption = mockk<NotificationConsumptionService>(relaxed = true)
 
     private val received = MutableSharedFlow<ApiNotification>(extraBufferCapacity = 16)
     private val socket = mockk<MessageSocketManager> {
@@ -93,6 +97,7 @@ class NotificationBannerViewModelTest {
         conversationRepository = conversationRepository,
         clock = clock,
         activeConversationStore = store,
+        consumption = consumption,
     )
 
     @Test
@@ -484,5 +489,31 @@ class NotificationBannerViewModelTest {
         vm.dismiss()
 
         assertThat(vm.banner.value).isNull()
+    }
+
+    @Test
+    fun tappingTheBannerConsumesItsNotificationThenHandsItBackForNavigation() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+        received.emit(notification(id = "n7"))
+        runCurrent()
+
+        val tapped = vm.onTapped()
+        runCurrent()
+
+        assertThat(tapped?.notificationId).isEqualTo("n7")
+        assertThat(vm.banner.value).isNull()
+        coVerify(exactly = 1) { consumption.consume(NotificationReadScope.Single("n7")) }
+    }
+
+    @Test
+    fun tappingWithoutABannerConsumesNothing() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        assertThat(vm.onTapped()).isNull()
+        runCurrent()
+
+        coVerify(exactly = 0) { consumption.consume(any()) }
     }
 }

@@ -284,7 +284,9 @@ fun MeeshyApp(
         BeneathOnboarding(isCovered = onboardingCovers) {
             // #4457 — la banniere in-app se monte UNE fois, ICI, par-dessus la navigation (une
             // banniere SUIT le lecteur : une instance par ecran en ferait autant de rivales).
+            val bannerPeek = rememberBannerPeekState()
             NotificationBannerHost(
+                onPreviewConversation = bannerPeek::show,
                 activeConversationId = navBackStack?.arguments?.getString(ChatViewModel.CONVERSATION_ID_ARG),
                 activePostId = navBackStack?.arguments?.getString(PostDetailViewModel.POST_ID_ARG),
                 onOpenConversation = { navigator.openConversation(it) },
@@ -292,6 +294,7 @@ fun MeeshyApp(
                 onOpenGame = { navController.navigate(GameRoutes.route(it)) },
             )
 
+            BannerPeekSheetHost(bannerPeek) { navigator.openConversation(it) }
             AppOverlayStack(extensions.overlays, navController)
             MediaOverlayHost(navController)
 
