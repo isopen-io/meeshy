@@ -2508,13 +2508,13 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `onStrokeCaptured drops a stroke of fewer than two points`() = runTest {
+    fun `onStrokeCaptured commits a tap as a single point and drops an empty capture`() = runTest {
         val vm = viewModel()
 
         vm.onStrokeCaptured(points(1.0, 1.0))
         vm.onStrokeCaptured(emptyList())
 
-        assertThat(vm.state.value.selectedSlideStrokes).isEmpty()
+        assertThat(vm.state.value.selectedSlideStrokes.single().points).hasSize(1)
     }
 
     @Test

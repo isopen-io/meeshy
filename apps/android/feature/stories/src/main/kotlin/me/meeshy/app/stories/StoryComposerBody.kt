@@ -149,6 +149,7 @@ private fun SceneFirstFrame(
                             StoryComposerPanel(state, viewModel, onPickMedia = doors.onPickMedia, onOpenSoundShelf = doors.onOpenSoundShelf)
                         },
                         onCloseLocal = { onMorePanel(null) },
+                        zoom = zoom,
                     )
                 } ?: SceneEditingBand(edition, state, viewModel, comparison)
             },

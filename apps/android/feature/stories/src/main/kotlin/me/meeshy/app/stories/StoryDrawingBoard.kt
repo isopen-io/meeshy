@@ -2,6 +2,8 @@ package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StrokeSmoothing
+import me.meeshy.sdk.model.scene.StrokeEraser
+import me.meeshy.sdk.model.scene.StrokePoint
 
 /**
  * The pure, immutable freehand-drawing state of one slide — the committed [strokes],
@@ -78,6 +80,21 @@ data class StoryDrawingBoard(
             strokes = strokes.filterNot { it.id == id },
             redoStack = emptyList(),
             selectedStrokeId = selectedStrokeId.takeUnless { it == id },
+        )
+    }
+
+    /**
+     * The eraser: removes every stroke grazed by [erasePoints] (design space). A deletion is a new user action, so the
+     * redo stack is emptied and a selection on an erased stroke is lifted; the board is returned untouched when the
+     * gesture hits nothing.
+     */
+    fun erase(erasePoints: List<StrokePoint>): StoryDrawingBoard {
+        val kept = StrokeEraser.survivors(strokes, erasePoints)
+        if (kept === strokes) return this
+        return copy(
+            strokes = kept,
+            redoStack = emptyList(),
+            selectedStrokeId = selectedStrokeId.takeIf { id -> kept.any { it.id == id } },
         )
     }
 
