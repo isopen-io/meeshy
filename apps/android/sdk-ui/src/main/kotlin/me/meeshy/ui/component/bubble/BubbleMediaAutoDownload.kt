@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.util.UnstableApi
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
+import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import me.meeshy.sdk.model.MediaAutoDownloadDecider
@@ -95,10 +96,12 @@ internal fun BubblePolicyImage(
 ) {
     val fetches = bubbleFetchesFromNetwork(LocalBubbleMediaAutoDownload.current, sizeBytes)
     val context = LocalContext.current
+    val painted = remember { PaintedImage() }
     val request = remember(url, fetches) {
         ImageRequest.Builder(context)
             .data(url)
             .networkCachePolicy(if (fetches) CachePolicy.ENABLED else CachePolicy.DISABLED)
+            .placeholderMemoryCacheKey(painted.key)
             .build()
     }
     val fallback = if (fetches || fallbackUrl == null) null else rememberAsyncImagePainter(fallbackUrl)
@@ -107,6 +110,15 @@ internal fun BubblePolicyImage(
         contentDescription = contentDescription,
         contentScale = ContentScale.Crop,
         error = fallback,
+        onSuccess = { painted.key = it.result.memoryCacheKey },
         modifier = modifier,
     )
+}
+
+/**
+ * Ce que la case a peint en dernier : quand son adresse change (l'aperçu local d'un envoi cède à l'URL du serveur,
+ * #15104), l'image d'avant reste à l'écran jusqu'à la nouvelle — aucune case vide entre les deux.
+ */
+private class PaintedImage {
+    var key: MemoryCache.Key? = null
 }
