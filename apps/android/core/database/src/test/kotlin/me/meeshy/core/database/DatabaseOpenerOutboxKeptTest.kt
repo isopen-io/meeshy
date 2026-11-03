@@ -1,10 +1,11 @@
 package me.meeshy.core.database
 
 import android.content.Context
-import android.database.sqlite.SQLiteDatabaseCorruptException
+import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import java.io.File
+import java.io.RandomAccessFile
 import kotlinx.coroutines.runBlocking
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.core.database.entity.PendingIdEntity
@@ -21,6 +22,10 @@ class DatabaseOpenerOutboxKeptTest {
     private fun realBuild(ctx: Context, location: DatabaseLocation): MeeshyDatabase =
         DatabaseModule.meeshyDatabaseBuilder(ctx, location).allowMainThreadQueries().build()
 
+    /**
+     * Une base peuplée par l'app (outbox, effacements E2EE, identifiants en attente), puis close : le journal WAL est
+     * versé dans le fichier, qui porte seul tout le contenu.
+     */
     private fun seeded(name: String): File {
         DatabaseModule.meeshyDatabaseBuilder(context, name).allowMainThreadQueries().build().apply {
             runBlocking {
@@ -35,21 +40,32 @@ class DatabaseOpenerOutboxKeptTest {
                 )
                 pendingIdDao().upsert(PendingIdEntity("cid_1", "srv-1", "conv", reconciledAt = null))
             }
+            openHelper.writableDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)").use { it.moveToFirst() }
             close()
         }
         return context.getDatabasePath(name)
     }
 
-    /** La première ouverture du fichier principal découvre une corruption ; la recréation, elle, réussit. */
-    private fun corruptOnFirstOpen(primaryName: String): (Context, DatabaseLocation) -> MeeshyDatabase {
-        var primaryOpens = 0
-        return { ctx, location ->
-            if (location == DatabaseLocation.Named(primaryName) && primaryOpens++ == 0) {
-                throw SQLiteDatabaseCorruptException("database disk image is malformed")
-            }
-            realBuild(ctx, location)
+    /**
+     * Écrase l'en-tête de la page racine de `room_master_table` dans le FICHIER : le catalogue (`sqlite_master`) reste
+     * lisible, donc la sonde passe, et c'est Room qui découvre la corruption en vérifiant l'identité du schéma à
+     * l'ouverture. Les pages de l'outbox, des effacements et des identifiants en attente sont intactes.
+     */
+    private fun corruptRoomMasterTable(file: File) {
+        val (pageSize, rootPage) = SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+            val size = db.rawQuery("PRAGMA page_size", null).use { it.moveToFirst(); it.getLong(0) }
+            val root = db.rawQuery("SELECT rootpage FROM sqlite_master WHERE name = 'room_master_table'", null)
+                .use { it.moveToFirst(); it.getLong(0) }
+            size to root
+        }
+        listOf("-wal", "-shm").forEach { File(file.path + it).delete() }
+        RandomAccessFile(file, "rw").use { raw ->
+            raw.seek((rootPage - 1) * pageSize)
+            raw.write(ByteArray(pageSize.toInt()) { 0xFF.toByte() })
         }
     }
+
+    private fun corrupted(name: String): File = seeded(name).also(::corruptRoomMasterTable)
 
     private fun opener(name: String, diagnostics: DatabaseInitDiagnostics) = DatabaseOpener(
         context = context,
@@ -58,13 +74,31 @@ class DatabaseOpenerOutboxKeptTest {
         primaryName = name,
         clock = { 99L },
         secondaryFile = File(context.cacheDir, "kept-secondary-$name"),
-        build = corruptOnFirstOpen(name),
+        build = ::realBuild,
     )
+
+    @Test
+    fun `la corruption que Room decouvre a l'ouverture laisse le fichier au sauvetage puis a la quarantaine`() {
+        val name = "room-discovers.db"
+        val file = corrupted(name)
+        assertThat(DatabaseRecovery.isReadable(file)).isTrue()
+        val diagnostics = DatabaseInitDiagnostics()
+
+        val database = opener(name, diagnostics).open()
+
+        assertThat(File(file.path + ".corrupted.99").exists()).isTrue()
+        assertThat(diagnostics.events.value.map { it.stage }).containsAtLeast(
+            DatabaseInitStage.FIRST_FAILURE,
+            DatabaseInitStage.QUARANTINED,
+            DatabaseInitStage.RECREATED,
+        ).inOrder()
+        database.close()
+    }
 
     @Test
     fun `un cache inutilisable est reconstruit et l'outbox reste lisible`() {
         val name = "outbox-kept.db"
-        val file = seeded(name)
+        val file = corrupted(name)
         val diagnostics = DatabaseInitDiagnostics()
 
         val database = opener(name, diagnostics).open()
@@ -81,7 +115,7 @@ class DatabaseOpenerOutboxKeptTest {
     @Test
     fun `la reprise garde les clairs E2EE que le coffre doit encore effacer`() = runBlocking {
         val name = "erasures-kept.db"
-        seeded(name)
+        corrupted(name)
         val diagnostics = DatabaseInitDiagnostics()
 
         val database = opener(name, diagnostics).open()
@@ -95,7 +129,7 @@ class DatabaseOpenerOutboxKeptTest {
     @Test
     fun `la reprise garde les identifiants en attente, et l'echo d'un envoi recupere se reconcilie`() = runBlocking {
         val name = "pending-kept.db"
-        seeded(name)
+        corrupted(name)
         val diagnostics = DatabaseInitDiagnostics()
 
         val database = opener(name, diagnostics).open()

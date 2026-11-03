@@ -71,7 +71,8 @@ internal object DatabaseModule {
     /**
      * Journal WAL explicite, exécuteur de requêtes dédié, réglages posés à chaque connexion. Seules les versions
      * antérieures à la base exportée v16 sont purgées : une corruption n'est jamais masquée par une migration destructive,
-     * [DatabaseOpener] la met en quarantaine.
+     * ni effacée par la couche SQLite ([KeepCorruptFileOpenHelperFactory]) — [DatabaseOpener] en sauve ce qui ne se refait
+     * pas, puis la met en quarantaine.
      */
     fun meeshyDatabaseBuilder(context: Context, location: DatabaseLocation): RoomDatabase.Builder<MeeshyDatabase> {
         val builder = when (location) {
@@ -84,6 +85,7 @@ internal object DatabaseModule {
             .addCallback(DatabasePragmas.callback)
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .setQueryExecutor(DatabasePragmas.sharedQueryExecutor)
+            .openHelperFactory(KeepCorruptFileOpenHelperFactory())
             .fallbackToDestructiveMigrationFrom(*PRE_BASELINE_VERSIONS)
     }
 
