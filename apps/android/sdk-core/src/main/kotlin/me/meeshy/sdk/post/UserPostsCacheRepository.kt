@@ -2,6 +2,7 @@ package me.meeshy.sdk.post
 
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import me.meeshy.core.database.dao.ProfileStatsCacheDao
 import me.meeshy.core.database.entity.ProfileStatsCacheEntity
 import me.meeshy.sdk.cache.CacheClock
