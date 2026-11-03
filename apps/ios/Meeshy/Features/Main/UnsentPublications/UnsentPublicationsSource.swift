@@ -115,9 +115,43 @@ enum UnsentPublicationsCopy {
         String(localized: "feed.unsent.alreadySending", defaultValue: "Cette publication est en train de partir.", bundle: .main)
     }
     static func typeLabel(_ type: String) -> String {
-        type == "REEL"
-            ? String(localized: "feed.unsent.type.reel", defaultValue: "Réel", bundle: .main)
-            : String(localized: "feed.unsent.type.post", defaultValue: "Post", bundle: .main)
+        switch type {
+        case "REEL": String(localized: "feed.unsent.type.reel", defaultValue: "Réel", bundle: .main)
+        case "STATUS": String(localized: "content.kind.mood", defaultValue: "Humeur", bundle: .main)
+        default: String(localized: "feed.unsent.type.post", defaultValue: "Post", bundle: .main)
+        }
+    }
+}
+
+/// **Ce que l'auteur lit quand il annule l'envoi d'une publication en attente**
+/// (#10331) — le même verdict depuis le détail d'un post et depuis Mes stories.
+/// Rend `true` quand rien ne partira plus.
+@MainActor
+enum PendingSendNotice {
+    @discardableResult
+    static func announce(
+        _ verdict: PublicationCancellation,
+        toasts: FeedbackToastSurfacing = FeedbackToastManager.shared
+    ) -> Bool {
+        switch verdict {
+        case .removed, .cancelRequested: toasts.showSuccess(UnsentPublicationsCopy.deleted)
+        case .notFound: toasts.showError(UnsentPublicationsCopy.alreadySent)
+        case .failed: toasts.showError(UnsentPublicationsCopy.deleteError)
+        }
+        return verdict == .removed || verdict == .cancelRequested
+    }
+
+    @discardableResult
+    static func announce(
+        _ verdict: StoryPendingCancellation,
+        toasts: FeedbackToastSurfacing = FeedbackToastManager.shared
+    ) -> Bool {
+        switch verdict {
+        case .removed: toasts.showSuccess(UnsentPublicationsCopy.deleted)
+        case .inFlight: toasts.showError(UnsentPublicationsCopy.alreadySending)
+        case .notFound: toasts.showError(UnsentPublicationsCopy.alreadySent)
+        }
+        return verdict == .removed
     }
 }
 

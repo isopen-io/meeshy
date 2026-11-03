@@ -252,6 +252,29 @@ final class StoryViewModelTests: XCTestCase {
         """)
     }
 
+    // MARK: - #10331 — annuler l'envoi d'une story en attente
+
+    func test_cancelWaitingPublication_removed_dropsItsOptimisticStoriesFromTheTray() async {
+        let item = StoryPublishQueueItem(visibility: "FRIENDS", slidesPayload: Data("[]".utf8), mediaReferences: [])
+        let kept = makeStoryItem(id: "s1")
+        let pending = makeStoryItem(id: "\(item.tempStoryId)#0")
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [kept, pending])]
+
+        await StoryWaitingCancellation.run(item, on: sut) { _ in .removed }
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), ["s1"], "la story annulée quitte le tray")
+    }
+
+    func test_cancelWaitingPublication_inFlight_keepsItsOptimisticStories() async {
+        let item = StoryPublishQueueItem(visibility: "FRIENDS", slidesPayload: Data("[]".utf8), mediaReferences: [])
+        let pending = makeStoryItem(id: "\(item.tempStoryId)#0")
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [pending])]
+
+        await StoryWaitingCancellation.run(item, on: sut) { _ in .inFlight }
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), [pending.id], "elle part : rien ne disparaît")
+    }
+
     func test_deltaRefresh_purgesStoryReportedDeletedByServer() async {
         let kept = makeStoryItem(id: "s1")
         let deleted = makeStoryItem(id: "s2")
