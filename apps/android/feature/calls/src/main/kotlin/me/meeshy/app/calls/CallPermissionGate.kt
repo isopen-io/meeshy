@@ -11,6 +11,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import me.meeshy.sdk.model.call.CallPreflight
+import me.meeshy.sdk.model.call.CallPreflightDecision
 import me.meeshy.sdk.model.call.IncomingCallAnswer
 import me.meeshy.sdk.model.call.IncomingCallPermissionPolicy
 
@@ -36,6 +38,21 @@ class CallPermissionGate internal constructor(
             action()
         } else {
             pending.set(action)
+            request()
+        }
+    }
+
+    /**
+     * Composer un appel (iOS `requestPermissionsThenStartCall`) : le micro est bloquant — refusé, l'appel ne part
+     * pas et [onDecision] reçoit [CallPreflightDecision.MicrophoneDenied] —, la caméra ne l'est jamais : refusée,
+     * l'appel part en audio avec le repli qui dit pourquoi. [onDecision] est appelé une fois, qu'on ait demandé ou non.
+     */
+    fun preflightOutgoing(isVideo: Boolean, onDecision: (CallPreflightDecision) -> Unit) {
+        val decide = { onDecision(CallPreflight.decide(isMicGranted(), isCameraGranted(), isVideo)) }
+        if (isMicGranted() && (!isVideo || isCameraGranted())) {
+            decide()
+        } else {
+            pending.setDecision(decide)
             request()
         }
     }

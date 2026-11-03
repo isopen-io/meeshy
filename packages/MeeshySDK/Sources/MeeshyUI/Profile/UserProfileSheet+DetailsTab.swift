@@ -146,12 +146,14 @@ extension UserProfileSheet {
 
             switch connectionStatus {
             case .none:
-                profileActionButton(
-                    icon: "person.badge.plus.fill",
-                    label: String(localized: "profile.action.connectionRequest", defaultValue: "Demande de connexion", bundle: .module),
-                    color: Color(hex: resolvedAccent),
-                    action: { Task { await sendConnectionRequest() } }
-                )
+                ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: displayUser.resolvedDisplayName) {
+                    profileActionButton(
+                        icon: "person.badge.plus.fill",
+                        label: String(localized: "profile.action.connectionRequest", defaultValue: "Demande de connexion", bundle: .module),
+                        color: Color(hex: resolvedAccent),
+                        action: { Task { await sendConnectionRequest() } }
+                    )
+                }
             case .pendingSent:
                 profileActionButton(
                     icon: "xmark.circle.fill",
@@ -179,11 +181,7 @@ extension UserProfileSheet {
                     action: { Task { await declineRequest() } }
                 )
             case .connected:
-                if let relationSection, let userId = resolvedUserId, !userId.isEmpty {
-                    relationSection.build(userId, displayUser.resolvedDisplayName)
-                } else {
-                    ProfileConnectedBadge()
-                }
+                ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: displayUser.resolvedDisplayName) { ProfileConnectedBadge() }
             }
 
             if isBlocked {

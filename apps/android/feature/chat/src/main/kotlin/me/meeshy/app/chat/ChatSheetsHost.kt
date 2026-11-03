@@ -511,23 +511,6 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         }
     }
 
-    if (state.isEffectsPickerOpen) {
-        ModalBottomSheet(
-            onDismissRequest = actions.dismissEffectsPicker,
-            containerColor = MeeshyTheme.tokens.backgroundPrimary,
-        ) {
-            EffectsPickerSheet(
-                effects = state.pendingEffects,
-                accentColor = accentColor,
-                onToggle = actions.toggleEffect,
-                onSelectDuration = actions.selectEphemeralDuration,
-                onClear = actions.clearEffects,
-                onDone = actions.dismissEffectsPicker,
-                modifier = Modifier.navigationBarsPadding(),
-            )
-        }
-    }
-
     val replyThread = state.replyThreadOverlay
     if (replyThread != null) {
         ModalBottomSheet(

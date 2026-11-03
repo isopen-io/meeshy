@@ -70,6 +70,17 @@ data class ReactionUpdateEvent(
     val userId: String,
     val emoji: String,
     val count: Int = 0,
+    /** Le `Participant.id` de l'acteur (clé d'auteur d'un tiers) ; absent d'une vieille passerelle. */
+    val participantId: String? = null,
+    /** L'agrégat servi APRÈS l'action : borne autoritaire du nombre de lignes d'un emoji. */
+    val aggregation: ReactionEventAggregation? = null,
+)
+
+@Serializable
+data class ReactionEventAggregation(
+    val emoji: String? = null,
+    val count: Int = 0,
+    val participantIds: List<String>? = null,
 )
 
 @Serializable

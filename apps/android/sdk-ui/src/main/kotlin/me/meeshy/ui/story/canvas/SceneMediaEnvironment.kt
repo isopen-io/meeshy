@@ -16,6 +16,8 @@ public data class SceneMediaEnvironment(
     val muteLocked: Boolean = false,
     val isReader: Boolean = true,
     val playsVideo: Boolean = true,
+    /** Le cookie de version d'une image retouchée ([SceneEditedBitmapBridge.versionOf]) : 0 tant qu'elle ne l'est pas. */
+    val versionOf: (String) -> Long = { 0L },
 ) {
     public companion object {
         public val Default: SceneMediaEnvironment = SceneMediaEnvironment()

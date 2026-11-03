@@ -58,7 +58,7 @@ import me.meeshy.ui.theme.MeeshyPalette
 public fun Modifier.messageEffects(
     effects: MessageEffects,
     hasPlayedAppearance: Boolean = false,
-    shape: Shape = RoundedCornerShape(16.dp),
+    shape: Shape = RoundedCornerShape(18.dp),
     appearanceSeed: Long = 0L,
 ): Modifier {
     val plan = remember(effects, hasPlayedAppearance) {
