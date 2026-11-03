@@ -10,6 +10,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.CompositionLocalProvider
@@ -311,7 +313,11 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 }
             },
         )
+        val infoViewModel: ConversationInfoViewModel = hiltViewModel(key = "conversation-info")
+        LaunchedEffect(state.conversationId) { if (state.conversationId.isNotBlank()) infoViewModel.start(state.conversationId) }
+        val hero by infoViewModel.hero.collectAsStateWithLifecycle()
         ConversationInfoSheet(
+            hero = hero,
             title = infoTitle,
             subtitle = if (state.isGroup && state.memberCount > 0) {
                 pluralStringResource(R.plurals.chat_header_members, state.memberCount, state.memberCount)
