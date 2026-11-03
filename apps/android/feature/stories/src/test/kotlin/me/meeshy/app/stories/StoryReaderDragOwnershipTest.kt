@@ -43,14 +43,6 @@ class StoryReaderDragOwnershipTest {
     }
 
     @Test
-    fun `la barre revendique l'horizontal dominant au dela de huit dp`() {
-        assertThat(StoryReactionStripGesture.stripOwnsDrag(dx = 9f, dy = 2f)).isTrue()
-        assertThat(StoryReactionStripGesture.stripOwnsDrag(dx = 7f, dy = 0f)).isFalse()
-        assertThat(StoryReactionStripGesture.stripOwnsDrag(dx = 20f, dy = 20f)).isFalse()
-        assertThat(StoryReactionStripGesture.stripOwnsDrag(dx = -20f, dy = 3f)).isTrue()
-    }
-
-    @Test
     fun `l'axe se décide à huit dp de domination puis se garde`() {
         val tracker = StoryReaderDragTracker()
         assertThat(tracker.track(8f, 0f, featureAtStart = false, horizontalYields = false)).isEqualTo(StoryDragAxis.Undecided)

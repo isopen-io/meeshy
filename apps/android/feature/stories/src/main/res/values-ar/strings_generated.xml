@@ -265,6 +265,8 @@
     <string name="stories_tray_manage">إدارة قصصي</string>
     <string name="stories_tray_view_my_story">عرض قصتي</string>
     <string name="stories_viewer_close">إغلاق</string>
+    <string name="stories_viewer_fullscreen_enter">ملء الشاشة</string>
+    <string name="stories_viewer_fullscreen_exit">الخروج من ملء الشاشة</string>
     <string name="stories_viewer_mute">كتم صوت الخلفية</string>
     <string name="stories_viewer_next">القصة التالية</string>
     <string name="stories_viewer_not_found_description">تعذّر تحميل هذه القصة. أعِد المحاولة أو أغلِق.</string>

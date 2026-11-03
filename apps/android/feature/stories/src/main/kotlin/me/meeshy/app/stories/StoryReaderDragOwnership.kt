@@ -64,18 +64,6 @@ internal object StoryReaderDragStartZone {
     }
 }
 
-/** Qui consomme le glissé HORIZONTAL courant d'une barre défilante — iOS `StoryReactionStripGesture`. */
-internal object StoryReactionStripGesture {
-    /** Course horizontale (dp) au-delà de laquelle la barre revendique : au-dessus d'un tremblement, avant l'axe du lecteur. */
-    const val HORIZONTAL_CLAIM_DP: Float = 8f
-
-    /** La barre ne prend que ce qu'elle revendique ; l'égalité parfaite revient au lecteur. */
-    fun stripOwnsDrag(dx: Float, dy: Float): Boolean {
-        val ax = abs(dx)
-        return ax >= HORIZONTAL_CLAIM_DP && ax > abs(dy)
-    }
-}
-
 /**
  * Le suivi d'un glissé du lecteur — iOS `StoryReaderDragTracker` : l'axe pris, l'état des surfaces PHOTOGRAPHIÉ au
  * moment où l'axe vertical se décide, et la purge qui répare un relâchement jamais livré.
@@ -101,6 +89,9 @@ internal class StoryReaderDragTracker {
 
     val isInFlight: Boolean get() = axis != StoryDragAxis.Undecided
 
+    /** Une surface était ouverte au départ du glissé en cours (photo de l'axe vertical, ou toucher qui l'a refermée). */
+    val hadActiveFeature: Boolean get() = hadActiveFeatureAtStart || featureConsumedByTouch
+
     /**
      * Décide l'axe au premier mouvement significatif puis le garde. La cession horizontale est consultée AVANT de
      * s'engager à l'horizontale : c'est le seul instant où la course entre deux détecteurs peut être perdue.
@@ -119,7 +110,7 @@ internal class StoryReaderDragTracker {
 
     /** Termine le glissé : son axe, et si une surface était ouverte à son départ. Les deux photos ne valent que pour lui. */
     fun finish(): Ended {
-        val ended = Ended(axis, hadActiveFeatureAtStart || featureConsumedByTouch)
+        val ended = Ended(axis, hadActiveFeature)
         clearGesture()
         return ended
     }
