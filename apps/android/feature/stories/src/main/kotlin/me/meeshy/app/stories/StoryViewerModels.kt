@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.model.audio.BackgroundAudioAnnouncement
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryClipTransition
@@ -257,6 +258,8 @@ data class StorySlideView(
     val places: List<StoryLocationObject> = emptyList(),
     /** Les puces des sons de premier plan (iOS `AudioForegroundChip`). */
     val audioChips: List<StoryAudioChipView> = emptyList(),
+    /** Le son d'arrière-plan que l'en-tête annonce (iOS `BackgroundSoundBadge`) : rien, l'original, ou un crédit. */
+    val backgroundAudio: BackgroundAudioAnnouncement = BackgroundAudioAnnouncement.None,
     /** Déjà vue par le lecteur à l'ouverture : la lecture commence à la première non vue. */
     val isViewed: Boolean = false,
     /** Instant de publication, pour le « il y a 2 h » de l'en-tête ; `null` si illisible. */

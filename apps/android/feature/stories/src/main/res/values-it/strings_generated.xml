@@ -261,6 +261,7 @@
     <string name="stories_tray_add_story">Aggiungi una storia</string>
     <string name="stories_tray_manage">Gestisci le mie storie</string>
     <string name="stories_tray_view_my_story">Vedi la mia storia</string>
+    <string name="stories_viewer_a11y_background_audio">Audio di sottofondo</string>
     <string name="stories_viewer_close">Chiudi</string>
     <string name="stories_viewer_fullscreen_enter">Schermo intero</string>
     <string name="stories_viewer_fullscreen_exit">Esci dallo schermo intero</string>

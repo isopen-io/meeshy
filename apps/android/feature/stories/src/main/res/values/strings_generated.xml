@@ -260,6 +260,7 @@
     <string name="stories_tray_add_story">Add a story</string>
     <string name="stories_tray_manage">Manage my stories</string>
     <string name="stories_tray_view_my_story">View my story</string>
+    <string name="stories_viewer_a11y_background_audio">Background audio</string>
     <string name="stories_viewer_close">Close</string>
     <string name="stories_viewer_fullscreen_enter">Full screen</string>
     <string name="stories_viewer_fullscreen_exit">Exit full screen</string>
