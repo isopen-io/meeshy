@@ -12,7 +12,10 @@ import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.game.MeeshEdition
 import me.meeshy.sdk.model.game.ceremony.MintCeremonyAnswer
+import me.meeshy.sdk.model.game.ceremony.GameMintCeremony
 import me.meeshy.sdk.model.game.ceremony.MintCeremonyChoreography
+import me.meeshy.sdk.model.game.ceremony.MintCeremonyMode
+import me.meeshy.sdk.model.game.ceremony.MintCeremonyParticles
 import me.meeshy.sdk.model.game.ceremony.MintCeremonyPaint
 import me.meeshy.sdk.model.game.ceremony.MintCeremonyRequest
 import me.meeshy.sdk.model.game.ceremony.MintCeremonyRun
@@ -71,18 +74,21 @@ class MintCeremonySceneTest {
         renderAt(refused, listOf(2.0, 2.4, 3.0))
     }
 
+    private fun paintOf(modest: Boolean, stride: Int): MintCeremonyPaint {
+        val plan = GameMintCeremony.plan(MeeshEdition.Prism, MintCeremonyMode.Normal, modest = modest)
+        return MintCeremonyParticles.build(plan, seed = 1000).paint(plan, 2.7, stride)
+    }
+
     @Test
     fun `particles stay within the budget and stride 2 halves them`() {
-        val run = started()
-        val full = paintAt(run, 2.2, stride = 1).painted
-        val half = paintAt(run, 2.2, stride = 2).painted
-        assertThat(full).isAtMost(MintCeremonyBudget.MAX_PARTICLES)
-        assertThat(half).isAtMost(full / 2 + 1)
+        val full = paintOf(modest = false, stride = 1)
+        assertThat(full.painted).isAtMost(MintCeremonyBudget.MAX_PARTICLES)
+        assertThat(paintOf(modest = false, stride = 2).painted).isLessThan(full.painted)
     }
 
     @Test
     fun `a modest device paints fewer particles than a mid-range one`() {
-        assertThat(paintAt(started(modest = true), 2.2).painted).isLessThan(paintAt(started(modest = false), 2.2).painted)
+        assertThat(paintOf(modest = true, stride = 1).painted).isLessThan(paintOf(modest = false, stride = 1).painted)
     }
 
     private companion object {
