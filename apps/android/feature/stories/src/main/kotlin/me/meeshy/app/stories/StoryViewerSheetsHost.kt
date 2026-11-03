@@ -42,6 +42,9 @@ import me.meeshy.ui.theme.MeeshySpacing
 internal class StoryViewerChromeState {
     var showViewers by mutableStateOf(false)
     var showComments by mutableStateOf(false)
+    /** Le commentaire visé par une notification (iOS `targetCommentId`), et son parent quand c'est une réponse. */
+    var targetCommentId by mutableStateOf<String?>(null)
+    var targetParentCommentId by mutableStateOf<String?>(null)
     var showReply by mutableStateOf(false)
     var showSendTo by mutableStateOf(false)
     var showOptions by mutableStateOf(false)
@@ -136,14 +139,6 @@ internal fun StoryViewerSheetsHost(
                 accentHex = accent,
             ),
             onDismiss = { chrome.showReply = false },
-        )
-    }
-
-    if (chrome.showComments && commentThread != null) {
-        StoryCommentsThreadSheet(
-            thread = commentThread,
-            serverCommentCount = currentItem?.commentCount ?: 0,
-            onDismiss = { chrome.showComments = false },
         )
     }
 }
