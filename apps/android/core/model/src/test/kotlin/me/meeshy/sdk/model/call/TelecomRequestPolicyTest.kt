@@ -85,13 +85,13 @@ class TelecomRequestPolicyTest {
     }
 
     @Test
-    fun `les touches du clavier systeme sont relayees pendant un appel actif`() {
+    fun `les touches du clavier systeme sont relayees pendant un appel connecte`() {
         assertThat(act(TelecomSystemRequest.Dtmf("12#"), CallState.Connected))
             .isEqualTo(TelecomRequestPolicy.Action.SendDtmf("12#"))
     }
 
     @Test
-    fun `les touches du clavier systeme sont ignorees hors appel actif ou invalides`() {
+    fun `les touches du clavier systeme sont ignorees hors appel connecte ou invalides`() {
         assertThat(act(TelecomSystemRequest.Dtmf("1"), incoming)).isEqualTo(TelecomRequestPolicy.Action.None)
         assertThat(act(TelecomSystemRequest.Dtmf("1x"), CallState.Connected)).isEqualTo(TelecomRequestPolicy.Action.None)
     }

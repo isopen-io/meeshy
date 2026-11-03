@@ -82,7 +82,7 @@ public object TelecomRequestPolicy {
         is TelecomSystemRequest.Mute ->
             if (state.isActive && request.muted != isMuted) Action.SetMuted(request.muted, byHold = false) else Action.None
         is TelecomSystemRequest.Dtmf ->
-            CallDtmfTones.normalize(request.digits)?.takeIf { state.isActive }?.let(Action::SendDtmf) ?: Action.None
+            CallDtmfTones.normalize(request.digits)?.takeIf { state is CallState.Connected || state is CallState.Reconnecting }?.let(Action::SendDtmf) ?: Action.None
         is TelecomSystemRequest.Hold -> when {
             !state.isActive -> Action.None
             request.onHold && !isMuted -> Action.SetMuted(true, byHold = true)
