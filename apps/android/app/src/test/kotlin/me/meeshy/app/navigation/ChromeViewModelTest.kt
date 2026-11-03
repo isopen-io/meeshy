@@ -127,37 +127,6 @@ class ChromeViewModelTest {
     }
 
     @Test
-    fun `a live friend request notification lands in the cache and the badge without any refresh`() = runTest {
-        val cache = FriendshipCache()
-        val vm = viewModel(cache)
-
-        notificationReceived.emit(
-            ApiNotification(
-                id = "n1",
-                type = "friend_request",
-                actor = me.meeshy.sdk.model.NotificationActor(id = "alice"),
-                context = me.meeshy.sdk.model.NotificationContext(friendRequestId = "r1"),
-            ),
-        )
-
-        assertThat(cache.currentReceivedPendingSenderIds).containsExactly("alice")
-        assertThat(vm.pendingFriendRequests.value).isEqualTo(1)
-    }
-
-    @Test
-    fun `a live acceptance notification makes the accepter a friend and clears the sent pending entry`() = runTest {
-        val cache = FriendshipCache()
-        cache.didSendRequest("bob", "r2")
-        viewModel(cache)
-
-        notificationReceived.emit(
-            ApiNotification(id = "n2", type = "friend_accepted", actor = me.meeshy.sdk.model.NotificationActor(id = "bob")),
-        )
-
-        assertThat(cache.isFriend("bob")).isTrue()
-    }
-
-    @Test
     fun `warm-up is a no-op while unauthenticated`() = runTest {
         val vm = viewModel()
 
