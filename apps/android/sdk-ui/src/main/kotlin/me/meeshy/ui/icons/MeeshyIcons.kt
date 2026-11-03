@@ -222,6 +222,7 @@ import androidx.compose.material.icons.filled.VisibilityOff as FiVisibilityOff
 import androidx.compose.material.icons.filled.VpnKey as FiVpnKey
 import androidx.compose.material.icons.filled.Wallpaper as FiWallpaper
 import androidx.compose.material.icons.filled.Warning as FiWarning
+import androidx.compose.material.icons.filled.Wifi as FiWifi
 import androidx.compose.material.icons.filled.WifiOff as FiWifiOff
 import androidx.compose.material.icons.filled.WorkspacePremium as FiWorkspacePremium
 import androidx.compose.material.icons.filled.ZoomIn as FiZoomIn
@@ -583,6 +584,7 @@ public object MeeshyIcons {
     public val Warning: ImageVector get() = Icons.Outlined.OuWarning
     public val WarningFilled: ImageVector get() = Icons.Filled.FiWarning
     public val Waveform: ImageVector get() = Icons.Filled.FiGraphicEq
+    public val Wifi: ImageVector get() = Icons.Filled.FiWifi
     public val WifiOff: ImageVector get() = Icons.Filled.FiWifiOff
     public val WifiProblem: ImageVector get() = Icons.Filled.FiSignalWifiConnectedNoInternet4
     public val ZoomIn: ImageVector get() = Icons.Filled.FiZoomIn

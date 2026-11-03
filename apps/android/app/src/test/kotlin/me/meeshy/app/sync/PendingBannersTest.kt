@@ -47,34 +47,18 @@ class PendingBannersTest {
     }
 
     @Test
-    fun `les comptes se derivent de l'outbox`() = runTest {
+    fun `le bandeau compte les modifications en attente de l'outbox`() = runTest {
         val vm = viewModel()
         items.value = listOf(settings("a"), settings("b"), story("c"))
         runCurrent()
-        assertThat(vm.uiState.value).isEqualTo(PendingBannersUiState(settingsCount = 2, storyCount = 1, storyVisible = true))
+        assertThat(vm.uiState.value).isEqualTo(PendingBannersUiState(settingsCount = 2))
     }
 
     @Test
-    fun `masquer le bandeau des stories le cache jusqu'a ce que son compte change`() = runTest {
+    fun `une story en attente n'allume jamais le bandeau du haut`() = runTest {
         val vm = viewModel()
-        items.value = listOf(story("a"))
-        runCurrent()
-        vm.dismissStories()
-        runCurrent()
-        assertThat(vm.uiState.value.storyVisible).isFalse()
-
         items.value = listOf(story("a"), story("b"))
         runCurrent()
-        assertThat(vm.uiState.value.storyVisible).isTrue()
-    }
-
-    @Test
-    fun `le bandeau des modifications n'a pas de masquage`() = runTest {
-        val vm = viewModel()
-        items.value = listOf(settings("a"))
-        runCurrent()
-        vm.dismissStories()
-        runCurrent()
-        assertThat(vm.uiState.value.settingsCount).isEqualTo(1)
+        assertThat(vm.uiState.value.settingsCount).isEqualTo(0)
     }
 }

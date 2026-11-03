@@ -71,8 +71,6 @@
     <string name="push_action_comment">Kommentieren</string>
     <string name="push_action_comment_hint">Kommentieren…</string>
     <string name="root_pending_changes">Ausstehende Änderungen</string>
-    <string name="root_pending_stories">Ausstehende Storys</string>
-    <string name="root_publish_on_reconnect">Wird nach Wiederverbindung veröffentlicht</string>
     <string name="root_sync_on_reconnect">Synchronisierung, sobald wieder online</string>
     <string name="route_title_affiliate">Partnerprogramm</string>
     <string name="route_title_bookmarks">Lesezeichen</string>
