@@ -47,6 +47,9 @@
     <string name="feed_notice_reported">تم الإبلاغ عن المنشور</string>
     <string name="feed_notice_repost_failed">خطأ في إعادة النشر</string>
     <string name="feed_notice_translation_failed">خطأ في الترجمة</string>
+    <string name="feed_post_deleted">تم حذف المنشور</string>
+    <string name="feed_post_open">فتح</string>
+    <string name="feed_post_pinned">تم تثبيت المنشور</string>
     <string name="feed_post_reposted_from">أعاد النشر من @%1$s</string>
     <plurals name="feed_post_stat_comments">
         <item quantity="zero">لا توجد تعليقات</item>
@@ -86,7 +89,9 @@
     <string name="feed_quote_submit">إعادة نشر</string>
     <string name="feed_reel">ريل</string>
     <string name="feed_reel_card_a11y">ريل من %1$s</string>
+    <string name="feed_reel_impressions">الظهور</string>
     <string name="feed_reel_republished_by">أعاد نشره %1$s</string>
+    <string name="feed_reel_views">المشاهدات</string>
     <string name="feed_report_reason_harassment">تحرّش</string>
     <string name="feed_report_reason_hate_speech">خطاب كراهية</string>
     <string name="feed_report_reason_impersonation">انتحال الهوية</string>

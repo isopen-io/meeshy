@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallEndMotive
 import me.meeshy.sdk.model.call.CallEndReason
+import me.meeshy.sdk.model.call.CallFailureReason
 import me.meeshy.sdk.model.call.CallStatusLabelLaw
 import me.meeshy.sdk.model.call.CallHeaderLaw
 import me.meeshy.ui.theme.MeeshyRadius
@@ -140,5 +141,16 @@ internal fun endedLabel(reason: CallEndReason?): String = when (CallStatusLabelL
     CallEndMotive.Rejected -> stringResource(R.string.call_ended_declined)
     CallEndMotive.Missed -> stringResource(R.string.call_ended_missed)
     CallEndMotive.ConnectionLost -> stringResource(R.string.call_ended_connection_lost)
-    CallEndMotive.Failed -> stringResource(R.string.call_ended_failed)
+    CallEndMotive.Failed -> failureLabel(reason)
 }
+
+@Composable
+private fun failureLabel(reason: CallEndReason?): String =
+    when (CallFailureReason.classify((reason as? CallEndReason.Failed)?.message)) {
+        CallFailureReason.InitiateTimedOut -> stringResource(R.string.call_failed_initiate_timed_out)
+        CallFailureReason.InitiateMalformed -> stringResource(R.string.call_failed_initiate_malformed)
+        CallFailureReason.ConnectTimedOut -> stringResource(R.string.call_failed_connect_timed_out)
+        CallFailureReason.JoinRefused -> stringResource(R.string.call_failed_join_refused)
+        CallFailureReason.MediaSetup -> stringResource(R.string.call_failed_media_setup)
+        CallFailureReason.Unknown -> stringResource(R.string.call_ended_failed)
+    }

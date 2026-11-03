@@ -73,4 +73,18 @@ class StoryDrawingStrokeWireTest {
         assertThat(decoded.captureVersion).isEqualTo(0)
         assertThat(decoded.createdAt).isEqualTo(776000000.0)
     }
+
+    /**
+     * Une story iOS ancienne ne porte qu'un blob PencilKit (`drawingData` base64) et aucun `drawingStrokes` :
+     * Android ne le rend pas (consigné pour décision produit) mais le document se décode sans erreur.
+     */
+    @Test
+    fun `un blob PencilKit herite se decode sans erreur et ne donne aucun trait a peindre`() {
+        val decoded = json.decodeFromString(
+            StoryEffects.serializer(),
+            """{ "drawingData": "AAECAwQFBgc=", "drawingStrokes": null }""",
+        )
+
+        assertThat(decoded.drawingStrokes.orEmpty()).isEmpty()
+    }
 }

@@ -80,6 +80,7 @@ internal fun StorySceneBackground(
                 onPlayer = onBackgroundPlayer,
                 fit = slide.backgroundFits,
                 modifier = Modifier.fillMaxSize().graphicsLayer { frame(bg) },
+                effects = rememberSceneVideoEffects(slide.backgroundVideoUrl, slide.backgroundPosterUrl, slide.composerLooks),
             )
         }
         // Au repos le fond vidéo n'a pas de lecteur : son affiche (vignette, sinon ThumbHash) garde le cadre, l'aplat dessous.

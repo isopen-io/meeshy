@@ -3,6 +3,7 @@ package me.meeshy.sdk.conversation
 import me.meeshy.sdk.model.AttachmentAudioTranslationMerge
 import me.meeshy.sdk.model.AttachmentTranscriptionMerge
 import me.meeshy.sdk.model.MessageTranslationMerge
+import me.meeshy.sdk.model.translation.ServerTranslationAdmission
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.TranslateRequest
 import me.meeshy.sdk.net.api.TranslationApi
@@ -111,6 +112,7 @@ internal class MessageEnrichmentWriter(
         if (target.isEmpty()) return false
         val message = updater.find(messageId) ?: return false
         if (message.deletedAt != null) return false
+        if (!ServerTranslationAdmission.admits(message, conversationEncryptionMode = null)) return false
         val source = message.content
         if (source.isBlank()) return false
 

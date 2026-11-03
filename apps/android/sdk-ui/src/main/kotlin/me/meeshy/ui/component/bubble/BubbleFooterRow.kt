@@ -124,24 +124,29 @@ private fun BubbleIdentityFooter(
         modifier = modifier,
     ) {
         Box {
-            MeeshyAvatar(
-                name = name,
-                context = AvatarContext.MessageBubble,
-                containerColor = senderColor,
-                imageUrl = content.senderAvatarUrl,
-                presence = rememberPresence(content.senderProfile?.userId),
-                here = rememberConversationHere(content.senderProfile?.userId, content.viewingConversationId),
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .let { base ->
-                        if (onSenderTap == null) base
-                        else base.combinedClickable(
-                            onClickLabel = profileLabel,
-                            onClick = onSenderTap,
-                            onLongClick = { menuOpen = true },
-                        )
-                    },
-            )
+            val avatarModifier = Modifier
+                .clip(CircleShape)
+                .let { base ->
+                    if (onSenderTap == null) base
+                    else base.combinedClickable(
+                        onClickLabel = profileLabel,
+                        onClick = onSenderTap,
+                        onLongClick = { menuOpen = true },
+                    )
+                }
+            if (content.senderIsAnonymous) {
+                BubbleSenderGhost(size = AvatarContext.MessageBubble.size.dp, color = senderColor, modifier = avatarModifier)
+            } else {
+                MeeshyAvatar(
+                    name = name,
+                    context = AvatarContext.MessageBubble,
+                    containerColor = senderColor,
+                    imageUrl = content.senderAvatarUrl,
+                    presence = rememberPresence(content.senderProfile?.userId),
+                    here = rememberConversationHere(content.senderProfile?.userId, content.viewingConversationId),
+                    modifier = avatarModifier,
+                )
+            }
             if (onSenderTap != null) {
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     DropdownMenuItem(

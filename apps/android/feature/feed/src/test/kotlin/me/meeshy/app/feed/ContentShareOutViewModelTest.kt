@@ -70,4 +70,26 @@ class ContentShareOutViewModelTest {
         assertThat(opened).containsExactly("Profil de Léa")
         coVerify(exactly = 0) { links.resolve(any(), any()) }
     }
+
+    @Test
+    fun `copying the link hands over the tracked link of the copy gesture`() {
+        val links = mockk<PostShareLinkService>()
+        coEvery { links.resolve("p1", "copy") } returns PostShareTarget("https://meeshy.me/l/abc", tracked = true)
+        val copied = mutableListOf<String>()
+
+        ContentShareOutViewModel(links).copyLink("p1") { copied += it }
+
+        assertThat(copied).containsExactly("https://meeshy.me/l/abc")
+    }
+
+    @Test
+    fun `copying without a minted link falls back to the raw post url`() {
+        val links = mockk<PostShareLinkService>()
+        coEvery { links.resolve("p1", "copy") } returns PostShareLinkLaw.resolve("p1", null)
+        val copied = mutableListOf<String>()
+
+        ContentShareOutViewModel(links).copyLink("p1") { copied += it }
+
+        assertThat(copied).containsExactly(PostShareLinkLaw.resolve("p1", null).url)
+    }
 }

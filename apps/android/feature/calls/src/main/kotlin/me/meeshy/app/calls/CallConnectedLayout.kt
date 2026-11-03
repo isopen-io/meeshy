@@ -154,6 +154,7 @@ internal fun CallConnectedColumn(
     val routeViewModel: CallAudioRouteViewModel = hiltViewModel()
     val route by routeViewModel.state.collectAsStateWithLifecycle()
     var routeSheetOpen by remember { mutableStateOf(false) }
+    val signalingDegraded by viewModel.signalingDegraded.collectAsStateWithLifecycle()
     LaunchedEffect(state.isVideoCall) { routeViewModel.onEvent(CallAudioRouteUiEvent.Start(state.isVideoCall)) }
 
     BoxWithConstraints(modifier) {
@@ -177,7 +178,7 @@ internal fun CallConnectedColumn(
             } else if (audioPanel) {
                 CallCaptionsTranscriptPanel(state = state, peer = peer, modifier = Modifier.weight(1f))
             } else {
-                CallAudioStage(state = state, peer = peer)
+                CallAudioStage(state = state, peer = peer, signalingDegraded = signalingDegraded)
             }
 
             state.captionText?.let { caption -> CallCaption(caption) }
