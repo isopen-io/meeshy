@@ -39,6 +39,7 @@ internal fun StorySceneOverlays(
                         onAudioFocusLost = onAudioFocusLost,
                         players = players,
                         holdsAudioFocus = focusHolder == StorySceneAudioFocus.Holder.Placed(layer.view.id),
+                        looks = slide.composerLooks,
                     )
                 }
                 is StorySceneLayer.Text -> if (layer.view.isVisible(playheadSeconds)) {

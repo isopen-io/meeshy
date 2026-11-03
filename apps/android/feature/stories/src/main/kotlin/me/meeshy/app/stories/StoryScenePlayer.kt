@@ -98,7 +98,7 @@ internal fun StorySceneBackground(
             val bg = slide.backgroundTransform
             if (slide.backgroundFits) SceneBackdropLayer(slide.backdrop, imageUrl)
             AsyncImage(
-                model = imageUrl,
+                model = rememberSceneMediaModel(imageUrl, slide.composerLooks),
                 contentDescription = null,
                 contentScale = if (slide.backgroundFits) ContentScale.Fit else ContentScale.Crop,
                 colorFilter = SceneLookChain.colorFilter(slide.lookRecipe),

@@ -148,6 +148,7 @@ internal fun StoryForegroundLayer(
     onAudioFocusLost: () -> Unit = {},
     players: Boolean = true,
     holdsAudioFocus: Boolean = true,
+    looks: StorySceneMediaLooks? = null,
 ) {
     if (media.isVideo && !players && restingPosterKind(media.posterUrl, media.thumbHash) == RestingPosterKind.NONE) return
     val animated = media.animated(playheadSeconds)
@@ -196,7 +197,7 @@ internal fun StoryForegroundLayer(
         } else {
             Box(layerModifier) {
                 AsyncImage(
-                    model = media.url,
+                    model = rememberSceneMediaModel(media.url, looks),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     colorFilter = SceneLookChain.colorFilter(media.lookRecipe),
