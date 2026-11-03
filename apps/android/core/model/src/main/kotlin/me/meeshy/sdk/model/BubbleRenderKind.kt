@@ -40,7 +40,16 @@ object BubbleRenderKind {
          * The ephemeral self-destruct countdown elapsed on a still-undeleted message:
          * the bubble collapses (iOS renders `EmptyView`; Android animates it away).
          */
-        EphemeralExpired;
+        EphemeralExpired,
+
+        /**
+         * A view-once message THIS reader has not opened (iOS `viewOnceSealed`): the bubble carries no text, caption
+         * or piece at all — only the "tap to show" chip. Decided per reader, never by the global view count.
+         */
+        ViewOnceSealed;
+
+        /** True only for [ViewOnceSealed]. */
+        val isViewOnceSealed: Boolean get() = this == ViewOnceSealed
 
         /** True only for [EphemeralExpired] — the arm that hides the bubble. */
         val isEphemeralExpired: Boolean get() = this == EphemeralExpired
@@ -78,10 +87,12 @@ object BubbleRenderKind {
         isViewOnce: Boolean = false,
         isViewOnceOpenedByMe: Boolean = false,
         isSystem: Boolean = false,
+        isViewOnceSealed: Boolean = false,
     ): Kind = when {
         isSystem -> Kind.System
         isDeleted -> Kind.Deleted
         isViewOnce && isViewOnceOpenedByMe -> Kind.Burned
+        isViewOnceSealed -> Kind.ViewOnceSealed
         ephemeral is EphemeralLifecycle.State.Expired -> Kind.EphemeralExpired
         else -> Kind.Standard
     }

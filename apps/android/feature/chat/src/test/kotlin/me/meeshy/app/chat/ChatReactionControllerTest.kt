@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.ReactionAnimationGate
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
@@ -44,6 +45,7 @@ class ChatReactionControllerTest {
         val added: MutableSharedFlow<ReactionUpdateEvent>,
         val removed: MutableSharedFlow<ReactionUpdateEvent>,
         val withdrawals: OwnReactionWithdrawals,
+        val gate: ReactionAnimationGate,
     ) {
         val state: ChatUiState get() = flow.value
         fun mine(messageId: String): Set<String> = controller.ownReactions.value[messageId] ?: emptySet()
@@ -65,6 +67,7 @@ class ChatReactionControllerTest {
         val socket = mockk<MessageSocketManager>()
         every { socket.reactionAdded } returns added
         every { socket.reactionRemoved } returns removed
+        val gate = ReactionAnimationGate()
         val controller = ChatReactionController(
             scope = screenScope(),
             state = ChatStateAccess(flow),
@@ -76,8 +79,9 @@ class ChatReactionControllerTest {
             messageSocketManager = socket,
             workManager = workManager,
             ownReactionWithdrawals = withdrawals,
+            animationGate = gate,
         )
-        return Rig(controller, flow, repo, reactions, workManager, emojiUsage, added, removed, withdrawals)
+        return Rig(controller, flow, repo, reactions, workManager, emojiUsage, added, removed, withdrawals, gate)
     }
 
     private fun event(userId: String, conversationId: String = "c1") =
@@ -467,5 +471,39 @@ class ChatReactionControllerTest {
         val strip = r.state.reactionDetails!!.quickEmojis
         assertThat(strip.first()).isEqualTo("🎉")
         assertThat(strip.size).isAtMost(12)
+    }
+
+    // --- entrée en comète --------------------------------------------------------------------
+
+    @Test
+    fun `adding a reaction locally arms the comet, removing it does not`() = runTest {
+        val r = rig()
+        r.controller.toggle("m1", "🔥")
+        advanceUntilIdle()
+        assertThat(r.gate.shouldAnimate("m1", "🔥")).isTrue()
+
+        r.controller.toggle("m2", "🔥")
+        advanceUntilIdle()
+        r.controller.toggle("m2", "🔥")
+        advanceUntilIdle()
+        val fresh = ReactionAnimationGate()
+        assertThat(fresh.shouldAnimate("m3", "🔥")).isFalse()
+        assertThat(r.gate.shouldAnimate("m3", "🔥")).isFalse()
+    }
+
+    @Test
+    fun `a peer's added frame arms the comet, a removal and my own echo do not`() = runTest {
+        val r = rig()
+        r.controller.start()
+        advanceUntilIdle()
+
+        r.removed.emit(event("other"))
+        r.added.emit(event("me"))
+        advanceUntilIdle()
+        assertThat(r.gate.shouldAnimate("m1", "❤️")).isFalse()
+
+        r.added.emit(event("other"))
+        advanceUntilIdle()
+        assertThat(r.gate.shouldAnimate("m1", "❤️")).isTrue()
     }
 }

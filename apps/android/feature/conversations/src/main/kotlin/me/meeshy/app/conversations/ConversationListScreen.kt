@@ -183,7 +183,7 @@ fun ConversationListScreen(
                     header = {
                         ConversationListHead(
                             rail = header,
-                            filters = { ConversationFilterBar(selected = state.selectedFilter, onSelect = viewModel::selectFilter) },
+                            filters = { ConversationFilterBar(selected = state.selectedFilters, onToggle = viewModel::toggleFilter) },
                         )
                     },
                 )
