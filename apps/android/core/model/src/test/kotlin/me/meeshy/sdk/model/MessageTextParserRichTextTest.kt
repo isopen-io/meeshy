@@ -90,4 +90,12 @@ class MessageTextParserRichTextTest {
     @Test fun `a raw url still parses as before`() {
         assertThat(parse("https://x.fr/a", null, null)).containsExactly(MessageSegment.UrlLink("https://x.fr/a", "https://x.fr/a"))
     }
+
+    @Test fun `double underscores render underlined`() {
+        assertThat(parse("__mot__", null, null)).containsExactly(MessageSegment.Text("mot", TextStyles(underline = true)))
+    }
+
+    @Test fun `double tildes render struck through`() {
+        assertThat(parse("~~mot~~", null, null)).containsExactly(MessageSegment.Text("mot", TextStyles(strikethrough = true)))
+    }
 }

@@ -69,6 +69,21 @@ data class StoryTextFrame(
         copy(borderColor = hex, borderWidth = borderWidth.takeIf { it > 0f } ?: DEFAULT_BORDER_WIDTH)
 
     companion object {
+        /**
+         * Le cadre qu'un objet du fil décrit (iOS `parsedFrameShape` / `resolvedFramePaddingScale` / `resolvedFrameBorder…`) :
+         * forme inconnue ⇒ arrondi, marge bornée 0…3, liseré borné 0…12 ; un liseré de largeur positive sans couleur se
+         * peint en blanc par défaut.
+         */
+        fun fromWire(shape: String?, paddingScale: Double?, borderWidth: Double?, borderColor: String?): StoryTextFrame {
+            val width = borderWidth?.toFloat()?.takeIf { it.isFinite() && it > 0f }?.coerceAtMost(MAX_BORDER) ?: 0f
+            return StoryTextFrame(
+                shape = StoryTextFrameShape.fromWire(shape),
+                paddingScale = paddingScale?.toFloat()?.takeIf { it.isFinite() }?.coerceIn(0f, MAX_PADDING) ?: DEFAULT_PADDING,
+                borderWidth = width,
+                borderColor = borderColor?.takeIf { it.isNotBlank() } ?: DEFAULT_BORDER_COLOR.takeIf { width > 0f },
+            )
+        }
+
         const val DEFAULT_PADDING: Float = 1f
         const val MAX_PADDING: Float = 3f
         const val MAX_BORDER: Float = 12f

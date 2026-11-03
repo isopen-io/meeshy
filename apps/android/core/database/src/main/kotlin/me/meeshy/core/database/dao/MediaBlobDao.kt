@@ -28,9 +28,40 @@ public interface MediaBlobDao {
     @Query("SELECT cmid FROM media_blob")
     public suspend fun cmids(): List<String>
 
+    /** The `cmid`s of rows written before [before] — the sweep never touches a write of the running process. */
+    @Query("SELECT cmid FROM media_blob WHERE createdAt < :before")
+    public suspend fun cmidsOlderThan(before: Long): List<String>
+
+    /** The row WITHOUT its `bytes` column: reading a legacy multi-megabyte BLOB whole overflows the cursor window. */
+    @Query("SELECT cmid, fileName, mimeType, createdAt FROM media_blob WHERE cmid = :cmid")
+    public suspend fun meta(cmid: String): MediaBlobMeta?
+
+    /** Rows still holding octets in the BLOB column (written before the sealed files, #13551). */
+    @Query("SELECT cmid FROM media_blob WHERE length(bytes) > 0")
+    public suspend fun legacyCmids(): List<String>
+
+    @Query("SELECT length(bytes) FROM media_blob WHERE cmid = :cmid")
+    public suspend fun legacyLength(cmid: String): Long?
+
+    /** A slice of the legacy BLOB (1-based [from], as SQLite `substr`) — read piece by piece, never whole. */
+    @Query("SELECT substr(bytes, :from, :count) FROM media_blob WHERE cmid = :cmid")
+    public suspend fun legacySlice(cmid: String, from: Long, count: Long): ByteArray?
+
+    /** Empties the BLOB once its octets live in a sealed file. */
+    @Query("UPDATE media_blob SET bytes = zeroblob(0) WHERE cmid = :cmid")
+    public suspend fun clearBytes(cmid: String)
+
     @Query("DELETE FROM media_blob WHERE cmid = :cmid")
     public suspend fun delete(cmid: String)
 
     @Query("DELETE FROM media_blob")
     public suspend fun clear()
 }
+
+/** A `media_blob` row without its octets. */
+public class MediaBlobMeta(
+    public val cmid: String,
+    public val fileName: String,
+    public val mimeType: String,
+    public val createdAt: Long,
+)

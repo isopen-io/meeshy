@@ -147,12 +147,15 @@
     <string name="my_stories_viewers">Aufrufliste</string>
     <string name="share_story_text">🔗 Story von %1$s: %2$s</string>
     <string name="stories_action_delete">Löschen</string>
+    <string name="stories_action_mute">Stumm</string>
     <string name="stories_action_react">Reagieren</string>
     <string name="stories_action_reply">Antworten</string>
     <string name="stories_action_report">Melden</string>
     <string name="stories_action_repost">Erneut posten</string>
+    <string name="stories_action_save">Speichern</string>
     <string name="stories_action_send">Senden</string>
     <string name="stories_action_share">Teilen</string>
+    <string name="stories_action_sound">Ton</string>
     <string name="stories_action_translations">Übersetzungen</string>
     <string name="stories_action_views">Aufrufe</string>
     <string name="stories_add">Hinzufügen</string>
@@ -295,6 +298,8 @@
     <string name="story_composer_grabber">Griff der Werkzeugleiste</string>
     <string name="story_composer_grabber_hint_dismiss">Nach unten ziehen zum Verkleinern oder Schließen.</string>
     <string name="story_composer_grabber_hint_resize">Nach oben ziehen zum Vergrößern, nach unten zum Verkleinern oder Schließen.</string>
+    <string name="story_composer_loadingImage">Bild wird geladen…</string>
+    <string name="story_composer_loadingVideo">Video wird geladen…</string>
     <string name="story_composer_redo">Wiederholen</string>
     <string name="story_composer_soundLibrary">Bibliothek</string>
     <string name="story_composer_undo">Rückgängig</string>
@@ -317,6 +322,8 @@
     <string name="story_media_soundExtraction_a11yHint">Andere Personen können den Ton der Videos dieses Beitrags in ihren eigenen Beiträgen wiederverwenden.</string>
     <string name="story_media_soundExtraction_caption">Andere Personen können den Ton der Videos dieses Beitrags wiederverwenden.</string>
     <string name="story_media_soundExtraction_label">Wiederverwendung des Tons erlauben</string>
+    <string name="story_reader_buffering">Story wird geladen</string>
+    <string name="story_reader_loading">Story wird geladen…</string>
     <string name="story_repost_error_forbidden">Diese Story kann nicht erneut geteilt werden</string>
     <string name="story_repost_error_generic">Erneutes Teilen fehlgeschlagen</string>
     <string name="story_repost_error_unavailable">Diese Story ist nicht mehr verfügbar</string>
@@ -328,6 +335,10 @@
     </plurals>
     <string name="story_send_search_hint">Unterhaltung suchen...</string>
     <string name="story_send_sent">Gesendet</string>
+    <string name="story_sentinel_body">Deine Version der App kann sie noch nicht darstellen. Sie ist nicht verloren: Nach dem Update erscheint sie genau so, wie ihr Autor sie gestaltet hat.</string>
+    <string name="story_sentinel_skip">WEITER ZUR NÄCHSTEN</string>
+    <string name="story_sentinel_title">Diese Story verwendet ein neueres Format</string>
+    <string name="story_sentinel_update">AKTUALISIEREN</string>
     <string name="story_sound_library_clearSearch">Suche löschen</string>
     <string name="story_sound_library_emptyMine">Deine Sounds erscheinen hier, sobald du eine Story mit eigenem Audio veröffentlichst.</string>
     <string name="story_sound_library_emptySearch">Kein Sound entspricht dieser Suche.</string>

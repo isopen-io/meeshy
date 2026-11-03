@@ -108,6 +108,14 @@ class MessageBubbleAccessibilityLabelTest {
     private fun audio(id: String) = BubbleAudio(attachmentId = id)
 
     @Test
+    fun `TalkBack lit le texte sans la notation markdown`() {
+        val label = compose(content(text = "**bonjour** [doc](https://x.io) # titre"))
+        assertThat(label).contains("bonjour doc # titre")
+        assertThat(label).doesNotContain("**")
+        assertThat(compose(content(text = "# Titre\n- un"))).contains("Titre\nun")
+    }
+
+    @Test
     fun `received text message names the sender before the text`() {
         val label = compose(content(text = "Hello", senderName = "Alice"))
         assertThat(label).isEqualTo("Alice, Hello")

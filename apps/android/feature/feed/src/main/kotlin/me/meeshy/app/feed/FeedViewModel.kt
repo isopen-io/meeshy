@@ -162,6 +162,10 @@ class FeedViewModel @Inject constructor(
             publications.notices.collect { notice -> _state.update { it.copy(notice = notice.feedNotice) } }
         }
         viewModelScope.launch {
+            // Un j'aime ou un favori que la file a perdu : le retour arrière est déjà fait, le fil le DIT.
+            postRepository.gestureRefusals.collect { refusal -> _state.update { it.copy(notice = refusal.feedNotice) } }
+        }
+        viewModelScope.launch {
             combine(
                 postRepository.feedStream(
                     onSyncError = { _ -> _state.update { it.withLoadFailure() } },
@@ -590,56 +594,31 @@ class FeedViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Epingle un de SES PROPRES posts (feature-parity §F) — port fidele d'iOS
-     * (`PostDetailViewModel.pinPost`/`ProfileUserPostsList.pinPost`), qui n'expose
-     * jamais de contrepartie "unpin" dans son UI ; `PostRepository.unpinPost`
-     * existe côté SDK mais reste sans appelant sur les deux plateformes, donc
-     * pas branche ici. Refresh apres succes pour faire remonter `isPinned`.
-     */
-    fun pinPost(postId: String) {
-        viewModelScope.launch {
-            when (postRepository.pinPost(postId)) {
-                is NetworkResult.Success -> postRepository.refresh()
-                is NetworkResult.Failure -> _state.update { it.copy(notice = FeedNotice.PIN_FAILED) }
-            }
-        }
-    }
+    private val postActions = FeedPostActionsDelegate(
+        posts = postRepository,
+        reports = reportRepository,
+        scope = viewModelScope,
+        head = realtimeHead,
+        notify = { notice -> _state.update { it.copy(notice = notice) } },
+    )
 
-    /**
-     * Suppression confirmee cote UI, OPTIMISTE (iOS FeedViewModel+PostActions) : le post
-     * quitte le fil aussitot (tombstone de la tete temps reel, deja relachee par la
-     * reconciliation quand le cache ne le porte plus) ; un echec le fait revenir, avec
-     * le message localise.
-     */
-    fun deletePost(postId: String) {
-        realtimeHead.update { FeedRealtimeReducer.remove(it, postId) }
-        viewModelScope.launch {
-            when (postRepository.delete(postId)) {
-                is NetworkResult.Success -> postRepository.refresh()
-                is NetworkResult.Failure -> {
-                    realtimeHead.update { FeedRealtimeReducer.restore(it, postId) }
-                    _state.update { it.copy(notice = FeedNotice.DELETE_FAILED) }
-                }
-            }
-        }
-    }
+    /** Epingle un de SES PROPRES posts (iOS `pinPost`) ; voir [FeedPostActionsDelegate.pin]. */
+    fun pinPost(postId: String) = postActions.pin(postId)
 
-    /** Signale [postId] pour [reason] et confirme l'envoi — ou dit l'echec (iOS `feed.post.reported`). */
-    fun reportPost(postId: String, reason: ReportReason) {
-        viewModelScope.launch {
-            val result = reportRepository.reportPost(postId, reason, details = null)
-            val notice = if (result is NetworkResult.Success) FeedNotice.REPORTED else FeedNotice.REPORT_FAILED
-            _state.update { it.copy(notice = notice) }
-        }
-    }
+    /** Suppression confirmee, OPTIMISTE (iOS `withdrawPost`) ; voir [FeedPostActionsDelegate.delete]. */
+    fun deletePost(postId: String) = postActions.delete(postId)
+
+    /** Signale [postId] pour [reason] (iOS `feed.post.reported`) ; voir [FeedPostActionsDelegate.report]. */
+    fun reportPost(postId: String, reason: ReportReason) = postActions.report(postId, reason)
 
     /** Bookmark analogue of [toggleLike] — same durable-outbox toggle, same flush schedule. */
     fun toggleBookmark(postId: String) {
+        val adding = cardOf(postId)?.isBookmarkedByMe != true
         viewModelScope.launch {
             try {
-                postRepository.toggleBookmark(postId)
+                val accepted = postRepository.toggleBookmark(postId)
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
+                if (accepted && adding) _state.update { it.copy(notice = FeedNotice.BOOKMARKED) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

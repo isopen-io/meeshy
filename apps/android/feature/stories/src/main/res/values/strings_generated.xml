@@ -147,12 +147,15 @@
     <string name="my_stories_viewers">Views list</string>
     <string name="share_story_text">🔗 Story by %1$s: %2$s</string>
     <string name="stories_action_delete">Delete</string>
+    <string name="stories_action_mute">Mute</string>
     <string name="stories_action_react">React</string>
     <string name="stories_action_reply">Reply</string>
     <string name="stories_action_report">Report</string>
     <string name="stories_action_repost">Repost</string>
+    <string name="stories_action_save">Save</string>
     <string name="stories_action_send">Send</string>
     <string name="stories_action_share">Share</string>
+    <string name="stories_action_sound">Sound</string>
     <string name="stories_action_translations">Translations</string>
     <string name="stories_action_views">Views</string>
     <string name="stories_add">Add</string>
@@ -295,6 +298,8 @@
     <string name="story_composer_grabber">Toolbar handle</string>
     <string name="story_composer_grabber_hint_dismiss">Drag down to shrink or close.</string>
     <string name="story_composer_grabber_hint_resize">Drag up to enlarge, down to shrink or close.</string>
+    <string name="story_composer_loadingImage">Loading image…</string>
+    <string name="story_composer_loadingVideo">Loading video…</string>
     <string name="story_composer_redo">Redo</string>
     <string name="story_composer_soundLibrary">Library</string>
     <string name="story_composer_undo">Undo</string>
@@ -317,6 +322,8 @@
     <string name="story_media_soundExtraction_a11yHint">Other people will be able to reuse this post\'s video soundtrack in their own posts.</string>
     <string name="story_media_soundExtraction_caption">Other people will be able to reuse this post\'s video soundtrack.</string>
     <string name="story_media_soundExtraction_label">Allow soundtrack reuse</string>
+    <string name="story_reader_buffering">Loading the story</string>
+    <string name="story_reader_loading">Loading story…</string>
     <string name="story_repost_error_forbidden">This story can\'t be reposted</string>
     <string name="story_repost_error_generic">Reposting failed</string>
     <string name="story_repost_error_unavailable">This story is no longer available</string>
@@ -328,6 +335,10 @@
     </plurals>
     <string name="story_send_search_hint">Search a conversation...</string>
     <string name="story_send_sent">Sent</string>
+    <string name="story_sentinel_body">Your version of the app can\'t paint it yet. It isn\'t lost: it will appear exactly as its author composed it once you update.</string>
+    <string name="story_sentinel_skip">SKIP TO THE NEXT</string>
+    <string name="story_sentinel_title">This story uses a newer format</string>
+    <string name="story_sentinel_update">UPDATE</string>
     <string name="story_sound_library_clearSearch">Clear search</string>
     <string name="story_sound_library_emptyMine">Your sounds will appear here as soon as you publish a story with original audio.</string>
     <string name="story_sound_library_emptySearch">No sound matches this search.</string>

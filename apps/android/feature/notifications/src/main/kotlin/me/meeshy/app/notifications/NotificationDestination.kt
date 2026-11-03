@@ -1,6 +1,7 @@
 package me.meeshy.app.notifications
 
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.StoryViewerInitialAction
 import me.meeshy.sdk.model.game.GameTarget
 import me.meeshy.sdk.model.push.PushPayload
 import me.meeshy.sdk.model.push.PushTapDestination
@@ -34,6 +35,17 @@ public sealed interface NotificationDestination {
     public data class Story(val userId: String) : NotificationDestination
     public data class Profile(val userId: String) : NotificationDestination
 
+    /**
+     * Une story nommée par son id : le lecteur s'ouvre sur CETTE story (pas sur le plateau d'un auteur deviné), sur la
+     * feuille de [action] (commentaires, vues) et, pour un commentaire, sur le commentaire ciblé.
+     */
+    public data class StoryContent(
+        val postId: String,
+        val action: StoryViewerInitialAction?,
+        val commentId: String?,
+        val parentCommentId: String?,
+    ) : NotificationDestination
+
     /** Une NOUVELLE humeur ouvre sa page plein écran (iOS `Route.moodSpotlight`, #10814). */
     public data class Mood(val statusId: String) : NotificationDestination
 
@@ -60,6 +72,8 @@ public object NotificationDestinationResolver {
             is PushTapDestination.Post -> NotificationDestination.Post(destination.postId)
             is PushTapDestination.Reel -> NotificationDestination.Reel(destination.postId)
             is PushTapDestination.Story -> NotificationDestination.Story(destination.userId)
+            is PushTapDestination.StoryContent ->
+                NotificationDestination.StoryContent(destination.postId, destination.action, destination.commentId, destination.parentCommentId)
             is PushTapDestination.Mood -> NotificationDestination.Mood(destination.statusId)
             is PushTapDestination.Profile -> NotificationDestination.Profile(destination.userId)
             is PushTapDestination.Game -> NotificationDestination.Game(destination.target)
@@ -74,6 +88,8 @@ public object NotificationDestinationResolver {
             postId = (notification.context?.postId ?: notification.metadata?.postId).present(),
             postType = (notification.metadata?.postType ?: notification.metadata?.contentType).present(),
             senderId = notification.actor?.id.present(),
+            commentId = (notification.context?.commentId ?: notification.metadata?.commentId).present(),
+            parentCommentId = (notification.context?.parentCommentId ?: notification.metadata?.parentCommentId).present(),
         )
     }
 }
@@ -87,6 +103,7 @@ internal fun NotificationDestination.dispatch(
     onOpenProfile: (String) -> Unit,
     onOpenMood: (String) -> Unit = onOpenPost,
     onOpenGame: (GameTarget) -> Unit = {},
+    onOpenStoryContent: (NotificationDestination.StoryContent) -> Unit = { onOpenPost(it.postId) },
 ) {
     when (this) {
         is NotificationDestination.Conversation -> onOpenConversation(conversationId)
@@ -95,6 +112,7 @@ internal fun NotificationDestination.dispatch(
         is NotificationDestination.Story -> onOpenStory(userId)
         is NotificationDestination.Profile -> onOpenProfile(userId)
         is NotificationDestination.Mood -> onOpenMood(statusId)
+        is NotificationDestination.StoryContent -> onOpenStoryContent(this)
         is NotificationDestination.Game -> onOpenGame(target)
         NotificationDestination.None -> Unit
     }

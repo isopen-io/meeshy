@@ -482,7 +482,9 @@ struct ComposerSceneSurface: View {
                                    backgroundIsMedia: restBackgroundIsMedia,
                                    postText: restPostText,
                                    selection: selectionColumn,
-                                   sceneSideInset: restSceneSideInset)
+                                   sceneSideInset: restSceneSideInset,
+                                   sceneTopInset: restSceneTopInset)
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { restChromeTop = $0 }
     }
 
     /// **Le volet de description, borné à la CARTE.**
@@ -520,6 +522,18 @@ struct ComposerSceneSurface: View {
     /// laisser voir l'objet qu'il règle.
     @State private var sceneCardFrame: CGRect = .null
     @State private var restSceneSideInset: CGFloat = 0
+    @State private var restSceneTop: CGFloat = 0
+    @State private var restChromeTop: CGFloat = 0
+
+    private var restSceneTopInset: CGFloat {
+        ComposerRestChrome.sceneTopInset(sceneTop: restSceneTop, chromeTop: restChromeTop)
+    }
+
+    /// Un panneau, une feuille ou le clavier réduisent la scène au-delà du repos.
+    private var sceneIsReduced: Bool {
+        ComposerSceneLift.panelIsOpen(lowZone: lowZone, toolOptionsServed: toolOptions != nil)
+            || anchoredSheetTop != nil || editingTextId != nil
+    }
 
     /// Le cadre de la scène LIBRE, dans le même repère que la carte : le rail
     /// droit s'y borne à la hauteur de la carte (#10542).
@@ -586,6 +600,13 @@ struct ComposerSceneSurface: View {
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
         .onPreferenceChange(ComposerSceneCardWidthPreferenceKey.self) { sceneCardWidth = $0 }
         .onPreferenceChange(ComposerSceneCardFrameKey.self) { sceneCardFrame = $0 }
+        .onPreferenceChange(ComposerSceneDrawnOriginKey.self) { origine in
+            guard let origine else { return }
+            restSceneSideInset = ComposerRestChrome.restInset(measured: origine.x, sceneIsReduced: sceneIsReduced,
+                                                              current: restSceneSideInset)
+            restSceneTop = ComposerRestChrome.restInset(measured: origine.y, sceneIsReduced: sceneIsReduced,
+                                                        current: restSceneTop)
+        }
         .onPreferenceChange(ComposerFreeZoneFrameKey.self) { freeZoneFrame = $0 }
         .onPreferenceChange(ComposerLowerFloorsHeightKey.self) { lowerFloorsHeight = $0 }
         // **La bascule outil <-> scène se fait en fondu**, coupé sous
@@ -677,10 +698,14 @@ struct ComposerSceneSurface: View {
                              anchor: UnitPoint(x: 0.5, y: zone.height > 0 ? (scene.minY - zone.minY) / zone.height : 0))
                 .offset(y: zone.minY + lift.offsetY)
                 .animation(keyboard.liftAnimation(reduceMotion: reduceMotion, now: Date()), value: lift)
+                .preference(key: ComposerSceneDrawnOriginKey.self,
+                            value: CGPoint(x: ComposerRestChrome.sceneSideInset(layer: geo.frame(in: .global),
+                                                                                aspectRatio: aspectRatio,
+                                                                                scale: lift.scale),
+                                           y: ComposerRestChrome.sceneTop(layer: geo.frame(in: .global),
+                                                                          aspectRatio: aspectRatio,
+                                                                          offsetY: lift.offsetY)))
         }
-        .onGeometryChange(for: CGFloat.self) {
-            ComposerRestChrome.sceneSideInset(layer: $0.frame(in: .global), aspectRatio: aspectRatio)
-        } action: { restSceneSideInset = $0 }
         .padding(ComposerSceneRailsInsets.insets(arrangement: arrangement, showsSlideRow: showsRailsSlideRow))
         .ignoresSafeArea(.container, edges: arrangement == .rails ? [] : .bottom)
         .ignoresSafeArea(.keyboard)
@@ -1004,4 +1029,11 @@ struct ComposerSceneSurface: View {
     // `description` et `descriptionPlaceholder` restent au contrat : la porte
     // est servie par le meuble, qui possède le texte. Les retirer obligerait
     // chaque site de montage à re-prouver qu'il n'en a pas besoin.
+}
+
+/// Le coin haut-gauche de la scène DESSINÉE, dans la fenêtre : le 9:16 de la
+/// couche, à l'échelle et au décalage où la levée le pose.
+private struct ComposerSceneDrawnOriginKey: PreferenceKey {
+    static let defaultValue: CGPoint? = nil
+    static func reduce(value: inout CGPoint?, nextValue: () -> CGPoint?) { value = nextValue() ?? value }
 }

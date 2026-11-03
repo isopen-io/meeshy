@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "common.copy", "androidName": "about_copy", "status": "adopted" },
+        { "catalog": "app", "iosKey": "about.info.mediaTier", "androidName": "about_info_media_tier", "status": "adopted" },
+        { "catalog": "app", "iosKey": "about.info.mediaTier.low", "androidName": "about_media_tier_low", "status": "adopted" },
+        { "catalog": "app", "iosKey": "about.info.mediaTier.mid", "androidName": "about_media_tier_mid", "status": "adopted" },
+        { "catalog": "app", "iosKey": "about.info.mediaTier.high", "androidName": "about_media_tier_high", "status": "adopted" },
+        { "catalog": "app", "iosKey": "about.info.mediaTier.pro", "androidName": "about_media_tier_pro", "status": "adopted" },
+        { "catalog": "app", "iosKey": "about.link.about", "androidName": "about_link_about", "status": "adopted" },
+        { "catalog": "app", "iosKey": "about.link.contact", "androidName": "about_link_contact", "status": "adopted" },
+        { "catalog": "app", "iosKey": "about.link.partners", "androidName": "about_link_partners", "status": "adopted" },
+        { "catalog": "app", "iosKey": "support.help.rate", "androidName": "support_help_rate", "status": "adopted" },
+        { "catalog": "app", "iosKey": "support.a11y.opens", "androidName": "support_a11y_opens", "status": "adopted" },
+        { "androidName": "about_link_hint", "status": "android-only" }
+      ]
+    }
+  }
+}
