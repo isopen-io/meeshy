@@ -10,16 +10,16 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.net.NetworkResult
-import me.meeshy.sdk.net.api.ActiveSessionInfo
+import me.meeshy.sdk.model.session.UserSession
 import javax.inject.Inject
 
 data class ActiveSessionsUiState(
-    val sessions: List<ActiveSessionInfo> = emptyList(),
+    val sessions: List<UserSession> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val revokingIds: Set<String> = emptySet(),
     /** iOS `ActiveSessionsViewModel.pendingRevocation` : l'appareil dont la déconnexion attend un « oui ». */
-    val pendingRevocation: ActiveSessionInfo? = null,
+    val pendingRevocation: UserSession? = null,
     /** iOS `isConfirmingRevokeAll` : « Déconnecter tous les autres appareils ? » attend un « oui ». */
     val confirmingRevokeOthers: Boolean = false,
 )
@@ -52,7 +52,7 @@ class ActiveSessionsViewModel @Inject constructor(
     }
 
     /** Un toucher sur « Déconnecter » ne déconnecte rien : il demande confirmation (iOS). */
-    fun requestRevoke(session: ActiveSessionInfo) {
+    fun requestRevoke(session: UserSession) {
         _state.update { it.copy(pendingRevocation = session) }
     }
 

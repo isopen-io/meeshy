@@ -82,7 +82,7 @@ class SignupViewModelTest {
         override suspend fun requestMagicLink(body: me.meeshy.sdk.net.api.MagicLinkRequestBody) =
             ApiResponse<me.meeshy.sdk.net.api.MagicLinkRequestData>(success = false)
         override suspend fun listSessions() =
-            ApiResponse<me.meeshy.sdk.net.api.SessionsListData>(success = false)
+            ApiResponse<me.meeshy.sdk.model.session.UserSessionsPayload>(success = false)
         override suspend fun revokeSession(sessionId: String) = ApiResponse<Unit>(success = true)
         override suspend fun revokeOtherSessions() = ApiResponse<Unit>(success = true)
         override suspend fun validateMagicLink(body: me.meeshy.sdk.net.api.MagicLinkValidateRequest) =

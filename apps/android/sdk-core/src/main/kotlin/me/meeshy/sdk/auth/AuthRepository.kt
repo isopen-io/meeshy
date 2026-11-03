@@ -352,7 +352,7 @@ class AuthRepository @Inject constructor(
         me.meeshy.sdk.net.apiCallUnit { authApi.cancelTwoFactorSetup() }
 
     /** Les sessions actives du compte (la courante marquee par le serveur). */
-    suspend fun listSessions(): NetworkResult<me.meeshy.sdk.net.api.SessionsListData> =
+    suspend fun listSessions(): NetworkResult<me.meeshy.sdk.model.session.UserSessionsPayload> =
         apiCall { authApi.listSessions() }
 
     /** Revoque UNE session (jamais la courante cote UI). */

@@ -13,8 +13,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.net.NetworkResult
-import me.meeshy.sdk.net.api.ActiveSessionInfo
-import me.meeshy.sdk.net.api.SessionsListData
+import me.meeshy.sdk.model.session.UserSession
+import me.meeshy.sdk.model.session.UserSessionsPayload
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -24,11 +24,11 @@ import org.junit.Test
 class ActiveSessionsConfirmationTest {
 
     private val dispatcher = StandardTestDispatcher()
-    private val current = ActiveSessionInfo(id = "me", isCurrentSession = true)
-    private val tablet = ActiveSessionInfo(id = "tablet", isCurrentSession = false)
+    private val current = UserSession(id = "me", isCurrentSession = true)
+    private val tablet = UserSession(id = "tablet", isCurrentSession = false)
 
     private fun repository(): AuthRepository = mockk<AuthRepository>().also { repo ->
-        coEvery { repo.listSessions() } returns NetworkResult.Success(SessionsListData(sessions = listOf(current, tablet)))
+        coEvery { repo.listSessions() } returns NetworkResult.Success(UserSessionsPayload(sessions = listOf(current, tablet)))
         coEvery { repo.revokeSession(any()) } returns NetworkResult.Success(Unit)
         coEvery { repo.revokeOtherSessions() } returns NetworkResult.Success(Unit)
     }
