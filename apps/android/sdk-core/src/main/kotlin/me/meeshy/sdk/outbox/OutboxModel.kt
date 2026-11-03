@@ -55,6 +55,21 @@ public enum class OutboxKind {
 
     /** Une réaction de story posée hors ligne : l'emoji affiché reste vrai, il part au retour du réseau. */
     REACT_STORY,
+
+    /** « Supprimer pour moi » (#15415) : le message disparaît chez moi seul, le rejeu est sans effet de plus. */
+    HIDE_FOR_ME,
+
+    /** Le geste inverse de [HIDE_FOR_ME] : il s'annule avec lui s'ils sont encore en file. */
+    RESTORE_FOR_ME,
+
+    /** Une pièce retirée d'un message déjà accusé : le 404 d'un rejeu vaut succès. */
+    REMOVE_ATTACHMENT,
+
+    /** Un message retiré par la modération avec son motif : le 404 d'un rejeu vaut succès. */
+    MODERATION_DELETE,
+
+    /** L'accusé de RÉCEPTION de toute une conversation : informatif, jamais compté dans la pastille de synchronisation. */
+    MARK_RECEIVED,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -195,6 +210,14 @@ public object OutboxLaneMap {
         OutboxKind.CONSUME_AFTER_READ,
         OutboxKind.CONSUME_VIEW_ONCE,
         -> OutboxLaneAssignment.Shared(OutboxLanes.CONSUMPTION)
+
+        OutboxKind.HIDE_FOR_ME,
+        OutboxKind.RESTORE_FOR_ME,
+        -> OutboxLaneAssignment.Shared(OutboxChatLanes.PERSONAL_HIDING)
+        OutboxKind.REMOVE_ATTACHMENT,
+        OutboxKind.MODERATION_DELETE,
+        -> OutboxLaneAssignment.Shared(OutboxChatLanes.CONTENT_REMOVAL)
+        OutboxKind.MARK_RECEIVED -> OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT)
     }
 
     /**
@@ -304,6 +327,10 @@ public data class CommentPayload(
     val content: String,
     val parentId: String? = null,
     val originalLanguage: String? = null,
+    /** Medias already uploaded under the `comment` context that leave with the comment (#15448). Absent on old rows. */
+    val attachmentIds: List<String>? = null,
+    val effectFlags: Int? = null,
+    val location: me.meeshy.sdk.model.SharedPlace? = null,
 )
 
 /**

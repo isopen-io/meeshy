@@ -9,7 +9,7 @@ import javax.inject.Singleton
 /**
  * Process-level record of the conversation currently on screen (feature-parity §M).
  *
- * The in-app notification surfaces ([NotificationBannerViewModel] / [NotificationToastViewModel])
+ * The in-app notification surfaces ([NotificationBannerViewModel])
  * track the active thread inside their own ViewModel, but a background component — the FCM push
  * service — has no ViewModel to read. This singleton is the seam that carries that one nav truth
  * across the process boundary so a FOREGROUND push for the thread the reader is already looking at

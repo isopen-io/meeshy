@@ -26,7 +26,7 @@ class OptimisticMessageStagerTest {
     }
 
     private fun coordinator(harness: MessageCollaboratorHarness, sink: SendPreviewSink?, outbox: OutboxRepository = harness.outbox) =
-        MessageSendCoordinator(harness.database, harness.database.messageDao(), outbox, harness.clock, previews = sink)
+        MessageSendCoordinator(harness.database, harness.database.messageDao(), outbox, harness.clock, listPreviews = sink)
 
     @Test
     fun `a media bubble shows its local paths and its protection before the upload ends`() = runHarnessTest { harness ->

@@ -21,6 +21,8 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.FeedGeneration
 import me.meeshy.sdk.model.FeedMergeLaws
 import me.meeshy.sdk.model.PostReactionSummaryLaw
+import me.meeshy.sdk.model.PostReactionSyncLaw
+import me.meeshy.sdk.model.SocketPostReactionSyncData
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.DiscoverabilityPrecision
@@ -853,6 +855,10 @@ class PostRepository @Inject constructor(
     suspend fun applyReactionCount(postId: String, emoji: String, count: Int): Boolean =
         fence.commitOrWrite(fence?.currentTicket()) { foldIntoCache(postId) { PostReactionSummaryLaw.applying(it, emoji, count) } } ?: false
 
+    /** L'agrégat complet rendu par `post:reaction-request-sync` remplace le résumé de la ligne du fil ; `false` : rien à changer. */
+    suspend fun applyReactionSync(sync: SocketPostReactionSyncData): Boolean =
+        fence.commitOrWrite(fence?.currentTicket()) { foldIntoCache(sync.postId) { PostReactionSyncLaw.applying(it, sync) } } ?: false
+
     /**
      * On-demand translation for a post the caller already holds (the post-detail
      * surface owns its post outside the feed cache): blocking-translates [post]'s
@@ -939,14 +945,22 @@ class PostRepository @Inject constructor(
      * compteur du post, s'il est dans le cache du fil, monte tout de suite. [parentId] `null` = commentaire racine.
      * Rend le `cmid` de la ligne, ou `null` si la file a refusé l'écriture (compte clos entre-temps).
      */
-    suspend fun queueComment(postId: String, content: String, parentId: String? = null, originalLanguage: String? = null): String? {
+    suspend fun queueComment(
+        postId: String,
+        content: String,
+        parentId: String? = null,
+        originalLanguage: String? = null,
+        attachmentIds: List<String>? = null,
+        effectFlags: Int? = null,
+        location: SharedPlace? = null,
+    ): String? {
         val ticket = fence?.currentTicket()
         val cmid = outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.CREATE_COMMENT,
                 lane = OutboxLanes.COMMENT,
                 targetId = postId,
-                payload = MeeshyApi.json.encodeToString(CommentPayload.serializer(), CommentPayload(content, parentId, originalLanguage)),
+                payload = MeeshyApi.json.encodeToString(CommentPayload.serializer(), CommentPayload(content, parentId, originalLanguage, attachmentIds?.takeIf { it.isNotEmpty() }, effectFlags, location)),
             ),
             ticket,
         ) ?: return null

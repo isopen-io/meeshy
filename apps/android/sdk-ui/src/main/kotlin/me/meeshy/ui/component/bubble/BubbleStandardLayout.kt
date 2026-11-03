@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +39,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.meeshy.sdk.model.RetryBarState
 import me.meeshy.sdk.model.BubbleSkinLaw
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.ui.R
@@ -266,10 +268,10 @@ private fun BubbleBody(
 }
 
 /** Largeur de la bande de renvoi d'un envoi échoué (iOS `retryBandWidth`). */
-private val RetryBandWidth = 34.dp
+private val RetryBandWidth = RetryBarState.BAND_WIDTH_DP.dp
 
 /**
- * Envoi échoué, port d'iOS `BubbleFailedRetryBar` : une bande orange de 34 dp INTÉGRÉE au bord
+ * Envoi échoué, port d'iOS `BubbleFailedRetryBar` : une bande orange de 32 dp INTÉGRÉE au bord
  * droit de la bulle (rognée par son coin arrondi), le contenu décalé d'autant pour que l'heure
  * reste lisible ; un tap renvoie. Refusé pour le lieu d'un fichier (#13550) ou média perdu (#13554), la bulle le dit et le tap la retire.
  * Sans échec, le contenu passe tel quel.
@@ -286,7 +288,6 @@ private fun BubbleFailedRetryEdge(
         content()
         return
     }
-    val label = BubbleFailedTap.label(failure)
     Box {
         Column(modifier = Modifier.padding(end = RetryBandWidth)) {
             content()
@@ -298,24 +299,11 @@ private fun BubbleFailedRetryEdge(
                 )
             }
         }
-        Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.CenterEnd) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .width(RetryBandWidth)
-                .fillMaxHeight()
-                .background(MeeshyPalette.Warning)
-                .let { base -> if (onRetry == null) base else base.clickable(onClickLabel = label, onClick = onRetry) }
-                .semantics { contentDescription = label },
-        ) {
-            Icon(
-                imageVector = BubbleFailedTap.icon(failure),
-                contentDescription = null,
-                tint = MeeshyPalette.White,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-        }
+        BubbleFailedRetryBar(
+            failure = failure,
+            onRetry = onRetry,
+            modifier = Modifier.matchParentSize().wrapContentSize(Alignment.CenterEnd),
+        )
     }
 }
 

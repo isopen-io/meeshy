@@ -107,8 +107,13 @@
     <string name="bubble_message_deleted">تم حذف الرسالة</string>
     <string name="bubble_meta_pinned_a11y">رسالة مثبّتة</string>
     <string name="bubble_protection_after_read">يختفي بعد القراءة</string>
+    <string name="bubble_reply_author_hint">يعرض ملف الكاتب المقتبس</string>
+    <string name="bubble_reply_media">الوسائط</string>
+    <string name="bubble_reply_mood">المزاج</string>
+    <string name="bubble_reply_open_media">فتح الوسائط المقتبسة</string>
     <string name="bubble_reply_photo">صورة</string>
     <string name="bubble_reply_story">قصة</string>
+    <string name="bubble_reply_you">أنت</string>
     <string name="bubble_status_delivered">تم التسليم</string>
     <string name="bubble_status_failed">فشل</string>
     <string name="bubble_status_pending">قيد الانتظار</string>
@@ -120,6 +125,10 @@
     <string name="bubble_story_citation_unavailable">القصة غير متاحة</string>
     <string name="bubble_translated">مترجم</string>
     <string name="capture_microphone_denied">تم رفض الميكروفون — سيكون الفيديو صامتًا. اضغط لفتح الإعدادات</string>
+    <string name="code_viewer_load_error">تعذّر تحميل الملف</string>
+    <string name="code_viewer_loading">جارٍ التحميل...</string>
+    <string name="code_viewer_loading_file">جارٍ تحميل الملف...</string>
+    <string name="code_viewer_more_lines">%1$d أسطر إضافية</string>
     <string name="common_cancel">إلغاء</string>
     <string name="common_clearSearch">مسح البحث</string>
     <string name="common_close">إغلاق</string>

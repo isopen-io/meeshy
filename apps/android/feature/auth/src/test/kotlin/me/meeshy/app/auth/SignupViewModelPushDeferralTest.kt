@@ -46,6 +46,8 @@ class SignupViewModelPushDeferralTest {
                 override fun regionTag(): String = "US"
             },
             store,
+            provenSessions = provenOpener(),
+            celebration = arrivalCelebration(),
         ).apply {
             onDisplayNameChange("Ada Lovelace")
             onEmailChange("ada@meeshy.me")

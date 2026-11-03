@@ -86,6 +86,9 @@ internal fun StoryCanvasSurface(
     isDrawingActive: Boolean,
     drawColorHex: String,
     drawWidthDesign: Double,
+    drawTool: me.meeshy.sdk.model.StrokeTool = me.meeshy.sdk.model.StrokeTool.PEN,
+    drawSmoothing: me.meeshy.sdk.model.StrokeSmoothing = me.meeshy.sdk.model.StrokeSmoothing.CURVE,
+    onStrokeErased: (List<StoryDrawingStrokePoint>) -> Unit = {},
     onStrokeCaptured: (List<StoryDrawingStrokePoint>) -> Unit,
     onTransform: (Float, Float, Float, Float, Float) -> Unit,
     onElementTap: (String) -> Unit,
@@ -312,7 +315,20 @@ internal fun StoryCanvasSurface(
                 isCapturing = isDrawingActive,
                 activeColorHex = drawColorHex,
                 activeWidthDesign = drawWidthDesign,
+                activeTool = drawTool,
+                activeSmoothing = drawSmoothing,
                 onStrokeCaptured = onStrokeCaptured,
+                onErase = onStrokeErased,
+                onViewportPinch = onViewportScale?.let { settle ->
+                    { factor: Float, ended: Boolean ->
+                        if (ended) {
+                            pinchScale = 1f
+                            settle(CanvasViewportZoomPolicy.settledScale(settledViewport, factor))
+                        } else {
+                            pinchScale = factor
+                        }
+                    }
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         }

@@ -176,6 +176,38 @@ object FeedMediaGallery {
     }
 
     /**
+     * La galerie des visuels d'un post CITÉ ([embed]) : ses images et vidéos dans l'ordre serveur, attribuées à l'auteur CITÉ
+     * (jamais au post extérieur). [index] est le rang du média touché parmi ces visuels.
+     */
+    fun ofQuotedVisuals(embed: RepostEmbedPresentation, index: Int): FeedGallery {
+        val visuals = FeedCardMediaRouting.visuals(embed.media)
+        if (visuals.isEmpty()) return EMPTY
+        val carrierText = embed.content.takeIf { visuals.size == 1 }
+        val authorName = embed.authorName?.trim()?.ifBlank { null }
+        val createdAtIso = embed.createdAtIso?.trim()?.ifBlank { null }
+        val pages = visuals.map { item ->
+            FeedGalleryPage(
+                url = item.url,
+                thumbnailUrl = item.thumbnailUrl,
+                caption = mediaCaption(own = item.caption, carrierText = carrierText),
+                authorName = authorName,
+                createdAtIso = createdAtIso,
+                alt = item.alt,
+                mediaId = item.id,
+                isVideo = item.type == FeedMediaType.VIDEO,
+                durationMillis = item.durationSeconds?.let { it * 1000 },
+            )
+        }
+        return FeedGallery(
+            pages = pages,
+            startIndex = index.coerceIn(0, pages.lastIndex),
+            postId = embed.id,
+            authorId = embed.authorId,
+            authorAvatarUrl = embed.authorAvatarUrl,
+        )
+    }
+
+    /**
      * La galerie sociale de [gallery] : ses images (légendes déjà servies par le Prisme, auteur par page) suivies des médias
      * des [comments] du post — la composition commune de `SocialMediaGalleryPresentation`, que le fil rejoint avec ce qu'il tient.
      */

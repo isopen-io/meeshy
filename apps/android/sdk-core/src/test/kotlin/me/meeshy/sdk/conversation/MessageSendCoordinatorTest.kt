@@ -5,6 +5,9 @@ import java.time.Instant
 import kotlinx.serialization.decodeFromString
 import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.media.MediaLoss
+import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.PendingMediaPreview
+import me.meeshy.sdk.media.PendingMediaPreviewing
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
@@ -355,5 +358,68 @@ class MessageSendCoordinatorTest {
 
         assertThat(harness.database.messageDao().find(cid)).isNull()
         assertThat(harness.outbox.row(cid)).isNull()
+    }
+
+    private class RecordingPreviews : PendingMediaPreviewing {
+        val released = mutableListOf<List<ApiMessageAttachment>>()
+        override suspend fun keep(cmid: String, thumbnailPath: String?, effects: MessageEffects): String? = null
+        override suspend fun render(cmid: String, item: MediaUploadItem, effects: MessageEffects): PendingMediaPreview? = null
+        override suspend fun release(attachments: List<ApiMessageAttachment>) {
+            released += attachments
+        }
+    }
+
+    private val previewed = ApiMessageAttachment(
+        id = "cmid_up",
+        mimeType = "image/jpeg",
+        thumbnailUrl = "file:///cache/pending-previews/cmid_up.jpg",
+    )
+
+    @Test
+    fun `the server ACK releases the local previews of the bubble it replaces`() = runHarnessTest { harness ->
+        val previews = RecordingPreviews()
+        val coordinator = MessageSendCoordinator(harness.database, harness.database.messageDao(), harness.outbox, harness.clock, previews = previews)
+        val cid = coordinator.sendOptimistic("c1", "", "fr", sender, messageType = "image", attachmentUploadCmids = listOf("cmid_up"), attachments = listOf(previewed))
+
+        coordinator.reconcileSent(cid, ApiMessage(id = "srv1", conversationId = "c1", createdAt = "2026-06-01T10:00:00Z", clientMessageId = cid))
+
+        assertThat(previews.released).containsExactly(listOf(previewed))
+    }
+
+    @Test
+    fun `cancelling a pending send releases its previews with its bubble`() = runHarnessTest { harness ->
+        val previews = RecordingPreviews()
+        val coordinator = MessageSendCoordinator(harness.database, harness.database.messageDao(), harness.outbox, harness.clock, previews = previews)
+        val cid = coordinator.sendOptimistic("c1", "", "fr", sender, messageType = "image", attachmentUploadCmids = listOf("cmid_up"), attachments = listOf(previewed))
+
+        coordinator.cancelPendingSend(cid)
+
+        assertThat(harness.database.messageDao().find(cid)).isNull()
+        assertThat(previews.released).containsExactly(listOf(previewed))
+    }
+
+    @Test
+    fun `clearing a failed send releases its previews with its bubble`() = runHarnessTest { harness ->
+        val previews = RecordingPreviews()
+        val coordinator = MessageSendCoordinator(harness.database, harness.database.messageDao(), harness.outbox, harness.clock, previews = previews)
+        val cid = coordinator.sendOptimistic("c1", "", "fr", sender, messageType = "image", attachmentUploadCmids = listOf("cmid_up"), attachments = listOf(previewed))
+        coordinator.markSendFailed(cid)
+
+        coordinator.clearSendMessageRow(cid)
+
+        assertThat(previews.released).containsExactly(listOf(previewed))
+    }
+
+    @Test
+    fun `a bubble removed because its media was lost releases its previews`() = runHarnessTest { harness ->
+        val previews = RecordingPreviews()
+        val coordinator = MessageSendCoordinator(harness.database, harness.database.messageDao(), harness.outbox, harness.clock, previews = previews)
+        val cid = coordinator.sendOptimistic("c1", "", "fr", sender, messageType = "image", attachmentUploadCmids = listOf("cmid_up"), attachments = listOf(previewed))
+        harness.outbox.markExhausted(cid, MediaLoss.REASON)
+        coordinator.markSendFailed(cid, MediaLoss.REASON)
+
+        coordinator.retrySend(cid)
+
+        assertThat(previews.released).containsExactly(listOf(previewed))
     }
 }

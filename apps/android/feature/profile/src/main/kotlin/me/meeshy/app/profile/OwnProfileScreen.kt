@@ -47,6 +47,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import me.meeshy.sdk.model.appearance.AvatarRingDesign
+import me.meeshy.sdk.model.profile.ProfileDecorLayersPolicy
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -102,7 +104,9 @@ fun OwnProfileScreen(
     onMoodTap: (() -> Unit)? = null,
     viewModel: OwnProfileViewModel = hiltViewModel(),
     uploadViewModel: AvatarBannerUploadViewModel = hiltViewModel(),
+    decorViewModel: ProfileBannerViewModel = hiltViewModel(),
 ) {
+    val decorCatalog by decorViewModel.catalog.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val uploadState by uploadViewModel.state.collectAsStateWithLifecycle()
     val onEvent = viewModel::onEvent
@@ -161,6 +165,7 @@ fun OwnProfileScreen(
                 onMoodTap = onMoodTap,
                 onPickLanguage = { pickingSlot = it },
                 onEvent = onEvent,
+                ring = { user -> decorCatalog?.let { ProfileDecorLayersPolicy.resolve(user.banner, user.servedDecor, it, blockedByTarget = false).ring } },
                 banner = { ProfileBanner(user = it, modifier = Modifier.fillMaxSize()) },
             )
         }
@@ -280,6 +285,7 @@ internal fun OwnProfileBody(
     onPickLanguage: (OwnProfileLanguageSlot) -> Unit,
     onEvent: (OwnProfileUiEvent) -> Unit,
     banner: @Composable BoxScope.(MeeshyUser) -> Unit,
+    ring: (MeeshyUser) -> AvatarRingDesign? = { null },
 ) {
     Column(
         modifier = Modifier
@@ -322,6 +328,7 @@ internal fun OwnProfileBody(
                 onPickAvatar = onPickAvatar,
                 onOpenImage = onOpenImage,
                 onMoodTap = onMoodTap,
+                ring = ring(user),
                 banner = { banner(this, user) },
             )
             OwnProfileSectionsColumn(

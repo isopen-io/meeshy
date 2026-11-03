@@ -230,14 +230,8 @@ nonisolated enum StoryQueueThumbnail {
         if reference.mediaType == "video" {
             return try? await StoryMediaDecoder.firstFrame(of: file, maxDimension: maxPixel)
         }
-        let options = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithURL(file as CFURL, options) else { return nil }
-        let thumbnailOptions = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
-        ] as CFDictionary
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions).map(UIImage.init(cgImage:))
+        return ImageDownsampler.thumbnail(fileURL: file, maxPixelSize: maxPixel, decodeImmediately: true)
+            .map(UIImage.init(cgImage:))
     }
 }
 

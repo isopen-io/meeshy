@@ -237,6 +237,8 @@
     <string name="conversation_appearance_sheet_title">Hintergrund und Akzent</string>
     <string name="conversation_appearance_signature">Signature</string>
     <string name="conversation_encryption_switched_enabled">Ende-zu-Ende-Verschlüsselung aktiviert: Neue Nachrichten werden auf deinen Geräten verschlüsselt.</string>
+    <string name="conversation_info_created_on">Erstellt am %1$s</string>
+    <string name="conversation_info_muted">Mitteilungen deaktiviert</string>
     <string name="conversation_info_pinned_see_all">Alle %1$d angehefteten Nachrichten ansehen</string>
     <string name="conversation_info_tab_media">Medien</string>
     <string name="conversation_info_tab_members">Mitglieder</string>

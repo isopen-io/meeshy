@@ -4103,13 +4103,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         coVerify {
-            h.repo.applyReadReceipt(
-                conversationId = "c1",
-                ownSenderId = "me",
-                deliveredCount = 2,
-                readCount = 1,
-                frontierIso = "2026-06-12T10:00:00Z",
-            )
+            h.repo.applyReadStatusSummary("c1", ReadStatusSummary(totalMembers = 3, deliveredCount = 2, readCount = 1), "me")
         }
     }
 
@@ -4127,7 +4121,7 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.repo.applyReadReceipt(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { h.repo.applyReadStatusSummary(any(), any(), any()) }
     }
 
     @Test

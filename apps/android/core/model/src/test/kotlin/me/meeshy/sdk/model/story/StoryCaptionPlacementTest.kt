@@ -46,4 +46,17 @@ class StoryCaptionPlacementTest {
         assertThat(StoryCaptionPlacement.SIDE_INSET_DP).isEqualTo(20f)
         assertThat(StoryCaptionPlacement.springStiffness()).isWithin(0.5f).of(273.3f)
     }
+
+    @Test
+    fun `la legende commence au-dessus du composeur deplie puis de la bulle repliee`() {
+        val expanded = StoryCaptionPlacement.bottomInset(composerBlockHeight = 120f, composerBottomPadding = 10f, isComposerShown = true)
+        val folded = StoryCaptionPlacement.bottomInset(composerBlockHeight = 48f, composerBottomPadding = 10f, isComposerShown = true)
+        assertThat(expanded).isEqualTo(130f)
+        assertThat(folded).isEqualTo(58f)
+    }
+
+    @Test
+    fun `chrome masque le composeur sort et la legende redescend`() {
+        assertThat(StoryCaptionPlacement.bottomInset(composerBlockHeight = 120f, composerBottomPadding = 10f, isComposerShown = false)).isEqualTo(10f)
+    }
 }

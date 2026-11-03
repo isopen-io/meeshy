@@ -168,6 +168,9 @@
     <string name="mood_spotlight_reply_sent">تم إرسال الرد</string>
     <string name="mood_spotlight_unavailable">لم يعد هذا المزاج متاحًا</string>
     <string name="nearby_back">رجوع</string>
+    <string name="nearby_denied_action">فتح الإعدادات</string>
+    <string name="nearby_denied_detail">لا يمكن لـ Meeshy الوصول إلى موقعك. اسمح بذلك من الإعدادات، أو حرّك الخريطة يدويًا.</string>
+    <string name="nearby_denied_title">الموقع غير مسموح به</string>
     <string name="nearby_retry">إعادة المحاولة</string>
     <string name="nearby_title">بالقرب مني</string>
     <string name="post_bookmark_removed">تمت الإزالة من المفضلة</string>
@@ -214,8 +217,23 @@
         <item quantity="other">عرض %1$d رد</item>
     </plurals>
     <string name="post_detail_back">رجوع</string>
+    <string name="post_detail_media_image">صورة مشارَكة</string>
+    <string name="post_detail_media_more">عرض الوسائط الـ %1$d</string>
+    <string name="post_detail_media_open_hint">فتح بملء الشاشة</string>
+    <string name="post_detail_media_video">فيديو مشارَك</string>
     <string name="post_detail_title">منشور</string>
     <string name="post_detail_viewers">المشاهدات</string>
+    <string name="profile_posts_empty">لا توجد منشورات</string>
+    <string name="profile_posts_empty_filter_subtitle">المس المربع مرة أخرى لعرض كل شيء</string>
+    <string name="profile_posts_empty_posts">لا توجد منشورات</string>
+    <string name="profile_posts_empty_reels">لا توجد مقاطع</string>
+    <string name="profile_posts_empty_subtitle">ستظهر المنشورات هنا</string>
+    <string name="profile_posts_end_of_content">لقد شاهدت كل شيء</string>
+    <string name="profile_posts_first_published_at">تم نشر أول محتوى في %1$s</string>
+    <string name="profile_posts_load_error">خطأ أثناء تحميل المنشورات</string>
+    <string name="profile_posts_stat_posts">المنشورات</string>
+    <string name="profile_posts_stat_reels">المقاطع</string>
+    <string name="profile_posts_stat_stories">القصص</string>
     <string name="status_bubble_republish">إعادة النشر</string>
     <string name="status_bubble_via">عبر @%1$s</string>
     <string name="status_composer_bare_add">إضافة كلمة</string>

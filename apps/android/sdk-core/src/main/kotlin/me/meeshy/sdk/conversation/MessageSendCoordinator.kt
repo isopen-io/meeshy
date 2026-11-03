@@ -12,6 +12,7 @@ import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaAdoption
+import me.meeshy.sdk.media.PendingMediaPreviewing
 import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.model.ConversationWriteRestriction
 import me.meeshy.sdk.media.MediaLoss
@@ -51,10 +52,12 @@ internal class MessageSendCoordinator(
     private val regime: EndToEndRegimeKeeper? = null,
     /** #14890 — à l'accusé, le fichier local d'un média envoyé rejoint le cache typé sous son adresse canonique. */
     private val adoption: MediaAdoption? = null,
+    /** #15104 — l'aperçu local d'un média en attente part avec sa bulle : accusé, annulation, retrait. */
+    private val previews: PendingMediaPreviewing? = null,
     /** L'aperçu de la liste suit mon envoi : posé à l'envoi optimiste, recalculé quand la bulle est retirée. */
-    previews: SendPreviewSink? = null,
+    listPreviews: SendPreviewSink? = null,
 ) {
-    private val stager = OptimisticMessageStager(database, messageDao, previews)
+    private val stager = OptimisticMessageStager(database, messageDao, listPreviews)
 
     /**
      * Optimistic send: the message appears instantly as a `SENDING` bubble backed by Room, and a
@@ -190,7 +193,7 @@ internal class MessageSendCoordinator(
      */
     suspend fun reconcileSent(cmid: String, serverMessage: ApiMessage) {
         val now = clock.nowMillis()
-        val optimisticAttachments = adoption?.let { optimisticAttachmentsOf(cmid) }.orEmpty()
+        val optimisticAttachments = if (adoption != null || previews != null) optimisticAttachmentsOf(cmid) else emptyList()
         database.withTransaction {
             messageDao.deleteByIds(listOf(cmid))
             messageDao.upsertAll(listOf(MessageEntityFactory.cached(serverMessage, now)))
@@ -198,6 +201,14 @@ internal class MessageSendCoordinator(
         }
         regime?.learnFromServed(listOf(serverMessage))
         adoption?.adopt(optimisticAttachments, serverMessage.attachments)
+        previews?.release(optimisticAttachments)
+    }
+
+    /** Retire la bulle optimiste [cmid] et, avec elle, les aperçus locaux de ses médias. */
+    private suspend fun dropBubble(cmid: String) {
+        val optimisticAttachments = previews?.let { optimisticAttachmentsOf(cmid) }.orEmpty()
+        stager.withdraw(cmid)
+        previews?.release(optimisticAttachments)
     }
 
     private suspend fun optimisticAttachmentsOf(cmid: String): List<ApiMessageAttachment> =
@@ -230,7 +241,7 @@ internal class MessageSendCoordinator(
         val row = messageDao.find(cmid) ?: return
         if (isDefinitive(row.lastError)) {
             outboxRepository.discard(cmid)
-            stager.withdraw(cmid)
+            dropBubble(cmid)
             return
         }
         messageDao.updateSendState(cmid, LocalSendState.SENDING.name)
@@ -281,14 +292,14 @@ internal class MessageSendCoordinator(
      * parti (en vol) n'est pas annulé — sa bulle reste.
      */
     suspend fun cancelPendingSend(cmid: String) {
-        if (outboxRepository.cancelPendingSend(cmid)) stager.withdraw(cmid)
+        if (outboxRepository.cancelPendingSend(cmid)) dropBubble(cmid)
     }
 
     /** Retire la ligne d'outbox d'un envoi échoué (quel que soit son état sauf en vol) et sa bulle optimiste. */
     suspend fun clearSendMessageRow(cmid: String) {
         if (outboxRepository.row(cmid)?.state == OutboxState.INFLIGHT.name) return
         outboxRepository.clearSendMessageRow(cmid)
-        stager.withdraw(cmid)
+        dropBubble(cmid)
     }
 
     private fun isDefinitive(reason: String?): Boolean =

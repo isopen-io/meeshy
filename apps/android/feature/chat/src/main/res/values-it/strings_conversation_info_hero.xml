@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_type_direct">Diretta</string>
+    <string name="conversation_type_group">Gruppo</string>
+    <string name="conversation_type_public">Pubblica</string>
+    <string name="conversation_type_global">Globale</string>
+    <string name="conversation_type_community">Community</string>
+    <string name="conversation_type_channel">Canale</string>
+    <string name="conversation_type_broadcast">Broadcast</string>
+    <string name="conversation_type_bot">Bot</string>
+</resources>

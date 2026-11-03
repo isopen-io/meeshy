@@ -2667,8 +2667,8 @@ jobs:
     if: always()
     steps:
       - name: Checkout (le script du verdict seul)
-        if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
         uses: actions/checkout@v7
+        if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
         with:
           sparse-checkout: scripts/ci
           fetch-depth: 1

@@ -132,7 +132,7 @@ internal fun ReelPage(
         isProtected = false,
         player = player,
         fallback = PipAspect.PORTRAIT,
-        active = isElected && stage.showsVideoSurface,
+        active = isEngaged && stage.showsVideoSurface,
         onWindowClosed = { paused = true },
     )
     val playPauseFade = rememberFullscreenPlayPauseFade(isPlaying)
@@ -174,7 +174,7 @@ internal fun ReelPage(
                 // La scène du réel : le rendu du lecteur de stories, rejoué en boucle, son compris.
                 StoryScenePlayer(
                     slide = scene,
-                    playing = isPlaying && loadsMedia,
+                    playing = isPlaying && isEngaged && loadsMedia,
                     muted = muted,
                     loads = loadsMedia,
                     rewindWhenIdle = !isElected,
@@ -216,12 +216,13 @@ internal fun ReelPage(
                 } else {
                     ReelVideoSurface(
                         mediaUrl = playable,
-                        isActive = isElected,
+                        // Un son ne s'engage qu'une fois le pager posé ; la vidéo, elle, joue dès le geste (lecteur déjà attaché).
+                        isActive = isElected && isEngaged,
                         modifier = Modifier.fillMaxSize(),
                         muted = muted,
                         showsPicture = false,
                         loads = loadsMedia,
-                        paused = !isPlaying,
+                        paused = !(isPlaying && isEngaged),
                         onAudioFocusLost = { focusLost = true },
                         onAudioFocusGained = { focusLost = false },
                         onAudioFocusLostForGood = { paused = true },

@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
@@ -92,11 +92,28 @@ class UserSessionsRepositoryTest {
 
         val seen = mutableListOf<CacheResult<UserSessionsPayload>>()
         backgroundScope.launch { rig.repository.stream().collect { seen += it } }
-        advanceUntilIdle()
+        runCurrent()
 
         assertThat((seen.single() as CacheResult.Stale).value).isEqualTo(served)
         assertThat(rig.store.observe().first()).isEqualTo(served)
         assertThat(rig.repository.syncFailure.value).isNotNull()
+    }
+
+    @Test
+    fun `a later successful revalidation clears the failure banner`() = runTest {
+        val rig = rig()
+        rig.store.save(served, rig.clock.now - 10 * 60_000L)
+        coEvery { rig.api.listSessions() } throws IOException("offline")
+        backgroundScope.launch { rig.repository.stream().collect { } }
+        runCurrent()
+        assertThat(rig.repository.syncFailure.value).isNotNull()
+
+        coEvery { rig.api.listSessions() } returns ApiResponse(success = true, data = served)
+        rig.clock.now += 10 * 60_000L
+        rig.store.save(served, rig.clock.now - 10 * 60_000L)
+        runCurrent()
+
+        assertThat(rig.repository.syncFailure.value).isNull()
     }
 
     @Test

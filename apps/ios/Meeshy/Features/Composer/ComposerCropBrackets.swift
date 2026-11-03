@@ -112,3 +112,67 @@ struct ComposerCropPresetBar: View {
         .frame(height: ComposerEditScene.presetsHeight)
     }
 }
+
+/// **« Annuler » du recadrage** (#15355), en tête des formats : il rend le
+/// cadre d'avant l'entrée dans Recadrer en un geste. Une flèche de retour, pas
+/// la croix : la croix abandonne toute la retouche.
+struct ComposerCropCancelButton: View {
+    static let minSide: CGFloat = MeeshyControlSize.tapTarget
+
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: MeeshySpacing.xs) {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                Text(ComposerCaptureCopy.cancelEdit)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, MeeshySpacing.md)
+            .frame(minWidth: Self.minSide, minHeight: Self.minSide)
+            .adaptiveLiquidGlass(in: Capsule(), interactive: true)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(ComposerCaptureCopy.cancelCrop)
+    }
+}
+
+/// **La prise hors du cadre, voilée** (#15355) : posée SOUS l'image du cadre,
+/// qui la recouvre exactement — seule la part qui dépasse se voit, assombrie.
+/// Elle lit la même source, le même look sans son cadre et le même cadrage que
+/// le cadre ; elle ne peint que ce qui tombe à l'écran.
+struct ComposerCropOverflow: View {
+    @ObservedObject var session: ComposerCaptureSession
+    let frame: CGRect
+    let screen: CGSize
+
+    var body: some View {
+        if let source = session.editSource, let pose = placement {
+            ComposerLiveLookSurface(look: session.look.withoutFrame, person: session.lookPerson,
+                                    date: session.lookDate, framing: pose.framing, source: source,
+                                    canvas: ComposerLookPainter.previewCanvas(
+                                        aspect: ComposerLookPainter.aspect(of: pose.rect.size)),
+                                    fps: ComposerCaptureSurfaceRule.editFPS(session.thermalBudget))
+                .overlay(Color.black.opacity(ComposerCropOverflowLayout.veil))
+                .frame(width: pose.rect.width, height: pose.rect.height)
+                .position(x: pose.rect.midX, y: pose.rect.midY)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// La fenêtre que le cadre peint, lue comme lui : aux proportions de sa toile.
+    private var placement: ComposerCropOverflowPlacement? {
+        guard let etendue = session.editExtent else { return nil }
+        let toile = ComposerLookPainter.previewCanvas(aspect: ComposerLookPainter.aspect(of: frame.size))
+        guard toile.height > 0 else { return nil }
+        let fenetre = session.framing.window(in: etendue, aspect: toile.width / toile.height)
+        return ComposerCropOverflowLayout.visible(frame: frame, window: fenetre, source: etendue,
+                                                  screen: CGRect(origin: .zero, size: screen))
+    }
+}

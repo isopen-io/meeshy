@@ -147,6 +147,9 @@
     <string name="mood_spotlight_reply_sent">Resposta enviada</string>
     <string name="mood_spotlight_unavailable">Este humor não está mais disponível</string>
     <string name="nearby_back">Voltar</string>
+    <string name="nearby_denied_action">Abrir Ajustes</string>
+    <string name="nearby_denied_detail">O Meeshy não tem acesso à sua localização. Permita nos Ajustes ou mova o mapa manualmente.</string>
+    <string name="nearby_denied_title">Localização não autorizada</string>
     <string name="nearby_retry">Tentar novamente</string>
     <string name="nearby_title">Por perto</string>
     <string name="post_bookmark_removed">Removido dos favoritos</string>
@@ -187,8 +190,23 @@
         <item quantity="other">Ver %1$d respostas</item>
     </plurals>
     <string name="post_detail_back">Voltar</string>
+    <string name="post_detail_media_image">Imagem compartilhada</string>
+    <string name="post_detail_media_more">Ver as %1$d mídias</string>
+    <string name="post_detail_media_open_hint">Abrir em tela cheia</string>
+    <string name="post_detail_media_video">Vídeo compartilhado</string>
     <string name="post_detail_title">Publicação</string>
     <string name="post_detail_viewers">Visualizações</string>
+    <string name="profile_posts_empty">Nenhuma publicação</string>
+    <string name="profile_posts_empty_filter_subtitle">Toque no bloco novamente para ver tudo</string>
+    <string name="profile_posts_empty_posts">Nenhuma publicação</string>
+    <string name="profile_posts_empty_reels">Nenhum reel</string>
+    <string name="profile_posts_empty_subtitle">As publicações aparecerão aqui</string>
+    <string name="profile_posts_end_of_content">Você já viu tudo</string>
+    <string name="profile_posts_first_published_at">Primeiro conteúdo publicado em %1$s</string>
+    <string name="profile_posts_load_error">Erro ao carregar as publicações</string>
+    <string name="profile_posts_stat_posts">Publicações</string>
+    <string name="profile_posts_stat_reels">Reels</string>
+    <string name="profile_posts_stat_stories">Stories</string>
     <string name="status_bubble_republish">Republicar</string>
     <string name="status_bubble_via">via @%1$s</string>
     <string name="status_composer_bare_add">Adicionar uma palavra</string>
