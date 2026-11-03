@@ -97,6 +97,7 @@ fun StoryViewerScreen(
         currentItem = currentItem,
         chrome = chrome,
         haptics = meeshyHaptics,
+        fullscreen = cardMotion.fullscreen,
         viewModel = viewModel,
         onClose = onClose,
         onOpenProfile = onOpenProfile,

@@ -6,8 +6,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -35,13 +33,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.ChatBubbleOutline
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -123,7 +114,7 @@ internal fun DetailStatsRow(
         DetailStat(
             icon = { tint ->
                 Icon(
-                    if (post.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                    if (post.isLiked) MeeshyIcons.HeartFilled else MeeshyIcons.FavoriteBorder,
                     contentDescription = stringResource(if (post.isLiked) R.string.feed_unlike else R.string.feed_like),
                     tint = tint,
                     modifier = Modifier.size(20.dp),
@@ -150,7 +141,7 @@ internal fun DetailStatsRow(
         }
         DetailStat(
             icon = { tint ->
-                Icon(Icons.Filled.ChatBubbleOutline, contentDescription = stringResource(R.string.feed_comments), tint = tint, modifier = Modifier.size(18.dp))
+                Icon(MeeshyIcons.ChatBubbleOutline, contentDescription = stringResource(R.string.feed_comments), tint = tint, modifier = Modifier.size(18.dp))
             },
             count = post.commentCount,
             active = false,
@@ -164,7 +155,7 @@ internal fun DetailStatsRow(
         DetailStat(
             icon = { tint ->
                 Icon(
-                    if (post.isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                    if (post.isBookmarked) MeeshyIcons.BookmarkFilled else MeeshyIcons.Bookmark,
                     contentDescription = stringResource(if (post.isBookmarked) R.string.feed_unbookmark else R.string.feed_bookmark),
                     tint = tint,
                     modifier = Modifier.size(20.dp),
@@ -231,7 +222,7 @@ internal fun DetailRepostStat(
             .padding(horizontal = MeeshySpacing.xs)
             .semantics { contentDescription = a11y },
     ) {
-        EngagementIcon(icon = Icons.Filled.Repeat, active = active, tint = tint)
+        EngagementIcon(icon = MeeshyIcons.Repeat, active = active, tint = tint)
         if (count > 0) {
             Spacer(Modifier.width(MeeshySpacing.xs))
             EngagementCount(count = count, color = MeeshyTheme.tokens.textSecondary)
