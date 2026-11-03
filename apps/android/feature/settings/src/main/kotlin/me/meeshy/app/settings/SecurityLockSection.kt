@@ -14,13 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddCircle
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +44,7 @@ import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.component.lock.LockPinSheet
 import me.meeshy.ui.component.lock.LockPinSheetTexts
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -83,7 +77,7 @@ internal fun SecurityLockSectionContent(
     val tint = MeeshyPalette.Error
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics { heading() }) {
-            Icon(Icons.Filled.Lock, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+            Icon(MeeshyIcons.LockFilled, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
             Spacer(Modifier.size(MeeshySpacing.sm))
             Text(
                 text = stringResource(R.string.security_lock_section).uppercase(),
@@ -125,7 +119,7 @@ private fun LockStatusRow(presentation: LockSectionPresentation, tint: Color) {
                 stateDescription = if (presentation.showLockBadge) "$stateText, $badgeText" else stateText
             },
     ) {
-        Icon(Icons.Filled.Lock, contentDescription = null, tint = tint, modifier = Modifier.size(28.dp))
+        Icon(MeeshyIcons.LockFilled, contentDescription = null, tint = tint, modifier = Modifier.size(28.dp))
         Spacer(Modifier.size(MeeshySpacing.sm))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -154,7 +148,7 @@ private fun LockStatusRow(presentation: LockSectionPresentation, tint: Color) {
                 )
                 Spacer(Modifier.size(MeeshySpacing.sm))
             }
-            Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MeeshyPalette.Success, modifier = Modifier.size(20.dp))
+            Icon(MeeshyIcons.CheckCircleFilled, contentDescription = null, tint = MeeshyPalette.Success, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -163,10 +157,10 @@ private fun LockStatusRow(presentation: LockSectionPresentation, tint: Color) {
 private fun LockActionCapsule(action: LockSectionAction, lockCount: Int, onClick: () -> Unit) {
     val haptics = rememberMeeshyHaptics()
     val style = when (action) {
-        LockSectionAction.CONFIGURE -> CapsuleStyle(Icons.Filled.AddCircle, Color.White, MeeshyPalette.Error, medium = true)
-        LockSectionAction.CHANGE -> CapsuleStyle(Icons.Filled.Edit, MeeshyPalette.Error, MeeshyPalette.Error.copy(alpha = 0.15f), medium = false)
-        LockSectionAction.UNLOCK_ALL -> CapsuleStyle(Icons.Filled.LockOpen, Color.White, MeeshyPalette.Warning, medium = true)
-        LockSectionAction.REMOVE -> CapsuleStyle(Icons.Filled.Delete, MeeshyPalette.Error, MeeshyPalette.Error.copy(alpha = 0.10f), medium = true)
+        LockSectionAction.CONFIGURE -> CapsuleStyle(MeeshyIcons.AddCircleFilled, Color.White, MeeshyPalette.Error, medium = true)
+        LockSectionAction.CHANGE -> CapsuleStyle(MeeshyIcons.EditFilled, MeeshyPalette.Error, MeeshyPalette.Error.copy(alpha = 0.15f), medium = false)
+        LockSectionAction.UNLOCK_ALL -> CapsuleStyle(MeeshyIcons.LockOpenFilled, Color.White, MeeshyPalette.Warning, medium = true)
+        LockSectionAction.REMOVE -> CapsuleStyle(MeeshyIcons.DeleteFilled, MeeshyPalette.Error, MeeshyPalette.Error.copy(alpha = 0.10f), medium = true)
     }
     val label = when (action) {
         LockSectionAction.CONFIGURE -> stringResource(R.string.security_lock_configure)

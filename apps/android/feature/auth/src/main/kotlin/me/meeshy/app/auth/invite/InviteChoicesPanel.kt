@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -37,6 +35,7 @@ import me.meeshy.sdk.model.InviteChoicesPanelState
 import me.meeshy.sdk.model.InviteLandingChoice
 import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -169,7 +168,7 @@ private fun Notice(notice: InviteChoiceNotice, isDark: Boolean) {
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.Info, contentDescription = null, tint = InviteInk.accent(isDark), modifier = Modifier.size(20.dp))
+        Icon(MeeshyIcons.InfoFilled, contentDescription = null, tint = InviteInk.accent(isDark), modifier = Modifier.size(20.dp))
         Text(
             text = stringResource(InviteLandingCopy.notice(notice)),
             style = MaterialTheme.typography.labelLarge,
