@@ -439,6 +439,7 @@
     <string name="story_tool_texture">خلفية</string>
     <string name="story_tool_timeline">الخط الزمني</string>
     <string name="story_tray_a11y_changeMood">تغيير حالتي</string>
+    <string name="story_tray_a11y_createStory">إنشاء قصة</string>
     <string name="story_tray_menu_profile">عرض الملف الشخصي</string>
     <string name="story_tray_menu_viewStories">عرض القصص</string>
     <string name="story_viewer_transcript_title">النص المكتوب</string>
