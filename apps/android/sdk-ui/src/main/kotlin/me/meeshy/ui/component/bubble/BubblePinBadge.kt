@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -17,6 +15,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -36,7 +35,7 @@ internal fun BubblePinBadge(modifier: Modifier = Modifier) {
             .semantics(mergeDescendants = true) {},
     ) {
         Icon(
-            imageVector = Icons.Filled.PushPin,
+            imageVector = MeeshyIcons.PinFilled,
             contentDescription = null,
             tint = MeeshyPalette.PinnedBlue,
             modifier = Modifier.size(12.dp),
