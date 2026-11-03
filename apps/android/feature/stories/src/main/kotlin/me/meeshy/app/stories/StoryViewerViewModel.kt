@@ -22,6 +22,9 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.StorySourceWindow
+import me.meeshy.sdk.model.StoryViewerInitialAction
+import me.meeshy.sdk.model.StoryViewerScope
+import me.meeshy.sdk.story.isExpired
 import me.meeshy.sdk.model.StorySourceWindowMs
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.EngagementSessions
@@ -73,6 +76,17 @@ class StoryViewerViewModel @Inject constructor(
 
     /** La story précise à ouvrir (une story republiée) ; `null` : le lecteur démarre à la première non vue de l'auteur. */
     private val requestedStoryId: String? = savedStateHandle.get<String>(STORY_ID_ARG)?.takeIf { it.isNotBlank() }
+
+    /**
+     * L'intention d'entrée (feuille à ouvrir d'office, commentaire ciblé), posée par la route ; consommée une fois par
+     * [consumeEntryIntent]. Sans auteur nommé (ouverture par l'id de la story), la lecture reste sur son groupe.
+     */
+    private var entryIntent: StoryEntryIntent? = StoryEntryIntent(
+        action = StoryViewerInitialAction.fromWire(savedStateHandle.get<String>(ACTION_ARG)),
+        targetCommentId = savedStateHandle.get<String>(COMMENT_ID_ARG)?.takeIf { it.isNotBlank() },
+        targetParentCommentId = savedStateHandle.get<String>(PARENT_COMMENT_ID_ARG)?.takeIf { it.isNotBlank() },
+    ).takeIf { it.action != null || it.targetCommentId != null }
+    private val singleGroup: Boolean = userId.isBlank()
 
     private val projector = StorySlideProjector(config.apiBaseUrl)
 
@@ -291,11 +305,21 @@ class StoryViewerViewModel @Inject constructor(
             if (startFrom(attempt { storyRepository.cachedStories() })) return@launch
             val network = attempt { (storyRepository.list() as? NetworkResult.Success)?.data }
             if (startFrom(network)) return@launch
+            if (startFrom(attempt { fetchRequestedStory() })) return@launch
             _state.update {
                 if (requestedStoryId != null) it.copy(isLoading = false, missingStoryId = requestedStoryId)
                 else it.copy(isLoading = false, loadFailed = true)
             }
         }
+    }
+
+    /**
+     * Le plateau ignore ce groupe : on ne retélécharge pas tout le plateau, on demande la story nommée seule (iOS
+     * `fetchStoryPost`). Sans story nommée, ou si la passerelle la refuse, rien — le lecteur dit « introuvable ».
+     */
+    private suspend fun fetchRequestedStory(): List<ApiPost>? {
+        val id = requestedStoryId ?: return null
+        return (postRepository.getPost(id) as? NetworkResult.Success)?.data?.let(::listOf)
     }
 
     /** Relance l'ouverture après un échec (bouton Réessayer du repli). */
@@ -321,14 +345,17 @@ class StoryViewerViewModel @Inject constructor(
      */
     private fun startFrom(posts: List<ApiPost>?): Boolean {
         if (posts.isNullOrEmpty()) return false
+        val authorId = userId.ifBlank { posts.firstOrNull { it.id == requestedStoryId }?.author?.id.orEmpty() }
         val currentUserId = sessionRepository.currentUserId
+        val now = clock.nowMillis()
         val groups = attempt {
-            posts.toStoryGroups(currentUserId = currentUserId, nowMillis = clock.nowMillis())
-                .purgingDeadStories(currentUserId = currentUserId, nowMillis = clock.nowMillis())
+            posts.toStoryGroups(currentUserId = currentUserId, nowMillis = now)
+                .purgingDeadStories(currentUserId = currentUserId, nowMillis = now)
+                .let { StoryViewerScope.liveOnly(it, currentUserId, requestedStoryId) { story -> story.isExpired(now) } }
                 .map { it.toGroupSlides() }
         } ?: return false
-        val next = StoryPlayback.forAuthor(groups, userId, requestedStoryId) ?: return false
-        playback = next
+        val opened = StoryPlayback.forAuthor(groups, authorId, requestedStoryId) ?: return false
+        playback = if (singleGroup) opened.restrictedToCurrentGroup() else opened
         emit()
         return true
     }
@@ -588,6 +615,8 @@ class StoryViewerViewModel @Inject constructor(
     }
 
     private fun emit() {
+        val now = clock.nowMillis()
+        playback = playback.skippingUnplayable(sessionRepository.currentUserId, rawItems::get) { it.isExpired(now) }
         val currentId = playback.currentSlide?.id
         transitionPostRoom(currentId)
         // Dwell follows the slide on screen; a dismissed viewer is treated as no slide, so the
@@ -774,9 +803,21 @@ class StoryViewerViewModel @Inject constructor(
         override val customDestinationLanguage: String? = null
     }
 
+    /**
+     * L'intention d'entrée, rendue UNE fois et seulement quand une story est à l'écran : la feuille de commentaires ou
+     * de vues que la notification désignait. Les appels suivants rendent `null`.
+     */
+    fun consumeEntryIntent(): StoryEntryIntent? {
+        if (playback.currentSlide == null) return null
+        return entryIntent.also { entryIntent = null }
+    }
+
     companion object {
         const val USER_ID_ARG: String = "userId"
         const val STORY_ID_ARG: String = "storyId"
+        const val ACTION_ARG: String = "action"
+        const val COMMENT_ID_ARG: String = "commentId"
+        const val PARENT_COMMENT_ID_ARG: String = "parentCommentId"
     }
 
     /**
