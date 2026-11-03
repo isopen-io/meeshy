@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.auth.SignupForm
 import me.meeshy.sdk.model.auth.SignupSubmitError
 import me.meeshy.sdk.model.auth.SignupValidation
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.notification.PushPermissionDeferralStore
 import me.meeshy.sdk.socket.RealtimeSessionCoordinator
 import javax.inject.Inject
 
@@ -77,6 +78,7 @@ class SignupViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val realtimeCoordinator: RealtimeSessionCoordinator,
     deviceLocaleProvider: DeviceLocaleProvider,
+    private val pushPermissionDeferral: PushPermissionDeferralStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
@@ -149,9 +151,10 @@ class SignupViewModel @Inject constructor(
      * numéro arrive sous le même `200` sans qu'aucun compte existe, et brancher
      * les sockets dessus ouvrirait une session sur personne.
      */
-    private fun applyOutcome(outcome: RegisterOutcome) {
+    private suspend fun applyOutcome(outcome: RegisterOutcome) {
         when (outcome) {
             is RegisterOutcome.Created -> {
+                pushPermissionDeferral.postpone()
                 realtimeCoordinator.onAuthenticatedChanged(true)
                 _state.update { it.copy(isSubmitting = false, isRegistered = true) }
             }
