@@ -76,7 +76,7 @@ public data class ReelAutostartGate(
     val userPaused: Boolean = false,
     val audioFocusLost: Boolean = false,
 ) {
-    val shouldPlay: Boolean
+    public val shouldPlay: Boolean
         get() = ReelMediaAutostart.shouldStart(isActive, revealCompleted, isCallActive) && !userPaused && !audioFocusLost
 
     public fun withCall(active: Boolean): ReelAutostartGate = copy(isCallActive = active)
