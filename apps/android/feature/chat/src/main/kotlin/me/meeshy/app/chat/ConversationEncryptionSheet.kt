@@ -193,13 +193,15 @@ private fun ConversationEncryptionRegime.modeChoice(): ConversationEncryptionMod
 private fun ActivationBlock(state: ConversationEncryptionUiState, accent: Color, viewModel: ConversationEncryptionViewModel) {
     Text(stringResource(R.string.encryption_detail_mode_header), style = MaterialTheme.typography.titleSmall, color = MeeshyTheme.tokens.textPrimary)
     ConversationEncryptionModeChoice.values().forEach { mode ->
-        ModeRow(mode, selected = mode == state.selected, enabled = mode.isOfferedOnThisPhone && !state.isSwitching) { viewModel.select(mode) }
+        ModeRow(mode, selected = mode == state.selected, enabled = mode.isOfferedFor(state.isDirect) && !state.isSwitching) { viewModel.select(mode) }
     }
-    Text(
-        stringResource(R.string.encryption_e2ee_unavailable_here),
-        style = MaterialTheme.typography.bodySmall,
-        color = MeeshyTheme.tokens.textMuted,
-    )
+    if (!ConversationEncryptionModeChoice.E2EE.isOfferedFor(state.isDirect)) {
+        Text(
+            stringResource(R.string.encryption_e2ee_direct_only_here),
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textMuted,
+        )
+    }
     Text(stringResource(R.string.encryption_detail_activation_footer_final), style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textMuted)
     Button(
         onClick = viewModel::activate,
@@ -249,12 +251,12 @@ private fun ModeChangeBlock(
     )
     Column(modifier = Modifier.selectableGroup()) {
         targets.forEach { mode ->
-            ModeRow(mode, selected = mode == state.selected, enabled = mode.isOfferedOnThisPhone && !state.isSwitching) { viewModel.select(mode) }
+            ModeRow(mode, selected = mode == state.selected, enabled = mode.isOfferedFor(state.isDirect) && !state.isSwitching) { viewModel.select(mode) }
         }
     }
-    if (targets.any { !it.isOfferedOnThisPhone }) {
+    if (targets.any { !it.isOfferedFor(state.isDirect) }) {
         Text(
-            stringResource(R.string.encryption_e2ee_unavailable_here),
+            stringResource(R.string.encryption_e2ee_direct_only_here),
             style = MaterialTheme.typography.bodySmall,
             color = MeeshyTheme.tokens.textMuted,
         )

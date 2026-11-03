@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.composer.ComposerKeyboardTransition
 import org.junit.Test
 
 class ChatScrollGeometryTest {
@@ -135,5 +136,26 @@ class ChatScrollGeometryTest {
     @Test
     fun `BottomUp -- the old (top) edge is the highest visible index`() {
         assertThat(ChatScrollGeometry.topEdgeIndex(2, 9, ChatListOrientation.BottomUp)).isEqualTo(9)
+    }
+}
+
+class ChatScrollGeometryBottomMarginTest {
+    private fun transition(perFrame: Boolean, at: Long = 0L) =
+        ComposerKeyboardTransition.announce(280f, 300L, at, perFrame)
+
+    @org.junit.Test fun `sans mouvement la marge basse ne s'anime pas`() {
+        org.junit.Assert.assertEquals(0, ChatScrollGeometry.bottomMarginAnimationMs(null, 0L))
+    }
+
+    @org.junit.Test fun `les insets image par image sont suivis sans animation doublee`() {
+        org.junit.Assert.assertEquals(0, ChatScrollGeometry.bottomMarginAnimationMs(transition(perFrame = true), 100L))
+    }
+
+    @org.junit.Test fun `sans insets image par image la marge rejoint la duree annoncee pendant le mouvement`() {
+        org.junit.Assert.assertEquals(300, ChatScrollGeometry.bottomMarginAnimationMs(transition(perFrame = false), 100L))
+    }
+
+    @org.junit.Test fun `apres la fin du mouvement aucune animation n'est rejouee`() {
+        org.junit.Assert.assertEquals(0, ChatScrollGeometry.bottomMarginAnimationMs(transition(perFrame = false), 10_000L))
     }
 }

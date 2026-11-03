@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -83,7 +82,7 @@ internal fun StoryLeadingRail(
     onMediaSource: (ComposerMediaSource) -> Unit = {},
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth().composerScrollEdgeCue(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(RAIL_GAP),
     ) {
         if (rail.showsClose) LabeledRailItem(MeeshyIcons.Close, stringResource(R.string.composer_scene_close), onClose)
@@ -145,7 +144,7 @@ internal fun ColumnScope.StoryTrailingRail(
 @Composable
 internal fun StoryEditingRail(bar: SceneSelectionBar, tools: List<RailTool>, onAction: (ComposerSelectionAction) -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().testTag(EDITING_RAIL_TAG).verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth().testTag(EDITING_RAIL_TAG).composerScrollEdgeCue(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(RAIL_GAP),
     ) { SelectionRailBlock(bar, tools, onAction) }
 }

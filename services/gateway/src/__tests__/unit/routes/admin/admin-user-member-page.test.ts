@@ -254,7 +254,8 @@ describe('GET /admin/users/:userId/preferences', () => {
     expect(Object.keys(data).sort()).toEqual(
       ['application', 'audio', 'document', 'message', 'notification', 'privacy', 'video']
     );
-    expect(data.privacy).toEqual({ ...PRIVACY_PREFERENCE_DEFAULTS, showOnlineStatus: false });
+    // #14406 — la valeur EFFECTIVE de la Connaissance automatique (clé sans défaut stocké, résolue par l'âge).
+    expect(data.privacy).toEqual({ ...PRIVACY_PREFERENCE_DEFAULTS, showOnlineStatus: false, autoAcquaintance: true });
     expect(data.notification).toEqual({ ...NOTIFICATION_PREFERENCE_DEFAULTS, dndEnabled: true });
     expect(data.application).toEqual(APPLICATION_PREFERENCE_DEFAULTS);
   });

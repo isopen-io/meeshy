@@ -45,7 +45,8 @@ data class NewConversationUiState(
     /** Le mode touché dans la section Chiffrement ; `null` = le défaut de l'offre. */
     val pickedEncryptionMode: CreationEncryptionMode? = null,
 ) {
-    val isGroup: Boolean get() = selected.size >= 2
+    /** Two or more peers, or nobody yet: a group, whose title field shows (a group of myself alone needs it). */
+    val isGroup: Boolean get() = NewConversationLogic.conversationType(selected.size) == NewConversationLogic.TYPE_GROUP
 
     /** La section Chiffrement (décision du 2026-11-01) : les modes offerts pour ce rôle et ce type. */
     val encryptionOffer: CreationEncryptionOffer
@@ -54,6 +55,10 @@ data class NewConversationUiState(
     /** Le mode coché, celui qui partira avec la demande. */
     val encryptionMode: CreationEncryptionMode
         get() = NewConversationLogic.resolvedEncryptionMode(encryptionOffer, pickedEncryptionMode)
+
+    /** La section Chiffrement n'apparaît qu'une fois la conversation créable : la feuille s'ouvre allégée (#14646). */
+    val showsEncryption: Boolean
+        get() = NewConversationLogic.canCreate(selected.size, groupTitle)
 
     /** Before a searchable query, the picker shows « Your contacts » (iOS `NewConversationView`). */
     val showsContacts: Boolean get() = query.trim().length < NewConversationLogic.MIN_QUERY_LENGTH
@@ -69,7 +74,7 @@ data class NewConversationUiState(
     val showsNoResults: Boolean
         get() = !isSearching && results.isEmpty() && answeredQuery != null && answeredQuery == query.trim()
     val canCreate: Boolean
-        get() = NewConversationLogic.canCreate(selected.size) && !isCreating
+        get() = NewConversationLogic.canCreate(selected.size, groupTitle) && !isCreating
 }
 
 /** A creation failure, told in words (parity iOS `new_conversation.error.blocked` / `conversation.new.create.error`). */

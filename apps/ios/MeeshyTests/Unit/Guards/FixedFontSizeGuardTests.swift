@@ -572,8 +572,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
                           head: #"Text("\(Int(displayedProgress * 100))%")"#),
         ExactSizeTextSite(file: "Features/Main/Views/ConversationHelperViews.swift",
                           head: "Text(Self.displayedUnread(unreadCount))"),
-        ExactSizeTextSite(file: "Features/Main/Views/GlobalSearchView.swift",
-                          head: #"Text("\(result.unreadCount)")"#),
         ExactSizeTextSite(file: "Features/Main/Components/ConversationDashboardView.swift",
                           head: #"Text("\(score)")"#)
     ]
@@ -694,8 +692,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // partage aussi. La borne garde un classifieur VIVANT, pas un compte.
         XCTAssertGreaterThan(sites.filter { $0.receiver == .glyph }.count, 130,
                              "les glyphes sont la population majoritaire (207 au 264i, 148 au #9125, 139 au #10947)")
-        XCTAssertGreaterThan(sites.filter { $0.receiver == .text }.count, 20,
-                             "le texte figé existe (36 au 264i) — un 0 ici signerait un classifieur mort")
+        XCTAssertGreaterThan(sites.filter { $0.receiver == .text }.count, 15,
+                             "le texte figé existe (36 au 264i, 20 au #14620) — un 0 ici signerait un classifieur mort")
     }
 
     /// Témoins synthétiques : la question dont la réponse est connue d'avance.

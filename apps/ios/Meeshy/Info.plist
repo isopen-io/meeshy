@@ -59,6 +59,8 @@
 	<false/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>MeeshySourceCommit</key>
+	<string>$(MEESHY_SOURCE_COMMIT)</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

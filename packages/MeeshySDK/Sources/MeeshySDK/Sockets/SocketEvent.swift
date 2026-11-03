@@ -92,6 +92,8 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case conversationLeave = "conversation:leave"
     case conversationLeft = "conversation:left"
     case conversationNew = "conversation:new"
+    /// Un administrateur a rendu la conversation OBSOLÈTE (#14643) : son contenu est effacé pour tous.
+    case conversationObsoleted = "conversation:obsoleted"
     case conversationParticipantBanned = "conversation:participant-banned"
     case conversationParticipantJoined = "conversation:participant-joined"
     case conversationParticipantLeft = "conversation:participant-left"

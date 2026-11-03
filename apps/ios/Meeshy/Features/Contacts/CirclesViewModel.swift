@@ -205,12 +205,14 @@ final class CirclesViewModel: ObservableObject {
             return false
         }
         let snapshot = pendingTargets
-        pendingTargets[link.userId] = target
-        let cmid = ClientMutationId.generate()
-        observeRaiseOutcome(cmid: cmid, userId: link.userId)
-        let payload = SendFriendRequestPayload(clientMutationId: cmid, targetUserId: link.userId, targetLevel: target.rawValue)
+        let userId = link.userId
+        pendingTargets[userId] = target
         do {
-            try await offlineQueue.enqueue(.sendFriendRequest, payload: payload, conversationId: nil)
+            try await CircleRaiseSender(offlineQueue: offlineQueue).send(to: userId, level: target) { [weak self] in
+                self?.pendingTargets[userId] = nil
+                self?.notice = String(localized: "circles.notice.requestFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .main)
+                HapticFeedback.error()
+            }
             HapticFeedback.success()
             return true
         } catch {
@@ -218,19 +220,6 @@ final class CirclesViewModel: ObservableObject {
             notice = String(localized: "circles.notice.requestFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .main)
             HapticFeedback.error()
             return false
-        }
-    }
-
-    private func observeRaiseOutcome(cmid: String, userId: String) {
-        let queue = offlineQueue
-        Task { @MainActor [weak self] in
-            let stream = await queue.outcomeStream(for: cmid)
-            for await event in stream {
-                guard case .exhausted = event, let self else { continue }
-                self.pendingTargets[userId] = nil
-                self.notice = String(localized: "circles.notice.requestFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .main)
-                HapticFeedback.error()
-            }
         }
     }
 

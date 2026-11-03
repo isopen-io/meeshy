@@ -9,7 +9,8 @@
  * geste, ni que la déconnexion efface la session. Ce gate mesure, pour chaque
  * schéma × gabarit (390 × 844, 320 × 568) :
  *
- *  1. l'écran d'attente a disparu ; les sections d'iOS sont là ; dix bascules, plus
+ *  1. l'écran d'attente a disparu ; les sections d'iOS sont là ; onze bascules
+ *     (« Sauvegarder média » synchronisée en Confidentialité depuis #14641), plus
  *     celle de l'appareil (traduire sur cet appareil, #9898, réglage local) ;
  *     aucune entrée non portée n'est offerte — le legacy est décommissionné
  *     (#6702) — et aucun contrôle ne vise une autre origine : la suppression
@@ -174,7 +175,11 @@ try {
         ['COMPTE', 'CONFIDENTIALITÉ', 'APPARENCE', 'NOTIFICATIONS', 'DONNÉES', 'OUTILS', 'À PROPOS'].every((title) => sections.includes(title)),
         `${label} : les sections d'iOS, « Données » comprise depuis que l'export y mène (#6725) (${JSON.stringify(sections)})`,
       );
-      check((await page.$$('[role="switch"]:not([data-setting="deviceTranslation"])')).length === 10, `${label} : dix bascules que la passerelle obéit`);
+      check((await page.$$('[role="switch"]:not([data-setting="deviceTranslation"])')).length === 11, `${label} : onze bascules que la passerelle obéit`);
+      check(
+        (await page.$$('section[aria-labelledby="settings-privacy"] [role="switch"][data-setting="saveMediaToGallery"]')).length === 1,
+        `${label} : « Sauvegarder média » vit en Confidentialité, synchronisée par /me/preferences, comme sur iOS (#14641)`,
+      );
       check(
         (await page.$$('[role="switch"][data-setting="deviceTranslation"]')).length === 1,
         `${label} : et celle de l'appareil — traduire sur cet appareil (#9898), un réglage local qui n'attend aucune passerelle`,

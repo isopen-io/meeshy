@@ -18,12 +18,16 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.StarredMessagesStore
+import me.meeshy.sdk.conversation.ConversationLivePatcher
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.conversationlist.ConversationListLoadState
+import me.meeshy.sdk.model.search.ListMessageSearchState
+import me.meeshy.sdk.search.ListMessageSearchSource
 import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.CategorySocketManager
@@ -34,6 +38,7 @@ import me.meeshy.sdk.socket.SocketManager
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusRepository
 import me.meeshy.sdk.story.StoryRepository
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -61,8 +66,10 @@ class ConversationListViewModel @Inject constructor(
     networkMonitor: NetworkMonitor,
     statusRepository: StatusRepository,
     rowSignalsSource: ConversationListRowSignals,
+    livePatcher: ConversationLivePatcher,
     private val loadingDeps: ConversationListLoadingDeps = ConversationListLoadingDeps.detached(),
     dialogDeps: ConversationListDialogDeps = ConversationListDialogDeps.detached(),
+    messageSearchSource: ListMessageSearchSource = NoListMessageSearch,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -102,6 +109,7 @@ class ConversationListViewModel @Inject constructor(
         draftStore = draftStore,
         workManager = workManager,
         activeConversationId = { loadingDeps.activeConversation.conversationId.value },
+        obsoleter = dialogDeps.obsoleter,
     )
     /** Les dialogues confirmés de la liste (bloquer, masquer, quitter, renommer, signaler, verrou). */
     internal val dialogs: ConversationListDialogController = ConversationListDialogController(
@@ -114,6 +122,8 @@ class ConversationListViewModel @Inject constructor(
         preferencesSocketManager = preferencesSocketManager,
         starredStore = starredStore,
         currentUserId = { _state.value.currentUserId },
+        patcher = livePatcher,
+        connectionState = socketManager.connectionState,
     )
     private val pullRefresh = ConversationListPullRefresh(
         storyRepository = storyRepository,
@@ -130,6 +140,17 @@ class ConversationListViewModel @Inject constructor(
         storyRepository = storyRepository,
         statusBarCache = statusBarCache,
     )
+
+    private val messageSearcher = ConversationListMessageSearcher(
+        scope = viewModelScope,
+        source = messageSearchSource,
+        readerPrism = { _state.value.currentUser?.let { ReaderPrism.resolve(it, Locale.getDefault()) }.orEmpty() },
+        conversations = { rawConversations },
+        isConcealed = { _state.value.isLocked(it) },
+    )
+
+    /** La section « Messages » de la recherche (#14619) : un flux à part, la liste ne se recompose pas à chaque frappe. */
+    val messageSearch: StateFlow<ListMessageSearchState> = messageSearcher.state
 
     private val loader = ConversationListLoader(viewModelScope, repository, loadingDeps) { rawConversations.isNotEmpty() }
 
@@ -185,6 +206,9 @@ class ConversationListViewModel @Inject constructor(
         messagePrefetch.start(viewModelScope, sessionRepository, socketManager) { rawConversations }
     }
 
+    /** La conversation brute de [id], même hors du filtre courant : la ligne d'un message trouvé la nomme. */
+    fun conversationFor(id: String): ApiConversation? = rawConversations.firstOrNull { it.id == id }
+
     /** Selects a filter tab and re-derives the visible list from the cached conversations (no network). */
     fun selectFilter(filter: ConversationFilter) {
         _state.update { it.copy(selectedFilter = filter).withVisible(rawConversations) }
@@ -193,6 +217,7 @@ class ConversationListViewModel @Inject constructor(
     /** Updates the free-text search query and re-derives the visible list (no network). */
     fun setSearch(query: String) {
         _state.update { it.copy(searchText = query).withVisible(rawConversations) }
+        messageSearcher.onQueryChanged(query)
     }
 
     /** Opens or closes the search field; closing clears the query and restores the full list. */
@@ -201,6 +226,7 @@ class ConversationListViewModel @Inject constructor(
             val next = if (active) it else it.copy(searchText = "")
             next.copy(isSearchActive = active).withVisible(rawConversations)
         }
+        if (!active) messageSearcher.onQueryChanged("")
     }
 
     fun togglePin(id: String) = actions.togglePin(id)
@@ -228,6 +254,8 @@ class ConversationListViewModel @Inject constructor(
     fun leaveConversation(id: String) = actions.leaveConversation(id)
     fun deleteConversationForMe(id: String) = actions.deleteConversationForMe(id)
     fun deleteConversationForAll(id: String) = actions.deleteConversationForAll(id)
+
+    fun makeConversationObsolete(id: String) = actions.makeConversationObsolete(id)
     fun discardDraft(id: String) = actions.discardDraft(id)
 
     /** Loads (once, cache-only) the hard-press preview card's recent messages. */

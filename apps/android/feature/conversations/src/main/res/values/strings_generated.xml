@@ -150,22 +150,27 @@
     <string name="encryption_create_header">Encryption</string>
     <string name="encryption_mode_e2ee_description">Only your devices and those of the participants read the messages. Translation happens on your device.</string>
     <string name="encryption_mode_e2ee_label">End-to-end</string>
-    <string name="encryption_mode_hybrid_description">Encrypted on our servers, like Server. Double encryption by your devices is coming soon.</string>
+    <string name="encryption_mode_hybrid_description">Encrypted on our servers; between compatible devices, a second layer lets you check that a text message was not altered on the way.</string>
     <string name="encryption_mode_hybrid_label">Hybrid</string>
     <string name="encryption_mode_server_description">Your messages are encrypted on our servers. Translation, transcription and search work.</string>
     <string name="encryption_mode_server_label">Server</string>
     <string name="global_search_back">Back</string>
+    <string name="global_search_empty_subtitle">Messages, posts, users</string>
     <plurals name="global_search_members">
         <item quantity="one">%1$d member</item>
         <item quantity="other">%1$d members</item>
     </plurals>
     <string name="global_search_no_results">No results</string>
     <string name="global_search_online">Online</string>
+    <string name="global_search_post_kind_post">Post</string>
+    <string name="global_search_post_kind_reel">Reel</string>
+    <string name="global_search_post_kind_story">Story</string>
     <string name="global_search_recent_clear">Clear</string>
     <string name="global_search_recent_remove">Remove</string>
     <string name="global_search_searching">Searching…</string>
     <string name="global_search_tab_conversations">Conversations</string>
     <string name="global_search_tab_messages">Messages</string>
+    <string name="global_search_tab_posts">Posts</string>
     <string name="invite_customize">Customise the options</string>
     <string name="invite_defaultMessage">Join me to talk with no filters and no barriers…</string>
     <string name="links_affiliate_action_copy">Copy the referral link</string>
@@ -310,7 +315,7 @@
     <string name="my_share_links_status_inactive">Inactive</string>
     <string name="my_share_links_title">Share links</string>
     <string name="my_share_links_toggle">Active</string>
-    <string name="new_conversation_back">Back</string>
+    <string name="new_conversation_close">Close</string>
     <string name="new_conversation_contacts_empty_subtitle">Search for a user to start a conversation.</string>
     <string name="new_conversation_contacts_empty_title">No contacts</string>
     <string name="new_conversation_contacts_loading">Loading contacts</string>

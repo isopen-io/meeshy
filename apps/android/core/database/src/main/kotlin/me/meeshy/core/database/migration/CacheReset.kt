@@ -14,6 +14,7 @@ internal object CacheReset {
         CacheTables.all.forEach { db.execSQL("DROP TABLE IF EXISTS `${it.name}`") }
         CacheTables.all.forEach(db::createCacheTable)
         SearchIndexSchema.create(db)
+        DurableTables.ensureAdditive(db)
     }
 }
 

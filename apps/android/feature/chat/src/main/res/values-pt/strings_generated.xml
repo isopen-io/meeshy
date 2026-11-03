@@ -101,6 +101,7 @@
     <string name="conversation_appearance_section_solid">Cor sólida</string>
     <string name="conversation_appearance_sheet_title">Fundo e destaque</string>
     <string name="conversation_appearance_signature">Signature</string>
+    <string name="conversation_encryption_switched_enabled">Criptografia de ponta a ponta ativada: as novas mensagens são criptografadas nos seus aparelhos.</string>
     <string name="conversation_info_pinned_see_all">Ver as %1$d mensagens fixadas</string>
     <string name="conversation_info_tab_media">Mídias</string>
     <string name="conversation_info_tab_members">Membros</string>
@@ -178,7 +179,7 @@
     <string name="encryption_fact_end_to_end_never_turned_off_direct">A criptografia de ponta a ponta nunca é desativada: esta conversa individual continua criptografada. Você sempre poderá abrir ao lado outra conversa, sem criptografia de ponta a ponta, com esta pessoa: as duas estão na lista, esta marcada com um cadeado.</string>
     <string name="encryption_fact_every_server_feature">Todas as funções estão disponíveis: tradução automática, transcrição de áudios, prévia das notificações, busca.</string>
     <string name="encryption_fact_group_sending_unavailable">Neste grupo, o app ainda não pode enviar mensagens criptografadas.</string>
-    <string name="encryption_fact_hybrid_is_server_today">O modo híbrido hoje criptografa como Servidor. A criptografia dupla pelos seus aparelhos chega em breve.</string>
+    <string name="encryption_fact_hybrid_is_server_today">O modo híbrido criptografa suas mensagens em nossos servidores, que podem lê-las para tradução e busca: não é criptografia de ponta a ponta. Entre dois aparelhos compatíveis, uma segunda camada permite ainda verificar que uma mensagem de texto não foi alterada no caminho; quando ela falta, nada é apresentado como verificado.</string>
     <string name="encryption_fact_no_edit">Uma mensagem enviada não pode ser editada.</string>
     <string name="encryption_fact_no_forward">Uma mensagem não pode ser encaminhada.</string>
     <string name="encryption_fact_no_notification_preview">As notificações não mostram o texto da mensagem: o servidor não o conhece.</string>
@@ -203,12 +204,12 @@
     <string name="encryption_legacy_title">Criptografia de ponta a ponta</string>
     <string name="encryption_mode_e2ee_description">Só os seus aparelhos e os dos participantes leem as mensagens. A tradução acontece no seu aparelho.</string>
     <string name="encryption_mode_e2ee_label">Ponta a ponta</string>
-    <string name="encryption_mode_hybrid_description">Criptografado em nossos servidores, como Servidor. A criptografia dupla pelos seus aparelhos chega em breve.</string>
+    <string name="encryption_mode_hybrid_description">Criptografado em nossos servidores; entre aparelhos compatíveis, uma segunda camada permite verificar que uma mensagem de texto não foi alterada no caminho.</string>
     <string name="encryption_mode_hybrid_label">Híbrido</string>
     <string name="encryption_mode_server_description">Suas mensagens são criptografadas em nossos servidores. Tradução, transcrição e busca funcionam.</string>
     <string name="encryption_mode_server_label">Servidor</string>
     <string name="encryption_summary_end_to_end">Criptografada de ponta a ponta: só os aparelhos dos participantes leem as mensagens</string>
-    <string name="encryption_summary_hybrid">Criptografada em nossos servidores (modo híbrido)</string>
+    <string name="encryption_summary_hybrid">Criptografada em nossos servidores, com verificação entre aparelhos compatíveis</string>
     <string name="encryption_summary_none">Conversa criada antes da criptografia sistemática: suas mensagens não são criptografadas</string>
     <string name="encryption_summary_server">Criptografada em nossos servidores</string>
     <string name="encryption_topic_absent">Indisponível neste modo</string>

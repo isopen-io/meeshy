@@ -21,9 +21,25 @@ class NewConversationLogicTest {
     }
 
     @Test
-    fun cannot_create_with_no_participants() {
-        assertThat(NewConversationLogic.canCreate(0)).isFalse()
-        assertThat(NewConversationLogic.canCreate(1)).isTrue()
+    fun cannot_create_with_no_participants_and_no_title() {
+        assertThat(NewConversationLogic.canCreate(0, rawTitle = "")).isFalse()
+        assertThat(NewConversationLogic.canCreate(0, rawTitle = "   ")).isFalse()
+        assertThat(NewConversationLogic.canCreate(1, rawTitle = "")).isTrue()
+    }
+
+    @Test
+    fun a_group_of_myself_alone_is_allowed_once_it_has_a_title() {
+        assertThat(NewConversationLogic.conversationType(0)).isEqualTo(NewConversationLogic.TYPE_GROUP)
+        assertThat(NewConversationLogic.canCreate(0, rawTitle = "Mes notes")).isTrue()
+    }
+
+    @Test
+    fun a_group_of_myself_alone_leaves_as_a_titled_group_without_invitees() {
+        val request = NewConversationLogic.request(emptyList(), rawTitle = "  Mes notes  ", CreationEncryptionMode.SERVER)
+
+        assertThat(request.type).isEqualTo(NewConversationLogic.TYPE_GROUP)
+        assertThat(request.title).isEqualTo("Mes notes")
+        assertThat(request.participantIds).isEmpty()
     }
 
     @Test
@@ -78,12 +94,13 @@ class NewConversationLogicTest {
     }
 
     @Test
-    fun this_phone_offers_end_to_end_as_soon_only() {
+    fun this_phone_offers_end_to_end_for_a_direct_conversation() {
         val offer = NewConversationLogic.encryptionOffer(platformRole = "ADMIN", selectedCount = 1)
 
-        assertThat(NewConversationLogic.END_TO_END_SUPPORTED).isFalse()
-        assertThat(offer.choices.last().unavailability).isEqualTo(CreationEncryptionUnavailability.CLIENT_NOT_YET)
-        assertThat(offer.defaultMode).isEqualTo(CreationEncryptionMode.SERVER)
+        assertThat(NewConversationLogic.END_TO_END_SUPPORTED).isTrue()
+        assertThat(offer.choices.last().mode).isEqualTo(CreationEncryptionMode.E2EE)
+        assertThat(offer.choices.last().available).isTrue()
+        assertThat(offer.defaultMode).isEqualTo(CreationEncryptionMode.E2EE)
     }
 
     @Test

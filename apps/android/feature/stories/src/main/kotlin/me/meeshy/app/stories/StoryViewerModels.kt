@@ -292,6 +292,11 @@ data class StoryLanguageOption(
  * reads the CURRENT group's slides plus the index so its segmented progress and
  * auto-advance stay simple; group roll-over and dismissal are decided by the
  * pure engine.
+ *
+ * RÈGLE D'EXTENSION (lot story-viewer-decomposition-and-nav-graph) : ce type ne reçoit plus de champ. Un lot
+ * qui ajoute une fonction au lecteur expose SON contrôleur ou son `StateFlow` et le lit dans son fichier
+ * emplacement (`StoryViewerShell`, `StoryRailOverlays`, `StoryViewerSheetsHost`…) ; l'hôte
+ * `StoryViewerScreen` ne grossit pas.
  */
 data class StoryViewerUiState(
     val authorName: String = "",

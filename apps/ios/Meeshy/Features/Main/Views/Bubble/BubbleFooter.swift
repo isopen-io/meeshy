@@ -199,6 +199,7 @@ struct BubbleFooter: View, Equatable {
     /// Trailing meta: timestamp + delivery check (or retry button on failure).
     @ViewBuilder
     private var metaTrailing: some View {
+        integrityMark
         editMark
         if let timestamp = model.timestamp {
             Text(timestamp)
@@ -227,6 +228,14 @@ struct BubbleFooter: View, Equatable {
     /// #7620 — « modifié » se dit ICI, juste avant l'heure, comme la rangée
     /// plate (`FocalMetaRow`) le fait déjà. En tête de bulle, le crayon
     /// tombait dans le coin arrondi que le `clipShape` de la bulle rogne.
+    /// #14369 — le verdict de la couche appareil d'un hybride, avant l'heure.
+    @ViewBuilder
+    private var integrityMark: some View {
+        if let integrity = model.integrity {
+            BubbleDeviceLayerMark(integrity: integrity, isMe: model.isMe, isDark: isDark)
+        }
+    }
+
     @ViewBuilder
     private var editMark: some View {
         if let edit = model.edit {

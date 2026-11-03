@@ -11,16 +11,24 @@ import android.graphics.drawable.Icon
 import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
+import android.os.Build
 import android.os.SystemClock
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
+import me.meeshy.sdk.model.playback.BackgroundResumeRoute
 import me.meeshy.sdk.model.playback.VoicePlaybackCard
 import me.meeshy.sdk.model.playback.VoicePlaybackCardRules
 import me.meeshy.sdk.model.playback.VoicePlaybackCommand
 import me.meeshy.sdk.model.playback.VoicePlaybackTransportState
+
+/** L'application a une activité visible : le seul cas où elle peut demander le focus sans service de premier plan. */
+private fun processInForeground(): Boolean =
+    ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
 
 /** En lecture ou en attente du réseau : la carte reste au premier plan. */
 private val VoicePlaybackTransportState.isActive: Boolean get() = isPlaying || isBuffering
@@ -48,8 +56,12 @@ internal class VoicePlaybackSessionController(
     private val foreground: VoicePlaybackForeground,
     private val scope: CoroutineScope,
     private val loadArtwork: suspend (String) -> Bitmap?,
+    private val appInForeground: () -> Boolean = ::processInForeground,
+    private val sdkInt: Int = Build.VERSION.SDK_INT,
+    private val targetSdk: Int = context.applicationInfo.targetSdkVersion,
 ) {
     private val session = MediaSession(context, TAG)
+    private var inForeground = false
     private val artwork = HashMap<String, Bitmap>()
     private var observing: Job? = null
     private var artworkJob: Job? = null
@@ -60,16 +72,16 @@ internal class VoicePlaybackSessionController(
     fun start() {
         session.setCallback(
             object : MediaSession.Callback() {
-                override fun onPlay() = bridge.dispatch(VoicePlaybackCommand.Play)
+                override fun onPlay() = dispatch(VoicePlaybackCommand.Play)
 
-                override fun onPause() = bridge.dispatch(VoicePlaybackCommand.Pause)
+                override fun onPause() = dispatch(VoicePlaybackCommand.Pause)
 
-                override fun onStop() = bridge.dispatch(VoicePlaybackCommand.Stop)
+                override fun onStop() = dispatch(VoicePlaybackCommand.Stop)
 
-                override fun onSeekTo(pos: Long) = bridge.dispatch(VoicePlaybackCommand.SeekTo(pos))
+                override fun onSeekTo(pos: Long) = dispatch(VoicePlaybackCommand.SeekTo(pos))
 
                 override fun onCustomAction(action: String, extras: android.os.Bundle?) {
-                    command(action)?.let(bridge::dispatch)
+                    command(action)?.let { dispatch(it) }
                 }
             },
         )
@@ -79,10 +91,34 @@ internal class VoicePlaybackSessionController(
 
     /** Un bouton de la notification (intent de service) : la même voie que la carte du système. */
     fun onAction(action: String?) {
-        command(action)?.let(bridge::dispatch)
+        command(action)?.let { dispatch(it) }
+    }
+
+    /** Remet un ordre au lecteur ; une reprise prend d'abord le premier plan quand le système l'exige pour le focus. */
+    private fun dispatch(command: VoicePlaybackCommand) {
+        if (command == VoicePlaybackCommand.Play) takeForegroundBeforeFocus()
+        bridge.dispatch(command)
+    }
+
+    private fun takeForegroundBeforeFocus() {
+        val route = BackgroundResumeRoute.of(
+            appForeground = appInForeground(),
+            serviceForeground = inForeground,
+            targetSdk = targetSdk,
+            sdkInt = sdkInt,
+        )
+        if (route != BackgroundResumeRoute.EnterForegroundThenFocus) return
+        val snapshot = bridge.snapshot.value ?: return
+        enterForeground(snapshot, shown(snapshot).artworkUrl?.let(artwork::get))
+    }
+
+    private fun enterForeground(snapshot: VoicePlaybackSnapshot, art: Bitmap?) {
+        foreground.enter(NOTIFICATION_ID, notification(snapshot, art))
+        inForeground = true
     }
 
     fun stop() {
+        inForeground = false
         observing?.cancel()
         artworkJob?.cancel()
         session.isActive = false
@@ -102,6 +138,7 @@ internal class VoicePlaybackSessionController(
     private fun render(snapshot: VoicePlaybackSnapshot?) {
         if (snapshot == null) {
             foreground.leave()
+            inForeground = false
             return
         }
         val url = shown(snapshot).artworkUrl
@@ -111,9 +148,11 @@ internal class VoicePlaybackSessionController(
         val notification = notification(snapshot, cached)
         if (snapshot.transport.isActive) {
             foreground.enter(NOTIFICATION_ID, notification)
+            inForeground = true
         } else {
             context.getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, notification)
             foreground.park()
+            inForeground = false
         }
         if (url != null && cached == null) fetchArtwork(url, snapshot.card.attachmentId)
     }

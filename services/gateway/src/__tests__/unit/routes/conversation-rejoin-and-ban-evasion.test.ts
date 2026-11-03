@@ -43,6 +43,7 @@ const mockSendConflict = jest.fn<any>((reply: any, msg: any) => { reply._body = 
 const mockSendInternalError = jest.fn<any>((reply: any, msg: any) => { reply._body = { success: false, error: msg }; return reply; });
 const mockSendError = jest.fn<any>((reply: any, status: any, msg: any) => { reply._body = { success: false, status, error: msg }; return reply; });
 
+jest.mock('../../../services/messaging/messageRequests', () => ({ ...jest.requireActual<object>('../../../services/messaging/messageRequests'), decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })) }));
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));

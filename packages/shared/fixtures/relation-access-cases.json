@@ -1557,6 +1557,490 @@
         "reason": "self",
         "requiresConsent": false
       }
+    },
+    {
+      "id": "dm-request-public-between-adults",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "dm.request"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "dm-request-to-self-refused",
+      "matrix": "Soi",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "dm.request"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "self",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "dm-request-public-adult-to-minor-shielded",
+      "matrix": "Bouclier des mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "dm.request"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "dm-request-public-unknown-age-to-minor-shielded",
+      "matrix": "Bouclier des mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "unknown",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "dm.request"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "dm-request-community-adult-to-minor-still-shielded",
+      "matrix": "Bouclier des mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": true,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "dm.request"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "COMMUNITY",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "dm-request-public-minor-to-minor-allowed",
+      "matrix": "Bouclier des mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "minor",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "dm.request"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "dm-request-public-adult-to-unknown-age-allowed",
+      "matrix": "Bouclier des mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "unknown",
+        "viewerRole": "USER",
+        "feature": "dm.request"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "dm-read-receipts-acquaintance",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "ACQUAINTANCE",
+        "grantedByTarget": "ACQUAINTANCE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "dm.readReceipts"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "ACQUAINTANCE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "dm-read-receipts-community-refused",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": true,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "dm.readReceipts"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "COMMUNITY",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "dm-typing-acquaintance",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "ACQUAINTANCE",
+        "grantedByTarget": "ACQUAINTANCE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "dm.typing"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "ACQUAINTANCE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "dm-typing-one-way-acquaintance-refused",
+      "matrix": "Aucun accès à sens unique",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "dm.typing"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "dm-typing-shield-does-not-apply",
+      "matrix": "Bouclier des mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "ACQUAINTANCE",
+        "grantedByTarget": "ACQUAINTANCE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "dm.typing"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "ACQUAINTANCE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "presence-dnd-acquaintance",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "ACQUAINTANCE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "presence.dnd"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "ACQUAINTANCE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "presence-dnd-public-refused",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "presence.dnd"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "dm-request-acquaintance-adult-to-minor-allowed",
+      "matrix": "Bouclier des mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "ACQUAINTANCE",
+        "grantedByTarget": "ACQUAINTANCE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "dm.request"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "ACQUAINTANCE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "call-ring-public-between-adults",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "call.ring"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "call-ring-to-self-refused",
+      "matrix": "Soi",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "call.ring"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "self",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "call-ring-acquaintance-adult-to-minor-shielded",
+      "matrix": "Bouclier des mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "ACQUAINTANCE",
+        "grantedByTarget": "ACQUAINTANCE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "call.ring"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "ACQUAINTANCE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "call-ring-friend-adult-to-minor-allowed",
+      "matrix": "Bouclier des mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "FRIEND",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "call.ring"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "FRIEND",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "call-ring-minor-to-minor-allowed",
+      "matrix": "Bouclier des mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "minor",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "call.ring"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "views-identity-community",
+      "matrix": "Communauté",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": true,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "views.identity"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "COMMUNITY",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "views-identity-public-refused",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "views.identity"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
     }
   ]
 }

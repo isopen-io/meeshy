@@ -11,6 +11,7 @@ const deMediaViewer = {
   'media.viewer.compose': 'Mit diesem Medium erstellen',
   'media.viewer.imager': 'Als Bild',
   'media.viewer.saved': 'Gespeichert',
+  'media.viewer.already_saved': 'Bereits gespeichert',
   'media.viewer.save_failed': 'Speichern nicht möglich',
   'media.viewer.offline': 'Offline – versuche es erneut, sobald du verbunden bist',
   'media.viewer.retry': 'Zum Speichern erneut tippen',
