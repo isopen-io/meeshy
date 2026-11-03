@@ -247,10 +247,14 @@ final class ComposerSceneRestChromeTests: XCTestCase {
                                                bottomPanelIsOpen: false, timelineIsOpen: false,
                                                sheetIsRaised: true)
         XCTAssertTrue(ComposerRestChrome.sceneIsReduced(feuille), "une feuille ancrée monte du bas")
+    }
+
+    func test_sceneIsReduced_lesProprietesDUnObjet_laissentLaScenePleine() {
         let proprietes = ComposerRestChrome.State(toolIsOpen: false, writesText: false, cameraIsArmed: false,
                                                   bottomPanelIsOpen: false, timelineIsOpen: false,
                                                   objectIsSelected: true, propertiesAreOpen: true)
-        XCTAssertTrue(ComposerRestChrome.sceneIsReduced(proprietes), "la feuille basse des propriétés aussi")
+        XCTAssertFalse(ComposerRestChrome.sceneIsReduced(proprietes),
+                       "le cadrage d'une image sélectionnée se pose par-dessus la scène")
     }
 
     /// La surface lit la loi : plus de réduction calculée à côté d'elle, et la
@@ -265,7 +269,7 @@ final class ComposerSceneRestChromeTests: XCTestCase {
         XCTAssertFalse(surface.contains("panelIsOpen("), "aucune réduction par panneau ne survit")
     }
 
-    /// Les propriétés d'un objet sélectionné réduisent aussi la scène : ses
+    /// Les propriétés d'un objet sélectionné se posent par-dessus la scène : ses
     /// options restent dans leur colonne, ↶ ↷ et la rangée des diapos partent.
     func test_lesProprietesDUnObjet_gardentSesOptions_retirentLaRangeeDuHaut() {
         let proprietes = ComposerRestChrome.State(toolIsOpen: false, writesText: false, cameraIsArmed: false,

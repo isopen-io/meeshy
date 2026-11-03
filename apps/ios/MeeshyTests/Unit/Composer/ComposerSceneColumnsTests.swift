@@ -225,10 +225,10 @@ final class ComposerSceneColumnsTests: XCTestCase {
                                                        drawingBarIsShown: false), "au repos, rien ne se pose")
     }
 
-    func test_overlaysScene_lesProprietes_sontUneFeuille_quiReduitLaScene() {
-        XCTAssertFalse(ComposerSceneLift.overlaysScene(lowZone: .properties, bottomPanelIsOpen: true,
-                                                       drawingBarIsShown: true),
-                       "la feuille basse des propriétés réduit la scène au-dessus d'elle")
+    func test_overlaysScene_lesProprietesDUnObjet_sePosentParDessus() {
+        XCTAssertTrue(ComposerSceneLift.overlaysScene(lowZone: .properties, bottomPanelIsOpen: false,
+                                                      drawingBarIsShown: false),
+                      "le cadrage, l'apparition ou la frise d'un objet ne réduisent pas la scène")
     }
 
     func test_floorTop_sousUnEtagePoseParDessus_laSceneLitLeHautDuRepos() {

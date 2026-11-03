@@ -534,8 +534,9 @@ struct ComposerSceneSurface: View {
     /// Une feuille ou le clavier réduisent la scène au-delà du repos (#15226).
     private var sceneIsReduced: Bool { ComposerRestChrome.sceneIsReduced(restState) }
 
-    /// Une bande, la frise, les effets, la barre de dessin ou les réglages d'un
-    /// outil se posent par-dessus la scène : elle garde le bas du repos.
+    /// Une bande, la frise, les effets, la barre de dessin, les réglages d'un
+    /// outil ou les propriétés d'un objet se posent par-dessus la scène : elle
+    /// garde le bas du repos.
     private var sceneIsOverlaid: Bool {
         ComposerSceneLift.overlaysScene(lowZone: lowZone, bottomPanelIsOpen: restState.bottomPanelIsOpen,
                                         drawingBarIsShown: drawingBar != nil)

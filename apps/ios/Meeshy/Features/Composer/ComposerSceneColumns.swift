@@ -295,12 +295,10 @@ nonisolated enum ComposerSceneEffects {
 
 // MARK: - La scène garde sa taille sous ce qui se pose par-dessus (#15226)
 
-/// **Une bande, la frise, les effets, la barre de dessin ou les réglages d'un
-/// outil se posent PAR-DESSUS la scène, qui garde sa taille du repos** (#15226,
-/// même loi qu'Android #15192). Seuls le clavier et une vraie feuille la
-/// réduisent (`ComposerRestChrome.sceneIsReduced`) : les propriétés d'un objet,
-/// dans leur feuille basse, la font REMONTER au-dessus d'elles, jamais
-/// descendre (#8712).
+/// **Une bande, la frise, les effets, la barre de dessin, les réglages d'un
+/// outil ou les propriétés d'un objet se posent PAR-DESSUS la scène, qui garde
+/// sa taille du repos** (#15226, même loi qu'Android #15192). Seuls le clavier
+/// et une vraie feuille la réduisent (`ComposerRestChrome.sceneIsReduced`).
 ///
 /// La scène se cadre au-dessus du haut des étages du bas. Au repos, c'est le
 /// socle ; sous une feuille, son haut. Sous un étage posé par-dessus, la scène
@@ -309,11 +307,7 @@ nonisolated enum ComposerSceneEffects {
 nonisolated enum ComposerSceneLift {
 
     static func overlaysScene(lowZone: ComposerLowZone, bottomPanelIsOpen: Bool, drawingBarIsShown: Bool) -> Bool {
-        switch lowZone {
-        case .properties:          return false
-        case .toolOptions, .band:  return true
-        case .nothing:             return bottomPanelIsOpen || drawingBarIsShown
-        }
+        lowZone != .nothing || bottomPanelIsOpen || drawingBarIsShown
     }
 
     /// Le haut des étages du bas que la scène lit : celui du repos sous un

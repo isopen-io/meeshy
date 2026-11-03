@@ -72,8 +72,8 @@ nonisolated enum ComposerRestChrome {
         /// Ses propriétés ouvertes en bas ne sont pas un outil : la colonne
         /// des options reste, pour passer de l'une à l'autre.
         var objectIsSelected: Bool = false
-        /// Les propriétés de l'objet sélectionné occupent le bas, dans leur
-        /// feuille basse : la scène se réduit au-dessus d'elles.
+        /// Les propriétés de l'objet sélectionné occupent le bas : elles se
+        /// posent par-dessus la scène, qui garde sa taille.
         var propertiesAreOpen: Bool = false
         /// Le clavier est levé pour écrire SUR la scène.
         var keyboardIsUp: Bool = false
@@ -152,7 +152,7 @@ nonisolated enum ComposerRestChrome {
     }
 
     static func sceneIsReduced(_ state: State) -> Bool {
-        state.keyboardIsUp || state.sheetIsRaised || state.propertiesAreOpen
+        state.keyboardIsUp || state.sheetIsRaised
     }
 
     /// Une bande, la frise, les effets ou les propriétés occupent le bas : le
