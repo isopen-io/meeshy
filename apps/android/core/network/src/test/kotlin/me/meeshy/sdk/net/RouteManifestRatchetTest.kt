@@ -111,6 +111,9 @@ class RouteManifestRatchetTest {
          * au clonage et la traduction vocale suivie par job), que portent `VoiceApi` et `ConsentsApi`.
          * 150 : moins `PATCH /guest-sessions/me`, la sonde de session d'invité que porte `GuestSessionApi.me` (elle partait en GET,
          * verbe que la passerelle ne sert pas).
+         * 143 : moins sept routes que des lots fusionnés le 2026-11-03 ont implémentées : les cinq lectures
+         * `GET /me/preferences/{application,document,encryption,message,video}` (`PreferencesApi`),
+         * `GET /user/deleted-conversations` et `POST /user-preferences/communities/reorder`.
          */
         const val TO_PORT_CEILING = 143
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
