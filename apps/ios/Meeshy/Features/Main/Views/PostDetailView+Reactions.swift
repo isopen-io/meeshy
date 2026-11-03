@@ -22,6 +22,7 @@ extension PostDetailView {
     /// basculement, pour ne pas promettre un état que la vue ne sait pas
     /// afficher.
     func sendDetailReaction(_ emoji: String) {
+        guard !isPendingPublication else { return }
         guard emoji != MeeshyQuickReactions.heart else {
             toggleDetailPostHeart()
             return

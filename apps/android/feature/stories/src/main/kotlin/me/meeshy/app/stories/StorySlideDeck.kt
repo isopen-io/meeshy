@@ -71,6 +71,8 @@ data class StorySlide(
     val videosDuckUnderSound: Boolean = true,
     /** Le look de chaque média de la diapo (#13841), posé ou de fond : un RÉGLAGE peint en direct, cuit à la publication seulement. */
     val mediaLooks: Map<String, me.meeshy.sdk.model.StoryMediaLook> = emptyMap(),
+    /** La forme du cadre de la scène : 9:16, ou 16:9 quand le fond importé est paysage (iOS `canvasAspect`). */
+    val canvasFormat: me.meeshy.sdk.model.scene.CanvasFormat = me.meeshy.sdk.model.scene.CanvasFormat.PORTRAIT,
 )
 
 /** Ce que la loi unique [StorySlidePublishMatter] lit de la slide : une coquille de texte vide n'y est jamais comptée. */

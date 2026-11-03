@@ -1,16 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- « Mes cercles » (#13938) : android-only tant que les clés circles.* ne sont pas au catalogue iOS de dev ; texte exact de la branche lot/ui-cercles-ios-13938. Partagées par « Mes cercles » et le profil. -->
 <resources>
-    <string name="circles_action_demote">Zu %1$s herabstufen</string>
-    <string name="circles_action_promote">Zu %1$s befördern</string>
-    <string name="circles_action_promote_a11y">%2$s zu %1$s befördern</string>
     <string name="circles_action_request">%1$s anfragen</string>
     <string name="circles_action_request_a11y">%2$s um die Stufe %1$s bitten</string>
     <string name="circles_action_unlink">Verbindung aufheben</string>
+    <string name="circles_promote_friend">Lass uns Freunde sein</string>
+    <string name="circles_promote_close">Lass uns vertraut sein</string>
+    <string name="circles_promote_blood">Lass uns Blut werden</string>
+    <string name="circles_promote_friend_a11y">Lass uns Freunde sein: %1$s um die Stufe Freund bitten</string>
+    <string name="circles_promote_close_a11y">Lass uns vertraut sein: %1$s um die Stufe Vertrauter bitten</string>
+    <string name="circles_promote_blood_a11y">Lass uns Blut werden: %1$s um die Stufe Blut bitten</string>
+    <string name="circles_demote_close">Lass uns vertraut bleiben</string>
+    <string name="circles_demote_friend">Lass uns Freunde bleiben</string>
+    <string name="circles_demote_acquaintance">Lass uns in Kontakt bleiben</string>
+    <string name="circles_demote_close_confirm_title">Mit %1$s nur noch vertraut bleiben?</string>
+    <string name="circles_demote_friend_confirm_title">Mit %1$s nur noch befreundet bleiben?</string>
+    <string name="circles_demote_acquaintance_confirm_title">Mit %1$s nur noch in Kontakt bleiben?</string>
     <string name="circles_confirm_cancel">Abbrechen</string>
-    <string name="circles_demote_confirm_action">Herabstufen</string>
     <string name="circles_demote_confirm_body">%1$s wechselt von %2$s zu %3$s. Du verlierst, was %2$s teilt. %1$s wird nicht benachrichtigt und kann dich 30 Tage lang nicht bitten, wieder aufzusteigen.</string>
-    <string name="circles_demote_confirm_title">%1$s zu %2$s herabstufen?</string>
     <string name="circles_level_acquaintance">Bekannter</string>
     <string name="circles_level_blood">Blut</string>
     <string name="circles_level_close">Nah</string>

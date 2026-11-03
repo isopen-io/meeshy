@@ -158,6 +158,9 @@
     <string name="fullscreen_react">Reagieren</string>
     <string name="fullscreen_reply">Antworten</string>
     <string name="fullscreen_show_controls">Bedienelemente einblenden</string>
+    <string name="identity_role_admin">Admin</string>
+    <string name="identity_role_creator">Ersteller</string>
+    <string name="identity_role_moderator">Moderator</string>
     <string name="image_editor_before">Original</string>
     <string name="image_editor_cancel">Abbrechen</string>
     <string name="image_editor_crop_applied">Zuschnitt</string>
@@ -386,6 +389,9 @@
     <string name="time_lastSeen_online">Online</string>
     <string name="time_lastSeen_seen">Gesehen %1$s</string>
     <string name="time_lastSeen_yesterdayAt">Gestern um %1$s gesehen</string>
+    <string name="userIdentity_language_show_a11y">Auf %1$s anzeigen</string>
+    <string name="userIdentity_read">Gelesen</string>
+    <string name="userIdentity_translation_available">Übersetzung verfügbar</string>
     <string name="viewer_caption_see_less">weniger anzeigen</string>
     <string name="viewer_caption_see_less_hint">Klappt die Bildunterschrift ein</string>
     <string name="viewer_caption_see_more">mehr anzeigen</string>

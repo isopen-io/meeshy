@@ -204,7 +204,7 @@ fun ChatScreen(
                         .onSizeChanged { headerHeightPx = it.height }
                         .graphicsLayer { alpha = chromeAlpha },
                 ) {
-                    ChatHeaderHost(host)
+                    ChatHeaderHost(host, remember(viewModel) { viewModel.controllers.find<ChatServerSearch>() })
                 }
                 Box(
                     Modifier

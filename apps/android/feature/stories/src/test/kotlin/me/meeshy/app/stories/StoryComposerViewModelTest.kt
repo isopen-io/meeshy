@@ -3300,4 +3300,76 @@ class StoryComposerViewModelTest {
         assertThat(vm.state.value.deck.slides).hasSize(1)
         assertThat(store.load()).isNull()
     }
+
+    private fun sizedMedia(id: String, width: Int, height: Int) = uploaded(id).copy(width = width, height = height)
+
+    private fun StoryComposerViewModel.seedWithText(media: UploadedMedia, textY: Float) = onSceneReduce { state ->
+        state.copy(
+            deck = state.deck.addMediaToSelected(media.id).addTextElementToSelected(StoryTextElement(id = "t", text = "hello", y = textY)),
+            attachments = state.attachments + media,
+        ).mirrorDraftToSelection()
+    }
+
+    @Test
+    fun `a landscape background switches the canvas to 16-9 and reports the repositioned elements`() = runTest {
+        val vm = viewModel()
+
+        vm.seedWithText(sizedMedia("wide", 1920, 1080), textY = 0.1f)
+
+        val slide = vm.state.value.deck.selectedSlide
+        assertThat(slide.canvasFormat).isEqualTo(me.meeshy.sdk.model.scene.CanvasFormat.LANDSCAPE)
+        assertThat(slide.elements.single().y).isEqualTo(0f)
+        assertThat(vm.state.value.repositionedCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a portrait background keeps the canvas in 9-16 with nothing repositioned`() = runTest {
+        val vm = viewModel()
+
+        vm.seedWithText(sizedMedia("tall", 1080, 1920), textY = 0.1f)
+
+        assertThat(vm.state.value.deck.selectedSlide.canvasFormat).isEqualTo(me.meeshy.sdk.model.scene.CanvasFormat.PORTRAIT)
+        assertThat(vm.state.value.deck.selectedSlide.elements.single().y).isEqualTo(0.1f)
+        assertThat(vm.state.value.repositionedCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `removing the landscape background brings the canvas back to 9-16`() = runTest {
+        val vm = viewModel()
+        vm.seedWithText(sizedMedia("wide", 1920, 1080), textY = 0.5f)
+
+        vm.onRemoveSceneBackground()
+
+        assertThat(vm.state.value.deck.selectedSlide.canvasFormat).isEqualTo(me.meeshy.sdk.model.scene.CanvasFormat.PORTRAIT)
+    }
+
+    @Test
+    fun `a repost from a portrait scene into a landscape slide repositions its objects and counts them`() = runTest {
+        val vm = viewModel()
+        vm.onSceneReduce { state ->
+            state.copy(
+                deck = state.deck
+                    .setSelectedCanvasFormatForTest(me.meeshy.sdk.model.scene.CanvasFormat.LANDSCAPE)
+                    .addTextElementToSelected(StoryTextElement(id = "a", text = "a", y = 0.5f))
+                    .addTextElementToSelected(StoryTextElement(id = "b", text = "b", y = 0.1f)),
+            )
+        }
+
+        vm.onRepostSource("src-1", me.meeshy.sdk.model.scene.CanvasFormat.PORTRAIT)
+
+        val ys = vm.state.value.deck.selectedSlide.elements.associate { it.id to it.y }
+        assertThat(ys["a"]).isEqualTo(0.5f)
+        assertThat(ys["b"]).isEqualTo(0f)
+        assertThat(vm.state.value.repositionedCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `the banner count clears when dismissed`() {
+        val shown = StoryComposerUiState(repositionedCount = 3)
+
+        assertThat(StoryComposerCanvasFormat.bannerDismissed(shown).repositionedCount).isEqualTo(0)
+    }
+
+    private fun StorySlideDeck.setSelectedCanvasFormatForTest(format: me.meeshy.sdk.model.scene.CanvasFormat): StorySlideDeck =
+        copy(slides = slides.map { if (it.id == selectedId) it.copy(canvasFormat = format) else it })
 }

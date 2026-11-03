@@ -144,14 +144,20 @@ class PostDetailViewModel: ObservableObject {
         // `ConversationViewModel.loadMessages` draining NSEPendingMessageConsumer).
         await NSEPendingPostConsumer.shared.consumeAll()
         let cacheResult = await CacheCoordinator.shared.feed.load(for: postId)
+        // Une publication encore dans la file (#14929) n'existe pas côté
+        // serveur : sa carte optimiste est servie par l'hôte, et un GET sur son
+        // cmid ne rendrait qu'une absence.
+        let mayAskServer = !ClientMutationId.isValid(postId)
         switch cacheResult {
         case .fresh(let cached, _):
             post = cached.first
             return
         case .stale(let cached, _):
             post = cached.first
+            guard mayAskServer else { return }
             await refreshPost(postId)
         case .expired, .empty:
+            guard mayAskServer else { return }
             isLoading = post == nil
             await refreshPost(postId)
         }

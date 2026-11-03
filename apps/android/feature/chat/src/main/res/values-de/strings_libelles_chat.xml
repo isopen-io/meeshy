@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="chat_pinned_count">
+        <item quantity="one">%1$d angeheftete Nachricht</item>
+        <item quantity="other">%1$d angeheftete Nachrichten</item>
+    </plurals>
+    <plurals name="chat_typing_many">
+        <item quantity="one">%1$d Person schreibt…</item>
+        <item quantity="other">%1$d Personen schreiben…</item>
+    </plurals>
+</resources>

@@ -371,7 +371,11 @@
    "symbol": "checkmark",
    "status": "mapped",
    "role": "Check",
-   "reason": "Icons.Filled.Check"
+   "reason": "Icons.Filled.Check; statuts de livraison : Icons.Filled.Done (envoyé) et Icons.Filled.DoneAll (reçu, lu)",
+   "aliases": [
+    "Done",
+    "DoneAll"
+   ]
   },
   {
    "symbol": "checkmark.circle",
@@ -2341,6 +2345,14 @@
    "directional": false
   },
   "Document": {
+   "origin": "material",
+   "directional": false
+  },
+  "Done": {
+   "origin": "material",
+   "directional": false
+  },
+  "DoneAll": {
    "origin": "material",
    "directional": false
   },

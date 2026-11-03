@@ -77,13 +77,13 @@ private fun LocationTarget(
         Modifier
             .offset { androidx.compose.ui.unit.IntOffset(frame.left.roundToInt(), frame.top.roundToInt()) }
             .size(with(density) { frame.width.toFloat().toDp() }, with(density) { frame.height.toFloat().toDp() })
+            .testTag(STORY_LOCATION_TAP_TAG)
             .clickable(interactionSource = silent, indication = null, role = Role.Button) { onTap(location.place) }
             .clearAndSetSemantics {
                 contentDescription = label
                 role = Role.Button
                 onClick(label = hint) { onTap(location.place); true }
-            }
-            .testTag(STORY_LOCATION_TAP_TAG),
+            },
     )
 }
 

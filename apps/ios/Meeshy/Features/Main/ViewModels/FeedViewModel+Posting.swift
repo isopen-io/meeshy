@@ -406,14 +406,7 @@ extension FeedViewModel {
             type: type,
             content: content ?? "",
             timestamp: Date(),
-            media: localMediaURLs.enumerated().map { index, url in
-                Self.optimisticFeedMedia(
-                    forLocalURL: url,
-                    declaredMimeType: localMediaMimeTypes.flatMap {
-                        $0.indices.contains(index) ? $0[index] : nil
-                    }
-                )
-            },
+            media: PendingPublicationLocalMedia.optimisticMedia(localMediaURLs, declaredMimeTypes: localMediaMimeTypes),
             originalLanguage: originalLanguage
         )
         optimistic.storyEffects = storyEffects   // la scène, #4756
@@ -421,7 +414,7 @@ extension FeedViewModel {
         debouncedCacheSave()
 
         do {
-            _ = try await offlineQueue.enqueuePostMedia(
+            let enqueued = try await offlineQueue.enqueuePostMedia(
                 sourceMediaURLs: localMediaURLs,
                 // Le MIME que l'expéditeur a DÉCLARÉ, et non celui que
                 // l'extension laissera deviner : les deux divergent dès qu'un
@@ -471,6 +464,7 @@ extension FeedViewModel {
                 mediaObjectIds: mediaObjectIds,
                 allowSoundExtraction: allowSoundExtraction
             )
+            showRelocatedMedia(of: cmid, storedPaths: enqueued.localMediaPaths)
             publishSuccess = true
             observeOutcome(cmid: cmid, rollback: { [weak self] in
                 self?.removeOptimisticPost(id: cmid)
@@ -479,27 +473,5 @@ extension FeedViewModel {
             removeOptimisticPost(id: cmid)
             publishError = error.localizedDescription
         }
-    }
-
-    /// Builds the optimistic `FeedMedia` for a not-yet-uploaded local file,
-    /// deriving the type from its DECLARED mime — and only from its extension
-    /// when nothing was declared. The `file://` URL is replaced by the server
-    /// media URL on reconcile.
-    ///
-    /// La distinction n'est pas cosmétique : un vocal importé en `.caf` se
-    /// re-dérivait en `application/octet-stream`, donc `AttachmentKind` le
-    /// classait autrement qu'audio et la carte optimiste s'affichait comme une
-    /// IMAGE — un lecteur absent là où l'auteur venait d'enregistrer sa voix.
-    private static func optimisticFeedMedia(
-        forLocalURL url: URL, declaredMimeType: String?
-    ) -> FeedMedia {
-        let mime = declaredMimeType ?? MimeTypeResolver.mimeType(forExtension: url.pathExtension)
-        let type: FeedMediaType
-        switch AttachmentKind(mimeType: mime) {
-        case .video: type = .video
-        case .audio: type = .audio
-        default: type = .image
-        }
-        return FeedMedia(type: type, url: url.absoluteString)
     }
 }

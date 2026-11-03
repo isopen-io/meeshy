@@ -15,9 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChatBubbleOutline
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -56,6 +53,7 @@ import me.meeshy.sdk.model.displayedText
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.icons.MeeshyIcons
 
 /** Ce que l'overlay demande à son hôte, hors rangée ; une instance stable par overlay. */
 internal class StoryCommentsOverlayActions(
@@ -107,7 +105,7 @@ private fun StoryExpiredCommentsBanner() {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
     ) {
-        Icon(Icons.Filled.Schedule, contentDescription = null, tint = MeeshyMediaChromeColors.OnMediaSecondary, modifier = Modifier.size(14.dp))
+        Icon(MeeshyIcons.ScheduleFilled, contentDescription = null, tint = MeeshyMediaChromeColors.OnMediaSecondary, modifier = Modifier.size(14.dp))
         Text(
             stringResource(R.string.stories_comments_overlay_expired),
             style = TextStyle(color = MeeshyMediaChromeColors.OnMediaSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
@@ -260,7 +258,7 @@ private fun StoryCommentsEmpty() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
-        Icon(Icons.Filled.ChatBubbleOutline, contentDescription = null, tint = MeeshyMediaChromeColors.OnMediaMuted, modifier = Modifier.size(32.dp))
+        Icon(MeeshyIcons.ChatBubbleOutline, contentDescription = null, tint = MeeshyMediaChromeColors.OnMediaMuted, modifier = Modifier.size(32.dp))
         Text(
             stringResource(R.string.stories_comments_empty_title),
             style = TextStyle(color = MeeshyMediaChromeColors.OnMediaSecondary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
