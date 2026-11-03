@@ -98,6 +98,10 @@
     <string name="bubble_joinNotice_rule_messages_denied">ne peut pas écrire de messages</string>
     <string name="bubble_location_open">Ouvrir dans Plans</string>
     <string name="bubble_location_shared">Position partagée</string>
+    <string name="bubble_media_a11y_masked">Média masqué</string>
+    <string name="bubble_media_a11y_view_once">Média à voir une fois</string>
+    <string name="bubble_media_masked">Contenu masqué</string>
+    <string name="bubble_media_tap_to_view">Toucher pour voir</string>
     <string name="bubble_message_deleted">Message supprimé</string>
     <string name="bubble_meta_pinned_a11y">Message épinglé</string>
     <string name="bubble_protection_after_read">Disparaît après lecture</string>

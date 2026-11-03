@@ -98,6 +98,10 @@
     <string name="bubble_joinNotice_rule_messages_denied">no puede escribir mensajes</string>
     <string name="bubble_location_open">Abrir en Mapas</string>
     <string name="bubble_location_shared">Ubicación compartida</string>
+    <string name="bubble_media_a11y_masked">Archivo oculto</string>
+    <string name="bubble_media_a11y_view_once">Archivo de una sola visualización</string>
+    <string name="bubble_media_masked">Contenido oculto</string>
+    <string name="bubble_media_tap_to_view">Toca para ver</string>
     <string name="bubble_message_deleted">Mensaje eliminado</string>
     <string name="bubble_meta_pinned_a11y">Mensaje fijado</string>
     <string name="bubble_protection_after_read">Desaparece tras leerlo</string>

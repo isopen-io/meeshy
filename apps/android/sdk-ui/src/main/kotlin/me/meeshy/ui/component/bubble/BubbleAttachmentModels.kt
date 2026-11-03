@@ -23,6 +23,12 @@ public data class BubbleImage(
     val isProtected: Boolean = false,
     /** Le poids du fichier original, s'il est connu : sous 100 Ko, il descend seul (#14639). */
     val sizeBytes: Long? = null,
+    /** La pièce se déclare floutée (son propre drapeau, indépendant de celui du message). */
+    val isBlurred: Boolean = false,
+    /** La pièce se déclare à vue unique. */
+    val isViewOnce: Boolean = false,
+    /** Combien de fois la vue unique a été ouverte (le compteur du coin de la case). */
+    val viewOnceCount: Int = 0,
 )
 
 @Immutable
@@ -70,6 +76,9 @@ public data class BubbleVideo(
     val isOnDevice: Boolean = false,
     /** Ce que la passerelle sert de la consommation de CE lecteur : alimente la barre de reprise. */
     val servedConsumption: MeeshyMediaConsumption? = null,
+    val isBlurred: Boolean = false,
+    val isViewOnce: Boolean = false,
+    val viewOnceCount: Int = 0,
 ) {
     /** Le ratio servi par la métadonnée (niveau 3 de [me.meeshy.sdk.model.media.VideoDisplayAspect]) ; `null` sans dimensions. */
     val metadataRatio: Double?
