@@ -322,6 +322,7 @@
     <string name="story_media_soundExtraction_caption">Otras personas podrán reutilizar la banda sonora de los vídeos de esta publicación.</string>
     <string name="story_media_soundExtraction_label">Permitir la reutilización del sonido</string>
     <string name="story_reader_buffering">Cargando la story</string>
+    <string name="story_reader_loading">Cargando historia…</string>
     <string name="story_repost_error_forbidden">Esta historia no se puede volver a compartir</string>
     <string name="story_repost_error_generic">Error al republicar</string>
     <string name="story_repost_error_unavailable">Esta historia ya no está disponible</string>
@@ -334,6 +335,10 @@
     </plurals>
     <string name="story_send_search_hint">Buscar una conversación...</string>
     <string name="story_send_sent">Enviado</string>
+    <string name="story_sentinel_body">Tu versión de la aplicación aún no sabe pintarla. No se ha perdido: se mostrará tal y como la compuso su autor después de la actualización.</string>
+    <string name="story_sentinel_skip">PASAR A LA SIGUIENTE</string>
+    <string name="story_sentinel_title">Esta historia usa un formato más reciente</string>
+    <string name="story_sentinel_update">ACTUALIZAR</string>
     <string name="story_sound_library_clearSearch">Borrar la búsqueda</string>
     <string name="story_sound_library_emptyMine">Tus sonidos aparecerán aquí en cuanto publiques una historia con audio original.</string>
     <string name="story_sound_library_emptySearch">Ningún sonido coincide con esta búsqueda.</string>
