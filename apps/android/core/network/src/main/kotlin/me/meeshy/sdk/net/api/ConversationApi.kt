@@ -130,6 +130,17 @@ interface ConversationApi {
         @Query("limit") limit: Int,
     ): ApiResponse<List<ApiConversation>>
 
+    /**
+     * `GET /conversations?withUserId=…&limit=…` — every conversation the caller shares with
+     * [withUserId], groups included (gateway `core-list.ts`, parity iOS
+     * `ConversationService.listSharedWith`). Feeds the profile's Conversations tab.
+     */
+    @GET("conversations")
+    suspend fun sharedWith(
+        @Query("withUserId") withUserId: String,
+        @Query("limit") limit: Int,
+    ): ApiResponse<List<ApiConversation>>
+
     // Empty-body POST (no @Body — like markRead): the gateway derives the joiner
     // from the JWT. Idempotent server-side (routes/conversations/sharing.ts
     // resolveConversationEntry): an existing member gets the same canonical

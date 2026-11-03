@@ -39,6 +39,8 @@ private abstract class StubStatsApi : ConversationApi {
     override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun directWith(type: String, withUserId: String, limit: Int) =
         ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun sharedWith(withUserId: String, limit: Int) =
+        ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun listConditional(
         offset: Int?,
         limit: Int?,
