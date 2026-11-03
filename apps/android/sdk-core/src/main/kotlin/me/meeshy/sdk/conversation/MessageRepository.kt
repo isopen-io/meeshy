@@ -13,6 +13,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.media.MediaAdoption
 import me.meeshy.sdk.media.PendingMediaPreviewing
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.socket.SendMessageAck
 import me.meeshy.sdk.model.ReadStatusSummary
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MeeshyUser
@@ -209,6 +210,9 @@ class MessageRepository internal constructor(
      */
     suspend fun reconcileSent(cmid: String, serverMessage: ApiMessage) =
         sends.reconcileSent(cmid, serverMessage)
+
+    /** Server ACK of the socket fallback: the optimistic bubble becomes the acknowledged message. */
+    suspend fun reconcileAcknowledged(cmid: String, ack: SendMessageAck) = sends.reconcileAcknowledged(cmid, ack)
 
     /** The outbox exhausted its retries — surface the bubble as retryable, with the [reason] it says (#13550). */
     suspend fun markSendFailed(cmid: String, reason: String? = null) = sends.markSendFailed(cmid, reason)
