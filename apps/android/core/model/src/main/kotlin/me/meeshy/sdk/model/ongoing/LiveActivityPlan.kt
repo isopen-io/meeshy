@@ -17,6 +17,7 @@ data class LiveActivityPlan(
     val chronometerFromEpochMs: Long? = null,
     val actions: List<LiveActivityAction> = emptyList(),
     val isOngoing: Boolean = true,
+    val isError: Boolean = false,
 )
 
 /** La lecture d'un vocal telle que la notification la montre ; [isProtected] masque la conversation. */
@@ -73,6 +74,7 @@ object LiveActivityPlans {
             indeterminate = !ended && !waiting && !counted,
             actions = if (ended) emptyList() else listOf(LiveActivityAction(LiveActivityCommand.OutboxCancel, labels.cancel)),
             isOngoing = !ended,
+            isError = snapshot.phase == OutboxActivityPhase.Failed,
         )
     }
 

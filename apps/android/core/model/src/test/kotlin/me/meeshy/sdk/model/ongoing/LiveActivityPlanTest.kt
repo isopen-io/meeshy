@@ -53,6 +53,9 @@ class LiveActivityPlanTest {
         val plan = LiveActivityPlans.outbox(outbox(OutboxActivityPhase.Sent, sent = 3, total = 3, remaining = 0), labels)
         assertThat(plan.isOngoing).isFalse()
         assertThat(plan.actions).isEmpty()
+        assertThat(plan.isError).isFalse()
+        val failed = LiveActivityPlans.outbox(outbox(OutboxActivityPhase.Failed, remaining = 0), labels)
+        assertThat(failed.isError).isTrue()
     }
 
     @Test

@@ -10,6 +10,8 @@
     <!-- Lecture d'un vocal en arrière-plan : service de premier plan « mediaPlayback » + CPU éveillé (#13393). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- lot: ongoing-activity-host — envoi long porté par le service unique des notifications en cours (type dataSync). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Audio/video calls (WebRTC media capture) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
@@ -232,6 +234,18 @@
             android:name=".ongoing.VoiceRecordingService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- lot: ongoing-activity-host — UN service de premier plan typé pour les notifications en cours ;
+             le masque réellement passé à startForeground suit les activités ET les permissions (ForegroundTypeLaw). -->
+        <service
+            android:name=".ongoing.OngoingActivityService"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall|microphone|camera|mediaPlayback|mediaProjection|dataSync" />
+
+        <!-- Boutons des notifications en cours (Annuler, Arrêter, Raccrocher...) : un seul récepteur, sans gestionnaire = sans effet. -->
+        <receiver
+            android:name=".ongoing.OngoingCommandReceiver"
+            android:exported="false" />
 
         <!-- FCM Push -->
         <service
