@@ -20,11 +20,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
+import me.meeshy.app.push.PushTapExtras
 import me.meeshy.sdk.model.playback.BackgroundResumeRoute
 import me.meeshy.sdk.model.playback.VoicePlaybackCard
 import me.meeshy.sdk.model.playback.VoicePlaybackCardRules
 import me.meeshy.sdk.model.playback.VoicePlaybackCommand
 import me.meeshy.sdk.model.playback.VoicePlaybackTransportState
+import me.meeshy.sdk.model.rootnav.NowPlayingReturnPolicy
 
 /** L'application a une activité visible : le seul cas où elle peut demander le focus sans service de premier plan. */
 private fun processInForeground(): Boolean =
@@ -234,7 +236,7 @@ internal class VoicePlaybackSessionController(
         val open = PendingIntent.getActivity(
             context,
             NOTIFICATION_ID,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            openIntent(snapshot),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val builder = Notification.Builder(context, CHANNEL_ID)
@@ -264,6 +266,22 @@ internal class VoicePlaybackSessionController(
         )
         if (seekable) builder.addAction(action(ACTION_FORWARD, android.R.drawable.ic_media_ff, R.string.voice_playback_forward, REQUEST_FORWARD))
         return builder.build()
+    }
+
+    /**
+     * Le toucher ramène à la bulle du vocal qui joue, par les extras que lit le toucher de notification
+     * (`LaunchRouter`) ; en pause, sans conversation ou pour un audio de post, il ouvre l'app seule.
+     */
+    private fun openIntent(snapshot: VoicePlaybackSnapshot): Intent {
+        val intent = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val target = NowPlayingReturnPolicy.notificationTarget(snapshot.card, snapshot.transport.isPlaying)
+        if (target != null) {
+            PushTapExtras.put(
+                intent,
+                mapOf("conversationId" to target.conversationId, "messageId" to target.messageId),
+            )
+        }
+        return intent
     }
 
     /** Ce que l'écran verrouillé montre : « Message vocal », sans nom, conversation ni avatar. */
