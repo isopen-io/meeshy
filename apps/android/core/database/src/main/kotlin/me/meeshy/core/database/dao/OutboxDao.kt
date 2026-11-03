@@ -140,6 +140,17 @@ public interface OutboxDao {
     )
     public suspend fun defer(cmid: String, nextAttemptAt: Long, waitingSince: Long, now: Long)
 
+    /** Holds a row back until [nextAttemptAt] (a failed attempt's backoff); its wait clock and attempts are untouched. */
+    @Query("UPDATE outbox SET nextAttemptAt = :nextAttemptAt, updatedAt = :now WHERE cmid = :cmid")
+    public suspend fun scheduleNext(cmid: String, nextAttemptAt: Long, now: Long)
+
+    /** The earliest moment a held-back `PENDING` row becomes due, or `null`. */
+    @Query("SELECT MIN(nextAttemptAt) FROM outbox WHERE state = 'PENDING' AND nextAttemptAt IS NOT NULL")
+    public suspend fun earliestScheduledAttempt(): Long?
+
+    @Query("SELECT EXISTS(SELECT 1 FROM outbox WHERE state IN ('PENDING', 'INFLIGHT'))")
+    public suspend fun hasWork(): Boolean
+
     @Query("UPDATE outbox SET nextAttemptAt = NULL, waitingSince = NULL, lastError = NULL, cancelRequestedAt = NULL WHERE cmid = :cmid")
     public suspend fun resetSchedule(cmid: String)
 
