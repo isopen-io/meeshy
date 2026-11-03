@@ -21,6 +21,8 @@ internal fun StorySceneOverlays(
     muted: Boolean,
     rewindWhenInactive: Boolean = false,
     onAudioFocusLost: () -> Unit = {},
+    onAudioFocusGained: () -> Unit = {},
+    onAudioFocusLostForGood: () -> Unit = {},
     players: Boolean = true,
 ) {
     val playheadSeconds = if (slide.needsPlayhead) progress.value * slideDurationMs / 1000f else 0f
@@ -37,6 +39,8 @@ internal fun StorySceneOverlays(
                         muted = muted,
                         rewindWhenInactive = rewindWhenInactive,
                         onAudioFocusLost = onAudioFocusLost,
+                        onAudioFocusGained = onAudioFocusGained,
+                        onAudioFocusLostForGood = onAudioFocusLostForGood,
                         players = players,
                         holdsAudioFocus = focusHolder == StorySceneAudioFocus.Holder.Placed(layer.view.id),
                         looks = slide.composerLooks,

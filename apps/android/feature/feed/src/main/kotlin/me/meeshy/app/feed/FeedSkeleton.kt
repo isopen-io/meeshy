@@ -2,31 +2,21 @@ package me.meeshy.app.feed
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import me.meeshy.ui.component.MeeshySkeletonBox
-import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.component.skeleton.SkeletonFeedPost
+import me.meeshy.ui.component.skeleton.SkeletonGeometry
 import me.meeshy.ui.theme.MeeshySpacing
 
+/** Le froid du fil : des publications-squelettes aux dimensions exactes d'iOS (`SkeletonFeedList`). */
 @Composable
 internal fun FeedSkeleton() {
     LazyColumn(
-        contentPadding = PaddingValues(MeeshySpacing.lg),
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+        contentPadding = PaddingValues(vertical = MeeshySpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
+        userScrollEnabled = false,
     ) {
-        items(6) {
-            MeeshySkeletonBox(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp),
-                shape = RoundedCornerShape(MeeshyRadius.xl),
-            )
-        }
+        items(List(SkeletonGeometry.FeedPost.listCount) { it }) { SkeletonFeedPost() }
     }
 }

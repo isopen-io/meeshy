@@ -119,9 +119,26 @@ nonisolated enum ComposerRestChrome {
         return max(0, layer.minX + zone.midX - scene.width * scale / 2)
     }
 
+    /// **Le haut de la scène DESSINÉE** : la levée s'ancre au haut du 9:16 de
+    /// la couche, qui ne bouge que du décalage qu'elle applique.
+    static func sceneTop(layer: CGRect, aspectRatio ratio: CGFloat, offsetY: CGFloat) -> CGFloat {
+        guard !layer.isNull, layer.minY.isFinite, offsetY.isFinite else { return 0 }
+        let zone = ComposerSceneFit.zone(in: layer.size, aspectRatio: ratio)
+        let scene = ComposerSceneFit.frame(in: zone, aspectRatio: ratio)
+        guard scene.height > 0 else { return 0 }
+        return layer.minY + scene.minY + offsetY
+    }
+
+    /// ✕ et ↶ ↷ se posent sous le haut de la scène quand elle commence plus bas
+    /// que le chrome (iPhone SE) ; une scène qui monte au-dessus ne les déplace pas.
+    static func sceneTopInset(sceneTop: CGFloat, chromeTop: CGFloat) -> CGFloat {
+        guard sceneTop.isFinite, chromeTop.isFinite else { return 0 }
+        return max(0, sceneTop - chromeTop)
+    }
+
     /// Un panneau, une feuille ou le clavier réduisent la scène au-delà du
     /// repos : ses options ne la suivent pas, elles gardent l'écart du repos.
-    static func restSideInset(measured: CGFloat, sceneIsReduced: Bool, current: CGFloat) -> CGFloat {
+    static func restInset(measured: CGFloat, sceneIsReduced: Bool, current: CGFloat) -> CGFloat {
         sceneIsReduced ? current : measured
     }
 

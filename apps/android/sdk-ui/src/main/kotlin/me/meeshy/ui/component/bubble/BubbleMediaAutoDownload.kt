@@ -1,12 +1,15 @@
 package me.meeshy.ui.component.bubble
 
+import androidx.annotation.OptIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.media3.common.util.UnstableApi
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import coil.request.CachePolicy
@@ -16,6 +19,9 @@ import me.meeshy.sdk.model.MediaAvailability
 import me.meeshy.sdk.model.MediaDownloadPreferences
 import me.meeshy.sdk.model.MediaKind
 import me.meeshy.sdk.model.NetworkCondition
+import me.meeshy.sdk.model.mediacache.MediaCacheCategory
+import me.meeshy.sdk.model.piece.PieceBadge
+import me.meeshy.ui.component.media.MeeshyMediaCache
 
 /**
  * La politique de téléchargement automatique des médias du fil (#14639) : le réseau du moment et
@@ -43,6 +49,33 @@ public data class BubbleMediaAutoDownload(
 
 /** `null` : aucun hôte n'a branché de politique — la bulle charge comme avant. */
 public val LocalBubbleMediaAutoDownload = compositionLocalOf<BubbleMediaAutoDownload?> { null }
+
+/**
+ * **Une vidéo rendue en ligne de fichier se télécharge-t-elle seule ?** (#14652, miroir de
+ * `VideoAvailabilityResolver.shouldAutoStart`, iOS) — la MÊME politique que l'image de bulle, appliquée au genre
+ * vidéo : sous 100 Ko en ligne, toujours ; au-delà, la préférence vidéo de « Réglages › Médias » ; hors ligne, jamais.
+ * Seule une rangée encore « à télécharger » part : ni scellée, ni protégée, ni déjà là, ni en échec. Sans politique
+ * fournie par l'hôte, rien ne part seul.
+ */
+internal fun bubbleAutoDownloadsVideo(policy: BubbleMediaAutoDownload?, file: BubbleFile, badge: PieceBadge): Boolean =
+    policy != null && file.isVideo && badge is PieceBadge.Idle &&
+        policy.fetches(file.sizeBytes?.toLong(), MediaKind.VIDEO)
+
+/** Met la vidéo de [url] dans le cache de lecture ; rend `true` quand elle y est entière. */
+public fun interface BubbleVideoPrefetcher {
+    public suspend fun prefetch(url: String): Boolean
+}
+
+/** `null` : le cache vidéo Media3 de l'app ([MeeshyMediaCache]), celui que le lecteur relit. */
+public val LocalBubbleVideoPrefetcher = staticCompositionLocalOf<BubbleVideoPrefetcher?> { null }
+
+@OptIn(UnstableApi::class)
+@Composable
+internal fun rememberBubbleVideoPrefetcher(): BubbleVideoPrefetcher {
+    val provided = LocalBubbleVideoPrefetcher.current
+    val context = LocalContext.current.applicationContext
+    return provided ?: remember(context) { BubbleVideoPrefetcher { url -> MeeshyMediaCache.get(context).prefetch(MediaCacheCategory.VIDEO, url) } }
+}
 
 /** La politique (absente ⇒ libre) laisse-t-elle la bulle chercher ce média sur le réseau ? */
 internal fun bubbleFetchesFromNetwork(policy: BubbleMediaAutoDownload?, sizeBytes: Long?): Boolean =

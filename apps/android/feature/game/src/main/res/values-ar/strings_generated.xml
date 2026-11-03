@@ -412,6 +412,7 @@
     <string name="game_concept_elans_use">انظر أي الفئات نشطة، ثم قم بإجراء في فئة ناقصة. ما دام الزخم قائمًا، يُطلق كل إجراء شرارات أكثر.</string>
     <string name="game_concept_elans_what">الزخم مضاعِف للشرارات. يشتغل حين تكون نشطًا في عدة فئات من الإجراءات هذه الأيام.</string>
     <string name="game_concept_elans_why">الزخم يضاعف شرارات إجراءاتك القادمة.</string>
+    <string name="game_concept_fact_after">بعدها</string>
     <string name="game_concept_fact_balance">لديك</string>
     <string name="game_concept_fact_closes">الإغلاق</string>
     <string name="game_concept_fact_cost">المطلوب</string>
@@ -426,6 +427,7 @@
     <string name="game_concept_fact_prism_hour">ساعة المنشور</string>
     <string name="game_concept_fact_record">الذروة</string>
     <string name="game_concept_fact_remaining">لم تُنل بعد</string>
+    <string name="game_concept_fact_required">المطلوب</string>
     <string name="game_concept_fact_seal">الختم</string>
     <string name="game_concept_fact_state">الحالة</string>
     <string name="game_concept_fact_tier">حالة نورك</string>
@@ -938,7 +940,12 @@
     <string name="game_notebook_remove_failed">تعذّر على السيرة حذف هذه الصورة.</string>
     <string name="game_notebook_size">تشغل السيرة %1$s.</string>
     <string name="game_photo_a11y">صورة: %1$s</string>
+    <string name="game_photo_author_caption_achievement">مأثرة</string>
+    <string name="game_photo_author_caption_mission">حلم حقّقه</string>
+    <string name="game_photo_author_caption_rank">رتبة بلغها</string>
     <string name="game_photo_author_label_achievement">مأثرة ⁨%1$s⁩</string>
+    <string name="game_photo_author_label_mission">حلم حقّقه ⁨%1$s⁩</string>
+    <string name="game_photo_author_label_rank">رتبة بلغها ⁦%1$s⁩</string>
     <string name="game_photo_camera_denied">تم رفض الكاميرا. اسمح بها من إعدادات جهازك، أو اختر صورة من المعرض.</string>
     <string name="game_photo_camera_unavailable">الكاميرا غير متاحة (هل يستخدمها تطبيق آخر؟). اختر صورة من المعرض، أو احتفظ بالبطاقة فقط.</string>
     <string name="game_photo_camera_unsupported">لا يسمح هذا الجهاز بالكاميرا هنا. اختر صورة من المعرض، أو احتفظ بالبطاقة فقط.</string>
@@ -1084,9 +1091,11 @@
     <string name="game_sparks_pocket_label">نورك</string>
     <string name="game_sparks_record_line">%1$s تلقّيتها منذ البداية</string>
     <string name="game_spend_missing_freeze">ينقصك %1$s لأخذ قنديل.</string>
+    <string name="game_spend_missing_mint">ينقص نورك %1$s لسكّ Meesh رقم %2$s.</string>
     <string name="game_spend_missing_relight">ينقص %1$s لإعادة إشعال لهبك.</string>
     <string name="game_spend_missing_reroll">ينقصك %1$s لتبديل هذا الفصل.</string>
     <string name="game_spend_missing_seal">ينقصك %1$s لأخذ خاتم الرحلة.</string>
+    <string name="game_spend_missing_unlock">ينقص %1$s لفتحه.</string>
     <string name="game_starFragments_one">%1$s شظية نجم</string>
     <string name="game_starFragments_other">%1$s شظايا نجم</string>
     <string name="game_state_atlas_progress">اللغات المختومة: %1$s من %2$s. تبادلات غير مكتملة: %3$s.</string>
@@ -1182,6 +1191,9 @@
     <string name="game_treasury_tresor">كنز</string>
     <string name="progression_a11y_bar_level">نحو المستوى %1$d</string>
     <string name="progression_a11y_bar_meesh">نحو الـ Meesh التالية</string>
+    <string name="progression_a11y_bar_streak">لهبك، نحو معلمه التالي</string>
+    <string name="progression_a11y_tier_pending">المرحلة %1$d لم تُبلغ بعد</string>
+    <string name="progression_a11y_tier_reached">تم بلوغ المرحلة %1$d</string>
     <string name="progression_achievement_a11y_hint">المس لترى هذه المأثرة بالحجم الكامل.</string>
     <string name="progression_achievement_all_content_types_condition">رسالة صوتية ورسالة نصية ومنشور وقصة وريل</string>
     <string name="progression_achievement_all_content_types_title">متعدّد المواهب</string>

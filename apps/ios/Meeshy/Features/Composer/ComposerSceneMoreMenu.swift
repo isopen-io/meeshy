@@ -64,6 +64,7 @@ struct ComposerSceneMoreMenuItems: View {
     let onEntry: (ComposerMoreMenuEntry) -> Void
     let onAnimation: () -> Void
     let onTimeline: () -> Void
+    var soundReuseAllowed = true
 
     var body: some View {
         ForEach(entries, id: \.self) { entree in item(entree) }
@@ -75,6 +76,9 @@ struct ComposerSceneMoreMenuItems: View {
         switch entree {
         case .animation:
             Menu { animationItems } label: { libelle }
+        case .soundReuse:
+            Toggle(isOn: Binding(get: { soundReuseAllowed }, set: { _ in onEntry(entree) })) { libelle }
+                .accessibilityHint(ComposerMoreMenuCopy.soundReuseHint)
         default:
             Button(role: entree.isDestructive ? .destructive : nil) { onEntry(entree) } label: { libelle }
         }
