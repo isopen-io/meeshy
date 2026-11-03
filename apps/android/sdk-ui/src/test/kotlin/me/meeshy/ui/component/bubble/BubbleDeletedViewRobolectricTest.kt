@@ -6,6 +6,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.unit.width
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
