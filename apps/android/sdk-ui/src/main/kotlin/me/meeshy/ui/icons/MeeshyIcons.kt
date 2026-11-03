@@ -381,6 +381,7 @@ public object MeeshyIcons {
     public val Campaign: ImageVector get() = Icons.Filled.FiCampaign
     public val ChartBar: ImageVector get() = Icons.Filled.FiBarChart
     public val Check: ImageVector get() = Icons.Filled.FiCheck
+    public val CheckBoxChecked: ImageVector get() = Icons.Filled.FiCheckBox
     public val CheckBoxBlank: ImageVector get() = Icons.Filled.FiCheckBoxOutlineBlank
     public val CheckBoxChecked: ImageVector get() = Icons.Filled.FiCheckBox
     public val CheckCircle: ImageVector get() = Icons.Outlined.OuCheckCircle

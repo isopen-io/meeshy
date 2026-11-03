@@ -125,40 +125,40 @@ class MessageSendCoordinatorTest {
     }
 
     @Test
-    fun `reply, story reply and forward references each travel on the bubble and on the request`() = runHarnessTest { harness ->
+    fun `reply, story reply and forward references travel on the bubble and on the request`() = runHarnessTest { harness ->
         val coordinator = coordinator(harness)
-        val reply = coordinator.sendOptimistic("c1", "salut", "fr", sender, replyToId = "r1")
-        val storyReply = coordinator.sendOptimistic("c2", "salut", "fr", sender, storyReplyToId = "s1")
-        val forward = coordinator.sendOptimistic(
-            "c3", "salut", "fr", sender,
-            forwardedFromId = "f1",
-            forwardedFromConversationId = "fc1",
-        )
 
+        val reply = coordinator.sendOptimistic("c1", "salut", "fr", sender, replyToId = "r1")
         assertThat(harness.cachedMessage(reply).replyToId).isEqualTo("r1")
-        assertThat(harness.queuedRequest("c1").replyToId).isEqualTo("r1")
-        assertThat(harness.cachedMessage(storyReply).storyReplyToId).isEqualTo("s1")
+        assertThat(harness.queuedRequest().replyToId).isEqualTo("r1")
+
+        val story = coordinator.sendOptimistic("c2", "salut", "fr", sender, storyReplyToId = "s1")
+        assertThat(harness.cachedMessage(story).storyReplyToId).isEqualTo("s1")
         assertThat(harness.queuedRequest("c2").storyReplyToId).isEqualTo("s1")
-        assertThat(harness.cachedMessage(forward).forwardedFromId).isEqualTo("f1")
-        assertThat(harness.cachedMessage(forward).forwardedFromConversationId).isEqualTo("fc1")
-        val forwarded = harness.queuedRequest("c3")
-        assertThat(forwarded.forwardedFromId).isEqualTo("f1")
-        assertThat(forwarded.forwardedFromConversationId).isEqualTo("fc1")
+
+        val forward = coordinator.sendOptimistic(
+            "c3", "salut", "fr", sender, forwardedFromId = "f1", forwardedFromConversationId = "fc1",
+        )
+        val bubble = harness.cachedMessage(forward)
+        assertThat(bubble.forwardedFromId).isEqualTo("f1")
+        assertThat(bubble.forwardedFromConversationId).isEqualTo("fc1")
+        val request = harness.queuedRequest("c3")
+        assertThat(request.forwardedFromId).isEqualTo("f1")
+        assertThat(request.forwardedFromConversationId).isEqualTo("fc1")
     }
 
     @Test
-    fun `a combined relation travels as the story reply alone, the precedence of iOS`() = runHarnessTest { harness ->
+    fun `a request carries ONE relation, as on iOS - the story wins over the reply, the reply over the forward`() = runHarnessTest { harness ->
         coordinator(harness).sendOptimistic(
             "c1", "salut", "fr", sender,
-            replyToId = "r1",
-            storyReplyToId = "s1",
-            forwardedFromId = "f1",
+            replyToId = "r1", storyReplyToId = "s1", forwardedFromId = "f1", forwardedFromConversationId = "fc1",
         )
 
         val request = harness.queuedRequest()
         assertThat(request.storyReplyToId).isEqualTo("s1")
         assertThat(request.replyToId).isNull()
         assertThat(request.forwardedFromId).isNull()
+        assertThat(request.forwardedFromConversationId).isNull()
     }
 
     @Test

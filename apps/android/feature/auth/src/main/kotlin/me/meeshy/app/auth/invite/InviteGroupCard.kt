@@ -206,7 +206,7 @@ private fun LinkActions(absolute: String, isDark: Boolean) {
     Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus)) {
         ActionButton(
             text = stringResource(if (copied) R.string.invite_landing_group_copied else R.string.invite_landing_group_copy),
-            icon = if (copied) MeeshyIcons.Check else MeeshyIcons.CopyOutlined,
+            icon = if (copied) MeeshyIcons.Check else MeeshyIcons.Copy,
             isDark = isDark,
             modifier = Modifier.weight(1f),
         ) {
