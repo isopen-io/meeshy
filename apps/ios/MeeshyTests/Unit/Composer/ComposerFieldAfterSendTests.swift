@@ -19,7 +19,7 @@ final class ComposerFieldAfterSendTests: XCTestCase {
     }
 
     /// **La protection de #5326.** L'hôte a refusé l'envoi
-    /// (`sendMessageWithAttachments` sur `isUploading` ou un contenu jugé vide,
+    /// (`sendMessageWithAttachments` sur un contenu jugé vide,
     /// `submitEdit`) — il n'a pas touché à sa source, qui porte encore le texte
     /// poussé juste avant. Le champ le garde.
     func test_lHoteARefuse_leChampGardeLeTexte() {
