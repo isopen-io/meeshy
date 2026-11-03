@@ -324,6 +324,10 @@
     <string name="story_media_soundExtraction_a11yHint">D\'autres personnes pourront réutiliser la bande-son des vidéos de ce post dans leurs propres publications.</string>
     <string name="story_media_soundExtraction_caption">D\'autres personnes pourront réutiliser la bande-son des vidéos de ce post.</string>
     <string name="story_media_soundExtraction_label">Autoriser la reprise du son</string>
+    <string name="story_notification_expired_back">Retour aux notifications</string>
+    <string name="story_notification_expired_cta_create">Créer une story</string>
+    <string name="story_notification_expired_subtitle">Cette story n\'est plus disponible.</string>
+    <string name="story_notification_expired_title">Story expirée</string>
     <string name="story_reader_buffering">Chargement de la story en cours</string>
     <string name="story_reader_loading">Chargement de la story…</string>
     <string name="story_repost_error_forbidden">Cette story ne peut pas être repartagée</string>
