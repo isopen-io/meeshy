@@ -262,6 +262,8 @@
     <string name="stories_tray_manage">Gérer mes stories</string>
     <string name="stories_tray_view_my_story">Voir ma story</string>
     <string name="stories_viewer_close">Fermer</string>
+    <string name="stories_viewer_fullscreen_enter">Plein écran</string>
+    <string name="stories_viewer_fullscreen_exit">Quitter le plein écran</string>
     <string name="stories_viewer_mute">Couper le son de fond</string>
     <string name="stories_viewer_next">Story suivante</string>
     <string name="stories_viewer_not_found_description">Impossible de charger cette story. Réessayez ou fermez.</string>
