@@ -55,6 +55,7 @@ class SettingsViewModelLanguageTest {
             userRepository = mockk<UserRepository>(relaxed = true),
             themeStore = themeStore,
             interfaceLanguageStore = languageStore,
+            applicationSync = mockk(relaxed = true),
             workManager = mockk(relaxed = true),
         )
     }

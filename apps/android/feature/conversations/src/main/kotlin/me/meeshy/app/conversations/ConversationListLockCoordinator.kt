@@ -1,8 +1,15 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.lock.LockPinState
+import me.meeshy.sdk.model.lock.LockPinMode
+import me.meeshy.sdk.model.lock.LockPinEffect
+import me.meeshy.sdk.model.lock.LockPinResult
+import me.meeshy.sdk.model.lock.LockPinReducer
+import me.meeshy.sdk.model.lock.LockPinOracle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.lock.ConversationUnlockSessionStore
 
 /**
  * Verrou par code de la liste : ouverture des feuilles PIN, enchainement
@@ -13,6 +20,7 @@ import me.meeshy.sdk.lock.ConversationLockStore
 internal class ConversationListLockCoordinator(
     private val state: MutableStateFlow<ConversationListUiState>,
     private val lockStore: ConversationLockStore,
+    private val unlockSession: ConversationUnlockSessionStore = ConversationUnlockSessionStore(),
     private val openConversation: (String) -> Unit,
 ) {
 
@@ -102,11 +110,17 @@ internal class ConversationListLockCoordinator(
         result.effects.forEach { effect ->
             when (effect) {
                 is LockPinEffect.CommitMasterPin -> lockStore.setMasterPin(effect.pin)
-                is LockPinEffect.CommitLock -> lockStore.setLock(effect.conversationId, effect.pin)
+                is LockPinEffect.CommitLock -> {
+                    lockStore.setLock(effect.conversationId, effect.pin)
+                    unlockSession.revoke(effect.conversationId)
+                }
                 is LockPinEffect.RemoveLock -> lockStore.removeLock(effect.conversationId)
                 LockPinEffect.RemoveMasterPin -> lockStore.removeMasterPin()
                 LockPinEffect.RemoveAllLocks -> lockStore.removeAllLocks()
-                is LockPinEffect.OpenConversation -> openConversation(effect.conversationId)
+                is LockPinEffect.OpenConversation -> {
+                    unlockSession.unlock(effect.conversationId)
+                    openConversation(effect.conversationId)
+                }
                 LockPinEffect.Completed -> {
                     val pending = pendingLockConversationId
                     pendingLockConversationId = null

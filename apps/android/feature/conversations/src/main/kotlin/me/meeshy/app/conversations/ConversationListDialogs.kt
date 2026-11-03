@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -45,6 +46,8 @@ internal fun ConversationListDialogHost(
     val toasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 4) }
     val openSettings by rememberUpdatedState(onOpenSettings)
     val armSearch by rememberUpdatedState(onOpenConversationSearch)
+    val uriHandler = LocalUriHandler.current
+    val openUrl by rememberUpdatedState { url: String -> uriHandler.openUri(url) }
     LaunchedEffect(controller) {
         controller.effects.collect { effect ->
             when (effect) {
@@ -52,6 +55,7 @@ internal fun ConversationListDialogHost(
                 is ConversationListDialogEffect.Toast -> toasts.tryEmit(effect.request)
                 ConversationListDialogEffect.OpenSettings -> openSettings()
                 is ConversationListDialogEffect.ArmSearch -> armSearch(effect.conversationId)
+                is ConversationListDialogEffect.OpenUrl -> openUrl(effect.url)
             }
         }
     }

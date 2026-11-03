@@ -26,6 +26,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.model.composer.ComposerToolbarLaw
+import me.meeshy.sdk.model.composer.ComposerTrayPresenter
+import me.meeshy.sdk.model.composer.PendingPlace
 
 /**
  * Bottom bar layer. The multi-selection bar (#13294) REPLACES the composer while the mode is open
@@ -165,16 +167,16 @@ private fun ChatComposerDock(host: ChatHostContext) {
             },
             pendingSlot = if (pending.items.isEmpty() && host.pendingPlace == null) null else {
                 {
-                    Column {
-                        ComposerPlaceChip(host.pendingPlace, accentColor, onRemove = actions.clearPendingPlace)
-                        if (pending.items.isNotEmpty()) {
-                            ComposerPendingStrip(
-                                pending.items,
-                                onRemove = actions.removePendingAttachment,
-                                onEdit = editPending,
-                            )
-                        }
-                    }
+                    ComposerAttachmentTrayView(
+                        tray = ComposerTrayPresenter.present(
+                            pending.items,
+                            host.pendingPlace?.let { PendingPlace(it.latitude, it.longitude, it.name, it.address) },
+                        ),
+                        accent = accentColor,
+                        onRemove = actions.removePendingAttachment,
+                        onRemovePlace = actions.clearPendingPlace,
+                        onEdit = editPending,
+                    )
                 }
             },
             canMinimize = false,
@@ -186,7 +188,7 @@ private fun ChatComposerDock(host: ChatHostContext) {
             onDraftChange = actions.onDraftChange,
             onPickLanguage = actions.onComposerLanguagePicked,
             onSend = actions.send,
-            onClearEffects = actions.clearEffects,
+            onClearEffects = actions.clearPanelEffects,
             onCancelEdit = actions.cancelEdit,
             onCancelReply = actions.cancelReply,
             onRemoveClipboard = actions.removeClipboardContent,

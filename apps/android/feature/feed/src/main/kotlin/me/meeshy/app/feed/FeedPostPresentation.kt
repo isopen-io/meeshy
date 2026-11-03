@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.lang.ReaderPrism
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.theme.authorAccentHex
@@ -17,7 +18,6 @@ import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
 import me.meeshy.sdk.model.resolvedLayout
 import me.meeshy.sdk.model.resolvedCaption
-import me.meeshy.sdk.lang.LanguageResolver.preferredContentLanguages
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.story.sceneItems
 import me.meeshy.sdk.story.toStoryItem
@@ -180,7 +180,7 @@ object FeedPostBuilder {
         activeLanguageCode: String? = null,
         currentUserId: String? = null,
     ): FeedPostPresentation {
-        val preferredLanguages = preferredContentLanguages(preferences)
+        val preferredLanguages = ReaderPrism.resolve(preferences)
         val media = FeedMediaMapper.map(post.media, preferredLanguages, mediaBaseUrl)
         val images = media
             .filter { it.type == FeedMediaType.IMAGE }

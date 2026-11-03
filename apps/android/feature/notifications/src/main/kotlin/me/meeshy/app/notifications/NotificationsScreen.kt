@@ -43,6 +43,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.story.StoryNotificationContext
 import me.meeshy.sdk.model.game.GameTarget
 import me.meeshy.sdk.model.NotificationQuickAction
 import me.meeshy.ui.component.chrome.MeeshyBackground
@@ -80,7 +81,7 @@ fun NotificationsScreen(
     onOpenMood: (String) -> Unit = onOpenPost,
     onOpenProfile: (String) -> Unit = {},
     onOpenGame: (GameTarget) -> Unit = {},
-    onOpenStoryContent: ((NotificationDestination.StoryContent) -> Unit)? = null,
+    onOpenStoryContent: ((NotificationDestination.StoryContent, StoryNotificationContext) -> Unit)? = null,
     revealTap: EngagementRevealTapViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -125,7 +126,10 @@ fun NotificationsScreen(
                 onOpenProfile = { openProfile(it) },
                 onOpenMood = { openMood(it) },
                 onOpenGame = { openGame(it) },
-                onOpenStoryContent = { target -> openStoryContent?.invoke(target) ?: openPost(target.postId) },
+                onOpenStoryContent = { target ->
+                    openStoryContent?.invoke(target, StoryNotificationContext.from(notification, System.currentTimeMillis()))
+                        ?: openPost(target.postId)
+                },
             )
         }
     }
