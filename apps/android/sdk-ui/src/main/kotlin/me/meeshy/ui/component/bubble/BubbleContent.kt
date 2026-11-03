@@ -2,6 +2,9 @@ package me.meeshy.ui.component.bubble
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.JoinNoticePresentation
+import me.meeshy.sdk.model.BubbleAttachmentLayout
+import me.meeshy.sdk.model.CallSummaryMetadata
+import me.meeshy.sdk.model.ProtectionDescriptor
 import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.BubbleStickerSpec
 import me.meeshy.sdk.model.MessageEffects
@@ -184,6 +187,19 @@ public data class BubbleContent(
      * autres lecteurs (réponse, galerie, export). Nul pour tout autre message, supprimé ou scellé.
      */
     val sticker: BubbleStickerSpec? = null,
+    /** Les vidéos jointes, lues par la grille visuelle (iOS `visualGrid`) ; vide scellé, supprimé ou chiffré. */
+    val videos: List<BubbleVideo> = emptyList(),
+    /** Comment les pièces se rangent dans la bulle (grille visuelle, audio, non média, mélange) ; `None` sans pièce. */
+    val attachmentLayout: BubbleAttachmentLayout = BubbleAttachmentLayout.None,
+    /** Ce que le message déclare de sa protection (éphémère, vue unique, flou, chiffré). */
+    val protection: ProtectionDescriptor = ProtectionDescriptor.Unprotected,
+    /**
+     * Vue unique pas encore ouverte par CE lecteur (iOS `viewOnceSealed`) : la bulle ne porte NI texte, NI légende, NI
+     * pièce — rien n'atteint TalkBack, la copie ou la file de téléchargement. Décidé par lecteur, jamais par le compteur.
+     */
+    val isViewOnceSealed: Boolean = false,
+    /** Le résumé d'un appel (message système d'appel), décodé de `metadata` ; nul pour tout autre message. */
+    val callSummary: CallSummaryMetadata? = null,
 )
 
 /**
