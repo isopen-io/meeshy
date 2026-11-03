@@ -12,6 +12,8 @@ data class GalleryAttribution(
     val avatarUrl: String?,
     val createdAtIso: String?,
     val commentId: String? = null,
+    /** Le compte de l'auteur, d'où se lit son point de présence ; `null` = aucun point. */
+    val userId: String? = null,
 )
 
 /** Une scène du post telle que l'hôte la déclare au composeur ; la peinture revient au lot de scène. */
@@ -94,13 +96,27 @@ object SocialMediaGalleryPresentation {
     ): SocialMediaGallery {
         val reader = ReaderPrism.resolve(prefs)
         val publication = if (scenes.isEmpty()) mediaPages(post, prefs, reader) else scenePages(post, scenes)
-        val following = comments.flatMap { commentPages(it, prefs, reader) }
+        return following(publication, comments, prefs)
+    }
+
+    /**
+     * [publication] (les pages que l'hôte a déjà composées pour le post) suivie des médias de [comments] ; un identifiant
+     * déjà vu garde sa première page. Le site où le fil, qui ne tient qu'une projection du post, rejoint la loi commune.
+     */
+    fun following(
+        publication: List<GalleryPage>,
+        comments: List<ApiPostComment>,
+        prefs: LanguageResolver.ContentLanguagePreferences,
+    ): SocialMediaGallery {
+        val reader = ReaderPrism.resolve(prefs)
         val seen = HashSet<String>()
-        return SocialMediaGallery((publication + following).filter { seen.add(it.id) })
+        val pages = publication + comments.flatMap { commentPages(it, prefs, reader) }
+        return SocialMediaGallery(pages.filter { seen.add(it.id) })
     }
 
     private fun attribution(post: ApiPost) = GalleryAttribution(
         name = post.author.displayLabel(), avatarUrl = post.author?.avatar, createdAtIso = post.createdAt,
+        userId = post.author?.id,
     )
 
     private fun ApiAuthor?.displayLabel(): String? =
@@ -138,7 +154,7 @@ object SocialMediaGalleryPresentation {
     ): List<GalleryPage> {
         val author = GalleryAttribution(
             name = comment.author.displayLabel(), avatarUrl = comment.author?.avatar,
-            createdAtIso = comment.createdAt, commentId = comment.id,
+            createdAtIso = comment.createdAt, commentId = comment.id, userId = comment.author?.id,
         )
         val carrier = comment.displayContent(prefs)
         return comment.media.orEmpty().filter { it.galleryKind() != null }

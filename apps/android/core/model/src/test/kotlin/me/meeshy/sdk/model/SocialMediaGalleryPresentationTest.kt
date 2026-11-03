@@ -123,4 +123,13 @@ class SocialMediaGalleryPresentationTest {
         val plain = compose(p)
         assertThat(plain.quotation("a", p)?.kind).isEqualTo(CommentQuotedMedia.Kind.IMAGE)
     }
+
+    @Test
+    fun `le fil rejoint la loi commune : ses pages deja composees suivies des commentaires donnent la meme galerie`() {
+        val p = post(listOf(image("a"), image("b")))
+        val comments = listOf(comment("c1", listOf(image("m"))))
+        val direct = compose(p, comments)
+        val viaFeed = SocialMediaGalleryPresentation.following(compose(p).pages, comments, Prefs())
+        assertThat(viaFeed).isEqualTo(direct)
+    }
 }

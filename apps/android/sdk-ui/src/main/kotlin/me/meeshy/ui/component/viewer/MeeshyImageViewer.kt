@@ -219,7 +219,7 @@ private const val STAGE_FADE_ON_DRAG = 0.6f
  * them in immersion — iOS hands the whole height to the media.
  */
 @Composable
-private fun SystemBarsForViewer(immersive: Boolean) {
+internal fun SystemBarsForViewer(immersive: Boolean) {
     FullScreenDialogWindow()
     val view = LocalView.current
     val window = (view.parent as? DialogWindowProvider)?.window ?: return
