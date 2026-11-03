@@ -39,6 +39,11 @@
     <string name="audio_editor_use">استخدام الصوت</string>
     <string name="audio_editor_volume_normal">عادي</string>
     <string name="audio_fullscreen_dial">الموضع في الرسالة الصوتية</string>
+    <string name="audio_recorder_micDenied">تم رفض إذن الميكروفون</string>
+    <string name="audio_recorder_micDeniedSettings">تم رفض الميكروفون — اسمح به في الإعدادات</string>
+    <string name="audio_recorder_record">تسجيل</string>
+    <string name="audio_recorder_recording">جارٍ التسجيل</string>
+    <string name="audio_recorder_tapToRecord">انقر للتسجيل</string>
     <string name="audio_split_handle_end">نهاية القص</string>
     <string name="audio_split_handle_start">بداية القص</string>
     <string name="audio_trim_handle_end">نهاية التحديد</string>
@@ -402,6 +407,11 @@
     <string name="sticker_sheet_unpin">إزالة من المفضلة</string>
     <string name="story_sticker_a11y">ملصق %1$s</string>
     <string name="story_sticker_title">الملصقات</string>
+    <string name="story_voiceRecorder_fromFiles">الملفات</string>
+    <string name="story_voiceRecorder_fromLibrary">المكتبة</string>
+    <string name="story_voiceRecorder_start">تسجيل</string>
+    <string name="story_voiceRecorder_stop">إيقاف التسجيل</string>
+    <string name="story_voiceRecorder_title">التسجيل</string>
     <string name="time_lastSeen_beforeYesterdayAt">شوهد أول أمس في %1$s</string>
     <string name="time_lastSeen_dateAt">شوهد في %1$s الساعة %2$s</string>
     <string name="time_lastSeen_online">متصل</string>

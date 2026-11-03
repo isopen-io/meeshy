@@ -39,6 +39,11 @@
     <string name="audio_editor_use">Usar o áudio</string>
     <string name="audio_editor_volume_normal">Normal</string>
     <string name="audio_fullscreen_dial">Posição na mensagem de voz</string>
+    <string name="audio_recorder_micDenied">Permissão de microfone negada</string>
+    <string name="audio_recorder_micDeniedSettings">Microfone negado — permita em Ajustes</string>
+    <string name="audio_recorder_record">Gravar</string>
+    <string name="audio_recorder_recording">Gravando</string>
+    <string name="audio_recorder_tapToRecord">Toque para gravar</string>
     <string name="audio_split_handle_end">Fim do corte</string>
     <string name="audio_split_handle_start">Início do corte</string>
     <string name="audio_trim_handle_end">Fim da seleção</string>
@@ -387,6 +392,11 @@
     <string name="sticker_sheet_unpin">Remover dos favoritos</string>
     <string name="story_sticker_a11y">Adesivo %1$s</string>
     <string name="story_sticker_title">Figurinhas</string>
+    <string name="story_voiceRecorder_fromFiles">Arquivos</string>
+    <string name="story_voiceRecorder_fromLibrary">Biblioteca</string>
+    <string name="story_voiceRecorder_start">Gravar</string>
+    <string name="story_voiceRecorder_stop">Parar a gravação</string>
+    <string name="story_voiceRecorder_title">Gravação</string>
     <string name="time_lastSeen_beforeYesterdayAt">Visto anteontem às %1$s</string>
     <string name="time_lastSeen_dateAt">Visto em %1$s às %2$s</string>
     <string name="time_lastSeen_online">Online</string>
