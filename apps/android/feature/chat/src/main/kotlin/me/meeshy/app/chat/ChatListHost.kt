@@ -111,27 +111,6 @@ internal fun ChatListHost(
     }
     // Script / Focal : la rangée plate d'iOS (`FocalRow`) ; Bulles, Résumé, Rivière : la bulle.
     val flatRows = ThreadRowMux.rendering(host.readingMode?.state?.mode) == ThreadRowRendering.Flat
-    // L'heure et les coches de la rangée plate : visibles pendant le défilement du doigt puis
-    // 900 ms (ScrollTimePillLaw), fondu de 280 ms — lues au dessin, sans recomposer les rangées.
-    var metaRevealed by remember { mutableStateOf(false) }
-    LaunchedEffect(flatRows) {
-        if (!flatRows) return@LaunchedEffect
-        snapshotFlow { host.chrome.isUserScrolling }
-            .collectLatest { scrolling ->
-                if (scrolling) {
-                    metaRevealed = true
-                } else if (metaRevealed) {
-                    delay(ScrollTimePillLaw.LINGER_MS.toLong())
-                    metaRevealed = false
-                }
-            }
-    }
-    val metaAlphaState = animateFloatAsState(
-        targetValue = if (metaRevealed) 1f else 0f,
-        animationSpec = tween(FocalMetrics.Pill.FADE_DURATION_MS.toInt()),
-        label = "flat-meta",
-    )
-    val metaAlpha = remember(metaAlphaState) { { metaAlphaState.value } }
     val scope = rememberCoroutineScope()
     // Async OpenGraph link previews: one screen-scoped store dedupes fetches across bubbles and
     // dies with the screen (its cache is discarded on logout/leave — nothing leaks to the next
@@ -260,28 +239,15 @@ internal fun ChatListHost(
         chrome = host.chrome,
         reduceMotion = reduceMotion,
     )
-    val pinnedDayMillis by remember(renderedItems, readingLinePx, flatRows) {
-        derivedStateOf {
-            if (host.chrome.isHeaderExpanded) return@derivedStateOf null
-            // Rangée plate : la pastille de jour se retire pendant le défilement (iOS).
-            if (flatRows && host.chrome.isUserScrolling) return@derivedStateOf null
-            val info = listState.layoutInfo
-            val height = info.viewportSize.height.toFloat()
-            val before = info.beforeContentPadding.toFloat()
-            val visible = info.visibleItemsInfo.filter { it.index < renderedItems.size }
-            // `reverseLayout` : l'offset court depuis le bas du fil ; on le ramène à l'écran.
-            val rows = visible.map { item ->
-                val bottom = height - before - item.offset
-                PinnedDayHeader.Row(
-                    isDayHeader = renderedItems[item.index] is ChatListItem.DayHeader,
-                    minY = bottom - item.size,
-                    maxY = bottom,
-                )
-            }
-            val row = PinnedDayHeader.stickyRow(rows, readingLinePx, height) ?: return@derivedStateOf null
-            PinnedDayHeader.governingDayMillis(renderedItems, visible[row].index, orientation)
-        }
-    }
+    // La pilule jour·heure, la révélation de l'heure des rangées plates (loi des 900 ms) et le clavier d'abord.
+    val timePill = rememberScrollTimePillDriver(listState, renderedItems, host.chrome, readingLinePx)
+    val scrollConnection = rememberKeyboardFirstScrollConnection(listState, host.chrome.threadScroll)
+    val metaAlphaState = animateFloatAsState(
+        targetValue = if (timePill.reveal.isRevealed && flatRows) 1f else 0f,
+        animationSpec = tween(FocalMetrics.Pill.FADE_DURATION_MS.toInt()),
+        label = "flat-meta",
+    )
+    val metaAlpha = remember(metaAlphaState) { { metaAlphaState.value } }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
     val media = rememberChatMediaHost(actions.dismissImageViewer)
     LaunchedEffect(state.imageViewer == null) { if (state.imageViewer == null) media.onImageViewerClosed() }
@@ -477,7 +443,8 @@ internal fun ChatListHost(
                     renderedItems = renderedItems,
                     accentColor = accentColor,
                     isLoadingOlder = state.isLoadingOlder,
-                    pinnedDayMillis = pinnedDayMillis,
+                    scrollTimePill = timePill.pill,
+                    scrollConnection = scrollConnection,
                     scrollAffordance = scrollAffordance,
                     typingParticipants = state.typingParticipants,
                     isOffline = state.isOffline,

@@ -94,6 +94,8 @@ internal class ChatChromeState(val listGate: ChatListUpdateGate? = null) {
     var isUserScrolling by mutableStateOf(false)
     /** L'en-tête est déplié : la pastille de jour flottante se retire (iOS `isHeaderExpanded`). */
     var isHeaderExpanded by mutableStateOf(false)
+    /** Le geste en cours : clavier d'abord, puis repli du chrome (en-tête, barre de saisie). */
+    val threadScroll = ThreadChromeScroll()
 }
 
 /**
