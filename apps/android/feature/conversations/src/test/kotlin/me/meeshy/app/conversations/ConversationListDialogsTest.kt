@@ -44,6 +44,8 @@ class ConversationListDialogsTest {
         val unblocked = mutableListOf<String>()
         override suspend fun block(userId: String): Boolean = accepts.also { blocked += userId }
         override suspend fun unblock(userId: String): Boolean = accepts.also { unblocked += userId }
+        val alreadyBlocked = mutableSetOf<String>()
+        override fun isBlocked(userId: String): Boolean = userId in alreadyBlocked
     }
 
     private class FakeReporter(var result: NetworkResult<Unit>? = NetworkResult.Success(Unit)) : ConversationReporter {
@@ -79,6 +81,7 @@ class ConversationListDialogsTest {
         user: MeeshyUser? = me,
         blocker: FakeBlocker = FakeBlocker(),
         reporter: FakeReporter = FakeReporter(),
+        webOrigin: String = "",
     ): Harness {
         val repo = mockk<ConversationRepository>(relaxed = true)
         val state = MutableStateFlow(ConversationListUiState(currentUserId = user?.id, currentUser = user))
@@ -100,7 +103,7 @@ class ConversationListDialogsTest {
             conversationOf = { id -> conversations.firstOrNull { it.id == id } },
             actions = actions,
             repository = repo,
-            deps = ConversationListDialogDeps(blocker, reporter),
+            deps = ConversationListDialogDeps(blocker, reporter, webOrigin = webOrigin),
             lock = lock,
             lockStore = lockStore,
         )
@@ -353,5 +356,43 @@ class ConversationListDialogsTest {
         h.controller.requestInvite("g2")
 
         assertThat(h.controller.dialog.value).isEqualTo(ConversationListDialog.Invite("g2"))
+    }
+
+    // ── Ce que le menu lit : blocage du pair, administration ──
+
+    @Test
+    fun `the menu reads the block state of a direct peer, and nothing for a group`() = runTest(StandardTestDispatcher()) {
+        val blocker = FakeBlocker().apply { alreadyBlocked += "peer" }
+        val h = harness(direct(), group(), blocker = blocker)
+
+        assertThat(h.controller.isPeerBlocked("d1")).isTrue()
+        assertThat(h.controller.isPeerBlocked("g1")).isNull()
+    }
+
+    @Test
+    fun `a platform admin opens the admin console of the conversation in the browser`() = runTest(StandardTestDispatcher()) {
+        val admin = me.copy(role = "ADMIN")
+        val h = harness(group(), user = admin, webOrigin = "https://meeshy.me/")
+
+        h.controller.openAdminConsole("g1")
+        runCurrent()
+
+        assertThat(h.effects).containsExactly(
+            ConversationListDialogEffect.OpenUrl("https://meeshy.me/admin/conversations/g1"),
+        )
+    }
+
+    @Test
+    fun `an ordinary member never reaches the admin console, nor an unknown web origin`() = runTest(StandardTestDispatcher()) {
+        val member = harness(group(), webOrigin = "https://meeshy.me")
+        val noOrigin = harness(group(), user = me.copy(role = "ADMIN"), webOrigin = "")
+
+        member.controller.openAdminConsole("g1")
+        noOrigin.controller.openAdminConsole("g1")
+        runCurrent()
+
+        assertThat(member.effects).isEmpty()
+        assertThat(noOrigin.effects).isEmpty()
+        assertThat(noOrigin.controller.canOpenAdminConsole).isFalse()
     }
 }

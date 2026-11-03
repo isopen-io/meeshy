@@ -146,4 +146,4 @@ internal class MessageWindowSource(
 
 /** Un message supprimé ou un éphémère échu n'a plus sa place dans le flux (même s'il reste une ligne avant la purge). */
 internal fun MessageEntity.isGone(nowMillis: Long): Boolean =
-    deletedAt != null || (expiresAt != null && expiresAt <= nowMillis)
+    deletedAt != null || expiresAt?.let { it <= nowMillis } == true

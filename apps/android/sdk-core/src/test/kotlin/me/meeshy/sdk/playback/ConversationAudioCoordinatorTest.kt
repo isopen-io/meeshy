@@ -207,4 +207,56 @@ class ConversationAudioCoordinatorTest {
         assertThat(engine.stops).isEqualTo(1)
         assertThat(coordinator.snapshot.value.context).isNull()
     }
+
+    @Test fun `une double notification de fin n'avance qu'une fois`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine, "b", "c")
+
+        engine.mutableEvents.tryEmit(AudioEngineEvent.Finished("a", completed = true))
+        engine.mutableEvents.tryEmit(AudioEngineEvent.Finished("a", completed = true))
+        runCurrent()
+
+        assertThat(engine.played).containsExactly("a", "b").inOrder()
+        assertThat(coordinator.snapshot.value.queue.current?.attachmentId).isEqualTo("b")
+    }
+
+    @Test fun `la file epuisee garde le contexte cinq secondes puis le lache`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine)
+
+        engine.mutableEvents.tryEmit(AudioEngineEvent.Finished("a", completed = true))
+        runCurrent()
+        assertThat(coordinator.snapshot.value.context).isNull()
+        assertThat(coordinator.graceContext.value?.conversationName).isEqualTo("Famille")
+
+        testScheduler.advanceTimeBy(4_900L)
+        runCurrent()
+        assertThat(coordinator.graceContext.value).isNotNull()
+
+        testScheduler.advanceTimeBy(200L)
+        runCurrent()
+        assertThat(coordinator.graceContext.value).isNull()
+    }
+
+    @Test fun `la croix ferme le contexte de grace tout de suite`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine)
+        engine.mutableEvents.tryEmit(AudioEngineEvent.Finished("a", completed = true))
+        runCurrent()
+
+        coordinator.dismissGrace()
+
+        assertThat(coordinator.graceContext.value).isNull()
+    }
+
+    @Test fun `rejouer pendant la grace la ferme`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine)
+        engine.mutableEvents.tryEmit(AudioEngineEvent.Finished("a", completed = true))
+        runCurrent()
+
+        coordinator.play(item("z"), emptyList(), "Autre", null)
+
+        assertThat(coordinator.graceContext.value).isNull()
+    }
 }

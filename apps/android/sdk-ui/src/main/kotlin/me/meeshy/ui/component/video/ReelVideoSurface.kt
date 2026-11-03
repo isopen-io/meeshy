@@ -18,13 +18,11 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.ui.R
 import me.meeshy.ui.component.media.ComposerLiveEffects
 import me.meeshy.ui.component.media.MeeshyMediaCache
-import me.meeshy.ui.component.media.PlayerCensus
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 
@@ -120,40 +118,44 @@ fun ReelVideoSurface(
      * pipeline d'effets.
      */
     effects: ComposerLiveEffects? = null,
+    /** Le premier plan est lu : l'hôte retire son poster sans que la page se recompose pour autant. */
+    onFirstFrame: () -> Unit = {},
+    /** Le média est arrivé au bout (sans boucle, ou fenêtre de source épuisée) : l'hôte enchaîne. */
+    onPlaybackEnded: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
     val painted = effects != null
     val player = remember(mediaUrl, sourceStartMs, sourceEndMs, loads, cached, painted) {
         if (!loads) return@remember null
-        PlayerCensus.record()
-        // Lecture par le cache disque (clé canonique) : un média déjà vu se rouvre sans réseau.
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(
-                if (cached) mediaCache.mediaSourceFactory(MediaCacheCategory.VIDEO, mediaUrl)
-                else DefaultMediaSourceFactory(context),
-            )
-            .build().apply {
+        // Un composable n'instancie jamais ExoPlayer lui-même : le lecteur vient du pool (borné à trois, FIFO)
+        // et y retourne à la sortie. La source se pose à chaque emprunt, le lecteur n'est donc lié à aucune URL.
+        val sourceFactory =
+            if (cached) mediaCache.mediaSourceFactory(MediaCacheCategory.VIDEO, mediaUrl)
+            else DefaultMediaSourceFactory(context)
+        ReelPlayers.get(context).acquire().apply {
             setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted && holdsAudioFocus)
             // **La fenêtre est portée par le MediaItem, jamais par un `seekTo`
             // suivi d'une surveillance.** ExoPlayer coupe alors la source
             // lui-même : la position 0 du player EST le début de la fenêtre, la
             // boucle reboucle sur elle, et aucun code n'a à observer la tête de
             // lecture pour arrêter à temps.
-            setMediaItem(
-                MediaItem.Builder()
-                    .setUri(mediaUrl)
-                    .apply {
-                        if (sourceStartMs != null && sourceEndMs != null) {
-                            setClippingConfiguration(
-                                MediaItem.ClippingConfiguration.Builder()
-                                    .setStartPositionMs(sourceStartMs)
-                                    .setEndPositionMs(sourceEndMs)
-                                    .build(),
-                            )
+            setMediaSource(
+                sourceFactory.createMediaSource(
+                    MediaItem.Builder()
+                        .setUri(mediaUrl)
+                        .apply {
+                            if (sourceStartMs != null && sourceEndMs != null) {
+                                setClippingConfiguration(
+                                    MediaItem.ClippingConfiguration.Builder()
+                                        .setStartPositionMs(sourceStartMs)
+                                        .setEndPositionMs(sourceEndMs)
+                                        .build(),
+                                )
+                            }
                         }
-                    }
-                    .build(),
+                        .build(),
+                ),
             )
             repeatMode = Player.REPEAT_MODE_ONE
             this.volume = if (muted) 0f else volume.coerceIn(0f, 1f)
@@ -189,11 +191,19 @@ fun ReelVideoSurface(
     val currentOnAudioFocusLost by rememberUpdatedState(onAudioFocusLost)
     val currentOnAudioFocusGained by rememberUpdatedState(onAudioFocusGained)
     val currentOnAudioFocusLostForGood by rememberUpdatedState(onAudioFocusLostForGood)
+    val currentOnFirstFrame by rememberUpdatedState(onFirstFrame)
+    val currentOnPlaybackEnded by rememberUpdatedState(onPlaybackEnded)
     DisposableEffect(player) {
         val live = player ?: return@DisposableEffect onDispose { }
         val releaseLease = if (cached) mediaCache.lease(mediaUrl) else ({ })
         currentOnPlayer(ReelPlayerHandle(live))
         val focusListener = object : Player.Listener {
+            override fun onRenderedFirstFrame() = currentOnFirstFrame()
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED) currentOnPlaybackEnded()
+            }
+
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS) {
                     currentOnAudioFocusLost()
@@ -217,7 +227,9 @@ fun ReelVideoSurface(
             live.removeListener(focusListener)
             currentOnPlayer(null)
             releaseLease()
-            live.release()
+            // Un lecteur peint par le GPU garde son pipeline d'effets : il ne se remet pas à zéro, il se détruit.
+            val pool = ReelPlayers.get(context)
+            if (painted) pool.discard(live) else pool.release(live)
         }
     }
 

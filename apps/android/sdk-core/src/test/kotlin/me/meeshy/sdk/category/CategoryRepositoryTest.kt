@@ -39,6 +39,8 @@ class CategoryRepositoryTest {
 
         override suspend fun getAudio() = ApiResponse<me.meeshy.sdk.model.AudioPreferenceSyncBody>(success = false)
 
+        override suspend fun updateApplication(body: me.meeshy.sdk.model.ApplicationPreferenceSyncBody) = ApiResponse<Unit>(success = false)
+
         var calls: Int = 0
         var createCalls: Int = 0
         var lastCreateBody: CreateCategoryBody? = null
