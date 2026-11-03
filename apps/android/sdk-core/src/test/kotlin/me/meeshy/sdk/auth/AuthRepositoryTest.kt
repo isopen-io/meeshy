@@ -351,6 +351,26 @@ class AuthRepositoryTest {
     }
 
     @Test
+    fun registerHoldingSession_claimedAddress_awaitsTheCodeWithoutAnySession() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(
+            response = ApiResponse(success = false),
+            registerResponse = ApiResponse(
+                success = true,
+                data = RegisterResponse(
+                    status = "verification-required", email = "a@b.co", accountCreated = true, pendingSessionToken = "pend",
+                ),
+            ),
+        )
+        val (repo, _) = repository(api, store)
+
+        val result = repo.registerHoldingSession(RegisterRequest(email = "typed@b.co", password = "secret", claimEmail = true))
+
+        assertThat(result.getOrNull()).isEqualTo(RegisterOutcome.VerificationRequired("a@b.co", "pend"))
+        assertThat(store.jwt).isNull()
+    }
+
+    @Test
     fun register_phoneOwnershipConflict_isSuccessButAdoptsNothing() = runTest {
         val store = InMemoryTokenStore()
         val api = FakeAuthApi(

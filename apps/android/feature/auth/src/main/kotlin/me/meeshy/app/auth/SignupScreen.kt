@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -70,8 +71,6 @@ import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.auth.LanguageStepSelection
 import me.meeshy.sdk.model.auth.SignupField
 import me.meeshy.sdk.model.auth.SignupPrimaryAction
-import me.meeshy.sdk.model.auth.SignupFieldMessage
-import me.meeshy.sdk.model.auth.SignupRefusal
 import me.meeshy.sdk.model.auth.SignupSubmitError
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.auth.AuthContentType
@@ -112,6 +111,8 @@ fun SignupScreen(
     onRegistered: () -> Unit,
     onOpenTerms: () -> Unit = {},
     onOpenPrivacy: () -> Unit = {},
+    onOpenSignInLink: () -> Unit = {},
+    onOpenForgotPassword: () -> Unit = {},
     viewModel: SignupViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -130,6 +131,23 @@ fun SignupScreen(
         )
     }
 
+    val takenActions = remember(viewModel) {
+        SignupEmailTakenActions(
+            onItsMe = viewModel::requestSignInLink,
+            onNotMe = viewModel::claimEmail,
+            onForgotPassword = viewModel::onForgotPassword,
+        )
+    }
+    val latestOpenSignInLink by rememberUpdatedState(onOpenSignInLink)
+    val latestOpenForgotPassword by rememberUpdatedState(onOpenForgotPassword)
+    LaunchedEffect(viewModel) {
+        viewModel.effect.collect { effect ->
+            when (effect) {
+                SignupEffect.OpenSignInLink -> latestOpenSignInLink()
+                SignupEffect.OpenForgotPassword -> latestOpenForgotPassword()
+            }
+        }
+    }
     LaunchedEffect(state.isRegistered) {
         if (state.isRegistered) onRegistered()
     }
@@ -158,7 +176,7 @@ fun SignupScreen(
                 SignupHeader()
                 SignupPhoneSection(state = state, viewModel = viewModel)
                 PhaseReveal(visible = state.progress.emailShown) {
-                    EmailPhase(state = state, viewModel = viewModel, modifier = Modifier.padding(top = PHASE_GAP), onSignIn = { viewModel.onSwitchToLogin(); onClose() })
+                    EmailPhase(state = state, viewModel = viewModel, takenActions = takenActions, modifier = Modifier.padding(top = PHASE_GAP))
                 }
                 PhaseReveal(visible = state.progress.cardShown) {
                     Column(
@@ -272,11 +290,10 @@ private fun SignupPhoneSection(state: SignupUiState, viewModel: SignupViewModel)
 private fun EmailPhase(
     state: SignupUiState,
     viewModel: SignupViewModel,
-    onSignIn: () -> Unit,
+    takenActions: SignupEmailTakenActions,
     modifier: Modifier = Modifier,
 ) {
     val message = state.messageFor(SignupField.EMAIL)
-    val emailTaken = (message as? SignupFieldMessage.Refused)?.refusal == SignupRefusal.EMAIL_TAKEN
     val errorText = fieldMessageText(SignupField.EMAIL, message)
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
         AuthTextField(
@@ -291,19 +308,8 @@ private fun EmailPhase(
             modifier = Modifier.testTag(SIGNUP_EMAIL_TAG),
         )
         ErrorHaptic(errorText)
-        // Une adresse déjà prise n'est pas une faute de frappe : la sortie est de se connecter.
-        if (emailTaken) {
-            Text(
-                text = stringResource(R.string.signup_sign_in),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MeeshyPalette.Indigo500,
-                modifier = Modifier
-                    .heightIn(min = 48.dp)
-                    .clickable(role = Role.Button, onClick = onSignIn)
-                    .padding(vertical = MeeshySpacing.sm),
-            )
-        }
+        // Une adresse déjà prise n'est pas une faute de frappe : « Est-ce vous ? », ses gestes valent pour CETTE adresse.
+        SignupEmailTakenBlock(state = state, actions = takenActions)
     }
 }
 
