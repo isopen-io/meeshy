@@ -14,6 +14,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.sdk.model.story.StoryComposerFold
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -55,8 +59,20 @@ internal fun BoxScope.StoryCommentsOverlayHost(
     viewModel: StoryViewerViewModel,
     chromeVisible: Boolean,
     comments: StoryCommentsOverlayRequest = StoryCommentsOverlayRequest(),
+    decorationsShown: Boolean = true,
 ) {
     var composerHeightPx by remember { mutableIntStateOf(0) }
+    var composerFolded by remember { mutableStateOf(false) }
+    val replyId = commentThread?.let { thread ->
+        val threadState by thread.state.collectAsStateWithLifecycle()
+        threadState.replyTarget?.parentId
+    }
+    var previousReplyId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(replyId) {
+        if (StoryComposerFold.unfoldsOnReply(previousReplyId, replyId)) composerFolded = false
+        previousReplyId = replyId
+    }
+    val decorationsAlpha = storyFocusAlpha(decorationsShown)
     LaunchedEffect(slide?.id) {
         chrome.captionExpanded = false
         chrome.transcript = chrome.transcript.onSlide(slide?.id)
@@ -77,11 +93,14 @@ internal fun BoxScope.StoryCommentsOverlayHost(
         )
     }
     val transcriptText = chrome.transcript.text(currentItem?.storyEffects, viewModel.transcriptLanguageChain())
-    if (transcriptText != null) {
-        StoryTranscriptCaption(transcriptText, bottomInset, Modifier.align(Alignment.BottomCenter))
+    if (decorationsAlpha <= 0f) {
+        Unit
+    } else if (transcriptText != null) {
+        StoryTranscriptCaption(transcriptText, bottomInset, Modifier.align(Alignment.BottomCenter).graphicsLayer { alpha = decorationsAlpha })
     } else if (slide != null && slide.text.isNotBlank()) {
         StoryCaptionOverlay(
             text = slide.text,
+            modifier = Modifier.graphicsLayer { alpha = decorationsAlpha },
             expanded = chrome.captionExpanded,
             onToggle = {
                 haptics.light()
@@ -100,6 +119,8 @@ internal fun BoxScope.StoryCommentsOverlayHost(
         if (composerPinned && commentThread != null) {
             StoryPinnedCommentComposer(
                 thread = commentThread,
+                folded = composerFolded,
+                onFoldChange = { composerFolded = it },
                 modifier = Modifier.onSizeChanged {
                     composerHeightPx = it.height
                     onComposerHeight(it.height)

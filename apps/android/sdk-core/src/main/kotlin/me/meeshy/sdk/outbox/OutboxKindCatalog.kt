@@ -32,6 +32,7 @@ public object OutboxKindCatalog {
         OutboxKind.REPORT_ATTACHMENT_STATUS,
         OutboxKind.CONSUME_AFTER_READ,
         OutboxKind.CONSUME_VIEW_ONCE,
+        OutboxKind.MARK_RECEIVED,
         -> false
         OutboxKind.SEND_MESSAGE,
         OutboxKind.EDIT_MESSAGE,
@@ -65,6 +66,10 @@ public object OutboxKindCatalog {
         OutboxKind.UPDATE_CONVERSATION,
         OutboxKind.SETTINGS_ACTION,
         OutboxKind.REACT_STORY,
+        OutboxKind.HIDE_FOR_ME,
+        OutboxKind.RESTORE_FOR_ME,
+        OutboxKind.REMOVE_ATTACHMENT,
+        OutboxKind.MODERATION_DELETE,
         -> true
     }
 
@@ -88,7 +93,12 @@ public object OutboxKindCatalog {
         OutboxKind.BOOKMARK_POST,
         OutboxKind.UNBOOKMARK_POST,
         OutboxKind.REACT_STORY,
+        OutboxKind.HIDE_FOR_ME,
+        OutboxKind.RESTORE_FOR_ME,
+        OutboxKind.MARK_RECEIVED,
         -> true
+        OutboxKind.REMOVE_ATTACHMENT,
+        OutboxKind.MODERATION_DELETE,
         OutboxKind.SEND_MESSAGE,
         OutboxKind.SEND_E2EE_MESSAGE,
         OutboxKind.EDIT_MESSAGE,

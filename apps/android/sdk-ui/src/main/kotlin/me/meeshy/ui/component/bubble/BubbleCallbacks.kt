@@ -41,6 +41,8 @@ public data class BubbleCallbacks(
     val onStoryCitationClick: (() -> Unit)? = null,
     /** Tap on a language flag of the Prisme strip, with its language code. */
     val onFlagTap: ((String) -> Unit)? = null,
+    /** Tap sur le bouton traduire du pied (iOS `onTranslate`) : l'explorateur des langues du message. */
+    val onTranslate: (() -> Unit)? = null,
     /** Tap sur le smiley d'ajout du dernier message reçu : la réaction rapide. */
     val onAddReaction: (() -> Unit)? = null,
     /** Appui long de 0,4 s sur le smiley d'ajout : le sélecteur complet. */

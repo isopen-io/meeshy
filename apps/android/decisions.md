@@ -711,3 +711,16 @@ la déconnexion (même compte, même historique, comme iOS) ; un autre compte le
 `unapprovedOwnDevices` et ne reçoivent rien), signaux chiffrés (gardés au coffre, pas encore appliqués), pièces jointes
 `client-v1`, groupes (Sender Keys), aperçu déchiffré dans la liste et la notification, numéros de sécurité.
 
+
+## ADR-031 — Le drapeau de la bulle ouvre un panneau secondaire, comme iOS (#15471, remplace la divergence du `LanguageFlagTapResolver`)
+
+Le toucher d'un drapeau changeait jusqu'ici la langue PRIMAIRE de la bulle (« un seul texte cohérent », écart assumé
+avec iOS). La directive #11570 vise l'iso : `BubbleFlagTap` (`:core:model`, miroir de `BubbleLanguageFlagController`)
+décide — langue d'origine ou primaire du Prisme : le texte principal y revient et le panneau se ferme ; autre langue
+avec contenu : le panneau SECONDAIRE sous le texte s'ouvre (second toucher : il se ferme) ; langue sans contenu : la
+traduction est demandée (indicateur d'attente sur le drapeau). L'état ouvert/fermé est un état de VUE de la bulle
+(`ChatMessageRow`, comme `@State secondaryLangCode`), jamais du fil. Le bouton traduire est en première position stable
+du pied et disparaît dès qu'un drapeau existe ; les drapeaux ne sont plus rendus en `FlowRow` sous le texte.
+`LanguageFlagTapResolver.resolve` (fil, commentaires, stories) garde son modèle à texte unique : la divergence n'y reste
+qu'en dehors de la bulle de chat. Le Prisme (rangs 1 à 4, original si rien ne correspond) n'a pas changé : une seule
+fonction, `PrismTranslationResolver`.

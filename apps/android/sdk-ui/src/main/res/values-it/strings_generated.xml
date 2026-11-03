@@ -82,6 +82,7 @@
     <string name="bubble_contact_card_on_meeshy">Su Meeshy</string>
     <string name="bubble_contact_card_shared">Contatto condiviso</string>
     <string name="bubble_edited">modificato</string>
+    <string name="bubble_footer_translation_request">Richiedi la traduzione</string>
     <string name="bubble_forwarded">Inoltrato</string>
     <string name="bubble_forwarded_from">Inoltrato da %1$s</string>
     <string name="bubble_forwarded_from_person">Inoltr. da %1$s</string>

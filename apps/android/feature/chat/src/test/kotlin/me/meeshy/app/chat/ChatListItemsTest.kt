@@ -378,4 +378,25 @@ class ChatListItemContentTypeTest {
         assertThat(keys).containsNoDuplicates()
         assertThat(keys).contains("unread-separator")
     }
+
+    @Test
+    fun `the separator announces the server count rather than the window count`() {
+        val items = buildChatListItems(
+            listOf(bubble("m1", "2026-06-11T08:00:00Z"), bubble("m2", "2026-06-11T09:00:00Z")),
+            zone,
+            firstUnreadId = "m2",
+            serverUnreadCount = 12,
+        )
+        assertThat(items.filterIsInstance<ChatListItem.UnreadSeparator>().single().count).isEqualTo(12)
+    }
+
+    @Test
+    fun `an unknown server count falls back to the window count`() {
+        val items = buildChatListItems(
+            listOf(bubble("m1", "2026-06-11T08:00:00Z"), bubble("m2", "2026-06-11T09:00:00Z")),
+            zone,
+            firstUnreadId = "m1",
+        )
+        assertThat(items.filterIsInstance<ChatListItem.UnreadSeparator>().single().count).isEqualTo(2)
+    }
 }

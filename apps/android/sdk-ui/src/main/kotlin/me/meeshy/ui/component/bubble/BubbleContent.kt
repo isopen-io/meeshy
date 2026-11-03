@@ -206,6 +206,14 @@ public data class BubbleContent(
     val isEditSaving: Boolean = false,
     /** La dernière modification est celle d'un modérateur : le pied le dit en mots. */
     val editedByModerator: Boolean = false,
+    /** La langue primaire du Prisme du lecteur pour ce message (ou l'origine) : le drapeau qui y ramène le texte. */
+    val primaryLanguageCode: String? = null,
+    /** `langue -> texte` des traductions que le pied propose en panneau secondaire ; vide sans drapeau. */
+    val secondaryTexts: Map<String, String> = emptyMap(),
+    /** La langue dont le panneau secondaire est OUVERT sous le texte ; posée par la rangée, nulle par défaut. */
+    val openSecondaryCode: String? = null,
+    /** Les langues dont une traduction est demandée : leur drapeau attend. Posé par la rangée. */
+    val translatingCodes: Set<String> = emptySet(),
 )
 
 /**

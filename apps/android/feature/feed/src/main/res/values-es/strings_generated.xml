@@ -147,6 +147,9 @@
     <string name="mood_spotlight_reply_sent">Respuesta enviada</string>
     <string name="mood_spotlight_unavailable">Este estado de ánimo ya no está disponible</string>
     <string name="nearby_back">Atrás</string>
+    <string name="nearby_denied_action">Abrir Ajustes</string>
+    <string name="nearby_denied_detail">Meeshy no tiene acceso a tu ubicación. Permítelo en Ajustes o mueve el mapa manualmente.</string>
+    <string name="nearby_denied_title">Ubicación no autorizada</string>
     <string name="nearby_retry">Reintentar</string>
     <string name="nearby_title">Cerca</string>
     <string name="post_bookmark_removed">Quitado de favoritos</string>
@@ -193,6 +196,17 @@
     <string name="post_detail_media_video">Vídeo compartido</string>
     <string name="post_detail_title">Publicación</string>
     <string name="post_detail_viewers">Visualizaciones</string>
+    <string name="profile_posts_empty">Ninguna publicación</string>
+    <string name="profile_posts_empty_filter_subtitle">Toca de nuevo el mosaico para verlo todo</string>
+    <string name="profile_posts_empty_posts">Sin publicaciones</string>
+    <string name="profile_posts_empty_reels">Sin reels</string>
+    <string name="profile_posts_empty_subtitle">Las publicaciones aparecerán aquí</string>
+    <string name="profile_posts_end_of_content">Ya has visto todo</string>
+    <string name="profile_posts_first_published_at">Primer contenido publicado el %1$s</string>
+    <string name="profile_posts_load_error">Error al cargar las publicaciones</string>
+    <string name="profile_posts_stat_posts">Publicaciones</string>
+    <string name="profile_posts_stat_reels">Reels</string>
+    <string name="profile_posts_stat_stories">Historias</string>
     <string name="status_bubble_republish">Volver a publicar</string>
     <string name="status_bubble_via">vía @%1$s</string>
     <string name="status_composer_bare_add">Añadir unas palabras</string>

@@ -383,6 +383,9 @@ class StoryViewerViewModel @Inject constructor(
     /** La story telle que la passerelle l'a servie — ce que l'export vidéo lit (objets sonores, fenêtres, pièces). */
     fun rawItem(id: String): StoryItem? = rawItems[id]
 
+    /** Le groupe d'auteur à [index] (l'interlude d'identité annonce le voisin), `null` hors bornes. */
+    fun groupAt(index: Int): StoryGroupSlides? = playback.groups.getOrNull(index)
+
     /** Appui long : la story se fige (iOS `explicitPause`). */
     fun pauseByHold() {
         if (playback.currentSlide == null || _state.value.isPaused) return

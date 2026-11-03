@@ -2,6 +2,7 @@ package me.meeshy.sdk.playback
 
 import android.content.Context
 import androidx.media3.common.util.UnstableApi
+import me.meeshy.sdk.model.playback.MediaThermalPolicy
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -27,10 +28,15 @@ public object VideoPlaybackModule {
     public fun sharedVideoPlayerManager(
         @ApplicationContext context: Context,
         coordinator: PlaybackCoordinator,
+        thermal: ThermalStatusObserver,
         @MainDispatcher dispatcher: CoroutineDispatcher,
     ): SharedVideoPlayerManager = SharedVideoPlayerManager(
         portFactory = VideoPlayerPortFactory { ExoVideoPlayerPort(context) },
         coordinator = coordinator,
         scope = CoroutineScope(SupervisorJob() + dispatcher),
-    ).also(coordinator::register)
+        tickIntervalMs = { MediaThermalPolicy.tickIntervalMs(thermal.state.value) },
+    ).also {
+        thermal.start()
+        coordinator.register(it)
+    }
 }

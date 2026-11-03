@@ -88,6 +88,7 @@
     <string name="bubble_contact_card_on_meeshy">على Meeshy</string>
     <string name="bubble_contact_card_shared">جهة اتصال مشتركة</string>
     <string name="bubble_edited">معدَّلة</string>
+    <string name="bubble_footer_translation_request">طلب الترجمة</string>
     <string name="bubble_forwarded">تمت إعادة التوجيه</string>
     <string name="bubble_forwarded_from">تمت إعادة التوجيه من %1$s</string>
     <string name="bubble_forwarded_from_person">موجّهة من %1$s</string>

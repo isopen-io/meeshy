@@ -70,9 +70,8 @@ import me.meeshy.ui.component.comments.CommentThreadList
 import me.meeshy.sdk.model.composer.ComposerConfiguration
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.SharedPlace
-import me.meeshy.ui.component.bubble.BubbleBlurReveal
-import me.meeshy.ui.component.bubble.BubbleBlurRevealSpec
-import me.meeshy.ui.component.bubble.messageEffects
+import me.meeshy.ui.component.comments.CommentBody
+import me.meeshy.ui.component.comments.commentSwipeToReply
 import me.meeshy.ui.component.composer.LocalUniversalComposer
 import me.meeshy.ui.component.composer.UniversalComposerSpec
 import me.meeshy.ui.component.composer.rememberComposerMediaIntake
@@ -245,7 +244,8 @@ private fun CommentRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(if (comment.isPending) 0.5f else 1f),
+            .alpha(if (comment.isPending) 0.5f else 1f)
+            .commentSwipeToReply { if (!comment.isPending) onReply(comment.id) },
     ) {
         MeeshyAvatar(name = comment.authorName ?: unknownAuthor, size = 32.dp, imageUrl = comment.authorAvatarUrl, presence = rememberPresence(comment.authorId))
         Spacer(Modifier.width(MeeshySpacing.sm))
@@ -280,7 +280,7 @@ private fun CommentRow(
                 }
             }
             }
-            CommentBody(comment) {
+            CommentBody(commentId = comment.id, effects = comment.effects, isBlurred = comment.isBlurred) {
                 if (comment.hasBody) {
                     SelectionContainer {
                         RichMessageText(
@@ -315,24 +315,6 @@ private fun CommentRow(
                 CommentMoreMenu(comment = comment, onDelete = onDelete, imaging = imaging)
             }
         }
-    }
-}
-
-/**
- * #14385 — le corps d'un commentaire (texte + médias) avec ses effets, comme iOS `commentBody(effects:)` : les effets
- * permanents l'habillent, et un commentaire flouté se lit sous le voile de la bulle ([BubbleBlurReveal] — on touche, on
- * lit, ça se referme). Sans effet, le corps est rendu tel quel.
- */
-@Composable
-private fun CommentBody(comment: CommentPresentation, content: @Composable () -> Unit) {
-    val shape = RoundedCornerShape(MeeshyRadius.sm)
-    val dressed: @Composable () -> Unit = {
-        Column(if (comment.effects.hasPersistentEffect) Modifier.messageEffects(comment.effects, shape = shape) else Modifier) { content() }
-    }
-    if (comment.isBlurred) {
-        BubbleBlurReveal(messageId = comment.id, spec = BubbleBlurRevealSpec(isViewOnce = false), shape = shape) { dressed() }
-    } else {
-        dressed()
     }
 }
 

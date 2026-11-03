@@ -63,6 +63,7 @@ internal fun ChatListRow(
     /** Le mode sélection est ouvert (#13294) ; [selectedIds] est lu pour CETTE rangée seule. */
     selecting: Boolean = false,
     selectedIds: Set<String> = emptySet(),
+    translatingLanguages: Set<String> = emptySet(),
     /** Le message que l'overlay d'appui long présente : sa cellule s'efface pendant ce temps. */
     overlayMessageId: String? = null,
 ) {
@@ -87,6 +88,7 @@ internal fun ChatListRow(
             focalElected = focalElected,
             focalScale = focalScale,
             selecting = selecting,
+            translatingLanguages = translatingLanguages,
             selected = selecting && item.bubble.messageId in selectedIds,
             hiddenForOverlay = overlayMessageId != null && item.bubble.messageId == overlayMessageId,
         )
