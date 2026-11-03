@@ -13,7 +13,7 @@ class SharedVideoPlayerManagerTest {
 
     private class FakeVideoPort(override var playsLocalFile: Boolean = false) : VideoPlayerPort {
         override var isReady: Boolean = true
-        var listener: VideoPlayerPort.Listener? = null
+        var attachedListener: VideoPlayerPort.Listener? = null
         var generation = 0
         var source: VideoSource? = null
         var plays = 0
@@ -21,12 +21,12 @@ class SharedVideoPlayerManagerTest {
         var released = false
         var loops = false
         var successors = 0
-        var muted = false
+        var mutedByManager = false
         var position = 0L
         var seeks = mutableListOf<Long>()
         var stops = 0
 
-        override fun setListener(listener: VideoPlayerPort.Listener?) { this.listener = listener }
+        override fun setListener(listener: VideoPlayerPort.Listener?) { attachedListener = listener }
         override fun load(source: VideoSource, generation: Int, speed: Float) {
             this.source = source
             this.generation = generation
@@ -36,7 +36,7 @@ class SharedVideoPlayerManagerTest {
         override fun pause() { pauses += 1 }
         override fun seekTo(positionMs: Long) { seeks += positionMs; position = positionMs }
         override fun setSpeed(speed: Float) {}
-        override fun setMuted(muted: Boolean) { this.muted = muted }
+        override fun setMuted(muted: Boolean) { mutedByManager = muted }
         override fun setLooping(looping: Boolean) { loops = looping }
         override fun queueLoopSuccessor(): Boolean { successors = 1; return true }
         override fun dropLoopSuccessors() { successors = 0 }
@@ -103,8 +103,8 @@ class SharedVideoPlayerManagerTest {
         f.manager.load(VideoMedia(url = "https://m/a.mp4", attachmentId = "att1"))
         f.manager.play()
         val gen = f.port.generation
-        f.port.listener!!.onEnded(gen)
-        f.port.listener?.onEnded(gen)
+        f.port.attachedListener!!.onEnded(gen)
+        f.port.attachedListener?.onEnded(gen)
         assertThat(events.count { it.complete }).isEqualTo(1)
         assertThat(events.first { it.complete }.attachmentId).isEqualTo("att1")
         assertThat(f.manager.state.value.activeMedia).isEmpty()
@@ -121,11 +121,11 @@ class SharedVideoPlayerManagerTest {
         f.manager.play()
         assertThat(f.port.successors).isEqualTo(1)
         val gen = f.port.generation
-        f.port.listener!!.onLoopTurn(gen)
+        f.port.attachedListener!!.onLoopTurn(gen)
         assertThat(events.count { it.complete }).isEqualTo(1)
         assertThat(f.port.successors).isEqualTo(1)
         f.port.successors = 0
-        f.port.listener!!.onLoopTurn(gen)
+        f.port.attachedListener!!.onLoopTurn(gen)
         assertThat(events.count { it.complete }).isEqualTo(2)
         f.manager.setLooping(false)
         assertThat(f.port.successors).isEqualTo(0)
@@ -138,9 +138,9 @@ class SharedVideoPlayerManagerTest {
         f.manager.load(VideoMedia(url = "https://m/a.mp4"))
         val stale = f.port.generation
         f.manager.load(VideoMedia(url = "https://m/b.mp4"))
-        f.port.listener!!.onPrepared(stale, 9_000L)
+        f.port.attachedListener!!.onPrepared(stale, 9_000L)
         assertThat(f.manager.state.value.durationMs).isEqualTo(0L)
-        f.port.listener!!.onPrepared(f.port.generation, 4_000L)
+        f.port.attachedListener!!.onPrepared(f.port.generation, 4_000L)
         assertThat(f.manager.state.value.durationMs).isEqualTo(4_000L)
     }
 
@@ -159,7 +159,7 @@ class SharedVideoPlayerManagerTest {
         val local = FakeVideoPort(playsLocalFile = true)
         f.manager.load(VideoMedia(url = "https://m/a.mp4", localFileUri = "file:///a.mp4"), PreparedVideo(local, 7_000L))
         assertThat(local.released).isFalse()
-        assertThat(local.listener).isNotNull()
+        assertThat(local.attachedListener).isNotNull()
         assertThat(f.manager.state.value.durationMs).isEqualTo(7_000L)
     }
 
@@ -172,7 +172,7 @@ class SharedVideoPlayerManagerTest {
         f.manager.load(VideoMedia(url = "https://m/b.mp4"))
         assertThat(f.manager.isMuted).isTrue()
         assertThat(f.manager.isForceMuted).isFalse()
-        assertThat(f.port.muted).isTrue()
+        assertThat(f.port.mutedByManager).isTrue()
     }
 
     @Test

@@ -6,6 +6,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,10 +23,14 @@ import me.meeshy.sdk.model.EngagementSessions
 import me.meeshy.sdk.model.navigation.PostDetailLanding
 import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PostTranslationMerge
+import me.meeshy.sdk.model.PostUpdateMerge
 import me.meeshy.sdk.model.PublicationViewersAccess
 import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.net.toContentFetchFailure
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.post.PostRepository
@@ -40,6 +47,12 @@ import me.meeshy.sdk.model.PostReactionPick
 import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.InMemoryEmojiUsageStore
 import javax.inject.Inject
+
+/** Effets ponctuels du detail d'un post. */
+sealed interface PostDetailEffect {
+    /** Le post n'existe plus (supprime) : quitter l'ecran. */
+    data object Close : PostDetailEffect
+}
 
 /**
  * A single post opened full-screen from the feed — the Android take on iOS `PostDetailView`.
@@ -100,7 +113,13 @@ class PostDetailViewModel @Inject constructor(
     private val workManager: WorkManager,
     savedStateHandle: SavedStateHandle,
     private val emojiUsageStore: EmojiUsageStore = InMemoryEmojiUsageStore(),
+    private val reports: ReportRepository? = null,
 ) : ViewModel() {
+
+    private val _effects = Channel<PostDetailEffect>(Channel.BUFFERED)
+
+    /** Les effets ponctuels du detail (aujourd'hui : quitter l'ecran apres la suppression du post). */
+    val effects: Flow<PostDetailEffect> = _effects.receiveAsFlow()
 
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
 
@@ -280,6 +299,51 @@ class PostDetailViewModel @Inject constructor(
                 if (event.postId != postId) return@collect
                 val mine = if (event.userId == currentUserId()) false else null
                 liveOverlay.update { it.copy(likeCount = event.likesCount, isLiked = mine ?: it.isLiked) }
+            }
+        }
+        observeEditsAndReconnection()
+    }
+
+    /**
+     * The rest of the room (iOS `subscribeToSocket`): the author's edit and a finished translation
+     * fold onto the open post in place, and every RECONNECTION joins the room again and reads the post
+     * again — the events emitted during the cut are lost. Each listener swallows its own failure.
+     */
+    private fun observeEditsAndReconnection() {
+        listen(socialSocket.postUpdated) { event ->
+            if (event.post.id == postId) {
+                rawPost.update { current -> current?.let { PostUpdateMerge.merge(it, event.post) ?: it } }
+            }
+        }
+        listen(socialSocket.postTranslationUpdated) { event ->
+            if (event.postId == postId) {
+                rawPost.update { current ->
+                    current?.let { PostTranslationMerge.mergeTranslation(it, event.language, event.translation) ?: it }
+                }
+            }
+        }
+        listen(socialSocket.reconnected) {
+            socialSocket.joinPostRoom(postId)
+            load(silentWhenShown = true)
+        }
+    }
+
+    private fun <T> listen(flow: Flow<T>, onEach: suspend (T) -> Unit) {
+        viewModelScope.launch {
+            try {
+                flow.collect { value ->
+                    try {
+                        onEach(value)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // best-effort — the next event or the next reconnection heals it
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // a flow that cannot be collected is simply not listened to
             }
         }
     }
@@ -483,10 +547,61 @@ class PostDetailViewModel @Inject constructor(
                 bookmarkCount = (shown.bookmarkCount + if (bookmarked) 1 else -1).coerceAtLeast(0),
             )
         }
-        sendEngagement(revertTo = previous) { postRepository.setBookmarked(shown.id, bookmarked) }
+        status.update { it.copy(notice = if (bookmarked) FeedNotice.BOOKMARKED else FeedNotice.UNBOOKMARKED) }
+        sendEngagement(revertTo = previous, failure = FeedNotice.BOOKMARK_FAILED) {
+            postRepository.setBookmarked(shown.id, bookmarked)
+        }
     }
 
-    private fun sendEngagement(revertTo: LiveOverlay, enqueue: suspend () -> Unit) {
+    /** Epingle un de SES posts (menu « ... »), puis relit le post pour que `isPinned` remonte. */
+    fun pin() {
+        val shown = rawPost.value ?: return
+        viewModelScope.launch {
+            val done = attempt { postRepository.pinPost(shown.id) } is NetworkResult.Success
+            status.update { it.copy(notice = if (done) FeedNotice.PINNED else FeedNotice.PIN_FAILED) }
+            if (done) load(silentWhenShown = true)
+        }
+    }
+
+    /** Signale le post pour [reason] et dit l'issue. */
+    fun report(reason: ReportReason) {
+        val shown = rawPost.value ?: return
+        val sender = reports ?: return
+        viewModelScope.launch {
+            val sent = attempt { sender.reportPost(shown.id, reason, details = null) } is NetworkResult.Success
+            status.update { it.copy(notice = if (sent) FeedNotice.REPORTED else FeedNotice.REPORT_FAILED) }
+        }
+    }
+
+    /** Supprime SON post ; l'ecran se ferme au succes, un refus le laisse en place et le dit. */
+    fun delete() {
+        val shown = rawPost.value ?: return
+        viewModelScope.launch {
+            if (attempt { postRepository.delete(shown.id) } is NetworkResult.Success) {
+                try {
+                    postRepository.refresh()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // the feed catches up on its next read
+                }
+                _effects.trySend(PostDetailEffect.Close)
+            } else {
+                status.update { it.copy(notice = FeedNotice.DELETE_FAILED) }
+            }
+        }
+    }
+
+    private suspend fun <T> attempt(call: suspend () -> NetworkResult<T>?): NetworkResult<T>? =
+        try {
+            call()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+
+    private fun sendEngagement(revertTo: LiveOverlay, failure: FeedNotice? = null, enqueue: suspend () -> Unit) {
         viewModelScope.launch {
             try {
                 enqueue()
@@ -495,6 +610,7 @@ class PostDetailViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 liveOverlay.value = revertTo
+                if (failure != null) status.update { it.copy(notice = failure) }
             }
         }
     }

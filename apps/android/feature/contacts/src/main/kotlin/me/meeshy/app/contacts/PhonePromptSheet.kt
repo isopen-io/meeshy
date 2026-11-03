@@ -1,5 +1,6 @@
 package me.meeshy.app.contacts
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,8 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -169,7 +168,7 @@ private fun Header() {
             modifier = Modifier.size(56.dp).background(MeeshyGradients.brand, RoundedCornerShape(28.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.PersonAdd, contentDescription = null, tint = MeeshyPalette.White)
+            Icon(MeeshyIcons.PersonAdd, contentDescription = null, tint = MeeshyPalette.White)
         }
         Text(
             text = stringResource(R.string.phone_prompt_title),

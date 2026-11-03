@@ -7,9 +7,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -172,9 +169,9 @@ private fun AuthorReachLine(post: FeedPostPresentation) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = spoken },
     ) {
-        ReachFigure(Icons.Filled.BarChart, reach.impressions.orEmpty())
+        ReachFigure(MeeshyIcons.ChartBar, reach.impressions.orEmpty())
         Spacer(Modifier.width(MeeshySpacing.sm))
-        ReachFigure(Icons.Filled.Visibility, reach.views.orEmpty())
+        ReachFigure(MeeshyIcons.EyeFilled, reach.views.orEmpty())
     }
 }
 

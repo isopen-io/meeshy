@@ -2,7 +2,12 @@ package me.meeshy.app.stories
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.graphicsLayer
+import me.meeshy.sdk.model.story.StoryCaptionPlacement
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
@@ -27,6 +32,9 @@ internal fun StoryViewerReaderScene(
     state: StoryViewerUiState,
     commentsOpen: Boolean,
     viewModel: StoryViewerViewModel,
+    chromeVisible: Boolean = !state.isPaused,
+    fullscreen: Boolean = false,
+    captionExpanded: Boolean = false,
 ) {
     val uriHandler = LocalUriHandler.current
     val unpaintable = StorySentinelPolicy.currentStoryIsUnpaintable(item?.storyEffects)
@@ -35,23 +43,27 @@ internal fun StoryViewerReaderScene(
     val floorHash = item?.let(StoryReaderFloor::backdropHash) ?: slide.backgroundThumbHash
     StoryReaderBackground(slide)
     StoryReaderSceneCard(
-        state = StoryReaderCardState(chromeVisible = !state.isPaused, commentsOpen = commentsOpen),
+        state = StoryReaderCardState(chromeVisible = chromeVisible, isFullscreenSession = fullscreen, commentsOpen = commentsOpen),
         floor = { expanded -> StorySceneFloor(floorHash, expanded) },
     ) {
-        if (unpaintable) {
-            StorySentinelView(
-                onUpdate = { uriHandler.openUri(StorySentinelPolicy.STORE_URL) },
-                onSkip = viewModel::advance,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            StoryViewerCanvas(slide, progress, slideDurationMs, playing, state.isMuted, lap, viewModel)
-            StoryLoadingOverlay(
-                slideKey = slide.id,
-                thumbHash = slide.backgroundThumbHash,
-                coverUrl = slide.backgroundPosterUrl,
-                progress = contentProgress,
-            )
+        // Légende dépliée : la scène s'efface et laisse remonter le fond de la slide — pas de voile (iOS `storySceneOpacity`).
+        val sceneAlpha by animateFloatAsState(StoryCaptionPlacement.sceneOpacity(captionExpanded), label = "storyCaptionSceneDim")
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = sceneAlpha }) {
+            if (unpaintable) {
+                StorySentinelView(
+                    onUpdate = { uriHandler.openUri(StorySentinelPolicy.STORE_URL) },
+                    onSkip = viewModel::advance,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                StoryViewerCanvas(slide, progress, slideDurationMs, playing, state.isMuted, lap, viewModel)
+                StoryLoadingOverlay(
+                    slideKey = slide.id,
+                    thumbHash = slide.backgroundThumbHash,
+                    coverUrl = slide.backgroundPosterUrl,
+                    progress = contentProgress,
+                )
+            }
         }
     }
 }

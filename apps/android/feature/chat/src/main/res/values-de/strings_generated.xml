@@ -1,6 +1,14 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="a11y_message_location">geteilter Standort</string>
+    <string name="attachment_loading_a11y_failed">Laden fehlgeschlagen</string>
+    <string name="attachment_loading_a11y_ready">Bereit</string>
+    <string name="attachment_loading_cancel_a11y">Laden abbrechen</string>
+    <string name="attachment_loading_error">Fehler</string>
+    <string name="attachment_stage_compressing">Wird komprimiert</string>
+    <string name="attachment_stage_hashing">Hash</string>
+    <string name="attachment_stage_loading">Wird geladen</string>
+    <string name="attachment_stage_thumbnailing">Vorschau</string>
     <string name="attachment_sticker">Sticker</string>
     <string name="chat_action_copy_link">Link kopieren</string>
     <string name="chat_action_open_link">Link öffnen</string>
@@ -418,6 +426,9 @@
     <string name="share_action_copy_text">Text kopieren</string>
     <string name="share_action_save">Sichern</string>
     <string name="share_action_share_out">Außerhalb von Meeshy teilen</string>
+    <string name="share_button_a11y">An %1$d Empfänger senden</string>
+    <string name="share_button_forward">Weiterleiten · %1$d</string>
+    <string name="share_button_send">Senden · %1$d</string>
     <string name="share_caption_hint">Nachricht hinzufügen…</string>
     <string name="share_capture_warning">Dieses Medium wurde soeben von der App aufgenommen. Beim Veröffentlichen wird es über diese Unterhaltung hinaus sichtbar.</string>
     <string name="share_close">Schließen</string>
@@ -442,11 +453,16 @@
     <string name="share_detail_group_unsized">Gruppe</string>
     <string name="share_empty_body">Suche jemanden nach Name, Benutzername oder Nummer.</string>
     <string name="share_empty_title">Noch niemand hier</string>
+    <string name="share_encryption_warning">„%1$s“ ist nicht verschlüsselt: Dort verlässt diese Nachricht die Ende-zu-Ende-Verschlüsselung.</string>
     <string name="share_error_generic">Fehler beim Teilen</string>
     <string name="share_flame_note">Die Kopie verschwindet spätestens nach der Dauer der ursprünglichen Nachricht und kann nicht erneut weitergeleitet werden.</string>
     <string name="share_flame_title">Verschwindet nach</string>
     <string name="share_group_create">Gruppe mit %1$s erstellen</string>
+    <string name="share_grouping_separately">Einzeln</string>
+    <string name="share_grouping_together">Zusammen</string>
     <string name="share_limits_recipients">Höchstens 10 Empfänger pro Sendung</string>
+    <string name="share_limits_too_heavy">%1$d Dateien, %2$s. Ein Teilen umfasst höchstens %3$d Dateien und %4$s.</string>
+    <string name="share_limits_trim">Entferne %1$d Dateien zum Senden</string>
     <string name="share_offline">Offline. Was noch nicht gesendet wurde, geht raus, sobald das Netz zurück ist – auch wenn du Meeshy schließt.</string>
     <string name="share_publish_feed">Mein Feed</string>
     <string name="share_publish_reel">Reel</string>
