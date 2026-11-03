@@ -1,5 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="a11y_media_download_action">Herunterladen</string>
+    <string name="a11y_media_download_cancel">Download abbrechen</string>
     <string name="audio_editor_a11y_playhead">Wiedergabeposition</string>
     <string name="audio_editor_apply">Änderungen anwenden</string>
     <string name="audio_editor_close">Schließen</string>
