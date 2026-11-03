@@ -97,8 +97,11 @@ class RouteManifestRatchetTest {
          * 204 : plus les cinq routes du Bring et du réglage par personne (`GET|POST /bring/:userId`,
          * `DELETE /bring/:bringId`, `GET|PUT /relations/:userId/settings`, #13936), servies par la passerelle et
          * que le sous-lot `proche-bring@android` portera.
+         * 192 : moins douze routes du jeu et du décor (#14563 : la vitrine d'un autre membre, les archives de saison et de
+         * semaine de ligue, le calendrier, les cadres d'atmosphère, les trois routes des moments photo et les quatre des
+         * autocollants), que portent `GameApi.kt` et `ProfileDecorApi.kt`.
          */
-        const val TO_PORT_CEILING = 204
+        const val TO_PORT_CEILING = 192
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
