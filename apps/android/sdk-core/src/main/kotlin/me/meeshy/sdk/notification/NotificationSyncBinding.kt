@@ -16,9 +16,10 @@ import me.meeshy.sdk.socket.RealtimeBinding
 import timber.log.Timber
 
 /**
- * Wires the notification-sync socket family (`notification:new` plus the four
+ * Wires the notification-sync socket family (the four
  * lifecycle events — read, read-bulk, deleted, deleted-bulk — and the
- * server-authoritative `notification:counts`) into [NotificationRepository]'s
+ * server-authoritative `notification:counts`; `notification:new` now enters through
+ * [NotificationIngestPipeline] only) into [NotificationRepository]'s
  * shared cache. Factored out of `NotificationsViewModel` (notif-sync) because
  * [MessageSocketManager]'s flows are `SharedFlow`s with `replay = 0`: a caller
  * whose collector is scoped to a screen only sees events that arrive while
@@ -38,9 +39,6 @@ fun CoroutineScope.observeNotificationSync(
     notificationRepository: NotificationRepository,
     messageSocketManager: MessageSocketManager,
 ) {
-    messageSocketManager.notificationReceived
-        .onEach { notificationRepository.prependLive(it) }
-        .launchIn(this)
     messageSocketManager.notificationRead
         .onEach { notificationRepository.applyRead(it.notificationId) }
         .launchIn(this)

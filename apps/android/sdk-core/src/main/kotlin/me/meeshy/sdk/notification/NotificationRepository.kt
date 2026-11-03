@@ -141,6 +141,17 @@ class NotificationRepository @Inject constructor(
     suspend fun refresh() = revalidateNotifications()
 
     /**
+     * La relecture silencieuse des 30 dernières notifications (resynchro après un trou, une reconnexion ou un retour au
+     * premier plan). Le compteur est lu INDÉPENDAMMENT de la liste et posé même quand la liste échoue ; un échec
+     * laisse le cache intact et se rend à l'appelant, qui le journalise. `null` = tout a abouti.
+     */
+    suspend fun resync(): Throwable? {
+        var failure: Throwable? = null
+        revalidateNotifications { failure = it }
+        return failure
+    }
+
+    /**
      * A real-time `notification:new` arrival (feature-parity §M) prepends into the SAME cache
      * [notificationsStream] serves — a live notification is never silently overwritten by the
      * next observer's re-read or a concurrent revalidate. Dedupes by id (a REST-list race or a
