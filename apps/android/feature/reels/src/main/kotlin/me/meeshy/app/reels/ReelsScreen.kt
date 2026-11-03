@@ -1,6 +1,19 @@
 package me.meeshy.app.reels
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.EaseIn
+import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.chrome.FloatingButtonGeometry
+import me.meeshy.sdk.model.chrome.RevealGeometry
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.component.chrome.CircularRevealMask
+import me.meeshy.ui.layout.currentMeeshyWindowInfo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -66,6 +79,8 @@ fun ReelsScreen(
     onClose: () -> Unit = {},
     onOpenPost: (String) -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
+    onOpenStory: (String) -> Unit = {},
+    authorHasStory: (String) -> Boolean = { false },
     viewModel: ReelsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -86,6 +101,34 @@ fun ReelsScreen(
     // l'ecran, la video du reel visible continue de jouer sous la feuille.
     var commentsReelId by rememberSaveable { mutableStateOf<String?>(null) }
     val pagerState = rememberPagerState(pageCount = { state.reels.size })
+
+    val feedButtonStorage by viewModel.feedButtonStorage.collectAsStateWithLifecycle()
+    val reduceMotion = LocalReduceMotion.current
+    val reveal = remember { Animatable(0f) }
+    var closing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val closeNow by rememberUpdatedState(onClose)
+    // Le dévoilement circulaire s'ouvre avec l'écran (0,35 s ease-out) ; la fermeture le rejoue à l'envers.
+    LaunchedEffect(Unit) {
+        reveal.animateTo(1f, tween(RevealGeometry.durationMillis(opening = true, reduceMotion = reduceMotion), easing = EaseOut))
+    }
+    // Fermer = tout couper (vidéo + audio), une haptique légère, le disque se referme (0,3 s ease-in) pendant que
+    // la navigation retire l'écran sans le démonter avant la fin de la transition (voir `StackTransitions`).
+    val requestClose = remember(viewModel, haptics, scope) {
+        {
+            if (!closing) {
+                closing = true
+                viewModel.stopAllMedia()
+                haptics.light()
+                scope.launch {
+                    launch { closeNow() }
+                    reveal.animateTo(0f, tween(RevealGeometry.durationMillis(opening = false, reduceMotion = reduceMotion), easing = EaseIn))
+                }
+                Unit
+            }
+        }
+    }
+    BackHandler(enabled = !closing) { requestClose() }
 
     LaunchedEffect(seed) { viewModel.load(seed) }
     // Fond noir en plein cadre : heure et icônes claires, rendues à la fenêtre en quittant l'écran.
@@ -118,8 +161,19 @@ fun ReelsScreen(
         )
     }
     val openProfile by rememberUpdatedState(onOpenProfile)
-    val openAuthor = remember { { id: String -> openProfile(id) } }
+    val openStory by rememberUpdatedState(onOpenStory)
+    val hasStory by rememberUpdatedState(authorHasStory)
+    // Un auteur qui a une story non vue : son avatar ouvre cette story (un seul groupe), sinon son profil (iOS).
+    val openAuthor = remember { { id: String -> if (hasStory(id)) openStory(id) else openProfile(id) } }
 
+    val safeInsets = currentMeeshyWindowInfo().safeInsets
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val center = remember(maxWidth, maxHeight, safeInsets, feedButtonStorage) {
+            val geometry = FloatingButtonGeometry(maxWidth.value, maxHeight.value, safeInsets)
+            val point = geometry.centerForStorage(feedButtonStorage, FloatingButtonGeometry.DEFAULT_FEED_STORAGE)
+            RevealGeometry.unitCenter(point.x, point.y, maxWidth.value, maxHeight.value)
+        }
+    CircularRevealMask(progress = { reveal.value }, center = center, reduceMotion = reduceMotion) {
     Box(
         Modifier
             .fillMaxSize()
@@ -127,7 +181,7 @@ fun ReelsScreen(
     ) {
         val seedFailure = state.seedFailure
         if (seedFailure != null) {
-            ReelOpenFailure(failure = seedFailure, onRetry = viewModel::retry, onClose = onClose)
+            ReelOpenFailure(failure = seedFailure, onRetry = viewModel::retry, onClose = requestClose)
         } else if (state.reels.isEmpty()) {
             ReelEmptyStates(state = state, onRetry = viewModel::retry)
         } else {
@@ -155,7 +209,7 @@ fun ReelsScreen(
             muted = muted,
             showsMute = state.reels.getOrNull(pagerState.currentPage)?.let { ReelSound.showsMuteButton(it, probedAudio[it.id]) } == true,
             viewModel = viewModel,
-            onClose = onClose,
+            onClose = requestClose,
             onToggleMute = { muted = !muted },
             onReveal = { chromeHidden = false },
             onOpen = { id -> onOpenPost(id) },
@@ -163,6 +217,8 @@ fun ReelsScreen(
             onShare = { reel -> shareOut(reel.shareCard(context)) },
         )
         if (!inVideoWindow) FeedbackToastHost(toasts = viewModel.toasts, modifier = Modifier.navigationBarsPadding())
+    }
+    }
     }
 
     val openCommentsReelId = commentsReelId
