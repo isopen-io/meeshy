@@ -39,6 +39,7 @@ fun RepostSceneCard(
 ) {
     val slide = remember(item, authorName) { viewModel.repostSlideOf(item, authorName) }
     val by = stringResource(R.string.stories_repost_by)
+    val openHint = stringResource(R.string.stories_repost_open_fullscreen)
     val label = authorName?.let { "$by $it" } ?: by
     Box(
         modifier = modifier
@@ -46,7 +47,7 @@ fun RepostSceneCard(
             .aspectRatio(SCENE_ASPECT)
             .clip(RoundedCornerShape(MeeshyRadius.lg))
             .background(StorySceneFill.resolve(slide.background, slide.accentHex).brush())
-            .clickable(role = Role.Button, onClick = onOpen)
+            .clickable(role = Role.Button, onClickLabel = openHint, onClick = onOpen)
             .semantics { contentDescription = label },
     ) {
         StoryScenePlayer(
