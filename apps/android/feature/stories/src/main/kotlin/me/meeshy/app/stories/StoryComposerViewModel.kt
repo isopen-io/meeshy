@@ -31,10 +31,6 @@ import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
-import me.meeshy.sdk.model.StoryDrawingStrokePoint
-import me.meeshy.sdk.model.StrokeSmoothing
-import me.meeshy.sdk.model.StrokeTool
-import me.meeshy.sdk.model.scene.StrokePoint
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.SceneObjectMenu
@@ -424,43 +420,6 @@ class StoryComposerViewModel @Inject constructor(
 
     /** Glisser, pincer et tourner un même objet sont UN geste : une seule entrée d'annulation. */
     private fun transformGesture(id: String) = "transform:$id"
-
-    /** Enters the drawing tool (closes the band, clears selections). */
-    fun onEnterDrawingMode() = reduce { StoryComposerDrawingReducer.entered(it) }
-
-    fun onExitDrawingMode() = reduce { StoryComposerDrawingReducer.exited(it) }
-
-    fun onDrawColorSelected(colorHex: String) = reduce { StoryComposerDrawingReducer.colorSelected(it, colorHex) }
-
-    fun onDrawWidthSelected(widthDesign: Double) = reduce { StoryComposerDrawingReducer.widthSelected(it, widthDesign) }
-
-    /** Commits a captured freehand stroke (design-space [points]); a tap is dropped. */
-    fun onStrokeCaptured(points: List<StoryDrawingStrokePoint>) {
-        val id = newStrokeId()
-        val now = Instant.now().epochSecond.toDouble()
-        reduce { StoryComposerDrawingReducer.captured(it, points, id, now) }
-    }
-
-    fun onDrawUndo() = reduce { StoryComposerDrawingReducer.undone(it) }
-
-    fun onDrawRedo() = reduce { StoryComposerDrawingReducer.redone(it) }
-
-    fun onDrawBrushSelected(tool: StrokeTool) = reduce { StoryComposerDrawingReducer.brushSelected(it, tool) }
-
-    fun onDrawSmoothingSelected(smoothing: StrokeSmoothing) = reduce { StoryComposerDrawingReducer.smoothingSelected(it, smoothing) }
-
-    fun onDrawToolToggled(tool: DrawingEditTool) = reduce { StoryComposerDrawingReducer.toolToggled(it, tool) }
-
-    fun onStrokeToolToggled(id: String, tool: DrawingEditTool) = reduce { StoryComposerDrawingReducer.strokeToolToggled(it, id, tool) }
-
-    fun onStrokeDeleted(id: String) = reduce { StoryComposerDrawingReducer.strokeDeleted(it, id) }
-
-    /** The eraser gesture ([points] in design space); `true` when a stroke disappeared, so the edge can tick the haptic. */
-    fun onEraseGesture(points: List<StoryDrawingStrokePoint>): Boolean {
-        val before = _state.value.drawingBoard.strokes.size
-        reduce { StoryComposerDrawingReducer.erased(it, points.map { p -> StrokePoint(p.x, p.y) }) }
-        return _state.value.drawingBoard.strokes.size != before
-    }
 
     fun onVisibilityChange(visibility: StoryVisibility) = _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
 
