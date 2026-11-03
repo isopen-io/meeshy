@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_composer_plus_menu">Adicionar à sua publicação</string>
+    <string name="feed_composer_plus_photo_video">Foto ou vídeo</string>
+    <string name="feed_composer_plus_camera">Câmera</string>
+    <string name="feed_composer_plus_audio">Gravação de áudio</string>
+    <string name="feed_composer_plus_file">Arquivo</string>
+    <string name="feed_composer_plus_location">Localização</string>
+</resources>

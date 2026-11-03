@@ -14,6 +14,8 @@ import me.meeshy.sdk.call.WebRtcEngine
 import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.VideoFilterConfig
+import me.meeshy.sdk.model.call.VideoFilterDegradePolicy
+import me.meeshy.sdk.model.call.VideoFilterDegradeState
 import me.meeshy.ui.icons.MeeshyIcons
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,9 +31,22 @@ fun interface CallVideoEffectsSink {
  * revient au neutre à la fin, l'appel suivant repart sans effet.
  */
 @Singleton
-class CallVideoEffectsController internal constructor(private val sink: CallVideoEffectsSink) : CallFeatureController {
+class CallVideoEffectsController internal constructor(
+    private val sink: CallVideoEffectsSink,
+    private val health: CallVideoHealthImpl? = null,
+) : CallFeatureController {
     @Inject
-    constructor(engine: WebRtcEngine) : this(CallVideoEffectsSink(engine::setVideoEffects))
+    constructor(engine: WebRtcEngine, health: CallVideoHealthImpl) : this(CallVideoEffectsSink(engine::setVideoEffects), health)
+
+    init {
+        health?.onEffectsDegradedChanged = { sink.apply(effective(_config.value)) }
+    }
+
+    private val degradePolicy = VideoFilterDegradePolicy()
+
+    /** Les effets avancés (flou d'arrière-plan, lissage) sont coupés tant que l'appareil chauffe ; la colorimétrie reste. */
+    private fun effective(requested: VideoFilterConfig): VideoFilterConfig =
+        if (health?.effectsDegraded?.value == true) degradePolicy.effectiveConfig(requested, DEGRADED) else requested
 
     private val _config = MutableStateFlow(VideoFilterConfig.DEFAULT)
     val config: StateFlow<VideoFilterConfig> = _config.asStateFlow()
@@ -39,7 +54,7 @@ class CallVideoEffectsController internal constructor(private val sink: CallVide
     fun apply(config: VideoFilterConfig) {
         if (_config.value == config) return
         _config.value = config
-        sink.apply(config)
+        sink.apply(effective(config))
     }
 
     override fun onTransition(previous: CallState, next: CallState, session: CallSessionInfo) {
@@ -53,6 +68,12 @@ class CallVideoEffectsController internal constructor(private val sink: CallVide
         sink.apply(VideoFilterConfig.DEFAULT)
     }
 }
+
+private val DEGRADED = VideoFilterDegradeState(
+    consecutiveOverBudgetFrames = VideoFilterDegradePolicy.DEFAULT_OVER_BUDGET_THRESHOLD,
+    consecutiveUnderBudgetFrames = 0,
+    isAutoDegraded = true,
+)
 
 /**
  * « Effets » dans la pilule : offert en vidéo établie, caméra allumée — un effet porte sur MON image, il
