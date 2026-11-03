@@ -419,6 +419,9 @@
     <string name="share_action_copy_text">Copia testo</string>
     <string name="share_action_save">Salva</string>
     <string name="share_action_share_out">Condividi fuori da Meeshy</string>
+    <string name="share_button_a11y">Invia a %1$d destinatari</string>
+    <string name="share_button_forward">Inoltra · %1$d</string>
+    <string name="share_button_send">Invia · %1$d</string>
     <string name="share_caption_hint">Aggiungi un messaggio…</string>
     <string name="share_capture_warning">Questo contenuto è stato appena acquisito dall\'app. Pubblicandolo diventerà visibile oltre questa conversazione.</string>
     <string name="share_close">Chiudi</string>
@@ -443,11 +446,16 @@
     <string name="share_detail_group_unsized">Gruppo</string>
     <string name="share_empty_body">Cerca una persona per nome, nome utente o numero.</string>
     <string name="share_empty_title">Ancora nessuno qui</string>
+    <string name="share_encryption_warning">«%1$s» non è cifrata: lì questo messaggio uscirà dalla crittografia end-to-end.</string>
     <string name="share_error_generic">Errore durante la condivisione</string>
     <string name="share_flame_note">La copia scompare al più tardi dopo la durata del messaggio originale e non potrà essere inoltrata di nuovo.</string>
     <string name="share_flame_title">Scompare dopo</string>
     <string name="share_group_create">Crea un gruppo con %1$s</string>
+    <string name="share_grouping_separately">Separatamente</string>
+    <string name="share_grouping_together">Insieme</string>
     <string name="share_limits_recipients">Al massimo 10 destinatari per invio</string>
+    <string name="share_limits_too_heavy">%1$d file, %2$s. Una condivisione porta al massimo %3$d file e %4$s.</string>
+    <string name="share_limits_trim">Rimuovi %1$d file per inviare</string>
     <string name="share_offline">Offline. Ciò che non è partito partirà al ritorno della rete, anche se chiudi Meeshy.</string>
     <string name="share_publish_feed">Il mio feed</string>
     <string name="share_publish_reel">Reel</string>

@@ -232,4 +232,29 @@ class MessageEffectsPickerTest {
         assertThat(presentation.showSummary).isTrue()
         assertThat(presentation.sections.flatMap { it.options }.none { it.isActive }).isTrue()
     }
+
+    // MARK: - Panneau compact : deux rangées, comme iOS EffectsPickerView
+
+    @Test
+    fun panel_hasEntryThenPermanentRowsInIosOrder() {
+        val rows = MessageEffectsPickerPresenter.panel(MessageEffects())
+
+        assertThat(rows.map { it.section })
+            .containsExactly(MessageEffectSection.ENTRY, MessageEffectSection.PERMANENT)
+            .inOrder()
+        assertThat(rows[0].options.map { it.option.labelKey })
+            .containsExactly("shake", "zoom", "explode", "confetti", "fireworks", "waoo")
+            .inOrder()
+        assertThat(rows[1].options.map { it.option.labelKey })
+            .containsExactly("glow", "pulse", "rainbow", "sparkle")
+            .inOrder()
+    }
+
+    @Test
+    fun panel_marksOnlyArmedChipsActive() {
+        val rows = MessageEffectsPickerPresenter.panel(MessageEffects(flags = MessageEffectFlags.ZOOM or MessageEffectFlags.GLOW))
+
+        assertThat(rows.flatMap { it.options }.filter { it.isActive }.map { it.option })
+            .containsExactly(MessageEffectOption.ZOOM, MessageEffectOption.GLOW)
+    }
 }

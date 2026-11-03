@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -116,9 +117,9 @@ private fun rememberBubbleAccessibilityLabel(content: BubbleContent): String {
         replyToAuthor = stringResource(R.string.bubble_a11y_reply_to),
         replyToExcerpt = stringResource(R.string.bubble_a11y_reply_to_excerpt),
         replyToYou = stringResource(R.string.a11y_message_reply_to_you),
-        images = stringResource(R.string.bubble_a11y_images),
+        images = pluralStringResource(R.plurals.bubble_a11y_images, content.images.size, content.images.size),
         videos = stringResource(R.string.a11y_message_videos),
-        audios = stringResource(R.string.bubble_a11y_audios),
+        audios = pluralStringResource(R.plurals.bubble_a11y_audios, content.audios.size, content.audios.size),
         location = stringResource(R.string.bubble_a11y_location),
         file = stringResource(R.string.bubble_a11y_file),
         contactCard = stringResource(R.string.a11y_message_contact_card),

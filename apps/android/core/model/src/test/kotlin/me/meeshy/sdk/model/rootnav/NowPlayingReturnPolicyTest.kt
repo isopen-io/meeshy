@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.rootnav
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.playback.VoicePlaybackCard
 import org.junit.Test
 
 class NowPlayingReturnPolicyTest {
@@ -41,5 +42,31 @@ class NowPlayingReturnPolicyTest {
         tracker.onEnteredBackground()
         assertThat(tracker.onBecameActive()).isTrue()
         assertThat(tracker.onBecameActive()).isFalse()
+    }
+
+    private fun card(conversationId: String? = "c1", messageId: String? = "m1") =
+        VoicePlaybackCard(attachmentId = "a1", conversationId = conversationId, messageId = messageId)
+
+    @Test
+    fun `toucher la notification d'un vocal en lecture ouvre la conversation sur la bulle`() {
+        assertThat(NowPlayingReturnPolicy.notificationTarget(card(), isPlaying = true))
+            .isEqualTo(NowPlayingReturnTarget("c1", "m1"))
+    }
+
+    @Test
+    fun `la notification d'un vocal en pause n'ouvre aucune conversation`() {
+        assertThat(NowPlayingReturnPolicy.notificationTarget(card(), isPlaying = false)).isNull()
+    }
+
+    @Test
+    fun `la notification d'un vocal hors conversation n'ouvre rien`() {
+        assertThat(NowPlayingReturnPolicy.notificationTarget(card(conversationId = null), isPlaying = true)).isNull()
+        assertThat(NowPlayingReturnPolicy.notificationTarget(card(conversationId = " "), isPlaying = true)).isNull()
+    }
+
+    @Test
+    fun `sans identifiant de message la notification ouvre la conversation seule`() {
+        assertThat(NowPlayingReturnPolicy.notificationTarget(card(messageId = null), isPlaying = true))
+            .isEqualTo(NowPlayingReturnTarget("c1", ""))
     }
 }

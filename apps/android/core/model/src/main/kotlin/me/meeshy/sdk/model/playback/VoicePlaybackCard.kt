@@ -24,6 +24,9 @@ public data class VoicePlaybackCard(
     val artworkUrl: String? = null,
     val isProtected: Boolean = false,
     val durationMs: Long = 0L,
+    /** La conversation et le message du vocal : renseignés par le seul lecteur de conversation, jamais pour l'audio d'un post. */
+    val conversationId: String? = null,
+    val messageId: String? = null,
 )
 
 /** L'état de transport que la carte extrapole : la position, puis l'horloge fait avancer la barre. */
