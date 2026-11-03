@@ -6,6 +6,8 @@
     <string name="a11y_kit_toggle_on">Ativado</string>
     <string name="a11y_media_download_action">Baixar</string>
     <string name="a11y_media_download_cancel">Cancelar download</string>
+    <string name="audio_consent_notice_action">Ativar nas Configurações</string>
+    <string name="audio_consent_notice_message">Ative o consentimento de voz para que suas mensagens de áudio sejam transcritas e traduzidas.</string>
     <string name="audio_editor_a11y_playhead">Posição de reprodução</string>
     <string name="audio_editor_apply">Aplicar as alterações</string>
     <string name="audio_editor_close">Fechar</string>
