@@ -303,7 +303,7 @@ class CallViewModel @Inject constructor(
 
     /** L'appareil est trop chaud : la caméra se coupe, le pair le voit comme une caméra coupée, l'appel continue en audio. */
     private fun onThermalCritical() {
-        if (!media.isCameraOn) return
+        if (!config.isVideo || localCameraPending || !media.isCameraOn) return
         toggleCamera()
         videoFallbackAnnouncer.announce(CallVideoFallback.DeviceTooHot)
     }
