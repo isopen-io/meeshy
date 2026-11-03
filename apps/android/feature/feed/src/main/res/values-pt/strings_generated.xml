@@ -44,6 +44,9 @@
     <string name="feed_notice_reported">Publicação denunciada</string>
     <string name="feed_notice_repost_failed">Erro ao republicar</string>
     <string name="feed_notice_translation_failed">Erro de tradução</string>
+    <string name="feed_pending_cancel_send">Cancelar envio</string>
+    <string name="feed_pending_waiting">Aguardando envio</string>
+    <string name="feed_pending_withdrawn">Envio cancelado</string>
     <string name="feed_post_deleted">Publicação excluída</string>
     <string name="feed_post_open">Abrir</string>
     <string name="feed_post_pinned">Publicação fixada</string>

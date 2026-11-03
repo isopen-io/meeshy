@@ -92,4 +92,31 @@ class PostMenuPolicyTest {
         val others = entries(location = true, media = true)
         assertThat(others.last()).isEqualTo(PostMenuEntry.Report)
     }
+
+    private fun pending(open: Boolean, hasText: Boolean = true, retry: Boolean = false, reopen: Boolean = false) = PostMenuPolicy.entries(
+        PostMenuContext(
+            isAuthor = true, hasText = hasText, canOpen = open, editable = true, hasSaveableMedia = true, hasLocation = true,
+            pendingSend = PendingSendMenu(canRetry = retry, canReopen = reopen),
+        ),
+    )
+
+    @Test
+    fun `a card still on its way offers open, copy and cancel sending, nothing that needs the server`() {
+        assertThat(pending(open = true)).containsExactly(
+            PostMenuEntry.Open, PostMenuEntry.CopyText, PostMenuEntry.CancelSend,
+        ).inOrder()
+        assertThat(pending(open = true, hasText = false)).containsExactly(PostMenuEntry.Open, PostMenuEntry.CancelSend).inOrder()
+    }
+
+    @Test
+    fun `a card that gave up offers retry and reopen before cancel sending`() {
+        assertThat(pending(open = true, retry = true, reopen = true)).containsExactly(
+            PostMenuEntry.Open, PostMenuEntry.CopyText, PostMenuEntry.RetrySend, PostMenuEntry.ReopenSend, PostMenuEntry.CancelSend,
+        ).inOrder()
+    }
+
+    @Test
+    fun `the detail of a publication still on its way offers cancel sending alone`() {
+        assertThat(pending(open = false, retry = true, reopen = true)).containsExactly(PostMenuEntry.CancelSend)
+    }
 }

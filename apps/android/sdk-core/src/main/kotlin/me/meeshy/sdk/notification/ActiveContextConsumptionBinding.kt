@@ -7,7 +7,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import me.meeshy.core.common.IoDispatcher
@@ -33,12 +32,12 @@ class ActiveContextConsumptionBinding @Inject constructor(
         detach()
         val live = CoroutineScope(SupervisorJob() + io).also { scope = it }
         live.launch {
-            active.conversationId.distinctUntilChanged().filterNotNull().collect { id ->
+            active.conversationId.filterNotNull().collect { id ->
                 consumeSafely(NotificationReadScope.Conversation(id))
             }
         }
         live.launch {
-            active.postId.distinctUntilChanged().filterNotNull().collect { id ->
+            active.postId.filterNotNull().collect { id ->
                 consumeSafely(NotificationReadScope.Post(id))
             }
         }

@@ -1,6 +1,9 @@
 import type { LandingCopy } from './landing-copy';
 import type { LandingLanguage } from './landing-languages';
+import { APP_STORE_URL, GOOGLE_PLAY_URL } from '@/lib/store-links';
+
 import { GlobeIcon, LanguageSelect, SiteFooter, SiteHeader } from './site-chrome';
+import { AppleLogo, GooglePlayLogo } from './store-logos';
 
 /** L'image versionnée du QR (`public/world-qr.svg`, `scripts/generate-world-qr.mjs`). */
 export const WORLD_QR_PATH = '/world-qr.svg';
@@ -60,6 +63,7 @@ export function LandingPage({ language, copy }: LandingPageProps) {
             <p className="ld-note" data-world-unavailable hidden>
               {copy.unavailable}
             </p>
+            <StoreBadges copy={copy} />
           </div>
 
           <aside className="ld-preview" aria-label={copy.previewLabel}>
@@ -185,5 +189,36 @@ function WorldQr({ copy, placement }: { readonly copy: LandingCopy; readonly pla
         </span>
       </figcaption>
     </figure>
+  );
+}
+
+/**
+ * LES DEUX BOUTIQUES (#15120) — l'App Store et la fiche Google Play de l'app
+ * native, sous l'entrée World Wide du héros : qui veut l'application la trouve
+ * sans quitter la première vue. Les adresses viennent de `lib/store-links.ts`,
+ * comme sur `/download` ; les logos sont dessinés en ligne, la page prérendue
+ * n'attend aucune ressource pour les peindre.
+ */
+function StoreBadges({ copy }: { readonly copy: LandingCopy }) {
+  return (
+    <div className="ld-stores" role="group" aria-label={copy.storesLabel}>
+      <a href={APP_STORE_URL} target="_blank" rel="noopener noreferrer" data-store="app-store" aria-label={copy.appStoreLabel} className="ld-store">
+        <AppleLogo />
+        <StoreName caption={copy.appStoreCaption} name="App Store" />
+      </a>
+      <a href={GOOGLE_PLAY_URL} target="_blank" rel="noopener noreferrer" data-store="google-play" aria-label={copy.googlePlayLabel} className="ld-store">
+        <GooglePlayLogo />
+        <StoreName caption={copy.googlePlayCaption} name="Google Play" />
+      </a>
+    </div>
+  );
+}
+
+function StoreName({ caption, name }: { readonly caption: string; readonly name: string }) {
+  return (
+    <span className="ld-store-name">
+      <span className="ld-store-caption">{caption}</span>
+      {name}
+    </span>
   );
 }

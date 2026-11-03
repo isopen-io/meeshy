@@ -43,6 +43,9 @@
     <string name="feed_notice_reported">Beitrag gemeldet</string>
     <string name="feed_notice_repost_failed">Fehler beim erneuten Teilen</string>
     <string name="feed_notice_translation_failed">Übersetzungsfehler</string>
+    <string name="feed_pending_cancel_send">Senden abbrechen</string>
+    <string name="feed_pending_waiting">Wartet auf Versand</string>
+    <string name="feed_pending_withdrawn">Senden abgebrochen</string>
     <string name="feed_post_deleted">Beitrag gelöscht</string>
     <string name="feed_post_open">Öffnen</string>
     <string name="feed_post_pinned">Beitrag angeheftet</string>
