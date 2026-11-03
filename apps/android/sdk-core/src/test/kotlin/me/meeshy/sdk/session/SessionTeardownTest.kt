@@ -180,6 +180,17 @@ class SessionTeardownTest {
     }
 
     @Test
+    fun wipe_clearsTheActiveSessionsSnapshot() = runTest {
+        val sessions = InMemoryUserSessionsSnapshotStore()
+        sessions.save(me.meeshy.sdk.model.session.UserSessionsPayload(listOf(me.meeshy.sdk.model.session.UserSession("a"))), 5L)
+
+        teardown(perAccountCaches = setOf(sessions)).wipe()
+
+        assertThat(sessions.observe().first()).isNull()
+        assertThat(sessions.lastSyncedAt().first()).isNull()
+    }
+
+    @Test
     fun wipe_clearsTheAccountPreferenceSnapshots() = runTest {
         val snapshots = me.meeshy.sdk.preferences.InMemoryPreferenceSnapshotStore()
         snapshots.save("all", "{}", 5L)

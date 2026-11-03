@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.settings.R
-import me.meeshy.sdk.net.api.ActiveSessionInfo
+import me.meeshy.sdk.model.session.UserSession
 import me.meeshy.ui.component.chrome.CollapsibleHeaderLazyPage
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
@@ -132,7 +132,7 @@ fun ActiveSessionsScreen(
 
 @Composable
 private fun SessionRow(
-    session: ActiveSessionInfo,
+    session: UserSession,
     isRevoking: Boolean,
     onRevoke: () -> Unit,
 ) {
@@ -203,7 +203,7 @@ private fun SessionRow(
 }
 
 /** "Pixel 8 · Android 15" / "Chrome · macOS" — le plus specifique disponible. */
-internal fun sessionTitle(session: ActiveSessionInfo): String {
+internal fun sessionTitle(session: UserSession): String {
     val device = listOfNotNull(session.deviceVendor, session.deviceModel)
         .joinToString(" ")
         .ifBlank { session.browserName.orEmpty() }
@@ -215,7 +215,7 @@ internal fun sessionTitle(session: ActiveSessionInfo): String {
 /** iOS `ActiveSessionsView` : déconnecter un appareil, ou tous les autres, se confirme d'abord. */
 @Composable
 private fun SessionRevocationConfirmations(
-    pending: ActiveSessionInfo?,
+    pending: UserSession?,
     confirmingOthers: Boolean,
     onConfirmRevoke: () -> Unit,
     onConfirmOthers: () -> Unit,
