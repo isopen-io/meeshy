@@ -12,6 +12,7 @@ import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.media.MediaAdoption
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ReadStatusSummary
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
@@ -335,4 +336,8 @@ class MessageRepository internal constructor(
         readCount: Int,
         frontierIso: String?,
     ) = receipts.applyReadReceipt(conversationId, ownSenderId, deliveredCount, readCount, frontierIso)
+
+    /** `read-status:updated` : le résumé ne touche que le message qu'il décrit ; `true` si la ligne a changé. */
+    suspend fun applyReadStatusSummary(conversationId: String, summary: ReadStatusSummary, currentUserId: String): Boolean =
+        receipts.applyReadStatusSummary(conversationId, summary, currentUserId)
 }
