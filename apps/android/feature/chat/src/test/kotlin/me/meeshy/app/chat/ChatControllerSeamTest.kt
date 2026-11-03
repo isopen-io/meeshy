@@ -160,6 +160,7 @@ class ChatControllerSeamTest {
 
     private fun viewModel(
         controllers: Set<ChatController>,
+        openConversations: me.meeshy.sdk.conversation.OpenConversationRegistry = mockk(relaxed = true),
         stream: kotlinx.coroutines.flow.Flow<CacheResult<List<LocalMessage>>> =
             flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0)),
     ): ChatViewModel {
@@ -226,6 +227,7 @@ class ChatControllerSeamTest {
             controllers,
             ownReactionWithdrawals = OwnReactionWithdrawals(),
             outOfThreadSendGate = OutOfThreadSendGate { OutOfThreadAdmission.SEND },
+            openConversations = openConversations,
         )
     }
 
@@ -252,7 +254,7 @@ class ChatControllerSeamTest {
             ),
         )
 
-        val vm = viewModel(setOf(recording), stream)
+        val vm = viewModel(setOf(recording), stream = stream)
         advanceUntilIdle()
         val host = checkNotNull(recording.host)
 
@@ -293,5 +295,24 @@ class ChatControllerSeamTest {
 
         assertThat(healthy.attachments).isEqualTo(1)
         assertThat(vm.state.value.conversationId).isEqualTo("c1")
+    }
+
+    // --- the single open hook ---------------------------------------------------------------------
+
+    @Test
+    fun `init opens the conversation once and leaving the screen closes it`() = runTest(dispatcher) {
+        val registry = mockk<me.meeshy.sdk.conversation.OpenConversationRegistry>(relaxed = true)
+        val vm = viewModel(emptySet(), registry)
+        io.mockk.verify(exactly = 1) { registry.open("c1") }
+        io.mockk.verify(exactly = 0) { registry.close(any()) }
+
+        val store = androidx.lifecycle.ViewModelStore()
+        androidx.lifecycle.ViewModelProvider(store, object : androidx.lifecycle.ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T = vm as T
+        })[ChatViewModel::class.java]
+        store.clear()
+
+        io.mockk.verify(exactly = 1) { registry.close("c1") }
     }
 }
