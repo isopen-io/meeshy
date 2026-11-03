@@ -401,6 +401,7 @@
     <string name="new_conversation_selected">محدَّد</string>
     <string name="new_conversation_title">محادثة جديدة</string>
     <string name="participantProfile_linkExpires">ينتهي في</string>
+    <string name="preview_messages_unavailable">تعذّر تحميل الرسائل</string>
     <string name="row_a11y_conversation_with">محادثة مع %1$s</string>
     <string name="row_a11y_last_message">آخر رسالة: %1$s</string>
     <string name="row_a11y_muted">مكتومة</string>

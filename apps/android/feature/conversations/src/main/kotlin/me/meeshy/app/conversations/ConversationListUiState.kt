@@ -70,6 +70,8 @@ data class ConversationListUiState(
      * flight); present-but-empty = loaded, genuinely no cached messages.
      */
     val previewMessages: Map<String, List<LocalMessage>> = emptyMap(),
+    /** Aperçus dont la lecture a échoué sur une ligne froide : « Impossible de charger les messages », pas « vide ». */
+    val previewUnavailable: Set<String> = emptySet(),
     /**
      * Live mirror of [me.meeshy.sdk.lock.ConversationLockStore.lockedConversationIdsFlow] —
      * port of iOS `ConversationListView` observing `ConversationLockManager` directly so a
@@ -176,6 +178,10 @@ data class ConversationListUiState(
      */
     fun previewFor(conversationId: String): List<LocalMessage>? =
         if (isLocked(conversationId)) null else previewMessages[conversationId]
+
+    /** La lecture de l'aperçu de [conversationId] a échoué et rien n'est en cache. */
+    fun isPreviewUnavailable(conversationId: String): Boolean =
+        !isLocked(conversationId) && conversationId in previewUnavailable
 
     /**
      * The peer's story-ring state on [conversation]'s row avatar (parity iOS

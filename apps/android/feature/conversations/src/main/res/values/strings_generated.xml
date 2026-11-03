@@ -373,6 +373,7 @@
     <string name="new_conversation_selected">Selected</string>
     <string name="new_conversation_title">New conversation</string>
     <string name="participantProfile_linkExpires">Expires on</string>
+    <string name="preview_messages_unavailable">Couldn\'t load messages</string>
     <string name="row_a11y_conversation_with">Conversation with %1$s</string>
     <string name="row_a11y_last_message">last message: %1$s</string>
     <string name="row_a11y_muted">muted</string>
