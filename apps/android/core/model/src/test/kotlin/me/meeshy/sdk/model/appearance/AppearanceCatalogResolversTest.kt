@@ -96,7 +96,7 @@ class AppearanceCatalogResolversTest {
 
         val removable = catalog.removablePacks(AppearancePackDomain.WALLPAPER).map { it.slug }
 
-        assertThat(removable).containsExactly("heritages", "nature-et-ciel", "illustrations", "animes").inOrder()
+        assertThat(removable).containsExactly("heritages", "nature-et-ciel", "illustrations", "animes", "meeshy-fonds", "meeshy-fonds-vivants").inOrder()
         assertThat(removable).doesNotContain("essentiels")
     }
 

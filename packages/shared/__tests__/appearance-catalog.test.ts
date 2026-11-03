@@ -9,15 +9,21 @@ import { canUseFrame } from '../types/frame-usage';
 import { parsePackIndex } from '../types/content-pack-index';
 import { GAMUT_KEYS } from '../design/appearance/gamut';
 import { validateLottie } from '../utils/lottie-validate';
+import { MEESHY_COLLECTION_SLUGS } from '../scripts/compose-meeshy-collections';
 
 const DIR = join(__dirname, '../design/appearance');
 const read = (file: string): unknown => JSON.parse(readFileSync(join(DIR, file), 'utf8')) as unknown;
 
 type PackFile = { readonly packs: readonly { readonly slug: string; readonly order: number; readonly installedByDefault: boolean; readonly removable: boolean; readonly usage?: unknown; readonly designs?: readonly unknown[]; readonly rings?: readonly unknown[] }[] };
-const wallpapers = read('wallpapers/designs.json') as PackFile;
+/** Les collections Meeshy de #15158 ont leur propre témoin (`meeshy-collections-catalog.test.ts`) : ce fichier compte le catalogue qui les précède. */
+const beforeCollections = (file: PackFile): PackFile => ({ packs: file.packs.filter((pack) => !MEESHY_COLLECTION_SLUGS.includes(pack.slug)) });
+const allWallpapers = read('wallpapers/designs.json') as PackFile;
+const wallpapers = beforeCollections(allWallpapers);
 const banners = read('banners/designs.json') as PackFile;
-const rings = read('avatar-rings/rings.json') as PackFile;
-const frames = read('banner-frames/frames.json') as PackFile;
+const allRings = read('avatar-rings/rings.json') as PackFile;
+const rings = beforeCollections(allRings);
+const allFrames = read('banner-frames/frames.json') as PackFile;
+const frames = beforeCollections(allFrames);
 
 const wallpaperDesigns = wallpapers.packs.flatMap((pack) => pack.designs ?? []);
 const bannerKeys = banners.packs.flatMap((pack) => pack.designs ?? []).map((design) => (design as { key: string }).key);
@@ -151,12 +157,12 @@ describe('les noms en sept langues', () => {
 
   it.each(PACK_LANGUAGES.map((lang) => [lang] as const))('%s nomme chaque pack, modèle, contour, cadre de bannière et couleur', (lang) => {
     const strings = keysOf(lang);
-    expect(Object.keys(strings.designs).sort()).toEqual([...new Set([...wallpaperDesigns.map((design) => (design as { key: string }).key), ...bannerKeys])].sort());
-    expect(Object.keys(strings.rings).sort()).toEqual(itemKeys(rings, 'rings'));
-    expect(Object.keys(strings.frames).sort()).toEqual(itemKeys(frames, 'frames'));
+    expect(Object.keys(strings.designs).sort()).toEqual([...new Set([...allWallpapers.packs.flatMap((pack) => pack.designs ?? []).map((design) => (design as { key: string }).key), ...bannerKeys])].sort());
+    expect(Object.keys(strings.rings).sort()).toEqual(itemKeys(allRings, 'rings'));
+    expect(Object.keys(strings.frames).sort()).toEqual(itemKeys(allFrames, 'frames'));
     expect(Object.values(strings.frames).every((name) => typeof name === 'string' && name.length > 0)).toBe(true);
     expect(Object.keys(strings.gamut).sort()).toEqual([...GAMUT_KEYS].sort());
-    expect(Object.keys(strings.packs).sort()).toEqual([...wallpapers.packs, ...banners.packs, ...rings.packs, ...frames.packs].map((pack) => pack.slug).sort());
+    expect(Object.keys(strings.packs).sort()).toEqual([...allWallpapers.packs, ...banners.packs, ...allRings.packs, ...allFrames.packs].map((pack) => pack.slug).sort());
     expect(Object.values(strings.designs).every((name) => typeof name === 'string' && name.length > 0)).toBe(true);
   });
 });

@@ -131,6 +131,30 @@
     "cadres-australs": {
       "name": "Südliche Rahmen",
       "description": "Drei Rahmen nach Punktmalerei und südlichem Himmel: funkelnde Punktkreise, eine Meeresschildkröte, die um deinen Avatar schwimmt, und das leuchtende Kreuz des Südens."
+    },
+    "meeshy-signature": {
+      "name": "Meeshy Signatur",
+      "description": "Sechs Rahmen von Meeshy, schlicht und in jeder Größe lesbar: Goldfaden, Perlmuttperlen, Finsternis, Rosette, Sternennacht und Facetten."
+    },
+    "meeshy-vivants": {
+      "name": "Lebendig von Meeshy",
+      "description": "Sechs animierte Rahmen von Meeshy, die kaum über deinen Avatar hinausragen: eine Umlaufbahn, ein Polarlicht-Halo, ein Puls, Funken, ein Komet und eine Dünung."
+    },
+    "meeshy-fonds": {
+      "name": "Signatur-Hintergründe",
+      "description": "Sechs Hintergründe von Meeshy, zurückhaltend unter den Blasen, hell wie dunkel: Seide, Punkte, feine Wellen, Wiener Geflecht, Terrazzo und Dämmerung."
+    },
+    "meeshy-fonds-vivants": {
+      "name": "Lebendige Hintergründe",
+      "description": "Vier animierte Hintergründe von Meeshy, die sich sanft hinter deinen Nachrichten bewegen: Glühwürmchen, Polarlichtschleier, sanfter Schnee und Wellenringe."
+    },
+    "meeshy-bordures": {
+      "name": "Signatur-Rahmen",
+      "description": "Sechs Bannerrahmen von Meeshy, nur am Rand, damit Level und Zähler sichtbar bleiben: Goldpaspel, Voluten, Perlenschnur, Onyx, Intarsie und Mitternacht."
+    },
+    "meeshy-bordures-vivantes": {
+      "name": "Lebendige Rahmen",
+      "description": "Vier animierte Bannerrahmen von Meeshy: ein Glanz, der über Gold gleitet, schimmernde Perlen, eine funkelnde Nacht und ein Neonlicht."
     }
   },
   "designs": {
@@ -153,7 +177,17 @@
     "bulles-legeres": "Leichte Blasen",
     "pluie-de-petales": "Blütenregen",
     "maree": "Gezeiten",
-    "braises": "Glut"
+    "braises": "Glut",
+    "soie": "Seide",
+    "pointille": "Punkte",
+    "vagues-fines": "Feine Wellen",
+    "cannage": "Wiener Geflecht",
+    "terrazzo": "Terrazzo",
+    "crepuscule": "Dämmerung",
+    "lucioles": "Glühwürmchen",
+    "voile-aurore": "Polarlichtschleier",
+    "neige-douce": "Sanfter Schnee",
+    "ondes": "Wellenringe"
   },
   "rings": {
     "filet": "Haarlinie",
@@ -214,7 +248,19 @@
     "soleil-montagnes": "Sonne über den Bergen",
     "cercles-points": "Punktkreise",
     "tortue-marine": "Meeresschildkröte",
-    "croix-du-sud": "Kreuz des Südens"
+    "croix-du-sud": "Kreuz des Südens",
+    "fil-d-or": "Goldfaden",
+    "perles-de-nacre": "Perlmuttperlen",
+    "eclipse": "Finsternis",
+    "rosace": "Rosette",
+    "nuit-etoilee": "Sternennacht",
+    "facettes": "Facetten",
+    "orbite": "Umlaufbahn",
+    "halo-aurore": "Polarlicht-Halo",
+    "pulsation": "Puls",
+    "scintillement": "Funkeln",
+    "comete": "Komet",
+    "houle": "Dünung"
   },
   "gamut": {
     "indigo": "Meeshy-Indigo",
@@ -254,6 +300,16 @@
     "rituel": "Afrikanisch, Ritual",
     "rituel-anime": "Afrikanisch, Ritual, animiert",
     "celte": "Keltisch",
-    "celte-anime": "Keltisch, animiert"
+    "celte-anime": "Keltisch, animiert",
+    "liseret-or": "Goldpaspel",
+    "volutes": "Voluten",
+    "rang-de-perles": "Perlenschnur",
+    "onyx": "Onyx",
+    "marqueterie": "Intarsie",
+    "minuit": "Mitternacht",
+    "liseret-lumiere": "Lichtpaspel",
+    "perles-vives": "Schimmerperlen",
+    "nuit-vive": "Funkelnde Nacht",
+    "neon": "Neon"
   }
 }

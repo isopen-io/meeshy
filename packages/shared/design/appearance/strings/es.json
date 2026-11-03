@@ -131,6 +131,30 @@
     "cadres-australs": {
       "name": "Marcos australes",
       "description": "Tres marcos inspirados en la pintura de puntos y el cielo austral: círculos de puntos que centellean, una tortuga marina que nada alrededor del avatar y la Cruz del Sur que brilla."
+    },
+    "meeshy-signature": {
+      "name": "Firma Meeshy",
+      "description": "Seis contornos de Meeshy, sobrios y legibles a cualquier tamaño: hilo de oro, perlas de nácar, eclipse, rosetón, noche estrellada y facetas."
+    },
+    "meeshy-vivants": {
+      "name": "Vivos de Meeshy",
+      "description": "Seis contornos animados de Meeshy que apenas desbordan tu avatar: una órbita, un halo de aurora, un pulso, destellos, un cometa y un oleaje."
+    },
+    "meeshy-fonds": {
+      "name": "Fondos de firma",
+      "description": "Seis fondos de Meeshy, discretos bajo las burbujas, en claro y en oscuro: seda, punteado, olas finas, rejilla, terrazo y crepúsculo."
+    },
+    "meeshy-fonds-vivants": {
+      "name": "Fondos vivos",
+      "description": "Cuatro fondos animados de Meeshy, que se mueven suavemente detrás de tus mensajes: luciérnagas, velo de aurora, nieve suave y ondas."
+    },
+    "meeshy-bordures": {
+      "name": "Marcos de firma",
+      "description": "Seis marcos de portada de Meeshy, en el borde para que tu nivel y tus contadores sigan a la vista: ribete de oro, volutas, hilera de perlas, ónix, marquetería y medianoche."
+    },
+    "meeshy-bordures-vivantes": {
+      "name": "Marcos vivos",
+      "description": "Cuatro marcos de portada animados de Meeshy: un reflejo que se desliza sobre el oro, perlas que brillan, una noche que centellea y un neón."
     }
   },
   "designs": {
@@ -153,7 +177,17 @@
     "bulles-legeres": "Burbujas ligeras",
     "pluie-de-petales": "Lluvia de pétalos",
     "maree": "Marea",
-    "braises": "Brasas"
+    "braises": "Brasas",
+    "soie": "Seda",
+    "pointille": "Punteado",
+    "vagues-fines": "Olas finas",
+    "cannage": "Rejilla",
+    "terrazzo": "Terrazo",
+    "crepuscule": "Crepúsculo",
+    "lucioles": "Luciérnagas",
+    "voile-aurore": "Velo de aurora",
+    "neige-douce": "Nieve suave",
+    "ondes": "Ondas"
   },
   "rings": {
     "filet": "Filete",
@@ -214,7 +248,19 @@
     "soleil-montagnes": "Sol sobre las montañas",
     "cercles-points": "Círculos de puntos",
     "tortue-marine": "Tortuga marina",
-    "croix-du-sud": "Cruz del Sur"
+    "croix-du-sud": "Cruz del Sur",
+    "fil-d-or": "Hilo de oro",
+    "perles-de-nacre": "Perlas de nácar",
+    "eclipse": "Eclipse",
+    "rosace": "Rosetón",
+    "nuit-etoilee": "Noche estrellada",
+    "facettes": "Facetas",
+    "orbite": "Órbita",
+    "halo-aurore": "Halo de aurora",
+    "pulsation": "Pulso",
+    "scintillement": "Destello",
+    "comete": "Cometa",
+    "houle": "Oleaje"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",
@@ -254,6 +300,16 @@
     "rituel": "Africano ritual",
     "rituel-anime": "Africano ritual animado",
     "celte": "Celta",
-    "celte-anime": "Celta animado"
+    "celte-anime": "Celta animado",
+    "liseret-or": "Ribete de oro",
+    "volutes": "Volutas",
+    "rang-de-perles": "Hilera de perlas",
+    "onyx": "Ónix",
+    "marqueterie": "Marquetería",
+    "minuit": "Medianoche",
+    "liseret-lumiere": "Ribete de luz",
+    "perles-vives": "Perlas vivas",
+    "nuit-vive": "Noche centelleante",
+    "neon": "Neón"
   }
 }

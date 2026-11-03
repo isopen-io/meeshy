@@ -691,5 +691,203 @@
         "banner"
       ]
     }
+  },
+  {
+    "slug": "meeshy-bordures",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 7,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "45888ef3790330ed.webp",
+      "bytes": 884,
+      "sha256": "45888ef3790330ed9dabd79dbdf83f3f38922225708ca0dddf0faa2014c80829"
+    },
+    "preview": null,
+    "contract": {
+      "src": "1f019d788d1a113f.json",
+      "bytes": 17029,
+      "sha256": "1f019d788d1a113f22dddd71d11a6e045194326c56d3591bd8b743faf4124c02"
+    },
+    "strings": {
+      "fr": {
+        "src": "67f3f2f23f233bd9.json",
+        "bytes": 165,
+        "sha256": "67f3f2f23f233bd9499549571d48c58bdbfa2c9922eb69db1535621b11d3c194"
+      },
+      "en": {
+        "src": "d8639d7fdb5556c0.json",
+        "bytes": 160,
+        "sha256": "d8639d7fdb5556c036834338a4e728d1ea08ea847106601d6418ecef4e993755"
+      },
+      "es": {
+        "src": "69bf4a194ec31bdc.json",
+        "bytes": 172,
+        "sha256": "69bf4a194ec31bdc40792bee4b74d8cfb712193b5f992e9a01b1ea91a80fad72"
+      },
+      "pt": {
+        "src": "3134424ae66b40f4.json",
+        "bytes": 171,
+        "sha256": "3134424ae66b40f451103dfb0115b6362ef09c42d69b4ed1911b62933d310d07"
+      },
+      "de": {
+        "src": "0b652e4715afc2d7.json",
+        "bytes": 161,
+        "sha256": "0b652e4715afc2d70590e3ec817626352ee5ad92cef89c59b081345e3eedd403"
+      },
+      "it": {
+        "src": "38a87c2a06f8be99.json",
+        "bytes": 166,
+        "sha256": "38a87c2a06f8be998eb66ada426a4a317bd1c224d2d7db6e3662fdb23e07d871"
+      },
+      "ar": {
+        "src": "33eca17479597817.json",
+        "bytes": 192,
+        "sha256": "33eca1747959781785fd91c1eab5b1e17f27366295b02708266c43b786c05195"
+      }
+    },
+    "downloadBytes": {
+      "story": 17029,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Encadrements signature",
+        "description": "Six cadres de bannière par Meeshy, posés à la lisière pour laisser voir votre niveau et vos compteurs : liseré d’or, volutes, rang de perles, onyx, marqueterie et minuit."
+      },
+      "en": {
+        "name": "Signature borders",
+        "description": "Six banner frames by Meeshy, kept to the edge so your level and counters stay in view: gold piping, scrolls, pearl string, onyx, marquetry and midnight."
+      },
+      "es": {
+        "name": "Marcos de firma",
+        "description": "Seis marcos de portada de Meeshy, en el borde para que tu nivel y tus contadores sigan a la vista: ribete de oro, volutas, hilera de perlas, ónix, marquetería y medianoche."
+      },
+      "pt": {
+        "name": "Molduras assinatura",
+        "description": "Seis molduras de capa da Meeshy, na borda para que o teu nível e os teus contadores fiquem à vista: debrum de ouro, volutas, fio de pérolas, ónix, marchetaria e meia-noite."
+      },
+      "de": {
+        "name": "Signatur-Rahmen",
+        "description": "Sechs Bannerrahmen von Meeshy, nur am Rand, damit Level und Zähler sichtbar bleiben: Goldpaspel, Voluten, Perlenschnur, Onyx, Intarsie und Mitternacht."
+      },
+      "it": {
+        "name": "Cornici firma",
+        "description": "Sei cornici per il banner di Meeshy, al bordo perché livello e contatori restino visibili: filetto d’oro, volute, filo di perle, onice, intarsio e mezzanotte."
+      },
+      "ar": {
+        "name": "أطر مميّزة",
+        "description": "ستة أطر للافتة من Meeshy، عند الحافة كي يبقى مستواك وعدّاداتك ظاهرة: حاشية ذهبية، ولفائف، وعقد لؤلؤ، وجزع، وترصيع، ومنتصف الليل."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "meeshy-bordures-vivantes",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 8,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "4d5dfe28ea8a0166.webp",
+      "bytes": 1208,
+      "sha256": "4d5dfe28ea8a0166ca2129d9b29071ee4653d81fdcb2b4efaaf46fd5167c4830"
+    },
+    "preview": null,
+    "contract": {
+      "src": "6a6fb6bac7010fb2.json",
+      "bytes": 13863,
+      "sha256": "6a6fb6bac7010fb29e75d932c703d418bbe6d3307bf6bc73ccbef78386f2a962"
+    },
+    "strings": {
+      "fr": {
+        "src": "5a3f9d2f9b64592a.json",
+        "bytes": 132,
+        "sha256": "5a3f9d2f9b64592adaa0d4d7ce1904d4de4b7b9a074590c0589db1be8b0e4463"
+      },
+      "en": {
+        "src": "5f7693ce95767335.json",
+        "bytes": 124,
+        "sha256": "5f7693ce95767335ffb8caae18d7dbeb649791fe3b4adb9156823ee126bf228f"
+      },
+      "es": {
+        "src": "4f94dd08ab180b89.json",
+        "bytes": 127,
+        "sha256": "4f94dd08ab180b89e92f073955f5f8dd6a46f171a3489fa7cb2c3860cee6e3f2"
+      },
+      "pt": {
+        "src": "f12a13167699e31b.json",
+        "bytes": 127,
+        "sha256": "f12a13167699e31b7d4e1a5533de17c015ebaa2af9d1f4fa7dcaa58d78ae12ee"
+      },
+      "de": {
+        "src": "6ac6357e82a491f4.json",
+        "bytes": 123,
+        "sha256": "6ac6357e82a491f40eb9999103dfcddfc254a0058eaf328c3867a0c298dabb41"
+      },
+      "it": {
+        "src": "4e33e7ffcb42fbe9.json",
+        "bytes": 126,
+        "sha256": "4e33e7ffcb42fbe9418af73abe41d393577a6c2f805c32af5587b3a8c6eb7e6d"
+      },
+      "ar": {
+        "src": "f31ff035fe824043.json",
+        "bytes": 147,
+        "sha256": "f31ff035fe824043a779647eda3747dcaa06abff0404170234ab28b66f6ef67b"
+      }
+    },
+    "downloadBytes": {
+      "story": 13863,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Encadrements vivants",
+        "description": "Quatre cadres de bannière animés par Meeshy : un reflet qui glisse sur l’or, des perles qui brillent, une nuit qui scintille et un néon."
+      },
+      "en": {
+        "name": "Living borders",
+        "description": "Four animated banner frames by Meeshy: a glint gliding over gold, shining pearls, a twinkling night and a neon light."
+      },
+      "es": {
+        "name": "Marcos vivos",
+        "description": "Cuatro marcos de portada animados de Meeshy: un reflejo que se desliza sobre el oro, perlas que brillan, una noche que centellea y un neón."
+      },
+      "pt": {
+        "name": "Molduras vivas",
+        "description": "Quatro molduras de capa animadas da Meeshy: um reflexo que desliza sobre o ouro, pérolas que brilham, uma noite que cintila e um néon."
+      },
+      "de": {
+        "name": "Lebendige Rahmen",
+        "description": "Vier animierte Bannerrahmen von Meeshy: ein Glanz, der über Gold gleitet, schimmernde Perlen, eine funkelnde Nacht und ein Neonlicht."
+      },
+      "it": {
+        "name": "Cornici vive",
+        "description": "Quattro cornici animate per il banner di Meeshy: un riflesso che scorre sull’oro, perle che brillano, una notte che scintilla e un neon."
+      },
+      "ar": {
+        "name": "أطر حيّة",
+        "description": "أربعة أطر متحركة للافتة من Meeshy: لمعة تنزلق على الذهب، ولآلئ تتلألأ، وليل يومض، وضوء نيون."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
   }
 ]

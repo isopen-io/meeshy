@@ -131,6 +131,30 @@
     "cadres-australs": {
       "name": "إطارات جنوبية",
       "description": "ثلاثة إطارات مستوحاة من الرسم بالنقاط والسماء الجنوبية: دوائر نقاط تتلألأ، وسلحفاة بحرية تسبح حول صورتك الرمزية، وصليب الجنوب يلمع."
+    },
+    "meeshy-signature": {
+      "name": "توقيع Meeshy",
+      "description": "ستة أطر من Meeshy، رصينة وواضحة بأي حجم: خيط ذهبي، ولآلئ صدفية، وكسوف، ووردة، وليلة مرصّعة بالنجوم، وأوجه مصقولة."
+    },
+    "meeshy-vivants": {
+      "name": "نابضة من Meeshy",
+      "description": "ستة أطر متحركة من Meeshy تتجاوز صورتك الرمزية بالكاد: مدار، وهالة شفق، ونبض، وشرارات، ومذنّب، وموج."
+    },
+    "meeshy-fonds": {
+      "name": "خلفيات مميّزة",
+      "description": "ست خلفيات من Meeshy، هادئة تحت الفقاعات في الوضعين الفاتح والداكن: حرير، ونقاط، وأمواج رقيقة، وخيزران، وتيرازو، وغسق."
+    },
+    "meeshy-fonds-vivants": {
+      "name": "خلفيات حيّة",
+      "description": "أربع خلفيات متحركة من Meeshy تتحرك بهدوء خلف رسائلك: يراعات، وستار الشفق، وثلج ناعم، وتموّجات."
+    },
+    "meeshy-bordures": {
+      "name": "أطر مميّزة",
+      "description": "ستة أطر للافتة من Meeshy، عند الحافة كي يبقى مستواك وعدّاداتك ظاهرة: حاشية ذهبية، ولفائف، وعقد لؤلؤ، وجزع، وترصيع، ومنتصف الليل."
+    },
+    "meeshy-bordures-vivantes": {
+      "name": "أطر حيّة",
+      "description": "أربعة أطر متحركة للافتة من Meeshy: لمعة تنزلق على الذهب، ولآلئ تتلألأ، وليل يومض، وضوء نيون."
     }
   },
   "designs": {
@@ -153,7 +177,17 @@
     "bulles-legeres": "فقاعات خفيفة",
     "pluie-de-petales": "مطر البتلات",
     "maree": "مدّ وجزر",
-    "braises": "جمرات"
+    "braises": "جمرات",
+    "soie": "حرير",
+    "pointille": "نقاط",
+    "vagues-fines": "أمواج رقيقة",
+    "cannage": "خيزران",
+    "terrazzo": "تيرازو",
+    "crepuscule": "غسق",
+    "lucioles": "يراعات",
+    "voile-aurore": "ستار الشفق",
+    "neige-douce": "ثلج ناعم",
+    "ondes": "تموّجات"
   },
   "rings": {
     "filet": "خط رفيع",
@@ -214,7 +248,19 @@
     "soleil-montagnes": "شمس فوق الجبال",
     "cercles-points": "دوائر النقاط",
     "tortue-marine": "سلحفاة بحرية",
-    "croix-du-sud": "صليب الجنوب"
+    "croix-du-sud": "صليب الجنوب",
+    "fil-d-or": "خيط ذهبي",
+    "perles-de-nacre": "لآلئ صدفية",
+    "eclipse": "كسوف",
+    "rosace": "وردة",
+    "nuit-etoilee": "ليلة مرصّعة",
+    "facettes": "أوجه مصقولة",
+    "orbite": "مدار",
+    "halo-aurore": "هالة الشفق",
+    "pulsation": "نبض",
+    "scintillement": "تلألؤ",
+    "comete": "مذنّب",
+    "houle": "موج"
   },
   "gamut": {
     "indigo": "نيلي ميشي",
@@ -254,6 +300,16 @@
     "rituel": "أفريقي طقسي",
     "rituel-anime": "أفريقي طقسي متحرك",
     "celte": "سلتي",
-    "celte-anime": "سلتي متحرك"
+    "celte-anime": "سلتي متحرك",
+    "liseret-or": "حاشية ذهبية",
+    "volutes": "لفائف",
+    "rang-de-perles": "عقد لؤلؤ",
+    "onyx": "جزع",
+    "marqueterie": "ترصيع",
+    "minuit": "منتصف الليل",
+    "liseret-lumiere": "حاشية من نور",
+    "perles-vives": "لآلئ متلألئة",
+    "nuit-vive": "ليل يومض",
+    "neon": "نيون"
   }
 }

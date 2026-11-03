@@ -96,6 +96,19 @@ const BUILTIN: Readonly<Record<string, () => Promise<unknown>>> = {
   '426edf1416a6a885.json': () => import('@meeshy/shared/design/appearance/lottie/426edf1416a6a885.json'),
   '26e127fa6db7319c.json': () => import('@meeshy/shared/design/appearance/lottie/26e127fa6db7319c.json'),
   'ca970e7c170b2a54.json': () => import('@meeshy/shared/design/appearance/lottie/ca970e7c170b2a54.json'),
+  '7b31fa88974e4f4f.json': () => import('@meeshy/shared/design/appearance/lottie/7b31fa88974e4f4f.json'),
+  'ed3db59246a85a9f.json': () => import('@meeshy/shared/design/appearance/lottie/ed3db59246a85a9f.json'),
+  'fee863b9e5662e22.json': () => import('@meeshy/shared/design/appearance/lottie/fee863b9e5662e22.json'),
+  '551f8cfa30bd4cd8.json': () => import('@meeshy/shared/design/appearance/lottie/551f8cfa30bd4cd8.json'),
+  'dbfb4ad087c69666.json': () => import('@meeshy/shared/design/appearance/lottie/dbfb4ad087c69666.json'),
+  '1bf6ae32880af9c6.json': () => import('@meeshy/shared/design/appearance/lottie/1bf6ae32880af9c6.json'),
+  '8c4d314a163b814a.json': () => import('@meeshy/shared/design/appearance/lottie/8c4d314a163b814a.json'),
+  '6797108991f2e383.json': () => import('@meeshy/shared/design/appearance/lottie/6797108991f2e383.json'),
+  'ff9ce683d3827bb3.json': () => import('@meeshy/shared/design/appearance/lottie/ff9ce683d3827bb3.json'),
+  'fb8b374e8c0b841a.json': () => import('@meeshy/shared/design/appearance/lottie/fb8b374e8c0b841a.json'),
+  '2303e844e384560e.json': () => import('@meeshy/shared/design/appearance/lottie/2303e844e384560e.json'),
+  '4b9367a69e99f1d8.json': () => import('@meeshy/shared/design/appearance/lottie/4b9367a69e99f1d8.json'),
+  'ba80a0826eb7398b.json': () => import('@meeshy/shared/design/appearance/lottie/ba80a0826eb7398b.json'),
 };
 
 /** Les adresses intégrées : le témoin du catalogue exige que toute couche des packs `builtin` y figure. */
