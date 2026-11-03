@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import android.content.Context
+import me.meeshy.sdk.model.engagement.HeaderMemoryIds
 
 /**
  * Le régime de chiffrement que la bande dépliée annonce (miroir de `ConversationEncryptionBadge`
@@ -34,10 +35,7 @@ internal class ChatHeaderMemory(context: Context) {
         conversationId in prefs.getStringSet(EXPANDED_KEY, emptySet()).orEmpty()
 
     fun setExpanded(expanded: Boolean, conversationId: String) {
-        if (conversationId.isEmpty()) return
-        val ids = prefs.getStringSet(EXPANDED_KEY, emptySet()).orEmpty().toMutableSet()
-        if (expanded) ids += conversationId else ids -= conversationId
-        prefs.edit().putStringSet(EXPANDED_KEY, ids).apply()
+        write(EXPANDED_KEY, conversationId, expanded)
     }
 
     /** La Flamme masquée d'un toucher (#13297) : elle revient au prochain dépliement de l'en-tête. */
@@ -45,10 +43,13 @@ internal class ChatHeaderMemory(context: Context) {
         conversationId in prefs.getStringSet(FLAME_DISMISSED_KEY, emptySet()).orEmpty()
 
     fun setFlameDismissed(dismissed: Boolean, conversationId: String) {
-        if (conversationId.isEmpty()) return
-        val ids = prefs.getStringSet(FLAME_DISMISSED_KEY, emptySet()).orEmpty().toMutableSet()
-        if (dismissed) ids += conversationId else ids -= conversationId
-        prefs.edit().putStringSet(FLAME_DISMISSED_KEY, ids).apply()
+        write(FLAME_DISMISSED_KEY, conversationId, dismissed)
+    }
+
+    private fun write(key: String, conversationId: String, isMember: Boolean) {
+        val current = prefs.getStringSet(key, emptySet()).orEmpty()
+        val next = HeaderMemoryIds.with(current, conversationId, isMember)
+        if (next != current) prefs.edit().putStringSet(key, next).apply()
     }
 
     private companion object {

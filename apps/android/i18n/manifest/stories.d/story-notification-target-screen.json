@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "notifications.story.expired.title", "androidName": "story_notification_expired_title", "status": "adopted"},
+        {"catalog": "app", "iosKey": "notifications.story.expired.subtitle", "androidName": "story_notification_expired_subtitle", "status": "adopted"},
+        {"catalog": "app", "iosKey": "notifications.story.expired.cta.create", "androidName": "story_notification_expired_cta_create", "status": "adopted"},
+        {"catalog": "app", "iosKey": "notifications.story.expired.back", "androidName": "story_notification_expired_back", "status": "adopted"}
+      ]
+    }
+  }
+}

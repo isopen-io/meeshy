@@ -5,6 +5,7 @@ import kotlinx.serialization.encodeToString
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MessageEditOrdering
+import me.meeshy.sdk.model.MessageReactionRows
 import me.meeshy.sdk.model.PendingEdit
 import me.meeshy.sdk.model.PendingReaction
 import me.meeshy.sdk.model.QuotePropagation
@@ -31,6 +32,8 @@ internal class MessageMutationWriter(
     private val revisions: EditRevisionLedger? = null,
     /** Les événements arrivés avant leur message : gardés ici, rejoués par l'ingestion. */
     private val events: MessageEventBuffer? = null,
+    /** L'utilisateur courant, clé de MA ligne de réaction ; par défaut le compte du geste. */
+    private val selfId: (suspend () -> String?)? = null,
 ) {
     private val tombstones = MessageTombstoneWriter(updater, revisions, events)
 
@@ -41,8 +44,11 @@ internal class MessageMutationWriter(
      * whether the toggle was applied.
      */
     suspend fun toggleReactionOptimistic(messageId: String, emoji: String, isAdding: Boolean): Boolean {
+        val me = selfId?.invoke() ?: updater.ticket()?.ownerId
         val updated = updater.update(messageId, requireSynced = true) { message ->
-            message.copy(reactionSummary = ReactionSummaryShift.shifted(message.reactionSummary, emoji, if (isAdding) 1 else -1))
+            // Les lignes se dressent du résumé D'AVANT le décalage, sinon ma ligne compterait deux fois.
+            MessageReactionRows.withOwn(message, emoji, isAdding, me)
+                .let { it.copy(reactionSummary = ReactionSummaryShift.shifted(it.reactionSummary, emoji, if (isAdding) 1 else -1)) }
         } ?: return false
         outboxRepository.enqueue(
             OutboxMutation(

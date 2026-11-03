@@ -17,6 +17,8 @@ object PostReachFormatter {
         val pseudo: String?,
         val views: String?,
         val impressions: String?,
+        /** Personnes distinctes (`uniqueViewCount`), pour l'auteur seul ; `null` quand le serveur ne la sert pas. */
+        val uniqueViews: String? = null,
     )
 
     fun components(
@@ -24,10 +26,16 @@ object PostReachFormatter {
         isAuthor: Boolean,
         viewCount: Int,
         impressionCount: Int,
+        uniqueViewCount: Int? = null,
         locale: Locale = Locale.getDefault(),
     ): Components {
         val pseudo = username?.takeIf { it.isNotEmpty() }?.let { "@$it" }
         if (!isAuthor) return Components(pseudo = pseudo, views = null, impressions = null)
-        return Components(pseudo = pseudo, views = compact(viewCount, locale), impressions = compact(impressionCount, locale))
+        return Components(
+            pseudo = pseudo,
+            views = compact(viewCount, locale),
+            impressions = compact(impressionCount, locale),
+            uniqueViews = uniqueViewCount?.takeIf { it > 0 }?.let { compact(it, locale) },
+        )
     }
 }
