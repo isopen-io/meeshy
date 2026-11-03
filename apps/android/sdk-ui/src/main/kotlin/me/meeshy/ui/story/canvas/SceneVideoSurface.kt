@@ -91,7 +91,22 @@ private fun ScenePlayerView(
     if (expectedPositionMs != null) {
         LaunchedEffect(player) {
             val gate = DriftSeekGate()
-            while (true) {
+            val seekDone = object : Player.Listener {
+                override fun onPositionDiscontinuity(
+                    oldPosition: Player.PositionInfo,
+                    newPosition: Player.PositionInfo,
+                    reason: Int,
+                ) {
+                    if (reason == Player.DISCONTINUITY_REASON_SEEK) gate.release()
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY) gate.release()
+                }
+            }
+            player.addListener(seekDone)
+            try {
+              while (true) {
                 delay((PlayheadTickClock.DRIFT_CHECK_INTERVAL_SECONDS * 1000).toLong())
                 val expected = expectedPositionMs() ?: continue
                 val target = VideoDriftCorrection.driftCorrectionMs(
@@ -103,8 +118,10 @@ private fun ScenePlayerView(
                         SeekParameters(VideoDriftCorrection.SEEK_TOLERANCE_MS * 1000, VideoDriftCorrection.SEEK_TOLERANCE_MS * 1000),
                     )
                     player.seekTo(target)
-                    gate.release()
                 }
+              }
+            } finally {
+                player.removeListener(seekDone)
             }
         }
     }
