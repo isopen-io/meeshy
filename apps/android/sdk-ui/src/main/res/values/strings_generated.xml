@@ -1,5 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="a11y_feed_video_sound_mute">Mute the video</string>
+    <string name="a11y_feed_video_sound_unmute">Unmute the video</string>
     <string name="audio_editor_a11y_playhead">Playback position</string>
     <string name="audio_editor_apply">Apply changes</string>
     <string name="audio_editor_close">Close</string>
