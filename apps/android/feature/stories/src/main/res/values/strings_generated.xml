@@ -317,6 +317,7 @@
     <string name="story_media_soundExtraction_a11yHint">Other people will be able to reuse this post\'s video soundtrack in their own posts.</string>
     <string name="story_media_soundExtraction_caption">Other people will be able to reuse this post\'s video soundtrack.</string>
     <string name="story_media_soundExtraction_label">Allow soundtrack reuse</string>
+    <string name="story_reader_buffering">Loading the story</string>
     <string name="story_repost_error_forbidden">This story can\'t be reposted</string>
     <string name="story_repost_error_generic">Reposting failed</string>
     <string name="story_repost_error_unavailable">This story is no longer available</string>

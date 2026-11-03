@@ -319,6 +319,7 @@
     <string name="story_media_soundExtraction_a11yHint">D\'autres personnes pourront réutiliser la bande-son des vidéos de ce post dans leurs propres publications.</string>
     <string name="story_media_soundExtraction_caption">D\'autres personnes pourront réutiliser la bande-son des vidéos de ce post.</string>
     <string name="story_media_soundExtraction_label">Autoriser la reprise du son</string>
+    <string name="story_reader_buffering">Chargement de la story en cours</string>
     <string name="story_repost_error_forbidden">Cette story ne peut pas être repartagée</string>
     <string name="story_repost_error_generic">Échec de la republication</string>
     <string name="story_repost_error_unavailable">La story n\'est plus disponible</string>
