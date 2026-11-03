@@ -446,18 +446,30 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             authRepository.logout()
             realtimeCoordinator.onAuthenticatedChanged(false)
-            // The saved-account list AND the developer/QA environment selection are
-            // both device-level, cross-account state — neither is part of what a
-            // logout should reset (SessionTeardown.wipe() doesn't touch either).
-            _state.value = AuthUiState(
-                savedAccounts = savedAccountsStore.accounts.value,
-                selectedEnvironment = serverEnvironmentStore.selectedEnvironment,
-                customHostInput = serverEnvironmentStore.customHost,
-                showEnvironmentSelector = config.enableLogging,
-                sessionClosedNotice = explain,
-                offersKeepSignedIn = offersKeepSignedIn(savedAccountsStore.accounts.value),
-            )
+            applySignedOutState(explain)
         }
+    }
+
+    /**
+     * Une fermeture de session menée ailleurs (l'écran Réglages attend `AuthRepository.logout()` sous son
+     * propre overlay) vient de se terminer : la racine bascule sur la connexion.
+     */
+    fun onSignedOutExternally() {
+        applySignedOutState(explain = false)
+    }
+
+    private fun applySignedOutState(explain: Boolean) {
+        // The saved-account list AND the developer/QA environment selection are
+        // both device-level, cross-account state — neither is part of what a
+        // logout should reset (SessionTeardown.wipe() doesn't touch either).
+        _state.value = AuthUiState(
+            savedAccounts = savedAccountsStore.accounts.value,
+            selectedEnvironment = serverEnvironmentStore.selectedEnvironment,
+            customHostInput = serverEnvironmentStore.customHost,
+            showEnvironmentSelector = config.enableLogging,
+            sessionClosedNotice = explain,
+            offersKeepSignedIn = offersKeepSignedIn(savedAccountsStore.accounts.value),
+        )
     }
 
     /** « Se reconnecter » de l'avis de session fermée. */

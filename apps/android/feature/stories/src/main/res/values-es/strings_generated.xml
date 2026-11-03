@@ -340,6 +340,8 @@
     <string name="story_repost_error_generic">Error al republicar</string>
     <string name="story_repost_error_unavailable">Esta historia ya no está disponible</string>
     <string name="story_repost_reprojected">%1$d elemento(s) reposicionado(s) para el nuevo formato</string>
+    <string name="story_repost_success">Republicado en tu feed</string>
+    <string name="story_repost_success_reel">Republicado en tus reels</string>
     <string name="story_send_caption_hint">Añadir un mensaje…</string>
     <string name="story_send_loading">Cargando conversaciones…</string>
     <plurals name="story_send_members">

@@ -96,6 +96,7 @@ class StoryComposerViewModel @Inject constructor(
     private val publications: PublicationOutbox? = null,
     private val postDrafts: PostComposerDraftStore? = null,
     private val network: NetworkMonitor? = null,
+    private val draftCover: StoryDraftCoverSink? = null,
 ) : ViewModel() {
 
     /** Le compte sous lequel ce composeur s'est ouvert (#13621) : toute écriture de brouillon se fait sous lui. */
@@ -259,12 +260,9 @@ class StoryComposerViewModel @Inject constructor(
                 )
                 when (action) {
                     is StoryDraftPersist.Save -> {
-                        draftStore.save(action.snapshot)
+                        StoryComposerAutosave.saveThenCover({ draftStore.save(action.snapshot) }, { draftCover?.onDraftSaved(action.snapshot) })
                         ownsStoredDraft = true
-                        DraftRelease(
-                            StoryComposerAutosave.orphanedUploads(previous, action.snapshot),
-                            StoryComposerAutosave.namedUploads(action.snapshot),
-                        )
+                        DraftRelease(StoryComposerAutosave.orphanedUploads(previous, action.snapshot), StoryComposerAutosave.namedUploads(action.snapshot))
                     }
                     StoryDraftPersist.Clear -> {
                         draftStore.clear()

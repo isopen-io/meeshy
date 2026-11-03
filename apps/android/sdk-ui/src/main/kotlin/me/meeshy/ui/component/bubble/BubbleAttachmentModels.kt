@@ -47,6 +47,23 @@ public data class BubbleFile(
 )
 
 /**
+ * Une vidéo jointe (iOS `visualGrid` : images et vidéos dans UNE grille). Elle reste aussi dans [BubbleContent.files]
+ * (lecteurs existants) ; ce modèle porte ce que la grille lit : vignette, dimensions, durée.
+ */
+@Immutable
+public data class BubbleVideo(
+    val attachmentId: String,
+    val url: String? = null,
+    val thumbnailUrl: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val durationSeconds: Int? = null,
+    val sizeBytes: Int? = null,
+    /** À vue unique, floue, éphémère ou retenue : ni vignette ni lecture. */
+    val isProtected: Boolean = false,
+)
+
+/**
  * A shared contact card (vCard attachment). [name] is the card's display name when known, else
  * the attachment's file name without extension; [accountUsername] is the resolved Meeshy account
  * handle (without `@`) when the contact is registered.

@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.reels.R
 import me.meeshy.sdk.model.ReelScrub
+import me.meeshy.sdk.model.ReelScrubGeometry
 import me.meeshy.ui.component.video.ReelPlayerHandle
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 
@@ -79,7 +80,7 @@ internal fun ReelScrubBar(
     Canvas(
         modifier
             .fillMaxWidth()
-            .height(32.dp)
+            .height(ReelScrubGeometry.HIT_HEIGHT_DP.dp)
             .semantics {
                 contentDescription = label
                 progressBarRangeInfo = ProgressBarRangeInfo(progress.floatValue, 0f..1f)

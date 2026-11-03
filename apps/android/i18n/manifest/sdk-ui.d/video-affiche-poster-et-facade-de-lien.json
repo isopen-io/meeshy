@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "androidName": "video_poster_play", "status": "android-only" },
+        { "androidName": "video_embed_play", "status": "android-only" }
+      ]
+    }
+  }
+}

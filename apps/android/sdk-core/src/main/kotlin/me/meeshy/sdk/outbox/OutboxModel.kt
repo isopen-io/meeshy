@@ -40,6 +40,9 @@ public enum class OutboxKind {
 
     /** Le thème du bloc application (`PATCH /me/preferences/application`) : jamais de consentement (#4180). */
     UPDATE_APPLICATION_SETTINGS,
+
+    /** Une republication directe (#15067) : la story d'un autre repart en story, en post ou en réel, hors ligne comprise. */
+    REPOST_POST,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -165,6 +168,7 @@ public object OutboxLaneMap {
         OutboxKind.UNLIKE_POST,
         OutboxKind.BOOKMARK_POST,
         OutboxKind.UNBOOKMARK_POST,
+        OutboxKind.REPOST_POST,
         -> OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL)
 
         OutboxKind.REPORT_ATTACHMENT_STATUS -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA_STATUS)
@@ -283,6 +287,14 @@ public data class CommentPayload(
     val parentId: String? = null,
     val originalLanguage: String? = null,
 )
+
+/**
+ * Payload of a `REPOST_POST` outbox row (#15067). The row's `targetId` is the source post (a server id: the route
+ * `POST /posts/:id/repost`), its `cmid` the idempotency key sent as `X-Client-Mutation-Id`. [targetType] is the wire type
+ * of the destination (`STORY` | `POST` | `REEL`); a bare repost carries no quote and inherits the original's audience.
+ */
+@kotlinx.serialization.Serializable
+public data class RepostPayload(val targetType: String, val content: String? = null, val isQuote: Boolean = false)
 
 /**
  * Payload of a `PIN_MESSAGE` / `UNPIN_MESSAGE` outbox row. The row's `targetId`
