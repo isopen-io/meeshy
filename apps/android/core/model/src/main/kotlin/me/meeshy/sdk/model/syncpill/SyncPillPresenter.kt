@@ -59,7 +59,7 @@ data class SyncPillMetrics(
 ) {
     companion object {
         private val compact = SyncPillMetrics(22f, 11f, 10f, 11f, 6f, 4f, 10f, 6f, 160f)
-        private val typing = SyncPillMetrics(35f, 16f, 12f, 15f, 10f, 8f, 20f, 8f, 220f)
+        private val typing = SyncPillMetrics(35f, 15f, 14f, 16f, 10f, 8f, 20f, 8f, 220f)
 
         fun of(size: SyncPillSize): SyncPillMetrics = if (size == SyncPillSize.TYPING) typing else compact
     }
