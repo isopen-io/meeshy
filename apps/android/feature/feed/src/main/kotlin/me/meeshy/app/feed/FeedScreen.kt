@@ -16,6 +16,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +31,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -71,6 +75,19 @@ fun FeedScreen(
     val sceneCoordinator = remember { FeedSceneCoordinator() }
     val sceneIds = remember(state.posts) { feedSceneIds(state.posts) }
     FeedSceneElectionEffect(coordinator = sceneCoordinator, listState = listState, sceneIds = sceneIds)
+    val impressionTracker = remember(viewModel) {
+        FeedImpressionTracker(record = { id, _ -> viewModel.trackImpression(id) }, flush = viewModel::flushImpressions)
+    }
+    // Sortie ou arrière-plan : le lot d'impressions part, il n'est pas jeté (iOS `onDisappear` → `flushNow`).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, impressionTracker) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) impressionTracker.exited() }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            impressionTracker.exited()
+        }
+    }
     val context = LocalContext.current
     // Each notice shows once, in the reader's language. Collected (not keyed) so consuming
     // it never cancels the toast that is on screen.
@@ -106,6 +123,8 @@ fun FeedScreen(
             // and « Publications non envoyées » (#13417), whose reopened post opens the same host.
             val composerHead: @Composable () -> Unit = {
                 FeedComposerHead(
+                    userName = state.currentUserName,
+                    avatarUrl = state.currentUserAvatarUrl,
                     onCompose = { onOpenComposer(ComposerOrigin.FeedComposer) },
                     onResumeStory = onResumeStoryDraft,
                 )
@@ -149,7 +168,7 @@ fun FeedScreen(
             when (state.body) {
                 FeedBody.SKELETON -> FeedHeadColumn(storyRail, composerHead) { FeedSkeleton() }
                 FeedBody.OFFLINE_EMPTY -> FeedHeadColumn(storyRail, composerHead) { FeedOfflineEmptyState(onRetry = viewModel::refresh) }
-                FeedBody.LOAD_ERROR -> FeedHeadColumn(storyRail, composerHead) { FeedErrorState(onRetry = viewModel::refresh) }
+                FeedBody.LOAD_ERROR -> FeedHeadColumn(storyRail, composerHead) { FeedErrorCard(onRetry = viewModel::refresh) }
                 FeedBody.EMPTY -> FeedHeadColumn(storyRail, composerHead) { FeedEmptyState() }
                 FeedBody.POSTS -> LazyColumn(
                     state = listState,
@@ -169,7 +188,7 @@ fun FeedScreen(
                             viewModel.loadMoreIfNeeded(post.id)
                         }
                         LaunchedEffect(post.id) {
-                            viewModel.trackImpression(post.id)
+                            impressionTracker.appeared(post)
                         }
                         PostCard(
                             post = post,
@@ -249,9 +268,10 @@ fun FeedScreen(
 }
 
 @Composable
-private fun FeedComposerHead(onCompose: () -> Unit, onResumeStory: () -> Unit) {
+private fun FeedComposerHead(userName: String?, avatarUrl: String?, onCompose: () -> Unit, onResumeStory: () -> Unit) {
     Column {
-        FeedComposerPlaceholder(onClick = onCompose)
+        // Le sélecteur initial propre à chaque entrée du « + » attend la couture du composeur : toutes ouvrent la même scène.
+        FeedComposerPlaceholder(onClick = onCompose, userName = userName, avatarUrl = avatarUrl, onEntry = { onCompose() })
         DraftResumeSection(onResumePost = onCompose, onResumeStory = onResumeStory)
         UnsentPublicationsEntry(onReopen = onCompose, onReopenStory = onResumeStory)
     }
