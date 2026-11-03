@@ -28,7 +28,29 @@ internal data class RecentConversationRow(
     val isPinned: Boolean,
     val accentHex: String,
     val presence: String? = null,
+    val epochMillis: Long? = null,
+    val deepLink: String = WidgetDeepLink.HOME,
 )
+
+/** Les trois faces du widget, miroir des familles iOS `systemSmall` / `systemMedium` / `systemLarge`. */
+internal enum class RecentConversationsFace(val rowCount: Int) {
+    SMALL(1),
+    MEDIUM(2),
+    LARGE(5),
+    ;
+
+    companion object {
+        /** Taille minimale (dp) d'une face : la moyenne dès 4x2 cellules, la grande dès 4x4. */
+        const val MEDIUM_MIN_WIDTH_DP = 250
+        const val LARGE_MIN_HEIGHT_DP = 250
+
+        fun forSize(widthDp: Float, heightDp: Float): RecentConversationsFace = when {
+            widthDp < MEDIUM_MIN_WIDTH_DP -> SMALL
+            heightDp < LARGE_MIN_HEIGHT_DP -> MEDIUM
+            else -> LARGE
+        }
+    }
+}
 
 /**
  * Pure display state for [RecentConversationsWidget] — parity target: iOS
@@ -40,8 +62,16 @@ internal data class RecentConversationRow(
  */
 internal data class RecentConversationsWidgetPresentation(
     val rows: List<RecentConversationRow>,
+    val unreadTotal: Int = 0,
+    val signedIn: Boolean = true,
 ) {
     val isEmpty: Boolean get() = rows.isEmpty()
+
+    /** La pilule « N non lus » : absente à zéro. */
+    val showUnreadPill: Boolean get() = unreadTotal > 0
+
+    /** Les lignes que montre une [face], dans l'ordre épinglées puis récentes. */
+    fun rowsFor(face: RecentConversationsFace): List<RecentConversationRow> = rows.take(face.rowCount)
 
     companion object {
         /** iOS keeps up to 50 for the share-sheet's sake but renders `.prefix(5)` in
@@ -65,6 +95,8 @@ internal data class RecentConversationsWidgetPresentation(
             ephemeralLabel: String = "",
             nowMillis: Long = System.currentTimeMillis(),
             presence: Map<String, PresenceState> = emptyMap(),
+            totalUnread: Int? = null,
+            signedIn: Boolean = true,
         ): RecentConversationsWidgetPresentation {
             val rows = selection(conversations).map { conversation ->
                 RecentConversationRow(
@@ -82,12 +114,18 @@ internal data class RecentConversationsWidgetPresentation(
                     isUnread = conversation.unreadCount > 0,
                     isPinned = conversation.resolvedPreferences?.isPinned == true,
                     accentHex = conversation.accentHex(),
+                    epochMillis = ConversationRowTime.epochMillis(conversation),
+                    deepLink = WidgetDeepLink.conversation(conversation.id),
                     presence = conversation.takeIf { it.type.lowercase() in directConversationTypes }
                         ?.otherParticipantUserId(currentUserId)
                         ?.let { WidgetPresence.token(presence[it]) },
                 )
             }
-            return RecentConversationsWidgetPresentation(rows)
+            return RecentConversationsWidgetPresentation(
+                rows = rows,
+                unreadTotal = (totalUnread ?: conversations.sumOf { it.unreadCount }).coerceAtLeast(0),
+                signedIn = signedIn,
+            )
         }
     }
 }
