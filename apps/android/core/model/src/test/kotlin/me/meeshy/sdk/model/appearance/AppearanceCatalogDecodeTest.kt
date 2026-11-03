@@ -27,15 +27,15 @@ class AppearanceCatalogDecodeTest {
     // --- Le vrai fichier embarqué ------------------------------------------
 
     @Test
-    fun `the embedded file decodes in full — version 1, sixteen colours, five wallpaper packs, two banner packs, 19 ring packs, seven frame packs`() {
+    fun `the embedded file decodes in full — version 1, sixteen colours, seven wallpaper packs, two banner packs, 24 ring packs, 22 frame packs`() {
         val catalog = AppearanceCatalog.decode(AppearanceFixtures.embeddedCatalogText())
 
         assertThat(catalog.version).isEqualTo(1)
         assertThat(catalog.gamut.entries).hasSize(16)
-        assertThat(catalog.wallpaperPacks).hasSize(5)
+        assertThat(catalog.wallpaperPacks).hasSize(7)
         assertThat(catalog.bannerPacks).hasSize(2)
-        assertThat(catalog.ringPacks).hasSize(19)
-        assertThat(catalog.bannerFramePacks).hasSize(7)
+        assertThat(catalog.ringPacks).hasSize(24)
+        assertThat(catalog.bannerFramePacks).hasSize(22)
         assertThat(catalog.isEmpty).isFalse()
     }
 
@@ -53,8 +53,8 @@ class AppearanceCatalogDecodeTest {
         assertThat(catalog.bannerFramePacks.map { it.frames.size }).isEqualTo(declared("bannerFrames", "frames"))
         assertThat(catalog.wallpaperPacks.sumOf { it.designs.size }).isEqualTo(27)
         assertThat(catalog.bannerPacks.sumOf { it.designs.size }).isEqualTo(9)
-        assertThat(catalog.ringPacks.sumOf { it.rings.size }).isEqualTo(71)
-        assertThat(catalog.bannerFramePacks.sumOf { it.frames.size }).isEqualTo(24)
+        assertThat(catalog.ringPacks.sumOf { it.rings.size }).isEqualTo(77)
+        assertThat(catalog.bannerFramePacks.sumOf { it.frames.size }).isEqualTo(66)
     }
 
     @Test
@@ -82,7 +82,7 @@ class AppearanceCatalogDecodeTest {
         val catalog = AppearanceCatalog.decode(AppearanceFixtures.embeddedCatalogText())
 
         assertThat(catalog.wallpaperPacks.map { it.slug })
-            .containsExactly("essentiels", "heritages", "nature-et-ciel", "illustrations", "animes").inOrder()
+            .containsExactly("essentiels", "heritages", "nature-et-ciel", "illustrations", "animes", "meeshy-fonds", "meeshy-fonds-vivants").inOrder()
         assertThat(catalog.wallpaperPacks.map { it.order }).isInStrictOrder()
     }
 

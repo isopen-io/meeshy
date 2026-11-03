@@ -74,11 +74,11 @@ class AppearanceCatalogLoaderTest {
         assertThat(catalog.gamut.entries).hasSize(16)
         assertThat(catalog.wallpaperPacks).hasSize(7)
         assertThat(catalog.bannerPacks).hasSize(2)
-        assertThat(catalog.ringPacks).hasSize(21)
-        assertThat(catalog.bannerFramePacks).hasSize(9)
+        assertThat(catalog.ringPacks).hasSize(24)
+        assertThat(catalog.bannerFramePacks).hasSize(22)
         assertThat(catalog.wallpaperPacks.sumOf { it.designs.size }).isEqualTo(27)
-        assertThat(catalog.ringPacks.sumOf { it.rings.size }).isEqualTo(71)
-        assertThat(catalog.bannerFramePacks.sumOf { it.frames.size }).isEqualTo(24)
+        assertThat(catalog.ringPacks.sumOf { it.rings.size }).isEqualTo(77)
+        assertThat(catalog.bannerFramePacks.sumOf { it.frames.size }).isEqualTo(66)
         assertThat(spy.errors).isEmpty()
     }
 
