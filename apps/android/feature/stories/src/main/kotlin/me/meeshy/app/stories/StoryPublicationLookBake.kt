@@ -6,7 +6,7 @@ import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.look.StoryMediaLookMapping
 
 /**
- * Une image réglée que la publication doit cuire : son look, et son original — envoyé ([uploaded]) ou encore en attente
+ * Un média réglé que la publication doit cuire : son look, et son original — envoyé ([uploaded]) ou encore en attente
  * d'envoi ([pending], dont les octets donnent aussi les métadonnées de la prise).
  */
 internal data class StoryLookBakeJob(
@@ -14,6 +14,8 @@ internal data class StoryLookBakeJob(
     val look: StoryMediaLook,
     val uploaded: UploadedMedia? = null,
     val pending: MediaUploadItem? = null,
+    /** Une vidéo : elle se cuit par Media3, entière et avec son son. */
+    val video: Boolean = false,
 )
 
 /**
@@ -23,15 +25,20 @@ internal data class StoryLookBakeJob(
  */
 internal object StoryPublicationLookBake {
 
-    /** Les images à cuire, dans l'ordre des diapos ; un look qui ne peint rien, ou une vidéo, ne cuit pas. */
+    /**
+     * Les médias à cuire, dans l'ordre des diapos ; un look qui ne peint rien ne cuit pas — pour une vidéo, ce qu'elle
+     * peint ([StoryMediaLookMapping.videoPaints]).
+     */
     fun jobs(state: StoryComposerUiState): List<StoryLookBakeJob> =
         state.deck.slides.flatMap { slide ->
             slide.mediaIds.mapNotNull { id ->
-                val look = slide.mediaLooks[id]?.takeIf(StoryMediaLookMapping::paints) ?: return@mapNotNull null
+                val look = slide.mediaLooks[id] ?: return@mapNotNull null
                 val uploaded = state.attachments.firstOrNull { it.id == id }
                 val pending = state.pendingUploads.firstOrNull { it.cmid == id }?.item
                 val mime = uploaded?.mimeType ?: pending?.mimeType ?: return@mapNotNull null
-                if (mime.startsWith("video", ignoreCase = true)) null else StoryLookBakeJob(id, look, uploaded, pending)
+                val video = mime.startsWith("video", ignoreCase = true)
+                val paints = if (video) StoryMediaLookMapping.videoPaints(look) else StoryMediaLookMapping.paints(look)
+                StoryLookBakeJob(id, look, uploaded, pending, video).takeIf { paints }
             }
         }
 

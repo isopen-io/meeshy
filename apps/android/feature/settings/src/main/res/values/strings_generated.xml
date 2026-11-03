@@ -1,6 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="about_app_name">Meeshy</string>
+    <string name="about_copy">Copy</string>
     <string name="about_copyright">2024-2026 Meeshy. All rights reserved.</string>
     <string name="about_description_body">Meeshy is a high-performance real-time messaging platform with multilingual translation, voice cloning and end-to-end encryption.</string>
     <string name="about_feature_cloud_sync">Cloud sync</string>
@@ -8,11 +9,19 @@
     <string name="about_feature_themes">Customizable themes</string>
     <string name="about_feature_translation">Real-time translation</string>
     <string name="about_feature_voice_cloning">Voice cloning</string>
+    <string name="about_info_media_tier">Media profile</string>
     <string name="about_info_platform">Platform</string>
     <string name="about_info_sdk_version">SDK version</string>
+    <string name="about_link_about">About Meeshy</string>
+    <string name="about_link_contact">Contact</string>
     <string name="about_link_github">GitHub</string>
+    <string name="about_link_partners">Partners</string>
     <string name="about_link_twitter">Twitter / X</string>
     <string name="about_link_website">Website</string>
+    <string name="about_media_tier_high">High</string>
+    <string name="about_media_tier_low">Basic</string>
+    <string name="about_media_tier_mid">Intermediate</string>
+    <string name="about_media_tier_pro">Pro</string>
     <string name="about_section_description">Description</string>
     <string name="about_section_features">Features</string>
     <string name="about_section_informations">Information</string>
@@ -286,6 +295,8 @@
     <string name="settings_transcription_engine">Transcription engine</string>
     <string name="settings_transcription_engine_a11y">Transcription engine</string>
     <string name="settings_version_label">Version</string>
+    <string name="support_a11y_opens">Opens %1$s</string>
+    <string name="support_help_rate">Rate the app</string>
     <string name="support_info_build">Build</string>
     <string name="support_info_platform">Platform</string>
     <string name="support_info_version">Version</string>

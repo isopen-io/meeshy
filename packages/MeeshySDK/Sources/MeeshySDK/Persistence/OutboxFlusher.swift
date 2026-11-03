@@ -437,8 +437,7 @@ public actor OutboxFlusher {
     /// pour que `OfflineQueue.cancelPendingPublication` coupe la requête en vol.
     private func dispatchCancellably(_ record: OutboxRecord) async throws {
         let dispatcher = self.dispatcher
-        let task = Task { try await dispatcher.dispatch(record) }
-        OutboxInflightDispatches.shared.register(task, for: record.id)
+        let task = OutboxInflightDispatches.shared.start(record.id) { try await dispatcher.dispatch(record) }
         defer { OutboxInflightDispatches.shared.unregister(task, for: record.id) }
         try await withTaskCancellationHandler {
             try await task.value
