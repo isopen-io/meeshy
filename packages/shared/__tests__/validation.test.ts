@@ -9,6 +9,7 @@ import {
   SignalValidation,
   UserSchemas,
   updateBannerSchema,
+  updatePasswordSchema,
   updateUserProfileSchema,
   AuthSchemas,
   SignalProtocolLimits,
@@ -578,6 +579,27 @@ describe('updateBannerSchema', () => {
 
   it('rejects empty string', () => {
     expect(updateBannerSchema.safeParse({ banner: '' }).success).toBe(false);
+  });
+});
+
+describe('updatePasswordSchema — confirmPassword est un contrôle d\'interface', () => {
+  const newPassword = 'Xk9$mQ2vLp8#nR4wZ';
+
+  it('accepte {currentPassword, newPassword} sans confirmPassword (apps natives)', () => {
+    expect(updatePasswordSchema.safeParse({ currentPassword: 'ancien', newPassword }).success).toBe(true);
+  });
+
+  it('accepte {newPassword} seul (compte sans mot de passe)', () => {
+    expect(updatePasswordSchema.safeParse({ newPassword }).success).toBe(true);
+  });
+
+  it('accepte un confirmPassword identique (web)', () => {
+    expect(updatePasswordSchema.safeParse({ currentPassword: 'ancien', newPassword, confirmPassword: newPassword }).success).toBe(true);
+  });
+
+  it('refuse un confirmPassword fourni et différent', () => {
+    const r = updatePasswordSchema.safeParse({ currentPassword: 'ancien', newPassword, confirmPassword: 'autre-chose-12345' });
+    expect(r.success).toBe(false);
   });
 });
 

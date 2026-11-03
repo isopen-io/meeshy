@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import me.meeshy.app.game.GamePageScaffold
 import me.meeshy.app.game.notebook.photoMomentTitle
 import me.meeshy.ui.component.game.GameBounceButton
 import me.meeshy.app.game.photo.GamePhotoCoordinator
