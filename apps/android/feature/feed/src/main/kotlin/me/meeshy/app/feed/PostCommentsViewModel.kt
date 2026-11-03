@@ -44,6 +44,8 @@ import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PostTranslationMerge
 import me.meeshy.sdk.model.SocketCommentReactionUpdateData
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.model.SocketCommentTranslationUpdatedData
 import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.net.MeeshyConfig
@@ -136,9 +138,18 @@ class PostCommentsViewModel @Inject constructor(
     mentionContacts: MentionContacts = MentionContacts.None,
     private val commentsEngine: PostCommentsEngine? = null,
     private val heartTransport: CommentHeartTransport? = null,
+    private val network: NetworkMonitor = InMemoryNetworkMonitor(),
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
+
+    private val offline = MutableStateFlow(false)
+
+    /** Hors ligne : la feuille garde le fil lu et pose un bandeau discret, ou l'état « hors ligne » si rien n'est gardé. */
+    val isOffline: StateFlow<Boolean> = offline.asStateFlow()
+
+    /** Appelé quand un commentaire ou une réponse de l'utilisateur est confirmé : l'hôte incrémente son compteur. */
+    var onCommentSent: ((postId: String) -> Unit)? = null
 
     private val thread = MutableStateFlow(CommentThreadState())
     private val status = MutableStateFlow(Status())
@@ -192,6 +203,15 @@ class PostCommentsViewModel @Inject constructor(
 
     init {
         mentions.bind(MentionContext.post(postId))
+        viewModelScope.launch {
+            try {
+                network.isOnline.collect { online -> offline.value = !online }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                offline.value = false
+            }
+        }
         viewModelScope.launch {
             combine(thread, sessionRepository.currentUser, status, likes, replies) { t, user, st, likeState, replyState ->
                 ProjectionInputs(t, user, st, likeState, replyState)
@@ -587,6 +607,7 @@ class PostCommentsViewModel @Inject constructor(
                     is NetworkResult.Success -> {
                         thread.update { it.confirmed(tempId, result.data) }
                         status.update { it.copy(isSubmitting = false, error = null) }
+                        onCommentSent?.invoke(postId)
                     }
                     is NetworkResult.Failure -> {
                         thread.update { it.failed(tempId) }
@@ -762,6 +783,7 @@ class PostCommentsViewModel @Inject constructor(
                     is NetworkResult.Success -> {
                         replies.update { it.confirmedReply(parentId, tempId, result.data) }
                         status.update { it.copy(isSubmitting = false, error = null) }
+                        onCommentSent?.invoke(postId)
                     }
                     is NetworkResult.Failure -> {
                         replies.update { it.failedReply(parentId, tempId) }
