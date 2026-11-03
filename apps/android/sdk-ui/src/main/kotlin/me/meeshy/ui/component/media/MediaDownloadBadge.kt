@@ -72,7 +72,7 @@ private fun DownloadingBadge(state: MediaAvailabilityState.Downloading, accent: 
             .clickable(onClick = onCancel)
             .meeshyTapTarget()
             .clip(RoundedCornerShape(MeeshyRadius.pill))
-            .background(MeeshyMediaChromeColors.Scrim)
+            .background(MediaBadgeScrim)
             .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
@@ -103,7 +103,7 @@ private fun OfflineBadge(state: MediaAvailabilityState.NeedsDownload, modifier: 
             .alpha(0.6f)
             .meeshyTapTarget()
             .clip(RoundedCornerShape(MeeshyRadius.pill))
-            .background(MeeshyMediaChromeColors.Scrim)
+            .background(MediaBadgeScrim)
             .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
@@ -127,7 +127,7 @@ private fun RetryBadge(state: MediaAvailabilityState.Failed, onRetry: () -> Unit
             .clickable(onClick = onRetry)
             .meeshyTapTarget()
             .clip(RoundedCornerShape(MeeshyRadius.pill))
-            .background(MeeshyMediaChromeColors.Scrim)
+            .background(MediaBadgeScrim)
             .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
@@ -136,3 +136,5 @@ private fun RetryBadge(state: MediaAvailabilityState.Failed, onRetry: () -> Unit
         Text(text = retry, color = MeeshyMediaChromeColors.OnMedia, fontSize = 11.sp, maxLines = 1)
     }
 }
+
+private val MediaBadgeScrim = MeeshyMediaChromeColors.MediaBackdrop.copy(alpha = 0.55f)
