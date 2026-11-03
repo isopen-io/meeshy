@@ -37,6 +37,9 @@
     <string name="audio_split_handle_start">Inizio del taglio</string>
     <string name="audio_trim_handle_end">Fine della selezione</string>
     <string name="audio_trim_handle_start">Inizio della selezione</string>
+    <string name="audio_trim_play">Riproduci la selezione</string>
+    <string name="audio_trim_stop">Ferma</string>
+    <string name="audio_trim_strip">Barra di taglio</string>
     <string name="avatar_a11y_mood">umore %1$s</string>
     <string name="bubble_contact_card_a11y_on_meeshy">Su Meeshy: %1$s</string>
     <string name="bubble_contact_card_on_meeshy">Su Meeshy</string>
