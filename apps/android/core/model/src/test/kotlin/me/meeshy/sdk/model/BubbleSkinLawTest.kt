@@ -47,7 +47,8 @@ class BubbleSkinLawTest {
 
     @Test
     fun `received accent blends the sender into the brand indigo at 30 percent`() {
-        assertThat(BubbleSkinLaw.receivedAccentHex(null)).isEqualTo("6366F1")
+        // troncature entière iOS : 0x66 x 0,3 + 0x66 x 0,7 = 101,99 -> 0x65
+        assertThat(BubbleSkinLaw.receivedAccentHex(null)).isEqualTo("6365F1")
         assertThat(BubbleSkinLaw.receivedAccentHex("000000")).isEqualTo("4547A8")
     }
 

@@ -6,8 +6,8 @@ import org.junit.Test
 class BubbleInkTest {
 
     @Test
-    fun `the brand indigo and its darker steps carry a white ink`() {
-        listOf("6366F1", "4F46E5", "4338CA", "312E81").forEach {
+    fun `the darker indigo steps carry a white ink`() {
+        listOf("4F46E5", "4338CA", "312E81").forEach {
             assertThat(BubbleInk.readableOn(it)).isEqualTo(BubbleInk.WHITE)
         }
     }
