@@ -3,6 +3,8 @@ package me.meeshy.sdk.model.conversationlist
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationLastMessage
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
+import me.meeshy.sdk.model.LastMessageIdentity
+import me.meeshy.sdk.model.lastMessageIdentity
 import me.meeshy.sdk.model.isDirect
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.preview.PreviewFieldUpdate
@@ -85,8 +87,9 @@ object ConversationLivePatch {
         val knownAt = isoToEpochMillisOrNull(lastMessage?.createdAt)
         val isCurrent = incomingAt == null || knownAt == null || incomingAt >= knownAt
         if (!isCurrent && !event.previewRecalculated) return this
-        if (event.lastMessageId == PreviewFieldUpdate.Replaced<String>(null)) return clearingLastMessage()
-        val namedId = (event.lastMessageId as? PreviewFieldUpdate.Replaced<String>)?.value
+        val identity = event.lastMessageIdentity
+        if (identity == LastMessageIdentity.ReplacedByNothing) return clearingLastMessage()
+        val namedId = identity.namedId
         val isNewMessage = namedId != null && namedId != lastMessage?.id
         var last = lastMessage
         if (namedId != null && isNewMessage) {
