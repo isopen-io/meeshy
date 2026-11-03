@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.voiceprofile
 
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -63,12 +64,13 @@ class VoiceProfileWizardViewTest {
 
     @Test
     fun `the progress bar announces the title of each step to TalkBack`() {
+        val shown = mutableStateOf(VoiceWizardState())
+        compose.setContent { MeeshyTheme(darkTheme = false) { VoiceProfileWizardViewHost(shown.value) } }
         VoiceWizardStep.entries.forEach { step ->
-            val expected = string(voiceWizardStepTitle(step))
-            val shown = VoiceWizardState(step = step)
-            compose.setContent { MeeshyTheme(darkTheme = false) { VoiceProfileWizardViewHost(shown) } }
+            shown.value = VoiceWizardState(step = step)
+            compose.waitForIdle()
             val description = compose.onNodeWithTag(VOICE_WIZARD_PROGRESS_TAG).fetchSemanticsNode().config[SemanticsProperties.ContentDescription]
-            assertThat(description).containsExactly(expected)
+            assertThat(description).containsExactly(string(voiceWizardStepTitle(step)))
         }
     }
 

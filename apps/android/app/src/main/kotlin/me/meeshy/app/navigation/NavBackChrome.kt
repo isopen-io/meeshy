@@ -6,6 +6,7 @@ import me.meeshy.app.navigation.graph.FriendRequestsDestinations
 import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.LinksRoutes
 import me.meeshy.app.navigation.graph.StoryRoutes
+import me.meeshy.app.navigation.graph.VoiceProfileWizardDestinations
 
 /**
  * Comment un écran quitte la pile, comme sur iOS (#13364).
@@ -135,6 +136,7 @@ internal object NavBackChrome {
         sheet("Routes.ACTIVE_SESSIONS", Routes.ACTIVE_SESSIONS, IosPresentation.SHEET, settings("ActiveSessionsScreen.kt")),
         sheet("Routes.ENCRYPTED_DEVICES", Routes.ENCRYPTED_DEVICES, IosPresentation.SHEET, settings("EncryptedDevicesScreen.kt")),
         arrow("BirthDateDestinations.ROUTE", BirthDateDestinations.ROUTE, settings("BirthDateDeclarationScreen.kt"), IosPresentation.NONE),
+        sheet("VoiceProfileWizardDestinations.ROUTE", VoiceProfileWizardDestinations.ROUTE, IosPresentation.SHEET, settings("VoiceProfileWizardScreen.kt")),
         // Contacts, notifications, profils.
         arrow("Routes.CONTACTS", Routes.CONTACTS, contacts),
         arrow("Routes.CONTACTS_DISCOVER", Routes.CONTACTS_DISCOVER, contacts),
