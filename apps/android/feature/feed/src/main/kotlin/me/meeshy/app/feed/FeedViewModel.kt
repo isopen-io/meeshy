@@ -162,6 +162,10 @@ class FeedViewModel @Inject constructor(
             publications.notices.collect { notice -> _state.update { it.copy(notice = notice.feedNotice) } }
         }
         viewModelScope.launch {
+            // Un j'aime ou un favori que la file a perdu : le retour arrière est déjà fait, le fil le DIT.
+            postRepository.gestureRefusals.collect { refusal -> _state.update { it.copy(notice = refusal.feedNotice) } }
+        }
+        viewModelScope.launch {
             combine(
                 postRepository.feedStream(
                     onSyncError = { _ -> _state.update { it.withLoadFailure() } },
@@ -636,10 +640,12 @@ class FeedViewModel @Inject constructor(
 
     /** Bookmark analogue of [toggleLike] — same durable-outbox toggle, same flush schedule. */
     fun toggleBookmark(postId: String) {
+        val adding = cardOf(postId)?.isBookmarkedByMe != true
         viewModelScope.launch {
             try {
-                postRepository.toggleBookmark(postId)
+                val accepted = postRepository.toggleBookmark(postId)
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
+                if (accepted && adding) _state.update { it.copy(notice = FeedNotice.BOOKMARKED) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

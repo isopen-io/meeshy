@@ -17,12 +17,12 @@ nonisolated struct ConversationMessageSearchService: ConversationMessageSearchPr
 
     private let api: APIClientProviding
     private let searchService: MessageSearchService
-    private let cachedConversations: @Sendable () async -> [MeeshyConversation]
+    private let cachedConversations: @concurrent @Sendable () async -> [MeeshyConversation]
 
     init(
         api: APIClientProviding,
         searchService: MessageSearchService,
-        cachedConversations: @escaping @Sendable () async -> [MeeshyConversation] = Self.listCache
+        cachedConversations: @escaping @concurrent @Sendable () async -> [MeeshyConversation] = Self.listCache
     ) {
         self.api = api
         self.searchService = searchService
@@ -31,7 +31,7 @@ nonisolated struct ConversationMessageSearchService: ConversationMessageSearchPr
 
     /// Le cache de la liste, frais ou périmé : il ne sert qu'à nommer la
     /// conversation d'un résultat local, jamais à décider de ce qui est trouvé.
-    @Sendable static func listCache() async -> [MeeshyConversation] {
+    @concurrent static func listCache() async -> [MeeshyConversation] {
         switch await CacheCoordinator.shared.conversations.load(for: "list") {
         case .fresh(let value, _), .stale(let value, _): return value
         case .expired, .empty: return []
