@@ -322,6 +322,12 @@ fun CallScreen(
                 )
             }
 
+            if (state.showsConnectedLayout && !inPip) {
+                CallVideoNoticePill(
+                    notice = state.videoNotice,
+                    modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding().padding(top = MeeshySpacing.xxl * 2),
+                )
+            }
             CallOverlaySlotHost(
                 extensions.overlays, CallOverlaySlot.Center, overlayContext,
                 Modifier.align(Alignment.Center),

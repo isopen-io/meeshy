@@ -6,8 +6,11 @@ package me.meeshy.sdk.model.call
  */
 enum class CallVideoFallback {
     CameraPermissionDenied,
-    NoCamera;
+    NoCamera,
 
-    /** Seul un refus d'accès se dit à l'utilisateur (toast qui ouvre les Paramètres) : une absence de caméra n'a rien à réparer. */
-    val warnsUser: Boolean get() = this == CameraPermissionDenied
+    /** L'appareil est au palier thermique critique : la vidéo est coupée, l'appel continue en audio. */
+    DeviceTooHot;
+
+    /** Se dit à l'utilisateur : un refus d'accès (toast qui ouvre les Paramètres) ou la chaleur ; une absence de caméra n'a rien à réparer. */
+    val warnsUser: Boolean get() = this == CameraPermissionDenied || this == DeviceTooHot
 }

@@ -25,6 +25,7 @@ import me.meeshy.sdk.model.call.CallSoundPolicy
 import me.meeshy.sdk.model.call.CallSignalingRejoinLaw
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallVideoFallback
+import me.meeshy.sdk.model.call.CallVideoNotice
 import me.meeshy.sdk.model.call.CallStateMachine
 import me.meeshy.sdk.model.call.CallTurnCredentialsLaw
 import me.meeshy.sdk.model.call.IceServersRefreshedPayload
@@ -127,6 +128,8 @@ class CallViewModel @Inject constructor(
     /** `true` while the app itself froze the outgoing video ([CallVideoHealth]). */
     private var videoAutoPaused: Boolean = false
 
+    private var videoNotice: CallVideoNotice = CallVideoNotice.None
+
     /**
      * The name of a group call once its primary left (#13768, iOS `groupCallTitleDidChange` → `remoteUsername`): the
      * header, the pill and the ongoing-call notification all read it. Kept until the next [start], like iOS.
@@ -201,6 +204,7 @@ class CallViewModel @Inject constructor(
         coordinator.onSetupFailed = { message -> dispatch(CallEvent.ConnectionFailed(message)) }
         coordinator.onPrimaryVacated = ::onPrimaryVacated
         coordinator.onVideoUnavailable = ::onVideoUnavailable
+        coordinator.onThermalCritical = ::onThermalCritical
         peers.attach(host)
         waiting.attach(host)
         watchdogs.attach(host) { reliability.catchUpConnected() }
@@ -229,6 +233,9 @@ class CallViewModel @Inject constructor(
         }
         viewModelScope.launch {
             extensions.videoHealth.isVideoAutoPaused.collect(::onVideoHealthChanged)
+        }
+        viewModelScope.launch {
+            extensions.videoHealth.videoNotice.collect(::onVideoNoticeChanged)
         }
         viewModelScope.launch {
             signalManager.mediaToggles.collect(::onPeerEscalatedToVideo)
@@ -286,6 +293,19 @@ class CallViewModel @Inject constructor(
         if (paused == videoAutoPaused) return
         videoAutoPaused = paused
         publish()
+    }
+
+    private fun onVideoNoticeChanged(notice: CallVideoNotice) {
+        if (notice == videoNotice) return
+        videoNotice = notice
+        publish()
+    }
+
+    /** L'appareil est trop chaud : la caméra se coupe, le pair le voit comme une caméra coupée, l'appel continue en audio. */
+    private fun onThermalCritical() {
+        if (!media.isCameraOn) return
+        toggleCamera()
+        videoFallbackAnnouncer.announce(CallVideoFallback.DeviceTooHot)
     }
 
     /**
@@ -780,7 +800,7 @@ class CallViewModel @Inject constructor(
             callState, config, media, elapsedSeconds, connectionQuality, waiting.state,
             peer.qualityDegraded, peer.screenCapturing, peer.caption,
             peer.audioEnabled, peer.videoEnabled, videoAutoPaused, mediaEstablished,
-            peerScreenSharing = peer.screenSharing,
+            peerScreenSharing = peer.screenSharing, videoNotice = videoNotice,
         ).withGroupTitle(groupTitle?.text(groupTitleWording.current()))
         syncPreview()
     }
