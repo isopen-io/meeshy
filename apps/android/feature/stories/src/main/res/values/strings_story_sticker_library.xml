@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_sticker_save">Save to My stickers</string>
+    <string name="story_sticker_save_done">Added to My stickers</string>
+    <string name="story_sticker_save_already">Already in My stickers</string>
+    <string name="story_sticker_save_failed">Couldn\'t save that sticker</string>
+</resources>
