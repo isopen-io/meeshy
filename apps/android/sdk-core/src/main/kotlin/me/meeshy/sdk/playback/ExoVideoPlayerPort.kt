@@ -21,7 +21,7 @@ import androidx.media3.exoplayer.source.MediaSource
  * le connaisse.
  */
 @UnstableApi
-public class ExoVideoPlayerPort(
+internal class ExoVideoPlayerPort(
     context: Context,
     private val mediaSourceFactory: (uri: String) -> MediaSource.Factory = { DefaultMediaSourceFactory(context.applicationContext) },
     private val onCreated: () -> Unit = {},
