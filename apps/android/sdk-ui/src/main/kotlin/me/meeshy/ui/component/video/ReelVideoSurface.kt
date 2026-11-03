@@ -22,6 +22,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.ui.R
+import me.meeshy.ui.component.media.ComposerLiveEffects
 import me.meeshy.ui.component.media.MeeshyMediaCache
 import me.meeshy.ui.component.media.PlayerCensus
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -89,6 +90,10 @@ fun ReelVideoSurface(
     fit: Boolean = false,
     /** Un autre son (un vocal, un appel) a pris le focus : la vidéo vient de se mettre en pause d'elle-même. */
     onAudioFocusLost: () -> Unit = {},
+    /** Le focus est revenu après une perte PASSAGÈRE (fin d'un appel, d'une alarme) : la vidéo reprend d'elle-même. */
+    onAudioFocusGained: () -> Unit = {},
+    /** La perte est DÉFINITIVE (un autre lecteur a pris le focus pour de bon) : aucun gain ne suivra. */
+    onAudioFocusLostForGood: () -> Unit = {},
     /**
      * `false` : le média ne passe PAS par le cache disque (un contenu protégé — flamme, vue unique — ne laisse
      * aucune copie durable sur l'appareil). Le défaut garde le comportement des réels et des stories.
@@ -107,10 +112,17 @@ fun ReelVideoSurface(
      * réels.
      */
     textured: Boolean = false,
+    /**
+     * Le look d'une vidéo réglée du compositeur, que son aperçu peint par le GPU (#14848) : les mêmes effets que la scène
+     * ([me.meeshy.ui.component.retouch.rememberStoryVideoLookEffects]). `null` (une publication, déjà cuite) n'ouvre aucun
+     * pipeline d'effets.
+     */
+    effects: ComposerLiveEffects? = null,
 ) {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
-    val player = remember(mediaUrl, sourceStartMs, sourceEndMs, loads, cached) {
+    val painted = effects != null
+    val player = remember(mediaUrl, sourceStartMs, sourceEndMs, loads, cached, painted) {
         if (!loads) return@remember null
         PlayerCensus.record()
         // Lecture par le cache disque (clé canonique) : un média déjà vu se rouvre sans réseau.
@@ -144,9 +156,11 @@ fun ReelVideoSurface(
             repeatMode = Player.REPEAT_MODE_ONE
             volume = if (muted) 0f else 1f
             playWhenReady = false
+            if (painted) setVideoEffects(emptyList())
             prepare()
         }
     }
+    LaunchedEffect(player, effects) { effects?.let { player?.setVideoEffects(it.effects) } }
 
     // Le volume suit [muted] a chaud : le player est memoize par URL, donc la
     // valeur passee au constructeur ne refleterait jamais un toggle ulterieur.
@@ -171,6 +185,8 @@ fun ReelVideoSurface(
     // Bail de lecture : la ressource jouée est à l'abri de l'éviction LRU tant que le player vit.
     val currentOnPlayer by rememberUpdatedState(onPlayer)
     val currentOnAudioFocusLost by rememberUpdatedState(onAudioFocusLost)
+    val currentOnAudioFocusGained by rememberUpdatedState(onAudioFocusGained)
+    val currentOnAudioFocusLostForGood by rememberUpdatedState(onAudioFocusLostForGood)
     DisposableEffect(player) {
         val live = player ?: return@DisposableEffect onDispose { }
         val releaseLease = if (cached) mediaCache.lease(mediaUrl) else ({ })
@@ -179,6 +195,7 @@ fun ReelVideoSurface(
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS) {
                     currentOnAudioFocusLost()
+                    currentOnAudioFocusLostForGood()
                 }
             }
 
@@ -188,6 +205,8 @@ fun ReelVideoSurface(
             override fun onPlaybackSuppressionReasonChanged(playbackSuppressionReason: Int) {
                 if (playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS) {
                     currentOnAudioFocusLost()
+                } else if (playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE) {
+                    currentOnAudioFocusGained()
                 }
             }
         }

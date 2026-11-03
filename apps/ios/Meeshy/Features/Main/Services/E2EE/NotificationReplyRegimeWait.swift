@@ -171,8 +171,16 @@ final class NotificationReplyRegimeWait {
         await confirm(reply)
     }
 
+    /// Le régime relu l'a été sous le compte actif À CET INSTANT : changé
+    /// pendant la relecture (#14706), son verdict ne dit rien de la fiche, qui
+    /// attend son compte — ni retrait, ni bulle, ni envoi.
     private func confirm(_ reply: NotificationReplyAwaitingRegime) async {
-        switch await destination(reply.conversationId) {
+        let regime = await destination(reply.conversationId)
+        guard currentUserId() == reply.senderId else {
+            Logger.e2ee.warning("notification reply: account switched while reading the regime, kept for its account")
+            return
+        }
+        switch regime {
         case .unconfirmed:
             return
         case .inaccessible:

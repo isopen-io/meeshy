@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="about_link_hint">Ouvre %1$s dans le navigateur</string>
+</resources>

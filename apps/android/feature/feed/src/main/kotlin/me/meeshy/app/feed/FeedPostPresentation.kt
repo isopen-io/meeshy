@@ -101,6 +101,10 @@ data class FeedPostPresentation(
     val isBookmarked: Boolean,
     val commentCount: Int,
     val repostCount: Int,
+    /** Les partages du post (iOS `FeedPost.shareCount`), 0 quand la passerelle n'en sert pas. */
+    val shareCount: Int = 0,
+    /** L'accent de l'auteur (hex), passé en PARAMÈTRE à la barre d'actions ; `null` : teintes neutres. */
+    val accentHex: String? = null,
     /** Le lecteur a republié ce post — servi par la passerelle, ou posé au geste en attendant sa réponse (#14456). */
     val isReposted: Boolean = false,
     val isPinned: Boolean,
@@ -241,6 +245,8 @@ object FeedPostBuilder {
             isBookmarked = post.isBookmarkedByMe == true,
             commentCount = post.commentCount ?: 0,
             repostCount = post.repostCount ?: 0,
+            shareCount = post.shareCount ?: 0,
+            accentHex = post.authorAccentHex(),
             isReposted = post.isRepostedByMe == true,
             isPinned = post.isPinned == true,
             isEdited = post.isEdited == true,

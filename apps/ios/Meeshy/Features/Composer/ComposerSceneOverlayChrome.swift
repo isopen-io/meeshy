@@ -40,6 +40,9 @@ struct ComposerSceneOverlayChrome: View {
     /// L'écart entre le bord de l'écran et celui de la scène, quand elle prend
     /// toute la HAUTEUR et laisse une marge de chaque côté (iPhone SE).
     var sceneSideInset: CGFloat = 0
+    /// L'écart entre le haut du chrome et celui de la scène, quand elle
+    /// commence plus bas que lui (iPhone SE, 12 pt d'air au-dessus d'elle).
+    var sceneTopInset: CGFloat = 0
 
     @State private var press = ComposerRailDoorPress()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -69,7 +72,7 @@ struct ComposerSceneOverlayChrome: View {
                    value: ComposerRestChrome.selectionColumnIsShown(state))
         .padding(.horizontal, MeeshySpacing.smPlus)
         .padding(.horizontal, max(0, sceneSideInset))
-        .padding(.top, MeeshySpacing.xs)
+        .padding(.top, MeeshySpacing.xs + max(0, sceneTopInset))
     }
 
     private var topRow: some View {
