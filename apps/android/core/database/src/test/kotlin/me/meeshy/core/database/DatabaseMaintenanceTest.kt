@@ -37,4 +37,20 @@ class DatabaseMaintenanceTest {
         assertThat(second).isFalse()
         database.close()
     }
+
+    @Test
+    fun `le mode incremental est lu sur le fichier apres le VACUUM, une fois la base rouverte`() {
+        val name = "autovacuum-reopened.db"
+        open(name).apply {
+            DatabaseMaintenance(this).ensureIncrementalAutoVacuum()
+            close()
+        }
+
+        val reopened = open(name)
+        val mode = reopened.openHelper.writableDatabase.query("PRAGMA auto_vacuum").use { it.moveToFirst(); it.getInt(0) }
+
+        assertThat(mode).isEqualTo(2)
+        assertThat(DatabaseMaintenance(reopened).ensureIncrementalAutoVacuum()).isFalse()
+        reopened.close()
+    }
 }
