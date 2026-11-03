@@ -904,6 +904,31 @@ class ReelsViewModelTest {
     }
 
     @Test
+    fun `signaler envoie le motif choisi dans le dialogue`() = runTest {
+        coEvery { reportRepository.reportPost("r1", ReportReason.SPAM, null) } returns NetworkResult.Success(Unit)
+        val vm = viewModel(thread = listOf(reel("r1")))
+        vm.load()
+
+        vm.toasts.test {
+            vm.report("r1", ReportReason.SPAM)
+            assertThat(awaitItem().messageRes).isEqualTo(R.string.reels_toast_reported)
+        }
+        coVerify(exactly = 1) { reportRepository.reportPost("r1", ReportReason.SPAM, null) }
+    }
+
+    @Test
+    fun `un commentaire envoye depuis la feuille ajoute un au compteur du reel nomme seul`() = runTest {
+        val vm = viewModel(thread = listOf(reel("r1"), reel("r2")))
+        vm.load()
+        val before = vm.state.value.reels.associate { it.id to it.commentCount }
+
+        vm.commentSent("r1")
+
+        assertThat(vm.state.value.reels.first { it.id == "r1" }.commentCount).isEqualTo(before.getValue("r1") + 1)
+        assertThat(vm.state.value.reels.first { it.id == "r2" }.commentCount).isEqualTo(before.getValue("r2"))
+    }
+
+    @Test
     fun `epingler appelle la passerelle et un echec le dit`() = runTest {
         coEvery { repository.pinPost("r1") } returns NetworkResult.Failure(ApiError("x"))
         val vm = viewModel(thread = listOf(reel("r1")))

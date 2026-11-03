@@ -6,6 +6,7 @@ import me.meeshy.sdk.util.resolveServedImageUrl
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.fullscreen.MediaChromeBackdrop
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
 import me.meeshy.sdk.model.ReelMediaLayout
@@ -65,6 +66,8 @@ data class ReelPresentation(
     val scene: StorySlideView? = null,
     /** Ce que « Enregistrer », « Partager » et « Imager » rendent (#13896) : la charge servie et la scène qu'elle peint. */
     val export: Pair<StoryItem, StorySlideView>? = null,
+    /** Le média dont la luminance commande la teinte des glyphes du rail (iOS `MediaLuminanceScheme`) ; `null` : glyphes blancs. */
+    val backdrop: MediaChromeBackdrop? = null,
 )
 
 object ReelBuilder {
@@ -135,6 +138,7 @@ object ReelBuilder {
                     shareCount = post.shareCount ?: 0,
                     scene = scene,
                     export = ReelScene.export(post, scene, layout, mediaBaseUrl, preferences),
+                    backdrop = post.media.orEmpty().sortedBy { it.order ?: Int.MAX_VALUE }.firstNotNullOfOrNull { MediaChromeBackdrop.postMedia(it) },
                 )
             }
             .toList()
