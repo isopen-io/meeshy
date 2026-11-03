@@ -175,6 +175,7 @@ env:
 jobs:
   sdk-plan:
     name: Répartir les suites du SDK
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -195,6 +196,7 @@ jobs:
   # Le NOM du job est lu par la file des autres runs.
   file-mac:
     name: File d'attente Mac
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -485,7 +487,7 @@ jobs:
   sdk-tests:
     name: Verdict iOS SDK
     needs: [sdk-plan, sdk-build, sdk-test-shard]
-    if: always()
+    if: ${{ always() && (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

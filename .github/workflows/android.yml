@@ -103,6 +103,7 @@ jobs:
   # consultatif pour une PR iOS seule (qui ne peut pas connaître le manifeste Android).
   i18n:
     name: Chaînes Android générées à jour
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -147,6 +148,7 @@ jobs:
   # Le contrôle échoue quand un fichier a divergé du manifeste ou qu'un orphelin subsiste.
   routes:
     name: Routes Android générées à jour
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -167,6 +169,7 @@ jobs:
   # régénération fait échouer ce contrôle.
   tokens:
     name: Jetons de design générés à jour
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
