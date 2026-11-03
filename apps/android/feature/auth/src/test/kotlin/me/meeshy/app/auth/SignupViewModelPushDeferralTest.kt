@@ -49,6 +49,7 @@ class SignupViewModelPushDeferralTest {
         ).apply {
             onDisplayNameChange("Ada Lovelace")
             onEmailChange("ada@meeshy.me")
+            onPhoneEntryChange("0612345678")
             onPasswordChange("secret1")
         }
     }
