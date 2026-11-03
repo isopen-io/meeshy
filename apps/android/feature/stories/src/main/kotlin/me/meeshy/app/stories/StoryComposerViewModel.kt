@@ -31,20 +31,17 @@ import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
-import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.composer.AudienceCandidate
-import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.composer.ComposerPublishChannel
 import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.composer.ComposerHashtags
 import me.meeshy.sdk.model.composer.look.ComposerLookPerson
-import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.media.UnclaimedMediaSweep
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
@@ -446,37 +443,16 @@ class StoryComposerViewModel @Inject constructor(
     fun onVisibilityChange(visibility: StoryVisibility) = _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
 
     /** La liste « visible par » / « sauf » : l'appelant l'a déjà bornée aux personnes proposées. */
-    fun onAudienceUserIdsChange(ids: List<String>) {
-        _state.update { it.copy(draft = it.draft.withVisibilityUserIds(ids.distinct().take(ComposerAudienceSelection.MAX_USERS))) }
-    }
+    fun onAudienceUserIdsChange(ids: List<String>) = _state.update { StoryComposerDraftMetaReducer.audienceIdsChanged(it, ids) }
 
     /** Nomme [person] dans la publication (rangée « Avec… »), une seule fois par pseudo. */
-    fun onAddMention(person: AudienceCandidate) {
-        _state.update { current ->
-            val mentions = current.draft.mentions
-            if (mentions.size >= MAX_MENTIONS) return@update current
-            if (mentions.any { it.username.equals(person.username, ignoreCase = true) }) return@update current
-            current.copy(
-                draft = current.draft.copy(
-                    mentions = mentions + PostMentionInput(userId = person.id, username = person.username, display = MENTION_DISPLAY),
-                ),
-            )
-        }
-    }
+    fun onAddMention(person: AudienceCandidate) = _state.update { StoryComposerDraftMetaReducer.mentionAdded(it, person) }
 
-    fun onRemoveMention(username: String) {
-        _state.update { current ->
-            current.copy(draft = current.draft.copy(mentions = current.draft.mentions.filterNot { it.username.equals(username, ignoreCase = true) }))
-        }
-    }
+    fun onRemoveMention(username: String) = _state.update { StoryComposerDraftMetaReducer.mentionRemoved(it, username) }
 
-    fun onMediaAltChange(mediaId: String, text: String) {
-        _state.update { it.copy(draft = it.draft.copy(mediaAlt = MediaDescriptionLaw.with(it.draft.mediaAlt, mediaId, text))) }
-    }
+    fun onMediaAltChange(mediaId: String, text: String) = _state.update { StoryComposerDraftMetaReducer.mediaAltChanged(it, mediaId, text) }
 
-    fun onMediaCaptionChange(mediaId: String, text: String) {
-        _state.update { it.copy(draft = it.draft.copy(mediaCaption = MediaDescriptionLaw.with(it.draft.mediaCaption, mediaId, text))) }
-    }
+    fun onMediaCaptionChange(mediaId: String, text: String) = _state.update { StoryComposerDraftMetaReducer.mediaCaptionChanged(it, mediaId, text) }
 
     fun onAllowSoundExtractionChange(allowed: Boolean) = _state.update { it.copy(draft = it.draft.copy(allowSoundExtraction = allowed)) }
 

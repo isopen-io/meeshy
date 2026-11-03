@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="identity_role_creator">المنشئ</string>
-    <string name="identity_role_admin">مشرف عام</string>
-    <string name="identity_role_moderator">مشرف</string>
-</resources>

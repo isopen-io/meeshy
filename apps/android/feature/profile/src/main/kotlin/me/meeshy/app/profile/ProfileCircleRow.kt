@@ -1,5 +1,6 @@
 package me.meeshy.app.profile
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -50,8 +51,9 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 /**
  * Le bloc du cercle sur le profil d'un autre (#13940, #14910) — iso `ProfileCircleSection.swift` : le niveau commun et ce qui
- * manque pour monter ; puis, en bas du bloc, « Promouvoir en X » (seulement quand c'est possible) au-dessus de
- * « Rétrograder en Y » — « Annuler le lien » à Connaissance —, ce dernier toujours confirmé par un dialogue destructif.
+ * manque pour monter ; puis, en bas du bloc, le libellé impératif du cercle visé (« Soyons proches », seulement quand
+ * c'est possible) au-dessus de celui du cercle d'arrivée (« Restons amis » — « Annuler le lien » à Connaissance —), ce
+ * dernier toujours confirmé par un dialogue destructif ([ProfileCircleWording]).
  * [allowPromote] est faux quand la fiche offre déjà le geste de connexion : une seule porte pour la même demande.
  */
 @Composable
@@ -73,7 +75,9 @@ internal fun ProfileCircleRow(
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         CircleHeader(circle)
-        circle.offeredRaise?.takeIf { allowPromote }?.let { PromoteButton(it, displayName, onRaise) }
+        circle.offeredRaise?.takeIf { allowPromote }?.let { target ->
+            ProfileCircleWording.promote(target)?.let { label -> PromoteButton(target, label, displayName, onRaise) }
+        }
         circle.lowering?.let { target -> LowerButton(target, onClick = { confirming = true }) }
     }
     val target = circle.lowering
@@ -132,11 +136,11 @@ private fun CircleHeader(circle: ProfileCircle) {
 }
 
 @Composable
-private fun PromoteButton(target: RelationLevel, name: String, onRaise: () -> Unit) {
-    val title = levelTitle(target, null)
-    val a11y = stringResource(UiR.string.circles_action_promote_a11y, title, name)
+private fun PromoteButton(target: RelationLevel, @StringRes label: Int, name: String, onRaise: () -> Unit) {
+    val text = stringResource(label)
+    val a11y = ProfileCircleWording.promoteA11y(target)?.let { stringResource(it, name) } ?: text
     CircleActionButton(
-        label = stringResource(UiR.string.circles_action_promote, title),
+        label = text,
         color = target.tint(),
         filled = true,
         a11y = a11y,
@@ -146,11 +150,7 @@ private fun PromoteButton(target: RelationLevel, name: String, onRaise: () -> Un
 
 @Composable
 private fun LowerButton(target: RelationLevel, onClick: () -> Unit) {
-    val label = if (target == RelationLevel.PUBLIC) {
-        stringResource(UiR.string.circles_action_unlink)
-    } else {
-        stringResource(UiR.string.circles_action_demote, levelTitle(target, null))
-    }
+    val label = stringResource(ProfileCircleWording.lower(target))
     CircleActionButton(label = label, color = MeeshyPalette.Error, filled = false, a11y = label, onClick = onClick)
 }
 
@@ -192,17 +192,13 @@ private fun LowerConfirmDialog(
     val unlink = to == RelationLevel.PUBLIC
     val fromTitle = levelTitle(from, null)
     val toTitle = levelTitle(to, null)
-    val title = if (unlink) {
-        stringResource(UiR.string.circles_unlink_confirm_title, name)
-    } else {
-        stringResource(UiR.string.circles_demote_confirm_title, name, toTitle)
-    }
+    val title = stringResource(ProfileCircleWording.lowerTitle(to), name)
     val body = if (unlink) {
         stringResource(UiR.string.circles_unlink_confirm_body, name)
     } else {
         stringResource(UiR.string.circles_demote_confirm_body, name, fromTitle, toTitle)
     }
-    val action = if (unlink) UiR.string.circles_action_unlink else UiR.string.circles_demote_confirm_action
+    val action = ProfileCircleWording.lower(to)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },

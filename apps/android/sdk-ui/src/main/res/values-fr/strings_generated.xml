@@ -158,6 +158,9 @@
     <string name="fullscreen_react">Réagir</string>
     <string name="fullscreen_reply">Répondre</string>
     <string name="fullscreen_show_controls">Afficher les contrôles</string>
+    <string name="identity_role_admin">Admin</string>
+    <string name="identity_role_creator">Créateur</string>
+    <string name="identity_role_moderator">Modo</string>
     <string name="image_editor_before">Original</string>
     <string name="image_editor_cancel">Annuler</string>
     <string name="image_editor_crop_applied">Recadrage</string>

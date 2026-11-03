@@ -13,7 +13,9 @@ import { LANDING_COPY } from '@/landing/landing-copy';
 import { siteHref } from '@/lib/institutional-href';
 import { isAppPath } from '@/routes/app-paths';
 
-import { APP_STORE_URL, DownloadPage, downloadShots } from './download';
+import { APP_STORE_URL, GOOGLE_PLAY_URL } from '@/lib/store-links';
+
+import { DownloadPage, downloadShots } from './download';
 
 /**
  * **`/download` — LE PREMIER CONTACT AVEC MEESHY** (#7297, #8801).
@@ -45,17 +47,19 @@ describe('/download — ce que voit quelqu’un qui ne connaît pas Meeshy (#729
     expect(html).toContain('rel="noopener noreferrer"');
   });
 
-  test('le badge Google Play est là, dit « bientôt », et mène à la version web — jamais à une fiche absente', () => {
+  test('le badge Google Play mène à la fiche RÉELLE de l’app native, sans « bientôt », dans les sept langues (#15120)', () => {
+    expect(GOOGLE_PLAY_URL).toBe('https://play.google.com/store/apps/details?id=me.meeshy.app');
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       const html = renderToStaticMarkup(<DownloadPage language={language} />);
-      expect(html).toContain('Google Play');
-      expect(html).toContain('data-store="google-play"');
-      expect(html).not.toContain('play.google.com');
+      const badge = /<a [^>]*data-store="google-play"[^>]*>/.exec(html)?.[0] ?? '';
+      expect(badge).toContain(`href="${GOOGLE_PLAY_URL}"`);
+      expect(badge).toContain('rel="noopener noreferrer"');
+      expect(badge).toContain('target="_blank"');
+      expect(badge).toMatch(/aria-label="[^"]*Google Play[^"]*"/);
     }
-    const html = renderToStaticMarkup(<DownloadPage language="fr" />);
-    expect(html).toMatch(/<a[^>]*data-store="google-play"[^>]*href="\/"|<a[^>]*href="\/"[^>]*data-store="google-play"/);
-    expect(html).toContain('Bientôt');
-    expect(html).toContain('arrive bientôt sur Google Play');
+    const fr = renderToStaticMarkup(<DownloadPage language="fr" />);
+    expect(fr).not.toMatch(/bientôt/i);
+    expect(fr).toContain('Gratuit sur Google Play.');
   });
 
   test('une porte explicite mène au produit SERVI aujourd’hui — le web', () => {
@@ -146,7 +150,8 @@ describe('/download — ce que voit quelqu’un qui ne connaît pas Meeshy (#729
   test('en : la page parle anglais — le destinataire n’a pas choisi le français', () => {
     const html = renderToStaticMarkup(<DownloadPage language="en" />);
     expect(html).toContain('Get Meeshy');
-    expect(html).toContain('Coming soon');
+    expect(html).toContain('Get it on Google Play');
+    expect(html).not.toMatch(/coming soon/i);
     expect(html).not.toContain('navigateur');
   });
 
@@ -154,6 +159,6 @@ describe('/download — ce que voit quelqu’un qui ne connaît pas Meeshy (#729
     const html = renderToStaticMarkup(<DownloadPage language="ar" />);
     expect(html).toContain('Meeshy');
     expect(html).toContain('المتصفح');
-    expect(html).toContain('قريبًا');
+    expect(html).not.toContain('قريبًا');
   });
 });
