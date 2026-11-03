@@ -45,11 +45,10 @@ internal fun Modifier.hiddenTowardsEdge(isHidden: Boolean, edge: ChromeEdge): Mo
     )
     val travelDp = EdgeHiddenChrome.offsetDp(isHidden = true, edge = edge)
     val endOpacity = EdgeHiddenChrome.opacity(isHidden = true)
-    val moved = graphicsLayer {
+    val layered = graphicsLayer {
         translationY = if (reduceMotion) 0f else travelDp * density * progress
         alpha = 1f - progress * (1f - endOpacity)
     }
-    val layered = this.then(moved)
     if (EdgeHiddenChrome.allowsHitTesting(isHidden)) return layered
     return layered.pointerInput(Unit) {
         awaitPointerEventScope {
