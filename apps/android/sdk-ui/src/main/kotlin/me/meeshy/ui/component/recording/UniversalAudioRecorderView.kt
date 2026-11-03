@@ -124,7 +124,7 @@ public fun UniversalAudioRecorderView(
                 }
             }
             Spacer(Modifier.weight(1f))
-            MicRefusalNotice(handle.screen, onOpenSettings ?: { context.openAppSettings() })
+            MicRefusalNotice(handle.screen, onOpenSettings ?: { context.openAppSettings(); Unit })
             if (!handle.screen.isPreviewing) {
                 RecorderControls(handle, accent, Modifier.padding(horizontal = MeeshySpacing.xl).padding(bottom = 40.dp))
             }
