@@ -55,6 +55,10 @@ import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.purgingDeadStories
 import me.meeshy.sdk.story.toStoryGroups
 import me.meeshy.sdk.story.toStoryItem
+import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.ContentRemovalPolicy
+import me.meeshy.sdk.model.ContentRemovalReason
+import me.meeshy.ui.component.FeedbackKind
 import me.meeshy.ui.component.FeedbackToastRequest
 import javax.inject.Inject
 
@@ -821,24 +825,61 @@ class StoryViewerViewModel @Inject constructor(
     }
 
     /**
-     * Supprime la story COURANTE (la sienne uniquement — l'UI gate sur
-     * [StoryViewerUiState.isOwnStory]) puis avance ou ferme : rester sur un slide
-     * supprime rejouerait un fantome.
+     * Supprime la story COURANTE (la sienne uniquement — l'UI gate sur [StoryViewerUiState.isOwnStory]).
+     * Optimiste : la slide quitte le plateau tout de suite, le lecteur reste sur le contenu survivant, et le
+     * refus du serveur la rétablit avec un toast. La toute dernière slide ferme le lecteur à la confirmation.
      */
-    fun deleteCurrentStory(onEmpty: () -> Unit) {
+    fun deleteCurrentStory() = retireCurrentStory(reason = null)
+
+    /** Retrait par la modération, avec son motif (#11151) : sans motif valide (3 à 500 caractères), rien ne part. */
+    fun removeCurrentStory(reason: String) {
+        val normalized = ContentRemovalReason.normalized(reason) ?: return
+        retireCurrentStory(reason = normalized)
+    }
+
+    /** « Retirer » s'offre à la modération de la plateforme sur la story d'un autre, jamais sur la sienne. */
+    fun mayRemoveCurrentStory(): Boolean =
+        ContentRemovalPolicy.mayRemovePublication(_state.value.isOwnStory, sessionRepository.currentUser.value?.role)
+
+    private fun retireCurrentStory(reason: String?) {
         val storyId = _state.value.currentStoryId ?: return
+        val snapshot = playback
+        val rawSnapshot = rawItems[storyId]
+        val next = snapshot.removingSlide(storyId)
+        val lastOne = next.isDismissed
+        if (!lastOne) {
+            playback = next
+            rawItems.remove(storyId)
+            reactionStates.remove(storyId)
+            emit()
+        }
         viewModelScope.launch {
-            if (storyRepository.delete(storyId) is NetworkResult.Success) {
-                if (_state.value.hasNext) advance() else onEmpty()
+            val result = if (reason == null) storyRepository.delete(storyId) else storyRepository.delete(storyId, reason)
+            if (result is NetworkResult.Success) {
+                if (lastOne) {
+                    playback = next
+                    emit()
+                }
+                return@launch
             }
+            if (!lastOne) {
+                playback = snapshot
+                rawSnapshot?.let { rawItems[storyId] = it }
+                emit()
+            }
+            toastChannel.trySend(FeedbackToastRequest(R.string.my_stories_delete_error, FeedbackKind.Error))
         }
     }
 
-    /** Signale la story courante — best effort, meme semantique que le report de post. */
-    fun reportCurrentStory(reason: ReportReason) {
+    /**
+     * Signale la story courante : motif plus détail libre. [onDone] reçoit l'issue (vrai = envoyé) pour l'haptique
+     * succès ou erreur ; hors session, l'appel est inerte et compte comme un échec.
+     */
+    fun reportCurrentStory(reason: ReportReason, details: String? = null, onDone: (Boolean) -> Unit = {}) {
         val storyId = _state.value.currentStoryId ?: return
         viewModelScope.launch {
-            reportRepository.reportStory(storyId, reason, details = null)
+            val result = reportRepository.reportStory(storyId, reason, details?.trim()?.takeIf { it.isNotEmpty() })
+            onDone(result is NetworkResult.Success)
         }
     }
 }

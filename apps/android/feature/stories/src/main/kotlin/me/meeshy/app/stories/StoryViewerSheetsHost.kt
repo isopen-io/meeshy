@@ -46,9 +46,10 @@ internal class StoryViewerChromeState {
     var showOptions by mutableStateOf(false)
     var showReportDialog by mutableStateOf(false)
     var showDeleteDialog by mutableStateOf(false)
+    var showRemoveDialog by mutableStateOf(false)
 
     val sheetOpen: Boolean get() = showViewers || showComments || showReply || showSendTo
-    val dialogOpen: Boolean get() = showReportDialog || showDeleteDialog
+    val dialogOpen: Boolean get() = showReportDialog || showDeleteDialog || showRemoveDialog
 }
 
 @Composable
@@ -71,17 +72,23 @@ internal fun StoryViewerSheetsHost(
             onDismiss = { chrome.showDeleteDialog = false },
             onConfirm = {
                 chrome.showDeleteDialog = false
-                viewModel.deleteCurrentStory(onEmpty = onClose)
+                viewModel.deleteCurrentStory()
+            },
+        )
+    }
+    if (chrome.showRemoveDialog) {
+        StoryRemoveDialog(
+            onDismiss = { chrome.showRemoveDialog = false },
+            onConfirm = { reason ->
+                chrome.showRemoveDialog = false
+                viewModel.removeCurrentStory(reason)
             },
         )
     }
     if (chrome.showReportDialog) {
-        StoryReportDialog(
+        StoryReportSheet(
             onDismiss = { chrome.showReportDialog = false },
-            onPick = { reason ->
-                viewModel.reportCurrentStory(reason)
-                chrome.showReportDialog = false
-            },
+            onSend = { reason, details, done -> viewModel.reportCurrentStory(reason, details, done) },
         )
     }
     if (rail.showFullEmojiPicker) {
@@ -152,44 +159,6 @@ private fun StoryDeleteDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.stories_cancel)) }
         },
     )
-}
-
-@Composable
-private fun StoryReportDialog(onDismiss: () -> Unit, onPick: (ReportReason) -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.stories_report_title)) },
-        text = {
-            Column {
-                ReportReason.entries.filterNot { it == ReportReason.FAKE_PROFILE }.forEach { reason ->
-                    Text(
-                        text = reportReasonLabel(reason),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MeeshyPalette.White,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onPick(reason) }
-                            .padding(vertical = MeeshySpacing.md),
-                    )
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.stories_cancel)) }
-        },
-    )
-}
-
-@Composable
-private fun reportReasonLabel(reason: ReportReason): String = when (reason) {
-    ReportReason.SPAM -> stringResource(R.string.stories_report_reason_spam)
-    ReportReason.HARASSMENT -> stringResource(R.string.stories_report_reason_harassment)
-    ReportReason.INAPPROPRIATE -> stringResource(R.string.stories_report_reason_inappropriate)
-    ReportReason.VIOLENCE -> stringResource(R.string.stories_report_reason_violence)
-    ReportReason.HATE_SPEECH -> stringResource(R.string.stories_report_reason_hate_speech)
-    ReportReason.IMPERSONATION -> stringResource(R.string.stories_report_reason_impersonation)
-    ReportReason.OTHER, ReportReason.FAKE_PROFILE -> stringResource(R.string.stories_report_reason_other)
 }
 
 @Composable
