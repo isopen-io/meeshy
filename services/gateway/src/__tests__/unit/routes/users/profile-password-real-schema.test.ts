@@ -121,4 +121,32 @@ describe('PATCH /users/me/password — vrai schéma, sans confirmPassword', () =
     expect(update).not.toHaveBeenCalled();
     await app.close();
   });
+  it('porte le code CURRENT_PASSWORD_INCORRECT quand le mot de passe actuel est faux', async () => {
+    mockVerify.mockResolvedValueOnce(false);
+    const { app } = await buildApp('$2b$12$hash');
+    const res = await patch(app, { currentPassword: 'faux', newPassword: NEW_PASSWORD });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('CURRENT_PASSWORD_INCORRECT');
+    expect(res.json().error).toBe('Current password is incorrect');
+    await app.close();
+  });
+
+  it('porte le code PASSWORD_TOO_WEAK quand le nouveau mot de passe est trop faible', async () => {
+    mockVerify.mockResolvedValueOnce(true);
+    const { app, update } = await buildApp('$2b$12$hash');
+    const res = await patch(app, { currentPassword: 'ancien', newPassword: 'aaaaaaaaaaaa' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('PASSWORD_TOO_WEAK');
+    expect(res.json().error).toMatch(/^Password requirements: /);
+    expect(update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('porte le code VALIDATION_ERROR sur une erreur de schéma', async () => {
+    const { app } = await buildApp('$2b$12$hash');
+    const res = await patch(app, { currentPassword: 'ancien', newPassword: NEW_PASSWORD, confirmPassword: 'autre-chose-12345' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('VALIDATION_ERROR');
+    await app.close();
+  });
 });
