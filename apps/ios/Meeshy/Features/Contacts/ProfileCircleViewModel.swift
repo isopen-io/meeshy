@@ -185,3 +185,55 @@ enum ProfileCircleLowering: Equatable {
         }
     }
 }
+
+/// Les libellés IMPÉRATIFS d'un lien (#14910, décision porteur) : une clé par cercle visé, jamais un gabarit
+/// « Promouvoir en X » / « Rétrograder en X ». Monter : Soyons amis, Soyons proches, Devenons sang ; descendre : Restons
+/// proches, Restons amis, Restons en contact ; à Connaissance, « Annuler le lien ».
+enum ProfileCircleWording {
+    static func promote(to level: RelationLevel) -> String? {
+        switch level {
+        case .friend: return String(localized: "circles.promote.friend", defaultValue: "Soyons amis", bundle: .main)
+        case .close: return String(localized: "circles.promote.close", defaultValue: "Soyons proches", bundle: .main)
+        case .blood: return String(localized: "circles.promote.blood", defaultValue: "Devenons sang", bundle: .main)
+        case .public, .community, .acquaintance: return nil
+        }
+    }
+
+    static func promoteAccessibility(to level: RelationLevel, name: String) -> String? {
+        switch level {
+        case .friend:
+            return String(format: String(localized: "circles.promote.friend.a11y", defaultValue: "Soyons amis : demander le niveau Ami à %@", bundle: .main), name)
+        case .close:
+            return String(format: String(localized: "circles.promote.close.a11y", defaultValue: "Soyons proches : demander le niveau Proche à %@", bundle: .main), name)
+        case .blood:
+            return String(format: String(localized: "circles.promote.blood.a11y", defaultValue: "Devenons sang : demander le niveau Sang à %@", bundle: .main), name)
+        case .public, .community, .acquaintance:
+            return nil
+        }
+    }
+}
+
+extension ProfileCircleLowering {
+    /// Le libellé du bouton ET de l'action destructive du dialogue.
+    var label: String {
+        switch self {
+        case .demote(.close): return String(localized: "circles.demote.close", defaultValue: "Restons proches", bundle: .main)
+        case .demote(.friend): return String(localized: "circles.demote.friend", defaultValue: "Restons amis", bundle: .main)
+        case .demote: return String(localized: "circles.demote.acquaintance", defaultValue: "Restons en contact", bundle: .main)
+        case .unlink: return String(localized: "circles.action.unlink", defaultValue: "Annuler le lien", bundle: .main)
+        }
+    }
+
+    func confirmationTitle(name: String) -> String {
+        switch self {
+        case .demote(.close):
+            return String(format: String(localized: "circles.demote.close.confirm.title", defaultValue: "Rester seulement proches avec %@ ?", bundle: .main), name)
+        case .demote(.friend):
+            return String(format: String(localized: "circles.demote.friend.confirm.title", defaultValue: "Rester seulement amis avec %@ ?", bundle: .main), name)
+        case .demote:
+            return String(format: String(localized: "circles.demote.acquaintance.confirm.title", defaultValue: "Rester seulement en contact avec %@ ?", bundle: .main), name)
+        case .unlink:
+            return String(format: String(localized: "circles.unlink.confirm.title", defaultValue: "Annuler le lien avec %@ ?", bundle: .main), name)
+        }
+    }
+}
