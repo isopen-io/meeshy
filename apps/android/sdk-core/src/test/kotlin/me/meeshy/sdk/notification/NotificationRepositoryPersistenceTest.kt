@@ -70,7 +70,7 @@ class NotificationRepositoryPersistenceTest {
     private fun CacheResult<List<ApiNotification>>.ids(): List<String> = when (this) {
         is CacheResult.Fresh -> value
         is CacheResult.Stale -> value
-        is CacheResult.Syncing -> value
+        is CacheResult.Syncing -> value.orEmpty()
         else -> emptyList()
     }.map { it.id }
 
