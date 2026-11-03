@@ -1,5 +1,6 @@
 package me.meeshy.app.settings
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,8 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -70,7 +69,7 @@ internal fun SettingsProfileCard(state: SettingsUiState, onOpenProfile: (String)
                 }
             }
             Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                MeeshyIcons.ChevronForward,
                 contentDescription = null,
                 tint = MeeshyTheme.tokens.textMuted,
             )

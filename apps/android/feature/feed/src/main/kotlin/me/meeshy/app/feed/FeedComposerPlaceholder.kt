@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,13 +25,6 @@ import me.meeshy.feature.feed.R
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AttachFile
-import androidx.compose.material.icons.outlined.GraphicEq
-import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.PhotoCamera
-import androidx.compose.material.icons.outlined.PhotoLibrary
-import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -50,11 +44,11 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 /** Les cinq entrées du menu « + » du placeholder (iOS `FeedComposerPlaceholder`) : ce qu'on ajoute d'emblée à sa publication. */
 internal enum class FeedComposerEntry(val icon: ImageVector, @StringRes val labelRes: Int) {
-    PHOTO_VIDEO(Icons.Outlined.PhotoLibrary, R.string.feed_composer_plus_photo_video),
-    CAMERA(Icons.Outlined.PhotoCamera, R.string.feed_composer_plus_camera),
-    AUDIO(Icons.Outlined.GraphicEq, R.string.feed_composer_plus_audio),
-    FILE(Icons.Outlined.AttachFile, R.string.feed_composer_plus_file),
-    LOCATION(Icons.Outlined.LocationOn, R.string.feed_composer_plus_location),
+    PHOTO_VIDEO(MeeshyIcons.PhotoLibraryOutlined, R.string.feed_composer_plus_photo_video),
+    CAMERA(MeeshyIcons.PhotoCameraOutlined, R.string.feed_composer_plus_camera),
+    AUDIO(MeeshyIcons.GraphicEqOutlined, R.string.feed_composer_plus_audio),
+    FILE(MeeshyIcons.AttachFileOutlined, R.string.feed_composer_plus_file),
+    LOCATION(MeeshyIcons.Location, R.string.feed_composer_plus_location),
 }
 
 /**
@@ -116,7 +110,7 @@ private fun RowScope.FeedComposerPlusMenu(onEntry: (FeedComposerEntry) -> Unit) 
     Box {
         IconButton(onClick = { expanded = true }, modifier = Modifier.size(48.dp)) {
             Icon(
-                imageVector = Icons.Outlined.AddPhotoAlternate,
+                imageVector = MeeshyIcons.AddPhotoAlternateOutlined,
                 contentDescription = stringResource(R.string.feed_composer_plus_menu),
                 tint = MeeshyPalette.Indigo400,
             )

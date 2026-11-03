@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -19,17 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Celebration
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Gradient
-import androidx.compose.material.icons.filled.Grain
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Vibration
-import androidx.compose.material.icons.filled.WbSunny
-import androidx.compose.material.icons.filled.ZoomOutMap
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -212,17 +202,17 @@ private fun panelEffectLabel(option: MessageEffectOption): Int = when (option) {
 }
 
 private fun panelEffectIcon(option: MessageEffectOption): ImageVector = when (option) {
-    MessageEffectOption.SHAKE -> Icons.Filled.Vibration
-    MessageEffectOption.ZOOM -> Icons.Filled.ZoomOutMap
-    MessageEffectOption.EXPLODE -> Icons.Filled.Grain
-    MessageEffectOption.CONFETTI -> Icons.Filled.Celebration
-    MessageEffectOption.FIREWORKS -> Icons.Filled.AutoAwesome
-    MessageEffectOption.WAOO -> Icons.Filled.Star
-    MessageEffectOption.GLOW -> Icons.Filled.WbSunny
-    MessageEffectOption.PULSE -> Icons.Filled.Favorite
-    MessageEffectOption.RAINBOW -> Icons.Filled.Gradient
-    MessageEffectOption.SPARKLE -> Icons.Filled.Bolt
-    else -> Icons.Filled.Star
+    MessageEffectOption.SHAKE -> MeeshyIcons.Vibration
+    MessageEffectOption.ZOOM -> MeeshyIcons.ZoomOutMap
+    MessageEffectOption.EXPLODE -> MeeshyIcons.Grain
+    MessageEffectOption.CONFETTI -> MeeshyIcons.Celebration
+    MessageEffectOption.FIREWORKS -> MeeshyIcons.Sparkles
+    MessageEffectOption.WAOO -> MeeshyIcons.StarFilled
+    MessageEffectOption.GLOW -> MeeshyIcons.WbSunny
+    MessageEffectOption.PULSE -> MeeshyIcons.HeartFilled
+    MessageEffectOption.RAINBOW -> MeeshyIcons.Gradient
+    MessageEffectOption.SPARKLE -> MeeshyIcons.Bolt
+    else -> MeeshyIcons.StarFilled
 }
 
 internal fun ephemeralDurationLabel(duration: EphemeralDuration): Int = when (duration) {
