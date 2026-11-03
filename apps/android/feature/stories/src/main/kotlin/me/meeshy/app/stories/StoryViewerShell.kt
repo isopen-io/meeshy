@@ -122,7 +122,6 @@ internal fun StoryViewerShell(
                     accent = accent,
                     progress = { progress.value },
                     chrome = chrome,
-                    showsRepost = railPlan.showsRepost,
                     videoExport = videoExport,
                     actions = actions,
                     haptics = haptics,
