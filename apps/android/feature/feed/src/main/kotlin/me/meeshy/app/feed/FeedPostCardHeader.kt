@@ -89,11 +89,14 @@ internal fun FeedPostCardHeader(
                 )
             } else {
                 post.createdAtIso?.let {
-                    Text(
-                        text = postRelativeTime(it),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MeeshyTheme.tokens.textSecondary,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = postRelativeTime(it),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MeeshyTheme.tokens.textSecondary,
+                        )
+                        PostViewerPointsMark(postId = post.id, seed = post.viewerPoints, color = MeeshyTheme.tokens.textSecondary)
+                    }
                 }
                 if (isOwn) AuthorReachLine(post)
             }

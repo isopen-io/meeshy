@@ -128,6 +128,9 @@ internal class ChatHostContext(
     val takeLandingMessageId: () -> String? = { null },
     /** #14670 — la fenêtre ancrée sur un message ancien et le message allumé à l'arrivée. */
     val landing: ChatLandingState = ChatLandingState(),
+    /** #15269 — ce qui ferme le composeur (bandeau de lecture seule) et ce que le rang du lecteur permet. */
+    val composerClosure: me.meeshy.sdk.model.ComposerClosure? = null,
+    val capabilities: me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities? = null,
 )
 
 /** Ce que l'en-tête lit du [ChatEngagementController], sans connaître le contrôleur. */
@@ -176,13 +179,15 @@ internal fun rememberChatHostContext(
     downloadedFileIds: Set<String> = emptySet(),
     takeLandingMessageId: () -> String? = { null },
     landing: ChatLandingState = ChatLandingState(),
+    composerClosure: me.meeshy.sdk.model.ComposerClosure? = null,
+    capabilities: me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities? = null,
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
     val chrome = remember { ChatChromeState() }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing, composerClosure, capabilities)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */

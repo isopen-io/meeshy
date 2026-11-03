@@ -15,7 +15,12 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.pinch
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
@@ -174,6 +179,64 @@ class ComposerRetouchScreenTest {
         val rendered = delivered.single() as ComposerRetouchResult.Rendered
         assertThat(rendered.bitmap.width).isEqualTo(rendered.bitmap.height)
         assertThat(rendered.bitmap.width).isEqualTo(90)
+    }
+
+    private fun imageBounds() = compose.onNodeWithTag(RETOUCH_CROP_IMAGE_TAG).fetchSemanticsNode().boundsInRoot
+
+    @Test
+    fun `Recadrer garde la photo en grand, posee entiere sous un cadre fixe`() {
+        show()
+        val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText("Crop").performClick()
+        compose.waitForIdle()
+
+        val image = imageBounds()
+        assertThat(maxOf(image.width / screen.width, image.height / screen.height)).isAtLeast(0.5f)
+        assertThat(image.width / image.height).isWithin(0.01f).of(90f / 160f)
+    }
+
+    @Test
+    fun `pincer zoome la photo sous le cadre, et la fenetre gardee est celle qui part`() {
+        show()
+        compose.onNodeWithText("Crop").performClick()
+        compose.waitForIdle()
+        val before = imageBounds()
+
+        compose.onNodeWithTag(RETOUCH_CROP_IMAGE_TAG).performTouchInput {
+            val middle = center
+            pinch(middle - Offset(20f, 0f), middle - Offset(120f, 0f), middle + Offset(20f, 0f), middle + Offset(120f, 0f))
+        }
+        compose.waitForIdle()
+
+        assertThat(imageBounds().width).isGreaterThan(before.width * 1.5f)
+        compose.onNodeWithText("Crop").performClick()
+        compose.waitForIdle()
+        tapDone()
+        compose.waitUntil(10_000) { delivered.isNotEmpty() }
+        val rendered = delivered.single() as ComposerRetouchResult.Rendered
+        assertThat(rendered.bitmap.width).isLessThan(90)
+        assertThat(rendered.bitmap.width.toFloat() / rendered.bitmap.height).isWithin(0.05f).of(90f / 160f)
+        assertThat(rendered.recipe.crop).isNotNull()
+    }
+
+    @Test
+    fun `choisir un preset anime le cadre jusqu a ses nouvelles proportions`() {
+        show()
+        compose.onNodeWithText("Crop").performClick()
+        compose.waitForIdle()
+        val start = imageBounds()
+        compose.mainClock.autoAdvance = false
+
+        compose.onNodeWithText("1:1").performClick()
+        compose.mainClock.advanceTimeBy(120)
+        val midway = imageBounds()
+        compose.mainClock.advanceTimeBy(1_000)
+        val end = imageBounds()
+        compose.mainClock.autoAdvance = true
+
+        assertThat(end.width).isGreaterThan(start.width + 1f)
+        assertThat(midway.width).isGreaterThan(start.width)
+        assertThat(midway.width).isLessThan(end.width)
     }
 
     @Test

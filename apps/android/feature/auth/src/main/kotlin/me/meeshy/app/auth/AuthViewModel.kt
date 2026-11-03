@@ -22,6 +22,10 @@ import me.meeshy.sdk.model.auth.EmailVerificationRequest
 import me.meeshy.sdk.model.auth.KeepSignedInPolicy
 import me.meeshy.sdk.model.auth.LoginAccountIntent
 import me.meeshy.sdk.model.auth.LoginEmailCandidate
+import me.meeshy.sdk.model.auth.LoginFlow
+import me.meeshy.sdk.model.auth.LoginFlowEvent
+import me.meeshy.sdk.model.auth.OtpCodeField
+import me.meeshy.sdk.model.auth.TwoFactorRefusal
 import me.meeshy.sdk.model.auth.LoginOutcome
 import me.meeshy.sdk.model.auth.PendingEmailVerification
 import me.meeshy.sdk.model.auth.SavedAccount
@@ -85,7 +89,15 @@ data class AuthUiState(
     val canSubmit: Boolean get() = username.isNotBlank() && password.isNotBlank() && !isSubmitting
 
     /** iOS `LoginView` : « Se connecter » de l'étape 2FA reste grisé sous 6 caractères. */
-    val canSubmitTwoFactor: Boolean get() = twoFactorCode.trim().length >= CODE_LENGTH && !isSubmitting
+    val canSubmitTwoFactor: Boolean get() = OtpCodeField.isComplete(twoFactorCode) && !isSubmitting
+
+    /** L'étape de la connexion, lue de l'état : le jeton de second facteur la porte, jamais l'état sauvegardé. */
+    val loginFlow: LoginFlow
+        get() = when {
+            isAuthenticated -> LoginFlow.Authenticated
+            twoFactorToken != null -> LoginFlow.TwoFactor(twoFactorToken)
+            else -> LoginFlow.Form
+        }
 
     val canSubmitVerification: Boolean get() = verificationCode.trim().length >= CODE_LENGTH && !isSubmitting
 
@@ -300,7 +312,7 @@ class AuthViewModel @Inject constructor(
     }
 
     fun onTwoFactorCodeChange(value: String) {
-        _state.update { it.copy(twoFactorCode = value.take(MAX_CODE_INPUT), errorMessage = null, errorRes = null) }
+        _state.update { it.copy(twoFactorCode = OtpCodeField.sanitize(value), errorMessage = null, errorRes = null) }
     }
 
     /** iOS `LoginView.attempt2FALogin` → `AuthManager.completeLoginWith2FA`. */
@@ -311,16 +323,35 @@ class AuthViewModel @Inject constructor(
         abandonRestoration()
         _state.update { it.copy(isSubmitting = true, errorMessage = null, errorRes = null) }
         viewModelScope.launch {
-            when (val result = authRepository.completeLoginWith2FA(challenge, current.twoFactorCode.trim())) {
-                is NetworkResult.Failure -> showRefusal(result.error.code, result.error.httpStatus, result.error.message)
+            when (val result = authRepository.completeLoginWith2FA(challenge, current.twoFactorCode)) {
+                is NetworkResult.Failure -> showTwoFactorRefusal(result.error.code, result.error.httpStatus, result.error.message)
                 is NetworkResult.Success -> sessionOpened(result.data.user)
             }
         }
     }
 
-    /** « Annuler » de l'étape 2FA : retour au formulaire, le défi est oublié. */
+    /** « Annuler » de l'étape 2FA : retour au formulaire, l'identifiant reste, le mot de passe et le défi sont oubliés. */
     fun cancelTwoFactor() {
-        _state.update { it.copy(twoFactorToken = null, twoFactorCode = "", errorMessage = null, errorRes = null) }
+        _state.update { it.leavingTwoFactor(LoginFlowEvent.Cancelled) }
+    }
+
+    private fun showTwoFactorRefusal(code: String?, httpStatus: Int?, message: String?) {
+        val refusal = TwoFactorRefusal.classify(code, httpStatus, message)
+        val res = when (refusal) {
+            TwoFactorRefusal.OFFLINE -> R.string.email_verification_error_offline
+            TwoFactorRefusal.TOO_MANY_ATTEMPTS -> R.string.login_two_factor_error_too_many_attempts
+            TwoFactorRefusal.TOKEN_EXPIRED -> R.string.login_two_factor_error_token_expired
+            TwoFactorRefusal.INVALID_CODE -> R.string.login_two_factor_error_invalid_code
+            TwoFactorRefusal.UNEXPECTED -> R.string.common_error_generic
+        }
+        _state.update { it.copy(isSubmitting = false, errorMessage = null, errorRes = res).leavingTwoFactor(LoginFlowEvent.Refused(refusal)) }
+    }
+
+    /** Applique la loi [LoginFlow] : sortie de l'étape = jeton, code ET mot de passe vidés ; l'erreur éventuelle reste dite. */
+    private fun AuthUiState.leavingTwoFactor(event: LoginFlowEvent): AuthUiState {
+        if (loginFlow.reduce(event) is LoginFlow.TwoFactor) return this
+        return copy(twoFactorToken = null, twoFactorCode = "", password = "")
+            .let { if (event is LoginFlowEvent.Cancelled) it.copy(errorMessage = null, errorRes = null) else it }
     }
 
     fun onVerificationCodeChange(value: String) {

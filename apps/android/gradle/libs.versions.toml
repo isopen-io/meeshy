@@ -18,6 +18,8 @@ retrofit = "2.11.0"
 okhttp = "4.12.0"
 socketio = "2.1.1"
 room = "2.6.1"
+# The SQLite layer Room 2.6.1 is built on; core:database wraps its open helper factory.
+androidx-sqlite = "2.4.0"
 datastore = "1.1.1"
 coil = "2.7.0"
 browser = "1.8.0"
@@ -109,6 +111,7 @@ socketio = { module = "io.socket:socket.io-client", version.ref = "socketio" }
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+androidx-sqlite-framework = { module = "androidx.sqlite:sqlite-framework", version.ref = "androidx-sqlite" }
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
 androidx-browser = { module = "androidx.browser:browser", version.ref = "browser" }

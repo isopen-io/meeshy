@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.viewer
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
@@ -65,7 +66,7 @@ class MeeshyMediaViewerTest {
                     initialIndex = 1,
                     accent = MeeshyPalette.White,
                     onDismiss = {},
-                    scenePage = { _, _ -> Box(Modifier.testTag("scene-slot")) },
+                    scenePage = { _, _ -> Box(Modifier.fillMaxSize().testTag("scene-slot")) },
                 )
             }
         }

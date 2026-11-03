@@ -294,8 +294,8 @@ private fun FlatBadges(content: BubbleContent) {
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         modifier = Modifier.padding(start = FlatRowMetrics.indent),
     ) {
-        if (showsPin) BubblePinnedIndicator()
-        if (showsForward) BubbleForwardedBadge(content.forwardedFromName, MeeshyTheme.tokens.textMuted)
+        if (showsPin) BubblePinBadge()
+        if (showsForward) BubbleForwardBadge(content.forwardAttribution)
         if (showsEphemeral) EphemeralCountdownBadge(expiresAtIso = content.expiresAtIso)
     }
 }

@@ -84,6 +84,7 @@
     <string name="bubble_edited">modificato</string>
     <string name="bubble_forwarded">Inoltrato</string>
     <string name="bubble_forwarded_from">Inoltrato da %1$s</string>
+    <string name="bubble_forwarded_from_person">Inoltr. da %1$s</string>
     <string name="bubble_image_description">Immagine</string>
     <string name="bubble_joinNotice_joined">%1$s si è unito alla conversazione</string>
     <string name="bubble_joinNotice_noAccount">senza account</string>
@@ -98,6 +99,7 @@
     <string name="bubble_location_open">Apri in Mappe</string>
     <string name="bubble_location_shared">Posizione condivisa</string>
     <string name="bubble_message_deleted">Messaggio eliminato</string>
+    <string name="bubble_meta_pinned_a11y">Messaggio fissato</string>
     <string name="bubble_protection_after_read">Scompare dopo la lettura</string>
     <string name="bubble_reply_photo">Foto</string>
     <string name="bubble_reply_story">Storia</string>
@@ -156,6 +158,11 @@
     <string name="emoji_category_travel">Viaggi</string>
     <string name="emoji_picker_expand">Altre emoji</string>
     <string name="emoji_picker_title">Reazioni</string>
+    <string name="engagement_pill_a11y_streak">%1$s · Scintille: %2$d · Oggi: %3$d</string>
+    <string name="engagement_pill_a11y_streak_days_one">%1$d giorno</string>
+    <string name="engagement_pill_a11y_streak_days_other">%1$d giorni</string>
+    <string name="engagement_pill_a11y_total_one">%1$s scintilla guadagnata in questa conversazione</string>
+    <string name="engagement_pill_a11y_total_other">%1$s scintille guadagnate in questa conversazione</string>
     <string name="focal_focus_add_reaction">Aggiungi una reazione</string>
     <string name="focal_focus_translation_detail">Dettagli della traduzione</string>
     <string name="focal_row_anonymousSender">Senza account</string>
@@ -265,6 +272,8 @@
     <string name="post_daily_limit_comment_untimed">Hai fatto tutti i commenti consentiti oggi. Il limite conta i tuoi gesti, mai le tue scintille.</string>
     <string name="post_daily_limit_reaction">Hai fatto tutte le reazioni consentite oggi. Il limite conta i tuoi gesti, mai le tue scintille: potrai reagire di nuovo alle %1$s.</string>
     <string name="post_daily_limit_reaction_untimed">Hai fatto tutte le reazioni consentite oggi. Il limite conta i tuoi gesti, mai le tue scintille.</string>
+    <string name="post_points_a11y_one">Questo post ti ha fatto guadagnare %1$s scintilla</string>
+    <string name="post_points_a11y_other">Questo post ti ha fatto guadagnare %1$s scintille</string>
     <string name="presence_away">Assente</string>
     <string name="presence_here">Nella conversazione</string>
     <string name="presence_idle">Inattivo</string>
@@ -415,6 +424,15 @@
     <string name="viewer_caption_see_less_hint">Comprime la didascalia</string>
     <string name="viewer_caption_see_more">mostra di più</string>
     <string name="viewer_caption_see_more_hint">Mostra la didascalia completa</string>
+    <string name="viewer_engagement_comments_one">%1$d commento</string>
+    <string name="viewer_engagement_comments_other">%1$d commenti</string>
+    <string name="viewer_engagement_reactions">Reazioni: %1$s</string>
+    <string name="viewer_engagement_replies_one">%1$d risposta</string>
+    <string name="viewer_engagement_replies_other">%1$d risposte</string>
+    <string name="viewer_engagement_reposts_one">%1$d ripubblicazione</string>
+    <string name="viewer_engagement_reposts_other">%1$d ripubblicazioni</string>
+    <string name="viewer_engagement_shares_one">%1$d condivisione</string>
+    <string name="viewer_engagement_shares_other">%1$d condivisioni</string>
     <string name="viewer_media_unavailable">Questo contenuto non è più disponibile</string>
     <string name="viewer_more">Altro</string>
     <string name="viewer_position">Contenuto %1$d di %2$d</string>
@@ -422,4 +440,9 @@
     <string name="viewer_save">Salva</string>
     <string name="viewer_saving">Salvataggio…</string>
     <string name="viewer_share_outside">Condividi</string>
+    <string name="voiceProfile_recording_createProfile">Crea il profilo vocale</string>
+    <string name="voiceProfile_recording_languagePicker">Lingua di registrazione</string>
+    <string name="voiceProfile_recording_min_duration">min %1$d s</string>
+    <string name="voiceProfile_recording_readAloud">Leggi questo testo ad alta voce</string>
+    <string name="voiceProfile_recording_sample">Campione %1$d</string>
 </resources>

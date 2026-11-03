@@ -1,32 +1,27 @@
 package me.meeshy.app.stories
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.background
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.produceState
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
-import me.meeshy.feature.stories.R
-import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
@@ -35,19 +30,29 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.size.Size
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
+import me.meeshy.feature.stories.R
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.StoryMediaLook
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.model.scene.SceneLookRecipe
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.imageedit.sceneLook
 import me.meeshy.ui.component.retouch.LocalComposerLookAuthor
 import me.meeshy.ui.component.retouch.storyMediaLook
+import me.meeshy.ui.icons.MeeshyIcons
 
 /**
  * Un média posé et de quoi le peindre : sa pose, le modèle d'image (vignette téléversée, ou aperçu local en attente)
@@ -159,6 +164,7 @@ internal fun PlacedMediaLayer(
     }
     val widthPx = base.width.toFloat()
     val heightPx = base.height.toFloat()
+    val (shownWidth, shownHeight) = rememberReframedSize(widthPx, heightPx)
     val crop = placed.crop.takeUnless { frame.isVideo }
     val author = LocalComposerLookAuthor.current
     val picture = rememberComposerPicture(frame.model)
@@ -176,8 +182,8 @@ internal fun PlacedMediaLayer(
         modifier = Modifier
             .offset {
                 IntOffset(
-                    x = (placed.x * canvasWidthPx - widthPx / 2f).roundToInt(),
-                    y = (placed.y * canvasHeightPx - heightPx / 2f).roundToInt(),
+                    x = (placed.x * canvasWidthPx - shownWidth / 2f).roundToInt(),
+                    y = (placed.y * canvasHeightPx - shownHeight / 2f).roundToInt(),
                 )
             }
             .graphicsLayer {
@@ -217,7 +223,7 @@ internal fun PlacedMediaLayer(
             },
     ) {
         val frameModifier = Modifier
-            .size(with(density) { widthPx.toDp() }, with(density) { heightPx.toDp() })
+            .size(with(density) { shownWidth.toDp() }, with(density) { shownHeight.toDp() })
             .clip(RoundedCornerShape(corner))
         if (picture == null && frame.isVideo) {
             VideoFramePlaceholder(frameModifier)
@@ -236,6 +242,30 @@ internal fun PlacedMediaLayer(
         frame.pendingPhase?.let { phase -> IncomingWaitingBadge(phase, Modifier.align(Alignment.BottomStart).padding(WAITING_INSET)) }
     }
 }
+
+/**
+ * La taille dessinée du cadre (#15194) : un nouveau préréglage de recadrage change ses proportions, et le cadre y glisse
+ * plutôt que d'y sauter ; sa première taille, et toute taille sous « réduire les animations », se posent d'emblée. Le
+ * décodage suit la taille visée, jamais les tailles intermédiaires.
+ */
+@Composable
+private fun rememberReframedSize(widthPx: Float, heightPx: Float): Pair<Float, Float> {
+    val reduceMotion = LocalReduceMotion.current
+    val width = remember { Animatable(widthPx) }
+    val height = remember { Animatable(heightPx) }
+    LaunchedEffect(widthPx, heightPx, reduceMotion) {
+        if (reduceMotion) {
+            width.snapTo(widthPx)
+            height.snapTo(heightPx)
+            return@LaunchedEffect
+        }
+        launch { width.animateTo(widthPx, tween(REFRAME_MOTION_MILLIS)) }
+        launch { height.animateTo(heightPx, tween(REFRAME_MOTION_MILLIS)) }
+    }
+    return if (reduceMotion) widthPx to heightPx else width.value to height.value
+}
+
+private const val REFRAME_MOTION_MILLIS = 280
 
 /** Une vidéo dont l'image n'est pas (encore) extraite : un cadre à la forme de la vidéo, jamais un calque vide qu'on ne saisit pas. */
 @Composable

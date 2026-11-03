@@ -54,7 +54,8 @@ internal class StoryComposerDoors(
  * l'audience et Publier se retirent, et la colonne des outils porte, à la même place, ses options ; le pinceau en main n'a
  * que sa barre de dessin. [formatChevron] est le menu « Publier comme » de
  * l'hôte ; la route autonome n'en a pas. [sheet] est la feuille ouverte (stickers, sons, audience, ou celles de l'élément
- * sélectionné), ancrée en bas : la scène se réduit au-dessus d'elle (#13838). Un texte qu'on écrit, ou la légende, prend l'état de frappe (#13835) : la
+ * sélectionné), ancrée en bas : la scène se réduit au-dessus d'elle (#13838) ; le panneau du geste et la bande d'un réglage
+ * se posent par-dessus la scène, qui garde sa taille (#15192). Un texte qu'on écrit, ou la légende, prend l'état de frappe (#13835) : la
  * scène réduite au-dessus d'une barre collée au clavier, et rien d'autre. Quand la fenêtre a la place de deux rails
  * (#13837), les outils et le « ⋯ » vont dans un rail gauche libellé, la sélection et ↶↷ dans un rail droit, et Publier
  * sous la scène.
@@ -104,8 +105,8 @@ private fun SceneFirstFrame(
     val edition = rememberSceneEdition(state, viewModel, SceneEditionHost(sheet, doors, capture), besideScene.editing && openSheet == null, selection,
         quiet = panel != null || typing != null || armed)
     val raised = panel?.takeIf { it.raisedAtBottom }
-    val reduced = typing == null && (raised != null || edition.anyBand)
-    val editing = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null, sceneReduced = reduced)
+    val bottomPanelOpen = typing == null && (raised != null || edition.anyBand)
+    val editing = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null, bottomPanelOpen = bottomPanelOpen)
     val chrome = editing.sceneControls
     val levels = edition.levels
     val edited = edition.edited
@@ -118,7 +119,6 @@ private fun SceneFirstFrame(
     Box(Modifier.fillMaxSize()) {
         StorySceneFirstLayout(
             onDismiss = doors.onClose,
-            reduced = reduced,
             scene = { modifier ->
                 CompositionLocalProvider(LocalPlacedReframe provides placedReframe(edition.placedBand, placed, viewModel)) {
                     Box(modifier) {
@@ -160,7 +160,6 @@ private fun SceneFirstFrame(
             typing = typing,
             rails = rails,
             incoming = state.incomingPlaceholder()?.let { placeholder -> { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } },
-            clearsTrailingLane = editing.cedesLane && openSheet == null,
         )
         EditingAnnouncer(editing = editedWord(state, editing.editing))
         edited.background?.let { BackgroundRemoveConfirmation(it) }

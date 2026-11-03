@@ -438,12 +438,9 @@ internal fun ChatListHost(
         when {
             state.loadingPhase(host.landing.isLoadingNewer).isBlockingSpinnerNeeded -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) { ChatSkeleton() }
 
-            state.messages.isEmpty() && state.errorMessage != null -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) {
-                ChatNotice(state.errorMessage!!, onRetry = actions.refresh)
-            }
-
             state.messages.isEmpty() -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) {
-                ChatNotice(stringResource(R.string.chat_no_messages), onRetry = null)
+                val notice = state.emptyThreadNotice()
+                ChatNotice(stringResource(notice.text), onRetry = actions.refresh.takeIf { notice.offersRetry })
             }
 
             else -> Box(Modifier.fillMaxSize()) {

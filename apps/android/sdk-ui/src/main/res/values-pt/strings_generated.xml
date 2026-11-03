@@ -84,6 +84,7 @@
     <string name="bubble_edited">editado</string>
     <string name="bubble_forwarded">Encaminhado</string>
     <string name="bubble_forwarded_from">Encaminhado de %1$s</string>
+    <string name="bubble_forwarded_from_person">Enc. de %1$s</string>
     <string name="bubble_image_description">Imagem</string>
     <string name="bubble_joinNotice_joined">%1$s entrou na conversa</string>
     <string name="bubble_joinNotice_noAccount">sem conta</string>
@@ -98,6 +99,7 @@
     <string name="bubble_location_open">Abrir no Mapas</string>
     <string name="bubble_location_shared">Localização compartilhada</string>
     <string name="bubble_message_deleted">Mensagem excluída</string>
+    <string name="bubble_meta_pinned_a11y">Mensagem fixada</string>
     <string name="bubble_protection_after_read">Desaparece após a leitura</string>
     <string name="bubble_reply_photo">Foto</string>
     <string name="bubble_reply_story">Story</string>
@@ -156,6 +158,11 @@
     <string name="emoji_category_travel">Viagens</string>
     <string name="emoji_picker_expand">Mais emojis</string>
     <string name="emoji_picker_title">Reações</string>
+    <string name="engagement_pill_a11y_streak">%1$s · Faíscas: %2$d · Hoje: %3$d</string>
+    <string name="engagement_pill_a11y_streak_days_one">%1$d dia</string>
+    <string name="engagement_pill_a11y_streak_days_other">%1$d dias</string>
+    <string name="engagement_pill_a11y_total_one">%1$s faísca ganha nesta conversa</string>
+    <string name="engagement_pill_a11y_total_other">%1$s faíscas ganhas nesta conversa</string>
     <string name="focal_focus_add_reaction">Adicionar uma reação</string>
     <string name="focal_focus_translation_detail">Detalhes da tradução</string>
     <string name="focal_row_anonymousSender">Sem conta</string>
@@ -265,6 +272,8 @@
     <string name="post_daily_limit_comment_untimed">Você fez todos os comentários permitidos hoje. O limite conta seus gestos, nunca suas faíscas.</string>
     <string name="post_daily_limit_reaction">Você fez todas as reações permitidas hoje. O limite conta seus gestos, nunca suas faíscas: poderá reagir novamente às %1$s.</string>
     <string name="post_daily_limit_reaction_untimed">Você fez todas as reações permitidas hoje. O limite conta seus gestos, nunca suas faíscas.</string>
+    <string name="post_points_a11y_one">Esta publicação te rendeu %1$s faísca</string>
+    <string name="post_points_a11y_other">Esta publicação te rendeu %1$s faíscas</string>
     <string name="presence_away">Ausente</string>
     <string name="presence_here">Na conversa</string>
     <string name="presence_idle">Inativo</string>
@@ -415,6 +424,15 @@
     <string name="viewer_caption_see_less_hint">Recolhe a legenda</string>
     <string name="viewer_caption_see_more">ver mais</string>
     <string name="viewer_caption_see_more_hint">Mostra a legenda completa</string>
+    <string name="viewer_engagement_comments_one">%1$d comentário</string>
+    <string name="viewer_engagement_comments_other">%1$d comentários</string>
+    <string name="viewer_engagement_reactions">Reações: %1$s</string>
+    <string name="viewer_engagement_replies_one">%1$d resposta</string>
+    <string name="viewer_engagement_replies_other">%1$d respostas</string>
+    <string name="viewer_engagement_reposts_one">%1$d republicação</string>
+    <string name="viewer_engagement_reposts_other">%1$d republicações</string>
+    <string name="viewer_engagement_shares_one">%1$d compartilhamento</string>
+    <string name="viewer_engagement_shares_other">%1$d compartilhamentos</string>
     <string name="viewer_media_unavailable">Esta mídia não está mais disponível</string>
     <string name="viewer_more">Mais</string>
     <string name="viewer_position">Mídia %1$d de %2$d</string>
@@ -422,4 +440,9 @@
     <string name="viewer_save">Salvar</string>
     <string name="viewer_saving">Salvando…</string>
     <string name="viewer_share_outside">Compartilhar</string>
+    <string name="voiceProfile_recording_createProfile">Criar perfil vocal</string>
+    <string name="voiceProfile_recording_languagePicker">Idioma da gravação</string>
+    <string name="voiceProfile_recording_min_duration">mín. %1$d s</string>
+    <string name="voiceProfile_recording_readAloud">Leia este texto em voz alta</string>
+    <string name="voiceProfile_recording_sample">Amostra %1$d</string>
 </resources>

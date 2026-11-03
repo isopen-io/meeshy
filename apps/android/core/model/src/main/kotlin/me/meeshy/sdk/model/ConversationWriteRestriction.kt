@@ -44,6 +44,13 @@ sealed interface ConversationWriteRestriction {
          */
         fun fromRefusalCode(code: String?): ConversationWriteRestriction? =
             if (code == GLOBAL_ADULTS_ONLY_CODE) MinorGlobal else null
+
+        /**
+         * La restriction portée par la raison d'un envoi épuisé de la file (`Refused: HTTP 403 GLOBAL_ADULTS_ONLY`) :
+         * le code, mot entier. `null` pour toute autre raison.
+         */
+        fun fromReason(reason: String?): ConversationWriteRestriction? =
+            fromRefusalCode(reason?.split(' ')?.firstOrNull { it == GLOBAL_ADULTS_ONLY_CODE })
     }
 }
 

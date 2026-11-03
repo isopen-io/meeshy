@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "story_sticker_save",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sticker_save_done",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sticker_save_already",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sticker_save_failed",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

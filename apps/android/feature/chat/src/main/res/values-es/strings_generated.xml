@@ -52,8 +52,10 @@
         <item quantity="other">%1$d caracteres</item>
     </plurals>
     <string name="chat_clipboard_title">Contenido del portapapeles</string>
+    <string name="chat_composer_closed">Esta conversación ha sido cerrada</string>
     <string name="chat_composer_edit_title">Editar el mensaje</string>
     <string name="chat_composer_language">Idioma del mensaje</string>
+    <string name="chat_composer_minor_global">Global se abre a la escritura cuando cumplas 18 años</string>
     <string name="chat_composer_reply_a11y">Respuesta a %1$s: %2$s</string>
     <string name="chat_composer_reply_file">Archivo</string>
     <string name="chat_composer_reply_location">Ubicación</string>

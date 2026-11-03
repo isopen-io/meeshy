@@ -314,7 +314,7 @@ struct ProfileView: View {
                 }
             }
             .offset(y: -45)
-            .padding(.bottom, -45)
+            .padding(.bottom, -45 + ProfileOwnAvatar.reserveBelow(user))
 
             if !isEditing {
                 VStack(spacing: MeeshySpacing.xs) {

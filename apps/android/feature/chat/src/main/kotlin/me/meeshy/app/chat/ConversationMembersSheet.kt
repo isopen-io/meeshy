@@ -148,7 +148,7 @@ internal fun ConversationMembersContent(
                     style = MaterialTheme.typography.titleMedium,
                     color = MeeshyTheme.tokens.textPrimary,
                 )
-                if (state.viewerRole.hasMinimumRole(MemberRole.MODERATOR)) {
+                if (state.mayInvite) {
                     IconButton(onClick = { showAddSheet = true }) {
                         Icon(
                             imageVector = Icons.Filled.PersonAdd,

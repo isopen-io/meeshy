@@ -238,6 +238,9 @@ object SocketEventNames {
 
     /** `engagement:conversation-updated` : l'instantané « N (M) 🔥 » du lecteur, vers sa room personnelle (#8906). */
     const val ENGAGEMENT_CONVERSATION_UPDATED = "engagement:conversation-updated"
+
+    /** `engagement:post-updated` : ce qu'un post a rapporté au lecteur `{ postId, viewerPoints, at }`, vers sa room personnelle (#9569). */
+    const val ENGAGEMENT_POST_UPDATED = "engagement:post-updated"
     const val MESSAGE_CONSUMED = "message:consumed"
     const val MESSAGE_COUNTDOWN_STARTED = "message:countdown-started"
     const val MESSAGE_HIDDEN_FOR_ME = "message:hidden-for-me"
@@ -336,6 +339,7 @@ object SocketEventNames {
         CONVERSATION_UPDATED,
         E2EE_ENVELOPE,
         ENGAGEMENT_CONVERSATION_UPDATED,
+        ENGAGEMENT_POST_UPDATED,
         GAME_UPDATED,
         LOCATION_LIVE_START,
         LOCATION_LIVE_STARTED,

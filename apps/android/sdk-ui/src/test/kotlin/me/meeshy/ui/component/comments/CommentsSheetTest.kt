@@ -1,11 +1,13 @@
 package me.meeshy.ui.component.comments
 
 import androidx.compose.material3.Text
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.comments.CommentsSheetPhase
 import me.meeshy.ui.theme.MeeshyTheme
@@ -55,7 +57,7 @@ class CommentsSheetTest {
         compose.onNodeWithText("2 commentaires").assertIsDisplayed()
         compose.onNodeWithText("corps").assertIsDisplayed()
         compose.onNodeWithText("composeur").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Fermer").performClick()
+        compose.onNodeWithContentDescription("Fermer").performSemanticsAction(SemanticsActions.OnClick)
         assertThat(dismissed).isTrue()
     }
 

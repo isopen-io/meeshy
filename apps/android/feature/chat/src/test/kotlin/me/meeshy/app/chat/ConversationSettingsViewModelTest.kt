@@ -2,9 +2,11 @@ package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -13,11 +15,13 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.session.SessionRepository
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -62,8 +66,12 @@ class ConversationSettingsViewModelTest {
         return repository
     }
 
-    private fun viewModel(repository: ConversationRepository) =
-        ConversationSettingsViewModel(repository)
+    private fun session(user: MeeshyUser?): SessionRepository = mockk<SessionRepository>(relaxed = true).also {
+        every { it.currentUser } returns MutableStateFlow(user)
+    }
+
+    private fun viewModel(repository: ConversationRepository, user: MeeshyUser? = MeeshyUser(id = "me", username = "me")) =
+        ConversationSettingsViewModel(repository, session(user))
 
     @Test
     fun `load seeds a clean form from the cached conversation`() = runTest {
@@ -175,5 +183,33 @@ class ConversationSettingsViewModelTest {
 
         // Seeded from the FIRST emission; the second (announcement=true) must not overwrite the form.
         assertThat(vm.state.value.form?.isAnnouncementChannel).isFalse()
+    }
+
+    private fun ranked(type: String, role: String?) = conversation().copy(type = type, currentUserRole = role)
+
+    @Test
+    fun `a group moderator may edit the conversation`() = runTest {
+        val vm = viewModel(repo(ranked("group", "moderator")))
+        vm.load("c1")
+        advanceUntilIdle()
+        assertThat(vm.state.value.mayEdit).isTrue()
+    }
+
+    @Test
+    fun `a group member may not edit the conversation`() = runTest {
+        val vm = viewModel(repo(ranked("group", "member")))
+        vm.load("c1")
+        advanceUntilIdle()
+        assertThat(vm.state.value.mayEdit).isFalse()
+    }
+
+    @Test
+    fun `nobody edits Global or a direct, whatever the rank`() = runTest {
+        listOf("global", "direct").forEach { type ->
+            val vm = viewModel(repo(ranked(type, "creator")))
+            vm.load("c1")
+            advanceUntilIdle()
+            assertThat(vm.state.value.mayEdit).isFalse()
+        }
     }
 }

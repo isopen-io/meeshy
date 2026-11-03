@@ -57,8 +57,8 @@ public struct AvatarRingOrnamentPath: Codable, Hashable, Sendable {
 
 /// Les CALQUES ILLUSTRÉS d'un contour (#13960, miroir de `AvatarRingDecorSchema`) : un film `back`
 /// DERRIÈRE l'avatar, un film `front` AU-DESSUS, chacun carré, centré sur l'avatar, de côté
-/// `reach ×` la boîte du contour — il DÉBORDE sans grandir la mise en page. L'anneau fixe
-/// (`stroke` + `ornament`) reste l'image de repli et celle de « Réduire les animations ».
+/// `reach ×` la boîte du contour, posé par `fit(box:room:)` dans la place que l'hôte lui donne (#15157).
+/// L'anneau fixe (`stroke` + `ornament`) reste l'image de repli, jamais dessinée SOUS un film affiché.
 public struct AvatarRingDecor: Codable, Hashable, Sendable {
     /// Le débordement maximal : un film de côté 1,5 × la boîte du contour (`RING_DECOR_MAX_REACH`).
     public static let maxReach: Double = 1.5
@@ -95,8 +95,27 @@ public struct AvatarRingDecor: Codable, Hashable, Sendable {
         try c.encodeIfPresent(front, forKey: .front)
     }
 
-    /// Le côté d'un film dans une boîte de contour de côté `box` (miroir de `ringDecorCanvas`).
-    public func side(forBox box: Double) -> Double { box * reach }
+    /// Le plus petit côté de boîte où un cadre illustré se lit encore (`RING_DECOR_MIN_BOX`, #15157).
+    public static let minBox: Double = 44
+
+    /// Miroir de `ringDecorFit` (#15157) : le film ne peint jamais hors de la boîte de l'anneau seul,
+    /// sauf la place `room` que l'hôte déclare libre de chaque côté ; quand il demande plus, l'avatar,
+    /// son contour et ses films se réduisent ENSEMBLE de `scale`. `nil` ⇒ trop petit, l'anneau seul.
+    public func fit(box: Double, room: Double = 0) -> AvatarRingDecorFit? {
+        let need = box * reach
+        let side = min(need, box + 2 * max(0, room))
+        let scale = side / need
+        guard box * scale >= Self.minBox else { return nil }
+        return AvatarRingDecorFit(scale: scale, side: side, offset: (box - side) / 2)
+    }
+}
+
+/// Où se pose un cadre illustré dans sa boîte (#15157) : l'échelle commune de l'avatar et de ses
+/// films, le côté du film et son décalage depuis le coin de la boîte.
+public struct AvatarRingDecorFit: Hashable, Sendable {
+    public let scale: Double
+    public let side: Double
+    public let offset: Double
 }
 
 public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {

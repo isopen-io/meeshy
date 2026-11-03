@@ -32,6 +32,7 @@ import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.core.database.dao.TusUploadCheckpointDao
 import me.meeshy.core.database.migration.MeeshyMigrations
 import me.meeshy.core.database.search.SearchIndexSchema
+import java.io.File
 import javax.inject.Singleton
 
 @Module
@@ -44,14 +45,24 @@ internal object DatabaseModule {
         @ApplicationContext context: Context,
         diagnostics: DatabaseInitDiagnostics,
         health: StorageHealth,
+        leftovers: DatabaseLeftovers,
     ): MeeshyDatabase =
         DatabaseOpener(
             context = context,
             diagnostics = diagnostics,
             health = health,
             primaryName = DATABASE_NAME,
+            secondaryFile = secondaryFile(context),
+            leftovers = leftovers,
             build = { ctx, location -> meeshyDatabaseBuilder(ctx, location).build() },
         ).open()
+
+    @Provides
+    @Singleton
+    fun providesDatabaseLeftovers(@ApplicationContext context: Context): DatabaseLeftovers =
+        DatabaseLeftovers(primary = context.getDatabasePath(DATABASE_NAME), secondary = secondaryFile(context))
+
+    private fun secondaryFile(context: Context): File = File(context.cacheDir, DatabaseOpener.SECONDARY_NAME)
 
     /** The production configuration, shared with the tests that open the database the way the app does. */
     fun meeshyDatabaseBuilder(context: Context, name: String = DATABASE_NAME): RoomDatabase.Builder<MeeshyDatabase> =
@@ -60,7 +71,8 @@ internal object DatabaseModule {
     /**
      * Journal WAL explicite, exécuteur de requêtes dédié, réglages posés à chaque connexion. Seules les versions
      * antérieures à la base exportée v16 sont purgées : une corruption n'est jamais masquée par une migration destructive,
-     * [DatabaseOpener] la met en quarantaine.
+     * ni effacée par la couche SQLite ([KeepCorruptFileOpenHelperFactory]) — [DatabaseOpener] en sauve ce qui ne se refait
+     * pas, puis la met en quarantaine.
      */
     fun meeshyDatabaseBuilder(context: Context, location: DatabaseLocation): RoomDatabase.Builder<MeeshyDatabase> {
         val builder = when (location) {
@@ -73,6 +85,7 @@ internal object DatabaseModule {
             .addCallback(DatabasePragmas.callback)
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .setQueryExecutor(DatabasePragmas.sharedQueryExecutor)
+            .openHelperFactory(KeepCorruptFileOpenHelperFactory())
             .fallbackToDestructiveMigrationFrom(*PRE_BASELINE_VERSIONS)
     }
 

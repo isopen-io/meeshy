@@ -77,7 +77,7 @@ fun WelcomeScreen(
                 continuous = false,
             )
             Text(
-                text = "Meeshy",
+                text = stringResource(R.string.welcome_brand_name),
                 style = MaterialTheme.typography.displaySmall.copy(brush = MeeshyGradients.brand),
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = MeeshySpacing.xxl).semantics { heading() },

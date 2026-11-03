@@ -568,6 +568,26 @@ class FeedViewModelTest {
         assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
     }
 
+    @Test
+    fun `a manual language choice survives a realtime translation of another language and can be reset`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Stale(listOf(translatedPost("1")), 0L),
+        )
+        val vm = viewModel(bilingualUser, stream)
+        vm.onPostFlagTap("1", "es")
+
+        val withGerman = translatedPost("1").let {
+            it.copy(translations = it.translations.orEmpty() + ("de" to ApiPostTranslationEntry(text = "Hallo", confidenceScore = 0.8)))
+        }
+        stream.value = CacheResult.Fresh(listOf(withGerman), 0L)
+
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
+
+        vm.clearLanguageOverride("1")
+
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hello")
+    }
+
     // --- On-demand post translation (tapping a configured-but-absent flag) ---
 
     /** Translated into `en` only — a bilingual (en/es) viewer's `es` chip is translatable. */

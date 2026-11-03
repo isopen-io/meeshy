@@ -5,6 +5,8 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.ApiAttachmentTranslation
 import me.meeshy.sdk.model.ApiForwardedConversation
+import me.meeshy.sdk.model.ApiForwardedFrom
+import me.meeshy.sdk.model.ForwardAttribution
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
@@ -34,6 +36,7 @@ private fun message(
     forwardedFromId: String? = null,
     forwardedFromConversationId: String? = null,
     forwardedFromConversation: ApiForwardedConversation? = null,
+    forwardedFrom: ApiForwardedFrom? = null,
     effectFlags: Int? = null,
     isBlurred: Boolean? = null,
     isViewOnce: Boolean? = null,
@@ -56,6 +59,7 @@ private fun message(
     forwardedFromId = forwardedFromId,
     forwardedFromConversationId = forwardedFromConversationId,
     forwardedFromConversation = forwardedFromConversation,
+    forwardedFrom = forwardedFrom,
     effectFlags = effectFlags,
     isBlurred = isBlurred,
     isViewOnce = isViewOnce,
@@ -1306,7 +1310,7 @@ class BubbleContentBuilderTest {
             preferences = french,
         )
 
-        assertThat(content.forwardedFromName).isEqualTo("Team Meeshy")
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Group("Team Meeshy"))
     }
 
     @Test
@@ -1326,7 +1330,7 @@ class BubbleContentBuilderTest {
         )
 
         assertThat(content.isForwarded).isTrue()
-        assertThat(content.forwardedFromName).isNull()
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Anonymous)
     }
 
     @Test
@@ -1346,7 +1350,7 @@ class BubbleContentBuilderTest {
         )
 
         assertThat(content.isForwarded).isTrue()
-        assertThat(content.forwardedFromName).isNull()
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Anonymous)
     }
 
     @Test
@@ -1366,11 +1370,11 @@ class BubbleContentBuilderTest {
             preferences = french,
         )
 
-        assertThat(content.forwardedFromName).isEqualTo("meeshy-lobby")
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Group("meeshy-lobby"))
     }
 
     @Test
-    fun `a forward from a direct conversation is not named`() {
+    fun `a forward from a direct conversation without a known author stays anonymous`() {
         val content = BubbleContentBuilder.build(
             message(
                 forwardedFromId = "orig-msg",
@@ -1386,7 +1390,49 @@ class BubbleContentBuilderTest {
         )
 
         assertThat(content.isForwarded).isTrue()
-        assertThat(content.forwardedFromName).isNull()
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Anonymous)
+    }
+
+    @Test
+    fun `a forward from a direct conversation names the person who wrote it`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                forwardedFromId = "orig-msg",
+                forwardedFrom = ApiForwardedFrom(id = "orig-msg", sender = ApiMessageSender(displayName = "Belva Tano")),
+                forwardedFromConversation = ApiForwardedConversation(id = "orig-conv", title = "Belva", type = "direct"),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Person("Belva Tano"))
+    }
+
+    @Test
+    fun `a forward from a private group never names the group nor the person`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                forwardedFromId = "orig-msg",
+                forwardedFrom = ApiForwardedFrom(id = "orig-msg", sender = ApiMessageSender(displayName = "Belva Tano")),
+                forwardedFromConversation = ApiForwardedConversation(id = "orig-conv", title = "Secret", type = "group"),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Anonymous)
+    }
+
+    @Test
+    fun `a pinned message that was deleted carries no pin`() {
+        val content = BubbleContentBuilder.build(
+            message(deletedAt = "2026-07-08T09:00:00Z", pinnedAt = "2026-07-07T09:00:00Z"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.pinnedAtIso).isNull()
+        assertThat(BubbleTopBadges.of(content)).isEqualTo(BubbleTopBadges(pinned = false, forwarded = false))
     }
 
     @Test
@@ -1398,7 +1444,7 @@ class BubbleContentBuilderTest {
         )
 
         assertThat(content.isForwarded).isTrue()
-        assertThat(content.forwardedFromName).isNull()
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Anonymous)
     }
 
     @Test
@@ -1413,7 +1459,7 @@ class BubbleContentBuilderTest {
             preferences = french,
         )
 
-        assertThat(content.forwardedFromName).isNull()
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Anonymous)
     }
 
     // --- Story / mood reply previews (postReplyTo / storyReplyToId) ---

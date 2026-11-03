@@ -42,6 +42,7 @@ import me.meeshy.sdk.model.isMeaningful
 import me.meeshy.sdk.model.resolvedLastMessagePreview
 import me.meeshy.sdk.theme.accentColorPalette
 import me.meeshy.sdk.theme.displayTitle
+import me.meeshy.ui.component.chrome.conversationEngagementDescription
 import me.meeshy.ui.theme.LentilleMetrics
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
@@ -99,7 +100,9 @@ internal fun ConversationRowContainer(
     val secondary = hexColor(palette.secondary)
     val timeLabel = conversationRowRelativeTime(conversation, model.nowMillis)
 
-    val label = rowAccessibilityLabel(model, title, rowPreview, timeLabel, isPinned, isMuted)
+    val engagement = rememberRowEngagement(conversation)
+    val spokenPoints = engagement?.let { conversationEngagementDescription(it) }
+    val label = rowAccessibilityLabel(model, title, rowPreview, timeLabel, isPinned, isMuted, spokenPoints)
     val opensHint = stringResource(R.string.conversations_row_opens_conversation)
     val joinCallDescription = stringResource(R.string.row_join_call_a11y)
     val showsJoin = ConversationRowJoinCall.isVisible(
@@ -162,6 +165,7 @@ internal fun ConversationRowContainer(
                 line2 = line2,
                 timeLabel = timeLabel,
                 onJoinCall = actions.onJoinCall.takeIf { showsJoin },
+                engagement = engagement,
             )
             if (model.isSelected) {
                 Box(
@@ -236,6 +240,7 @@ private fun rowAccessibilityLabel(
     timeLabel: String?,
     isPinned: Boolean,
     isMuted: Boolean,
+    spokenPoints: String? = model.spokenPoints,
 ): String {
     val unread = model.conversation.unreadCount
     val spokenPreview = ConversationRowAccessibility.spokenPreview(rowPreview)
@@ -248,7 +253,7 @@ private fun rowAccessibilityLabel(
         muted = stringResource(R.string.accessibility_muted).takeIf { isMuted },
         pinned = stringResource(R.string.accessibility_pinned).takeIf { isPinned },
         locked = stringResource(R.string.conversations_badge_locked).takeIf { model.isLocked },
-        points = model.spokenPoints,
+        points = spokenPoints,
         pendingSync = stringResource(R.string.row_a11y_pending_sync).takeIf { model.hasPendingSync },
     )
 }

@@ -9,6 +9,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -43,7 +44,7 @@ class SignOutViewModelTest {
         coEvery { auth.logout() } coAnswers { gate.await() }
         val vm = viewModel(auth)
         val effects = mutableListOf<SignOutEffect>()
-        val job = backgroundScope.launch { vm.effects.collect { effects += it } }
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.effects.collect { effects += it } }
 
         vm.onEvent(SignOutEvent.Requested)
         vm.onEvent(SignOutEvent.Confirmed)

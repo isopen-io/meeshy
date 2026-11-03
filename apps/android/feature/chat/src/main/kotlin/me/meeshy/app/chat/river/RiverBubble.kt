@@ -1,5 +1,6 @@
 package me.meeshy.app.chat.river
 
+import me.meeshy.sdk.model.ForwardAttribution
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.fadeOut
@@ -225,7 +226,7 @@ private fun MessageBox(content: RiverBubbleContent, contentWidth: Dp, laneColor:
             .riverBubbleOutline(content.groupPosition, content.layout, laneColor, tokens.hairline)
             .padding(pad),
     ) {
-        if (content.isForwarded) ForwardedLine(content.forwardedFromName)
+        if (content.isForwarded) ForwardedLine(content.forwardAttribution)
         content.replyPreview?.let { QuotedReply(it, content.bubble.replyToMessageId, laneColor, actions) }
         BubbleBody(content, laneColor)
         if (content.timeString.isNotEmpty()) {
@@ -249,9 +250,13 @@ private fun metaTint(): Color =
     }
 
 @Composable
-private fun ForwardedLine(from: String?) {
+private fun ForwardedLine(attribution: ForwardAttribution) {
     Text(
-        text = from?.let { stringResource(UiR.string.bubble_forwarded_from, it) } ?: stringResource(UiR.string.bubble_forwarded),
+        text = when (attribution) {
+            is ForwardAttribution.Group -> stringResource(UiR.string.bubble_forwarded_from, attribution.name)
+            is ForwardAttribution.Person -> stringResource(UiR.string.bubble_forwarded_from_person, attribution.name)
+            ForwardAttribution.Anonymous -> stringResource(UiR.string.bubble_forwarded)
+        },
         color = metaTint(),
         fontSize = 12.sp,
         fontStyle = FontStyle.Italic,

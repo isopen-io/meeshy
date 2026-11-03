@@ -39,6 +39,7 @@ import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.formColumnWidth
 
 /**
  * Le panneau de choix ancré en bas : l'action principale en dégradé indigo vers violet (56 dp, les
@@ -60,6 +61,7 @@ internal fun InviteChoicesPanel(
             .fillMaxWidth()
             .background(if (isDark) MeeshyPalette.Indigo950.copy(alpha = 0.94f) else Color.White.copy(alpha = 0.94f))
             .drawBehind { drawLine(hairline, androidx.compose.ui.geometry.Offset.Zero, androidx.compose.ui.geometry.Offset(size.width, 0f), 1.dp.toPx()) }
+            .formColumnWidth()
             .padding(horizontal = MeeshySpacing.lg)
             .padding(top = MeeshySpacing.lg, bottom = MeeshySpacing.md),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus),

@@ -6,6 +6,8 @@ import android.database.sqlite.SQLiteDatabase
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.core.database.entity.PendingIdEntity
+import me.meeshy.core.database.entity.PlaintextErasureEntity
 
 /** Où vit la base : un nom (relatif au dossier des bases, ou chemin absolu) ou la mémoire. */
 public sealed interface DatabaseLocation {
@@ -14,12 +16,23 @@ public sealed interface DatabaseLocation {
 }
 
 /**
- * Ouvre la base sans JAMAIS lever pour cause de fichier abîmé ou de disque plein (iOS `ResilientDatabaseQueue`) :
- * 1. fichier illisible ou ouverture en échec : outbox sauvée en lecture seule, fichiers mis en quarantaine
- *    (`.corrupted.<ts>`), base recréée, envois en attente réinjectés ;
- * 2. sinon base de repli sur un chemin secondaire (cache de l'app) ;
+ * Ouvre la base sans JAMAIS lever pour cause de fichier abîmé ou de disque qui refuse (iOS `ResilientDatabaseQueue`), et
+ * sans JAMAIS masquer un bug de code :
+ * 1. fichier CORROMPU ([OpenFailureKind.CORRUPTION], ou corruption signalée en cours d'usage par un lancement précédent :
+ *    [DatabaseRecovery.isMarkedCorrupted]) : outbox, clairs E2EE à effacer et identifiants en attente sauvés en
+ *    lecture seule, fichiers mis en quarantaine (`.corrupted.<ts>`, [MAX_QUARANTINES] au plus), base recréée, ce qui a
+ *    été sauvé réinjecté ;
+ * 2. disque qui refuse ([OpenFailureKind.UNAVAILABLE]), ou recréation impossible : base de repli sur un chemin
+ *    secondaire (cache de l'app), le fichier principal restant en place ;
  * 3. sinon base en mémoire, [StorageHealth] passe en éphémère.
+ * Un échec qui relève du CODE ([OpenFailureKind.DEFECT] : migration absente ou fautive, schéma incohérent) REMONTE : rien
+ * n'est déplacé ni vidé, et le crash rend le bug visible au lieu d'effacer en silence le cache de chaque utilisateur.
  * Chaque jalon est consigné dans [DatabaseInitDiagnostics].
+ *
+ * Une ouverture nominale reprend ce que la base de repli d'un lancement précédent a gardé, puis la supprime : elle n'est
+ * pas chiffrée, et elle ne doit jamais être rouverte plus tard sous un autre compte. Une ligne reprise quitte la base de
+ * repli dans le même geste, une ligne non reprise y reste, et une ligne sauvée n'écrase jamais celle que la base de
+ * destination porte déjà : rien n'est rejoué, rien n'est perdu.
  */
 public class DatabaseOpener(
     private val context: Context,
@@ -28,73 +41,183 @@ public class DatabaseOpener(
     private val primaryName: String,
     private val clock: () -> Long = System::currentTimeMillis,
     private val secondaryFile: File = File(context.cacheDir, SECONDARY_NAME),
+    private val leftovers: DatabaseLeftovers? = null,
+    private val readable: (File) -> Boolean = DatabaseRecovery::isReadable,
     private val build: (Context, DatabaseLocation) -> MeeshyDatabase,
 ) {
     public fun open(): MeeshyDatabase {
         val primaryFile = context.getDatabasePath(primaryName)
-        var salvaged = emptyList<OutboxEntity>()
-        if (!DatabaseRecovery.isReadable(primaryFile)) {
+        if (DatabaseRecovery.isMarkedCorrupted(primaryFile)) {
+            diagnostics.record(DatabaseInitStage.FIRST_FAILURE, "corruption-marked:${primaryFile.name}")
+            return recreate(primaryFile)
+        }
+        if (!readable(primaryFile)) {
             diagnostics.record(DatabaseInitStage.FIRST_FAILURE, "unreadable:${primaryFile.name}")
-            salvaged = quarantine(primaryFile)
-            return openAfterFailure(salvaged, recreated = true)
+            return recreate(primaryFile)
         }
         val first = attempt(DatabaseLocation.Named(primaryName))
-        if (first.database != null) {
+        first.database?.let {
             health.markNormal()
-            return first.database
+            adoptFallback(it)
+            leftovers?.markInUse(primaryFile)
+            return it
         }
-        diagnostics.record(DatabaseInitStage.FIRST_FAILURE, first.failure ?: IllegalStateException("open failed"))
-        salvaged = quarantine(primaryFile)
-        return openAfterFailure(salvaged, recreated = true)
+        val failure = first.failure ?: IllegalStateException("open failed")
+        diagnostics.record(DatabaseInitStage.FIRST_FAILURE, failure)
+        return when (DatabaseRecovery.classify(failure)) {
+            OpenFailureKind.CORRUPTION -> recreate(primaryFile)
+            OpenFailureKind.UNAVAILABLE -> fallBack(DatabaseSalvage())
+            OpenFailureKind.DEFECT -> throw failure
+        }
     }
 
-    private fun openAfterFailure(salvaged: List<OutboxEntity>, recreated: Boolean): MeeshyDatabase {
+    private fun recreate(primaryFile: File): MeeshyDatabase {
+        val salvaged = quarantine(primaryFile)
         val retry = attempt(DatabaseLocation.Named(primaryName))
         retry.database?.let {
             diagnostics.record(DatabaseInitStage.RECREATED, primaryName)
             restore(it, salvaged)
-            if (recreated) health.markDegraded("recreated")
+            health.markDegraded("recreated")
+            leftovers?.markInUse(primaryFile)
             return it
         }
-        diagnostics.record(DatabaseInitStage.FIRST_FAILURE, retry.failure ?: IllegalStateException("recreate failed"))
+        val failure = retry.failure ?: IllegalStateException("recreate failed")
+        diagnostics.record(DatabaseInitStage.FIRST_FAILURE, failure)
+        if (DatabaseRecovery.classify(failure) == OpenFailureKind.DEFECT) throw failure
+        return fallBack(salvaged)
+    }
+
+    private fun fallBack(salvaged: DatabaseSalvage): MeeshyDatabase {
         secondaryFile.parentFile?.mkdirs()
         val secondary = attempt(DatabaseLocation.Named(secondaryFile.absolutePath))
         secondary.database?.let {
             diagnostics.record(DatabaseInitStage.FELL_BACK_SECONDARY, secondaryFile.absolutePath)
             restore(it, salvaged)
             health.markDegraded("secondary")
+            leftovers?.markInUse(secondaryFile)
             return it
         }
-        diagnostics.record(DatabaseInitStage.FELL_BACK_MEMORY, secondary.failure ?: IllegalStateException("secondary failed"))
+        val failure = secondary.failure ?: IllegalStateException("secondary failed")
+        diagnostics.record(DatabaseInitStage.FELL_BACK_MEMORY, failure)
+        if (DatabaseRecovery.classify(failure) == OpenFailureKind.DEFECT) throw failure
         health.markEphemeral("memory")
         val memory = build(context, DatabaseLocation.Memory)
         restore(memory, salvaged)
+        leftovers?.markInUse(null)
         return memory
     }
 
-    private fun quarantine(file: File): List<OutboxEntity> {
-        val salvaged = DatabaseRecovery.salvageOutbox(file)
+    /**
+     * La base de repli d'un lancement précédent rejoint la base principale ligne à ligne, sans jamais en rejouer ni en
+     * perdre une : chaque ligne est retirée de la base de repli dans une transaction de celle-ci, insérée dans la base
+     * principale, et le retrait n'est validé que si l'insertion a réussi ([adoptRow]). La base de repli ne disparaît que
+     * vide de toute ligne lisible ; sinon elle reste pour le lancement suivant et le stockage passe en dégradé, pour que
+     * l'interface dise que des envois attendent encore. La purge de session la retire de toute façon.
+     */
+    private fun adoptFallback(database: MeeshyDatabase) {
+        if (!secondaryFile.exists()) return
+        val salvage = DatabaseRecovery.salvage(secondaryFile)
+        val fallback = if (salvage.isEmpty) null else DatabaseRecovery.openWritable(secondaryFile)
+        val kept = try {
+            restore(database, salvage) { row, insert -> fallback != null && adoptRow(fallback, row, insert) }
+        } finally {
+            runCatching { fallback?.close() }
+        }
+        if (kept == 0) {
+            DatabaseRecovery.deleteFallback(secondaryFile)
+        } else {
+            health.markDegraded("$FALLBACK_KEPT$kept")
+        }
+    }
+
+    /**
+     * Retire [row] de [fallback] et l'insère dans la base principale ([insert]) comme UN geste : le retrait se fait dans
+     * une transaction de la base de repli, validée seulement après une insertion réussie. Un retrait refusé n'insère rien,
+     * une insertion refusée annule le retrait : la ligne reste dans la base de repli, ni rejouée ni perdue. Seul un échec
+     * de la validation elle-même, après une insertion réussie, laisse la ligne des deux côtés ; l'insertion « si absente »
+     * du lancement suivant la retrouve alors sans l'écraser.
+     */
+    private fun adoptRow(fallback: SQLiteDatabase, row: Rescued, insert: () -> Boolean): Boolean = try {
+        fallback.beginTransaction()
+        try {
+            val adopted = row.forgetIn(fallback) && insert()
+            if (adopted) fallback.setTransactionSuccessful()
+            adopted
+        } finally {
+            fallback.endTransaction()
+        }
+    } catch (_: Exception) {
+        false
+    }
+
+    private fun quarantine(file: File): DatabaseSalvage {
+        val salvaged = DatabaseRecovery.salvage(file)
         val moved = DatabaseRecovery.quarantine(file, clock())
+        if (!file.exists()) DatabaseRecovery.clearCorruptionMarker(file)
         diagnostics.record(DatabaseInitStage.QUARANTINED, moved.joinToString(",") { it.name })
+        DatabaseRecovery.pruneQuarantines(file, keep = MAX_QUARANTINES)
         return salvaged
     }
 
-    private fun restore(database: MeeshyDatabase, rows: List<OutboxEntity>) {
-        if (rows.isEmpty()) return
+    /** Une ligne sauvée, sa table et la clé qui l'identifie dans la base d'où elle vient. */
+    private class Rescued(val table: String, val values: ContentValues, private val key: List<String>) {
+        /** La retire de [source] ; `false` si l'écriture a échoué. */
+        fun forgetIn(source: SQLiteDatabase): Boolean = try {
+            val where = key.joinToString(" AND ") { "$it = ?" }
+            source.delete(table, where, key.map { values.getAsString(it) }.toTypedArray())
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private class RescueGroup(val stage: DatabaseInitStage, val rows: List<Rescued>)
+
+    /**
+     * Réinjecte [salvage] dans [database] ; rend le nombre de lignes qui n'ont pas pu l'être. Chaque ligne s'insère « si
+     * absente » : une ligne déjà présente (une annulation demandée, un état plus récent) n'est jamais écrasée par sa copie
+     * sauvée, et compte comme reprise. [adopt] encadre l'insertion de chaque ligne (elle lui est remise) et rend si la
+     * ligne est reprise.
+     */
+    private fun restore(
+        database: MeeshyDatabase,
+        salvage: DatabaseSalvage,
+        adopt: (Rescued, () -> Boolean) -> Boolean = { _, insert -> insert() },
+    ): Int {
+        if (salvage.isEmpty) return 0
+        val groups = listOf(
+            RescueGroup(
+                DatabaseInitStage.OUTBOX_SALVAGED,
+                salvage.outbox.map { Rescued("outbox", it.toValues(), OUTBOX_KEY) },
+            ),
+            RescueGroup(
+                DatabaseInitStage.ERASURES_SALVAGED,
+                salvage.plaintextErasures.map { Rescued("e2ee_plaintext_erasures", it.toValues(), ERASURE_KEY) },
+            ),
+            RescueGroup(
+                DatabaseInitStage.PENDING_IDS_SALVAGED,
+                salvage.pendingIds.map { Rescued("pending_ids", it.toValues(), PENDING_ID_KEY) },
+            ),
+        ).filter { it.rows.isNotEmpty() }
+        val total = groups.sumOf { it.rows.size }
         val db = try {
             database.openHelper.writableDatabase
         } catch (_: Exception) {
-            return
+            return total
         }
-        var restored = 0
-        rows.forEach { row ->
-            try {
-                if (db.insert("outbox", SQLiteDatabase.CONFLICT_REPLACE, row.toValues()) >= 0) restored++
-            } catch (_: Exception) {
-                // Une ligne de file illisible ne doit pas faire perdre les autres.
-            }
+        // Seule une écriture qui échoue est perdue, et une ligne perdue ne fait pas perdre les autres.
+        fun insertIfAbsent(row: Rescued): Boolean = try {
+            db.insert(row.table, SQLiteDatabase.CONFLICT_IGNORE, row.values)
+            true
+        } catch (_: Exception) {
+            false
         }
-        diagnostics.record(DatabaseInitStage.OUTBOX_SALVAGED, "$restored/${rows.size}")
+        val restored = groups.sumOf { group ->
+            val count = group.rows.count { row -> adopt(row) { insertIfAbsent(row) } }
+            diagnostics.record(group.stage, "$count/${group.rows.size}")
+            count
+        }
+        return total - restored
     }
 
     private class Attempt(val database: MeeshyDatabase?, val failure: Throwable?)
@@ -132,7 +255,34 @@ public class DatabaseOpener(
         put("ownerId", ownerId)
     }
 
+    private fun PlaintextErasureEntity.toValues(): ContentValues = ContentValues().apply {
+        put("account", account)
+        put("kind", kind)
+        put("itemId", itemId)
+        put("clientMessageId", clientMessageId)
+        put("senderId", senderId)
+        put("recordedAt", recordedAt)
+        put("acknowledgedAt", acknowledgedAt)
+    }
+
+    private fun PendingIdEntity.toValues(): ContentValues = ContentValues().apply {
+        put("localId", localId)
+        put("serverId", serverId)
+        put("conversationId", conversationId)
+        put("reconciledAt", reconciledAt)
+    }
+
     public companion object {
         public const val SECONDARY_NAME: String = "meeshy-fallback.db"
+
+        /** Les quarantaines gardées sur l'appareil : les plus récentes, pour le support ; les autres sont supprimées. */
+        public const val MAX_QUARANTINES: Int = 2
+
+        /** La raison de [StorageState.Degraded] quand la base de repli garde des lignes non reprises, suivie de leur nombre. */
+        public const val FALLBACK_KEPT: String = "fallback-kept:"
+
+        private val OUTBOX_KEY = listOf("cmid")
+        private val ERASURE_KEY = listOf("account", "kind", "itemId")
+        private val PENDING_ID_KEY = listOf("localId")
     }
 }

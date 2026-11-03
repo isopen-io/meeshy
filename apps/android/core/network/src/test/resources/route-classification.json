@@ -338,7 +338,6 @@
     "PATCH /api/v1/conversations/:id",
     "PATCH /api/v1/conversations/:id/participants/:participantKey",
     "PATCH /api/v1/conversations/:id/participants/:userId/unban",
-    "PATCH /api/v1/guest-sessions/me",
     "PATCH /api/v1/me/categories/:categoryId",
     "PATCH /api/v1/me/preferences",
     "PATCH /api/v1/users/me/username",
@@ -418,6 +417,10 @@
   {
    "file": "TusApi.kt",
    "reason": "Les deux @Url de TusApi ne sont pas des chemins déclarés : leur location est une URL rendue par le serveur au moment de createUpload, ce que le protocole tus.io impose."
+  },
+  {
+   "file": "SettingsActionApi.kt",
+   "reason": "Les trois @Url de SettingsActionApi rejouent un réglage de compte mis en file (SETTINGS_ACTION, #15179) : l'endpoint RELATIF vient de la ligne de l'outbox, jamais d'un littéral, et SettingsActionHandler refuse toute URL absolue."
   }
  ]
 }
