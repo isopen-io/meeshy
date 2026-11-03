@@ -54,7 +54,7 @@ public sealed interface PushPresentationDecision {
 public object PushPresentationPolicy {
 
     /** Les appels ne sont gouvernés que par `callsEnabled` : ni le maître push ni le calme ne les coupent. */
-    private val CALL_TYPES = setOf("incoming_call", "call", "CALL_INCOMING")
+    private val CALL_TYPES = setOf("incoming_call", "call_incoming", "call", "CALL_INCOMING")
 
     public fun decide(
         socketConnected: Boolean,
