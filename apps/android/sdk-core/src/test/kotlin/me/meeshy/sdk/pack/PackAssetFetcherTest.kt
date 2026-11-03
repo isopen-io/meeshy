@@ -27,7 +27,7 @@ class PackAssetFetcherTest {
         val api = mockk<PackAssetsApi>()
         coEvery { api.file(ref.src) } returns "abcdefgh".toResponseBody()
 
-        assertThat(PackAssetHttpFetcher(api).fetch(ref)).hasLength(4)
+        assertThat(PackAssetHttpFetcher(api).fetch(ref).size).isEqualTo(4)
     }
 
     @Test

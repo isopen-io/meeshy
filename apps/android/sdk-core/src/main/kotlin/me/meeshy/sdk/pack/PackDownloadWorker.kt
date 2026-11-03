@@ -81,7 +81,8 @@ class PackDownloadWorker @AssistedInject constructor(
             is PackDownloadOutcome.Failed -> when (outcome.cause) {
                 // L'intégrité ne se rejoue pas en boucle : la session suivante seulement.
                 PackFailureCause.INTEGRITY -> Result.failure(failure(outcome.cause))
-                PackFailureCause.NETWORK, PackFailureCause.SPACE -> Result.retry()
+                PackFailureCause.NETWORK, PackFailureCause.SPACE ->
+                    if (runAttemptCount >= MAX_ATTEMPTS) Result.failure(failure(outcome.cause)) else Result.retry()
             }
         }
     }
@@ -92,6 +93,9 @@ class PackDownloadWorker @AssistedInject constructor(
         const val KEY_FILES = "files"
         const val KEY_DONE = "done"
         const val KEY_CAUSE = "cause"
+
+        /** Au-delà, la file rend la main : la panne se reprend à la session suivante, pas en boucle. */
+        const val MAX_ATTEMPTS = 8
 
         fun uniqueName(slug: String): String = "pack-download-$slug"
 

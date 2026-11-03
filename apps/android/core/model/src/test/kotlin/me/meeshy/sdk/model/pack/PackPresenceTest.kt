@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.pack
 
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -71,8 +72,8 @@ class PackPresenceTest {
         assertThat(vectors).isNotEmpty()
         vectors.map { it.jsonObject }.forEach { v ->
             val result = PackPresenceMachine.transition(presence(v.getValue("from").jsonObject), event(v.getValue("event").jsonObject), context(v.getValue("context").jsonObject))
-            assertThat(result.presence).named(v.str("name")).isEqualTo(presence(v.getValue("to").jsonObject))
-            assertThat(result.effects.map { it.wire }).named(v.str("name")).isEqualTo(v.getValue("effects").jsonArray.map { it.jsonPrimitive.content })
+            assertWithMessage(v.str("name")).that(result.presence).isEqualTo(presence(v.getValue("to").jsonObject))
+            assertWithMessage(v.str("name")).that(result.effects.map { it.wire }).isEqualTo(v.getValue("effects").jsonArray.map { it.jsonPrimitive.content })
         }
     }
 

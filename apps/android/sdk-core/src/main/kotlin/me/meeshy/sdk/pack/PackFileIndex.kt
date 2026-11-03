@@ -52,16 +52,20 @@ class PackFileIndex(
         )
     }
 
-    private suspend fun update(change: (Stored) -> Stored) = lock.withLock {
-        val next = change(load())
-        cached = next
-        withContext(io) {
-            runCatching {
-                file.parentFile?.mkdirs()
-                val temp = File(file.path + ".part")
-                temp.writeText(json.encodeToString(Stored.serializer(), next))
-                if (!temp.renameTo(file)) temp.delete()
-            }
+    private suspend fun update(change: (Stored) -> Stored) {
+        lock.withLock {
+            val next = change(load())
+            cached = next
+            withContext(io) { persist(next) }
+        }
+    }
+
+    private fun persist(value: Stored) {
+        runCatching {
+            file.parentFile?.mkdirs()
+            val temp = File(file.path + ".part")
+            temp.writeText(json.encodeToString(Stored.serializer(), value))
+            if (!temp.renameTo(file)) temp.delete()
         }
     }
 

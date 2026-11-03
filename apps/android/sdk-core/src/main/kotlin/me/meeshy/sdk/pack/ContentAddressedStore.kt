@@ -86,7 +86,7 @@ class ContentAddressedStore(
         if (matches(bytes, ref)) bytes else { file.delete(); null }
     }
 
-    private suspend fun write(bytes: ByteArray, name: String) = withContext(io) {
+    private suspend fun write(bytes: ByteArray, name: String): Unit = withContext(io) {
         directory.mkdirs()
         val temp = File(directory, "$name.part")
         temp.writeBytes(bytes)
