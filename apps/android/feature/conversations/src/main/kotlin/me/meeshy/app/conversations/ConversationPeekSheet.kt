@@ -15,8 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -39,6 +37,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.conversationlist.ConversationPreviewPhase
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -171,7 +170,7 @@ private fun PeekComposer(
         )
         IconButton(onClick = onSend, enabled = state.canSend) {
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.Send,
+                imageVector = MeeshyIcons.Send,
                 contentDescription = stringResource(R.string.conversation_peek_send),
                 tint = if (state.canSend) accent else MeeshyTheme.tokens.textSecondary,
             )
