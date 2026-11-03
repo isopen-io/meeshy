@@ -1,7 +1,5 @@
-package me.meeshy.app.feed
+package me.meeshy.sdk.model
 
-import androidx.compose.runtime.Immutable
-import me.meeshy.sdk.model.ApiPostComment
 
 /**
  * Immutable optimistic-like SSOT for a post's comment thread.
@@ -13,7 +11,6 @@ import me.meeshy.sdk.model.ApiPostComment
  * this owns *what the like state becomes*. Mirror of iOS
  * `PostDetailViewModel.toggleCommentLike` (heart reaction, optimistic + rollback).
  */
-@Immutable
 data class CommentLikeState(
     val likedIds: Set<String> = emptySet(),
     val deltas: Map<String, Int> = emptyMap(),

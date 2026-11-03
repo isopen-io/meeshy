@@ -1,8 +1,5 @@
-package me.meeshy.app.feed
+package me.meeshy.sdk.model
 
-import androidx.compose.runtime.Immutable
-import me.meeshy.sdk.model.ApiPostComment
-import me.meeshy.sdk.model.ApiPostTranslationEntry
 
 /**
  * Immutable SSOT for the 1-level reply threads under a post's top-level comments.
@@ -15,7 +12,6 @@ import me.meeshy.sdk.model.ApiPostTranslationEntry
  * management (`expandedThreads` / `repliesMap` / `loadingReplies`), collapsing the thread
  * on a load failure exactly as iOS does.
  */
-@Immutable
 data class CommentRepliesState(
     val expandedIds: Set<String> = emptySet(),
     val loadingIds: Set<String> = emptySet(),

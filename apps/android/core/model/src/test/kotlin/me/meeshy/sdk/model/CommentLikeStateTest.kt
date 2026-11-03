@@ -1,7 +1,6 @@
-package me.meeshy.app.feed
+package me.meeshy.sdk.model
 
 import com.google.common.truth.Truth.assertThat
-import me.meeshy.sdk.model.ApiPostComment
 import org.junit.Test
 
 /**
