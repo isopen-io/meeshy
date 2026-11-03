@@ -281,6 +281,24 @@ data class NotificationContext(
     val postCreatedAt: String? = null,
     /** Date ISO d'expiration de l'entité sociale liée (story/status éphémère). */
     val postExpiresAt: String? = null,
+    // Détail du message (#8856/#8858) : chaîne OU nombre sur le fil, lu en chaîne ; voir NotificationMessageDetail.
+    @Serializable(with = TolerantStringSerializer::class) val locationLat: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val locationLon: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val locationName: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val locationAddress: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val contactName: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val contactPhone: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val contactEmail: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val inviteUrl: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val inviteConversationTitle: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val inviteMemberCount: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val linkUrl: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val linkDomain: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val linkTitle: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val linkImageUrl: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val thumbnailUrl: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val storyReply: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val notificationLocKey: String? = null,
 )
 
 /** Read/lifecycle state of a notification — port of NotificationState (NotificationModels.swift). */
@@ -361,6 +379,24 @@ data class NotificationMetadata(
     // Retrait par la modération (#11151)
     val contentId: String? = null,
     val reason: String? = null,
+    // Détail du message (#8856/#8858) : chaîne OU nombre sur le fil, lu en chaîne ; voir NotificationMessageDetail.
+    @Serializable(with = TolerantStringSerializer::class) val locationLat: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val locationLon: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val locationName: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val locationAddress: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val contactName: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val contactPhone: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val contactEmail: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val inviteUrl: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val inviteConversationTitle: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val inviteMemberCount: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val linkUrl: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val linkDomain: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val linkTitle: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val linkImageUrl: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val thumbnailUrl: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val storyReply: String? = null,
+    @Serializable(with = TolerantStringSerializer::class) val notificationLocKey: String? = null,
 )
 
 /** Résumé léger des pièces jointes d'un message — `NotificationMetadata.Attachments` côté iOS. */
