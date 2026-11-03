@@ -950,7 +950,7 @@ class SignupViewModelTest {
         s.viewModel.validated().validateNow()
         dispatcher.scheduler.runCurrent()
 
-        dispatcher.scheduler.advanceTimeBy(300_000)
+        dispatcher.scheduler.advanceTimeBy(600_000)
         dispatcher.scheduler.runCurrent()
         s.viewModel.onPrimary()
         dispatcher.scheduler.runCurrent()
