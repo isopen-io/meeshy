@@ -32,9 +32,13 @@ class ShareStagingBudget(
         true
     }
 
-    fun release(size: Long, file: Boolean = false) = synchronized(lock) {
-        bytes = maxOf(0L, bytes - maxOf(0L, size))
-        if (file) files = maxOf(0, files - 1)
+    fun release(size: Long, file: Boolean = false) {
+        synchronized(lock) {
+            bytes = maxOf(0L, bytes - maxOf(0L, size))
+            if (file) {
+                files = maxOf(0, files - 1)
+            }
+        }
     }
 
     /** Pourquoi la prochaine copie de [size] octets est refusée, ou `null` si elle passe. */

@@ -65,7 +65,7 @@ class ShareStagingException(val error: ShareStagingError) : Exception(error.toSt
 sealed interface ShareLoadOutcome {
     data class Payload(val payload: ShareProviderPayload) : ShareLoadOutcome
     data class Staged(val result: ShareStagingResult) : ShareLoadOutcome
-    data object Nothing : ShareLoadOutcome
+    data object None : ShareLoadOutcome
 }
 
 /** Ce que l'écran reçoit : le texte composé, les fichiers copiés et chaque manque, dans l'ordre. */
