@@ -106,17 +106,23 @@ nonisolated enum ComposerRestChrome {
 
     static func showsSlideRow(slideCount: Int) -> Bool { slideCount >= 2 }
 
-    /// **L'écart entre le bord de l'écran et celui de la scène**, où ✕, ↶ ↷
-    /// et la colonne se calent : sur un écran court (iPhone SE), la scène 9:16
-    /// prend toute la hauteur et laisse une marge de chaque côté. Il se lit sur
-    /// la couche de scène, AVANT toute réduction : un panneau, une feuille ou le
-    /// clavier réduisent la scène sans déplacer ses options.
-    static func sceneSideInset(layer: CGRect, aspectRatio ratio: CGFloat) -> CGFloat {
-        guard !layer.isNull, layer.minX.isFinite else { return 0 }
+    /// **L'écart entre le bord de l'écran et celui de la scène DESSINÉE**, où
+    /// ✕, ↶ ↷ et la colonne se calent : sur un écran court (iPhone SE), le 9:16
+    /// prend toute la hauteur, et le socle le réduit dès le repos à la zone libre
+    /// au-dessus de lui — une marge de chaque côté. La réduction s'ancre au
+    /// milieu de la zone : la scène dessinée y reste centrée.
+    static func sceneSideInset(layer: CGRect, aspectRatio ratio: CGFloat, scale: CGFloat) -> CGFloat {
+        guard !layer.isNull, layer.minX.isFinite, scale.isFinite, scale > 0 else { return 0 }
         let zone = ComposerSceneFit.zone(in: layer.size, aspectRatio: ratio)
         let scene = ComposerSceneFit.frame(in: zone, aspectRatio: ratio)
         guard scene.width > 0 else { return 0 }
-        return max(0, layer.minX + scene.minX)
+        return max(0, layer.minX + zone.midX - scene.width * scale / 2)
+    }
+
+    /// Un panneau, une feuille ou le clavier réduisent la scène au-delà du
+    /// repos : ses options ne la suivent pas, elles gardent l'écart du repos.
+    static func restSideInset(measured: CGFloat, sceneIsReduced: Bool, current: CGFloat) -> CGFloat {
+        sceneIsReduced ? current : measured
     }
 
     static func sceneIsReduced(_ state: State) -> Bool {
