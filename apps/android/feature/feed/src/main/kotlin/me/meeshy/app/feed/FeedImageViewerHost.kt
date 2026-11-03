@@ -66,9 +66,13 @@ internal fun FeedImageViewerHost(
             }
         },
         canCommentMedia = { page -> postId != null && page.postMediaId != null },
-        onCommentMedia = if (quote == null || postId == null) null else { page ->
-            page.postMediaId?.let { quote(postId, it) }
-            onDismiss()
+        onCommentMedia = if (quote == null || postId == null) {
+            null
+        } else {
+            { page: GalleryPage ->
+                page.postMediaId?.let { quote(postId, it) }
+                onDismiss()
+            }
         },
         onImageSaved = { result ->
             Toast.makeText(context, if (result.isSuccess) savedMessage else saveFailedMessage, Toast.LENGTH_SHORT).show()
