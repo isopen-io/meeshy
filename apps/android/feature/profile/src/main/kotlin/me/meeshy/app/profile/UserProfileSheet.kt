@@ -81,11 +81,13 @@ fun UserProfileSheet(
     viewModel: UserProfileSheetViewModel = hiltViewModel(),
     actionsViewModel: ProfileActionsViewModel = hiltViewModel(),
     bannerViewModel: ProfileBannerViewModel = hiltViewModel(),
+    sharedConversationsViewModel: ProfileSharedConversationsViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(user) { viewModel.onEvent(UserProfileSheetEvent.Open(user)) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val actionsState by actionsViewModel.state.collectAsStateWithLifecycle()
     val catalog by bannerViewModel.catalog.collectAsStateWithLifecycle()
+    val sharedConversations by sharedConversationsViewModel.state.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val scope = rememberCoroutineScope()
     val latestDismiss by rememberUpdatedState(onDismiss)
@@ -95,6 +97,8 @@ fun UserProfileSheet(
     val toasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 4) }
     var reportChoiceOpen by remember { mutableStateOf(false) }
     ProfileSheetActionsBinding(state, actionsViewModel, environment, toasts)
+    val sharedId = state.profile?.id?.takeIf { it.isNotBlank() && !state.isSelf }
+    LaunchedEffect(sharedId) { sharedId?.let(sharedConversationsViewModel::load) }
     LaunchedEffect(state.content) {
         // L'état VIVANT, pas l'instantané composé : une fiche précédente fermée ne referme pas la suivante.
         if (viewModel.state.value.content == ProfileSheetContent.Close) close()
@@ -118,6 +122,7 @@ fun UserProfileSheet(
                 onRetry = { viewModel.onEvent(UserProfileSheetEvent.Retry) },
                 actions = actionsViewModel.callbacks(state, environment) { reportChoiceOpen = true },
                 catalog = catalog,
+                sharedConversations = sharedConversations,
             )
             ConnectionFeedbackHost(feedback = actionsViewModel.connectionFeedback)
             FeedbackToastHost(toasts = toasts)
@@ -210,6 +215,7 @@ internal fun UserProfileSheetBody(
     onRetry: () -> Unit,
     actions: ProfileActionCallbacks,
     catalog: AppearanceCatalog? = null,
+    sharedConversations: ProfileSharedConversationsState = ProfileSharedConversationsState(),
 ) {
     val accent = hexColor(state.accentHex, MeeshyPalette.Indigo500)
     val title = state.profile?.let { it.displayName ?: it.username } ?: state.user.resolvedDisplayName
@@ -231,6 +237,7 @@ internal fun UserProfileSheetBody(
                 catalog = catalog,
                 isExpanded = isExpanded,
                 actions = actions,
+                sharedConversations = sharedConversations,
             )
         }
         ProfileSheetCloseButton(
