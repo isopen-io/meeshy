@@ -1,0 +1,196 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.domain.conversations",
+          "androidName": "purge_domain_conversations",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.domain.posts",
+          "androidName": "purge_domain_posts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.domain.reels",
+          "androidName": "purge_domain_reels",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.domain.stories",
+          "androidName": "purge_domain_stories",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.kind.audio",
+          "androidName": "purge_kind_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.kind.documents",
+          "androidName": "purge_kind_documents",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.kind.images",
+          "androidName": "purge_kind_images",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.kind.messages",
+          "androidName": "purge_kind_messages",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.kind.payloads",
+          "androidName": "purge_kind_payloads",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.kind.reactions",
+          "androidName": "purge_kind_reactions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.kind.videos",
+          "androidName": "purge_kind_videos",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.limitation.embedded",
+          "androidName": "purge_limitation_embedded",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.limitation.indivisible",
+          "androidName": "purge_limitation_indivisible",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.limitation.noStore",
+          "androidName": "purge_limitation_no_store",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.limitation.notApplicable",
+          "androidName": "purge_limitation_not_applicable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.purge.action.empty",
+          "androidName": "purge_action_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.purge.action.hint",
+          "androidName": "purge_action_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.purge.action.withSize",
+          "androidName": "purge_action_with_size",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.purge.confirm.action",
+          "androidName": "purge_confirm_action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.purge.confirm.message",
+          "androidName": "purge_confirm_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.purge.confirm.title",
+          "androidName": "purge_confirm_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.purge.kind.hint",
+          "androidName": "purge_kind_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.purge.selectAll",
+          "androidName": "purge_select_all",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.purge.unattributed.description",
+          "androidName": "purge_unattributed_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.purge.unattributed.label",
+          "androidName": "purge_unattributed_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "settings.cache.purge.unattributed.title",
+          "androidName": "purge_unattributed_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.storage.cache.description",
+          "androidName": "data_storage_cache_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.storage.cache.subtitle",
+          "androidName": "data_storage_cache_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.storage.cache.title",
+          "androidName": "data_storage_cache_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.storage.section.cache",
+          "androidName": "data_storage_section_cache",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.storage.title",
+          "androidName": "data_storage_title",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
