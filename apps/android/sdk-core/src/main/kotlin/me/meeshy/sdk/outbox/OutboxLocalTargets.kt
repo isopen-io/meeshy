@@ -58,6 +58,7 @@ public object OutboxLocalTargets {
         OutboxKind.CONSUME_AFTER_READ,
         OutboxKind.CONSUME_VIEW_ONCE,
         OutboxKind.REPOST_POST,
+        OutboxKind.REACT_STORY,
         OutboxKind.UPDATE_CONVERSATION,
     ).map { it.name }.toSet()
 
