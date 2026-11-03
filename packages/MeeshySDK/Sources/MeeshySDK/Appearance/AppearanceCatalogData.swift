@@ -1424,7 +1424,7 @@ enum AppearanceCatalogData {
               {
                 "d": "M0 0L36 36M36 0L0 36M18 0V36M0 18H36",
                 "role": "ink",
-                "opacity": 0.05,
+                "opacity": 0.06,
                 "width": 0.55
               },
               {
@@ -1471,7 +1471,7 @@ enum AppearanceCatalogData {
               {
                 "d": "M78 18L86 16L88 22L80 25Z",
                 "role": "ink",
-                "opacity": 0.05
+                "opacity": 0.06
               },
               {
                 "d": "M22 40L30 37L33 44L26 47L21 45Z",
@@ -1491,7 +1491,7 @@ enum AppearanceCatalogData {
               {
                 "d": "M10 72L17 70L19 77L12 80Z",
                 "role": "ink",
-                "opacity": 0.05
+                "opacity": 0.06
               },
               {
                 "d": "M44 76L52 72L56 80L48 84Z",

@@ -104,13 +104,13 @@ describe('les collections Meeshy de la boutique (#15158)', () => {
     });
   });
 
-  it('fonds : les fixes sont discrets (encre ≤ 8 %) ; les animés portent un film valide, léger et bouclé ; clair et sombre restent proches du blanc et du noir', () => {
+  it('fonds : les fixes sont discrets (encre entre 6 et 8 %, le plancher d’Android pour tout trait de motif) ; les animés portent un film valide, léger et bouclé ; clair et sombre restent proches du blanc et du noir', () => {
     const [signature, vivants] = packsOf('wallpapers/designs.json').slice(-2);
     type Design = { readonly key: string; readonly lottie?: Ref; readonly tile?: { readonly paths: readonly { readonly opacity: number }[] }; readonly palettes: { readonly light: { readonly base: string }; readonly dark: { readonly base: string } } };
     const all = [...(signature!['designs'] as readonly Design[]), ...(vivants!['designs'] as readonly Design[])];
     all.forEach((design) => {
       expect({ key: design.key, light: luminance(design.palettes.light.base) > 0.85, dark: luminance(design.palettes.dark.base) < 0.02 }).toEqual({ key: design.key, light: true, dark: true });
-      (design.tile?.paths ?? []).forEach((stroke) => expect(stroke.opacity).toBeLessThanOrEqual(0.08));
+      (design.tile?.paths ?? []).forEach((stroke) => expect({ key: design.key, opacity: stroke.opacity >= 0.06 && stroke.opacity <= 0.08 }).toEqual({ key: design.key, opacity: true }));
     });
     (signature!['designs'] as readonly Design[]).forEach((design) => expect(design.lottie).toBeUndefined());
     (vivants!['designs'] as readonly Design[]).forEach((design) => expectFilm(design.lottie!, [360, 760]));
