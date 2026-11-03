@@ -203,6 +203,7 @@ class ChatViewModel @Inject constructor(
      * first conversation emission has been read.
      */
     private val initialUnreadCount = MutableStateFlow<Int?>(null)
+    private var openingCursor = UnreadCursor.of(null, null)
 
     private val screenState = ChatStateAccess(_state)
 
@@ -285,7 +286,9 @@ class ChatViewModel @Inject constructor(
         // read (which zeroes it), then mark read. The first Room emission carries
         // the current cached value, so this never blocks beyond it.
         viewModelScope.launch {
-            val unread = conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
+            val opening = conversationRepository.conversationStream(conversationId).first()
+            openingCursor = UnreadCursor.of(opening, sessionRepository.currentUser.value?.id)
+            val unread = openingCursor.serverUnreadCount
             initialUnreadCount.value = unread
             if (unread > 0) {
                 withTimeoutOrNull(ReadAcknowledgement.WINDOW_WAIT_MILLIS) { windowAnswered.first { it } }
@@ -299,9 +302,9 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             val count = initialUnreadCount.filterNotNull().first()
             val bubbles = _state.map { it.messages }.first { it.isNotEmpty() }
-            val firstUnread = UnreadMarker.firstUnreadId(bubbles, count)
+            val firstUnread = UnreadMarker.firstUnreadId(bubbles, openingCursor, sessionRepository.currentUser.value?.id)
             _state.update {
-                it.copy(firstUnreadMessageId = firstUnread, unreadBoundaryResolved = true)
+                it.copy(firstUnreadMessageId = firstUnread, unreadAtOpening = count, unreadBoundaryResolved = true)
             }
         }
 
