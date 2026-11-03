@@ -53,6 +53,8 @@ class AuthRepository @Inject constructor(
     private val sessionBackup: SessionBackup = NoSessionBackup,
     private val keepSignedIn: KeepSignedInConsent? = null,
     private val accountShelf: AccountShelf = NoAccountShelf,
+    private val sessionClosing: me.meeshy.sdk.session.SessionClosing? = null,
+    private val serverLogout: ServerLogout? = null,
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
 
@@ -434,7 +436,9 @@ class AuthRepository @Inject constructor(
         val frozenJwt = tokenStore.jwt
         val frozenSessionToken = tokenStore.sessionToken
         purgeLocalSession()
-        closeServerSession(frozenJwt, frozenSessionToken)
+        // Trois essais en arrière-plan puis reprise WorkManager : la déconnexion ne les attend jamais.
+        serverLogout?.closeInBackground(frozenJwt, frozenSessionToken)
+            ?: closeServerSession(frozenJwt, frozenSessionToken)
     }
 
     /**
@@ -451,8 +455,14 @@ class AuthRepository @Inject constructor(
     }
 
     private suspend fun purgeLocalSession() {
+        val leaving = tokenStore.userId?.takeIf { it.isNotBlank() } ?: sessionRepository.currentUserId
         tokenStore.clear()
         sessionRepository.clear()
+        // Le profil gardé dans le coffre survit à la purge des caches : seul le compte qui part l'efface (#14840).
+        leaving?.let { sessionRepository.forgetIdentity(it) }
+        // Un seul plan de fermeture (surfaces d'extension d'abord), comme iOS : jetons deja vides, donc widgets et
+        // raccourcis se repeignent deconnectes.
+        sessionClosing?.closeSession()
         sessionTeardown.wipe()
         // Le curseur `_seq` est en MÉMOIRE, donc hors du périmètre de
         // [SessionTeardown] (stores persistés) — il se purge ici, comme iOS le

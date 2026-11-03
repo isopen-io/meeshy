@@ -89,6 +89,14 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
     var getByIdCallCount = 0
     var lastGetByIdConversationId: String?
 
+    /// La relecture aux refus TYPÉS (#14708) a son propre résultat : un témoin
+    /// de refus définitif le pose, lui seul, et rougit si l'appelant repasse
+    /// par `getById`. `nil` : le défaut du protocole (`getById`).
+    var getByIdTypedRefusalsResult: Result<APIConversation, Error>?
+    var getByIdTypedRefusalsCallCount = 0
+    /// Ce qui se passe PENDANT la relecture (un changement de compte, #14706).
+    var onGetByIdTypedRefusals: (@MainActor () -> Void)?
+
     var createCallCount = 0
     var lastCreateType: String?
     var lastCreateTitle: String?
@@ -197,6 +205,16 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
             lastGetByIdConversationId = conversationId
         }
         return try getByIdResult.get()
+    }
+
+    nonisolated func getByIdTypedRefusals(_ conversationId: String) async throws -> APIConversation {
+        let typed = await MainActor.run { () -> Result<APIConversation, Error>? in
+            getByIdTypedRefusalsCallCount += 1
+            onGetByIdTypedRefusals?()
+            return getByIdTypedRefusalsResult
+        }
+        guard let typed else { return try await getById(conversationId) }
+        return try typed.get()
     }
 
     nonisolated func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse {
@@ -368,6 +386,9 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
         searchHandler = nil
         getByIdCallCount = 0
         lastGetByIdConversationId = nil
+        getByIdTypedRefusalsResult = nil
+        getByIdTypedRefusalsCallCount = 0
+        onGetByIdTypedRefusals = nil
         createCallCount = 0
         lastCreateType = nil
         lastCreateTitle = nil

@@ -20,6 +20,12 @@ public enum class TusUploadContext(public val wire: String) {
     STORY("story"),
     STATUS("status"),
     COMMENT("comment"),
+
+    /**
+     * A chat/call attachment: NOT one of the four publication strings, so the gateway creates a
+     * `MessageAttachment` (what `POST /calls/:id/recordings/:id/attachment` claims), never a `PostMedia`.
+     */
+    ATTACHMENT("attachment"),
     ;
 
     public companion object {

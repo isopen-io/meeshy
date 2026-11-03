@@ -2,6 +2,7 @@
 <resources>
     <string name="bookmarks_back">رجوع</string>
     <string name="feed_action_bookmark">حفظ</string>
+    <string name="feed_action_cancel">إلغاء</string>
     <string name="feed_action_copy_link">نسخ الرابط</string>
     <string name="feed_action_copy_text">نسخ النص</string>
     <string name="feed_action_delete">حذف</string>
@@ -12,6 +13,7 @@
     <string name="feed_action_send">إرسال</string>
     <string name="feed_action_share">مشاركة</string>
     <string name="feed_action_view_profile">عرض الملف الشخصي</string>
+    <string name="feed_bookmark_success">تمت الإضافة إلى المفضلة</string>
     <string name="feed_comment_card_folded">+%1$d ردود</string>
     <string name="feed_comment_card_thread">سلسلة التعليقات</string>
     <string name="feed_comment_imagine">حوِّل إلى صورة</string>
@@ -46,6 +48,40 @@
     <string name="feed_notice_repost_failed">خطأ في إعادة النشر</string>
     <string name="feed_notice_translation_failed">خطأ في الترجمة</string>
     <string name="feed_post_reposted_from">أعاد النشر من @%1$s</string>
+    <plurals name="feed_post_stat_comments">
+        <item quantity="zero">لا توجد تعليقات</item>
+        <item quantity="one">تعليق واحد</item>
+        <item quantity="two">تعليقان</item>
+        <item quantity="few">%1$d تعليقات</item>
+        <item quantity="many">%1$d تعليقًا</item>
+        <item quantity="other">%1$d تعليق</item>
+    </plurals>
+    <plurals name="feed_post_stat_likes">
+        <item quantity="zero">لا توجد إعجابات</item>
+        <item quantity="one">إعجاب واحد</item>
+        <item quantity="two">إعجابان</item>
+        <item quantity="few">%1$d إعجابات</item>
+        <item quantity="many">%1$d إعجابًا</item>
+        <item quantity="other">%1$d إعجاب</item>
+    </plurals>
+    <plurals name="feed_post_stat_replies">
+        <item quantity="zero">لا توجد ردود</item>
+        <item quantity="one">رد واحد</item>
+        <item quantity="two">ردان</item>
+        <item quantity="few">%1$d ردود</item>
+        <item quantity="many">%1$d ردًا</item>
+        <item quantity="other">%1$d رد</item>
+    </plurals>
+    <plurals name="feed_post_stat_reposts">
+        <item quantity="zero">لا توجد إعادات نشر</item>
+        <item quantity="one">إعادة نشر واحدة</item>
+        <item quantity="two">إعادتا نشر</item>
+        <item quantity="few">%1$d إعادات نشر</item>
+        <item quantity="many">%1$d إعادة نشر</item>
+        <item quantity="other">%1$d إعادة نشر</item>
+    </plurals>
+    <string name="feed_post_stat_saves">%1$d عملية حفظ</string>
+    <string name="feed_post_stat_shares">%1$d مشاركة</string>
     <string name="feed_quote_cancel">إلغاء</string>
     <string name="feed_quote_submit">إعادة نشر</string>
     <string name="feed_reel">ريل</string>
