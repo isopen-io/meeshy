@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,7 +54,7 @@ public class FlatRowExpansion(
 )
 
 /** L'expansion de la rangée courante ; absente, le texte garde son propre état local. */
-public val LocalFlatRowExpansion = staticCompositionLocalOf<FlatRowExpansion?> { null }
+public val LocalFlatRowExpansion: ProvidableCompositionLocal<FlatRowExpansion?> = staticCompositionLocalOf { null }
 
 /** La courbe et la durée de la hauteur (0,3 s, (0,2 ; 0 ; 0 ; 1)) ; `snap` en Réduire les animations. */
 @Composable
