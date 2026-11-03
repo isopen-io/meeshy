@@ -1,16 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- « Mes cercles » (#13938) : android-only tant que les clés circles.* ne sont pas au catalogue iOS de dev ; texte exact de la branche lot/ui-cercles-ios-13938. Partagées par « Mes cercles » et le profil. -->
 <resources>
-    <string name="circles_action_demote">Rétrograder en %1$s</string>
-    <string name="circles_action_promote">Promouvoir en %1$s</string>
-    <string name="circles_action_promote_a11y">Promouvoir %2$s en %1$s</string>
     <string name="circles_action_request">Demander %1$s</string>
     <string name="circles_action_request_a11y">Demander le niveau %1$s à %2$s</string>
     <string name="circles_action_unlink">Annuler le lien</string>
+    <string name="circles_promote_friend">Soyons amis</string>
+    <string name="circles_promote_close">Soyons proches</string>
+    <string name="circles_promote_blood">Devenons sang</string>
+    <string name="circles_promote_friend_a11y">Soyons amis : demander le niveau Ami à %1$s</string>
+    <string name="circles_promote_close_a11y">Soyons proches : demander le niveau Proche à %1$s</string>
+    <string name="circles_promote_blood_a11y">Devenons sang : demander le niveau Sang à %1$s</string>
+    <string name="circles_demote_close">Restons proches</string>
+    <string name="circles_demote_friend">Restons amis</string>
+    <string name="circles_demote_acquaintance">Restons en contact</string>
+    <string name="circles_demote_close_confirm_title">Rester seulement proches avec %1$s ?</string>
+    <string name="circles_demote_friend_confirm_title">Rester seulement amis avec %1$s ?</string>
+    <string name="circles_demote_acquaintance_confirm_title">Rester seulement en contact avec %1$s ?</string>
     <string name="circles_confirm_cancel">Annuler</string>
-    <string name="circles_demote_confirm_action">Rétrograder</string>
     <string name="circles_demote_confirm_body">%1$s passera de %2$s à %3$s. Vous perdrez ce que %2$s partage. %1$s n\'en sera pas averti(e) et ne pourra pas vous redemander de remonter avant 30 jours.</string>
-    <string name="circles_demote_confirm_title">Rétrograder %1$s en %2$s ?</string>
     <string name="circles_level_acquaintance">Connaissance</string>
     <string name="circles_level_blood">Sang</string>
     <string name="circles_level_close">Proche</string>
