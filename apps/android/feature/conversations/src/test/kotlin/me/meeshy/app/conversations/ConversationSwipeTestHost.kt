@@ -6,6 +6,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.StoryRingState
 import me.meeshy.ui.component.swipe.LocalSwipeRowCoordinator
@@ -21,10 +22,13 @@ internal fun swipeTestConversation(id: String, unreadCount: Int = 0) = ApiConver
     currentUserRole = "member",
 )
 
+/** Un membre inscrit : la loi d'actions ne propose « Masquer » qu'à lui (`hide = registered && isActiveMember`). */
+internal val swipeTestViewer = MeeshyUser(id = "me", username = "me", role = "USER", isAnonymous = false)
+
 internal fun swipeTestModel(conversation: ApiConversation) = ConversationRowModel(
     conversation = conversation,
     currentUserId = "me",
-    currentUserPrefs = null,
+    currentUserPrefs = swipeTestViewer,
     peerUserId = null,
     storyRing = StoryRingState.None,
     moodEmoji = null,

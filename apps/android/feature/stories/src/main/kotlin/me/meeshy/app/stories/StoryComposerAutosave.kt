@@ -109,6 +109,21 @@ object StoryComposerAutosave {
         return previous.uploadCmids() - kept?.uploadCmids().orEmpty()
     }
 
+    /**
+     * Écrit le brouillon ([save]) PUIS sa couverture ([cover]) : la couverture est un luxe de la grille, jamais une condition
+     * de la sauvegarde. Elle vient après, et son échec — quel qu'il soit, hors annulation — est avalé.
+     */
+    suspend fun saveThenCover(save: suspend () -> Unit, cover: suspend () -> Unit) {
+        save()
+        try {
+            cover()
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            Unit
+        }
+    }
+
     /** Les envois durables que [snapshot] nomme par leur `cmid`. */
     fun namedUploads(snapshot: StoryComposerDraftSnapshot?): Set<String> = snapshot?.uploadCmids().orEmpty()
 

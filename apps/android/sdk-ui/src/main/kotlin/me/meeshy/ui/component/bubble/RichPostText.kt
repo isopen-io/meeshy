@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.PostTextTruncation
 import me.meeshy.sdk.model.YouTubeLinkDetector
+import me.meeshy.sdk.model.text.LinkDisplayLaw
 import me.meeshy.ui.R
 import me.meeshy.ui.theme.LocalMeeshyTokens
 import me.meeshy.ui.theme.MeeshyAdaptiveColors
@@ -87,6 +88,11 @@ public fun RichPostText(
                     .padding(vertical = 12.dp),
             )
         }
-        youtube?.let { YouTubeFacade(link = it, contentDescription = it.watchUrl) }
+        youtube?.let { link ->
+            val trackedUrl = trackedLinks?.entries
+                ?.firstOrNull { YouTubeLinkDetector.detect(it.key)?.videoId == link.videoId && LinkDisplayLaw.isTrackingToken(it.value) }
+                ?.let { LinkDisplayLaw.redirectUrl(it.value) }
+            YouTubeFacade(link = link, trackedUrl = trackedUrl)
+        }
     }
 }

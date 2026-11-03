@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -147,7 +148,7 @@ private fun shareStatusText(model: ShareRecipientRowModel): String? = when (mode
 internal fun shareDetailText(detail: ShareRecipient.Detail): String = when (detail) {
     ShareRecipient.Detail.Direct -> stringResource(R.string.share_detail_direct)
     is ShareRecipient.Detail.Group ->
-        if (detail.members > 0) stringResource(R.string.chat_forward_members, detail.members) else stringResource(R.string.share_detail_group_unsized)
+        if (detail.members > 0) pluralStringResource(R.plurals.chat_forward_members, detail.members, detail.members) else stringResource(R.string.share_detail_group_unsized)
     ShareRecipient.Detail.FriendWithoutConversation -> stringResource(R.string.share_detail_friend)
     is ShareRecipient.Detail.Handle -> "@${detail.handle}"
     is ShareRecipient.Detail.Channel -> stringResource(R.string.share_detail_channel, detail.community)

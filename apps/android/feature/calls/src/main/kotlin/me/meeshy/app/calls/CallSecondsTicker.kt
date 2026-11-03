@@ -44,4 +44,7 @@ interface CallTickerModule {
 
     @Binds
     fun bindCallHeartbeatTicker(impl: RealCallHeartbeatTicker): CallHeartbeatTicker
+
+    @Binds
+    fun bindCallAnalyticsSnapshotTicker(impl: RealCallAnalyticsSnapshotTicker): CallAnalyticsSnapshotTicker
 }

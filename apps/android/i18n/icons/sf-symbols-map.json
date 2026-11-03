@@ -409,8 +409,7 @@
    "role": "ChevronBackward",
    "reason": "Icons.AutoMirrored.Filled.KeyboardArrowLeft (rôle directionnel, miroité en RTL)",
    "aliases": [
-    "Back",
-    "BackArrow"
+    "Back"
    ]
   },
   {
@@ -3152,10 +3151,6 @@
   "ZoomOutMap": {
    "origin": "material",
    "directional": false
-  },
-  "BackArrow": {
-   "origin": "material",
-   "directional": true
   },
   "LabelTag": {
    "origin": "material",
