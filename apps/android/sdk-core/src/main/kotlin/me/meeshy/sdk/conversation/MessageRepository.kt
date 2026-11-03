@@ -67,9 +67,11 @@ class MessageRepository internal constructor(
         adoption: MediaAdoption? = null,
         /** #15104 — l'aperçu local d'un média en attente part avec sa bulle. */
         previews: PendingMediaPreviewing? = null,
+        /** L'aperçu de la liste de conversations suit mon envoi optimiste et son retrait. */
+        listPreviews: SendPreviewSink? = null,
     ) : this(
         history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures),
-        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption, previews),
+        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption, previews = previews, listPreviews = listPreviews),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao, fence),
             outboxRepository,

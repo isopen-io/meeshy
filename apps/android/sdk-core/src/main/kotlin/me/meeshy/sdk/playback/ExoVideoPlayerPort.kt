@@ -111,6 +111,12 @@ internal class ExoVideoPlayerPort(
         player.volume = if (muted) 0f else 1f
     }
 
+    override fun setAudioTracksEnabled(enabled: Boolean) {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, !enabled)
+            .build()
+    }
+
     override fun setLooping(looping: Boolean) {
         player.repeatMode = Player.REPEAT_MODE_OFF
         if (!looping) dropLoopSuccessors()

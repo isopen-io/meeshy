@@ -945,14 +945,22 @@ class PostRepository @Inject constructor(
      * compteur du post, s'il est dans le cache du fil, monte tout de suite. [parentId] `null` = commentaire racine.
      * Rend le `cmid` de la ligne, ou `null` si la file a refusé l'écriture (compte clos entre-temps).
      */
-    suspend fun queueComment(postId: String, content: String, parentId: String? = null, originalLanguage: String? = null): String? {
+    suspend fun queueComment(
+        postId: String,
+        content: String,
+        parentId: String? = null,
+        originalLanguage: String? = null,
+        attachmentIds: List<String>? = null,
+        effectFlags: Int? = null,
+        location: SharedPlace? = null,
+    ): String? {
         val ticket = fence?.currentTicket()
         val cmid = outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.CREATE_COMMENT,
                 lane = OutboxLanes.COMMENT,
                 targetId = postId,
-                payload = MeeshyApi.json.encodeToString(CommentPayload.serializer(), CommentPayload(content, parentId, originalLanguage)),
+                payload = MeeshyApi.json.encodeToString(CommentPayload.serializer(), CommentPayload(content, parentId, originalLanguage, attachmentIds?.takeIf { it.isNotEmpty() }, effectFlags, location)),
             ),
             ticket,
         ) ?: return null

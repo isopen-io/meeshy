@@ -1,7 +1,18 @@
 package me.meeshy.app.stories
 
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import me.meeshy.sdk.model.story.StoryComposerFold
+import me.meeshy.sdk.model.story.StoryComposerGesture
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -54,15 +65,100 @@ internal object StoryCommentHold {
 }
 
 /**
- * Le composeur universel épinglé sous la story d'autrui (iOS `composerLayer`). Un toucher sur la plaque, hors de ses
- * contrôles, ne fait ni avancer ni reculer la story.
+ * Le composeur universel épinglé sous la story d'autrui (iOS `composerLayer` + `StoryComposerFold`). Un toucher sur la
+ * plaque, hors de ses contrôles, ne fait ni avancer ni reculer la story. Un glissé VERTICAL né sur elle lui appartient
+ * (dès 8 dp) et la replie à 40 dp vers le bas, sans refermer la story. Replié, il ne reste que la bulle ; la plaque
+ * reste MONTÉE à hauteur nulle et invisible, pour que le brouillon et la bannière de réponse l'attendent.
  */
 @Composable
-internal fun StoryPinnedCommentComposer(thread: PostCommentsViewModel, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures { } }) {
-        PostCommentsComposerBar(viewModel = thread)
+internal fun StoryPinnedCommentComposer(
+    thread: PostCommentsViewModel,
+    folded: Boolean,
+    onFoldChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val state by thread.state.collectAsStateWithLifecycle()
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val haptics = rememberMeeshyHaptics()
+    val apply: (StoryComposerFold.Tap) -> Unit = { tap ->
+        if (tap.resignsKeyboard) {
+            keyboard?.hide()
+            focus.clearFocus()
+        }
+        haptics.light()
+        onFoldChange(tap.userFolded)
+    }
+    Column(modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures { } }) {
+        if (folded) {
+            StoryComposerUnfoldBubble(
+                badge = StoryComposerFold.bubbleBadge(isRecording = false, isReplying = state.replyTarget != null),
+                onUnfold = { apply(StoryComposerFold.BUBBLE_TAPPED) },
+            )
+        }
+        Box(
+            Modifier
+                .foldedToNothing(folded)
+                .storyComposerFoldDrag(enabled = !folded) { apply(StoryComposerFold.CHEVRON_TAPPED) },
+        ) {
+            Column {
+                if (!folded) {
+                    StoryComposerFoldChevron(
+                        onFold = { apply(StoryComposerFold.CHEVRON_TAPPED) },
+                        modifier = Modifier.align(Alignment.End),
+                    )
+                }
+                PostCommentsComposerBar(viewModel = thread)
+            }
+        }
     }
 }
+
+/** Replié : mesuré, mais posé à hauteur nulle, invisible, muet pour TalkBack et sans prise — le brouillon survit. */
+private fun Modifier.foldedToNothing(folded: Boolean): Modifier =
+    if (!folded) {
+        this
+    } else {
+        this
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                layout(placeable.width, 0) { placeable.place(0, 0) }
+            }
+            .clipToBounds()
+            .graphicsLayer { alpha = 0f }
+            .clearAndSetSemantics { }
+    }
+
+/**
+ * Le glissé vertical né sur le composeur lui appartient (iOS `composerDragGesture`) : dès que le vertical domine à 8 dp
+ * il consomme le geste — le lecteur, qui lit les changements non consommés, cède — et un glissé bas d'au moins 40 dp
+ * replie. L'horizontal n'est jamais consommé : on change encore de story depuis la bande basse.
+ */
+private fun Modifier.storyComposerFoldDrag(enabled: Boolean, onFold: () -> Unit): Modifier =
+    if (!enabled) {
+        this
+    } else {
+        pointerInput(Unit) {
+            val toDp = 1f / density
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                var dx = 0f
+                var dy = 0f
+                var claimed = false
+                do {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (change.isConsumed && !claimed) break
+                    val delta = change.positionChange()
+                    dx += delta.x * toDp
+                    dy += delta.y * toDp
+                    if (!claimed && StoryComposerGesture.owner(dx, dy) == StoryComposerGesture.Owner.COMPOSER) claimed = true
+                    if (claimed) change.consume()
+                } while (event.changes.any { it.pressed })
+                if (claimed && StoryComposerGesture.folds(dx, dy)) onFold()
+            }
+        }
+    }
 
 /** La liste des commentaires de la story, ouverte par le rail ; son composeur est le même que celui épinglé. */
 @Composable

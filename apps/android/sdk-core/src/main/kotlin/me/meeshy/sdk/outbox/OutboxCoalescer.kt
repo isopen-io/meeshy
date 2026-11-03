@@ -52,6 +52,8 @@ public sealed interface CoalesceDecision {
  *   lane but never supersede one another);
  * - an edit of a message still queued for sending is folded INTO that send (one request carrying the final text);
  *   a delete of it cancels the send and any edit, a delete after an edit replaces the edit;
+ * - « supprimer pour moi » / « restaurer » du même message sont deux états terminaux opposés : ils s'annulent ; un
+ *   masquage (ou une modération, ou un accusé de réception) répété ne garde que le dernier ;
  * - conversation details (title, description, avatar) and a generic settings action of the same (endpoint, method)
  *   merge field by field, the last write winning on each key; different endpoints never merge (FIFO);
  *
@@ -102,6 +104,10 @@ public object OutboxCoalescer {
                 replaceSameKind(incoming, sameTarget, OutboxKind.SEND_FRIEND_REQUEST)
             OutboxKind.RESPOND_FRIEND_REQUEST ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.RESPOND_FRIEND_REQUEST)
+            OutboxKind.HIDE_FOR_ME -> terminalToggle(incoming, sameTarget, OutboxKind.RESTORE_FOR_ME, OutboxKind.HIDE_FOR_ME)
+            OutboxKind.RESTORE_FOR_ME -> terminalToggle(incoming, sameTarget, OutboxKind.HIDE_FOR_ME, OutboxKind.RESTORE_FOR_ME)
+            OutboxKind.MODERATION_DELETE -> replaceSameKind(incoming, sameTarget, OutboxKind.MODERATION_DELETE)
+            OutboxKind.MARK_RECEIVED -> replaceSameKind(incoming, sameTarget, OutboxKind.MARK_RECEIVED)
             else -> CoalesceDecision.Enqueue(incoming)
         }
     }

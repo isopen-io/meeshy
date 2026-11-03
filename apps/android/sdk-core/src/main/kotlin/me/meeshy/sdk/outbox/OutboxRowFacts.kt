@@ -46,6 +46,9 @@ public object OutboxRowFacts {
         OutboxKind.CREATE_CONVERSATION -> other("createConversation")
         OutboxKind.UPDATE_CONVERSATION -> other("updateConversation")
         OutboxKind.SETTINGS_ACTION -> other("updateSettings")
+        OutboxKind.HIDE_FOR_ME, OutboxKind.MODERATION_DELETE -> OutboxPillFacts(OutboxUiKind.DELETE)
+        OutboxKind.RESTORE_FOR_ME, OutboxKind.REMOVE_ATTACHMENT -> other("updateConversation")
+        OutboxKind.MARK_RECEIVED -> other("markAsRead")
     }
 
     private fun other(key: String) = OutboxPillFacts(OutboxUiKind.OTHER, key)

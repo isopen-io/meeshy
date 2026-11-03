@@ -1,0 +1,193 @@
+package me.meeshy.app.feed
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.feedback.FeedbackToastKind
+import me.meeshy.sdk.model.profile.ProfilePostsEmptyKind
+import me.meeshy.ui.component.MeeshyEmptyState
+import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshyTheme
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
+
+private const val SKELETON_CARDS = 3
+
+/**
+ * Les éléments de l'onglet Postes d'une fiche, à verser DANS le défilement unique de la fiche (jamais un
+ * second défilement imbriqué ni un pull-to-refresh) : la bande de filtres, les cartes du fil (posts et
+ * réels), le vide par filtre, le pied « Vous avez tout vu ». Le contenu est injecté par `:app` — la feature
+ * du fil reste isolée de celle du profil. [onOpenMyStories] `null` = la tuile Stories reste informative.
+ */
+@Composable
+fun rememberProfilePostsItems(
+    userId: String,
+    onOpenPost: (String) -> Unit,
+    onOpenMyStories: (() -> Unit)?,
+): LazyListScope.() -> Unit {
+    val viewModel: ProfilePostsViewModel = hiltViewModel(key = "profile-posts-$userId")
+    LaunchedEffect(userId) { viewModel.bind(userId) }
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val failure = stringResource(R.string.profile_posts_load_error)
+    LaunchedEffect(viewModel, failure) {
+        viewModel.effects.collect { effect ->
+            if (effect is ProfilePostsEffect.PageFailed) viewModel.toasts.show(failure, FeedbackToastKind.ERROR)
+        }
+    }
+    val onEvent: (ProfilePostsEvent) -> Unit = remember(viewModel) { viewModel::onEvent }
+    val locale = Locale.getDefault()
+    return {
+        profilePostsItems(state, onEvent, onOpenPost, onOpenMyStories, locale)
+    }
+}
+
+internal fun LazyListScope.profilePostsItems(
+    state: ProfilePostsUiState,
+    onEvent: (ProfilePostsEvent) -> Unit,
+    onOpenPost: (String) -> Unit,
+    onOpenMyStories: (() -> Unit)?,
+    locale: Locale,
+) {
+    item(key = "posts-band", contentType = "posts-band") {
+        ProfilePostsFilterBand(
+            counts = state.counts,
+            selected = state.filter,
+            onSelect = { onEvent(ProfilePostsEvent.SelectFilter(it)) },
+            onStoriesTap = onOpenMyStories,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.xl),
+        )
+    }
+    if (state.showSkeleton) {
+        items(SKELETON_CARDS, key = { "posts-skeleton-$it" }, contentType = { "posts-skeleton" }) {
+            MeeshySkeletonBox(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = MeeshySpacing.xl)
+                    .padding(top = MeeshySpacing.md)
+                    .height(120.dp),
+                shape = RoundedCornerShape(MeeshyRadius.xl),
+            )
+        }
+    }
+    items(state.posts, key = { it.id }, contentType = { if (it.showsReelCard) "reel" else "post" }) { post ->
+        LaunchedEffect(post.id, state.posts.size) { onEvent(ProfilePostsEvent.CardAppeared(post.id)) }
+        PostCard(
+            post = post,
+            onLike = {},
+            onBookmark = {},
+            onFlagTap = {},
+            onClick = { onOpenPost(post.id) },
+            onOpenPost = onOpenPost,
+            onImageTap = { onOpenPost(post.id) },
+            modifier = Modifier
+                .padding(horizontal = MeeshySpacing.xl)
+                .padding(top = MeeshySpacing.md),
+        )
+    }
+    if (state.isLoadingMore) {
+        item(key = "posts-loading-more", contentType = "posts-loading") {
+            Box(Modifier.fillMaxWidth().padding(MeeshySpacing.md), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(24.dp), color = MeeshyPalette.Indigo500)
+            }
+        }
+    }
+    if (state.empty != ProfilePostsEmptyKind.NONE) {
+        item(key = "posts-empty", contentType = "posts-empty") { ProfilePostsEmpty(state.empty) }
+    }
+    if (state.showsEndFooter) {
+        item(key = "posts-end", contentType = "posts-end") { ProfilePostsEndFooter(state.firstPublishedAtIso, locale) }
+    }
+}
+
+@Composable
+private fun ProfilePostsEmpty(kind: ProfilePostsEmptyKind) {
+    val title: String
+    val subtitle: String
+    when (kind) {
+        ProfilePostsEmptyKind.NO_REELS -> {
+            title = stringResource(R.string.profile_posts_empty_reels)
+            subtitle = stringResource(R.string.profile_posts_empty_filter_subtitle)
+        }
+        ProfilePostsEmptyKind.NO_POSTS -> {
+            title = stringResource(R.string.profile_posts_empty_posts)
+            subtitle = stringResource(R.string.profile_posts_empty_filter_subtitle)
+        }
+        else -> {
+            title = stringResource(R.string.profile_posts_empty)
+            subtitle = stringResource(R.string.profile_posts_empty_subtitle)
+        }
+    }
+    Box(Modifier.fillMaxWidth().height(220.dp)) {
+        MeeshyEmptyState(
+            icon = if (kind == ProfilePostsEmptyKind.NO_REELS) MeeshyIcons.Movie else MeeshyIcons.Notes,
+            title = title,
+            subtitle = subtitle,
+            compact = true,
+        )
+    }
+}
+
+@Composable
+private fun ProfilePostsEndFooter(firstPublishedAtIso: String?, locale: Locale) {
+    val date = remember(firstPublishedAtIso, locale) { abbreviatedDate(firstPublishedAtIso, locale) }
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = MeeshySpacing.xl).semantics(mergeDescendants = true) {},
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
+    ) {
+        Icon(MeeshyIcons.Verified, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary)
+        Text(
+            stringResource(R.string.profile_posts_end_of_content),
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+        date?.let {
+            Text(
+                stringResource(R.string.profile_posts_first_published_at, it),
+                style = MaterialTheme.typography.labelSmall,
+                color = MeeshyTheme.tokens.textMuted,
+            )
+        }
+    }
+}
+
+/** « 12 janv. 2026 » : la date courte localisée d'un instant ISO ; `null` si absent ou illisible. */
+internal fun abbreviatedDate(iso: String?, locale: Locale): String? {
+    if (iso.isNullOrBlank()) return null
+    return runCatching {
+        DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale).withZone(ZoneId.systemDefault())
+            .format(Instant.parse(iso))
+    }.getOrNull()
+}
