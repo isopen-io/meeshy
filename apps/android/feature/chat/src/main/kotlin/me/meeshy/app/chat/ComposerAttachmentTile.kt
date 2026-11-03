@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -31,7 +30,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -44,6 +42,7 @@ import me.meeshy.sdk.model.composer.TileFace
 import me.meeshy.sdk.model.composer.TileTapAction
 import me.meeshy.sdk.model.composer.TrayEntry
 import me.meeshy.sdk.model.composer.TrayEntryKind
+import me.meeshy.ui.component.composer.PieceRemoveBadge
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshyRadius
@@ -52,10 +51,9 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 private val TILE_SIDE = 56.dp
 private val LABEL_WIDTH = 60.dp
-private val BADGE_TARGET = 44.dp
 
 /**
- * Une case du plateau : tuile 56 dp, badge de retrait en coin (cible 44 dp), libellé dessous. Miroir de
+ * Une case du plateau : tuile 56 dp, badge de retrait à cheval sur le coin (#15229), libellé dessous. Miroir de
  * `ComposerAttachmentTile` / `ComposerPlaceTile` iOS. Une pièce en préparation montre sa progression et
  * « Annuler » ; le toucher édite (glyphe central) ou aperçoit selon [AttachmentTilePresentation].
  */
@@ -91,7 +89,14 @@ internal fun ComposerAttachmentTile(
                     ReadyFace(AttachmentTilePresentation.of(item, editorAvailable = onEdit != null), accent, onEdit, onPreview)
                 }
             }
-            RemoveBadge(label = stringResource(R.string.chat_tray_remove, name), onClick = onRemove, modifier = Modifier.align(Alignment.TopEnd))
+            PieceRemoveBadge(
+                label = stringResource(R.string.chat_tray_remove, name),
+                onClick = onRemove,
+                discColor = MeeshyTheme.tokens.error,
+                discSize = 18.dp,
+                glyphSize = 10.dp,
+                modifier = Modifier.align(Alignment.TopEnd),
+            )
         }
         Text(
             text = entry.label ?: kindLabel,
@@ -214,25 +219,6 @@ private fun PlaceFace() {
         contentAlignment = Alignment.Center,
     ) {
         Icon(MeeshyIcons.LocationFilled, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-    }
-}
-
-@Composable
-private fun RemoveBadge(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .offset(x = 14.dp, y = (-14).dp)
-            .size(BADGE_TARGET)
-            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
-            .semantics { role = Role.Button },
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier.size(18.dp).clip(CircleShape).background(MeeshyTheme.tokens.error),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(MeeshyIcons.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(10.dp))
-        }
     }
 }
 
