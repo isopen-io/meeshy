@@ -323,7 +323,8 @@ public object BubbleContentBuilder {
                 DeliveryStatusResolver.resolve(
                     deliveredCount = message.deliveredCount,
                     readCount = message.readCount,
-                    recipientCount = recipientCount,
+                    recipientCount = message.recipientCount?.takeIf { it > 0 } ?: recipientCount,
+                    deliveredToAllAt = message.deliveredToAllAt,
                     readByAllAt = message.readByAllAt,
                     showReadReceipts = showReadReceipts,
                 )

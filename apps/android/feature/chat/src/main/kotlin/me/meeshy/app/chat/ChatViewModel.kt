@@ -497,13 +497,7 @@ class ChatViewModel @Inject constructor(
                 messageSocketManager.readStatusUpdated.collectArrived { event ->
                     if (event.conversationId != conversationId) return@collectArrived
                     val ownId = sessionRepository.currentUser.value?.id ?: return@collectArrived
-                    messageRepository.applyReadReceipt(
-                        conversationId = conversationId,
-                        ownSenderId = ownId,
-                        deliveredCount = event.summary.deliveredCount,
-                        readCount = event.summary.readCount,
-                        frontierIso = event.updatedAt,
-                    )
+                    messageRepository.applyReadStatusSummary(conversationId, event.summary, ownId)
                 }
             }
         }
