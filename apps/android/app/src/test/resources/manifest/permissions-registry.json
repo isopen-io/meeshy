@@ -199,10 +199,6 @@
       "arrivesWith": "appels intégrés au système (core-telecom)"
     },
     {
-      "permission": "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
-      "arrivesWith": "envoi de gros médias en arrière-plan"
-    },
-    {
       "permission": "android.permission.BLUETOOTH_CONNECT",
       "arrivesWith": "routage audio Bluetooth des appels"
     }

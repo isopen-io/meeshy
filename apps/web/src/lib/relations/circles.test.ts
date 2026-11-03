@@ -176,3 +176,13 @@ describe('la montée masquée tant que la passerelle sert un délai (#14910)', (
     expect(raiseOffer(eligible, NOW)).toEqual({ kind: 'available', target: 'CLOSE' });
   });
 });
+
+describe('la montée suit `canRaise` quand la passerelle le sert (#14910)', () => {
+  test('false ⇒ verrouillée même éligible ; true ⇒ ouverte ; absent ⇒ la loi habituelle', () => {
+    const eligible = link({ effectiveLevel: 'FRIEND', eligibleFor: 'CLOSE' });
+    expect(raiseOffer({ ...eligible, canRaise: false }, NOW)).toEqual({ kind: 'locked', target: 'CLOSE' });
+    expect(raiseOffer({ ...link({ effectiveLevel: 'FRIEND' }), canRaise: true }, NOW)).toEqual({ kind: 'available', target: 'CLOSE' });
+    expect(raiseOffer({ ...link({ effectiveLevel: 'BLOOD' }), canRaise: true }, NOW)).toEqual({ kind: 'none' });
+    expect(raiseOffer(eligible, NOW)).toEqual({ kind: 'available', target: 'CLOSE' });
+  });
+});

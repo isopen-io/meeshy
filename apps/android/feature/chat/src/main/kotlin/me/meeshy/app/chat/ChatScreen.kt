@@ -41,6 +41,8 @@ import me.meeshy.ui.component.bubble.LocalBubbleContactCardAccounts
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.app.chat.appearance.rememberConversationAppearance
+import me.meeshy.ui.component.bubble.BubbleSkin
+import me.meeshy.ui.component.bubble.LocalBubbleSkin
 import me.meeshy.sdk.model.composer.ComposerAttachmentLimits
 
 /**
@@ -165,6 +167,7 @@ fun ChatScreen(
         LocalBubbleContactCardAccounts provides contactCards,
         LocalChatContactCardScope provides contactCards::underConversation,
         LocalChatSignalClearance provides signalClearance,
+        LocalBubbleSkin provides remember(appearance.personalAccentHex) { BubbleSkin.of(appearance.personalAccentHex) },
     ) {
     ChatBackgroundHost(appearance) {
         // L'en-tête est une bande FLOTTANTE posée au-dessus du fil (iOS : ZStack, zIndex 100) :

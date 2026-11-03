@@ -64,6 +64,7 @@ class SettingsViewModelRegionalLanguageTest {
             themeStore = InMemoryThemeStore(),
             interfaceLanguageStore = InMemoryInterfaceLanguageStore(),
             workManager = workManager,
+            applicationSync = mockk(relaxed = true),
         )
     }
 
@@ -156,6 +157,7 @@ class SettingsViewModelRegionalLanguageTest {
             themeStore = InMemoryThemeStore(),
             interfaceLanguageStore = InMemoryInterfaceLanguageStore(),
             workManager = mockk(relaxed = true),
+            applicationSync = mockk(relaxed = true),
         )
         advanceUntilIdle()
 
