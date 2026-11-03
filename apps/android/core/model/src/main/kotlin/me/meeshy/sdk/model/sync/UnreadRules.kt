@@ -10,7 +10,7 @@ public data class OpenConversations(
     private val openOrder: List<String> = emptyList(),
     private val toRestoreOnClose: Map<String, Int> = emptyMap(),
 ) {
-    /** Résultat d'une fermeture : [closed] vrai à la dernière fenêtre, [restore] le décompte à rendre. */
+    /** Résultat d'une fermeture : [closed] vrai à la dernière fenêtre, [restore] le reste réel noté (null : le compte servi demeure). */
     public data class Closing(val next: OpenConversations, val closed: Boolean, val restore: Int?)
 
     public val ids: Set<String> get() = openCounts.keys
@@ -20,12 +20,11 @@ public data class OpenConversations(
 
     public fun isOpen(conversationId: String): Boolean = conversationId in openCounts
 
-    /** Ouvre une fenêtre sur [conversationId] ; [currentUnread] est le décompte à rendre à la fermeture. */
-    public fun open(conversationId: String, currentUnread: Int): OpenConversations {
+    /** Ouvre une fenêtre sur [conversationId]. Ouvrir n'est pas lire : rien n'est écrit dans le décompte. */
+    public fun open(conversationId: String): OpenConversations {
         val count = openCounts[conversationId] ?: 0
         val order = openOrder.filter { it != conversationId } + conversationId
-        val restore = if (count == 0) toRestoreOnClose + (conversationId to currentUnread.coerceAtLeast(0)) else toRestoreOnClose
-        return copy(openCounts = openCounts + (conversationId to count + 1), openOrder = order, toRestoreOnClose = restore)
+        return copy(openCounts = openCounts + (conversationId to count + 1), openOrder = order)
     }
 
     public fun close(conversationId: String): Closing {

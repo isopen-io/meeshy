@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model.chrome
 
+import me.meeshy.sdk.model.sync.UnreadRules
+
 /**
  * Le registre pur des non-lus par conversation (miroir de `NotificationCoordinator` iOS).
  *
@@ -15,7 +17,7 @@ public data class UnreadRegistry(
     public val isEmpty: Boolean get() = counts.isEmpty()
 
     public val total: Int
-        get() = counts.entries.sumOf { (id, count) -> if (id == openConversationId) 0 else count }
+        get() = UnreadRules.totalConversationsUnread(counts, setOfNotNull(openConversationId))
 
     public fun applyServer(conversationId: String, count: Int): UnreadRegistry {
         if (conversationId.isBlank()) return this
