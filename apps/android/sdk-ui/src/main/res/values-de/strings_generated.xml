@@ -112,6 +112,10 @@
     <string name="bubble_story_citation_unavailable">Story nicht verfügbar</string>
     <string name="bubble_translated">Übersetzt</string>
     <string name="capture_microphone_denied">Mikrofon verweigert — das Video bleibt stumm. Zum Öffnen der Einstellungen tippen</string>
+    <string name="code_viewer_load_error">Datei konnte nicht geladen werden</string>
+    <string name="code_viewer_loading">Laden...</string>
+    <string name="code_viewer_loading_file">Datei wird geladen...</string>
+    <string name="code_viewer_more_lines">%1$d weitere Zeilen</string>
     <string name="common_cancel">Abbrechen</string>
     <string name="common_clearSearch">Suche löschen</string>
     <string name="common_close">Schließen</string>

@@ -120,6 +120,10 @@
     <string name="bubble_story_citation_unavailable">القصة غير متاحة</string>
     <string name="bubble_translated">مترجم</string>
     <string name="capture_microphone_denied">تم رفض الميكروفون — سيكون الفيديو صامتًا. اضغط لفتح الإعدادات</string>
+    <string name="code_viewer_load_error">تعذّر تحميل الملف</string>
+    <string name="code_viewer_loading">جارٍ التحميل...</string>
+    <string name="code_viewer_loading_file">جارٍ تحميل الملف...</string>
+    <string name="code_viewer_more_lines">%1$d أسطر إضافية</string>
     <string name="common_cancel">إلغاء</string>
     <string name="common_clearSearch">مسح البحث</string>
     <string name="common_close">إغلاق</string>
