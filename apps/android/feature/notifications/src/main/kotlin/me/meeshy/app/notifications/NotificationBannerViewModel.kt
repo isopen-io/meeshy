@@ -63,8 +63,7 @@ data class InAppBanner(
  *
  * Quatre responsabilités, et une seule est à ce ViewModel :
  * - la DÉCISION appartient à [NotificationToastPolicy], qui est pure et testée ;
- * - le DÉDOUBLONNAGE appartient à [ToastDedupWindow], pure et testée aussi — la MÊME fenêtre que
- *   l'orchestrateur de toast ([NotificationToastViewModel]), plus une carte re-codée localement ;
+ * - le DÉDOUBLONNAGE appartient à [ToastDedupWindow], pure et testée aussi;
  * - le CADRAGE appartient à [NotificationBannerFraming], pure aussi, miroir des deux autres
  *   clients ;
  * - ce qui reste ici est l'ÉTAT qui vit ENTRE les appels — l'instance courante de la fenêtre de
@@ -92,6 +91,12 @@ class NotificationBannerViewModel @Inject constructor(
     private var activePostId: String? = null
 
     /**
+     * Les conversations OUVERTES dans d'autres fenêtres que la principale (tablette, fenêtres détachées) :
+     * l'ensemble complète [activeConversationId], qui n'en nomme qu'une.
+     */
+    private var otherOpenConversationIds: Set<String> = emptySet()
+
+    /**
      * Les identifiants déjà admis dans la fenêtre de dédoublonnage. Le socket et le push courent
      * pour le même événement : sans cette mémoire, la bannière s'afficherait deux fois. La décision
      * « déjà vu ? » et l'éviction sont le cœur PUR partagé [ToastDedupWindow] — la MÊME source de
@@ -104,8 +109,7 @@ class NotificationBannerViewModel @Inject constructor(
      * L'effacement automatique de la bannière courante. Un travail SÉPARÉ (et non un `delay` en
      * queue de `handle`) pour deux raisons : une bannière qui arrive pendant la fenêtre d'une
      * autre n'attend plus la fin des 4 s de la première (le collecteur reste libre), et une
-     * bannière plus récente annule le minuteur de l'ancienne au lieu d'en hériter — même forme
-     * que [NotificationToastViewModel].
+     * bannière plus récente annule le minuteur de l'ancienne au lieu d'en hériter.
      */
     private var dismissJob: Job? = null
 
@@ -129,20 +133,22 @@ class NotificationBannerViewModel @Inject constructor(
         activeConversationStore.setActive(conversationId)
         activeConversationStore.setActivePost(postId)
         // A banner already on screen for the thread the reader just opened has said its piece —
-        // the reader now sees the content in the fil, so pull it down (iOS
-        // NotificationToastManager.onConversationOpened / onPostOpened). The SAME pure predicate
-        // that silences a FRESH notification for the open thread (NotificationToastPolicy).
+        // the reader now sees the content in the fil, so pull it down. Same predicate as the
+        // policy's: only the OPEN CONVERSATION is an exception; a post/story on screen no longer
+        // silences (nor pulls down) a banner.
         val shown = _banner.value ?: return
-        if (ActiveContextMatch.matches(
-                contentConversationId = shown.conversationId,
-                contentPostId = shown.postId,
-                activeConversationId = conversationId,
-                activePostId = postId,
-            )
-        ) {
-            dismiss()
-        }
+        if (ActiveContextMatch.matchesOpenConversation(shown.conversationId, openConversationIds())) dismiss()
     }
+
+    /** Les conversations ouvertes dans les AUTRES fenêtres (ensemble complet, remplace le précédent). */
+    fun setOpenConversations(conversationIds: Set<String>) {
+        otherOpenConversationIds = conversationIds
+        val shown = _banner.value ?: return
+        if (ActiveContextMatch.matchesOpenConversation(shown.conversationId, openConversationIds())) dismiss()
+    }
+
+    private fun openConversationIds(): Set<String> =
+        otherOpenConversationIds + listOfNotNull(activeConversationId)
 
     /**
      * Toucher la bannière OUVRE son contenu : la notification est consommée (lue en local puis côté
@@ -170,11 +176,9 @@ class NotificationBannerViewModel @Inject constructor(
         val prefs = preferencesStore.preferences.value
         val decision = NotificationToastPolicy.decide(
             notification = notification,
-            activeConversationId = activeConversationId,
-            activePostId = activePostId,
+            openConversationIds = openConversationIds(),
             isDuplicateDelivery = admit.isDuplicate,
             preferences = prefs,
-            now = clock.localDateTime(),
         )
         val shown = (decision as? NotificationToastDecision.Show)?.notification ?: return
 
