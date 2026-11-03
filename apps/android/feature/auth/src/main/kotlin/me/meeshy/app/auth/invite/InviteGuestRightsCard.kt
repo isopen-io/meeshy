@@ -79,7 +79,12 @@ private fun places(terms: ShareLinkInvitationTerms): String {
     else stringResource(R.string.invite_landing_terms_places, remaining, max)
 }
 
-private fun joined(items: List<String>): String = android.icu.text.ListFormatter.getInstance().format(items)
+private fun joined(items: List<String>): String =
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+        android.icu.text.ListFormatter.getInstance().format(items)
+    } else {
+        items.joinToString(", ")
+    }
 
 @Composable
 private fun RightRow(row: InviteRightRow, isDark: Boolean) {
