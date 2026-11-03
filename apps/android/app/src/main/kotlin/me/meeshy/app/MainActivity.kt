@@ -369,7 +369,7 @@ private fun LocalizedContent(
     languageCode: String?,
     content: @androidx.compose.runtime.Composable () -> Unit,
 ) {
-    val tag = AppLanguage.resolveInterfaceLocaleTag(languageCode)
+    val tag = languageCode?.takeIf(AppLanguage::isShipped)
     val baseContext = LocalContext.current
     val baseConfiguration = LocalConfiguration.current
     val locale = remember(tag) { tag?.let(Locale::forLanguageTag) }
