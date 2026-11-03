@@ -88,6 +88,7 @@ fun MeeshyApp(
     // that entry's store, never this Activity-scoped instance, so the WebRTC session
     // and every collector in [CallViewModel] stay alive while the conversation shows.
     val callViewModel: CallViewModel = hiltViewModel()
+    val deepLinkHost: DeepLinkHostViewModel = hiltViewModel()
     // Ne collecte QUE la reference : les StateFlow eux-memes (badges, avatar) sont
     // lus a l'interieur de [MeeshyFloatingChrome], pas ici — sinon toute variation
     // d'un badge invaliderait TOUT MeeshyApp, y compris le lambda `builder` du
@@ -164,7 +165,7 @@ fun MeeshyApp(
     LaunchedEffect(warmDeepLink, authState.isAuthenticated, authState.hasAccount) {
         val uri = warmDeepLink ?: return@LaunchedEffect
         if (!WarmDeepLink.mayReplay(authState.isAuthenticated, authState.hasAccount, warmDeepLinkAwaitsAccount)) return@LaunchedEffect
-        WarmDeepLink.open(navController, uri)
+        if (!deepLinkHost.open(uri.toString(), navController)) WarmDeepLink.open(navController, uri)
         onWarmDeepLinkHandled()
     }
 
