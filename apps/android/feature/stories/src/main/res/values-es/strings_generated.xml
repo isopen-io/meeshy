@@ -422,6 +422,7 @@
     <string name="story_tool_texture">Fondo</string>
     <string name="story_tool_timeline">Timeline</string>
     <string name="story_tray_a11y_changeMood">Cambiar mi estado de ánimo</string>
+    <string name="story_tray_a11y_createStory">Crear una story</string>
     <string name="story_tray_menu_profile">Ver el perfil</string>
     <string name="story_tray_menu_viewStories">Ver las stories</string>
     <string name="story_viewer_transcript_title">Transcripción</string>

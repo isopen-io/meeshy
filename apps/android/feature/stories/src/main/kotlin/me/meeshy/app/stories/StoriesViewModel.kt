@@ -31,6 +31,8 @@ data class StoriesUiState(
     val isSyncing: Boolean = false,
     val showSkeleton: Boolean = false,
     val failedPublishes: List<StoryPublishFailures.Item> = emptyList(),
+    /** Au moins une story à moi, active ou expirée : l'appui sur « Moi » mène alors à « Mes stories ». */
+    val hasStoryHistory: Boolean = false,
 )
 
 /**
@@ -92,8 +94,9 @@ class StoriesViewModel @Inject constructor(
                         cached = rawStories,
                         pending = StoryOptimisticTray.pendingStories(pending, self),
                     )
+                    val groups = merged.toStoryGroups(currentUserId = currentUserId)
                     val tray = StoryTrayBuilder.build(
-                        groups = merged.toStoryGroups(currentUserId = currentUserId),
+                        groups = groups,
                         currentUserId = currentUserId,
                         mediaBaseUrl = config.apiBaseUrl,
                         coverOf = { coverMemo.coverUrl(it, currentUserId, coverStore::localPath) },
@@ -105,6 +108,8 @@ class StoriesViewModel @Inject constructor(
                             isSyncing = flags.isSyncing,
                             showSkeleton = flags.showSkeleton,
                             failedPublishes = StoryPublishFailures.from(failed),
+                            hasStoryHistory = currentUserId != null &&
+                                groups.any { g -> g.id == currentUserId && g.stories.isNotEmpty() },
                         )
                     }
                 }
