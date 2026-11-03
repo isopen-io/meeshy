@@ -39,19 +39,19 @@ class ComposerDocumentLawsTest {
     }
 
     @Test
-    fun `at 360 dp the whole row stays reachable - it tightens to its floor then scrolls with a peeking last tile`() {
+    fun `at 360 dp the nine tools tighten to their floor then scroll`() {
         val count = ComposerDocumentToolRow.servedRow(ComposerFormat.POST).size
         val fit = ComposerDocumentToolRow.fit(count, 360f)
-        assertThat(fit.spacingDp).isAtLeast(ComposerDocumentToolRow.MINIMUM_SPACING_DP)
-        assertThat(fit.spacingDp).isAtMost(ComposerDocumentToolRow.NOMINAL_SPACING_DP)
-        if (fit.scrolls) assertThat(fit.lastTilePeeks).isTrue()
+        assertThat(fit.spacingDp).isEqualTo(ComposerDocumentToolRow.MINIMUM_SPACING_DP)
+        assertThat(fit.scrolls).isTrue()
     }
 
     @Test
-    fun `a narrow row scrolls and still shows the start of its last tile`() {
-        val fit = ComposerDocumentToolRow.fit(9, 300f)
+    fun `a scrolling row shows the start of its last tile once the field is wide enough`() {
+        val fit = ComposerDocumentToolRow.fit(9, 402f)
         assertThat(fit.scrolls).isTrue()
         assertThat(fit.lastTilePeeks).isTrue()
+        assertThat(ComposerDocumentToolRow.fit(9, 300f).scrolls).isTrue()
     }
 
     @Test
