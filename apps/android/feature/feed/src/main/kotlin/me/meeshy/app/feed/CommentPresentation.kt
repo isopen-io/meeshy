@@ -6,7 +6,7 @@ import me.meeshy.sdk.model.servedAudioUrl
 import me.meeshy.sdk.model.CommentLikeState
 import me.meeshy.sdk.model.CommentEffects
 import me.meeshy.sdk.model.CommentPieceKind
-import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.CommentVeilRules
 import me.meeshy.sdk.model.MessageEffects
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
@@ -72,7 +72,7 @@ data class CommentPresentation(
     val place: FeedLocationPresentation? = null,
 ) {
     /** Un commentaire flouté se lit sous un voile, en le touchant (iOS `CommentVeilRules`). */
-    val isBlurred: Boolean get() = me.meeshy.sdk.model.CommentVeilRules.isVeiled(effects, isRevealed = false)
+    val isBlurred: Boolean get() = CommentVeilRules.isVeiled(effects, isRevealed = false)
 
     /** Un commentaire sans texte (un vocal, une photo seule) ne rend aucun corps : pas de ligne vide sous l'auteur (#14289). */
     val hasBody: Boolean get() = content.isNotBlank()
