@@ -40,7 +40,7 @@ class ConversationRealtimeRelayTest {
     private fun flow() = MutableSharedFlow<String>(extraBufferCapacity = 64)
 
     @Test
-    fun `un applicateur contribue est appele dans l'ordre d'arrivee`() = runBlocking {
+    fun `un applicateur contribue est appele dans l'ordre d'arrivee`() = runBlocking<Unit> {
         val events = flow()
         val gate = CompletableDeferred<Unit>()
         val relay = relay(applier("a", events, gate = gate))
@@ -53,7 +53,7 @@ class ConversationRealtimeRelayTest {
     }
 
     @Test
-    fun `plusieurs applicateurs partagent la meme voie sans modifier le relais`() = runBlocking {
+    fun `plusieurs applicateurs partagent la meme voie sans modifier le relais`() = runBlocking<Unit> {
         val first = flow()
         val second = flow()
         val relay = relay(applier("a", first), applier("b", second))
@@ -65,7 +65,7 @@ class ConversationRealtimeRelayTest {
     }
 
     @Test
-    fun `apres desarmement plus aucune ecriture`() = runBlocking {
+    fun `apres desarmement plus aucune ecriture`() = runBlocking<Unit> {
         val events = flow()
         val relay = relay(applier("a", events))
         relay.attach()
@@ -75,7 +75,7 @@ class ConversationRealtimeRelayTest {
     }
 
     @Test
-    fun `un applicateur en echec n'empeche pas les autres`() = runBlocking {
+    fun `un applicateur en echec n'empeche pas les autres`() = runBlocking<Unit> {
         val events = flow()
         val broken = object : RealtimeCacheApplier {
             override fun subscribe(registrar: RelayRegistrar) = error("boom")
@@ -88,7 +88,7 @@ class ConversationRealtimeRelayTest {
     }
 
     @Test
-    fun `le re-armement remplace l'ancien abonnement sans doubler les effets`() = runBlocking {
+    fun `le re-armement remplace l'ancien abonnement sans doubler les effets`() = runBlocking<Unit> {
         val events = flow()
         val relay = relay(applier("a", events))
         relay.attach()

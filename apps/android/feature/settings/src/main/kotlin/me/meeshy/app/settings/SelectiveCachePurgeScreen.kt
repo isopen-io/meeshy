@@ -10,11 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckBox
-import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -40,6 +35,7 @@ import me.meeshy.sdk.model.mediacache.CachePurgeReport
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.settings.SettingsCard
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -104,7 +100,7 @@ private fun UnattributedSection(report: CachePurgeReport, included: Boolean, onT
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
         ) {
-            Icon(Icons.Filled.Folder, contentDescription = null, tint = neutral, modifier = Modifier.size(14.dp))
+            Icon(MeeshyIcons.FolderFilled, contentDescription = null, tint = neutral, modifier = Modifier.size(14.dp))
             Text(
                 text = stringResource(R.string.purge_unattributed_title).uppercase(),
                 style = MaterialTheme.typography.labelMedium,
@@ -127,7 +123,7 @@ private fun UnattributedSection(report: CachePurgeReport, included: Boolean, onT
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {
                 Icon(
-                    imageVector = if (included) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
+                    imageVector = if (included) MeeshyIcons.CheckBoxChecked else MeeshyIcons.CheckBoxBlank,
                     contentDescription = null,
                     tint = if (included) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textMuted,
                     modifier = Modifier.size(24.dp),
@@ -199,7 +195,7 @@ private fun CachePurgeActions(state: SelectiveCachePurgeUiState, onEvent: (Selec
             if (state.isPurging) {
                 CircularProgressIndicator(modifier = Modifier.size(16.dp), color = ink, strokeWidth = 2.dp)
             } else {
-                Icon(Icons.Filled.Delete, contentDescription = null, tint = ink, modifier = Modifier.size(18.dp))
+                Icon(MeeshyIcons.DeleteFilled, contentDescription = null, tint = ink, modifier = Modifier.size(18.dp))
             }
             Text(
                 text = title,

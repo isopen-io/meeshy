@@ -59,6 +59,7 @@ import androidx.compose.material.icons.filled.CardGiftcard as FiCardGiftcard
 import androidx.compose.material.icons.filled.CellTower as FiCellTower
 import androidx.compose.material.icons.filled.ChangeHistory as FiChangeHistory
 import androidx.compose.material.icons.filled.Check as FiCheck
+import androidx.compose.material.icons.filled.CheckBox as FiCheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank as FiCheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.CheckCircle as FiCheckCircle
 import androidx.compose.material.icons.filled.Close as FiClose
@@ -380,6 +381,7 @@ public object MeeshyIcons {
     public val ChartBar: ImageVector get() = Icons.Filled.FiBarChart
     public val Check: ImageVector get() = Icons.Filled.FiCheck
     public val CheckBoxBlank: ImageVector get() = Icons.Filled.FiCheckBoxOutlineBlank
+    public val CheckBoxChecked: ImageVector get() = Icons.Filled.FiCheckBox
     public val CheckCircle: ImageVector get() = Icons.Outlined.OuCheckCircle
     public val CheckCircleFilled: ImageVector get() = Icons.Filled.FiCheckCircle
     public val ChevronDown: ImageVector get() = Icons.Filled.FiKeyboardArrowDown
