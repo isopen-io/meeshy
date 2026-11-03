@@ -2538,9 +2538,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Install Trivy
+        uses: ./.github/actions/installer-trivy
+
       - name: Run Trivy
         uses: aquasecurity/trivy-action@master
         with:
+          skip-setup-trivy: true
           scan-type: 'fs'
           scan-ref: '.'
           format: 'sarif'
