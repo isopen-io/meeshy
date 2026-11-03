@@ -45,6 +45,7 @@ class OutboxKindDiskValuesLockTest {
         "CREATE_CONVERSATION",
         "UPDATE_CONVERSATION",
         "SETTINGS_ACTION",
+        "REACT_STORY",
     )
 
     @Test

@@ -29,6 +29,15 @@ data class StoryReactionState(
         else StoryReactionState(count = count + 1, mine = mine + emoji)
 
     /**
+     * Rolls back EXACTLY the optimistic tap of [emoji] after a server refusal: that one count and that one mark leave,
+     * while every realtime delta that landed since the tap (other viewers' reactions) is kept. Inert when [emoji] is not
+     * in [mine] (the tap was already withdrawn, or never counted).
+     */
+    fun withdrawnLocally(emoji: String): StoryReactionState =
+        if (emoji !in mine) this
+        else StoryReactionState(count = (count - 1).coerceAtLeast(0), mine = mine - emoji)
+
+    /**
      * Reconcile a realtime `story:reacted`/`story:unreacted` delta.
      * @param isOwn whether the acting user is the current user.
      */

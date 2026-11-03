@@ -58,6 +58,8 @@ import me.meeshy.sdk.model.story.StoryViewerContentRules
 import me.meeshy.sdk.model.story.StoryRepostFailure
 import me.meeshy.sdk.story.StoryDirectRepostOutcome
 import me.meeshy.sdk.story.StoryRepository
+import me.meeshy.sdk.story.StoryReactionDelivery
+import me.meeshy.sdk.story.StoryReactionPublisher
 import me.meeshy.sdk.story.StoryRepostPublisher
 import me.meeshy.sdk.story.purgingDeadStories
 import me.meeshy.sdk.story.toStoryGroups
@@ -82,6 +84,7 @@ class StoryViewerViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val gameMoment: GameMomentPresence = GameMomentPresence(),
     private val repostPublisher: StoryRepostPublisher = storyRepository.asRepostPublisher(),
+    private val reactionPublisher: StoryReactionPublisher = storyRepository.asReactionPublisher(),
 ) : ViewModel() {
 
     private val userId: String = savedStateHandle.get<String>(USER_ID_ARG).orEmpty()
@@ -562,9 +565,9 @@ class StoryViewerViewModel @Inject constructor(
     }
 
     /**
-     * Quick-strip reaction on the current slide. The count moves optimistically;
-     * a repeat of the same emoji is inert (no network); a network failure rolls
-     * back to the snapshot so the UI never shows a phantom reaction.
+     * Quick-strip reaction on the current slide. The count moves optimistically; a repeat of the same emoji is inert
+     * (no network). A transport failure keeps the heart lit (the reaction waits in the outbox); a server refusal takes
+     * back exactly this tap on the story it was made on, and says why.
      */
     fun react(emoji: String) {
         val slide = playback.currentSlide ?: return
@@ -575,14 +578,17 @@ class StoryViewerViewModel @Inject constructor(
         reactionStates[slideId] = optimistic
         emit()
         viewModelScope.launch {
-            try {
-                if (storyRepository.react(slideId, emoji) is NetworkResult.Failure) {
-                    rollback(slideId, snapshot)
-                }
+            val delivery = try {
+                reactionPublisher.publish(slideId, emoji)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                rollback(slideId, snapshot)
+                StoryReactionDelivery.Refused(httpStatus = null, limitReached = false)
+            }
+            val recovery = StoryReactionRecovery.decide(delivery) as? StoryReactionRecovery.Rollback ?: return@launch
+            withdrawReaction(slideId, emoji)
+            if (playback.currentSlide?.id == slideId) {
+                toastChannel.trySend(FeedbackToastRequest(recovery.messageRes, FeedbackKind.Error))
             }
         }
     }
@@ -616,8 +622,9 @@ class StoryViewerViewModel @Inject constructor(
         }
     }
 
-    private fun rollback(slideId: String, snapshot: StoryReactionState) {
-        reactionStates[slideId] = snapshot
+    private fun withdrawReaction(slideId: String, emoji: String) {
+        val current = reactionStates[slideId] ?: return
+        reactionStates[slideId] = current.withdrawnLocally(emoji)
         emit()
     }
 

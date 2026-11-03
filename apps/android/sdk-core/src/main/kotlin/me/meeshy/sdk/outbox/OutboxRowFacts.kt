@@ -42,6 +42,7 @@ public object OutboxRowFacts {
         OutboxKind.RESPOND_FRIEND_REQUEST -> other("respondFriendRequest")
         OutboxKind.CREATE_POST -> other("createPost")
         OutboxKind.REPOST_POST -> other("repostPost")
+        OutboxKind.REACT_STORY -> OutboxPillFacts(OutboxUiKind.POST_REACTION)
         OutboxKind.CREATE_CONVERSATION -> other("createConversation")
         OutboxKind.UPDATE_CONVERSATION -> other("updateConversation")
         OutboxKind.SETTINGS_ACTION -> other("updateSettings")

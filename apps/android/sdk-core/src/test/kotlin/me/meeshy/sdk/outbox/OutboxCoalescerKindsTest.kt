@@ -137,3 +137,27 @@ class OutboxCoalescerKindsTest {
         assertThat(OutboxLocalTargets.isHeld(row("k1", OutboxKind.CREATE_CONVERSATION, "pending_abc"))).isFalse()
     }
 }
+
+class OutboxCoalescerStoryReactionTest {
+
+    private fun pending(cmid: String, emoji: String, target: String = "s1") =
+        row(cmid, OutboxKind.REACT_STORY, target, """{"emoji":"$emoji"}""")
+
+    @Test
+    fun `the same emoji queued twice on a story is one write, the latest`() {
+        val incoming = pending("r2", "🔥")
+
+        val decision = OutboxCoalescer.decide(incoming, listOf(pending("r1", "🔥")))
+
+        assertThat(decision).isEqualTo(CoalesceDecision.Replace(listOf("r1"), incoming))
+    }
+
+    @Test
+    fun `another emoji or another story queues its own row`() {
+        val incoming = pending("r2", "❤️")
+
+        assertThat(OutboxCoalescer.decide(incoming, listOf(pending("r1", "🔥")))).isEqualTo(CoalesceDecision.Enqueue(incoming))
+        assertThat(OutboxCoalescer.decide(pending("r3", "🔥", "s2"), listOf(pending("r1", "🔥"))))
+            .isEqualTo(CoalesceDecision.Enqueue(pending("r3", "🔥", "s2")))
+    }
+}

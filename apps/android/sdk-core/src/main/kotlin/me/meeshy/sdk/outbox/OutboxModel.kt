@@ -52,6 +52,9 @@ public enum class OutboxKind {
 
     /** Un réglage de compte générique (endpoint, méthode, corps) (#15179) : FIFO entre endpoints, fusion par couple. */
     SETTINGS_ACTION,
+
+    /** Une réaction de story posée hors ligne : l'emoji affiché reste vrai, il part au retour du réseau. */
+    REACT_STORY,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -183,6 +186,7 @@ public object OutboxLaneMap {
         OutboxKind.BOOKMARK_POST,
         OutboxKind.UNBOOKMARK_POST,
         OutboxKind.REPOST_POST,
+        OutboxKind.REACT_STORY,
         -> OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL)
 
         OutboxKind.REPORT_ATTACHMENT_STATUS -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA_STATUS)
@@ -309,6 +313,13 @@ public data class CommentPayload(
  */
 @kotlinx.serialization.Serializable
 public data class RepostPayload(val targetType: String, val content: String? = null, val isQuote: Boolean = false)
+
+/**
+ * Payload of a `REACT_STORY` outbox row. The row's `targetId` is the story (a server id: the route `POST /posts/:id/like`),
+ * so two taps of the same emoji on the same story coalesce into one row.
+ */
+@kotlinx.serialization.Serializable
+public data class StoryReactionPayload(val emoji: String)
 
 /**
  * Payload of a `PIN_MESSAGE` / `UNPIN_MESSAGE` outbox row. The row's `targetId`

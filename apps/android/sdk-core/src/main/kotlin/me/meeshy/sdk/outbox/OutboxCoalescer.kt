@@ -85,6 +85,7 @@ public object OutboxCoalescer {
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_AUDIO_SETTINGS)
             OutboxKind.UPDATE_APPLICATION_SETTINGS ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_APPLICATION_SETTINGS)
+            OutboxKind.REACT_STORY -> replaceSameStoryEmoji(incoming, sameTarget)
             OutboxKind.ADD_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.REMOVE_REACTION)
             OutboxKind.REMOVE_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.ADD_REACTION)
             OutboxKind.BLOCK_USER -> terminalToggle(incoming, sameTarget, OutboxKind.UNBLOCK_USER, OutboxKind.BLOCK_USER)
@@ -205,6 +206,15 @@ public object OutboxCoalescer {
 
     private fun decodePrefs(payload: String): ConversationPrefsPayload? =
         runCatching { MeeshyApi.json.decodeFromString(ConversationPrefsPayload.serializer(), payload) }.getOrNull()
+
+    /** La même réaction de story deux fois en file est UNE écriture : la dernière remplace la première. */
+    private fun replaceSameStoryEmoji(incoming: OutboxEntity, sameTarget: List<OutboxEntity>): CoalesceDecision {
+        val emoji = parseObject(incoming.payload)?.get("emoji") ?: return CoalesceDecision.Enqueue(incoming)
+        val superseded = sameTarget
+            .filter { it.kindEnum == OutboxKind.REACT_STORY && parseObject(it.payload)?.get("emoji") == emoji }
+            .map { it.cmid }
+        return if (superseded.isEmpty()) CoalesceDecision.Enqueue(incoming) else CoalesceDecision.Replace(superseded, incoming)
+    }
 
     private fun annihilateOpposite(
         incoming: OutboxEntity,

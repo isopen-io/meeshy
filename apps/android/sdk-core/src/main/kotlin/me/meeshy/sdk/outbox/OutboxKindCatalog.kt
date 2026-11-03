@@ -64,6 +64,7 @@ public object OutboxKindCatalog {
         OutboxKind.CREATE_CONVERSATION,
         OutboxKind.UPDATE_CONVERSATION,
         OutboxKind.SETTINGS_ACTION,
+        OutboxKind.REACT_STORY,
         -> true
     }
 
@@ -86,6 +87,7 @@ public object OutboxKindCatalog {
         OutboxKind.UNLIKE_POST,
         OutboxKind.BOOKMARK_POST,
         OutboxKind.UNBOOKMARK_POST,
+        OutboxKind.REACT_STORY,
         -> true
         OutboxKind.SEND_MESSAGE,
         OutboxKind.SEND_E2EE_MESSAGE,
