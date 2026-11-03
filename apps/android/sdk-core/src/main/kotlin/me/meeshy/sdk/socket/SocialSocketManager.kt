@@ -36,11 +36,19 @@ import me.meeshy.sdk.model.SocketStatusUpdatedData
 import me.meeshy.sdk.model.SocketStatusDeletedData
 import me.meeshy.sdk.model.SocketStatusReactedData
 import me.meeshy.sdk.model.SocketStatusUnreactedData
+import me.meeshy.sdk.model.ConversationDeletedSocketEvent
+import me.meeshy.sdk.model.social.PostRoomRefCount
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -95,6 +103,18 @@ class SocialSocketManager @Inject constructor(
     private val _statusDeleted = SocketInboundRoute.subject<SocketStatusDeletedData>()
     private val _statusReacted = SocketInboundRoute.subject<SocketStatusReactedData>()
     private val _statusUnreacted = SocketInboundRoute.subject<SocketStatusUnreactedData>()
+    private val _conversationDeleted = SocketInboundRoute.subject<ConversationDeletedSocketEvent>()
+
+    private val lock = Any()
+    private var postRooms = PostRoomRefCount()
+    private var feedSubscribed = false
+    private var replayScope: CoroutineScope? = null
+
+    /**
+     * `conversation:deleted` / `:closed` / `:obsoleted` : la passerelle émet `closed` pour une suppression douce et
+     * `deleted` pour une dure ; le cache social les lit sans savoir lequel est parti (miroir d'iOS `conversationDeleted`).
+     */
+    val conversationDeleted: SharedFlow<ConversationDeletedSocketEvent> = _conversationDeleted.exposed()
 
     val postCreated: SharedFlow<SocketPostCreatedData> = _postCreated.exposed()
 
@@ -218,6 +238,42 @@ class SocialSocketManager @Inject constructor(
 
     fun attach() {
         router.install(routes())
+        startReplay()
+    }
+
+    /** À chaque connexion (première ou reconnexion) : le serveur a oublié nos salles, la mémoire du client les rejoue. */
+    private fun startReplay() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        synchronized(lock) {
+            replayScope?.cancel()
+            replayScope = scope
+        }
+        scope.launch {
+            try {
+                socketManager.connected.collect { replaySubscriptions() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (@Suppress("TooGenericExceptionCaught") failure: Exception) {
+                Timber.w(failure, "SocialSocket: rejeu des abonnements en échec")
+            }
+        }
+    }
+
+    private fun replaySubscriptions() {
+        val (feed, rooms) = synchronized(lock) { feedSubscribed to postRooms.toRejoin() }
+        if (feed) socketManager.emit(SocketEventNames.FEED_SUBSCRIBE, JSONObject())
+        rooms.forEach { socketManager.emit(SocketEventNames.POST_JOIN, JSONObject().put("postId", it)) }
+    }
+
+    /** S'abonne au fil (`feed:subscribe`), rejoué à chaque reconnexion sur la socket unique. */
+    fun subscribeFeed() {
+        synchronized(lock) { feedSubscribed = true }
+        socketManager.emit(SocketEventNames.FEED_SUBSCRIBE, JSONObject())
+    }
+
+    fun unsubscribeFeed() {
+        synchronized(lock) { feedSubscribed = false }
+        socketManager.emit(SocketEventNames.FEED_UNSUBSCRIBE, JSONObject())
     }
 
     private fun routes(): List<SocketInboundRoute> = buildList {
@@ -254,6 +310,9 @@ class SocialSocketManager @Inject constructor(
         route(SocketEventNames.STATUS_DELETED, _statusDeleted)
         route(SocketEventNames.STATUS_REACTED, _statusReacted)
         route(SocketEventNames.STATUS_UNREACTED, _statusUnreacted)
+        route(SocketEventNames.CONVERSATION_DELETED, _conversationDeleted)
+        route(SocketEventNames.CONVERSATION_CLOSED, _conversationDeleted)
+        route(SocketEventNames.CONVERSATION_OBSOLETED, _conversationDeleted)
     }
 
     /**
@@ -262,7 +321,8 @@ class SocialSocketManager @Inject constructor(
      * post the viewer isn't otherwise implicitly subscribed to via a friend's feed room.
      */
     fun joinPostRoom(postId: String) {
-        socketManager.emit(SocketEventNames.POST_JOIN, JSONObject().put("postId", postId))
+        val step = synchronized(lock) { postRooms.join(postId).also { postRooms = it.next } }
+        if (step.emit) socketManager.emit(SocketEventNames.POST_JOIN, JSONObject().put("postId", postId))
     }
 
     /**
@@ -285,7 +345,8 @@ class SocialSocketManager @Inject constructor(
 
     /** Leaves the post-detail realtime room — pairs with [joinPostRoom]. */
     fun leavePostRoom(postId: String) {
-        socketManager.emit(SocketEventNames.POST_LEAVE, JSONObject().put("postId", postId))
+        val step = synchronized(lock) { postRooms.leave(postId).also { postRooms = it.next } }
+        if (step.emit) socketManager.emit(SocketEventNames.POST_LEAVE, JSONObject().put("postId", postId))
     }
 
     private inline fun <reified T> MutableList<SocketInboundRoute>.route(event: String, subject: RouteSubject<T>) {
