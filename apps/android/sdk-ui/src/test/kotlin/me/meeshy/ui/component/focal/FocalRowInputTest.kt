@@ -58,7 +58,7 @@ class FocalRowInputTest {
         val offenders = FocalRowInput::class.java.declaredFields
             .filter { !it.isSynthetic && !java.lang.reflect.Modifier.isStatic(it.modifiers) }
             .map { it.type }
-            .filter { kotlin.jvm.functions.Function::class.java.isAssignableFrom(it) || it.name.contains("Flow") }
+            .filter { Function::class.java.isAssignableFrom(it) || it.name.contains("Flow") }
         assertThat(offenders).isEmpty()
     }
 }
