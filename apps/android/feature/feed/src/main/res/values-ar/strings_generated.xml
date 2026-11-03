@@ -168,6 +168,9 @@
     <string name="mood_spotlight_reply_sent">تم إرسال الرد</string>
     <string name="mood_spotlight_unavailable">لم يعد هذا المزاج متاحًا</string>
     <string name="nearby_back">رجوع</string>
+    <string name="nearby_denied_action">فتح الإعدادات</string>
+    <string name="nearby_denied_detail">لا يمكن لـ Meeshy الوصول إلى موقعك. اسمح بذلك من الإعدادات، أو حرّك الخريطة يدويًا.</string>
+    <string name="nearby_denied_title">الموقع غير مسموح به</string>
     <string name="nearby_retry">إعادة المحاولة</string>
     <string name="nearby_title">بالقرب مني</string>
     <string name="post_bookmark_removed">تمت الإزالة من المفضلة</string>

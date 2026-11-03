@@ -685,17 +685,20 @@
         {
           "catalog": "app",
           "iosKey": "feed.nearby.empty.denied.action",
-          "status": "disabled"
+          "androidName": "nearby_denied_action",
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "feed.nearby.empty.denied.detail",
-          "status": "disabled"
+          "androidName": "nearby_denied_detail",
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "feed.nearby.empty.denied.title",
-          "status": "disabled"
+          "androidName": "nearby_denied_title",
+          "status": "adopted"
         }
       ]
     }

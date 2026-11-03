@@ -36,6 +36,7 @@ data class NearbyUiState(
     val hasMore: Boolean = true,
     val hasLocation: Boolean = false,
     val permissionDenied: Boolean = false,
+    val awaitingAccess: Boolean = false,
     val locationUnavailable: Boolean = false,
     val errorMessage: String? = null,
 )
@@ -80,6 +81,7 @@ class NearbyViewModel @Inject constructor(
                 isLocating = false,
                 error = null,
                 permissionDenied = false,
+                awaitingAccess = false,
                 locationUnavailable = false,
             )
         }
@@ -91,7 +93,12 @@ class NearbyViewModel @Inject constructor(
      * GPS/network fix itself in flight). Cleared once that attempt resolves, via
      * [loadNearby], [onPermissionDenied] or [onLocationUnavailable].
      */
-    fun onLocating() = status.update { it.copy(isLocating = true) }
+    fun onLocating() = status.update {
+        it.copy(isLocating = true, awaitingAccess = false, permissionDenied = false, locationUnavailable = false)
+    }
+
+    /** L'écran est ouvert sans accès à la position : rien n'est demandé avant le geste de l'utilisateur. */
+    fun onAwaitingAccess() = status.update { it.copy(awaitingAccess = true, isLocating = false) }
 
     /**
      * Pull-to-refresh: re-query the last known coordinates, no new GPS fix. Re-entrant
@@ -139,7 +146,9 @@ class NearbyViewModel @Inject constructor(
         }
     }
 
-    fun onPermissionDenied() = status.update { it.copy(permissionDenied = true, isLoading = false, isLocating = false) }
+    fun onPermissionDenied() = status.update {
+        it.copy(permissionDenied = true, awaitingAccess = false, isLoading = false, isLocating = false)
+    }
 
     fun onLocationUnavailable() = status.update { it.copy(locationUnavailable = true, isLoading = false, isLocating = false) }
 
@@ -179,6 +188,7 @@ class NearbyViewModel @Inject constructor(
             hasMore = list.hasMore,
             hasLocation = lastLat != null,
             permissionDenied = st.permissionDenied,
+            awaitingAccess = st.awaitingAccess,
             locationUnavailable = st.locationUnavailable,
             errorMessage = st.error,
         )
@@ -196,6 +206,7 @@ private data class NearbyStatus(
     val isLoadingMore: Boolean = false,
     val isLocating: Boolean = false,
     val permissionDenied: Boolean = false,
+    val awaitingAccess: Boolean = false,
     val locationUnavailable: Boolean = false,
     val error: String? = null,
 )

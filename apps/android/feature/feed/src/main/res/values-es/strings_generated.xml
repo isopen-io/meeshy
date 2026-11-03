@@ -147,6 +147,9 @@
     <string name="mood_spotlight_reply_sent">Respuesta enviada</string>
     <string name="mood_spotlight_unavailable">Este estado de ánimo ya no está disponible</string>
     <string name="nearby_back">Atrás</string>
+    <string name="nearby_denied_action">Abrir Ajustes</string>
+    <string name="nearby_denied_detail">Meeshy no tiene acceso a tu ubicación. Permítelo en Ajustes o mueve el mapa manualmente.</string>
+    <string name="nearby_denied_title">Ubicación no autorizada</string>
     <string name="nearby_retry">Reintentar</string>
     <string name="nearby_title">Cerca</string>
     <string name="post_bookmark_removed">Quitado de favoritos</string>
