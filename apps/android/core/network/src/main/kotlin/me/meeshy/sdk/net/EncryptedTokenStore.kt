@@ -1,6 +1,5 @@
 package me.meeshy.sdk.net
 
-import me.meeshy.sdk.model.AuthStorageKeys
 import me.meeshy.sdk.model.security.SecureStore
 
 /**
@@ -63,10 +62,7 @@ class EncryptedTokenStore(
 
     /** Signs the active account out: its tokens and the active pointer go; dormant accounts stay. */
     override fun clear() {
-        store.get(KEY_USER_ID)?.let {
-            vault.remove(it)
-            store.remove(AuthStorageKeys.user(it), it)
-        }
+        store.get(KEY_USER_ID)?.let(vault::remove)
         EncryptedAccountTokenVault.TOKEN_KEYS.forEach { store.remove(it) }
         store.remove(KEY_USER_ID)
     }

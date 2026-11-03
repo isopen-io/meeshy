@@ -55,4 +55,35 @@ class VaultSignedInIdentityStoreTest {
         }
         assertThat(store(legacy = legacy).recall("u1")).isEqualTo(alice)
     }
+
+    private val bob = MeeshyUser(id = "u2", username = "bob", displayName = "Bob")
+
+    @Test
+    fun `forget efface le profil du compte qui part, dans le coffre du profil, et celui-la seulement`() = runBlocking {
+        val profileVault = InMemorySecureStore()
+        val tokens = InMemoryTokenStore(userId = "u1")
+        val identities = store(profileVault, tokens)
+        identities.remember(alice)
+        identities.eventually("u1")
+        AuthProfileVault(profileVault).save(bob)
+
+        identities.forget("u1")
+
+        assertThat(profileVault.get("meeshy_user_u1", "u1")).isNull()
+        assertThat(AuthProfileVault(profileVault).load("u2")).isEqualTo(bob)
+    }
+
+    @Test
+    fun `une ecriture tardive, apres le depart des jetons, ne reecrit pas le profil`() = runBlocking {
+        val profileVault = InMemorySecureStore()
+        val tokens = InMemoryTokenStore(userId = "u1")
+        val identities = store(profileVault, tokens)
+        tokens.userId = null
+
+        identities.remember(alice)
+        identities.forget("u1")
+        delay(300)
+
+        assertThat(AuthProfileVault(profileVault).load("u1")).isNull()
+    }
 }

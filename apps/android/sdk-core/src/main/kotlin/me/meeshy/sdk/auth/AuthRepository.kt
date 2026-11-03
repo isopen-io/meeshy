@@ -452,8 +452,11 @@ class AuthRepository @Inject constructor(
     }
 
     private suspend fun purgeLocalSession() {
+        val leaving = tokenStore.userId?.takeIf { it.isNotBlank() } ?: sessionRepository.currentUserId
         tokenStore.clear()
         sessionRepository.clear()
+        // Le profil gardé dans le coffre survit à la purge des caches : seul le compte qui part l'efface (#14840).
+        leaving?.let { sessionRepository.forgetIdentity(it) }
         // Un seul plan de fermeture (surfaces d'extension d'abord), comme iOS : jetons deja vides, donc widgets et
         // raccourcis se repeignent deconnectes.
         sessionClosing?.closeSession()

@@ -180,4 +180,27 @@ class AuthRepositoryLogoutTest {
         assertThat(order).containsExactly("close", "wipe").inOrder()
         assertThat(tokensWhenClosing).isNull()
     }
+
+    @Test
+    fun `la deconnexion efface le profil gardé du compte qui part, pas celui des autres`() = runTest {
+        val forgotten = mutableListOf<String>()
+        val identities = object : me.meeshy.sdk.session.SignedInIdentityStore {
+            override suspend fun recall(userId: String): MeeshyUser? = null
+            override fun remember(user: MeeshyUser) = Unit
+            override suspend fun forget(userId: String) {
+                forgotten += userId
+            }
+        }
+        val store = InMemoryTokenStore(jwt = "jwt-a", sessionToken = "sess-a", userId = "A")
+        val api = mockk<AuthApi>().apply { coEvery { logout(any(), any()) } returns ApiResponse(success = true) }
+        val session = SessionRepository(
+            api, store, me.meeshy.sdk.net.SessionTransitionFlags(),
+            me.meeshy.sdk.session.PendingProfileEdits.NONE, identities,
+        )
+        val repository = AuthRepository(api, store, session, RecordingTeardown(), SyncSeqTracker())
+
+        repository.logout()
+
+        assertThat(forgotten).containsExactly("A")
+    }
 }

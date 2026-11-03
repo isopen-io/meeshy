@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import me.meeshy.core.datastore.SecretVault
 import me.meeshy.sdk.model.MeeshyUser
@@ -34,9 +36,10 @@ class VaultSignedInIdentityStore(
 ) : SignedInIdentityStore {
 
     private val pending = Channel<MeeshyUser>(Channel.CONFLATED)
+    private val vaultAccess = Mutex()
 
     init {
-        scope.launch { for (user in pending) write(user) }
+        scope.launch { for (user in pending) vaultAccess.withLock { write(user) } }
     }
 
     override suspend fun recall(userId: String): MeeshyUser? {
@@ -52,6 +55,15 @@ class VaultSignedInIdentityStore(
 
     override fun remember(user: MeeshyUser) {
         pending.trySend(user)
+    }
+
+    /**
+     * Efface le profil de [userId] du coffre où il est écrit. Appelée APRÈS que les jetons ont quitté ce compte : une
+     * écriture en cours finit d'abord (verrou), puis l'effacement passe ; toute écriture suivante voit un compte qui n'est
+     * plus celui des jetons et ne revient pas. Le profil des autres comptes n'est pas touché.
+     */
+    override suspend fun forget(userId: String) {
+        withContext(Dispatchers.IO) { vaultAccess.withLock { vault.clear(userId) } }
     }
 
     private fun write(user: MeeshyUser) {
