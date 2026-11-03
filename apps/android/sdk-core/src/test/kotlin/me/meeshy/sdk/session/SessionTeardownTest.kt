@@ -72,6 +72,7 @@ class SessionTeardownTest {
         perAccountCaches: Set<PerAccountCache> = emptySet(),
         guestSessions: AnonymousSessionStore? = null,
         feedbackToasts: me.meeshy.sdk.feedback.FeedbackToastCenter? = null,
+        lostSends: LostSendsNotifier? = null,
     ) = DefaultSessionTeardown(
         db,
         categoryStore,
@@ -85,7 +86,13 @@ class SessionTeardownTest {
         perAccountCaches,
         guestSessions,
         feedbackToasts = feedbackToasts,
+        lostSends = lostSends,
     )
+
+    private fun pendingSend() = OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1")
+
+    private fun notifier(toasts: me.meeshy.sdk.feedback.FeedbackToastCenter) =
+        LostSendsNotifier(toasts) { count -> "perdus:$count" }
 
     private class RecordingCache(private val failure: Exception? = null) : PerAccountCache {
         var clears = 0
@@ -375,5 +382,38 @@ class SessionTeardownTest {
         teardown(perAccountCaches = setOf(registry)).wipe()
 
         assertThat(store.load("k")).isEqualTo(me.meeshy.sdk.cache.CacheResult.Empty)
+    }
+
+    @Test
+    fun wipeAfterServerInvalidation_withPendingSendsWarnsOfTheLoss() = runTest {
+        val toasts = me.meeshy.sdk.feedback.FeedbackToastCenter()
+        outboxRepository.enqueue(pendingSend())
+
+        teardown(lostSends = notifier(toasts)).wipeAfterServerInvalidation()
+
+        assertThat(toasts.current.value?.message).isEqualTo("perdus:1")
+        assertThat(outboxRepository.observeAll().first()).isEmpty()
+    }
+
+    @Test
+    fun wipeAfterServerInvalidation_withAnEmptyQueueStaysSilentButStillPurges() = runTest {
+        val toasts = me.meeshy.sdk.feedback.FeedbackToastCenter()
+        val cache = RecordingCache()
+
+        teardown(lostSends = notifier(toasts), perAccountCaches = setOf(cache)).wipeAfterServerInvalidation()
+
+        assertThat(toasts.current.value).isNull()
+        assertThat(cache.clears).isEqualTo(1)
+    }
+
+    @Test
+    fun voluntaryWipe_neverWarnsEvenWithPendingSends() = runTest {
+        val toasts = me.meeshy.sdk.feedback.FeedbackToastCenter()
+        outboxRepository.enqueue(pendingSend())
+
+        teardown(lostSends = notifier(toasts)).wipe()
+
+        assertThat(toasts.current.value).isNull()
+        assertThat(outboxRepository.observeAll().first()).isEmpty()
     }
 }
