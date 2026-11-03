@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.media
 
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -41,16 +42,16 @@ public object TusMetadataBudget {
 
     // Clés triées, comme iOS (`.sortedKeys`) : une même transcription donne la même empreinte de clé de reprise.
     private fun json(t: TusTranscription): String = JsonObject(
-        linkedMapOf(
-            "confidence" to (t.confidence?.let(::JsonPrimitive) ?: JsonNull),
-            "durationMs" to (t.durationMs?.let(::JsonPrimitive) ?: JsonNull),
+        linkedMapOf<String, JsonElement>(
+            "confidence" to (t.confidence?.let { JsonPrimitive(it) } ?: JsonNull),
+            "durationMs" to (t.durationMs?.let { JsonPrimitive(it) } ?: JsonNull),
             "language" to JsonPrimitive(t.language),
             "segments" to (
                 t.segments?.let { list ->
                     JsonArray(
                         list.map {
                             JsonObject(
-                                linkedMapOf(
+                                linkedMapOf<String, JsonElement>(
                                     "endMs" to JsonPrimitive(it.endMs),
                                     "startMs" to JsonPrimitive(it.startMs),
                                     "text" to JsonPrimitive(it.text),
