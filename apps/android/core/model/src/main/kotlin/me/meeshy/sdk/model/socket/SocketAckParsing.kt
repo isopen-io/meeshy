@@ -28,7 +28,7 @@ object SocketAckParsing {
 
     fun parse(response: JsonObject?, source: SocketAckPayloadSource = SocketAckPayloadSource.AUTO): SocketAck<JsonObject> {
         response ?: return SocketAck.Timeout
-        if ((response["success"] as? JsonPrimitive)?.booleanOrNull != true) {
+        if (!response.isSuccess()) {
             return SocketAck.Refused(refusal(response))
         }
         val payload = when (source) {
@@ -55,6 +55,8 @@ object SocketAckParsing {
             endReason = errorObject?.string("endReason"),
         )
     }
+
+    private fun JsonObject.isSuccess(): Boolean = (this["success"] as? JsonPrimitive)?.let { !it.isString && it.booleanOrNull == true } == true
 
     private fun seconds(raw: Double): Int? = raw.takeIf { it.isFinite() }?.let { kotlin.math.ceil(it).toInt() }
 
