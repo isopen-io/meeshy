@@ -134,6 +134,7 @@ data class CallMediaTogglePayload(
 data class CallErrorPayload(
     val code: String? = null,
     val message: String? = null,
+    val callId: String? = null,
 )
 
 /** `call:already-answered` — one of the user's OTHER devices took the call. */

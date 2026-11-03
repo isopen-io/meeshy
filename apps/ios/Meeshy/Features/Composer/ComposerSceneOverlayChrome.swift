@@ -6,7 +6,8 @@ import MeeshyUI
 ///
 /// ✕ en haut à gauche, la rangée des diapos au centre dès deux diapos, ↶ ↷ en
 /// haut à droite seulement avec un historique, puis la colonne des boutons
-/// ronds sous ↶ ↷ — elle défile quand elle dépasse la hauteur (#14050). Ce chrome est de l'éditeur : il n'entre ni dans l'export,
+/// ronds sous ↶ ↷ — ses outils défilent quand elle dépasse la hauteur (#14050),
+/// son pied jamais (#14622). Ce chrome est de l'éditeur : il n'entre ni dans l'export,
 /// ni dans la capture du player, ni dans la vignette, et un toucher qui le vise
 /// n'atteint jamais le canvas. Hors de ses boutons, la scène garde ses gestes.
 struct ComposerSceneOverlayChrome: View {
@@ -36,6 +37,9 @@ struct ComposerSceneOverlayChrome: View {
     /// Le niveau du haut du rail d'édition (#13957, #13974, R6) : il prend la
     /// place de la colonne des outils, jamais une barre en plus.
     var selection: ComposerSelectionColumn?
+    /// L'écart entre le bord de l'écran et celui de la scène, quand elle prend
+    /// toute la HAUTEUR et laisse une marge de chaque côté (iPhone SE).
+    var sceneSideInset: CGFloat = 0
 
     @State private var press = ComposerRailDoorPress()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -64,6 +68,7 @@ struct ComposerSceneOverlayChrome: View {
         .animation(ComposerSelectionChrome.transition(reduceMotion: reduceMotion),
                    value: ComposerRestChrome.selectionColumnIsShown(state))
         .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.horizontal, max(0, sceneSideInset))
         .padding(.top, MeeshySpacing.xs)
     }
 
@@ -94,18 +99,36 @@ struct ComposerSceneOverlayChrome: View {
         }
     }
 
+    /// Le pied — « Texte du post », ⋯, puis Coller quand le presse-papiers
+    /// porte quelque chose — ne défile jamais (#14622) : ce sont les outils
+    /// au-dessus de lui qui défilent, et leur bord le dit par un fondu.
     private var toolColumn: some View {
-        ViewThatFits(in: .vertical) {
-            toolButtons
-            ScrollView(.vertical, showsIndicators: false) { toolButtons }
+        VStack(spacing: MeeshySpacing.sm) {
+            ViewThatFits(in: .vertical) {
+                bodyButtons
+                bodyButtons.modifier(ComposerScrollEdgeCue())
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("composer.rest.column.body")
+            footButtons
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(ComposerRestChromeCopy.column))
     }
 
-    private var toolButtons: some View {
+    private var bodyButtons: some View {
         VStack(spacing: MeeshySpacing.sm) {
-            ForEach(tools.map { AsyncRenderRow(id: $0, content: toolButton($0)) }, content: asyncRenderRowContent)
+            ForEach(ComposerRestChrome.columnBody(tools).map { AsyncRenderRow(id: $0, content: toolButton($0)) },
+                    content: asyncRenderRowContent)
+        }
+    }
+
+    private var footButtons: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            ForEach(ComposerRestChrome.columnFoot(tools).map { AsyncRenderRow(id: $0, content: toolButton($0)) },
+                    content: asyncRenderRowContent)
             if let pasteEntry { pasteEntry }
         }
     }

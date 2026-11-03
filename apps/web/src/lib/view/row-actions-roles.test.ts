@@ -114,4 +114,37 @@ describe('rowMenuItems — les actions que le rôle permet', () => {
     const ids = rowMenuItems({ flags: { isPinned: false, isMuted: false, isArchived: false }, unread: false, language: 'fr', canDelete: true }).map((item) => item.id);
     expect(ids).toEqual(['pin', 'mute', 'read', 'archive', 'delete']);
   });
+
+  test('RENDRE OBSOLÈTE (#14645) : un administrateur de la conversation, en dernier, en rouge ; jamais un membre ordinaire', () => {
+    const items = rowMenuItems({
+      flags: { isPinned: false, isMuted: false, isArchived: false },
+      unread: false,
+      language: 'fr',
+      canDelete: true,
+      actions: rowConversationActions({ conversation: conversationOf({ currentUserRole: 'admin' }), viewer: viewerOf() }),
+    });
+    const last = items[items.length - 1];
+    expect(last?.id).toBe('obsolete');
+    expect(last?.label).toBe('Rendre obsolète');
+    expect(last?.destructive).toBe(true);
+    expect(idsFor(conversationOf({ currentUserRole: 'creator' }), viewerOf()).includes('obsolete')).toBe(true);
+    expect(idsFor(conversationOf({ currentUserRole: 'member' }), viewerOf()).includes('obsolete')).toBe(false);
+    expect(idsFor(conversationOf({ currentUserRole: 'admin' }), viewerOf({ hasAccount: false, isAnonymous: true, platformRole: null })).includes('obsolete')).toBe(false);
+  });
+
+  test('#14653 — dans un tête-à-tête, l’un OU l’autre des deux membres le rend obsolète', () => {
+    const direct = (overrides: Partial<Conversation> = {}) => conversationOf({ type: 'direct', currentUserRole: 'member', ...overrides });
+    expect(idsFor(direct(), viewerOf()).includes('obsolete')).toBe(true);
+    expect(idsFor(direct({ currentUserRole: 'creator' }), viewerOf()).includes('obsolete')).toBe(true);
+    expect(rowConversationActions({ conversation: direct(), viewer: viewerOf() }).obsolete).toBe(true);
+  });
+
+  test('#14653 — jamais un ancien membre, un anonyme, ni un tête-à-tête fermé ; un groupe reste à l’administrateur', () => {
+    const direct = (overrides: Partial<Conversation> = {}) => conversationOf({ type: 'direct', currentUserRole: 'member', ...overrides });
+    expect(rowConversationActions({ conversation: direct({ isMember: false }), viewer: viewerOf() }).obsolete).toBe(false);
+    expect(rowConversationActions({ conversation: direct(), viewer: viewerOf({ hasAccount: false, isAnonymous: true, platformRole: null }) }).obsolete).toBe(false);
+    expect(rowConversationActions({ conversation: direct({ isActive: false }), viewer: viewerOf() }).obsolete).toBe(false);
+    expect(rowConversationActions({ conversation: conversationOf({ currentUserRole: 'member' }), viewer: viewerOf() }).obsolete).toBe(false);
+    expect(rowConversationActions({ conversation: conversationOf({ currentUserRole: 'admin' }), viewer: viewerOf() }).obsolete).toBe(true);
+  });
 });

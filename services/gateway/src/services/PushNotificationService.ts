@@ -15,6 +15,7 @@ import { CircuitBreaker, circuitBreakerManager } from '../utils/circuitBreaker';
 import { webPushFor } from './web-push-config';
 import { androidNotificationConfig } from './android-push-config';
 import { withRecipient } from './push-recipient';
+import { withoutCipherKeyMaterial } from './push-cipher-material';
 import {
   isNotificationRevocationPush,
   NOTIFICATION_REVOCATION_TTL_MS,
@@ -351,11 +352,12 @@ export class PushNotificationService {
 
     const { userId, types, platforms } = options;
 
-    const effectivePayload = await applyUserPreferences(this.prisma, options);
-    if (!effectivePayload) {
+    const preferredPayload = await applyUserPreferences(this.prisma, options);
+    if (!preferredPayload) {
       pushLogger.info('Push blocked by user preferences', { userId });
       return [];
     }
+    const effectivePayload = withoutCipherKeyMaterial(preferredPayload);
 
     // The `ENABLE_VOIP_PUSH` kill switch must gate every path that can reach
     // a `voip` token, not just a narrow helper — the real incoming-call push

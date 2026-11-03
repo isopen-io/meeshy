@@ -37,7 +37,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -75,10 +74,11 @@ internal fun BubbleImageGrid(
                             .semantics { role = Role.Button }
                     },
             ) {
-                AsyncImage(
-                    model = image.url,
+                BubblePolicyImage(
+                    url = image.url,
+                    fallbackUrl = image.thumbnailUrl,
+                    sizeBytes = image.sizeBytes,
                     contentDescription = bubbleImageContentDescription(image, stringResource(R.string.bubble_image_description)),
-                    contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
                 TileReactions(image.reactionLabel)
@@ -148,10 +148,11 @@ private fun BubbleImageCell(
                 ).semantics { role = Role.Button }
             },
     ) {
-        AsyncImage(
-            model = image.thumbnailUrl ?: image.url,
+        BubblePolicyImage(
+            url = image.thumbnailUrl ?: image.url,
+            fallbackUrl = image.thumbnailUrl,
+            sizeBytes = if (image.thumbnailUrl != null) null else image.sizeBytes,
             contentDescription = bubbleImageContentDescription(image, stringResource(R.string.bubble_image_description)),
-            contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
         )
         if (hiddenCount == 0) TileReactions(image.reactionLabel)

@@ -296,6 +296,47 @@ final class APIRequestPipelineTests: XCTestCase {
         XCTAssertEqual(serverParts(mapped)?.status, 0)
         XCTAssertTrue(serverParts(mapped)?.message.hasPrefix("Erreur de decodage: Key 'id' not found at path") == true)
     }
+
+    // MARK: - Le refus de la passerelle, distinct de celui d'un intermédiaire (#14693)
+
+    func test_typedRefusals_keepsTheAddressAndItsPolicies_andTypesTheRefusals() {
+        let base = ConversationsEndpoint.byId(id: "conv1")
+        let typed = TypedRefusals(base)
+
+        XCTAssertEqual(typed.path, base.path)
+        XCTAssertEqual(typed.authKind, base.authKind)
+        XCTAssertEqual(typed.retryPolicy, base.retryPolicy)
+        XCTAssertEqual(typed.rejectionPolicy, .structured)
+    }
+
+    func test_classify_structured404_fromAnIntermediary_carriesNoCode() {
+        guard case MeeshyError.rejected(let rejection)? = thrown(classify(status: 404, body: "404 page not found", rejection: .structured)) else {
+            return XCTFail("attendu .rejected")
+        }
+        XCTAssertEqual(rejection.statusCode, 404)
+        XCTAssertNil(rejection.code, "un 404 de Traefik ne porte aucun code de la passerelle")
+    }
+
+    func test_classify_structured404_fromTheGateway_carriesItsCode() {
+        let body = #"{"success":false,"error":"Conversation introuvable","code":"CONVERSATION_NOT_FOUND"}"#
+        guard case MeeshyError.rejected(let rejection)? = thrown(classify(status: 404, body: body, rejection: .structured)) else {
+            return XCTFail("attendu .rejected")
+        }
+        XCTAssertEqual(rejection.code, "CONVERSATION_NOT_FOUND")
+    }
+
+    func test_gatewayRefusal_readsOnlyTheGatewayEnvelope() {
+        let gateway = Data(#"{"success":false,"error":"Refusé","code":"CONVERSATION_ACCESS_DENIED"}"#.utf8)
+        XCTAssertEqual(APIRejection.gatewayRefusal(statusCode: 403, body: gateway)?.code, "CONVERSATION_ACCESS_DENIED")
+        XCTAssertEqual(APIRejection.gatewayRefusal(statusCode: 403, body: gateway)?.statusCode, 403)
+
+        XCTAssertNil(APIRejection.gatewayRefusal(statusCode: 403, body: nil))
+        XCTAssertNil(APIRejection.gatewayRefusal(statusCode: 403, body: Data("<html>Forbidden</html>".utf8)), "un proxy")
+        XCTAssertNil(APIRejection.gatewayRefusal(statusCode: 403, body: Data(#"{"code":"CONVERSATION_ACCESS_DENIED"}"#.utf8)),
+                     "sans `success: false`, ce n'est pas l'enveloppe de la passerelle")
+        XCTAssertNil(APIRejection.gatewayRefusal(statusCode: 403, body: Data(#"{"success":false,"error":"Refusé"}"#.utf8)),
+                     "sans code, le refus ne dit rien de machine")
+    }
 }
 
 private struct AnyCodingKey: CodingKey {

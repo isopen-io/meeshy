@@ -50,6 +50,7 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerFormatLabel
 import me.meeshy.sdk.audio.ComposerVoiceCapture
 import me.meeshy.sdk.audio.MediaRecorderEngine
+import me.meeshy.sdk.model.waveform.VoiceEncodingProfile
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.readMediaUploadItem
 import me.meeshy.sdk.model.composer.sound.ComposerAudioRole
@@ -200,13 +201,18 @@ internal class StorySoundRecorder(
 @Composable
 private fun rememberStorySoundRecorder(onTake: (MediaUploadItem, Float?) -> Unit): StorySoundRecorder {
     val context = LocalContext.current
-    val capture = remember { ComposerVoiceCapture(File(context.cacheDir, RECORDINGS), { MediaRecorderEngine(context) }) }
+    val capture = remember {
+        ComposerVoiceCapture(
+            File(context.cacheDir, RECORDINGS),
+            { MediaRecorderEngine(context, VoiceEncodingProfile.of(VoiceEncodingProfile.Kind.STORY_SOUND)) },
+        )
+    }
     var session by remember { mutableStateOf(capture.session) }
     var denied by remember { mutableStateOf(false) }
     val deliver by rememberUpdatedState(onTake)
     fun start() {
         denied = false
-        capture.start()
+        capture.start { session = capture.session }
         session = capture.session
     }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -226,9 +232,10 @@ private fun rememberStorySoundRecorder(onTake: (MediaUploadItem, Float?) -> Unit
         denied = denied,
         request = { if (context.hasMic()) start() else permission.launch(Manifest.permission.RECORD_AUDIO) },
         stop = {
-            val take = capture.finish()
+            capture.finish { take ->
+                take?.let { deliver(MediaUploadItem.onDisk(it.file, it.file.name, RECORDED_MIME, (it.durationSeconds * 1000).toLong()), it.durationSeconds.toFloat()) }
+            }
             session = capture.session
-            take?.let { deliver(MediaUploadItem.onDisk(it.file, it.file.name, RECORDED_MIME, (it.durationSeconds * 1000).toLong()), it.durationSeconds.toFloat()) }
         },
     )
 }

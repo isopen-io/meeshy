@@ -227,7 +227,7 @@ describe('DELETE /conversations/:id/delete-for-me — creator, empty direct DM',
     const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
     expect(res.statusCode).toBe(200);
     expect(prisma.conversation.count).toHaveBeenCalledWith({
-      where: { id: 'conv-resolved-id', type: 'direct', firstMessageSentAt: null },
+      where: { id: 'conv-resolved-id', type: { in: ['direct', 'group'] }, firstMessageSentAt: null },
     });
     // La clôture s'ENREGISTRE comme telle : `isActive: false` seul laissait la
     // fermeture hors de portée du stream de tombstones (`closedAt > since`).

@@ -1,5 +1,7 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.composer.ComposerKeyboardTransition
+
 /**
  * Which end of the rendered [ChatListItem] list currently holds the newest
  * message. [BottomUp] is [ChatScreen]'s shipped mode (`LazyColumn(reverseLayout
@@ -110,5 +112,16 @@ object ChatScrollGeometry {
             ChatListOrientation.TopDown -> firstVisibleIndex
             ChatListOrientation.BottomUp -> lastVisibleIndex
         }
+    }
+
+    /**
+     * Durée (ms) sur laquelle la marge basse du fil rejoint sa nouvelle valeur. Pendant un
+     * mouvement de clavier annoncé SANS insets image par image (avant API 30), la marge suit la
+     * durée du clavier ; avec des insets par image elle les suit tels quels, et passé le
+     * mouvement rien n'est rejoué : une animation de plus ferait traîner le fil derrière la barre.
+     */
+    fun bottomMarginAnimationMs(transition: ComposerKeyboardTransition?, nowMs: Long): Int {
+        if (transition == null || transition.perFrame || !transition.isLive(nowMs)) return 0
+        return transition.durationMs.toInt()
     }
 }

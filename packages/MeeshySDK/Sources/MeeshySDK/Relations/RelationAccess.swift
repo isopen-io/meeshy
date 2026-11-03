@@ -49,6 +49,12 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     case relayCommentersOnMyPosts = "relay.commentersOnMyPosts"
     case relayMyCommentsElsewhere = "relay.myCommentsElsewhere"
     case dmDirect = "dm.direct"
+    case dmRequest = "dm.request"
+    case dmReadReceipts = "dm.readReceipts"
+    case dmTyping = "dm.typing"
+    case presenceDnd = "presence.dnd"
+    case callRing = "call.ring"
+    case viewsIdentity = "views.identity"
     case audienceAcquaintances = "audience.acquaintances"
     case audienceClose = "audience.close"
     case audienceBlood = "audience.blood"
@@ -78,8 +84,9 @@ public enum RelationFeature: String, CaseIterable, Sendable {
              .audienceClose, .listeningCategory, .talkie: return .close
         case .relayMyCommentsElsewhere, .audienceBlood, .listeningTitle,
              .locationLive, .locationHistory, .locationProximity: return .blood
-        case .dmDirect, .audienceAcquaintances: return .acquaintance
-        case .acquaintanceAuto: return .public
+        case .dmDirect, .dmReadReceipts, .dmTyping, .presenceDnd, .audienceAcquaintances: return .acquaintance
+        case .acquaintanceAuto, .dmRequest, .callRing: return .public
+        case .viewsIdentity: return .community
         }
     }
 
@@ -97,9 +104,27 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     /// (`RELATION_DIRECTED_FEATURES`).
     public var isDirected: Bool {
         switch self {
-        case .bring, .talkie, .acquaintanceAuto: return true
+        case .bring, .talkie, .acquaintanceAuto, .dmRequest, .callRing: return true
         default: return false
         }
+    }
+
+    /// Le bouclier des mineurs (`RELATION_MINOR_TARGET_MIN_LEVEL`, RG-21) : le
+    /// niveau qu'un viewer non mineur doit atteindre face à un mineur DÉCLARÉ.
+    /// `nil` = la feature n'est pas bouclée.
+    public var minorTargetMinimum: RelationLevel? {
+        switch self {
+        case .dmRequest: return .acquaintance
+        case .callRing: return .friend
+        default: return nil
+        }
+    }
+
+    /// Le minimum de la matrice, relevé par le bouclier quand un viewer non
+    /// mineur s'adresse à un mineur déclaré — jamais abaissé.
+    public func minimumLevel(viewerMinor: RelationAgeClass, targetMinor: RelationAgeClass) -> RelationLevel {
+        guard let shield = minorTargetMinimum, targetMinor == .minor, viewerMinor != .minor else { return minimumLevel }
+        return max(minimumLevel, shield)
     }
 
     /// Les seules features qu'ADMIN/BIGBOSS lit sans lien (`RELATION_PRESENCE_FEATURES`).
@@ -176,7 +201,8 @@ public struct RelationAccessInput: Sendable, Equatable {
 /// pas PROPOSER une action qu'il refusera. Pur, sans état, sans I/O.
 ///
 /// Ordre des verdicts : blocage, identité absente, soi, rôle (présence seule),
-/// âge (Connaissance automatique seule), niveau, consentement.
+/// âge (Connaissance automatique seule), niveau (relevé par le bouclier des
+/// mineurs, refus dit `level`), consentement.
 public struct RelationAccess: Sendable, Equatable {
     public let allowed: Bool
     public let effectiveLevel: RelationLevel
@@ -216,7 +242,7 @@ public struct RelationAccess: Sendable, Equatable {
             return RelationAccess(allowed: false, effectiveLevel: level, reason: .minor, requiresConsent: false)
         }
 
-        let reached = level >= feature.minimumLevel
+        let reached = level >= feature.minimumLevel(viewerMinor: input.viewerMinor, targetMinor: input.targetMinor)
         guard reached, feature.requiresConsent else {
             return RelationAccess(allowed: reached, effectiveLevel: level, reason: .level, requiresConsent: false)
         }

@@ -607,4 +607,43 @@ class ChatComposerControllerTest {
     private companion object {
         const val NOW = 1_700_000_000_000L
     }
+
+    // --- end-to-end: no draft in clear on disk (#14632) ----------------------------------------
+
+    private val endToEnd = ChatUiState(conversationId = "c1", encryptionMode = "e2ee", directPeerUserId = "bob", endToEndAvailable = true)
+
+    @Test
+    fun `typing in an end to end conversation never writes the draft to disk`() = runTest {
+        val r = rig(initial = endToEnd)
+
+        r.controller.onDraftChange("mon secret")
+        advanceUntilIdle()
+
+        assertThat(r.drafts.load("c1")).isNull()
+        assertThat(r.text.text).isEqualTo("mon secret")
+    }
+
+    @Test
+    fun `typing in an end to end conversation removes a draft written in clear before`() = runTest {
+        val r = rig(initial = endToEnd, drafts = mapOf("c1" to ConversationDraft(conversationId = "c1", text = "ancien clair")))
+
+        r.controller.onDraftChange("mon secret")
+        advanceUntilIdle()
+
+        assertThat(r.drafts.load("c1")).isNull()
+    }
+
+    @Test
+    fun `learning the conversation is end to end takes its stored draft off the disk but keeps it in the composer`() = runTest {
+        val r = rig(drafts = mapOf("c1" to ConversationDraft(conversationId = "c1", text = "ancien clair")))
+        r.controller.restoreStoredDraft()
+        r.flow.value = endToEnd
+
+        r.controller.forgetEndToEndDraftOnDisk()
+        advanceUntilIdle()
+
+        assertThat(r.drafts.load("c1")).isNull()
+        assertThat(r.text.text).isEqualTo("ancien clair")
+    }
+
 }

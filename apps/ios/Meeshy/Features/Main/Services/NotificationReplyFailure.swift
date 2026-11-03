@@ -60,6 +60,70 @@ enum NotificationReplyFailure {
         UNUserNotificationCenter.current().add(request)
     }
 
+    /// **Une réponse rapide en attente de son régime se VOIT** (#14673). Une
+    /// seule annonce par réponse (identifiant stable), retirée quand elle se
+    /// solde. Corps du catalogue, jamais le texte saisi.
+    static func replyAwaitingRegimeContent(
+        conversationId: String, bundle: Bundle = InterfaceLanguageResolver.bundle()
+    ) -> UNMutableNotificationContent {
+        let content = conversationRouted(String(
+            localized: "notifications.reply_awaiting.regime",
+            defaultValue: "Réponse en attente : elle partira dès que la conversation sera joignable",
+            bundle: bundle
+        ), conversationId: conversationId)
+        content.sound = nil
+        return content
+    }
+
+    /// La réponse ne partira jamais (#14673) : plus membre, conversation
+    /// supprimée, trop ancienne, compte déconnecté.
+    static func replyNeverSentContent(
+        conversationId: String, bundle: Bundle = InterfaceLanguageResolver.bundle()
+    ) -> UNMutableNotificationContent {
+        conversationRouted(String(
+            localized: "notifications.reply_unsent.never_sent",
+            defaultValue: "Votre réponse n'a pas pu être envoyée",
+            bundle: bundle
+        ), conversationId: conversationId)
+    }
+
+    static func awaitingRegimeIdentifier(_ clientMessageId: String) -> String {
+        "reply-awaiting-regime-\(clientMessageId)"
+    }
+
+    static func postReplyAwaitingRegime(conversationId: String, clientMessageId: String) {
+        UNUserNotificationCenter.current().add(UNNotificationRequest(
+            identifier: awaitingRegimeIdentifier(clientMessageId),
+            content: replyAwaitingRegimeContent(conversationId: conversationId),
+            trigger: nil
+        ))
+    }
+
+    static func withdrawReplyAwaitingRegime(clientMessageId: String) {
+        let identifiers = [awaitingRegimeIdentifier(clientMessageId)]
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
+    }
+
+    static func postReplyNeverSent(conversationId: String, clientMessageId: String?) {
+        if let clientMessageId { withdrawReplyAwaitingRegime(clientMessageId: clientMessageId) }
+        UNUserNotificationCenter.current().add(UNNotificationRequest(
+            identifier: "reply-never-sent-\(UUID().uuidString)",
+            content: replyNeverSentContent(conversationId: conversationId),
+            trigger: nil
+        ))
+    }
+
+    private static func conversationRouted(_ body: String, conversationId: String) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.body = body
+        content.sound = .default
+        guard !conversationId.isEmpty else { return content }
+        content.userInfo = ["type": "new_message", "conversationId": conversationId]
+        content.threadIdentifier = "conversation:\(conversationId)"
+        return content
+    }
+
     static func post() {
         let content = UNMutableNotificationContent()
         content.body = String(localized: "feed.comments.send_error",

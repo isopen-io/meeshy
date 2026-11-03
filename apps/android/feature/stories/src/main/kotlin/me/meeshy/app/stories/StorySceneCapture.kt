@@ -95,9 +95,12 @@ internal class StorySceneCapture(
         if (replacing != null && background != null) background(result, replacing) else onCaptured(result)
     }
 
-    /** Le geste et sa ligne n'existent qu'au repos : scène vide, rien de sélectionné, aucun pinceau, texte ni panneau ouvert. */
+    /**
+     * Le geste et sa ligne n'existent qu'au repos : scène vide (aucun média en train d'y entrer), rien de sélectionné,
+     * aucun pinceau, texte ni panneau ouvert.
+     */
     fun offeredOn(state: StoryComposerUiState, somethingOpen: Boolean): Boolean = SceneQuickCapture.offers(
-        sceneIsBlank = state.deck.selectedSlide.isBlankScene,
+        sceneIsBlank = state.deck.selectedSlide.isBlankScene && !state.isUploadingMedia,
         armed = armed,
         toolIsOpen = somethingOpen || state.isDrawingActive || state.isEditingTextElement ||
             state.band.activeTool != null || state.selectedSceneObject != null,

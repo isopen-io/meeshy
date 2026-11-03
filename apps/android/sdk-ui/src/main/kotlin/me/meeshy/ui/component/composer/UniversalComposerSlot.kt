@@ -7,6 +7,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import java.io.File
+import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.composer.ComposerConfiguration
 import me.meeshy.ui.theme.MeeshyPalette
 
@@ -15,6 +17,8 @@ import me.meeshy.ui.theme.MeeshyPalette
  * recevoir. [onAttachUris] et [onAttachFile] absents ⇒ les portes de pièces se ferment, quel que soit le réglage ;
  * [onPickLanguage] absent ⇒ la pastille de langue, [onQuickEmoji] absent ⇒ les emojis rapides. [foldable] pose le ⌄ du
  * repli (iOS `foldableComment`). [topSlot] porte ce qui se pose au-dessus de la saisie (mentions, réponse, pièces).
+ * [effects] + [onToggleEffect] : le flou et les effets que la surface garde et envoie ; [onToggleEffect] absent ⇒ les
+ * portes du flou et des effets se ferment (#14385).
  */
 @Immutable
 public data class UniversalComposerSpec(
@@ -35,6 +39,14 @@ public data class UniversalComposerSpec(
     val onPickLanguage: ((String) -> Unit)? = null,
     val onQuickEmoji: ((String) -> Unit)? = null,
     val foldable: Boolean = false,
+    val effects: MessageEffects = MessageEffects(),
+    val onToggleEffect: ((Long) -> Unit)? = null,
+    val onClearEffects: () -> Unit = {},
+    /** Le lieu choisi au sélecteur du composeur rejoint la surface (#14387) ; absent ⇒ la porte « Lieu » se ferme. */
+    val onPickPlace: ((SharedPlace) -> Unit)? = null,
+    /** Le lieu qui attend l'envoi, posé en pastille au-dessus de la saisie ; [onRemovePlace] la retire. */
+    val pendingPlace: SharedPlace? = null,
+    val onRemovePlace: () -> Unit = {},
 ) {
     /** Le réglage effectif : celui de la surface, sans les portes qu'elle ne sait pas servir. */
     val effectiveConfiguration: ComposerConfiguration
@@ -42,6 +54,8 @@ public data class UniversalComposerSpec(
             receivesAttachments = onAttachUris != null && onAttachFile != null,
             picksLanguage = onPickLanguage != null,
             sendsQuickEmoji = onQuickEmoji != null,
+            appliesEffects = onToggleEffect != null,
+            picksPlace = onPickPlace != null,
         )
 }
 

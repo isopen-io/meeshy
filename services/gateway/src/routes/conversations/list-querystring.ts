@@ -64,6 +64,11 @@ export const conversationListQuerystringSchema = {
     includeCount: { type: 'string', enum: ['true', 'false'], description: 'Include total count of conversations' },
     type: { type: 'string', enum: ['direct', 'group', 'public', 'global', 'broadcast'], description: 'Filter by conversation type' },
     withUserId: { type: 'string', description: 'Filter direct conversations that include this user ID as a participant' },
-    updatedSince: { type: 'string', description: 'ISO8601 timestamp — return only conversations updated after this time' }
+    updatedSince: { type: 'string', description: 'ISO8601 timestamp — return only conversations updated after this time' },
+    requests: {
+      type: 'string',
+      enum: ['exclude', 'only', 'filtered'],
+      description: 'Message requests (#14107): exclude = main list, only = pending requests, filtered = filtered requests. Absent = everything, as before.'
+    }
   }
 } as const;

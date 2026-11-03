@@ -4,7 +4,25 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 /** Tables whose rows are the only copy of user intent: a migration may never drop or empty them. */
 internal object DurableTables {
-    val names: Set<String> = setOf("outbox", "media_blob", "tus_upload_checkpoint", "sync_meta")
+    val names: Set<String> = setOf("outbox", "media_blob", "tus_upload_checkpoint", "sync_meta", "e2ee_plaintext_erasures")
+
+    /** #14655 — la seule trace d'un clair à retirer du coffre E2EE : vidée, elle laisserait ce clair sur l'appareil. */
+    const val plaintextErasuresSql: String =
+        "CREATE TABLE IF NOT EXISTS `e2ee_plaintext_erasures` (`account` TEXT NOT NULL, `kind` TEXT NOT NULL, " +
+            "`itemId` TEXT NOT NULL, `clientMessageId` TEXT, `senderId` TEXT, `recordedAt` INTEGER NOT NULL, " +
+            "`acknowledgedAt` INTEGER, PRIMARY KEY(`account`, `kind`, `itemId`))"
+
+    const val plaintextErasuresIndexSql: String =
+        "CREATE INDEX IF NOT EXISTS `index_e2ee_plaintext_erasures_acknowledgedAt` ON `e2ee_plaintext_erasures` (`acknowledgedAt`)"
+
+    /**
+     * Les tables durables purement additives, créées si elles manquent et jamais vidées : une migration en échec
+     * (rendue par [CacheReset]) laisse ainsi la base dans la forme que Room valide, sans toucher une ligne existante.
+     */
+    fun ensureAdditive(db: SupportSQLiteDatabase) {
+        db.execSQL(plaintextErasuresSql)
+        db.execSQL(plaintextErasuresIndexSql)
+    }
 }
 
 internal data class CacheTableDefinition(

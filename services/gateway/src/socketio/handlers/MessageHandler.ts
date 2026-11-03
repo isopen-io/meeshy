@@ -92,7 +92,7 @@ import { buildMessageEditedCore } from '../messageEditedPayload';
 import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
-import { resolveMentionedUsers, resolveUsernamesToIds } from '../../services/MentionService';
+import { resolveMentionedUsers, resolveUsernamesToIds, withoutPendingMessageRequests } from '../../services/MentionService';
 import { reconcileEditedMentions, type MentionResolver } from '../../services/messaging/messageMentions';
 import { mergeTrackingLinksIntoMetadata, type LinkReconciler } from '../../services/messaging/messageLinks';
 import { editedLinksFor, editSealsAtRest } from '../../services/messaging/atRestEdit';
@@ -125,7 +125,7 @@ import {
   SocketMessageEditSchema,
   SocketMessageDeleteSchema,
 } from '../../validation/socket-event-schemas.js';
-import { toEncryptedPayload } from '../../validation/encryption-envelope.js';
+import { toDeviceLayer, toEncryptedPayload } from '../../validation/encryption-envelope.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import type { QueuedVariantFor } from '../queuedEventContract';
@@ -378,6 +378,8 @@ export class MessageHandler {
         // la garde sans transmettre le champ laisserait la copie muette.
         copyAttachmentsFromMessageId: validated.copyAttachmentsFromMessageId,
         encryptedPayload,
+        // #14369 — la couche appareil d'un envoi hybride, à côté du clair (même unité que REST).
+        deviceLayer: toDeviceLayer(validated, { sessionId: (socket.data as { sessionId?: string } | undefined)?.sessionId ?? null }),
         // Effets de protection déclarés par le client — parité avec
         // POST /messages, déclarés UNE fois (`messageProtectionInput.ts`) pour
         // les deux chemins socket. Sans cette propagation, une photo view-once
@@ -910,7 +912,7 @@ export class MessageHandler {
       // `User.id` sont déjà résolus — inutile de repasser par les usernames.
       emitMentionCreated({
         io: this.io,
-        newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
+        newlyMentionedUserIds: await withoutPendingMessageRequests(this.prisma, message.conversationId, editedMentions.newlyMentionedUserIds),
         messageId: message.id,
         conversationId: message.conversationId,
         editorUserId: userId,
@@ -1437,7 +1439,7 @@ export class MessageHandler {
       // mention miss never blocks the message broadcast.
       const mentionUsernames = (message.validatedMentions as string[] | undefined) ?? [];
       if (mentionUsernames.length > 0) {
-        const mentionedUserIds = await this._resolveMentionUserIds(mentionUsernames);
+        const mentionedUserIds = await withoutPendingMessageRequests(this.prisma, normalizedId, await this._resolveMentionUserIds(mentionUsernames));
         for (const targetUserId of mentionedUserIds) {
           if (targetUserId && targetUserId !== senderUserId) {
             this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {

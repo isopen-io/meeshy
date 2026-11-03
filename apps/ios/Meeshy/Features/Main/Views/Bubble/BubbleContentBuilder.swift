@@ -309,7 +309,7 @@ extension BubbleContent {
         // déjà recueilli le geste, le contenu est là pour être lu.
         let protection = message.protection()
         self.protection = message.isViewOnceRevealed ? protection.withoutViewOnce : protection
-        self.isBurning = message.isBurning
+        (self.isBurning, self.deviceLayerIntegrity) = (message.isBurning, Self.displayedIntegrity(message.deviceLayerIntegrity, displaysOriginal: effective == message.content))
         self.isViewOnceRevealed = message.isViewOnceRevealed && message.holdsViewOnce
         self.exitGate = message.exitGate
         self.captureVerdict = ContentCaptureVisibility.renderedVerdict(for: message)
@@ -444,6 +444,16 @@ extension BubbleContent {
             ?? preferredTranslation?.targetLanguage
             ?? preferredAudioLangCode
             ?? message.originalLanguage
+    }
+
+    /// **Ce que le pied dit de la couche appareil d'un hybride** (#14369). Le
+    /// sceau « vérifié » ne couvre que le texte ORIGINAL : à côté d'une
+    /// traduction produite par le serveur, il mentirait — il ne s'affiche donc
+    /// que sur l'original, et revient quand le lecteur bascule vers lui. Un
+    /// écart, lui, se dit dans les deux cas : la traduction vient du texte servi.
+    static func displayedIntegrity(_ integrity: HybridDeviceLayerIntegrity?, displaysOriginal: Bool) -> HybridDeviceLayerIntegrity? {
+        guard integrity == .verified, !displaysOriginal else { return integrity }
+        return nil
     }
 
     /// **Le texte que la bulle AFFICHE** (#11233) — le site unique que « Copier »

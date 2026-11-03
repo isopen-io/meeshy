@@ -295,7 +295,7 @@ describe('DELETE /conversations/:id/delete-for-me — creator, empty direct DM',
     const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
     expect(res.statusCode).toBe(200);
     expect(prisma.conversation.count).toHaveBeenCalledWith({
-      where: { id: CONV_ID, type: 'direct', firstMessageSentAt: null },
+      where: { id: CONV_ID, type: { in: ['direct', 'group'] }, firstMessageSentAt: null },
     });
     // La clôture porte son horodatage : `loadConversationTombstones` interroge
     // `closedAt > since`, donc une fermeture qui n'écrit que `isActive: false`

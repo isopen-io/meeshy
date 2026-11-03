@@ -1,10 +1,11 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="reels_action_comment">Commenter</string>
+    <string name="reels_action_repost">Repartager</string>
     <string name="reels_action_send">Envoyer</string>
     <string name="reels_author_profile">Profil de l\'auteur</string>
     <string name="reels_caption_translated">Traduction disponible</string>
     <string name="reels_close">Fermer</string>
-    <string name="reels_comments">Commentaires</string>
     <string name="reels_comments_composer_hint">Commenter…</string>
     <plurals name="reels_comments_count">
         <item quantity="one">%1$d commentaire</item>
@@ -27,7 +28,6 @@
     <string name="reels_menu_share">Partager</string>
     <string name="reels_mute">Couper le son</string>
     <string name="reels_open_failure_back">Retour</string>
-    <string name="reels_repost">Republier</string>
     <string name="reels_scrub">Avancer ou reculer</string>
     <string name="reels_share">Partager</string>
     <string name="reels_toast_delete_failed">Erreur lors de la suppression</string>

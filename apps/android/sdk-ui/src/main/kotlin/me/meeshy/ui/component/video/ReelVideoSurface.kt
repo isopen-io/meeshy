@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.video
 
+import android.view.LayoutInflater
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -20,6 +21,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
+import me.meeshy.ui.R
 import me.meeshy.ui.component.media.MeeshyMediaCache
 import me.meeshy.ui.component.media.PlayerCensus
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -92,6 +94,19 @@ fun ReelVideoSurface(
      * aucune copie durable sur l'appareil). Le défaut garde le comportement des réels et des stories.
      */
     cached: Boolean = true,
+    /**
+     * `false` : la surface joue son son SANS demander le focus audio — la scène l'a confié à une autre de ses vidéos
+     * (#14611). Deux surfaces audibles d'une même scène se le disputeraient : la seconde le prendrait, la première se
+     * mettrait en pause et l'hôte figerait la lecture.
+     */
+    holdsAudioFocus: Boolean = true,
+    /**
+     * `true` : l'image passe par une `TextureView` (#14624). Elle se compose dans la hiérarchie — au-dessus d'une autre
+     * vidéo, sous la rotation, le découpage et l'opacité de l'objet qui la porte. Une vidéo POSÉE sur une scène à fond
+     * vidéo en a besoin : deux `SurfaceView` superposées n'ont aucun ordre garanti. Le défaut garde la `SurfaceView` des
+     * réels.
+     */
+    textured: Boolean = false,
 ) {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
@@ -105,7 +120,7 @@ fun ReelVideoSurface(
                 else DefaultMediaSourceFactory(context),
             )
             .build().apply {
-            setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted)
+            setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted && holdsAudioFocus)
             // **La fenêtre est portée par le MediaItem, jamais par un `seekTo`
             // suivi d'une surveillance.** ExoPlayer coupe alors la source
             // lui-même : la position 0 du player EST le début de la fenêtre, la
@@ -135,10 +150,10 @@ fun ReelVideoSurface(
 
     // Le volume suit [muted] a chaud : le player est memoize par URL, donc la
     // valeur passee au constructeur ne refleterait jamais un toggle ulterieur.
-    LaunchedEffect(player, muted) {
+    LaunchedEffect(player, muted, holdsAudioFocus) {
         player?.volume = if (muted) 0f else 1f
         // Le focus suit le son : audible, la lecture le prend ; muet, elle le rend et ne le redemande pas.
-        player?.setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted)
+        player?.setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted && holdsAudioFocus)
     }
 
     // Hors premier plan (ON_STOP : touche Accueil, autre app), la lecture se suspend et
@@ -190,10 +205,14 @@ fun ReelVideoSurface(
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
-            PlayerView(ctx).apply {
-                useController = false
-                // Sans obturateur noir : le poster posé derrière reste visible jusqu'à la première image.
-                setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+            if (textured) {
+                LayoutInflater.from(ctx).inflate(R.layout.composer_live_player_view, null) as PlayerView
+            } else {
+                PlayerView(ctx).apply {
+                    useController = false
+                    // Sans obturateur noir : le poster posé derrière reste visible jusqu'à la première image.
+                    setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                }
             }
         },
         update = { view ->

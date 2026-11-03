@@ -20,12 +20,17 @@ import me.meeshy.ui.theme.MeeshySpacing
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import android.widget.Toast
+import me.meeshy.feature.chat.R
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -61,6 +66,13 @@ fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Un seul retour par fil : la fin de la conversation (#14645) peut arriver deux fois — la feuille
+    // d'infos qui l'a rendue obsolète, puis l'événement socket — et un second pop sortirait de la liste.
+    val leave = remember(onBack, state.conversationId) { OnceAction(onBack) }
+    val endController = remember(viewModel) { viewModel.controllers.find<ConversationEndController>() }
+    val conversationEnded by (endController?.ended ?: NOT_ENDED).collectAsStateWithLifecycle()
+    LaunchedEffect(conversationEnded) { if (conversationEnded) leave() }
+    EncryptionSwitchAnnouncementEffect(remember(viewModel) { viewModel.controllers.find<EncryptionSwitchAnnouncementController>() })
     val callEntry by viewModel.callEntry.collectAsStateWithLifecycle()
     val mayInviteFriends by viewModel.mayInviteFriends.collectAsStateWithLifecycle()
 
@@ -106,6 +118,7 @@ fun ChatScreen(
         )
     }
     val downloadedFileIds by viewModel.downloadedFileIds.collectAsStateWithLifecycle()
+    val landingState by viewModel.landingState.collectAsStateWithLifecycle()
     val host = rememberChatHostContext(
         state = state,
         composerText = viewModel.composerText,
@@ -113,7 +126,7 @@ fun ChatScreen(
         accentColor = accentColor,
         actions = actions,
         navigation = ChatNavigationActions(
-            onBack = onBack,
+            onBack = leave,
             onStartCall = onStartCall,
             onRejoinCall = onRejoinCall,
             onCreateShareLink = onCreateShareLink,
@@ -130,6 +143,8 @@ fun ChatScreen(
         selection = selection,
         engagement = engagement,
         downloadedFileIds = downloadedFileIds,
+        takeLandingMessageId = viewModel::takeLandingMessageId,
+        landing = landingState,
     )
 
     val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()
@@ -161,12 +176,13 @@ fun ChatScreen(
         // défilent sous le verre.
         var composerHeightPx by remember { mutableIntStateOf(0) }
         val composerHeight = with(LocalDensity.current) { composerHeightPx.toDp() }
+        val listBottomInset = rememberKeyboardFollowingInset(composerHeight + MeeshySpacing.sm, rememberComposerKeyboardState())
         Scaffold(containerColor = Color.Transparent) { _ ->
             Box(Modifier.fillMaxSize()) {
                 ChatListHost(
                     host,
                     topInset = headerHeight,
-                    bottomInset = composerHeight + MeeshySpacing.sm,
+                    bottomInset = listBottomInset,
                 )
                 // Rangée plate (Script) : pendant un défilement du doigt, l'en-tête ET le composeur
                 // s'effacent par opacité — aucun inset ne bouge — et reviennent à l'arrêt ; sauf
@@ -243,3 +259,25 @@ private fun queryDisplayName(resolver: ContentResolver, uri: Uri): String? =
         }
     }.getOrNull()
 
+private val NOT_ENDED: kotlinx.coroutines.flow.StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+/** Une action qui ne s'exécute qu'une fois : le retour d'un fil qui se ferme (#14645). */
+internal class OnceAction(private val action: () -> Unit) : () -> Unit {
+    private var done = false
+
+    override fun invoke() {
+        if (done) return
+        done = true
+        action()
+    }
+}
+
+/** #13794 — le passage au bout en bout fait sous les yeux du fil s'annonce, avec le libellé d'iOS (toast d'information). */
+@Composable
+private fun EncryptionSwitchAnnouncementEffect(announcer: EncryptionSwitchAnnouncementController?) {
+    val context = LocalContext.current
+    val notice = stringResource(R.string.conversation_encryption_switched_enabled)
+    LaunchedEffect(announcer, notice) {
+        announcer?.announcements?.collect { Toast.makeText(context, notice, Toast.LENGTH_LONG).show() }
+    }
+}
