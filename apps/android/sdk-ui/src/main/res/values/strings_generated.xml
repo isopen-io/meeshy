@@ -112,6 +112,10 @@
     <string name="bubble_story_citation_unavailable">Story unavailable</string>
     <string name="bubble_translated">Translated</string>
     <string name="capture_microphone_denied">Microphone denied — the video will be silent. Tap to open Settings</string>
+    <string name="code_viewer_load_error">Unable to load file</string>
+    <string name="code_viewer_loading">Loading...</string>
+    <string name="code_viewer_loading_file">Loading file...</string>
+    <string name="code_viewer_more_lines">%1$d more lines</string>
     <string name="common_cancel">Cancel</string>
     <string name="common_clearSearch">Clear search</string>
     <string name="common_close">Close</string>

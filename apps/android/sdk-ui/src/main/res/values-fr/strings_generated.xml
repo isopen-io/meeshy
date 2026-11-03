@@ -114,6 +114,10 @@
     <string name="bubble_story_citation_unavailable">Story indisponible</string>
     <string name="bubble_translated">Traduit</string>
     <string name="capture_microphone_denied">Micro refusé — la vidéo sera muette. Toucher pour ouvrir les Réglages</string>
+    <string name="code_viewer_load_error">Impossible de charger le fichier</string>
+    <string name="code_viewer_loading">Chargement...</string>
+    <string name="code_viewer_loading_file">Chargement du fichier...</string>
+    <string name="code_viewer_more_lines">%1$d lignes de plus</string>
     <string name="common_cancel">Annuler</string>
     <string name="common_clearSearch">Effacer la recherche</string>
     <string name="common_close">Fermer</string>

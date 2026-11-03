@@ -114,6 +114,10 @@
     <string name="bubble_story_citation_unavailable">Story indisponível</string>
     <string name="bubble_translated">Traduzido</string>
     <string name="capture_microphone_denied">Microfone negado — o vídeo ficará mudo. Toque para abrir os Ajustes</string>
+    <string name="code_viewer_load_error">Não foi possível carregar o arquivo</string>
+    <string name="code_viewer_loading">Carregando...</string>
+    <string name="code_viewer_loading_file">Carregando arquivo...</string>
+    <string name="code_viewer_more_lines">mais %1$d linhas</string>
     <string name="common_cancel">Cancelar</string>
     <string name="common_clearSearch">Limpar pesquisa</string>
     <string name="common_close">Fechar</string>
