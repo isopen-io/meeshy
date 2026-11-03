@@ -122,6 +122,7 @@ class ChatViewModel @Inject constructor(
     /** #14591 — le texte d'un tête-à-tête chiffré de bout en bout part scellé, et le fil relit son clair au coffre. */
     private val endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
     private val openConversations: OpenConversationRegistry,
+    reactionRows: me.meeshy.sdk.reaction.ReactionRowStore? = null,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -233,6 +234,7 @@ class ChatViewModel @Inject constructor(
         messageSocketManager = messageSocketManager,
         workManager = workManager,
         ownReactionWithdrawals = ownReactionWithdrawals,
+        rowStore = reactionRows,
     )
 
     private val translation = ChatTranslationController(

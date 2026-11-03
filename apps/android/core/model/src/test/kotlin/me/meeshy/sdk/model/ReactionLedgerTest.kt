@@ -154,3 +154,68 @@ class ReactionLedgerTest {
         assertThat(ReactionLedger.reconciled(rows, null, "me")).isEqualTo(rows)
     }
 }
+
+class MessageReactionRowsTest {
+
+    private fun message(summary: Map<String, Int>? = null, mine: List<String>? = null, rows: List<ReactionRow>? = null) =
+        ApiMessage(id = "m1", conversationId = "c1", reactionSummary = summary, currentUserReactions = mine, reactionRows = rows)
+
+    @Test
+    fun `my optimistic add writes a row under my user id and is idempotent`() {
+        val once = MessageReactionRows.withOwn(message(), "❤️", present = true, currentUserId = "me")
+        val twice = MessageReactionRows.withOwn(once, "❤️", present = true, currentUserId = "me")
+
+        assertThat(once.reactionRows!!.map { it.participantId }).containsExactly("me")
+        assertThat(twice).isEqualTo(once)
+    }
+
+    @Test
+    fun `add then remove cancel locally`() {
+        val added = MessageReactionRows.withOwn(message(), "❤️", present = true, currentUserId = "me")
+        val removed = MessageReactionRows.withOwn(added, "❤️", present = false, currentUserId = "me")
+
+        assertThat(removed.reactionRows).isEmpty()
+    }
+
+    @Test
+    fun `an optimistic add on a message known only by its counts rebuilds the others without author`() {
+        val result = MessageReactionRows.withOwn(message(summary = mapOf("❤️" to 2)), "❤️", present = true, currentUserId = "me")
+
+        assertThat(result.reactionRows!!.map { it.participantId }).containsExactly(null, null, "me")
+    }
+
+    @Test
+    fun `without an identity nothing is written`() {
+        val original = message()
+        assertThat(MessageReactionRows.withOwn(original, "❤️", present = true, currentUserId = null)).isSameInstanceAs(original)
+    }
+
+    @Test
+    fun `the echo of my own add finds my optimistic row and changes nothing`() {
+        val optimistic = MessageReactionRows.withOwn(message(summary = mapOf("❤️" to 1)), "❤️", present = true, currentUserId = "me")
+
+        val echo = MessageReactionRows.echoed(optimistic, "❤️", adding = true, participantId = "p-me", ownerUserId = "me", currentUserId = "me", aggregate = null)
+
+        assertThat(echo.changed).isFalse()
+    }
+
+    @Test
+    fun `my add from another device is a change, written under my user id`() {
+        val echo = MessageReactionRows.echoed(message(), "❤️", adding = true, participantId = "p-me", ownerUserId = "me", currentUserId = "me", aggregate = null)
+
+        assertThat(echo.changed).isTrue()
+        assertThat(echo.message.reactionRows!!.single().participantId).isEqualTo("me")
+    }
+
+    @Test
+    fun `a third party echo is bounded by the served aggregate`() {
+        val full = message(rows = listOf(ReactionRow("a", "m1", "p-a", "❤️"), ReactionRow("b", "m1", "p-b", "❤️")))
+
+        val echo = MessageReactionRows.echoed(
+            full, "❤️", adding = true, participantId = "p-c", ownerUserId = "c", currentUserId = "me",
+            aggregate = ReactionLedger.Aggregate(count = 2, participantIds = null),
+        )
+
+        assertThat(echo.changed).isFalse()
+    }
+}
