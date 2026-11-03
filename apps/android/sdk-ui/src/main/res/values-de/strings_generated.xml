@@ -407,4 +407,9 @@
     <string name="viewer_save">Speichern</string>
     <string name="viewer_saving">Wird gesichert…</string>
     <string name="viewer_share_outside">Teilen</string>
+    <string name="voiceProfile_recording_createProfile">Stimmprofil erstellen</string>
+    <string name="voiceProfile_recording_languagePicker">Aufnahmesprache</string>
+    <string name="voiceProfile_recording_min_duration">min. %1$d s</string>
+    <string name="voiceProfile_recording_readAloud">Lesen Sie diesen Text laut vor</string>
+    <string name="voiceProfile_recording_sample">Probe %1$d</string>
 </resources>

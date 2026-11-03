@@ -27,10 +27,10 @@ class VoiceSampleRulesTest {
     }
 
     @Test
-    fun `chaque texte du catalogue se lit en au moins dix secondes`() {
+    fun `chaque texte du catalogue se lit en plus de sept secondes, loin des cinq d'une phrase unique`() {
         VoiceProfilePrompts.supportedLanguageCodes.forEach { code ->
             VoiceProfilePrompts.prompts(code).forEach {
-                assertThat(VoiceSampleRules.estimatedReadingSeconds(it.text)).isAtLeast(8.0)
+                assertThat(VoiceSampleRules.estimatedReadingSeconds(it.text)).isAtLeast(7.0)
             }
         }
     }

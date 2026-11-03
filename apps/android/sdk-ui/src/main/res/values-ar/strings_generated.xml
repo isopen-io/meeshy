@@ -427,4 +427,9 @@
     <string name="viewer_save">حفظ</string>
     <string name="viewer_saving">جارٍ الحفظ…</string>
     <string name="viewer_share_outside">مشاركة</string>
+    <string name="voiceProfile_recording_createProfile">إنشاء الملف الصوتي</string>
+    <string name="voiceProfile_recording_languagePicker">لغة التسجيل</string>
+    <string name="voiceProfile_recording_min_duration">%1$d ث كحد أدنى</string>
+    <string name="voiceProfile_recording_readAloud">اقرأ هذا النص بصوت عالٍ</string>
+    <string name="voiceProfile_recording_sample">العينة %1$d</string>
 </resources>

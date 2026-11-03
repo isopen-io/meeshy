@@ -407,4 +407,9 @@
     <string name="viewer_save">Save</string>
     <string name="viewer_saving">Saving…</string>
     <string name="viewer_share_outside">Share</string>
+    <string name="voiceProfile_recording_createProfile">Create voice profile</string>
+    <string name="voiceProfile_recording_languagePicker">Recording language</string>
+    <string name="voiceProfile_recording_min_duration">min %1$d s</string>
+    <string name="voiceProfile_recording_readAloud">Read this text aloud</string>
+    <string name="voiceProfile_recording_sample">Sample %1$d</string>
 </resources>

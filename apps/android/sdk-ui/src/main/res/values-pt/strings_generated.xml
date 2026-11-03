@@ -412,4 +412,9 @@
     <string name="viewer_save">Salvar</string>
     <string name="viewer_saving">Salvando…</string>
     <string name="viewer_share_outside">Compartilhar</string>
+    <string name="voiceProfile_recording_createProfile">Criar perfil vocal</string>
+    <string name="voiceProfile_recording_languagePicker">Idioma da gravação</string>
+    <string name="voiceProfile_recording_min_duration">mín. %1$d s</string>
+    <string name="voiceProfile_recording_readAloud">Leia este texto em voz alta</string>
+    <string name="voiceProfile_recording_sample">Amostra %1$d</string>
 </resources>
