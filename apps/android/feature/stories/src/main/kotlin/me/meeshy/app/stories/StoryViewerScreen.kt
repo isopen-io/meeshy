@@ -123,6 +123,8 @@ fun StoryViewerScreen(
         playing = playback.playing,
         lap = playback.lap,
         waiting = playback.waiting,
+        awaitingStart = playback.awaitingStart,
+        scrubber = playback.scrubber,
         composing = cover.composing,
         railPlan = railPlan,
         commentThread = commentThread,
