@@ -97,6 +97,10 @@
     <string name="bubble_joinNotice_rule_messages_denied">darf keine Nachrichten schreiben</string>
     <string name="bubble_location_open">In Karten öffnen</string>
     <string name="bubble_location_shared">Geteilter Standort</string>
+    <string name="bubble_media_a11y_masked">Ausgeblendetes Medium</string>
+    <string name="bubble_media_a11y_view_once">Medium zum einmaligen Ansehen</string>
+    <string name="bubble_media_masked">Ausgeblendeter Inhalt</string>
+    <string name="bubble_media_tap_to_view">Zum Ansehen tippen</string>
     <string name="bubble_message_deleted">Nachricht gelöscht</string>
     <string name="bubble_meta_pinned_a11y">Angeheftete Nachricht</string>
     <string name="bubble_protection_after_read">Verschwindet nach dem Lesen</string>

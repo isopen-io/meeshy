@@ -105,6 +105,10 @@
     <string name="bubble_joinNotice_rule_messages_denied">لا يمكنه كتابة الرسائل</string>
     <string name="bubble_location_open">فتح في الخرائط</string>
     <string name="bubble_location_shared">موقع تمت مشاركته</string>
+    <string name="bubble_media_a11y_masked">وسائط مخفية</string>
+    <string name="bubble_media_a11y_view_once">وسائط تُعرض مرة واحدة</string>
+    <string name="bubble_media_masked">محتوى مخفي</string>
+    <string name="bubble_media_tap_to_view">انقر للعرض</string>
     <string name="bubble_message_deleted">تم حذف الرسالة</string>
     <string name="bubble_meta_pinned_a11y">رسالة مثبّتة</string>
     <string name="bubble_protection_after_read">يختفي بعد القراءة</string>

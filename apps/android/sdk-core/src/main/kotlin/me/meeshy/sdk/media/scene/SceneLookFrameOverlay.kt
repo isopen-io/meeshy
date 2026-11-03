@@ -2,6 +2,7 @@ package me.meeshy.sdk.media.scene
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.RectF
 import androidx.media3.effect.BitmapOverlay
@@ -13,12 +14,14 @@ import me.meeshy.sdk.model.scene.export.StoryExportVideoFormat
  * rendue ; le cadrage au format (`Presentation`, remplissage centré) l'agrandit d'autant. Peint une fois au format comme le
  * moteur poserait la vidéo, il entre au plus bas de la pile des calques, sur la seule fenêtre [startMillis]–[endMillis] de
  * sa vidéo : la vidéo réglée ne coûte ainsi aucune passe GL de plus que la vidéo nue. Appelé sur le fil GL de Media3.
+ * [filter] : le look de la diapo (#15224), que l'aperçu pose sur la vidéo ET sur son cadre — le cadre le reçoit en se peignant.
  */
 internal class SceneLookFrameOverlay(
     private val frame: Bitmap,
     private val startMillis: Long,
     private val endMillis: Long,
     private val format: StoryExportVideoFormat,
+    private val filter: ColorFilter? = null,
 ) : BitmapOverlay() {
 
     private var painted: Bitmap? = null
@@ -45,7 +48,7 @@ internal class SceneLookFrameOverlay(
         val halfHeight = frame.height * scale / 2f
         return Bitmap.createBitmap(format.width, format.height, Bitmap.Config.ARGB_8888).also { target ->
             val box = RectF(width / 2f - halfWidth, height / 2f - halfHeight, width / 2f + halfWidth, height / 2f + halfHeight)
-            Canvas(target).drawBitmap(frame, null, box, PAINT)
+            Canvas(target).drawBitmap(frame, null, box, filter?.let { Paint(PAINT).apply { colorFilter = it } } ?: PAINT)
         }
     }
 
@@ -66,7 +69,7 @@ internal class SceneLookFrameOverlay(
                 .map { first ->
                     val look = checkNotNull(items[first].look)
                     val last = (first until items.size).takeWhile { items[it].look === look }.last()
-                    SceneLookFrameOverlay(checkNotNull(look.look.frame), spans[first], spans[last + 1], format)
+                    SceneLookFrameOverlay(checkNotNull(look.look.frame), spans[first], spans[last + 1], format, look.sceneFilter)
                 }
         }
     }

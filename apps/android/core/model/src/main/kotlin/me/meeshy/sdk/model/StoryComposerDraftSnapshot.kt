@@ -315,6 +315,8 @@ data class StoryComposerDraftSnapshot(
     /** Les pièces téléversées que la scène porte, avec leur type et leur durée : ce qui qualifie un réel au retour. */
     val media: List<UploadedMedia> = emptyList(),
     val formats: List<String> = emptyList(),
+    /** La story publiée que ce brouillon ÉDITE (iOS `draftEditingPostId`) ; `null` : une création, et un blob d'avant. */
+    val editingPostId: String? = null,
 ) {
     /** Whether a publish of this draft is still owed a server confirmation (see [awaitingPublication]). */
     val isAwaitingPublication: Boolean
@@ -351,7 +353,8 @@ data class StoryComposerDraftSnapshot(
             postText == other.postText &&
             format == other.format &&
             formats == other.formats &&
-            media == other.media
+            media == other.media &&
+            editingPostId == other.editingPostId
 
     companion object {
         /** The audience a fresh draft defaults to — parity with the composer's `StoryVisibility.PUBLIC`. */

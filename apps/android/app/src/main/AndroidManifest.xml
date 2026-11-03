@@ -268,6 +268,13 @@
             android:exported="false"
             android:foregroundServiceType="phoneCall|microphone|camera|mediaPlayback|mediaProjection|dataSync" />
 
+        <!-- L'envoi de média en arrière-plan (MediaUploadLeaseNotifications) passe par le service de WorkManager en dataSync :
+             le type est redit ici, le lint vital de la release ne lisant pas celui déclaré par :sdk-core. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
         <!-- Boutons des notifications en cours (Annuler, Arrêter, Raccrocher...) : un seul récepteur, sans gestionnaire = sans effet. -->
         <receiver
             android:name=".ongoing.OngoingCommandReceiver"

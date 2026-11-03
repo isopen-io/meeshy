@@ -180,6 +180,20 @@ class SessionTeardownTest {
     }
 
     @Test
+    fun wipe_emptiesTheMultiDraftStoryStore() = runTest {
+        val root = java.nio.file.Files.createTempDirectory("story-drafts-teardown").toFile()
+        val store = me.meeshy.sdk.story.StoryDraftDiskStore(root.resolve("files"), root.resolve("sessions"), kotlinx.serialization.json.Json)
+        val draft = StoryComposerDraftSnapshot(slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "le brouillon de A")), selectedId = "s1")
+        store.save("a", draft, mapOf("m.jpg" to root.resolve("m.jpg").apply { writeText("A") }))
+
+        teardown(perAccountCaches = setOf(me.meeshy.sdk.story.StoryDraftStoreTeardown(store))).wipe()
+
+        assertThat(store.isEmpty()).isTrue()
+        assertThat(store.load("a")).isNull()
+        assertThat(root.resolve("files/StoryDrafts").exists()).isFalse()
+    }
+
+    @Test
     fun wipe_clearsTheActiveSessionsSnapshot() = runTest {
         val sessions = InMemoryUserSessionsSnapshotStore()
         sessions.save(me.meeshy.sdk.model.session.UserSessionsPayload(listOf(me.meeshy.sdk.model.session.UserSession("a"))), 5L)
