@@ -63,7 +63,7 @@ class ChatTranslationRequestsTest {
         every { socket.translationReceived } returns received
         val audioCalls = mutableListOf<Pair<String, String>>()
         val controller = ChatTranslationController(
-            scope = backgroundScope,
+            scope = screenScope(),
             state = ChatStateAccess(flow),
             messages = MutableStateFlow(loaded),
             messageRepository = repo,
