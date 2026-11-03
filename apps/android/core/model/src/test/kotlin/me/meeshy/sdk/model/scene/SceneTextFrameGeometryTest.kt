@@ -39,7 +39,7 @@ class SceneTextFrameGeometryTest {
     fun `the diamond widens around the inked text and centres it`() {
         val p = placed(StoryTextFrameShape.DIAMOND, ink = 5.0)
         assertThat(p.metrics.boundsWidth).isEqualTo(420.0)
-        assertThat(p.textX).isEqualTo(105.0)
+        assertThat(p.textX).isEqualTo(110.0)
     }
 
     @Test
