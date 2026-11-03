@@ -71,6 +71,7 @@ import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.appearance.AppearanceScheme
 import me.meeshy.sdk.model.appearance.ConversationAppearance
 import me.meeshy.sdk.model.appearance.ConversationBackground
+import me.meeshy.sdk.model.appearance.ConversationBackgroundPhotoVerdict
 import me.meeshy.sdk.model.appearance.ConversationBackgroundResolution
 import me.meeshy.sdk.model.mediahub.ConversationMediaKind
 import me.meeshy.sdk.model.mediahub.MediaHubItem
@@ -121,7 +122,7 @@ internal fun ConversationAppearanceSheet(
     }
     val accent = hexColor(effectiveHex)
     val candidates = remember(media.items) {
-        media.items.filter { item -> item.attachment?.let { !it.isVideo && !it.isEncrypted } == true }
+        media.items.filter { item -> item.attachment?.let { !it.isVideo && ConversationBackgroundPhotoVerdict.mayBeOffered(it.isEncrypted, isViewOnce = null, isBlurred = null) } == true }
     }
     val gridState = rememberLazyGridState()
     val nearEnd by remember(gridState) {
