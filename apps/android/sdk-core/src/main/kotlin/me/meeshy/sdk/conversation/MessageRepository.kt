@@ -11,6 +11,7 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.media.MediaAdoption
+import me.meeshy.sdk.media.PendingMediaPreviewing
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MeeshyUser
@@ -63,9 +64,11 @@ class MessageRepository internal constructor(
         erasures: PlaintextErasureLedger? = null,
         /** #14890 — le fichier local d'un média envoyé rejoint le cache typé à l'accusé. */
         adoption: MediaAdoption? = null,
+        /** #15104 — l'aperçu local d'un média en attente part avec sa bulle. */
+        previews: PendingMediaPreviewing? = null,
     ) : this(
         history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures),
-        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption),
+        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption, previews),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao, fence),
             outboxRepository,

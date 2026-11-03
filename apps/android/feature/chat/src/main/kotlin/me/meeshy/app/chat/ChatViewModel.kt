@@ -125,6 +125,7 @@ class ChatViewModel @Inject constructor(
     private val endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
     private val openConversations: OpenConversationRegistry,
     reactionRows: me.meeshy.sdk.reaction.ReactionRowStore? = null,
+    pendingPreviews: me.meeshy.sdk.media.PendingMediaPreviewing = me.meeshy.sdk.media.PendingMediaPreviewing.None,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -226,6 +227,7 @@ class ChatViewModel @Inject constructor(
         languageIdentifier = languageIdentifier,
         mentionContacts = mentionContacts,
         endToEnd = endToEnd,
+        pendingPreviews = pendingPreviews,
     )
 
     private val reactions = ChatReactionController(

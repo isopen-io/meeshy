@@ -25,6 +25,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaIntake
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.media.PendingMediaPreviewing
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.AttachmentMessageType
@@ -107,6 +108,7 @@ internal class AppShareSheetViewModel @Inject constructor(
     private val networkMonitor: NetworkMonitor,
     private val outOfThread: OutOfThreadSendGate,
     private val trackedLinks: PostShareLinkService,
+    private val previews: PendingMediaPreviewing = PendingMediaPreviewing.None,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AppShareState())
@@ -380,6 +382,8 @@ internal class AppShareSheetViewModel @Inject constructor(
     private suspend fun postFiles(conversationId: String, text: String, language: String, user: MeeshyUser) {
         incomingItems.forEachIndexed { index, item ->
             val uploadCmid = mediaUploadQueue.enqueue(item, conversationId = conversationId)
+            val effects = MessageEffects()
+            val preview = previews.render(uploadCmid, item, effects)
             messageRepository.sendOptimistic(
                 conversationId = conversationId,
                 content = if (index == 0) text else "",
@@ -394,6 +398,11 @@ internal class AppShareSheetViewModel @Inject constructor(
                         originalName = item.fileName,
                         mimeType = item.mimeType,
                         fileSize = item.sizeBytes.toInt(),
+                        thumbnailUrl = preview?.thumbnailUrl,
+                        width = preview?.width,
+                        height = preview?.height,
+                        duration = (preview?.durationMs ?: item.durationMs)?.toInt(),
+                        effectFlags = effects.flags,
                     ),
                 ),
             )
