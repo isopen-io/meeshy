@@ -297,6 +297,8 @@
     <string name="story_composer_grabber">Alça da barra de ferramentas</string>
     <string name="story_composer_grabber_hint_dismiss">Arraste para baixo para reduzir ou fechar.</string>
     <string name="story_composer_grabber_hint_resize">Arraste para cima para ampliar, para baixo para reduzir ou fechar.</string>
+    <string name="story_composer_loadingImage">Carregando a imagem...</string>
+    <string name="story_composer_loadingVideo">Carregando o vídeo...</string>
     <string name="story_composer_redo">Refazer</string>
     <string name="story_composer_soundLibrary">Biblioteca</string>
     <string name="story_composer_undo">Desfazer</string>

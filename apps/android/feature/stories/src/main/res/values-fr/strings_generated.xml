@@ -297,6 +297,8 @@
     <string name="story_composer_grabber">Poignée de la barre d\'outils</string>
     <string name="story_composer_grabber_hint_dismiss">Faites glisser vers le bas pour réduire ou fermer.</string>
     <string name="story_composer_grabber_hint_resize">Faites glisser vers le haut pour agrandir, vers le bas pour réduire ou fermer.</string>
+    <string name="story_composer_loadingImage">Chargement de l\'image...</string>
+    <string name="story_composer_loadingVideo">Chargement de la vidéo...</string>
     <string name="story_composer_redo">Rétablir</string>
     <string name="story_composer_soundLibrary">Bibliothèque</string>
     <string name="story_composer_undo">Annuler</string>

@@ -295,6 +295,8 @@
     <string name="story_composer_grabber">Toolbar handle</string>
     <string name="story_composer_grabber_hint_dismiss">Drag down to shrink or close.</string>
     <string name="story_composer_grabber_hint_resize">Drag up to enlarge, down to shrink or close.</string>
+    <string name="story_composer_loadingImage">Loading image…</string>
+    <string name="story_composer_loadingVideo">Loading video…</string>
     <string name="story_composer_redo">Redo</string>
     <string name="story_composer_soundLibrary">Library</string>
     <string name="story_composer_undo">Undo</string>

@@ -297,6 +297,8 @@
     <string name="story_composer_grabber">Maniglia della barra strumenti</string>
     <string name="story_composer_grabber_hint_dismiss">Trascina verso il basso per ridurre o chiudere.</string>
     <string name="story_composer_grabber_hint_resize">Trascina verso l\'alto per ingrandire, verso il basso per ridurre o chiudere.</string>
+    <string name="story_composer_loadingImage">Caricamento dell\'immagine...</string>
+    <string name="story_composer_loadingVideo">Caricamento del video...</string>
     <string name="story_composer_redo">Ripristina</string>
     <string name="story_composer_soundLibrary">Libreria</string>
     <string name="story_composer_undo">Annulla</string>
