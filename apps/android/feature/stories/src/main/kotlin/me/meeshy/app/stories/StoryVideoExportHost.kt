@@ -29,6 +29,8 @@ import me.meeshy.sdk.model.composer.scene.SceneExportPlan
 import me.meeshy.sdk.model.composer.scene.SceneExportState
 import me.meeshy.sdk.model.scene.export.StoryExportAuthorFacts
 import me.meeshy.sdk.model.scene.export.StoryExportMode
+import me.meeshy.ui.component.export.ExportAnnouncement
+import me.meeshy.ui.component.export.rememberExportAnnouncer
 import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.icons.MeeshyIcons
@@ -119,8 +121,9 @@ fun rememberSceneVideoExport(
 }
 
 /**
- * L'export vu de l'écran (#13897) : la progression tant qu'il tourne, puis son ISSUE, retenue avant que l'état ne soit
- * acquitté ([onAcknowledge] le ramène au repos) — un échec se dit toujours, jamais une bande qui disparaît sans un mot.
+ * L'export vu de l'écran (#13897) : la progression tant qu'il tourne, puis son ISSUE, remise à l'annonceur de
+ * l'application (#14557) avant que l'état ne soit acquitté ([onAcknowledge] le ramène au repos) — un échec se dit
+ * toujours, jamais une bande qui disparaît sans un mot, et la fin se dit encore quand le compositeur s'est fermé.
  * [onReady] remet le fichier prêt (feuille de partage).
  */
 @Composable
@@ -132,12 +135,25 @@ internal fun SceneExportStatus(
     onAcknowledge: () -> Unit,
     onReady: (SceneExportState.Ready) -> Unit,
 ) {
-    var outcome by remember { mutableStateOf<SceneExportOutcome?>(null) }
-    val shown = SceneExportOutcome.of(exportState) ?: outcome
+    val announcer = rememberExportAnnouncer()
+    val saved = stringResource(R.string.stories_scene_export_saved)
+    val shared = stringResource(R.string.stories_scene_export_shared)
+    val failed = stringResource(R.string.stories_scene_export_failed)
+    val retry = stringResource(R.string.stories_viewer_retry)
+    val currentRetry by rememberUpdatedState(onRetry)
+    var announced by remember { mutableStateOf<ExportAnnouncement?>(null) }
     LaunchedEffect(exportState) {
         val export = exportState
-        if (export is SceneExportState.Running) outcome = null
-        SceneExportOutcome.of(export)?.let { outcome = it }
+        if (export is SceneExportState.Running) announced?.let(announcer::withdraw)
+        SceneExportOutcome.of(export)?.let { outcome ->
+            val announcement = when (outcome) {
+                SceneExportOutcome.SAVED -> ExportAnnouncement(saved)
+                SceneExportOutcome.SHARED -> ExportAnnouncement(shared)
+                SceneExportOutcome.FAILED -> ExportAnnouncement(failed, failed = true, retryLabel = retry, onRetry = { currentRetry() })
+            }
+            announced = announcement
+            announcer.announce(announcement)
+        }
         when (export) {
             SceneExportState.Saved, SceneExportState.Failed -> onAcknowledge()
             is SceneExportState.Ready -> onReady(export)
@@ -148,9 +164,6 @@ internal fun SceneExportStatus(
         fraction = exportState.veilFraction,
         onCancel = onCancel,
         verifying = exportState.isVerifying,
-        outcome = shown,
-        onRetry = onRetry,
-        onOutcomeShown = { outcome = null },
         painting = painting,
     )
 }

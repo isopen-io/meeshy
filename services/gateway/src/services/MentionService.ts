@@ -702,3 +702,28 @@ export async function resolveUsernamesToIds(
   });
   return users.map((u) => u.id);
 }
+
+/**
+ * #14107 (audit M4) — les mentionnés qui reçoivent `mention:created` (avec le
+ * contenu en clair) : sans le destinataire d'une DEMANDE de message en attente
+ * dans CETTE conversation — il la découvre dans sa boîte, comme le veut
+ * l'éventail des notifications (`messageNotificationFanOut`, même prédicat :
+ * `messageRequestAt` posé). Une lecture qui échoue n'émet rien (fail-closed).
+ */
+export async function withoutPendingMessageRequests(
+  prisma: PrismaClient,
+  conversationId: string,
+  userIds: readonly string[]
+): Promise<string[]> {
+  if (!userIds || userIds.length === 0) return [];
+  try {
+    const pending = await prisma.participant.findMany({
+      where: { conversationId, userId: { in: [...userIds] }, messageRequestAt: { not: null } },
+      select: { userId: true }
+    });
+    const silenced = new Set(pending.map((row) => row.userId));
+    return userIds.filter((id) => !silenced.has(id));
+  } catch {
+    return [];
+  }
+}

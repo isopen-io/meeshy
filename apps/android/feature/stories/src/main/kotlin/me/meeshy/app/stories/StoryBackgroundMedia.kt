@@ -37,7 +37,7 @@ data class StoryBackgroundMedia(
     val adjustments: ImageAdjustments? = null,
     /** La fenêtre gardée d'une vidéo de fond (#13973) ; une image n'en a pas. */
     val window: MediaTrimBounds? = null,
-    /** Le quart de tour du fond, et le volume d'une vidéo de fond (#14083) ; au repos, rien de plus au fil. */
+    /** Le quart de tour du fond, son recadrage (#13973) et le volume d'une vidéo de fond (#14083) ; au repos, rien de plus au fil. */
     val setting: StoryBackgroundSetting = StoryBackgroundSetting(),
 ) {
     /** A `video/…` MIME denotes a looping background video; anything else is an image. */
@@ -85,5 +85,6 @@ data class StoryBackgroundMedia(
             rotation = setting.rotationDeg.toDouble(),
             volume = if (isVideo) setting.volume else 1f,
             mutedVolumeMemento = setting.mutedVolumeMemento.takeIf { isVideo },
+            crop = setting.crop,
         )
 }

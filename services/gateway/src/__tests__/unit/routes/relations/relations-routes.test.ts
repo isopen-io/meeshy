@@ -155,7 +155,7 @@ describe('#13933 — POST /relations/:userId/level — baisser ou sortir', () =>
     await app.call('POST', `${PREFIXE}/${AUTRE}/level`, { level: 'FRIEND' });
     await app.close();
 
-    expect(app.store.relations()[0].transitions).toEqual([{ actorId: MOI, from: 'CLOSE', to: 'FRIEND', at: NOW }]);
+    expect(app.store.relations()[0].transitions).toEqual([{ actorId: MOI, from: 'CLOSE', to: 'FRIEND', at: NOW, cause: 'explicit' }]);
   });
 
   it('refuse de MONTER par cette route : 400 RELATION_NOT_A_DROP, et un niveau égal ne change rien', async () => {

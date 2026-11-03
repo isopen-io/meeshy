@@ -6,10 +6,12 @@ import kotlin.math.roundToLong
  * The message menu's audio preview, driven through the thread's [VoiceNoteEngine] (#13862): a
  * translated voice note is Ogg Opus, which `MediaPlayer` skips below Android 10, so the preview
  * plays on Media3 like the thread does. Every control turns into an [OverlayMediaTransport]
- * transition that is reconciled onto the engine, then published through [onChange].
+ * transition that is reconciled onto the engine, then published through [onChange]. A protected voice
+ * note ([isProtected]: ephemeral, view-once, blurred, sealed) is loaded uncached, like the thread does.
  */
 internal class OverlayAudioPreview(
     private val engine: VoiceNoteEngine,
+    private val isProtected: Boolean,
     private val onChange: (OverlayMediaTransport) -> Unit,
 ) {
     var transport: OverlayMediaTransport = OverlayMediaTransport.idle()
@@ -43,7 +45,7 @@ internal class OverlayAudioPreview(
         val prev = transport
         val url = next.currentUrl
         when {
-            next.isLoading && url != null && url != prev.currentUrl -> engine.load(url)
+            next.isLoading && url != null && url != prev.currentUrl -> if (isProtected) engine.loadUncached(url) else engine.load(url)
             next.isPlaying && !prev.isPlaying -> {
                 engine.setSpeed(next.playbackRate)
                 engine.start()

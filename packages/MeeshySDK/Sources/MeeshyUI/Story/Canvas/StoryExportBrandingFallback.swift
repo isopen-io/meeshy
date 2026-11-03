@@ -43,7 +43,9 @@ nonisolated public struct StoryExportBrandingFailure: Sendable, Equatable {
 /// intacte ; ce qui manque est la marque de Meeshy, et le défaut est le nôtre.
 /// Refuser l'export, ou doubler l'attente d'un ré-encodage qui échoue en
 /// général pour une cause déterministe, ferait payer ce défaut à
-/// l'utilisateur. Android fait le même choix (`StoryExportBrandAssembler` : la
+/// l'utilisateur. Seul un décodage refusé, qui n'est pas déterministe, est
+/// relancé une fois avant d'arriver ici
+/// (`StoryExportBranding.exportRetryingDecodeFailure`). Android fait le même choix (`StoryExportBrandAssembler` : la
 /// story part seule si ses cartes ne se peignent pas).
 ///
 /// Ce que ce site ajoute : l'échec n'est plus une ligne d'avertissement

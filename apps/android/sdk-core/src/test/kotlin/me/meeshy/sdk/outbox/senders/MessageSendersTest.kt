@@ -156,6 +156,21 @@ class MessageSendersTest {
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
     }
 
+    /** #14656 — only an ACCEPTED deletion lets the end-to-end plaintext leave the vault. */
+    @Test
+    fun `delete message confirms the erasure only once the server accepted it`() = runTest {
+        val handler = DeleteMessageHandler(messageApi, messageRepository, ledger)
+        val row = outboxRow(OutboxKind.DELETE_MESSAGE, targetId = "m1")
+
+        coEvery { messageApi.delete("m1") } returns refused()
+        handler.send(row)
+        coVerify(exactly = 0) { messageRepository.confirmDeletion(any()) }
+
+        coEvery { messageApi.delete("m1") } returns accepted(Unit)
+        handler.send(row)
+        coVerify(exactly = 1) { messageRepository.confirmDeletion("m1") }
+    }
+
     @Test
     fun `pin message sends the conversation id from the payload with the message id as target`() = runTest {
         val handler = PinMessageHandler(messageApi, messageRepository, senderJson, ledger)

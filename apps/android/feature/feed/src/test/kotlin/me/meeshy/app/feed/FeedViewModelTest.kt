@@ -94,6 +94,7 @@ class FeedViewModelTest {
     private fun viewModel(hasMore: Boolean = true): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         every { repository.feedHasMore } returns MutableStateFlow(hasMore)
+        every { repository.gestureRefusals } returns MutableSharedFlow()
         every { socialSocket.postCreated } returns postCreated
         every { socialSocket.postDeleted } returns postDeleted
         every { socialSocket.postLiked } returns postLiked
@@ -103,6 +104,9 @@ class FeedViewModelTest {
         every { socialSocket.commentDeleted } returns commentDeleted
         every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
         every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
+        every { socialSocket.postReactionAdded } returns MutableSharedFlow()
+        every { socialSocket.postReactionRemoved } returns MutableSharedFlow()
+        every { socialSocket.reconnected } returns kotlinx.coroutines.flow.emptyFlow()
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
         return FeedViewModel(repository, session, socialSocket, config, reportRepository, workManager, engagement, publications)
@@ -461,6 +465,7 @@ class FeedViewModelTest {
     ): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
         every { repository.feedHasMore } returns MutableStateFlow(true)
+        every { repository.gestureRefusals } returns MutableSharedFlow()
         every { repository.feedStream(any(), any()) } returns stream
         every { socialSocket.postCreated } returns postCreated
         every { socialSocket.postDeleted } returns postDeleted

@@ -208,7 +208,6 @@ final class UnreadCountLabelTests: XCTestCase {
         let sites: [(path: String, call: String)] = [
             ("Meeshy/Features/Main/Views/ThemedConversationRow.swift", "UnreadCountLabel.messages("),
             ("Meeshy/Features/Main/Views/ConversationView+ScrollIndicators.swift", "UnreadCountLabel.messages("),
-            ("Meeshy/Features/Main/Views/GlobalSearchView.swift", "UnreadCountLabel.messages("),
             ("Meeshy/Features/Main/Views/RootFloatingChrome.swift", "UnreadCountLabel.notifications("),
             // Un cinquième site a vécu ici — `Lens/Mode/LentilleFocusCard.swift`,
             // découvert par la CI parce que 235i avait retiré

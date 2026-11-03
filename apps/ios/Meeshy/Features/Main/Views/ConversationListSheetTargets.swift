@@ -41,6 +41,8 @@ struct ConversationListSheetTargets {
 
     /// Celle dont la suppression attend confirmation.
     @Indirect var deleteTarget: Conversation? = nil
+    /// « Rendre obsolète » demandé (#14645) — la confirmation, jamais l'effet.
+    @Indirect var obsoleteTarget: Conversation? = nil
 
     /// Celle dont la feuille de verrou est présentée.
     @Indirect var lockSheet: Conversation? = nil

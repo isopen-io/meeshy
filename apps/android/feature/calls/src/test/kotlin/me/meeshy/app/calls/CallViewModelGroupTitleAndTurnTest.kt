@@ -88,6 +88,7 @@ class CallViewModelGroupTitleAndTurnTest {
         every { signalManager.incomingOffers } returns MutableSharedFlow()
         every { signalManager.endedCalls } returns MutableSharedFlow<CallEndedSignal>()
         every { signalManager.iceServersRefreshed } returns refreshes
+        every { signalManager.callErrors } returns MutableSharedFlow<me.meeshy.sdk.model.call.CallErrorSignal>()
         every { signalManager.qualityAlerts } returns MutableSharedFlow()
         every { signalManager.screenCaptureAlerts } returns MutableSharedFlow()
         every { signalManager.translatedSegments } returns MutableSharedFlow()

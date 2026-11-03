@@ -9,6 +9,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import me.meeshy.core.database.entity.OutboxEntity
+import kotlinx.coroutines.flow.first
+import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.ConversationPreferencesUpdate
 import me.meeshy.sdk.net.apiCall
@@ -16,6 +18,8 @@ import me.meeshy.sdk.outbox.ConversationPrefsPayload
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
 import me.meeshy.sdk.outbox.OutboxKindKey
+import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.UserStateRollbackEvents
 import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.outbox.toSendResult
 import me.meeshy.sdk.outbox.withPayload
@@ -43,7 +47,22 @@ public class MarkUnreadHandler @Inject constructor(
 public class UpdateConversationPrefsHandler @Inject constructor(
     private val conversationApi: ConversationApi,
     private val json: Json,
+    private val conversationRepository: ConversationRepository,
+    private val outboxRepository: OutboxRepository,
+    private val rollbacks: UserStateRollbackEvents,
 ) : OutboxKindHandler {
+
+    /**
+     * Le serveur a refusé l'instantané (ou les essais sont épuisés) : la ligne retrouve l'état d'avant le geste et
+     * l'écran en est prévenu. Un instantané plus récent encore en attente pour la conversation porte l'intention
+     * actuelle : il n'est pas défait.
+     */
+    override suspend fun onExhausted(row: OutboxEntity) {
+        val previous = runCatching { json.decodeFromString<ConversationPrefsPayload>(row.payload).previous }.getOrNull() ?: return
+        val newerPending = outboxRepository.observePendingTargets(OutboxKind.UPDATE_CONVERSATION_PREFS).first()
+        if (row.targetId in newerPending) return
+        if (conversationRepository.restorePreferences(row.targetId, previous)) rollbacks.emit(row.targetId)
+    }
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<ConversationPrefsPayload>(row) { prefs ->

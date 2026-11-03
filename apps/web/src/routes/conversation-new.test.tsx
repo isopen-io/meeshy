@@ -122,6 +122,14 @@ describe('l’écran s’ouvre en DIRECT', () => {
 
   /* En direct, une rangée OUVRE une conversation : elle ne se déclare pas
      cochable, sans quoi un lecteur d'écran annoncerait un état qui n'existe pas. */
+  test('la feuille se ferme par (X), plus par « < » (#14646)', async () => {
+    const el = await mount();
+    const close = el.querySelector<HTMLAnchorElement>('[data-new-close]');
+    expect(close?.getAttribute('aria-label')).toBe('Fermer');
+    expect(close?.getAttribute('href')).toBe('/chats');
+    expect(close?.querySelector('svg')).not.toBeNull();
+  });
+
   test('une rangée ne s’annonce PAS cochable', async () => {
     const el = await mount();
     expect(firstPerson(el)?.hasAttribute('aria-pressed')).toBe(false);
@@ -171,6 +179,14 @@ describe('passer en GROUPE change ce qu’un tap produit', () => {
     expect(composer(el)).not.toBeNull();
     expect(text(el.querySelector('h1'))).toBe('Nouveau groupe');
     expect(modeButton(el, 'group')?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  test('la description est REPLIÉE : un toucher la déplie (#14646)', async () => {
+    const el = await mount();
+    await click(modeButton(el, 'group'));
+    expect(el.querySelector('[data-group-description]')).toBeNull();
+    await click(el.querySelector('[data-group-description-open]'));
+    expect(el.querySelector('[data-group-description]')).not.toBeNull();
   });
 
   test('chaque rangée devient une case à cocher, et le DIT', async () => {
@@ -232,15 +248,23 @@ describe('un refus se pose sous son champ, et RIEN ne part', () => {
     expect(text(el.querySelector(`#${decrit}`))).toContain('nom');
   });
 
-  test('sans personne : c’est la LISTE qui est blâmée, pas le titre', async () => {
+  test('sans personne mais avec un titre (#14646) : rien n’est refusé, le groupe de moi seul part', async () => {
     const el = await mount();
     await click(modeButton(el, 'group'));
-    typeInto(titleField(el), 'Équipe déploiement');
+    typeInto(titleField(el), 'Mes notes');
     await settle();
     await submitGroup(el);
 
-    expect(titleField(el)?.getAttribute('aria-invalid')).toBe('false');
-    expect(text(el.querySelector('[role="alert"]'))).toContain('au moins une personne');
+    expect(titleField(el)?.getAttribute('aria-invalid') ?? 'false').toBe('false');
+    expect(text(el.querySelector('[role="alert"]'))).not.toContain('personne');
+  });
+
+  test('sans personne ni titre : c’est le TITRE qui est blâmé', async () => {
+    const el = await mount();
+    await click(modeButton(el, 'group'));
+    await submitGroup(el);
+
+    expect(titleField(el)?.getAttribute('aria-invalid')).toBe('true');
   });
 
   test('corriger le champ visé efface son refus', async () => {
@@ -253,20 +277,6 @@ describe('un refus se pose sous son champ, et RIEN ne part', () => {
     typeInto(titleField(el), 'Équipe');
     await settle();
     expect(titleField(el)?.getAttribute('aria-invalid')).toBe('false');
-  });
-
-  /* Choisir quelqu'un répare le refus de la LISTE — le geste qui corrige est
-     celui qui efface le message, jamais un second envoi. */
-  test('choisir quelqu’un efface le refus de la liste', async () => {
-    const el = await mount();
-    await click(modeButton(el, 'group'));
-    typeInto(titleField(el), 'Équipe');
-    await settle();
-    await submitGroup(el);
-    expect(el.querySelector('[role="alert"]')).not.toBeNull();
-
-    await click(firstPerson(el));
-    expect(el.querySelector('[role="alert"]')).toBeNull();
   });
 
   test('le bouton nomme le geste, et reste actionnable après un refus', async () => {

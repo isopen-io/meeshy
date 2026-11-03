@@ -938,7 +938,12 @@
     <string name="game_notebook_remove_failed">The Chronicle couldn’t remove this photo.</string>
     <string name="game_notebook_size">The Chronicle takes up %1$s.</string>
     <string name="game_photo_a11y">Photo: %1$s</string>
+    <string name="game_photo_author_caption_achievement">Great deed of</string>
+    <string name="game_photo_author_caption_mission">Dream fulfilled by</string>
+    <string name="game_photo_author_caption_rank">Rank reached by</string>
     <string name="game_photo_author_label_achievement">Great deed of %1$s</string>
+    <string name="game_photo_author_label_mission">Dream fulfilled by %1$s</string>
+    <string name="game_photo_author_label_rank">Rank reached by %1$s</string>
     <string name="game_photo_camera_denied">The camera is denied. Allow it in your device settings, or pick a photo from your gallery.</string>
     <string name="game_photo_camera_unavailable">The camera is not available (is another app using it?). Pick a photo from your gallery, or keep the card only.</string>
     <string name="game_photo_camera_unsupported">This device does not allow the camera here. Pick a photo from your gallery, or keep the card only.</string>

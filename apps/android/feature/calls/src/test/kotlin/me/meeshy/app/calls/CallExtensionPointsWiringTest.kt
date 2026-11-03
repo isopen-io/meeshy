@@ -117,6 +117,7 @@ class CallExtensionPointsWiringTest {
         every { signalManager.incomingOffers } returns MutableSharedFlow()
         every { signalManager.endedCalls } returns endedCalls
         every { signalManager.iceServersRefreshed } returns MutableSharedFlow<IceServersRefreshedPayload>()
+        every { signalManager.callErrors } returns MutableSharedFlow<me.meeshy.sdk.model.call.CallErrorSignal>()
         every { signalManager.qualityAlerts } returns MutableSharedFlow()
         every { signalManager.screenCaptureAlerts } returns MutableSharedFlow()
         every { signalManager.translatedSegments } returns MutableSharedFlow()

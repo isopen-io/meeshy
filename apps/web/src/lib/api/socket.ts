@@ -34,6 +34,7 @@ import {
 } from './realtime-message-mutations';
 import { applyMessageHiddenForMe, isMessageHiddenForMeEvent } from './realtime-message-hidden';
 import { applyViewerMembershipEnded, viewerMembershipEndedOf } from './realtime-membership-ended';
+import { applyConversationGone, conversationGoneOf } from './realtime-conversation-gone';
 import { applyMessagePinnedEvent, applyMessageUnpinnedEvent, isMessagePinnedEvent, isMessageUnpinnedEvent } from './realtime-message-pin';
 import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
 import {
@@ -210,6 +211,8 @@ export type RealtimeDeps = {
   /** Le compte NOMMÉ supprimé (#10237) : `error { code: ACCOUNT_DELETED, accountId }`
    * ou `auth:session-revoked { deletedAccountId }` — jamais le compte actif. */
   readonly onAccountDeleted?: (accountId: string) => void;
+  /** `conversation:closed` / `conversation:obsoleted` (#14645) : le fil ouvert de cette conversation se referme. */
+  readonly onConversationGone?: (conversationId: string) => void;
   /** Le compte de la session qui a OUVERT la connexion — seul nommable (audit #10237) ; `null` pour un invité. */
   readonly account?: string | null;
   /** Horloge INJECTABLE (motif `perform-send.ts`) — jamais `Date.now()` lu
@@ -343,8 +346,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
        fermé quand l'éphémère arrive ; c'est cet instant-là qui fait foi. */
     noteEphemeralDelivery(payload, now());
     /* LA GALERIE DE LA COQUE ANDROID (#8308) — à la RÉCEPTION, une seule fois,
-       jamais un média protégé ni le mien ; sans effet hors de la coque. */
-    noteGalleryReception(payload, deps.viewerId());
+       jamais un média protégé ni le mien, seulement si « Sauvegarder média »
+       est ouvert (#14641) ; sans effet hors de la coque. */
+    noteGalleryReception(payload, deps.viewerId(), deps.queryClient);
 
     const candidates = new Set([payload.senderId, payload.sender?.userId].filter((id): id is string => id !== undefined));
     for (const userId of candidates) {
@@ -494,6 +498,14 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onParticipantDeparture = (payload: unknown): void => {
     const ended = viewerMembershipEndedOf(payload, deps.viewerId());
     if (ended !== null) applyViewerMembershipEnded(deps.queryClient, ended);
+  };
+
+  /** `conversation:closed` / `-obsoleted` (#14645) — ligne, détail et messages partent. Règle : `realtime-conversation-gone.ts`. */
+  const onConversationGone = (payload: unknown): void => {
+    const id = conversationGoneOf(payload);
+    if (id === null) return;
+    deps.onConversationGone?.(id);
+    applyConversationGone(deps.queryClient, id);
   };
 
   /** `message:cited-post-withdrawn` (#7969) — la story citée est retirée : la carte passe « Story indisponible ». Règle : `realtime-cited-post.ts`. */
@@ -1033,6 +1045,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantDeparture);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantDeparture);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
@@ -1128,6 +1142,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantDeparture);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantDeparture);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);

@@ -53,6 +53,9 @@ class CallTurnCredentialsController @Inject constructor(
     private var watchdogJob: Job? = null
     private var retryAttempt = 0
 
+    /** Une demande `call:request-ice-servers` attend sa réponse : un `call:error` qui arrive peut être son refus. */
+    val hasPendingRequest: Boolean get() = watchdogJob?.isActive == true
+
     fun attach(host: CallSessionHost) {
         this.host = host
     }

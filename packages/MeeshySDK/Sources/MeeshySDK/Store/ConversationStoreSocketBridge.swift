@@ -129,6 +129,7 @@ public final class ConversationStoreSocketBridge {
             conversationUpdated: socket.conversationUpdated.eraseToAnyPublisher(),
             conversationDeleted: socket.conversationDeleted.eraseToAnyPublisher(),
             conversationRestored: socket.conversationRestored.eraseToAnyPublisher(),
+            conversationObsoleted: socket.conversationObsoleted.eraseToAnyPublisher(),
             participantLeft: socket.participantSelfLeft.eraseToAnyPublisher(),
             participantBanned: socket.participantBanned.eraseToAnyPublisher(),
             userPreferencesUpdated: socket.userPreferencesConversationUpdated.eraseToAnyPublisher(),
@@ -151,6 +152,7 @@ public final class ConversationStoreSocketBridge {
         conversationUpdated: AnyPublisher<ConversationUpdatedEvent, Never>,
         conversationDeleted: AnyPublisher<ConversationDeletedSocketEvent, Never>,
         conversationRestored: AnyPublisher<ConversationRestoredSocketEvent, Never> = Empty().eraseToAnyPublisher(),
+        conversationObsoleted: AnyPublisher<ConversationObsoletedEvent, Never> = Empty().eraseToAnyPublisher(),
         participantLeft: AnyPublisher<ParticipantLeftEvent, Never> = Empty().eraseToAnyPublisher(),
         participantBanned: AnyPublisher<ParticipantBannedEvent, Never> = Empty().eraseToAnyPublisher(),
         userPreferencesUpdated: AnyPublisher<UserPreferencesConversationUpdatedSocketEvent, Never>,
@@ -176,6 +178,7 @@ public final class ConversationStoreSocketBridge {
             conversationUpdated: conversationUpdated,
             conversationDeleted: conversationDeleted,
             conversationRestored: conversationRestored,
+            conversationObsoleted: conversationObsoleted,
             participantLeft: participantLeft,
             participantBanned: participantBanned,
             userPreferencesUpdated: userPreferencesUpdated,
@@ -224,6 +227,14 @@ public final class ConversationStoreSocketBridge {
             .store(in: &cancellables)
 
         feeds.conversationDeleted
+            .relay(through: lane) { event in
+                await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: event.conversationId))
+            }
+            .store(in: &cancellables)
+
+        // Rendue OBSOLÈTE par un administrateur (#14645) : elle n'est plus à
+        // personne, aucun gate d'identité.
+        feeds.conversationObsoleted
             .relay(through: lane) { event in
                 await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: event.conversationId))
             }

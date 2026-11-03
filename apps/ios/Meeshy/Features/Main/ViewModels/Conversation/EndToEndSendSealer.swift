@@ -32,6 +32,9 @@ struct EndToEndSendSealer {
     /// Le dernier statut servi ne dit pas le bout en bout d'une conversation
     /// que cet appareil a vue chiffrée (#12987) : rien ne part.
     var servedWithoutEndToEnd = false
+    /// Un tête-à-tête HYBRIDE (#14369) : le clair part, et la couche appareil
+    /// libsignal l'accompagne (`HybridDeviceLayerSender`).
+    var hybridDeviceLayer = false
     /// Le régime a changé côté serveur : le fil le relit, et dit si le serveur
     /// sert désormais sans bout en bout une conversation vue chiffrée.
     var onRegimeStale: @MainActor () async -> Bool = { false }
@@ -276,6 +279,7 @@ extension EndToEndSendSealer {
             endToEnd: viewModel.endToEnd,
             regimeEpoch: ledger.epoch(for: viewModel.conversationId),
             servedWithoutEndToEnd: seals && ledger.servedInClear(viewModel.conversationId),
+            hybridDeviceLayer: !seals && HybridDeviceLayer.isHybrid(viewModel.currentConversation?.encryptionMode ?? viewModel.encryptionModeAtOpening),
             onRegimeStale: { [refresher = viewModel.collaborators.regimeRefresher, id = viewModel.conversationId] in
                 refresher.refresh(conversationId: id)
                 await refresher.settle()

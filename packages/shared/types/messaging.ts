@@ -5,7 +5,7 @@
  * Gateway WebSocket ↔ Frontend communication
  */
 
-import type { E2EEDevicesMismatch } from './e2ee-directory.js';
+import type { E2EEDeviceLayerRequest, E2EEDevicesMismatch } from './e2ee-directory.js';
 import type { ApiResponse } from './api-responses.js';
 import type { SocketIOMessage } from './socketio-events.js';
 import type { EncryptedPayload } from './encryption.js';
@@ -163,6 +163,13 @@ export interface MessageRequest {
   // End-to-end encryption payload (for E2EE mode)
   // When present, content field should be empty or ignored
   readonly encryptedPayload?: EncryptedPayload;
+
+  /**
+   * La couche appareil d'un envoi HYBRIDE (#14369) : des enveloppes libsignal
+   * posées à côté d'un `content` en clair. Exclusive de `encryptedPayload` ;
+   * admise seulement dans une conversation `hybrid`.
+   */
+  readonly deviceLayer?: E2EEDeviceLayerRequest;
 
   // Preferences de traduction spécifiques à ce message
   readonly translationPreferences?: MessageTranslationPreferences;

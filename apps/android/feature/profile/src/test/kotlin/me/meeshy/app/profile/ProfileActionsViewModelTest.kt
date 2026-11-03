@@ -18,7 +18,9 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.conversation.DirectConversationOpener
 import me.meeshy.sdk.conversation.DirectConversationResolution
 import me.meeshy.sdk.conversation.DirectConversationSource
+import me.meeshy.sdk.friend.BlockActionCoordinator
 import me.meeshy.sdk.friend.BlockCache
+import me.meeshy.sdk.friend.BlockFailure
 import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.friend.ConnectionActionController
 import me.meeshy.sdk.friend.FriendshipCache
@@ -40,6 +42,7 @@ import me.meeshy.sdk.model.profile.ProfileLayout
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.relation.CirclesGateway
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
 import org.junit.After
 import org.junit.Before
@@ -67,11 +70,15 @@ class ProfileActionsViewModelTest {
     }
     private val blockRepository: BlockRepository = mockk(relaxed = true) {
         coEvery { listBlocked() } returns NetworkResult.Success(emptyList())
-        coEvery { setBlockedDurably(any(), any()) } answers {
+    }
+    private val blockFailures = MutableSharedFlow<BlockFailure>(extraBufferCapacity = 4)
+    private val blockActions: BlockActionCoordinator = mockk(relaxed = true) {
+        every { failures } returns blockFailures
+        coEvery { setBlocked(any(), any()) } answers {
             blockCache.setBlocked(firstArg(), secondArg())
-            "cmid"
         }
     }
+    private val reportRepository: ReportRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true) {
         every { currentUserId } returns "me"
     }
@@ -92,7 +99,8 @@ class ProfileActionsViewModelTest {
         blockCache = blockCache,
         blockRepository = blockRepository,
         directConversationOpener = opener(direct),
-        workManager = mockk(relaxed = true),
+        blockActions = blockActions,
+        reportRepository = reportRepository,
         sessionRepository = session,
         circles = circles,
     )
@@ -160,7 +168,7 @@ class ProfileActionsViewModelTest {
 
         vm.block()
 
-        coVerify { blockRepository.setBlockedDurably("u2", true) }
+        coVerify { blockActions.setBlocked("u2", true) }
         assertThat(vm.state.value.plan!!.layout).isEqualTo(ProfileLayout.BLOCKED_BY_ME)
         assertThat(vm.state.value.plan!!.canUnblock).isTrue()
         assertThat(seen).containsExactly(ProfileActionEvent.Toast(ProfileActionFeedback.UserBlocked))
@@ -181,7 +189,7 @@ class ProfileActionsViewModelTest {
 
     @Test
     fun `a failed block toasts the failure and keeps the profile usable`() = runTest {
-        coEvery { blockRepository.setBlockedDurably("u2", true) } throws IllegalStateException("disk")
+        coEvery { blockActions.setBlocked("u2", true) } throws IllegalStateException("disk")
         val vm = viewModel()
         val seen = events(vm)
         vm.bind("u2", isAnonymous = false)
@@ -190,6 +198,39 @@ class ProfileActionsViewModelTest {
 
         assertThat(vm.state.value.plan!!.layout).isEqualTo(ProfileLayout.NORMAL)
         assertThat(seen).containsExactly(ProfileActionEvent.Toast(ProfileActionFeedback.BlockFailed))
+    }
+
+    @Test
+    fun `an abandoned block toasts the failure when the outbox gives up`() = runTest {
+        val vm = viewModel()
+        val seen = events(vm)
+        vm.bind("u2", isAnonymous = false)
+
+        blockFailures.emit(BlockFailure("u2", wasBlocking = true))
+
+        assertThat(seen).containsExactly(ProfileActionEvent.Toast(ProfileActionFeedback.BlockFailed))
+    }
+
+    @Test
+    fun `an abandoned unblock toasts the unblock failure`() = runTest {
+        val vm = viewModel()
+        val seen = events(vm)
+        vm.bind("u2", isAnonymous = false)
+
+        blockFailures.emit(BlockFailure("u2", wasBlocking = false))
+
+        assertThat(seen).containsExactly(ProfileActionEvent.Toast(ProfileActionFeedback.UnblockFailed))
+    }
+
+    @Test
+    fun `a failure for another person is not told on this profile`() = runTest {
+        val vm = viewModel()
+        val seen = events(vm)
+        vm.bind("u2", isAnonymous = false)
+
+        blockFailures.emit(BlockFailure("someone-else", wasBlocking = true))
+
+        assertThat(seen).isEmpty()
     }
 
     @Test

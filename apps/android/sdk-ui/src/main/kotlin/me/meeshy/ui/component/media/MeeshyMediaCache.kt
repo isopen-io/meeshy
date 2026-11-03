@@ -5,13 +5,16 @@ import android.net.Uri
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.ContentMetadata
 import androidx.media3.datasource.cache.ContentMetadataMutations
 import androidx.media3.datasource.cache.SimpleCache
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import me.meeshy.sdk.media.CachedSpanProbe
@@ -24,6 +27,9 @@ import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
+import okhttp3.Call
 
 /**
  * Les deux caches Media3 de l'app : audio (200 Mo) et vidéo (1 Go), budgets lus de
@@ -32,6 +38,10 @@ import java.util.concurrent.ConcurrentHashMap
  * L'éviction est un [PinAwareLruCacheEvictor] : jamais une épingle active, jamais une ressource
  * dont un lecteur tient un bail ([lease]). Un `SimpleCache` ne tolère qu'une instance par dossier
  * dans le processus : l'objet est donc un singleton ([get]).
+ *
+ * Le réseau passe par [networkCallFactory] (#14567) : le client OkHttp des médias, dérivé du pool partagé (HTTP/2,
+ * multiplexage) sans les intercepteurs d'API. L'identité d'une requête reste celle de [MediaRequestHeaders], posée
+ * requête par requête. Tant que l'app ne l'a pas installé, la pile HTTP intégrée de Media3 prend le relais.
  */
 @UnstableApi
 public class MeeshyMediaCache private constructor(context: Context) : CachedSpanProbe, UploadedMediaCache {
@@ -61,17 +71,21 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
     }
 
     /** Source de données qui lit le cache d'abord et n'appelle le réseau que pour les tronçons manquants. */
-    public fun dataSourceFactory(category: MediaCacheCategory): DataSource.Factory =
+    public fun dataSourceFactory(category: MediaCacheCategory): CacheDataSource.Factory =
         CacheDataSource.Factory()
             .setCache(cacheFor(category))
             .setCacheKeyFactory(MeeshyMediaCacheKey)
             .setUpstreamDataSourceFactory(
-                ResolvingDataSource.Factory(DefaultDataSource.Factory(appContext)) { spec ->
+                ResolvingDataSource.Factory(networkSourceFactory()) { spec ->
                     val headers = MediaRequestHeaders.provider(spec.uri.toString())
                     if (headers.isEmpty()) spec else spec.withAdditionalHeaders(headers)
                 },
             )
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+
+    private fun networkSourceFactory(): DataSource.Factory =
+        networkCallFactory?.let { DefaultDataSource.Factory(appContext, OkHttpDataSource.Factory(it)) }
+            ?: DefaultDataSource.Factory(appContext)
 
     /**
      * Fabrique de sources du lecteur pour [uri] : le cache pour le réseau (http, https), la
@@ -83,6 +97,20 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
             DefaultMediaSourceFactory(dataSourceFactory(category))
         } else {
             DefaultMediaSourceFactory(appContext)
+        }
+    }
+
+    /**
+     * Met entière dans le cache de [category] la ressource de [url] (#14652) — par la MÊME source que le lecteur, si
+     * bien que la vidéo se rouvre ensuite sans réseau. Déjà là, rien ne part ; un échec ou une annulation n'annonce rien.
+     */
+    public suspend fun prefetch(category: MediaCacheCategory, url: String): Boolean = runInterruptible(Dispatchers.IO) {
+        if (isFullyCached(category, MeeshyMediaCacheKey.of(url))) return@runInterruptible true
+        try {
+            CacheWriter(dataSourceFactory(category).createDataSource(), DataSpec(Uri.parse(url)), null, null).cache()
+            true
+        } catch (_: IOException) {
+            false
         }
     }
 
@@ -198,6 +226,10 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
 
     public companion object {
         private const val PINS_REFRESH_MILLIS = 2_000L
+
+        /** Le client HTTP des médias, installé au démarrage par l'app (`MediaCredentialInitializer`). */
+        @Volatile
+        public var networkCallFactory: Call.Factory? = null
 
         @Volatile
         private var instance: MeeshyMediaCache? = null

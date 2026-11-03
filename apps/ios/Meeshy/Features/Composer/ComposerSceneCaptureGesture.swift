@@ -132,12 +132,16 @@ nonisolated enum ComposerSceneQuickCapture {
     }
 
     /// Le geste — et son indication — n'existent que sur une scène vide, viseur
-    /// éteint, aucun outil ouvert, dans un format qui a un viseur.
+    /// éteint, aucun outil ouvert, aucun média en train d'y entrer, dans un
+    /// format qui a un viseur. L'espace réservé d'un ajout occupe le centre de
+    /// la scène vide : l'indication s'y écrirait par-dessus « Préparation… ».
     static func offers(sceneIsBlank: Bool,
                        format: ComposerFormat,
                        stage: ComposerSceneCameraStage,
-                       toolIsOpen: Bool) -> Bool {
-        sceneIsBlank && stage == .off && !toolIsOpen && !ComposerSceneCamera.modes(for: format).isEmpty
+                       toolIsOpen: Bool,
+                       mediaIsEntering: Bool) -> Bool {
+        sceneIsBlank && !mediaIsEntering && stage == .off && !toolIsOpen
+            && !ComposerSceneCamera.modes(for: format).isEmpty
     }
 
     static func tap(format: ComposerFormat) -> Tap? {

@@ -3,13 +3,12 @@ package me.meeshy.app.stories
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -23,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -40,7 +40,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerFormatLabel
@@ -180,7 +180,7 @@ internal fun SceneToolColumn(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Column(
-            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            modifier = Modifier.weight(1f, fill = false).composerScrollEdgeCue(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(gap),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -213,7 +213,7 @@ internal fun ScenePublishSocle(
         Row(
             modifier = Modifier
                 .weight(1f)
-                .height(SCENE_TARGET)
+                .heightIn(min = SCENE_TARGET)
                 .clip(RoundedCornerShape(MeeshyRadius.pill))
                 .background(if (canPublish) Brush.linearGradient(MeeshyPalette.BrandGradient) else SolidColor(SOCLE_VEIL)),
             verticalAlignment = Alignment.CenterVertically,
@@ -221,22 +221,45 @@ internal fun ScenePublishSocle(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
+                    .heightIn(min = SCENE_TARGET)
                     .clickable(enabled = canPublish, role = Role.Button, onClick = onPublish)
                     .semantics { contentDescription = publishLabel }
                     .padding(start = MeeshySpacing.lg, end = MeeshySpacing.xs),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                Text(
-                    text = publishLabel,
+                PublishOneLineLabel(
+                    full = publishLabel,
+                    short = stringResource(R.string.composer_socle_publish),
                     color = Color.White.copy(alpha = if (canPublish) 1f else 0.6f),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
             chevron?.invoke()
+        }
+    }
+}
+
+/**
+ * Le libellé de Publier tient sur UNE ligne (#14826) : le nom entier s'il tient, puis le nom entier en plus petit, puis
+ * « Publier », puis « Publier » en plus petit, puis la flèche seule quand même ce mot ne tient pas (comme iOS aux tailles
+ * d'accessibilité) — jamais un mot coupé, jamais une seconde ligne. Le bouton garde le nom entier pour le lecteur d'écran.
+ */
+private val PUBLISH_ARROW = 20.dp
+
+@Composable
+private fun PublishOneLineLabel(full: String, short: String, color: Color) {
+    val measurer = rememberTextMeasurer()
+    val regular = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+    val reduced = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+    BoxWithConstraints {
+        val room = constraints.maxWidth
+        val fitting = remember(full, short, room, regular, reduced) {
+            listOf(full to regular, full to reduced, short to regular, short to reduced)
+                .firstOrNull { (text, style) -> measurer.measure(text, style, maxLines = 1, softWrap = false).size.width <= room }
+        }
+        if (fitting == null) {
+            Icon(MeeshyIcons.ArrowUp, contentDescription = null, tint = color, modifier = Modifier.size(PUBLISH_ARROW))
+        } else {
+            Text(text = fitting.first, color = color, style = fitting.second, maxLines = 1, softWrap = false)
         }
     }
 }

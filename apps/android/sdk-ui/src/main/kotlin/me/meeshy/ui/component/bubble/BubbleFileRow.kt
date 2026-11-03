@@ -14,7 +14,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontStyle
@@ -62,7 +65,7 @@ import me.meeshy.ui.theme.MeeshySpacing
  * A null [onClick] (no url yet, or no host callback) leaves the row non-interactive.
  */
 @Composable
-internal fun BubbleFileRow(
+public fun BubbleFileRow(
     file: BubbleFile,
     onColor: Color,
     onClick: (() -> Unit)?,
@@ -77,7 +80,7 @@ internal fun BubbleFileRow(
         BubbleContactCardRow(file, onColor, onClick, transfers, modifier)
         return
     }
-    val badge = remember(file, transfers) { transfers.badgeOf(file) }
+    val badge = rememberVideoAutoDownloadBadge(file, remember(file, transfers) { transfers.badgeOf(file) })
     val actionLabel = when (badge) {
         is PieceBadge.Downloading -> stringResource(R.string.bubble_file_cancel)
         PieceBadge.Failed -> stringResource(R.string.bubble_file_download_failed)
@@ -126,6 +129,34 @@ internal fun BubbleFileRow(
             }
         }
         FileBadgeView(badge = badge, onColor = onColor)
+    }
+}
+
+/** Où en est le téléchargement de la vidéo que la rangée a lancé ELLE-MÊME (#14652). */
+private enum class VideoAutoDownload { IDLE, RUNNING, DONE }
+
+/**
+ * La rangée d'une vidéo que la politique laisse descendre seule (#14652) la met dans le cache du lecteur dès qu'elle
+ * paraît, et le dit par son badge : progression, puis « prêt ». Hors politique, le badge de l'hôte est rendu tel quel.
+ */
+@Composable
+private fun rememberVideoAutoDownloadBadge(file: BubbleFile, hostBadge: PieceBadge): PieceBadge {
+    val starts = bubbleAutoDownloadsVideo(LocalBubbleMediaAutoDownload.current, file, hostBadge)
+    val prefetcher = rememberBubbleVideoPrefetcher()
+    var progress by remember(file.attachmentId, file.url) { mutableStateOf(VideoAutoDownload.IDLE) }
+    val url = file.url
+    if (starts && url != null) {
+        LaunchedEffect(url) {
+            if (progress != VideoAutoDownload.IDLE) return@LaunchedEffect
+            progress = VideoAutoDownload.RUNNING
+            progress = if (prefetcher.prefetch(url)) VideoAutoDownload.DONE else VideoAutoDownload.IDLE
+        }
+    }
+    if (hostBadge !is PieceBadge.Idle) return hostBadge
+    return when (progress) {
+        VideoAutoDownload.IDLE -> hostBadge
+        VideoAutoDownload.RUNNING -> PieceBadge.Downloading(null)
+        VideoAutoDownload.DONE -> PieceBadge.Ready
     }
 }
 
