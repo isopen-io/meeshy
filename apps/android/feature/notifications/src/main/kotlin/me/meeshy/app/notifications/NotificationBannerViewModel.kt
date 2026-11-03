@@ -18,11 +18,13 @@ import me.meeshy.sdk.model.ConversationBannerName
 import me.meeshy.sdk.model.NotificationBannerAvatar
 import me.meeshy.sdk.model.NotificationBannerFraming
 import me.meeshy.sdk.model.NotificationBannerPresentation
+import me.meeshy.sdk.model.NotificationReadScope
 import me.meeshy.sdk.model.NotificationToastDecision
 import me.meeshy.sdk.model.NotificationToastPolicy
 import me.meeshy.sdk.model.ToastDedupWindow
 import me.meeshy.sdk.model.isDirectConversationType
 import me.meeshy.sdk.notification.ActiveConversationStore
+import me.meeshy.sdk.notification.NotificationConsumptionService
 import me.meeshy.sdk.notification.NotificationPreferencesStore
 import me.meeshy.sdk.socket.MessageSocketManager
 
@@ -80,6 +82,7 @@ class NotificationBannerViewModel @Inject constructor(
     private val conversationRepository: ConversationRepository,
     private val clock: NotificationToastClock,
     private val activeConversationStore: ActiveConversationStore,
+    private val consumption: NotificationConsumptionService,
 ) : ViewModel() {
 
     private val _banner = MutableStateFlow<InAppBanner?>(null)
@@ -139,6 +142,20 @@ class NotificationBannerViewModel @Inject constructor(
         ) {
             dismiss()
         }
+    }
+
+    /**
+     * Toucher la bannière OUVRE son contenu : la notification est consommée (lue en local puis côté
+     * serveur, comme une ligne de la cloche — iOS `NotificationToastManager.consume`), la bannière
+     * tombe, et la bannière touchée est rendue à l'hôte pour qu'il navigue. `null` : plus de bannière.
+     */
+    fun onTapped(): InAppBanner? {
+        val tapped = _banner.value ?: return null
+        dismiss()
+        viewModelScope.launch {
+            runCatching { consumption.consume(NotificationReadScope.Single(tapped.notificationId)) }
+        }
+        return tapped
     }
 
     fun dismiss() {

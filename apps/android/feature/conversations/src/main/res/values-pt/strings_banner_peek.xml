@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_peek_open_full">Abrir a conversa completa</string>
+    <string name="conversation_peek_placeholder">Mensagem</string>
+    <string name="conversation_peek_send">Enviar</string>
+    <string name="conversation_peek_empty">Ainda não há mensagens</string>
+    <string name="conversation_peek_unavailable">Não foi possível carregar as mensagens</string>
+    <string name="conversation_peek_sealed">Conversa criptografada</string>
+    <string name="conversation_peek_sealed_message">Mensagem criptografada</string>
+    <string name="conversation_peek_composer_locked">Conversa criptografada: escreva pela visão completa</string>
+</resources>
