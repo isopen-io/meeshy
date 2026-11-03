@@ -1,5 +1,7 @@
 import XCTest
 import SwiftUI
+import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// #14500 — **sur un iPhone SE (375 × 667 pt) et un 13 mini (375 × 812 pt),
@@ -79,12 +81,13 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
 
     private static func postAtTwoSlides(state: ComposerRestChrome.State = rest,
                                         selection: ComposerSelectionColumn? = nil,
-                                        paste: Bool = false) -> ComposerSceneOverlayChrome {
+                                        paste: Bool = false,
+                                        sceneSideInset: CGFloat = 0) -> ComposerSceneOverlayChrome {
         ComposerSceneOverlayChrome(state: state, slideRow: slides(), slideCount: 2,
                                    onClose: {}, onUndo: {}, onRedo: {},
                                    tools: ComposerRestTool.allCases, onTool: { _ in },
                                    moreMenu: moreMenu(), pasteEntry: paste ? pasteEntry() : nil,
-                                   selection: selection)
+                                   selection: selection, sceneSideInset: sceneSideInset)
     }
 
     private static let controls = ["composer.close", "composer.history.undo", "composer.history.redo", "test.socle"]
@@ -157,6 +160,38 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
             defer { screen.dismount() }
 
             try assertClearOfControls(["composer.selection.column"] + entries, on: screen, size: size)
+        }
+    }
+
+    // MARK: - La scène plus étroite que l'écran
+
+    /// La scène 9:16 du SE, posée au-dessus du socle : elle prend toute la
+    /// hauteur et laisse une marge de chaque côté.
+    private static func sceneOfSE() -> CGRect {
+        let zone = ComposerSceneFit.zone(in: CGSize(width: iPhoneSE.width, height: iPhoneSE.height - socleReserve),
+                                         aspectRatio: SceneShape.aspect)
+        return ComposerSceneFit.frame(in: zone, aspectRatio: SceneShape.aspect)
+    }
+
+    /// Relevé au simulateur iPhone SE (#13864) : ✕ et ↶ débordaient à cheval
+    /// sur les coins de la scène, la colonne frôlait son bord droit. Ils se
+    /// posent SUR la scène, à la même distance de son bord que sur un écran
+    /// qu'elle remplit en largeur.
+    func test_surLeSE_laCroixLHistoriqueEtLaColonne_sePosentDansLaLargeurDeLaScene() throws {
+        let scene = Self.sceneOfSE()
+        XCTAssertGreaterThan(scene.minX, 8, "Le cas doit être celui d'une scène plus étroite que l'écran : \(scene).")
+        let chrome = Self.postAtTwoSlides(sceneSideInset: scene.minX)
+        let screen = RenderedScreen(Harness(chrome: chrome, size: Self.iPhoneSE), size: Self.iPhoneSE)
+        defer { screen.dismount() }
+
+        let ids = ["composer.close", "composer.history.undo", "composer.history.redo", "composer.rest.column.body",
+                   "composer.rest.postText", "composer.rest.more"]
+        for id in ids {
+            let frame = try XCTUnwrap(screen.frame(of: id), "\(id) introuvable dans l'arbre rendu")
+            XCTAssertGreaterThanOrEqual(frame.minX, scene.minX + MeeshySpacing.xs - 0.5,
+                                        "\(id) \(frame) déborde le bord gauche de la scène \(scene).")
+            XCTAssertLessThanOrEqual(frame.maxX, scene.maxX - MeeshySpacing.xs + 0.5,
+                                     "\(id) \(frame) déborde le bord droit de la scène \(scene).")
         }
     }
 

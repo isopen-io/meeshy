@@ -37,6 +37,9 @@ struct ComposerSceneOverlayChrome: View {
     /// Le niveau du haut du rail d'édition (#13957, #13974, R6) : il prend la
     /// place de la colonne des outils, jamais une barre en plus.
     var selection: ComposerSelectionColumn?
+    /// L'écart entre le bord de l'écran et celui de la scène, quand elle prend
+    /// toute la HAUTEUR et laisse une marge de chaque côté (iPhone SE).
+    var sceneSideInset: CGFloat = 0
 
     @State private var press = ComposerRailDoorPress()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -65,6 +68,7 @@ struct ComposerSceneOverlayChrome: View {
         .animation(ComposerSelectionChrome.transition(reduceMotion: reduceMotion),
                    value: ComposerRestChrome.selectionColumnIsShown(state))
         .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.horizontal, max(0, sceneSideInset))
         .padding(.top, MeeshySpacing.xs)
     }
 
