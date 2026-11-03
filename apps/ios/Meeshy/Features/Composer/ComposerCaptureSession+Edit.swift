@@ -411,7 +411,7 @@ extension ComposerCaptureSession {
         phase.isEditing && editChromeShown && ComposerEditTools.showsBrackets(active: activeEditTools)
     }
 
-    /// **La prise se réduit-elle ?** Au recadrage montré, et seulement là (#10930).
+    /// **La prise se pose-t-elle dans un cadre ?** Au recadrage montré, seulement là (#10930, #15193).
     var editFramesScene: Bool {
         phase.isEditing && ComposerEditTools.framesScene(active: activeEditTools, chromeShown: editChromeShown)
     }

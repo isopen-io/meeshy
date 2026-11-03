@@ -4,7 +4,7 @@ import CoreGraphics
 ///
 /// Plus de carte, plus de couloir : la scène prend toute la largeur (ou toute
 /// la hauteur sur un écran large) et les contrôles se posent dessus. Quand le
-/// clavier ou un panneau monte, elle ne se RE-MET PAS EN PAGE — elle se réduit
+/// clavier ou une feuille monte, elle ne se RE-MET PAS EN PAGE — elle se réduit
 /// par une échelle ancrée en haut et, s'il le faut, un décalage : une seule
 /// transaction, aucun calcul de mise en page du canvas, donc aucun objet qui
 /// saute pendant le geste.
