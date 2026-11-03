@@ -8,6 +8,9 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -243,5 +246,60 @@ class ChangePasswordViewModelTest {
         advanceUntilIdle()
 
         assertThat(sut.state.value.asksCurrentPassword).isTrue()
+    }
+
+    @Test
+    fun `un 400 en mode definition n'est pas un mot de passe actuel incorrect`() = runTest(dispatcher) {
+        val repository = mockk<UserRepository>()
+        coEvery { repository.changePassword(any(), any()) } returns
+            NetworkResult.Failure(ApiError(message = "Mot de passe trop faible", code = "HTTP_400", httpStatus = 400))
+        val sut = vm(repository, auth(NetworkResult.Success(false)))
+        advanceUntilIdle()
+        sut.onNewPasswordChange("newpass12")
+        sut.onConfirmPasswordChange("newpass12")
+
+        sut.submit()
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.error).isEqualTo(ChangePasswordError.GENERIC)
+        assertThat(sut.state.value.serverMessage).isEqualTo("Mot de passe trop faible")
+    }
+
+    @Test
+    fun `une erreur non 400 porte le message du serveur`() = runTest(dispatcher) {
+        val repository = mockk<UserRepository>()
+        coEvery { repository.changePassword(any(), any()) } returns
+            NetworkResult.Failure(ApiError(message = "Trop de tentatives", code = "HTTP_429", httpStatus = 429))
+        val sut = vm(repository)
+        sut.fillValid()
+
+        sut.submit()
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.serverMessage).isEqualTo("Trop de tentatives")
+        sut.onNewPasswordChange("newpass123")
+        assertThat(sut.state.value.serverMessage).isNull()
+    }
+
+    @Test
+    fun `le succes emet la fermeture apres 1,5 seconde seulement`() = runTest(dispatcher) {
+        val repository = mockk<UserRepository>()
+        coEvery { repository.changePassword(any(), any()) } returns
+            NetworkResult.Success(ChangePasswordResponse())
+        val sut = vm(repository)
+        val effects = mutableListOf<ChangePasswordEffect>()
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { sut.effects.collect { effects += it } }
+        sut.fillValid()
+
+        sut.submit()
+        advanceTimeBy(1_400)
+        runCurrent()
+        assertThat(sut.state.value.isSuccess).isTrue()
+        assertThat(effects).isEmpty()
+
+        advanceTimeBy(200)
+        runCurrent()
+        assertThat(effects).containsExactly(ChangePasswordEffect.Close)
+        job.cancel()
     }
 }

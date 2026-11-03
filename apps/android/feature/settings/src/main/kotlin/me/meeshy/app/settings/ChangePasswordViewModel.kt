@@ -3,7 +3,11 @@ package me.meeshy.app.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -21,6 +25,13 @@ import javax.inject.Inject
 /** The reason a change-password submit failed — localized by the screen, not the VM. */
 enum class ChangePasswordError { INCORRECT_CURRENT, NETWORK, GENERIC }
 
+/** Effets ponctuels : la fermeture automatique, 1,5 s après le succès (iOS `cancellableSleep`). */
+sealed interface ChangePasswordEffect {
+    data object Close : ChangePasswordEffect
+}
+
+internal const val CHANGE_PASSWORD_AUTO_CLOSE_MILLIS = 1_500L
+
 data class ChangePasswordUiState(
     val currentPassword: String = "",
     val newPassword: String = "",
@@ -28,6 +39,8 @@ data class ChangePasswordUiState(
     val isSaving: Boolean = false,
     val isSuccess: Boolean = false,
     val error: ChangePasswordError? = null,
+    /** Le message de la passerelle pour une erreur non 400 (iOS : `MeeshyError.server(_, msg)`). */
+    val serverMessage: String? = null,
     /** `null` tant que la lecture n'a pas répondu ou a échoué : le champ « actuel » reste demandé. */
     val hasPassword: Boolean? = null,
 ) {
@@ -66,6 +79,9 @@ class ChangePasswordViewModel @Inject constructor(
     private val _state = MutableStateFlow(ChangePasswordUiState())
     val state: StateFlow<ChangePasswordUiState> = _state.asStateFlow()
 
+    private val _effects = Channel<ChangePasswordEffect>(Channel.BUFFERED)
+    val effects: Flow<ChangePasswordEffect> = _effects.receiveAsFlow()
+
     init {
         viewModelScope.launch {
             val known = when (val result = authRepository.hasPassword()) {
@@ -77,15 +93,15 @@ class ChangePasswordViewModel @Inject constructor(
     }
 
     fun onCurrentPasswordChange(value: String) {
-        _state.update { it.copy(currentPassword = value, error = null) }
+        _state.update { it.copy(currentPassword = value, error = null, serverMessage = null) }
     }
 
     fun onNewPasswordChange(value: String) {
-        _state.update { it.copy(newPassword = value, error = null) }
+        _state.update { it.copy(newPassword = value, error = null, serverMessage = null) }
     }
 
     fun onConfirmPasswordChange(value: String) {
-        _state.update { it.copy(confirmPassword = value, error = null) }
+        _state.update { it.copy(confirmPassword = value, error = null, serverMessage = null) }
     }
 
     /**
@@ -96,7 +112,7 @@ class ChangePasswordViewModel @Inject constructor(
     fun submit() {
         val snapshot = _state.value
         if (!snapshot.canSubmit) return
-        _state.update { it.copy(isSaving = true, error = null) }
+        _state.update { it.copy(isSaving = true, error = null, serverMessage = null) }
         viewModelScope.launch {
             val result = userRepository.changePassword(
                 currentPassword = ChangePasswordForm.submittedCurrent(snapshot.currentPassword, snapshot.hasPassword),
@@ -105,16 +121,26 @@ class ChangePasswordViewModel @Inject constructor(
             _state.update { current ->
                 when (result) {
                     is NetworkResult.Success -> ChangePasswordUiState(isSuccess = true, hasPassword = current.hasPassword)
-                    is NetworkResult.Failure ->
-                        current.copy(isSaving = false, error = result.error.toChangePasswordError())
+                    is NetworkResult.Failure -> {
+                        val error = result.error.toChangePasswordError(snapshot.asksCurrentPassword)
+                        current.copy(
+                            isSaving = false,
+                            error = error,
+                            serverMessage = result.error.message.takeIf { error == ChangePasswordError.GENERIC && it.isNotBlank() },
+                        )
+                    }
                 }
+            }
+            if (result is NetworkResult.Success) {
+                delay(CHANGE_PASSWORD_AUTO_CLOSE_MILLIS)
+                _effects.send(ChangePasswordEffect.Close)
             }
         }
     }
 }
 
-private fun ApiError.toChangePasswordError(): ChangePasswordError = when {
-    httpStatus == 400 -> ChangePasswordError.INCORRECT_CURRENT
+private fun ApiError.toChangePasswordError(asksCurrentPassword: Boolean): ChangePasswordError = when {
+    httpStatus == 400 && asksCurrentPassword -> ChangePasswordError.INCORRECT_CURRENT
     code == "NETWORK" -> ChangePasswordError.NETWORK
     else -> ChangePasswordError.GENERIC
 }
