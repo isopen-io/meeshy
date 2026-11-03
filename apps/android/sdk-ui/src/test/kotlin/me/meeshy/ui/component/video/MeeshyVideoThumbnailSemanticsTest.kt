@@ -40,19 +40,19 @@ class MeeshyVideoThumbnailSemanticsTest {
 
     @Test fun `les deux badges s'affichent et la duree est au format m ss`() {
         show()
-        compose.onNodeWithTag(VideoPlayBadgeTestTag).assertExists()
-        compose.onNodeWithTag(VideoDurationBadgeTestTag).assertTextEquals("1:05")
+        compose.onNodeWithTag(VideoPlayBadgeTestTag, useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag(VideoDurationBadgeTestTag, useUnmergedTree = true).assertTextEquals("1:05")
     }
 
     @Test fun `les badges sont optionnels`() {
         show(showPlay = false, showDuration = false)
-        compose.onAllNodesWithTag(VideoPlayBadgeTestTag).assertCountEquals(0)
-        compose.onAllNodesWithTag(VideoDurationBadgeTestTag).assertCountEquals(0)
+        compose.onAllNodesWithTag(VideoPlayBadgeTestTag, useUnmergedTree = true).assertCountEquals(0)
+        compose.onAllNodesWithTag(VideoDurationBadgeTestTag, useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test fun `sans duree connue aucun badge de duree`() {
         show(durationMillis = null)
-        compose.onAllNodesWithTag(VideoDurationBadgeTestTag).assertCountEquals(0)
+        compose.onAllNodesWithTag(VideoDurationBadgeTestTag, useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test fun `tappable porte le libelle Lire la video`() {
