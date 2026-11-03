@@ -101,6 +101,10 @@
     <string name="location_fullscreen_directions">Direções</string>
     <string name="location_fullscreen_mapStyle">Estilo do mapa</string>
     <string name="location_fullscreen_sharedPosition">Posição compartilhada</string>
+    <string name="media_audio_open_fullscreen">Abrir em tela cheia, reprodução %1$d%%</string>
+    <string name="media_audio_open_fullscreen_hint">Mostra a visualização em tela cheia com as opções de salvamento</string>
+    <string name="media_audio_play">Reproduzir áudio</string>
+    <string name="media_audio_speed_cycle">Velocidade de reprodução %1$s</string>
     <string name="media_audio_transcribe">Transcrever</string>
     <string name="media_crop_a11y_handle_bottom">Borda inferior</string>
     <string name="media_crop_a11y_handle_bottomLeft">Canto inferior esquerdo</string>

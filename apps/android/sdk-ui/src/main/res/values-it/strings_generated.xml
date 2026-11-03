@@ -101,6 +101,10 @@
     <string name="location_fullscreen_directions">Itinerario</string>
     <string name="location_fullscreen_mapStyle">Stile mappa</string>
     <string name="location_fullscreen_sharedPosition">Posizione condivisa</string>
+    <string name="media_audio_open_fullscreen">Apri a schermo intero, riproduzione %1$d%%</string>
+    <string name="media_audio_open_fullscreen_hint">Mostra la vista a schermo intero con le opzioni di salvataggio</string>
+    <string name="media_audio_play">Riproduci l\'audio</string>
+    <string name="media_audio_speed_cycle">Velocità di riproduzione %1$s</string>
     <string name="media_audio_transcribe">Trascrivi</string>
     <string name="media_crop_a11y_handle_bottom">Bordo inferiore</string>
     <string name="media_crop_a11y_handle_bottomLeft">Angolo in basso a sinistra</string>
