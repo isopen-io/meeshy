@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_footer_offline_pending">Waiting, offline</string>
+    <string name="bubble_footer_slow">Slow send</string>
+    <string name="bubble_footer_edited_by_moderator">edited by a moderator</string>
+    <string name="bubble_footer_saving_edit">Saving edit</string>
+    <string name="bubble_footer_resend">Resend message</string>
+</resources>
