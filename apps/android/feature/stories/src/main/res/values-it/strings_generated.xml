@@ -147,12 +147,15 @@
     <string name="my_stories_viewers">Elenco delle visualizzazioni</string>
     <string name="share_story_text">🔗 Storia di %1$s: %2$s</string>
     <string name="stories_action_delete">Elimina</string>
+    <string name="stories_action_mute">Muto</string>
     <string name="stories_action_react">Reagisci</string>
     <string name="stories_action_reply">Rispondi</string>
     <string name="stories_action_report">Segnala</string>
     <string name="stories_action_repost">Ricondividi</string>
+    <string name="stories_action_save">Salva</string>
     <string name="stories_action_send">Invia</string>
     <string name="stories_action_share">Condividi</string>
+    <string name="stories_action_sound">Audio</string>
     <string name="stories_action_translations">Traduzioni</string>
     <string name="stories_action_views">Visualizzazioni</string>
     <string name="stories_add">Aggiungi</string>
@@ -322,6 +325,7 @@
     <string name="story_media_soundExtraction_caption">Altre persone potranno riutilizzare la colonna sonora dei video di questo post.</string>
     <string name="story_media_soundExtraction_label">Consenti il riutilizzo dell\'audio</string>
     <string name="story_reader_buffering">Caricamento della storia in corso</string>
+    <string name="story_reader_loading">Caricamento della storia…</string>
     <string name="story_repost_error_forbidden">Questa storia non può essere ricondivisa</string>
     <string name="story_repost_error_generic">Ripubblicazione non riuscita</string>
     <string name="story_repost_error_unavailable">Questa storia non è più disponibile</string>
@@ -334,6 +338,10 @@
     </plurals>
     <string name="story_send_search_hint">Cerca una conversazione...</string>
     <string name="story_send_sent">Inviato</string>
+    <string name="story_sentinel_body">La tua versione dell\'app non sa ancora disegnarla. Non è persa: dopo l\'aggiornamento apparirà esattamente come l\'ha composta il suo autore.</string>
+    <string name="story_sentinel_skip">PASSA ALLA SUCCESSIVA</string>
+    <string name="story_sentinel_title">Questa storia usa un formato più recente</string>
+    <string name="story_sentinel_update">AGGIORNA</string>
     <string name="story_sound_library_clearSearch">Cancella la ricerca</string>
     <string name="story_sound_library_emptyMine">I tuoi suoni appariranno qui non appena pubblicherai una storia con audio originale.</string>
     <string name="story_sound_library_emptySearch">Nessun suono corrisponde a questa ricerca.</string>

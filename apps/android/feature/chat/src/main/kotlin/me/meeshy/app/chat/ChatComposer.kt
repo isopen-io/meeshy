@@ -46,6 +46,9 @@ import me.meeshy.sdk.model.guest.GuestAttachmentAllowance
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.composer.ComposerCapability
 import me.meeshy.sdk.model.composer.ComposerConfiguration
+import me.meeshy.sdk.model.composer.ComposerFieldAfterSend
+import me.meeshy.sdk.model.composer.ComposerSendAlignment
+import me.meeshy.sdk.model.composer.ComposerTextFormat
 import me.meeshy.sdk.model.composer.ComposerToolbarLaw
 import me.meeshy.sdk.model.composer.ComposerMinimizeOutcome
 import me.meeshy.sdk.model.composer.ConversationComposerFold
@@ -197,6 +200,26 @@ internal fun ChatComposer(
         fieldValue = TextFieldValue(r.text, TextRange(r.cursor))
         onDraftChange(r.text)
     }
+    val returnKey = remember { ComposerReturnKeyHandler() }
+    var awaitingHostEmpty by remember { mutableStateOf(false) }
+    LaunchedEffect(draft, awaitingHostEmpty) {
+        if (awaitingHostEmpty && ComposerSendAlignment.shouldClearLocalText(hostText = draft, localText = fieldValue.text)) {
+            fieldValue = TextFieldValue(ComposerFieldAfterSend.resolve(fieldValue.text, draft, ComposerFieldAfterSend.Sender.HOST))
+            awaitingHostEmpty = false
+        }
+    }
+    fun applyEmphasis(style: ComposerTextFormat.Style) {
+        val text = fieldValue.text
+        val start = ComposerTextFormat.graphemeIndex(text, fieldValue.selection.min)
+        val end = ComposerTextFormat.graphemeIndex(text, fieldValue.selection.max)
+        val r = ComposerTextFormat.toggle(text, start, end, style)
+        if (configuration.bounded(r.text) != r.text) return
+        fieldValue = TextFieldValue(
+            r.text,
+            TextRange(ComposerTextFormat.utf16Offset(r.text, r.start), ComposerTextFormat.utf16Offset(r.text, r.end)),
+        )
+        onDraftChange(r.text)
+    }
     val hasContent = draft.isNotBlank() || hasPendingAttachments || clipboardContent != null
     LaunchedEffect(hasContent) { hostCallbacks.onHasContentChange(hasContent) }
     LaunchedEffect(focusTrigger) {
@@ -278,6 +301,13 @@ internal fun ChatComposer(
         configuration.offers(ComposerCapability.VOICE)
     val canCapture = affordances.canSendImages || affordances.canSendVideos
     val interact = hostCallbacks.onAnyInteraction
+    fun sendFromKeyboard() {
+        if (!(hasContent || isEditing) || !(canSend && (isEditing || slowMode.canSend))) return
+        interact()
+        haptics.light()
+        awaitingHostEmpty = true
+        onSend()
+    }
     val stickerSheet = LocalComposerStickerSheet.current
     var stickerSheetOpen by rememberSaveable { mutableStateOf(false) }
     val openStickers: (() -> Unit)? = if (stickerSheet != null && affordances.canSendImages) {
@@ -457,6 +487,17 @@ internal fun ChatComposer(
                                 modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
                             )
                         }
+                        if (fieldFocused && !fieldValue.selection.collapsed) {
+                            ComposerFormatBar(
+                                accentColor = accentColor,
+                                onFormat = { style ->
+                                    interact()
+                                    haptics.light()
+                                    applyEmphasis(style)
+                                },
+                                modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+                            )
+                        }
                         ComposerInputRow(
                             isEditing = isEditing,
                             hasAttachmentTiles = ladderTiles.isNotEmpty(),
@@ -502,12 +543,17 @@ internal fun ChatComposer(
                                 }
                             },
                             onFieldChange = { typed ->
-                                val bounded = configuration.bounded(typed.text)
-                                val newValue = if (bounded == typed.text) typed else TextFieldValue(bounded, TextRange(bounded.length))
+                                val resolved = returnKey.resolve(fieldValue, typed)
+                                val kept = resolved.value
+                                val bounded = configuration.bounded(kept.text)
+                                val newValue = if (bounded == kept.text) kept else TextFieldValue(bounded, TextRange(bounded.length))
                                 if (newValue.text != fieldValue.text && dock.state.isPanelOpen) dock.fieldFocused()
+                                if (newValue.text != fieldValue.text) awaitingHostEmpty = false
                                 fieldValue = newValue
                                 onDraftChange(newValue.text)
+                                if (resolved.sends) sendFromKeyboard()
                             },
+                            fieldModifier = returnKey.hardwareKeys { sendFromKeyboard() },
                             onRequestVoice = {
                                 interact()
                                 voice.request()
@@ -515,6 +561,7 @@ internal fun ChatComposer(
                             onSend = {
                                 interact()
                                 haptics.light()
+                                awaitingHostEmpty = true
                                 onSend()
                             },
                         )

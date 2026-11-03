@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MessageDeletedEvent
 import me.meeshy.sdk.model.ParticipantBannedEvent
 import me.meeshy.sdk.model.ParticipantJoinedEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
@@ -250,5 +251,63 @@ class ConversationLivePatcherTest {
 
         assertThat(stored("c1")).isNull()
         assertThat(stored("c2")).isNull()
+    }
+
+    @Test
+    fun `an edit of the last message replaces the whole facet, never keeping the old author`() = runTest {
+        seed(group())
+
+        patcher().applyEdited(incoming(id = "m1", createdAt = "2026-10-01T10:00:00.000Z", sender = "bob"))
+
+        val last = stored("c1")!!.lastMessage!!
+        assertThat(last.content).isEqualTo("Hello")
+        assertThat(last.senderName).isEqualTo("Bob")
+    }
+
+    @Test
+    fun `an edit of an older message leaves the row alone`() = runTest {
+        seed(group())
+
+        patcher().applyEdited(incoming(id = "m0"))
+
+        assertThat(stored("c1")!!.lastMessage?.id).isEqualTo("m1")
+    }
+
+    @Test
+    fun `deleting the last message reverts the row to the previous message served`() = runTest {
+        val api = mockk<ConversationApi>()
+        val previous = group().copy(
+            lastMessage = ApiConversationLastMessage(id = "m0", content = "avant", senderName = "Carol", createdAt = "2026-10-01T09:00:00.000Z"),
+        )
+        coEvery { api.getById("c1") } returns ApiResponse(success = true, data = previous)
+        seed(group())
+
+        patcher(api).applyDeleted(MessageDeletedEvent(messageId = "m1", conversationId = "c1"))
+
+        val last = stored("c1")!!.lastMessage!!
+        assertThat(last.id).isEqualTo("m0")
+        assertThat(last.senderName).isEqualTo("Carol")
+    }
+
+    @Test
+    fun `deleting the last message with no replacement known empties the preview`() = runTest {
+        val api = mockk<ConversationApi>()
+        coEvery { api.getById("c1") } throws java.io.IOException("offline")
+        seed(group())
+
+        patcher(api).applyDeleted(MessageDeletedEvent(messageId = "m1", conversationId = "c1"))
+
+        assertThat(stored("c1")!!.lastMessage).isNull()
+    }
+
+    @Test
+    fun `deleting a message that is no longer the last one does nothing and reads nothing`() = runTest {
+        val api = mockk<ConversationApi>()
+        seed(group())
+
+        patcher(api).applyDeleted(MessageDeletedEvent(messageId = "m-old", conversationId = "c1"))
+
+        assertThat(stored("c1")!!.lastMessage?.id).isEqualTo("m1")
+        coVerify(exactly = 0) { api.getById(any()) }
     }
 }

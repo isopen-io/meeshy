@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.link.EmailLinkSecret
 import me.meeshy.sdk.model.push.PushPayload
 import me.meeshy.sdk.model.push.PushTapDestination
 import me.meeshy.app.navigation.graph.GameRoutes
+import me.meeshy.app.navigation.graph.StoryRoutes
 
 /**
  * The primitive launch inputs a notification tap / full-screen call intent carries.
@@ -83,6 +84,8 @@ object LaunchRouter {
             is PushTapDestination.Post -> Routes.postDetail(destination.postId)
             is PushTapDestination.Reel -> Routes.reels(destination.postId)
             is PushTapDestination.Story -> Routes.story(destination.userId)
+            is PushTapDestination.StoryContent ->
+                StoryRoutes.storyPost(destination.postId, destination.action, destination.commentId, destination.parentCommentId)
             is PushTapDestination.Mood -> Routes.moodSpotlight(destination.statusId)
             is PushTapDestination.Profile -> Routes.profile(destination.userId)
             PushTapDestination.Notifications -> Routes.NOTIFICATIONS

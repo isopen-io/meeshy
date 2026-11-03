@@ -88,14 +88,16 @@ class MessageEffectRenderPlannerTest {
     fun plan_eachPersistentBit_mapsToItsEnum() {
         assertThat(plan(MessageEffectFlags.GLOW).persistent).containsExactly(PersistentEffect.GLOW)
         assertThat(plan(MessageEffectFlags.PULSE).persistent).containsExactly(PersistentEffect.PULSE)
-        assertThat(plan(MessageEffectFlags.RAINBOW).persistent).containsExactly(PersistentEffect.RAINBOW)
+        assertThat(plan(MessageEffectFlags.RAINBOW).persistent).isEmpty()
+        assertThat(plan(MessageEffectFlags.RAINBOW).rainbowLetters).isTrue()
         assertThat(plan(MessageEffectFlags.SPARKLE).persistent).containsExactly(PersistentEffect.SPARKLE)
     }
 
     @Test
-    fun plan_allPersistentBits_includesEveryFour() {
+    fun plan_allPersistentBits_keepsRainbowOutOfTheOutline() {
         assertThat(plan(MessageEffectFlags.PERSISTENT_MASK).persistent)
-            .containsExactlyElementsIn(PersistentEffect.entries)
+            .containsExactly(PersistentEffect.GLOW, PersistentEffect.PULSE, PersistentEffect.SPARKLE)
+        assertThat(plan(MessageEffectFlags.PERSISTENT_MASK).rainbowLetters).isTrue()
     }
 
     @Test
@@ -204,5 +206,12 @@ class MessageEffectRenderPlannerTest {
     @Test
     fun renderEffects_deletedWithNoEffects_isEmpty() {
         assertThat(renderEffects(0L, isDeleted = true).hasAnyEffect).isFalse()
+    }
+
+    @Test
+    fun plan_rainbowAlone_isNotEmptyButHasNoOutlineTreatment() {
+        val result = plan(MessageEffectFlags.RAINBOW)
+        assertThat(result.isEmpty).isFalse()
+        assertThat(result.persistent).isEmpty()
     }
 }

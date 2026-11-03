@@ -184,6 +184,6 @@ struct WaitingStoryRow: View {
 
 enum WaitingStoryCopy {
     static var cancel: String {
-        String(localized: "story.mine.waiting.cancel", defaultValue: "Annuler l'envoi", bundle: .main)
+        UnsentPublicationsCopy.cancelSend
     }
 }

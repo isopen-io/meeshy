@@ -102,16 +102,30 @@ class EncryptedTokenStoreTest {
     }
 
     @Test
-    fun `clear efface le profil du coffre du compte actif et celui-la seulement`() {
-        val vault = InMemorySecureStore()
-        vault.put("meeshy_user_B", "{}", "B")
-        val store = EncryptedTokenStore(vault)
+    fun `clear efface le profil dans le coffre du profil, distinct de celui des jetons, et celui du compte actif seulement`() {
+        val tokenVault = InMemorySecureStore()
+        val profileVault = InMemorySecureStore()
+        profileVault.put("meeshy_user_B", "{}", "B")
+        val store = EncryptedTokenStore(tokenVault, profileVault)
         store.userId = "A"
         store.jwt = "ja"
-        vault.put("meeshy_user_A", "{}", "A")
+        profileVault.put("meeshy_user_A", "{}", "A")
+
         store.clear()
-        assertThat(vault.get("meeshy_user_A", "A")).isNull()
-        assertThat(vault.get("token_date", "A")).isNull()
-        assertThat(vault.get("meeshy_user_B", "B")).isEqualTo("{}")
+
+        assertThat(profileVault.get("meeshy_user_A", "A")).isNull()
+        assertThat(profileVault.get("meeshy_user_B", "B")).isEqualTo("{}")
+        assertThat(tokenVault.get("token_date", "A")).isNull()
+        assertThat(store.userId).isNull()
+    }
+
+    @Test
+    fun `sans coffre de profil, clear n'invente rien et efface les jetons`() {
+        val tokenVault = InMemorySecureStore()
+        val store = EncryptedTokenStore(tokenVault)
+        store.userId = "A"
+        store.jwt = "ja"
+        store.clear()
+        assertThat(tokenVault.get("jwt", "A")).isNull()
     }
 }

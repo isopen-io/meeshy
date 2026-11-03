@@ -37,18 +37,36 @@ class StoryNavGraph @Inject constructor() : NavGraphContributor {
                 navDeepLink { uriPattern = Routes.STORY_DEEP_LINK },
             ),
         ) {
-            StoryViewerScreen(
-                onClose = { navController.popBackStack() },
-                onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
-                onEditStory = { storyId -> navController.navigate(Routes.storyComposerEdit(storyId)) },
-                onComposeStory = { storyId -> navController.navigate(Routes.storyComposerRecompose(storyId)) },
-                // Une story republiée qui n'est plus jouable (expirée, supprimée) ouvre la fiche du post, comme avant le lecteur.
-                onStoryMissing = { postId ->
-                    navController.navigate(Routes.postDetail(postId)) { popUpTo(Routes.STORY_VIEWER) { inclusive = true } }
-                },
-            )
+            StoryViewerHost(navController)
+        }
+        builder.composable(
+            route = StoryRoutes.STORY_POST,
+            arguments = listOf(
+                navArgument(StoryViewerViewModel.STORY_ID_ARG) { type = NavType.StringType },
+                navArgument(StoryViewerViewModel.ACTION_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument(StoryViewerViewModel.COMMENT_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument(StoryViewerViewModel.PARENT_COMMENT_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+            ),
+            deepLinks = StoryRoutes.STORY_LINKS.map { pattern -> navDeepLink { uriPattern = pattern } },
+        ) {
+            StoryViewerHost(navController)
         }
     }
+}
+
+@androidx.compose.runtime.Composable
+private fun StoryViewerHost(navController: NavHostController) {
+    StoryViewerScreen(
+        onClose = { navController.popBackStack() },
+        onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+        onEditStory = { storyId -> navController.navigate(Routes.storyComposerEdit(storyId)) },
+        onComposeStory = { storyId -> navController.navigate(Routes.storyComposerRecompose(storyId)) },
+        // Une story republiée qui n'est plus jouable (expirée, supprimée) ouvre la fiche du post, comme avant le lecteur.
+        onStoryMissing = { postId ->
+            val viewerId = navController.currentDestination?.id
+            navController.navigate(Routes.postDetail(postId)) { viewerId?.let { popUpTo(it) { inclusive = true } } }
+        },
+    )
 }
 
 @Module
