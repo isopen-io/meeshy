@@ -45,6 +45,8 @@
     <string name="audio_trim_stop">Parar</string>
     <string name="audio_trim_strip">Faixa de corte</string>
     <string name="avatar_a11y_mood">humor %1$s</string>
+    <string name="avatar_menu_view_profile">Ver o perfil</string>
+    <string name="avatar_menu_view_story">Ver o story</string>
     <string name="bubble_contact_card_a11y_on_meeshy">No Meeshy: %1$s</string>
     <string name="bubble_contact_card_on_meeshy">No Meeshy</string>
     <string name="bubble_contact_card_shared">Contato compartilhado</string>

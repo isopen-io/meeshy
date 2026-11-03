@@ -45,6 +45,8 @@
     <string name="audio_trim_stop">إيقاف</string>
     <string name="audio_trim_strip">شريط القص</string>
     <string name="avatar_a11y_mood">المزاج %1$s</string>
+    <string name="avatar_menu_view_profile">عرض الملف الشخصي</string>
+    <string name="avatar_menu_view_story">عرض القصة</string>
     <string name="bubble_contact_card_a11y_on_meeshy">على Meeshy: %1$s</string>
     <string name="bubble_contact_card_on_meeshy">على Meeshy</string>
     <string name="bubble_contact_card_shared">جهة اتصال مشتركة</string>

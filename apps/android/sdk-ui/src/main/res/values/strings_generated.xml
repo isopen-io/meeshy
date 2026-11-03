@@ -45,6 +45,8 @@
     <string name="audio_trim_stop">Stop</string>
     <string name="audio_trim_strip">Trim strip</string>
     <string name="avatar_a11y_mood">mood %1$s</string>
+    <string name="avatar_menu_view_profile">View profile</string>
+    <string name="avatar_menu_view_story">View story</string>
     <string name="bubble_contact_card_a11y_on_meeshy">On Meeshy: %1$s</string>
     <string name="bubble_contact_card_on_meeshy">On Meeshy</string>
     <string name="bubble_contact_card_shared">Shared contact</string>
