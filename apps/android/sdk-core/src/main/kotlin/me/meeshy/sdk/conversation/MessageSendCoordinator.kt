@@ -20,7 +20,10 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageEffectsEncoder
 import me.meeshy.sdk.model.MessageSticker
-import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.model.send.MessageRelation
+import me.meeshy.sdk.model.send.OutgoingAttachments
+import me.meeshy.sdk.model.send.OutgoingMessage
+import me.meeshy.sdk.model.send.SendAttemptContext
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.outbox.OutboxEnqueueResult
@@ -85,6 +88,8 @@ internal class MessageSendCoordinator(
         forwardedAttachmentIds: List<String>? = null,
         sticker: MessageSticker? = null,
         clientMessageId: String? = null,
+        attachmentReplyToId: String? = null,
+        copyAttachmentsFromMessageId: String? = null,
     ): String {
         require(clientMessageId == null || OutboxIds.isValidCid(clientMessageId)) { "clientMessageId must be a cid_ id" }
         val cid = clientMessageId ?: OutboxIds.cid()
@@ -120,31 +125,34 @@ internal class MessageSendCoordinator(
             sticker = sticker,
             forwardedFromId = forwardedFromId,
             forwardedFromConversationId = forwardedFromConversationId,
-            metadata = ForwardedPieces.stamp(chosenPieces),
+            metadata = SendTrace(
+                forwardedAttachmentIds = chosenPieces,
+                ephemeralDuration = wire.ephemeralDuration,
+                attachmentReplyToId = attachmentReplyToId,
+                copyAttachmentsFromMessageId = copyAttachmentsFromMessageId,
+            ).stamp(),
             effectFlags = wire.effectFlags,
             isBlurred = wire.isBlurred,
             isViewOnce = wire.isViewOnce,
             expiresAt = wire.expiresAt,
         )
-        val request = SendMessageRequest(
+        val outgoing = OutgoingMessage(
+            conversationId = conversationId,
             content = content,
-            originalLanguage = originalLanguage,
+            relation = MessageRelation.legacy(
+                replyToId, storyReplyToId, forwardedFromId, forwardedFromConversationId, attachmentReplyToId,
+            ),
+            attachments = OutgoingAttachments(placeholderIds.ifEmpty { null }),
             messageType = messageType,
-            replyToId = replyToId,
-            storyReplyToId = storyReplyToId,
-            clientMessageId = cid,
-            attachmentIds = placeholderIds.ifEmpty { null },
-            forwardedFromId = forwardedFromId,
-            forwardedFromConversationId = forwardedFromConversationId,
-            forwardedAttachmentIds = chosenPieces,
-            effectFlags = wire.effectFlags,
-            isBlurred = wire.isBlurred,
-            isViewOnce = wire.isViewOnce,
-            ephemeralDuration = wire.ephemeralDuration,
-            expiresAt = wire.expiresAt,
-            maxViewOnceCount = wire.maxViewOnceCount,
             location = location,
             sticker = sticker,
+            copyAttachmentsFromMessageId = copyAttachmentsFromMessageId,
+            forwardedAttachmentIds = chosenPieces,
+        )
+        // #7451 — la requête ne porte que la durée et le bit ; l'échéance locale reste sur la bulle d'affichage.
+        val request = outgoing.wireRequest(
+            SendAttemptContext(cid, now, effects, originalLanguage, reusesExistingRow = clientMessageId != null),
+            content = content,
         )
         database.withTransaction {
             messageDao.upsertAll(listOf(MessageEntityFactory.local(optimistic, now, LocalSendState.SENDING)))
@@ -221,30 +229,31 @@ internal class MessageSendCoordinator(
         messageDao.updateSendState(cmid, LocalSendState.SENDING.name)
         if (outboxRepository.retryWithPrerequisites(cmid)) return
         val message = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
+        val trace = SendTrace.read(message)
+        val outgoing = OutgoingMessage(
+            conversationId = message.conversationId,
+            content = message.content,
+            relation = MessageRelation.legacy(
+                message.replyToId, message.storyReplyToId, message.forwardedFromId,
+                message.forwardedFromConversationId, trace.attachmentReplyToId,
+            ),
+            messageType = message.messageType,
+            location = message.location,
+            sticker = message.sticker,
+            copyAttachmentsFromMessageId = trace.copyAttachmentsFromMessageId,
+            forwardedAttachmentIds = trace.forwardedAttachmentIds,
+        )
+        val effects = message.effects.copy(ephemeralDuration = trace.ephemeralDuration)
+        val context = SendAttemptContext(
+            cmid, clock.nowMillis(), effects, message.originalLanguage ?: LanguageResolver.FALLBACK_LANGUAGE,
+            reusesExistingRow = true,
+        )
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.SEND_MESSAGE,
                 lane = OutboxLanes.forMessage(message.conversationId),
                 targetId = message.conversationId,
-                payload = MeeshyApi.json.encodeToString(
-                    SendMessageRequest(
-                        content = message.content,
-                        originalLanguage = message.originalLanguage
-                            ?: LanguageResolver.FALLBACK_LANGUAGE,
-                        replyToId = message.replyToId,
-                        storyReplyToId = message.storyReplyToId,
-                        clientMessageId = cmid,
-                        forwardedFromId = message.forwardedFromId,
-                        forwardedFromConversationId = message.forwardedFromConversationId,
-                        forwardedAttachmentIds = ForwardedPieces.read(message),
-                        effectFlags = message.effectFlags,
-                        isBlurred = message.isBlurred,
-                        isViewOnce = message.isViewOnce,
-                        expiresAt = message.expiresAt,
-                        location = message.location,
-                        sticker = message.sticker,
-                    ),
-                ),
+                payload = MeeshyApi.json.encodeToString(outgoing.wireRequest(context, content = message.content)),
                 cmid = cmid,
             ),
         )

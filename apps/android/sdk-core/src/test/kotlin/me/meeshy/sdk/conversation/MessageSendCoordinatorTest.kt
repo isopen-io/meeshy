@@ -190,7 +190,7 @@ class MessageSendCoordinatorTest {
             .isEqualTo((MessageEffectFlags.VIEW_ONCE or MessageEffectFlags.EPHEMERAL).toInt())
         assertThat(request.isViewOnce).isTrue()
         assertThat(request.ephemeralDuration).isEqualTo(300)
-        assertThat(request.expiresAt).isEqualTo("1970-01-01T00:05:00Z")
+        assertThat(request.expiresAt).isNull()
         assertThat(request.maxViewOnceCount).isEqualTo(2)
         val bubble = harness.cachedMessage(cid)
         assertThat(bubble.isViewOnce).isTrue()
