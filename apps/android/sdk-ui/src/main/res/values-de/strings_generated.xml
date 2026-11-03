@@ -53,6 +53,8 @@
     <string name="auth_password_strength_veryWeak">Zu schwach</string>
     <string name="auth_password_strength_weak">Schwach</string>
     <string name="avatar_a11y_mood">Stimmung %1$s</string>
+    <string name="avatar_menu_view_profile">Profil ansehen</string>
+    <string name="avatar_menu_view_story">Story ansehen</string>
     <string name="brand_signature_accessibilityLabel">Meeshy Version %1$s, Build %2$s.</string>
     <plurals name="bubble_a11y_audios">
         <item quantity="one">eine Audiodatei</item>
