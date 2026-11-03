@@ -34,6 +34,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import me.meeshy.app.game.GamePageScaffold
 import me.meeshy.app.game.reveal.RevealCopy
 import me.meeshy.app.game.reveal.toGameMaterial
 import me.meeshy.feature.game.R

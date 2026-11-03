@@ -1,6 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="about_app_name">Meeshy</string>
+    <string name="about_copy">Copiar</string>
     <string name="about_copyright">2024-2026 Meeshy. Todos los derechos reservados.</string>
     <string name="about_description_body">Meeshy es una plataforma de mensajería en tiempo real de alto rendimiento con traducción multilingüe, clonación de voz y cifrado de extremo a extremo.</string>
     <string name="about_feature_cloud_sync">Sincronización en la nube</string>
@@ -8,11 +9,19 @@
     <string name="about_feature_themes">Temas personalizables</string>
     <string name="about_feature_translation">Traducción en tiempo real</string>
     <string name="about_feature_voice_cloning">Clonación de voz</string>
+    <string name="about_info_media_tier">Perfil multimedia</string>
     <string name="about_info_platform">Plataforma</string>
     <string name="about_info_sdk_version">Versión del SDK</string>
+    <string name="about_link_about">Acerca de Meeshy</string>
+    <string name="about_link_contact">Contacto</string>
     <string name="about_link_github">GitHub</string>
+    <string name="about_link_partners">Socios</string>
     <string name="about_link_twitter">Twitter / X</string>
     <string name="about_link_website">Sitio web</string>
+    <string name="about_media_tier_high">Alto</string>
+    <string name="about_media_tier_low">Básico</string>
+    <string name="about_media_tier_mid">Intermedio</string>
+    <string name="about_media_tier_pro">Pro</string>
     <string name="about_section_description">Descripción</string>
     <string name="about_section_features">Funciones</string>
     <string name="about_section_informations">Información</string>
@@ -93,12 +102,16 @@
     <string name="delete_account_warning_conversations">Todas tus conversaciones</string>
     <string name="delete_account_warning_messages">Todos tus mensajes</string>
     <string name="delete_account_warning_preferences">Tus preferencias y ajustes</string>
+    <string name="legal_language_picker_a11y">Idioma del documento</string>
     <string name="licenses_agpl_title">Texto de la licencia AGPL-3.0</string>
+    <string name="licenses_card_label">%1$s de %2$s, licencia %3$s</string>
+    <string name="licenses_intro">Meeshy utiliza las siguientes bibliotecas de código abierto.</string>
     <string name="licenses_libsignal_body">libsignal y las bibliotecas que incluye, con el texto de sus licencias.</string>
     <string name="licenses_libsignal_title">Avisos de libsignal</string>
     <string name="licenses_meeshy_body">El código fuente de Meeshy se publica bajo la licencia MIT. Esta aplicación incluye libsignal (Signal Messenger), publicado bajo la licencia GNU AGPL-3.0: la aplicación distribuida es, por tanto, una obra bajo la licencia AGPL-3.0 únicamente.</string>
     <string name="licenses_meeshy_body_mit">El código fuente de Meeshy se publica bajo la licencia MIT.</string>
     <string name="licenses_meeshy_title">Licencia de Meeshy</string>
+    <string name="licenses_section_open_source">Código abierto</string>
     <string name="licenses_source_body">El código fuente de esta versión, scripts de compilación incluidos, está disponible de forma gratuita.</string>
     <string name="licenses_source_commit">Revisión %1$s</string>
     <string name="licenses_source_open">Abrir el código fuente</string>
@@ -286,6 +299,8 @@
     <string name="settings_transcription_engine">Motor de transcripción</string>
     <string name="settings_transcription_engine_a11y">Motor de transcripción</string>
     <string name="settings_version_label">Versión</string>
+    <string name="support_a11y_opens">Abre %1$s</string>
+    <string name="support_help_rate">Valorar la app</string>
     <string name="support_info_build">Compilación</string>
     <string name="support_info_platform">Plataforma</string>
     <string name="support_info_version">Versión</string>

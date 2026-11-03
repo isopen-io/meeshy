@@ -29,8 +29,24 @@ internal object StoryComposerPreview {
     fun looks(state: StoryComposerUiState, mediaBaseUrl: String?): List<Map<String, StoryMediaLook>> {
         val slides = state.deck.publishableSlides
         return publishPlans(state, LOOK_LANGUAGE, slides).zip(slides) { plan, slide ->
-            plan.request.addressesOf(slide.mediaLooks, state.attachments, mediaBaseUrl)
+            slide.mediaLooks.flatMap { (id, look) -> plan.request.addressesOf(id, state.attachments, mediaBaseUrl).map { it to look } }.toMap()
         }
+    }
+
+    /** La taille debout, servie, de chaque vidéo réglée de chaque diapo publiable, par les mêmes adresses que [looks]. */
+    private fun videoSizes(state: StoryComposerUiState, mediaBaseUrl: String?): List<Map<String, Pair<Int, Int>>> {
+        val slides = state.deck.publishableSlides
+        return publishPlans(state, LOOK_LANGUAGE, slides).zip(slides) { plan, slide ->
+            slide.mediaLooks.keys.flatMap { id ->
+                val size = state.attachments.firstOrNull { it.id == id }?.videoSize() ?: return@flatMap emptyList()
+                plan.request.addressesOf(id, state.attachments, mediaBaseUrl).map { it to size }
+            }.toMap()
+        }
+    }
+
+    private fun UploadedMedia.videoSize(): Pair<Int, Int>? {
+        if (!mimeType.startsWith("video", ignoreCase = true)) return null
+        return width?.let { w -> height?.let { h -> w to h } }
     }
 
     /** Chaque diapo publiable et la scène que le lecteur en peint, ses looks compris quand [author] les signe. */
@@ -43,9 +59,10 @@ internal object StoryComposerPreview {
         project: (StoryItem) -> StorySlideView,
     ): List<Pair<StoryItem, StorySlideView>> {
         val looks = author?.let { looks(state, mediaBaseUrl) }.orEmpty()
+        val sizes = author?.let { videoSizes(state, mediaBaseUrl) }.orEmpty()
         return items(state, language, floor).mapIndexed { index, item ->
             val view = project(item)
-            val painted = author?.let { signer -> looks.getOrNull(index)?.let { StorySceneMediaLooks.of(it, signer) } }
+            val painted = author?.let { signer -> looks.getOrNull(index)?.let { StorySceneMediaLooks.of(it, signer, sizes.getOrNull(index).orEmpty()) } }
             item to if (painted == null) view else view.copy(composerLooks = painted)
         }
     }
@@ -59,17 +76,11 @@ internal object StoryComposerPreview {
         originalLanguage = originalLanguage,
     )
 
-    private fun CreateStoryRequest.addressesOf(
-        looks: Map<String, StoryMediaLook>,
-        attachments: List<UploadedMedia>,
-        mediaBaseUrl: String?,
-    ): Map<String, StoryMediaLook> {
-        val objects = storyEffects?.mediaObjects.orEmpty()
-        return looks.flatMap { (id, look) ->
-            val piece = attachments.firstOrNull { it.id == id }
-            val named = objects.filter { it.postMediaId == id }.mapNotNull { it.mediaURL ?: piece?.url }
-            (named + listOfNotNull(piece?.url)).map { resolveMediaUrl(it, mediaBaseUrl) to look }
-        }.toMap()
+    /** Les adresses que le lecteur charge pour la pièce [id] : celles que la scène nomme, et celle de la pièce téléversée. */
+    private fun CreateStoryRequest.addressesOf(id: String, attachments: List<UploadedMedia>, mediaBaseUrl: String?): List<String> {
+        val piece = attachments.firstOrNull { it.id == id }
+        val named = storyEffects?.mediaObjects.orEmpty().filter { it.postMediaId == id }.mapNotNull { it.mediaURL ?: piece?.url }
+        return (named + listOfNotNull(piece?.url)).map { resolveMediaUrl(it, mediaBaseUrl) }
     }
 
     private fun UploadedMedia.toFeedMedia(): FeedMedia = FeedMedia(

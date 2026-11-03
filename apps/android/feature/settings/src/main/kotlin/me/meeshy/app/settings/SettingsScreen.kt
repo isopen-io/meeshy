@@ -174,8 +174,6 @@ fun SettingsScreen(
                 AppearanceSection(state = state, viewModel = viewModel)
                 TranscriptionSection()
                 NotificationsSection(
-                    state = state,
-                    viewModel = viewModel,
                     onOpenNotificationSettings = onOpenNotificationSettings,
                 )
                 DataSection(
@@ -350,11 +348,11 @@ private fun AppearanceSection(state: SettingsUiState, viewModel: SettingsViewMod
 
 @Composable
 private fun NotificationsSection(
-    state: SettingsUiState,
-    viewModel: SettingsViewModel,
     onOpenNotificationSettings: () -> Unit,
+    viewModel: NotificationSettingsViewModel = hiltViewModel(),
 ) {
     val tint = MeeshyPalette.Error
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val notifications = state.notifications
     SettingsGroup(stringResource(R.string.settings_section_notifications), Icons.Filled.Notifications, tint) {
         PushNotificationToggle(

@@ -114,6 +114,7 @@ fun FeedScreen(
             val linkCopied = stringResource(R.string.feed_link_copied)
             val shareLauncher = LocalShareLauncher.current
             val shareOut = rememberContentShareOut()
+            val copyPostLink = rememberPostLinkCopy()
             var reportPostId by remember { mutableStateOf<String?>(null) }
             var deletePostId by remember { mutableStateOf<String?>(null) }
             reportPostId?.let { targetId ->
@@ -195,8 +196,10 @@ fun FeedScreen(
                             },
                             onShare = { shareOut(post.shareCard(context)) },
                             onCopyLink = {
-                                clipboard.setText(AnnotatedString(PostShareLink.webLink(post.id)))
-                                scope.launch { snackbar.showSnackbar(linkCopied) }
+                                copyPostLink(post.id) { url ->
+                                    clipboard.setText(AnnotatedString(url))
+                                    scope.launch { snackbar.showSnackbar(linkCopied) }
+                                }
                             },
                             onCopyText = { clipboard.setText(AnnotatedString(post.content)) },
                             onOpenProfile = onOpenProfile,

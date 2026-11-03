@@ -53,7 +53,7 @@ import me.meeshy.ui.theme.MeeshySpacing
  * L'espace réservé d'un média qui entre dans la scène (R5 de #13863) : à la place que R4 lui a donnée — [fillsScene] pour
  * le fond d'une diapo qui n'en a pas, sinon centré sur ([x], [y]), là où se posera le prochain objet —, avec [preview] (la
  * vignette locale, `null` pour une vidéo : une forme neutre), [fraction] de l'envoi (`null` : encore en préparation) et
- * [more] médias de la même sélection qui fondent leur propre diapo.
+ * [more] médias de la même sélection qui fondent leur propre diapo ; [isVideo] choisit le libellé « Chargement de l'image… / de la vidéo… » de la préparation.
  */
 @Immutable
 internal data class IncomingMediaPlaceholder(
@@ -63,6 +63,7 @@ internal data class IncomingMediaPlaceholder(
     val preview: Any?,
     val fraction: Float?,
     val more: Int,
+    val isVideo: Boolean = false,
 )
 
 /** L'espace réservé de la sélection en cours d'envoi, ou `null` quand rien n'entre : il part dans l'image où l'envoi s'achève. */
@@ -78,6 +79,7 @@ internal fun StoryComposerUiState.incomingPlaceholder(): IncomingMediaPlaceholde
         preview = item?.takeUnless { it.mimeType.startsWith("video", ignoreCase = true) }?.previewModel,
         fraction = incomingFraction(uploadingMedia, incomingMedia),
         more = mediaLandings.size - 1,
+        isVideo = item?.mimeType?.startsWith("video", ignoreCase = true) == true,
     )
 }
 
@@ -152,6 +154,10 @@ private fun IncomingMediaCard(placeholder: IncomingMediaPlaceholder, onCancel: (
                 CircularProgressIndicator(progress = { fraction }, color = Color.White, strokeWidth = RING_STROKE, modifier = Modifier.size(RING))
             }
             Text(status, color = Color.White, style = MaterialTheme.typography.labelMedium)
+            if (fraction == null) {
+                val loading = if (placeholder.isVideo) R.string.story_composer_loadingVideo else R.string.story_composer_loadingImage
+                Text(stringResource(loading), color = Color.White, style = MaterialTheme.typography.labelSmall)
+            }
             if (placeholder.more > 0) {
                 Text(stringResource(R.string.story_composer_incoming_more, placeholder.more), color = Color.White, style = MaterialTheme.typography.labelSmall)
             }

@@ -79,7 +79,7 @@ object ShareRecipientMerge {
         return recipients.filter { fold(it.title).contains(needle) }
     }
 
-    private fun fold(text: String): String =
+    internal fun fold(text: String): String =
         Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase()
 }
 

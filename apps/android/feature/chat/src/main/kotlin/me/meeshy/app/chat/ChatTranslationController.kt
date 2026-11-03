@@ -15,6 +15,9 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.translation.ServerTranslationAdmission
+import me.meeshy.sdk.model.translation.TranslationRequestFailure
+import me.meeshy.ui.component.bubble.RowFailure
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.collectArrived
@@ -42,7 +45,17 @@ internal class ChatTranslationController(
     private val sessionRepository: SessionRepository,
     private val messageSocketManager: MessageSocketManager,
     private val conversationId: String,
+    /** La demande de traduction d'UNE pièce audio ; `null` tant que la feuille ne l'offre pas. */
+    private val requestAttachmentTranslation: (suspend (attachmentId: String, language: String) -> Boolean)? = null,
 ) {
+
+    private val mutableFailures = MutableStateFlow<Map<String, TranslationRequestFailure>>(emptyMap())
+
+    /**
+     * Les demandes qui n'ont rien rendu, par ligne (`messageId|language`). Elles survivent à la
+     * fermeture de la feuille ; une nouvelle demande ou une traduction reçue efface la ligne.
+     */
+    val translationFailures: StateFlow<Map<String, TranslationRequestFailure>> = mutableFailures.asStateFlow()
 
     private val mutableShowingOriginal = MutableStateFlow<Set<String>>(emptySet())
 
@@ -71,9 +84,9 @@ internal class ChatTranslationController(
                 messages,
                 sessionRepository.currentUser,
                 state.flow.map { it.translatingLanguages }.distinctUntilChanged(),
-                activeLanguageOverride,
-            ) { explorerId, loaded, user, translating, overrides ->
-                buildLanguageExplorer(explorerId, loaded, user, translating, overrides)
+                activeLanguageOverride.combine(mutableFailures) { overrides, failures -> overrides to failures },
+            ) { explorerId, loaded, user, translating, (overrides, failures) ->
+                buildLanguageExplorer(explorerId, loaded, user, translating, overrides, failures)
             }
                 .distinctUntilChanged()
                 .collect { explorer -> state.update { it.copy(languageExplorer = explorer) } }
@@ -81,6 +94,7 @@ internal class ChatTranslationController(
         scope.launch {
             messageSocketManager.translationReceived.collectArrived { event ->
                 if (event.conversationId == conversationId) {
+                    mutableFailures.update { it - TranslationRequestFailure.rowKey(event.messageId, event.targetLanguage) }
                     messageRepository.applyTranslation(
                         event.messageId,
                         event.targetLanguage,
@@ -131,23 +145,89 @@ internal class ChatTranslationController(
      * a second tap while the request is in flight is ignored.
      */
     private fun requestOnDemandTranslation(messageId: String, targetLanguage: String) {
-        val key = "$messageId|$targetLanguage"
+        val key = TranslationRequestFailure.rowKey(messageId, targetLanguage)
         if (key in state.value.translatingLanguages) return
+        val refusal = refusalOrNull(messageId, targetLanguage, TranslationRequestFailure.Kind.TEXT)
+        if (refusal != null) {
+            mutableFailures.update { it + (key to refusal) }
+            return
+        }
+        mutableFailures.update { it - key }
         state.update { it.copy(translatingLanguages = it.translatingLanguages + key) }
         scope.launch {
             try {
                 val stored = messageRepository.requestTranslation(messageId, targetLanguage)
                 if (stored) {
                     mutableActiveLanguageOverride.update { it + (messageId to targetLanguage) }
+                } else {
+                    publishFailure(messageId, targetLanguage, TranslationRequestFailure.Kind.TEXT, null)
                 }
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Exception) {
                 state.update { it.copy(errorMessage = error.message) }
+                publishFailure(messageId, targetLanguage, TranslationRequestFailure.Kind.TEXT, error.message)
             } finally {
                 state.update { it.copy(translatingLanguages = it.translatingLanguages - key) }
             }
         }
+    }
+
+    /**
+     * Demande la traduction d'UNE pièce audio du message dans [language]. Même admission fail-closed
+     * que le texte (une pièce chiffrée ne part jamais au serveur) ; le résultat arrive par
+     * `audio:translation-ready`. Inerte tant que la demande par pièce n'est pas branchée.
+     */
+    fun requestAudioTranslation(messageId: String, attachmentId: String, language: String) {
+        val request = requestAttachmentTranslation ?: return
+        val target = language.normalizedCode() ?: return
+        val key = TranslationRequestFailure.rowKey(messageId, target)
+        if (key in state.value.translatingLanguages) return
+        val refusal = refusalOrNull(messageId, target, TranslationRequestFailure.Kind.AUDIO)
+        if (refusal != null) {
+            mutableFailures.update { it + (key to refusal) }
+            return
+        }
+        mutableFailures.update { it - key }
+        state.update { it.copy(translatingLanguages = it.translatingLanguages + key) }
+        scope.launch {
+            try {
+                if (!request(attachmentId, target)) {
+                    publishFailure(messageId, target, TranslationRequestFailure.Kind.AUDIO, null)
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                publishFailure(messageId, target, TranslationRequestFailure.Kind.AUDIO, error.message)
+            } finally {
+                state.update { it.copy(translatingLanguages = it.translatingLanguages - key) }
+            }
+        }
+    }
+
+    private fun refusalOrNull(
+        messageId: String,
+        language: String,
+        kind: TranslationRequestFailure.Kind,
+    ): TranslationRequestFailure? {
+        val current = state.value
+        return ServerTranslationAdmission.refusalOrNull(
+            message = messages.value.firstOrNull { it.message.id == messageId }?.message,
+            conversationEncryptionMode = current.encryptionMode,
+            conversationShownSealed = current.isEndToEnd,
+            language = language,
+            kind = kind,
+        ).takeIf { it != null }?.copy(messageId = messageId)
+    }
+
+    private fun publishFailure(
+        messageId: String,
+        language: String,
+        kind: TranslationRequestFailure.Kind,
+        detail: String?,
+    ) {
+        val failure = TranslationRequestFailure(messageId, language, kind, TranslationRequestFailure.Reason.FAILED, detail)
+        mutableFailures.update { it + (failure.rowKey to failure) }
     }
 
     /**
@@ -190,6 +270,7 @@ internal class ChatTranslationController(
         user: MeeshyUser?,
         translating: Set<String>,
         overrides: Map<String, String>,
+        failures: Map<String, TranslationRequestFailure>,
     ): MessageLanguageExplorer? {
         val id = explorerMessageId ?: return null
         val message = loaded.firstOrNull { it.message.id == id }?.message ?: return null
@@ -205,6 +286,13 @@ internal class ChatTranslationController(
             preferences = user ?: EmptyContentPreferences,
             translatingCodes = translatingCodes,
             selectedCode = overrides[id],
+            failures = failures.values.filter { it.messageId == id }.associate {
+                it.language to if (it.reason == TranslationRequestFailure.Reason.SERVER_REFUSED) {
+                    RowFailure.SERVER_REFUSED
+                } else {
+                    RowFailure.FAILED
+                }
+            },
         )
     }
 

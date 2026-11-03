@@ -84,3 +84,24 @@ class LegalDocumentCatalogTest {
         assertThat(listed).containsNoDuplicates()
     }
 }
+
+class LegalDocumentCatalogLanguagesTest {
+
+    @Test
+    fun `every document in every delivered language has all its sections and a date`() {
+        LegalDocumentKind.entries.forEach { kind ->
+            LegalDocumentCatalog.languages.forEach { language ->
+                val document = LegalDocumentCatalog.document(kind, language)
+                assertThat(document.sections.map { it.key })
+                    .containsExactlyElementsIn(LegalDocumentCatalog.sections(kind)).inOrder()
+                assertThat(document.lastUpdated).isEqualTo(LegalDate(2026, 2, 24))
+            }
+        }
+    }
+
+    @Test
+    fun `the segmented picker offers French and English first then Spanish and Portuguese`() {
+        assertThat(LegalDocumentCatalog.languages.map { it.code })
+            .containsExactly("fr", "en", "es", "pt").inOrder()
+    }
+}
