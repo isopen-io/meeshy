@@ -33,23 +33,21 @@ class CallCameraRailSemanticsTest {
         val node = rule.onNodeWithTag("fold").fetchSemanticsNode()
         assertThat(node.config.getOrNull(SemanticsProperties.ContentDescription)).isNotEmpty()
         assertThat(node.config.getOrNull(SemanticsProperties.StateDescription)).isNotNull()
-        assertThat(node.size.width).isAtLeast((44 * 1).toInt())
+        assertThat(node.size.width).isAtLeast(44)
     }
 
     @Test
     fun `un toucher sur le voile referme la grille et ne traverse pas`() {
         var open by mutableStateOf(true)
-        var reached = 0
         rule.setContent {
             MeeshyTheme {
                 Box(Modifier.size(200.dp)) {
-                    Box(Modifier.fillMaxSize().testTag("under").let { it })
+                    Box(Modifier.fillMaxSize().testTag("under"))
                     if (open) CallCameraRailScrim(onDismiss = { open = false }, modifier = Modifier.testTag("scrim"))
                 }
             }
         }
         rule.onNodeWithTag("scrim").performClick()
         assertThat(open).isFalse()
-        assertThat(reached).isEqualTo(0)
     }
 }
