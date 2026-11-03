@@ -295,6 +295,8 @@
     <string name="story_composer_grabber">Griff der Werkzeugleiste</string>
     <string name="story_composer_grabber_hint_dismiss">Nach unten ziehen zum Verkleinern oder Schließen.</string>
     <string name="story_composer_grabber_hint_resize">Nach oben ziehen zum Vergrößern, nach unten zum Verkleinern oder Schließen.</string>
+    <string name="story_composer_loadingImage">Bild wird geladen…</string>
+    <string name="story_composer_loadingVideo">Video wird geladen…</string>
     <string name="story_composer_redo">Wiederholen</string>
     <string name="story_composer_soundLibrary">Bibliothek</string>
     <string name="story_composer_undo">Rückgängig</string>

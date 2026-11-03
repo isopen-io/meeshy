@@ -303,6 +303,8 @@
     <string name="story_composer_grabber">مقبض شريط الأدوات</string>
     <string name="story_composer_grabber_hint_dismiss">اسحب لأسفل للتصغير أو الإغلاق.</string>
     <string name="story_composer_grabber_hint_resize">اسحب لأعلى للتكبير، ولأسفل للتصغير أو الإغلاق.</string>
+    <string name="story_composer_loadingImage">جارٍ تحميل الصورة...</string>
+    <string name="story_composer_loadingVideo">جارٍ تحميل الفيديو...</string>
     <string name="story_composer_redo">إعادة</string>
     <string name="story_composer_soundLibrary">المكتبة</string>
     <string name="story_composer_undo">تراجع</string>
