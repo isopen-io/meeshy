@@ -45,7 +45,10 @@ public class UserSessionsRepository @Inject constructor(
         cacheFirstFlowOf(
             policy = policy,
             snapshots = store.snapshot(),
-            revalidate = source()::revalidate,
+            revalidate = {
+                source().revalidate()
+                failure.value = null
+            },
             clock = clock,
             onRevalidateError = { failure.value = it.message ?: "sync failed" },
         )

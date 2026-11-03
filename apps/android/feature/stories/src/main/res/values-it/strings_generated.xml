@@ -368,6 +368,11 @@
     <string name="story_edit_error">Impossibile aggiornare la storia</string>
     <string name="story_edit_offline">Connessione necessaria per modificare la storia</string>
     <string name="story_edit_save">Salva</string>
+    <string name="story_group_intro_away">Assente</string>
+    <string name="story_group_intro_idle">Inattivo</string>
+    <string name="story_group_intro_offline">Non in linea</string>
+    <string name="story_group_intro_online">In linea</string>
+    <string name="story_group_intro_skip_hint">Tocca per passare alla storia</string>
     <string name="story_language_close">Chiudi</string>
     <string name="story_language_original">Originale</string>
     <string name="story_language_original_hint">Ogni testo nella sua lingua</string>

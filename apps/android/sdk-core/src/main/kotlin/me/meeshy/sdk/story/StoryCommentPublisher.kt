@@ -3,6 +3,7 @@ package me.meeshy.sdk.story
 import androidx.work.WorkManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.firstOrNull
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.outbox.OutboxCapacity
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.outbox.OutboxOutcome
@@ -40,8 +41,17 @@ class StoryCommentPublisher @Inject constructor(
     private val unsent: UnsentCommentStore,
     private val workManager: WorkManager,
 ) {
-    suspend fun publish(storyId: String, text: String, parentId: String?, originalLanguage: String?): StoryCommentPublication {
-        val cmid = queue(storyId, text, parentId, originalLanguage) ?: return StoryCommentPublication.Refused(text)
+    suspend fun publish(
+        storyId: String,
+        text: String,
+        parentId: String?,
+        originalLanguage: String?,
+        attachmentIds: List<String>? = null,
+        effectFlags: Int? = null,
+        place: SharedPlace? = null,
+    ): StoryCommentPublication {
+        val cmid = queue(storyId, text, parentId, originalLanguage, attachmentIds, effectFlags, place)
+            ?: return StoryCommentPublication.Refused(text)
         workManager.enqueue(OutboxFlushWorker.buildRequest())
         return when (val outcome = outbox.outcomeFor(cmid).firstOrNull()) {
             is OutboxOutcome.Succeeded -> StoryCommentPublication.Delivered
@@ -50,9 +60,17 @@ class StoryCommentPublisher @Inject constructor(
         }
     }
 
-    private suspend fun queue(storyId: String, text: String, parentId: String?, originalLanguage: String?): String? =
+    private suspend fun queue(
+        storyId: String,
+        text: String,
+        parentId: String?,
+        originalLanguage: String?,
+        attachmentIds: List<String>?,
+        effectFlags: Int?,
+        place: SharedPlace?,
+    ): String? =
         try {
-            posts.queueComment(storyId, text, parentId, originalLanguage)
+            posts.queueComment(storyId, text, parentId, originalLanguage, attachmentIds, effectFlags, place)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

@@ -66,6 +66,9 @@ sealed class ChatListItem {
  * is inserted directly above it (below that message's day header, if any). An id
  * absent from [bubbles] inserts nothing.
  *
+ * [serverUnreadCount] is the count the separator announces (the server's, #7525); the window count only
+ * stands in when the server count is unknown or zero.
+ *
  * When [showEncryptionNotice] is true, a single [ChatListItem.EncryptionNotice]
  * is prepended above everything (including the first day header) — the reader is at
  * the start of an encrypted conversation's history.
@@ -76,6 +79,7 @@ fun buildChatListItems(
     firstUnreadId: String? = null,
     showEncryptionNotice: Boolean = false,
     conversationStartName: String? = null,
+    serverUnreadCount: Int? = null,
 ): List<ChatListItem> {
     val items = mutableListOf<ChatListItem>()
     if (showEncryptionNotice) {
@@ -90,7 +94,8 @@ fun buildChatListItems(
     }
     var currentDay: LocalDate? = null
     val unreadIndex = firstUnreadId?.let { id -> bubbles.indexOfFirst { it.messageId == id } } ?: -1
-    val unreadCount = if (unreadIndex < 0) 0 else bubbles.subList(unreadIndex, bubbles.size).count { !it.isOutgoing }
+    val windowUnreadCount = if (unreadIndex < 0) 0 else bubbles.subList(unreadIndex, bubbles.size).count { !it.isOutgoing }
+    val unreadCount = serverUnreadCount?.takeIf { it > 0 } ?: windowUnreadCount
     bubbles.forEach { bubble ->
         val millis = isoToEpochMillis(bubble.createdAtIso)
         if (millis > 0L) {

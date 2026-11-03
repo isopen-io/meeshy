@@ -15,7 +15,6 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.notification.UnreadBadgeCoordinator
-import me.meeshy.sdk.friend.observeFriendshipLive
 import me.meeshy.sdk.notification.observeNotificationSync
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -74,7 +73,6 @@ class ChromeViewModel @Inject constructor(
 
     init {
         viewModelScope.observeNotificationSync(notificationRepository, messageSocketManager)
-        viewModelScope.observeFriendshipLive(friendshipCache, messageSocketManager)
     }
 
     fun warmUpIfAuthenticated(isAuthenticated: Boolean) {

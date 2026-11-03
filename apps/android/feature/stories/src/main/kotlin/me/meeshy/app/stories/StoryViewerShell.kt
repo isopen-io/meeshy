@@ -64,6 +64,7 @@ internal fun StoryViewerShell(
     actions: StoryViewerActions,
     haptics: MeeshyHaptics,
     viewModel: StoryViewerViewModel,
+    groupIntro: StoryGroupIntroUi,
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -261,6 +262,7 @@ internal fun StoryViewerShell(
                 toasts = viewModel.toasts,
                 modifier = Modifier.padding(bottom = with(density) { (if (composerPinned) composerHeightPx else 0).toDp() }),
             )
+            StoryGroupIntroLayer(groupIntro)
         }
     }
 }

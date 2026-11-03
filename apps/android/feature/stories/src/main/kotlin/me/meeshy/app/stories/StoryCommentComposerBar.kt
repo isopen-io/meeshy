@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.sdk.model.story.StoryCommentPiece
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshyRadius
@@ -50,6 +51,9 @@ internal const val STORY_COMMENT_REPLY_BANNER_TAG = "story.comment.replyBanner"
 internal const val STORY_COMMENT_REPLY_CANCEL_TAG = "story.comment.replyCancel"
 internal const val STORY_COMMENT_FIELD_TAG = "story.comment.field"
 internal const val STORY_COMMENT_SEND_TAG = "story.comment.send"
+internal const val STORY_COMMENT_ATTACH_TAG = "story.comment.attach"
+internal const val STORY_COMMENT_PIECE_TAG = "story.comment.piece"
+internal const val STORY_COMMENT_PIECE_REMOVE_TAG = "story.comment.pieceRemove"
 
 /**
  * **L'unique barre de saisie du lecteur de story** (iOS `StoryComposerBarView`) : un champ, un bouton d'envoi, et — quand
@@ -65,10 +69,13 @@ internal fun StoryCommentComposerBar(
     onSend: () -> Unit,
     onCancelReply: () -> Unit,
     modifier: Modifier = Modifier,
+    /** `null` : pas de plateau de pièces (la porte « joindre » est absente, jamais grisée). */
+    onAttach: (() -> Unit)? = null,
+    onRemovePiece: (String) -> Unit = {},
 ) {
     val accent = hexColor(state.accentHex)
     val secondary = hexColor(state.secondaryHex)
-    val canSend = text.isNotBlank()
+    val canSend = state.canSend(text)
     Column(modifier.fillMaxWidth().testTag(STORY_COMMENT_BAR_TAG)) {
         state.reply?.let { reply ->
             Row(
@@ -114,11 +121,28 @@ internal fun StoryCommentComposerBar(
                 }
             }
         }
+        state.attachments.pieces.forEach { piece ->
+            StoryCommentPieceChip(piece, onRemove = { onRemovePiece(piece.id) })
+        }
         Row(
             Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         ) {
+            if (onAttach != null && !state.attachments.isFull) {
+                val attachLabel = stringResource(R.string.stories_comment_attach)
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onAttach)
+                        .semantics { contentDescription = attachLabel }
+                        .testTag(STORY_COMMENT_ATTACH_TAG),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(MeeshyIcons.AttachFile, contentDescription = null, tint = MeeshyMediaChromeColors.OnMediaMuted, modifier = Modifier.size(22.dp))
+                }
+            }
             Box(
                 Modifier
                     .weight(1f)
@@ -158,6 +182,50 @@ internal fun StoryCommentComposerBar(
             ) {
                 Icon(MeeshyIcons.Send, contentDescription = null, tint = MeeshyMediaChromeColors.OnMedia, modifier = Modifier.size(20.dp))
             }
+        }
+    }
+}
+
+/** Une pièce du plateau : son nom, « envoi en cours » tant qu'elle n'a pas d'id serveur, et sa croix de retrait. */
+@Composable
+private fun StoryCommentPieceChip(piece: StoryCommentPiece, onRemove: () -> Unit) {
+    val removeLabel = stringResource(R.string.stories_comment_attach_remove)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.md)
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .background(MeeshyMediaChromeColors.MediaFill)
+            .padding(start = MeeshySpacing.md)
+            .testTag(STORY_COMMENT_PIECE_TAG),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = piece.fileName,
+                style = MaterialTheme.typography.labelLarge,
+                color = MeeshyMediaChromeColors.OnMedia,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (piece.uploadedId == null) {
+                Text(
+                    text = stringResource(R.string.stories_comment_attach_uploading),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MeeshyMediaChromeColors.OnMediaMuted,
+                )
+            }
+        }
+        Box(
+            Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onRemove)
+                .semantics { contentDescription = removeLabel }
+                .testTag(STORY_COMMENT_PIECE_REMOVE_TAG),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(MeeshyIcons.Close, contentDescription = null, tint = MeeshyMediaChromeColors.OnMediaMuted, modifier = Modifier.size(14.dp))
         }
     }
 }
