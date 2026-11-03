@@ -26,4 +26,12 @@ public object ActiveContextMatch {
         val postMatch = activePostId != null && contentPostId == activePostId
         return conversationMatch || postMatch
     }
+
+    /**
+     * La conversation du contenu est-elle ouverte dans l'une des fenêtres ([openConversationIds]) ?
+     * Un id absent ou vide ne correspond jamais. C'est la règle de la bannière : la conversation
+     * ouverte est sa seule exception (un post à l'écran ne la supprime plus).
+     */
+    public fun matchesOpenConversation(contentConversationId: String?, openConversationIds: Set<String>): Boolean =
+        !contentConversationId.isNullOrEmpty() && contentConversationId in openConversationIds
 }
