@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="audio_player_waveform">موضع التشغيل</string>
+    <string name="audio_player_error">تعذر التشغيل</string>
+    <string name="audio_player_retry">إعادة المحاولة</string>
+    <string name="audio_player_edit">تعديل الصوت</string>
+    <string name="audio_player_delete">إزالة الصوت</string>
+</resources>

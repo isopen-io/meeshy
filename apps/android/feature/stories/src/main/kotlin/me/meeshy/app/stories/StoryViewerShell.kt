@@ -27,10 +27,10 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.ui.component.FeedbackToastHost
+import me.meeshy.sdk.model.scene.export.StoryExportMode
 import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
-import me.meeshy.ui.theme.hexColor
 
 /**
  * Propriétaire : lot story-viewer-decomposition-and-nav-graph. La coque du lecteur : la carte (cube, glissé, gestes),
@@ -97,11 +97,21 @@ internal fun StoryViewerShell(
             modifier = Modifier
                 .fillMaxSize()
                 .storyCardFrame(cardMotion)
-                .background(hexColor(accent))
                 .onGloballyPositioned { rail.boxOriginInRoot = it.positionInRoot() },
         ) {
             if (slide != null) {
-                StoryViewerCanvas(slide, progress, slideDurationMs, playing, state.isMuted, lap, viewModel)
+                StoryViewerReaderScene(
+                    slide = slide,
+                    item = currentItem,
+                    progress = progress,
+                    slideDurationMs = slideDurationMs,
+                    playing = playing,
+                    lap = lap,
+                    state = state,
+                    commentsOpen = chrome.showComments,
+                    viewModel = viewModel,
+                )
+                StoryReadingScrims(chromeVisible = !state.isPaused)
             }
 
             StoryStallIndicator(waiting = waiting, modifier = Modifier.align(Alignment.Center))
@@ -122,7 +132,6 @@ internal fun StoryViewerShell(
                     accent = accent,
                     progress = { progress.value },
                     chrome = chrome,
-                    showsRepost = railPlan.showsRepost,
                     videoExport = videoExport,
                     actions = actions,
                     haptics = haptics,
@@ -148,7 +157,10 @@ internal fun StoryViewerShell(
                         onViews = { rail.closeBars(); haptics.light(); chrome.showViewers = true },
                         onCompose = { rail.closeBars(); haptics.light(); state.currentStoryId?.let { id -> actions.onComposeStory?.invoke(id) } },
                         onComments = { rail.closeBars(); haptics.light(); chrome.showComments = true },
+                        onToggleSound = { haptics.light(); viewModel.toggleMute() },
+                        onSave = { rail.closeBars(); haptics.light(); videoExport.start(StoryExportMode.SAVE) },
                     ),
+                    emphasis = rememberStoryRailEmphasis(state, rail, chrome, commentThread, videoExport.busy),
                     reactionCount = state.reactionCount,
                     hasReacted = state.myReactions.isNotEmpty(),
                     languageBadgeCode = state.activeLanguageCode,

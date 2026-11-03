@@ -2,6 +2,7 @@ package me.meeshy.app.stories
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import me.meeshy.sdk.model.StoryViewerInitialAction
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
@@ -50,6 +51,13 @@ fun StoryViewerScreen(
     val accent = remember(slide?.accentHex) { slide?.accentHex ?: "1A1A2E" }
 
     val chrome = rememberStoryViewerChromeState()
+    LaunchedEffect(state.currentStoryId) {
+        when (viewModel.consumeEntryIntent()?.action) {
+            StoryViewerInitialAction.COMMENTS -> chrome.showComments = true
+            StoryViewerInitialAction.VIEWS -> chrome.showViewers = true
+            null -> Unit
+        }
+    }
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
     val meeshyHaptics = rememberMeeshyHaptics()
@@ -63,13 +71,17 @@ fun StoryViewerScreen(
     val commentThread = rememberStoryCommentThread(state.currentStoryId)
     val currentItem = state.currentStoryId?.let(viewModel::rawItem)
     val commentCount = rememberStoryCommentCount(commentThread, currentItem?.commentCount ?: 0)
-    val railPlan = StoryRailPlan.resolve(
+    val liveRailPlan = StoryRailPlan.resolve(
         isOwnStory = state.isOwnStory,
         hasTranslatableContent = state.availableLanguages.isNotEmpty(),
         canReply = StoryReplyRules.canReply(state.isOwnStory, state.currentStoryId, state.authorUserId),
         canCompose = onComposeStory != null && state.canCompose,
         commentCount = commentCount,
         isRepublishable = StoryRepostAudience.isRepublishable(currentItem?.visibility),
+        hasAudibleSound = slide?.hasSound == true,
+    )
+    val railPlan = rememberFrozenRailPlan(
+        StoryRailFreezeInput(state.currentStoryId, liveRailPlan, slide?.hasSound == true, rememberStoryCommentsReconciled(commentThread)),
     )
     val composing = railPlan.pinsCommentComposer && storyCommentHolds(commentThread)
     val cover = StoryViewerCover(

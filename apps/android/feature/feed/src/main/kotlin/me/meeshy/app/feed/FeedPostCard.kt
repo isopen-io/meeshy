@@ -82,6 +82,7 @@ internal fun PostCard(
                 onPin = onPin,
                 onReport = onReport,
                 onDelete = onDelete,
+                onOpen = onClick,
             )
             FeedPostCardBody(
                 post = post,

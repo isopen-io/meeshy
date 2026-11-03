@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_failed_initiate_timed_out">تعذّر بدء المكالمة: الخادم لا يردّ</string>
+    <string name="call_failed_initiate_malformed">تعذّر بدء المكالمة: ردّ غير متوقع من الخادم</string>
+    <string name="call_failed_connect_timed_out">تعذّر إنشاء الاتصال</string>
+    <string name="call_failed_join_refused">تعذّر الانضمام إلى المكالمة</string>
+    <string name="call_failed_media_setup">الميكروفون أو الكاميرا غير متاحة</string>
+</resources>

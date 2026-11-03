@@ -1,6 +1,8 @@
 package me.meeshy.ui.component.bubble
 
+import me.meeshy.sdk.model.text.PlainText
 import java.util.Locale
+import me.meeshy.sdk.model.MessageSourceKind
 
 /**
  * Localized wording for the composed message-bubble accessibility label, injected by the
@@ -35,7 +37,29 @@ public data class BubbleAccessibilityStrings(
     val delivery: BubbleDeliveryA11yStrings,
     /** What an end-to-end message this device cannot open says (#13110); blank ⇒ nothing of it is read. */
     val endToEndSealed: String = "",
+    /** « Sans compte » : annoncé après le nom d'un invité anonyme ; blanc ⇒ rien. */
+    val anonymousSender: String = "",
+    /** La source annoncée pour un message qui ne vient pas d'un utilisateur ; blanc ⇒ rien. */
+    val sources: BubbleSourceA11yStrings = BubbleSourceA11yStrings(),
 )
+
+/** L'étiquette parlée de chaque source non utilisateur ; blanc ⇒ la source n'est pas annoncée. */
+public data class BubbleSourceA11yStrings(
+    val system: String = "",
+    val ads: String = "",
+    val app: String = "",
+    val agent: String = "",
+    val authority: String = "",
+) {
+    internal fun of(kind: MessageSourceKind): String = when (kind) {
+        MessageSourceKind.User -> ""
+        MessageSourceKind.System -> system
+        MessageSourceKind.Ads -> ads
+        MessageSourceKind.App -> app
+        MessageSourceKind.Agent -> agent
+        MessageSourceKind.Authority -> authority
+    }
+}
 
 /** The six spoken delivery phrasings, one per [DeliveryStatus] arm. */
 public data class BubbleDeliveryA11yStrings(
@@ -74,6 +98,8 @@ public object MessageBubbleAccessibilityLabel {
 
         if (!content.isOutgoing) {
             parts += content.senderName?.takeIf { it.isNotBlank() } ?: strings.unknownSender
+            if (content.senderIsAnonymous) strings.anonymousSender.takeIf { it.isNotBlank() }?.let { parts += it }
+            strings.sources.of(content.sourceKind).takeIf { it.isNotBlank() }?.let { parts += it }
         }
 
         if (content.isEndToEndSealed) {
@@ -97,7 +123,7 @@ public object MessageBubbleAccessibilityLabel {
         }
 
         if (content.text.isNotBlank() && !content.isBlurred) {
-            parts += content.text
+            parts += PlainText.of(content.text)
         }
 
         if (content.images.isNotEmpty()) {

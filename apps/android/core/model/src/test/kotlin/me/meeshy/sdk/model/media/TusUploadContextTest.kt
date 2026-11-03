@@ -26,4 +26,10 @@ class TusUploadContextTest {
         assertThat(TusUploadContext.fromWire("")).isNull()
         assertThat(TusUploadContext.fromWire("STORY")).isNull()
     }
+
+    @Test
+    fun `the attachment context is not one of the four publication strings`() {
+        assertThat(TusUploadContext.ATTACHMENT.wire).isEqualTo("attachment")
+        assertThat(listOf("post", "story", "status", "comment")).doesNotContain(TusUploadContext.ATTACHMENT.wire)
+    }
 }

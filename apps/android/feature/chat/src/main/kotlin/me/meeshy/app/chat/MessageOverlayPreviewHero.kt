@@ -27,6 +27,7 @@ import androidx.compose.ui.window.PopupProperties
 import java.util.Locale
 import me.meeshy.ui.R
 import me.meeshy.ui.component.bubble.BubbleAccessibilityStrings
+import me.meeshy.ui.component.bubble.BubbleSourceA11yStrings
 import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleDeliveryA11yStrings
@@ -139,6 +140,14 @@ private fun rememberBubbleAccessibilityLabel(content: BubbleContent): String {
             failed = stringResource(R.string.bubble_status_failed),
         ),
         endToEndSealed = stringResource(R.string.bubble_message_end_to_end),
+        anonymousSender = stringResource(R.string.focal_row_anonymousSender),
+        sources = BubbleSourceA11yStrings(
+            system = stringResource(R.string.a11y_message_source_system),
+            ads = stringResource(R.string.a11y_message_source_ads),
+            app = stringResource(R.string.a11y_message_source_app),
+            agent = stringResource(R.string.a11y_message_source_agent),
+            authority = stringResource(R.string.a11y_message_source_authority),
+        ),
     )
     val locale: Locale = LocalConfiguration.current.locales[0]
     return remember(content, strings, locale) {

@@ -188,9 +188,10 @@ class UserRepository @Inject constructor(
      * edit). A wrong current password comes back as an HTTP 400 in the folded
      * [NetworkResult.Failure] (`httpStatus == 400`), which the caller maps to a targeted
      * "incorrect current password" message; transport failures surface as `code == "NETWORK"`.
+     * `currentPassword` is null to SET a first password on an account that has none (#9186).
      */
     suspend fun changePassword(
-        currentPassword: String,
+        currentPassword: String?,
         newPassword: String,
     ): NetworkResult<ChangePasswordResponse> =
         apiCall { userApi.changePassword(ChangePasswordRequest(currentPassword, newPassword)) }

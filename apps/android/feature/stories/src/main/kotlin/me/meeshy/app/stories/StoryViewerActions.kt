@@ -1,12 +1,15 @@
 package me.meeshy.app.stories
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import me.meeshy.app.feed.rememberContentShareOut
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.share.ShareCard
 import me.meeshy.sdk.model.share.ShareCards
 import me.meeshy.sdk.model.share.ShareSubject
+import me.meeshy.sdk.model.story.StoryOptionsMenuEntry
 import me.meeshy.feature.stories.R
 import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.share.LocalShareLauncher
@@ -25,6 +28,15 @@ internal class StoryViewerActions(
     val share: () -> Unit,
     val openSendTo: () -> Unit,
     val repost: () -> Unit,
+    /** Les entrées du menu ⋮ qu'un autre lot branche (plein écran, transcription, imager, rendre privée). */
+    val entryHandlers: Map<StoryOptionsMenuEntry, StoryMenuEntryAction> = emptyMap(),
+)
+
+/** Une entrée de menu branchée de l'extérieur : son libellé, son icône et son geste. */
+internal class StoryMenuEntryAction(
+    @StringRes val labelRes: Int,
+    val icon: ImageVector,
+    val onClick: () -> Unit,
 )
 
 /** L'audience d'une story qui s'ouvre sans compte — la seule qui reçoit un lien suivi (#14315). */

@@ -44,4 +44,18 @@
     <string name="contacts_tab_discover">Descobrir</string>
     <string name="contacts_tab_requests">Pedidos</string>
     <string name="contacts_title">Contatos</string>
+    <string name="phone_prompt_benefit">Seus contatos encontram você no Meeshy pelo seu número. Você também poderá usá-lo para entrar.</string>
+    <string name="phone_prompt_code_label">Código de 6 dígitos</string>
+    <string name="phone_prompt_code_sent">Código enviado por SMS</string>
+    <string name="phone_prompt_edit">Editar</string>
+    <string name="phone_prompt_error_code_invalid">Código incorreto ou expirado</string>
+    <string name="phone_prompt_error_generic">Ocorreu um erro</string>
+    <string name="phone_prompt_implausible">Este número não parece real: confira-o.</string>
+    <string name="phone_prompt_later">Mais tarde</string>
+    <string name="phone_prompt_later_a11y">Mais tarde, buscar meus contatos sem adicionar número</string>
+    <string name="phone_prompt_phone_label">Telefone</string>
+    <string name="phone_prompt_send_code">Receber o código por SMS</string>
+    <string name="phone_prompt_title">Adicione seu número</string>
+    <string name="phone_prompt_too_short">Este número é curto demais: pelo menos %1$d dígitos.</string>
+    <string name="phone_prompt_verify">Verificar</string>
 </resources>

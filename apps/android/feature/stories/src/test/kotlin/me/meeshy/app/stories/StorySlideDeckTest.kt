@@ -666,4 +666,20 @@ class StorySlideDeckTest {
         val deck = deckOf("a", "b", selected = "b").setSelectedStrokes(listOf(strokeOf("s1")))
         assertThat(deck.publishableSlides.map { it.id }).containsExactly("b")
     }
+
+    @Test
+    fun `publishableSlides et canPublish lisent la meme loi de matiere`() {
+        val chosenBackground = me.meeshy.sdk.model.StoryBackgroundValue.Hex("112233")
+        val deck = StorySlideDeck(
+            slides = listOf(
+                StorySlide(id = "vide"),
+                StorySlide(id = "fond", background = chosenBackground),
+                StorySlide(id = "lieu", places = listOf(me.meeshy.sdk.model.StoryLocationObject(id = "p", place = me.meeshy.sdk.model.SharedPlace(latitude = 1.0, longitude = 2.0, name = "Paris")))),
+            ),
+            selectedId = "vide",
+        )
+        assertThat(deck.publishableSlides.map { it.id }).containsExactly("fond", "lieu").inOrder()
+        assertThat(deck.hasPublishMatter).isTrue()
+        assertThat(StorySlideDeck(slides = listOf(StorySlide(id = "vide")), selectedId = "vide").hasPublishMatter).isFalse()
+    }
 }

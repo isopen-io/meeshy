@@ -277,6 +277,19 @@ class CallSignalManager internal constructor(
             JSONObject().put("callId", callId).apply { reason?.let { put("reason", it) } },
         )
 
+    /** `true` quand la socket est ouverte : sinon un emit est jeté et la fin d'appel doit être différée. */
+    val isSocketConnected: Boolean get() = socketManager.isConnected
+
+    /**
+     * Comme [emitEnd], avec l'accusé de la passerelle : [onResult] reçoit `true` quand elle a pris la fin en compte,
+     * `false` sur un refus, une session finie ou un accusé absent. Sert à la réconciliation des fins différées.
+     */
+    fun emitEndAcked(callId: String, reason: String? = null, onResult: (Boolean) -> Unit) =
+        socketManager.emit(
+            SocketEventNames.CALL_END,
+            JSONObject().put("callId", callId).apply { reason?.let { put("reason", it) } },
+        ) { args -> onResult((args.firstOrNull() as? JSONObject)?.optBoolean("success", false) == true) }
+
     /** Signal the peer that the local microphone was muted/unmuted. */
     fun emitToggleAudio(callId: String, enabled: Boolean) =
         socketManager.emit(SocketEventNames.CALL_TOGGLE_AUDIO, JSONObject().put("callId", callId).put("enabled", enabled))

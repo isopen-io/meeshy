@@ -33,6 +33,7 @@ dependencies {
     implementation(project(":sdk-ui"))
     implementation(project(":core:common"))
     implementation(libs.androidx.core.telecom)
+    implementation(libs.datastore.preferences)
     implementation(libs.coil.compose)
 
     implementation(libs.androidx.core.ktx)

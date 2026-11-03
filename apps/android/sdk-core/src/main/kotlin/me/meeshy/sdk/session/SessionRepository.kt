@@ -197,6 +197,9 @@ class SessionRepository @Inject constructor(
         _hasResolvedStoredSession.value = true
     }
 
+    /** Efface du coffre le profil gardé pour [userId], le compte qui quitte l'appareil ; les autres comptes gardent le leur. */
+    suspend fun forgetIdentity(userId: String) = identities.forget(userId)
+
     /** Drop the identity on logout / account switch. */
     fun clear() {
         transition.bumpGeneration()

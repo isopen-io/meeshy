@@ -37,6 +37,7 @@ import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusRepository
+import me.meeshy.sdk.link.ConversationListEntryRequests
 import me.meeshy.sdk.story.StoryRepository
 import java.util.Locale
 import javax.inject.Inject
@@ -70,6 +71,7 @@ class ConversationListViewModel @Inject constructor(
     private val loadingDeps: ConversationListLoadingDeps = ConversationListLoadingDeps.detached(),
     dialogDeps: ConversationListDialogDeps = ConversationListDialogDeps.detached(),
     messageSearchSource: ListMessageSearchSource = NoListMessageSearch,
+    entryRequests: ConversationListEntryRequests = ConversationListEntryRequests(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -198,6 +200,7 @@ class ConversationListViewModel @Inject constructor(
             }
         }
 
+        viewModelScope.launch { entryRequests.requested.collect { filter -> if (filter != null) selectFilter(filter).also { entryRequests.consume() } } }
         loader.start(networkMonitor.isOnline, socketManager.connectionState.map { it == SocketConnectionState.CONNECTED })
         viewModelScope.launch { lock.observe() }
         observers.startCategories()
