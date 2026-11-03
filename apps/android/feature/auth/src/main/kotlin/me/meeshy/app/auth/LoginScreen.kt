@@ -169,7 +169,7 @@ private fun LoginBody(
     val verificationPending = state.pendingVerification
     val selected: SavedAccount? = state.selectedAccount
     when {
-        state.twoFactorToken != null -> TwoFactorSection(
+        state.twoFactorToken != null -> LoginTwoFactorStep(
             state = state,
             onCodeChange = viewModel::onTwoFactorCodeChange,
             onSubmit = viewModel::submitTwoFactor,

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="login_two_factor_error_invalid_code">Ce code n\'est pas le bon. Vérifiez votre application d\'authentification et réessayez.</string>
+    <string name="login_two_factor_error_too_many_attempts">Trop de tentatives. Réessayez dans quelques minutes.</string>
+    <string name="login_two_factor_error_token_expired">Cette connexion a expiré. Saisissez de nouveau votre mot de passe.</string>
+</resources>
