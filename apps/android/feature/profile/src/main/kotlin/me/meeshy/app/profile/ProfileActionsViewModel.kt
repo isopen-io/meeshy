@@ -60,6 +60,9 @@ enum class ProfileActionFeedback(val isError: Boolean) {
     RaiseSent(false),
     RaiseFailed(true),
 
+    /** La rétrogradation ou l'annulation du lien (#14910) a été refusée : le niveau d'avant est rendu. */
+    LowerFailed(true),
+
     /** Le signalement en deux touches est parti, ou la passerelle l'a refusé. */
     ReportSent(false),
     ReportFailed(true),
@@ -110,6 +113,7 @@ class ProfileActionsViewModel @Inject constructor(
 
     private val raiseCmids = mutableMapOf<String, String>()
     private var circleJob: Job? = null
+    private var lowerJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -143,8 +147,34 @@ class ProfileActionsViewModel @Inject constructor(
             val served = (quietly { circles.refreshLinks() } as? NetworkResult.Success)?.data ?: cached
             val sent = quietly { circles.pendingRequests(FriendRequestDirection.Sent) }.orEmpty()
             val pendingNow = _state.value.circle?.pending
+            val blocked = quietly { circles.raiseGate(userId) }?.blocks(System.currentTimeMillis()) ?: false
             val fresh = ProfileCircle.of(userId, served, sent)
-            applyCircle(userId, fresh?.copy(pending = fresh.pending ?: pendingNow))
+            applyCircle(userId, fresh?.copy(pending = fresh.pending ?: pendingNow, raiseBlocked = blocked))
+        }
+    }
+
+    /**
+     * Rétrograder d'un cran, ou annuler le lien à Connaissance (#14910) — le dialogue de confirmation est déjà passé.
+     * Instantané → niveau visé tout de suite → `POST /relations/:userId/level` → la vue servie, ou le niveau d'avant et
+     * l'échec dit.
+     */
+    fun lowerCircle() = withTarget { id ->
+        val before = _state.value.circle ?: return@withTarget
+        val target = before.lowering ?: return@withTarget
+        if (lowerJob?.isActive == true) return@withTarget
+        circleJob?.cancel()
+        _state.update { it.copy(circle = before.lowered()) }
+        lowerJob = viewModelScope.launch {
+            when (val result = quietly { circles.lower(id, target) }) {
+                is NetworkResult.Success -> applyCircle(
+                    id,
+                    ProfileCircle.of(id, listOf(result.data), emptyList())?.copy(raiseBlocked = before.raiseBlocked),
+                )
+                else -> {
+                    applyCircle(id, before)
+                    _events.emit(ProfileActionEvent.Toast(ProfileActionFeedback.LowerFailed))
+                }
+            }
         }
     }
 

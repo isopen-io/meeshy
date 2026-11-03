@@ -9,6 +9,10 @@ import Foundation
 /// (`RelationRefusal.from`).
 public protocol RelationsProviding: Sendable {
     func links() async throws -> [RelationLink]
+    /// `GET /relations/:userId` — le lien avec UNE personne, blocage de montée compris quand il est servi.
+    func link(userId: String) async throws -> RelationLink
+    /// `POST /relations/:userId/level` — baisse MON accord vers `level` (`public` annule le lien). Silencieux.
+    func lower(userId: String, to level: RelationLevel) async throws -> RelationLink
     func config() async throws -> RelationsConfig
     func ritual(
         userId: String,
@@ -34,6 +38,20 @@ public final class RelationsService: RelationsProviding, Sendable {
         return response.data
     }
 
+    public func link(userId: String) async throws -> RelationLink {
+        let response: APIResponse<RelationLink> = try await api.request(
+            RelationsEndpoint.byUserId(userId: userId), method: "GET", body: nil, queryItems: nil
+        )
+        return response.data
+    }
+
+    public func lower(userId: String, to level: RelationLevel) async throws -> RelationLink {
+        let response: APIResponse<RelationLink> = try await api.post(
+            RelationsEndpoint.byUserIdLevel(userId: userId), body: LevelBody(level: level.rawValue)
+        )
+        return response.data
+    }
+
     /// `GET /relations/config` — niveaux, libellés des sept langues, seuils servis.
     public func config() async throws -> RelationsConfig {
         let response: APIResponse<RelationsConfig> = try await api.request(
@@ -55,6 +73,10 @@ public final class RelationsService: RelationsProviding, Sendable {
             RelationsEndpoint.byUserIdRitual(userId: userId), body: body
         )
         return response.data
+    }
+
+    private struct LevelBody: Encodable {
+        let level: String
     }
 
     private struct RitualBody: Encodable {

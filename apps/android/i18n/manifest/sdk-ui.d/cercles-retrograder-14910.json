@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "circles_action_demote",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_action_promote",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_action_promote_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_action_unlink",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_confirm_cancel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_demote_confirm_action",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_demote_confirm_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_demote_confirm_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_notice_lower_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_unlink_confirm_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_unlink_confirm_title",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -135,6 +135,34 @@ describe('gérer le lien (#14910) — promouvoir si possible, rétrograder d’u
     expect(html).toContain('data-profile-circle-lower="demote"');
   });
 
+  test('Promouvoir est MASQUÉ quand la passerelle sert `canRaise: false` (demande en suspens, non éligible)', () => {
+    expect(view({ link: link({ eligibleFor: 'CLOSE', canRaise: false }) })).not.toContain('data-profile-circle-raise');
+    expect(view({ link: link({ eligibleFor: 'CLOSE', canRaise: true }) })).toContain('data-profile-circle-raise="CLOSE"');
+  });
+
+  test('câblée : `canRaise: false` lu sur GET /relations/:userId masque Promouvoir', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link({ eligibleFor: 'CLOSE' })]);
+    appQueryClient.setQueryData(friendRequestsQueryKey('sent'), { pages: [{ requests: [], nextCursor: null }], pageParams: [null] } satisfies FriendRequestsData);
+    const transport = (async () => ({ ok: true, data: null })) as unknown as HttpTransport;
+    transport.request = (async (req: HttpRequest) =>
+      req.path === '/api/v1/relations/u-ada' ? { ok: true, data: { ...link({ eligibleFor: 'CLOSE' }), canRaise: false, raiseBlockedUntil: null } } : { ok: true, data: null }) as HttpTransport['request'];
+    const host = await mount(
+      <ProfileCircleRow
+        language="fr"
+        person={{ id: 'u-ada', username: 'ada', displayName: 'Ada', avatar: null }}
+        raisable
+        viewerId="u-me"
+        now={NOW}
+        onOutcome={noop}
+        onNotice={noop}
+        deps={{ source: 'gateway', transport }}
+      />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(host.querySelector('[data-profile-circle-raise]')).toBeNull();
+    expect(host.querySelector('[data-profile-circle-lower="demote"]')).not.toBeNull();
+  });
+
   const transportFor = (lowerResult: unknown, requests: HttpRequest[]): HttpTransport => {
     const transport = (async () => ({ ok: true, data: null })) as unknown as HttpTransport;
     transport.request = (async (req: HttpRequest) => {

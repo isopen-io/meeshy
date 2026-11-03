@@ -74,6 +74,13 @@ internal object CacheTables {
         createSql = "CREATE TABLE IF NOT EXISTS `keyed_json_cache` (`namespace` TEXT NOT NULL, `key` TEXT NOT NULL, `payload` TEXT NOT NULL, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`namespace`, `key`))",
     )
 
+    /** Version 24 : la liste des notifications (portée « all »), servie au premier cadre avant tout réseau. */
+    val notifications = CacheTableDefinition(
+        name = "notifications",
+        createSql = "CREATE TABLE IF NOT EXISTS `notifications` (`id` TEXT NOT NULL, `scopeKey` TEXT NOT NULL, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `isRead` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        indexSql = listOf("CREATE INDEX IF NOT EXISTS `index_notifications_scopeKey_createdAt` ON `notifications` (`scopeKey`, `createdAt`)"),
+    )
+
     /** The columns version 20 appended to `messages`, exactly as Room declares them. */
     val messageColumnsAddedIn20: List<String> = listOf(
         "`serverId` TEXT",
@@ -141,6 +148,7 @@ internal object CacheTables {
         cacheEntries,
         keyedJsonCache,
         pendingIds,
+        notifications,
     )
 
     val names: Set<String> = all.map { it.name }.toSet()

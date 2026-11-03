@@ -10,6 +10,7 @@ import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.media.MediaAdoption
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MeeshyUser
@@ -58,9 +59,11 @@ class MessageRepository internal constructor(
         events: MessageEventBuffer? = null,
         /** #14655 — la file durable des clairs E2EE à retirer du coffre. */
         erasures: PlaintextErasureLedger? = null,
+        /** #14890 — le fichier local d'un média envoyé rejoint le cache typé à l'accusé. */
+        adoption: MediaAdoption? = null,
     ) : this(
         history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures),
-        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime),
+        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao, fence),
             outboxRepository,

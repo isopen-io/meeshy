@@ -480,7 +480,7 @@ struct PostDetailView: View {
 
             // Le composeur ne survit pas à l'absence de post : commenter ce qui
             // n'existe plus n'aboutirait jamais.
-            if displayPost != nil || viewModel.isLoading {
+            if displayPost != nil || viewModel.isLoading, !PendingPublicationMarker.isPending(postId: postId) {
                 VStack(spacing: 0) {
                     if mentionController.activeQuery != nil {
                         MentionSuggestionPanel(
@@ -508,57 +508,54 @@ struct PostDetailView: View {
     /// The `…` menu, lifted out of the old navBar into the header's trailing slot.
     var postMenu: some View {
         Menu {
-            Button {
-                Task { await mintShareLink(action: .copyToPasteboard) }
-            } label: {
-                Label(String(localized: "feed.post.detail.copy_link", defaultValue: "Copier le lien", bundle: .main), systemImage: "link")
-            }
-            Button {
-                Task { await mintShareLink(action: .presentShareSheet) }
-            } label: {
-                Label(String(localized: "feed.post.detail.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
-            }
-            // Dans un MENU, c'est le NOM qui porte l'état du favori — un lecteur
-            // d'écran y entend des commandes, pas des interrupteurs (253i, #4266) ;
-            // la barre d'action de ce fichier varie sur ces mêmes clés.
-            PostSaveMenuItems(
-                title: canSaveMedia
-                    ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
-                    : (isPostBookmarked
-                        ? String(localized: "a11y.post.bookmark_remove", defaultValue: "Retirer des favoris", bundle: .main)
-                        : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main)),
-                systemImage: canSaveMedia ? "arrow.down.to.line" : (isPostBookmarked ? "bookmark.fill" : "bookmark"),
-                save: { canSaveMedia ? requestSaveMedia() : toggleDetailBookmark() },
-                imager: displayPost.flatMap { PostSaveAction.imagerAction(for: $0, coordinator: mediaSaveCoordinator) }
-            )
-            if displayPost?.authorId == AuthManager.shared.currentUser?.id {
-                Button {
-                    Task { await viewModel.pinPost(postId) }
-                    HapticFeedback.light()
-                } label: {
-                    Label(String(localized: "feed.post.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin")
-                }
-                Button {
-                    isEditing = true
-                    HapticFeedback.light()
-                } label: {
-                    Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
-                }
+            if PendingPublicationMarker.isPending(postId: postId) {
                 PublicationDestructiveMenuItems(postId: postId, onDelete: { _ in
                     Task { if await viewModel.deletePost(postId) { router.pop() } }
                 }, onRemove: nil)
             } else {
-                if let post = displayPost {
-                    PublicationDestructiveMenuItems(postId: postId, onDelete: nil, onRemove: ContentRemovalOffer.publication(for: post) { [viewModel, router] in
-                        if await viewModel.withdrawPost($0, $1) { router.pop() }
-                    })
-                }
-                Divider()
-                Button(role: .destructive) {
-                    HapticFeedback.light()
-                    Task { await viewModel.reportPost(postId) }
-                } label: {
-                    Label(String(localized: "feed.post.detail.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+                PostDetailLinkMenuItems { await mintShareLink(action: $0) }
+                // Dans un MENU, c'est le NOM qui porte l'état du favori — un lecteur
+                // d'écran y entend des commandes, pas des interrupteurs (253i, #4266) ;
+                // la barre d'action de ce fichier varie sur ces mêmes clés.
+                PostSaveMenuItems(
+                    title: canSaveMedia
+                        ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
+                        : (isPostBookmarked
+                            ? String(localized: "a11y.post.bookmark_remove", defaultValue: "Retirer des favoris", bundle: .main)
+                            : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main)),
+                    systemImage: canSaveMedia ? "arrow.down.to.line" : (isPostBookmarked ? "bookmark.fill" : "bookmark"),
+                    save: { canSaveMedia ? requestSaveMedia() : toggleDetailBookmark() },
+                    imager: displayPost.flatMap { PostSaveAction.imagerAction(for: $0, coordinator: mediaSaveCoordinator) }
+                )
+                if displayPost?.authorId == AuthManager.shared.currentUser?.id {
+                    Button {
+                        Task { await viewModel.pinPost(postId) }
+                        HapticFeedback.light()
+                    } label: {
+                        Label(String(localized: "feed.post.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin")
+                    }
+                    Button {
+                        isEditing = true
+                        HapticFeedback.light()
+                    } label: {
+                        Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+                    }
+                    PublicationDestructiveMenuItems(postId: postId, onDelete: { _ in
+                        Task { if await viewModel.deletePost(postId) { router.pop() } }
+                    }, onRemove: nil)
+                } else {
+                    if let post = displayPost {
+                        PublicationDestructiveMenuItems(postId: postId, onDelete: nil, onRemove: ContentRemovalOffer.publication(for: post) { [viewModel, router] in
+                            if await viewModel.withdrawPost($0, $1) { router.pop() }
+                        })
+                    }
+                    Divider()
+                    Button(role: .destructive) {
+                        HapticFeedback.light()
+                        Task { await viewModel.reportPost(postId) }
+                    } label: {
+                        Label(String(localized: "feed.post.detail.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+                    }
                 }
             }
         } label: {

@@ -30,7 +30,7 @@ class InMemoryStoryCommentsCache @Inject constructor() : StoryCommentsCache {
     override suspend fun read(storyId: String): StoryCommentsSnapshot? = held[storyId]
 
     override suspend fun write(storyId: String, snapshot: StoryCommentsSnapshot) {
-        if (held.size >= MAX_STORIES && storyId !in held) held.keys.firstOrNull()?.let { held.remove(it) }
+        if (held.size >= MAX_STORIES && !held.containsKey(storyId)) held.keys.firstOrNull()?.let { held.remove(it) }
         held[storyId] = snapshot
     }
 
