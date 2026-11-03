@@ -418,6 +418,37 @@ final class PostDetailViewModelTests: PostDetailViewModelTestCase {
         XCTAssertEqual(mock.getCommentsCallCount, 0, "aucun commentaire n'existe sous un cmid : pas de toast d'erreur non plus")
     }
 
+    func test_loadPost_onPendingPublication_neverAsksTheServer() async {
+        let (sut, mock) = makeSUT()
+
+        await sut.loadPost(ClientMutationId.generate())
+
+        XCTAssertEqual(mock.getPostCallCount, 0, "aucun GET ne part pour un cmid (#14929)")
+        XCTAssertNil(sut.loadFailure, "la carte optimiste de l'hôte reste à l'écran, sans état d'absence")
+        XCTAssertFalse(sut.isLoading)
+    }
+
+    func test_pendingDetail_offersNoEngagement() throws {
+        let detail = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/PostDetailView.swift"))
+        let barre = try XCTUnwrap(detail.range(of: "if !isPendingPublication {"))
+        XCTAssertTrue(detail[barre.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+                        .hasPrefix("actionsBar(post, renderedItem: renderedItem, scrollProxy: scrollProxy)"),
+                      "ni cœur, ni republier, ni favori sous une publication en attente")
+        XCTAssertEqual(detail.components(separatedBy: "actionsBar(post, renderedItem:").count, 2,
+                       "la barre n'est montée qu'à un seul endroit, derrière la garde")
+        for geste in ["func toggleDetailBookmark() {\n        guard !isBookmarkInFlight, !isPendingPublication",
+                      "func toggleDetailRepost(quote: Bool) {\n        guard !isRepostInFlight, !isPendingPublication"] {
+            XCTAssertTrue(detail.contains(geste), geste)
+        }
+        for (unite, garde) in [("Meeshy/Features/Main/Views/PostDetailView+Heart.swift",
+                                "func toggleDetailPostHeart() {\n        guard !isPendingPublication else { return }"),
+                               ("Meeshy/Features/Main/Views/PostDetailView+Reactions.swift",
+                                "func sendDetailReaction(_ emoji: String) {\n        guard !isPendingPublication else { return }")] {
+            XCTAssertTrue(AppSourceGuard.stripComments(try AppSourceGuard.unit(unite)).contains(garde), unite)
+        }
+    }
+
     func test_registerDetailOpen_onPendingPublication_recordsNothing() async {
         let (sut, mock) = makeSUT()
 

@@ -2,6 +2,8 @@ package me.meeshy.sdk.model.push
 
 import me.meeshy.sdk.model.StoryViewerInitialAction
 import me.meeshy.sdk.model.game.GameTarget
+import me.meeshy.sdk.model.navigation.NotificationContentRouter
+import me.meeshy.sdk.model.navigation.NotificationContentSurface
 
 /**
  * Où mène le toucher d'une notification système : la table `type × identifiants → destination`
@@ -88,8 +90,9 @@ public sealed interface PushTapDestination {
 
         private fun content(payload: PushPayload, type: String, postId: String): PushTapDestination {
             if (type == "friend_new_mood") return Mood(postId)
-            val entity = payload.postType?.uppercase()
-            if (entity == "REEL") return Reel(postId)
+            val entity = (payload.postType ?: payload.contentType)?.uppercase()
+            val surface = NotificationContentRouter.surface(payload.postType, payload.contentType, type, false)
+            if (surface == NotificationContentSurface.REEL) return Reel(postId)
             if (entity in EPHEMERAL_ENTITIES && type == "friend_new_story") {
                 payload.senderId?.let { return Story(it) }
             }

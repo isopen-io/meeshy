@@ -44,6 +44,8 @@ data class ApiResponse<T>(
     val retryAfter: Double? = null,
     /** Les consentements à donner d'un 403 de pièce jointe (`/attachments/:id/translate`). */
     val requiredConsents: List<String>? = null,
+    /** La pagination par curseur des routes qui ne passent pas par `sendSuccess` (`messages/search`), à la racine. */
+    val cursorPagination: CursorPagination? = null,
 )
 
 /**

@@ -158,6 +158,9 @@
     <string name="fullscreen_react">Reagir</string>
     <string name="fullscreen_reply">Responder</string>
     <string name="fullscreen_show_controls">Mostrar os controles</string>
+    <string name="identity_role_admin">Admin</string>
+    <string name="identity_role_creator">Criador</string>
+    <string name="identity_role_moderator">Moderador</string>
     <string name="image_editor_before">Original</string>
     <string name="image_editor_cancel">Cancelar</string>
     <string name="image_editor_crop_applied">Recorte</string>
@@ -389,6 +392,9 @@
     <string name="time_lastSeen_online">Online</string>
     <string name="time_lastSeen_seen">Visto %1$s</string>
     <string name="time_lastSeen_yesterdayAt">Visto ontem às %1$s</string>
+    <string name="userIdentity_language_show_a11y">Mostrar em %1$s</string>
+    <string name="userIdentity_read">Lida</string>
+    <string name="userIdentity_translation_available">Tradução disponível</string>
     <string name="viewer_caption_see_less">ver menos</string>
     <string name="viewer_caption_see_less_hint">Recolhe a legenda</string>
     <string name="viewer_caption_see_more">ver mais</string>

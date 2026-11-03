@@ -19,12 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,6 +56,7 @@ import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
+import me.meeshy.ui.icons.MeeshyIcons
 
 /** Ce que la rangée peut déclencher ; une seule instance par overlay, donc stable pour les rangées. */
 @Immutable
@@ -170,7 +165,7 @@ private fun StoryCommentHeader(comment: StoryComment, showOriginal: Boolean, aut
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Translate,
+                    imageVector = MeeshyIcons.Translate,
                     contentDescription = label,
                     tint = if (showOriginal) MeeshyMediaChromeColors.OnMediaMuted else MeeshyMediaChromeColors.OnMedia,
                     modifier = Modifier.size(14.dp),
@@ -208,7 +203,7 @@ private fun StoryCommentPlace(name: String) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        Icon(Icons.Filled.Place, contentDescription = null, tint = MeeshyMediaChromeColors.OnMedia, modifier = Modifier.size(12.dp))
+        Icon(MeeshyIcons.LocationFilled, contentDescription = null, tint = MeeshyMediaChromeColors.OnMedia, modifier = Modifier.size(12.dp))
         Text(name, style = TextStyle(color = MeeshyMediaChromeColors.OnMedia, fontSize = 11.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -232,7 +227,7 @@ private fun StoryCommentActions(
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
         ) {
             Icon(
-                imageVector = if (comment.likedByMe) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                imageVector = if (comment.likedByMe) MeeshyIcons.HeartFilled else MeeshyIcons.FavoriteBorder,
                 contentDescription = likeLabel,
                 tint = if (comment.likedByMe) MeeshyPalette.Error else MeeshyMediaChromeColors.OnMediaSecondary,
                 modifier = Modifier.size(16.dp),
@@ -257,7 +252,7 @@ private fun StoryCommentActions(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
         ) {
-            Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null, tint = MeeshyMediaChromeColors.OnMediaSecondary, modifier = Modifier.size(14.dp))
+            Icon(MeeshyIcons.Reply, contentDescription = null, tint = MeeshyMediaChromeColors.OnMediaSecondary, modifier = Modifier.size(14.dp))
             Text(replyLabel, style = TextStyle(color = MeeshyMediaChromeColors.OnMediaSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, shadow = LegibleShadow))
         }
         Spacer(Modifier.weight(1f))

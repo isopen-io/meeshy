@@ -164,6 +164,9 @@
     <string name="fullscreen_react">تفاعل</string>
     <string name="fullscreen_reply">رد</string>
     <string name="fullscreen_show_controls">إظهار عناصر التحكّم</string>
+    <string name="identity_role_admin">مشرف</string>
+    <string name="identity_role_creator">المنشئ</string>
+    <string name="identity_role_moderator">مُنظّم</string>
     <string name="image_editor_before">الأصل</string>
     <string name="image_editor_cancel">إلغاء</string>
     <string name="image_editor_crop_applied">اقتصاص</string>
@@ -404,6 +407,9 @@
     <string name="time_lastSeen_online">متصل</string>
     <string name="time_lastSeen_seen">شوهد %1$s</string>
     <string name="time_lastSeen_yesterdayAt">شوهد أمس في %1$s</string>
+    <string name="userIdentity_language_show_a11y">عرض بـ%1$s</string>
+    <string name="userIdentity_read">مقروء</string>
+    <string name="userIdentity_translation_available">الترجمة متاحة</string>
     <string name="viewer_caption_see_less">عرض أقل</string>
     <string name="viewer_caption_see_less_hint">يطوي الشرح</string>
     <string name="viewer_caption_see_more">عرض المزيد</string>
