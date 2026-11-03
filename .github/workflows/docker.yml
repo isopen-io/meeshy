@@ -719,9 +719,18 @@ jobs:
             echo "tag=${SLUG}${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Checkout (action locale)
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+
+      - name: Install Trivy
+        uses: ./.github/actions/installer-trivy
+
       - name: Security scan
         uses: aquasecurity/trivy-action@master
         with:
+          skip-setup-trivy: true
           image-ref: ${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}:${{ steps.scan-tag.outputs.tag }}
           format: 'sarif'
           output: 'trivy-${{ matrix.service }}.sarif'

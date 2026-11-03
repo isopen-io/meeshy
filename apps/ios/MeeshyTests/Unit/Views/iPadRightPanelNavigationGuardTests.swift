@@ -161,9 +161,19 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
     func test_iPadRoot_toastsBannersAndWindowTitle_matchTheiPhone() throws {
         let overlays = try source(of: "iPadRootView+Overlays.swift")
         XCTAssertFalse(overlays.contains("FeedbackToastView("), "les toasts ont un hôte unique, au niveau de MeeshyApp")
-        XCTAssertTrue(overlays.contains("RootPendingBanners()"), "les bandeaux « en attente » existent aussi sur iPad")
+        XCTAssertTrue(overlays.contains("RootPendingBanners()"), "le bandeau des réglages en attente existe aussi sur iPad")
         let layer = try source(of: "RootLayers/iPadRootViewLayers.swift")
         XCTAssertTrue(layer.contains("DeviceLayout.activeWindowScene?.title"), "la fenêtre iPad porte le titre de ce qu'elle montre")
+    }
+
+    /// #15223 — une story en attente se lit à l'horloge (anneau du tray,
+    /// « File » de Mes stories), jamais à un bandeau en haut des racines. Le
+    /// bandeau des réglages en attente reste : il ne relève pas d'une publication.
+    func test_rootPendingBanners_neverAnnounceAPendingStory() throws {
+        let banners = try source(of: "RootPendingBanners.swift")
+        XCTAssertFalse(banners.contains("StoryPublishService"), "la racine ne lit plus la file des stories")
+        XCTAssertFalse(banners.contains("root.pending_stories"), "aucun libellé « Stories en attente »")
+        XCTAssertTrue(banners.contains("PendingSettingsBannerInline()"))
     }
 
     /// La fenêtre DÉTACHÉE (conversation ou réels à côté de la principale) :
