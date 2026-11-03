@@ -169,6 +169,8 @@ dependencies {
     implementation(libs.work.runtime)
     implementation(libs.firebase.messaging)
     implementation(libs.timber)
+    implementation(libs.androidx.metrics.performance)
+    implementation(libs.androidx.tracing.ktx)
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.coil.compose)
     implementation(libs.okhttp)
