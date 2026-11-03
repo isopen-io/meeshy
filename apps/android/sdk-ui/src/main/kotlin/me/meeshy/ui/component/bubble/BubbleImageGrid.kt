@@ -28,6 +28,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
 import kotlin.math.min
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -157,7 +158,7 @@ private fun BubbleImageCell(
         )
         if (hiddenCount == 0) TileReactions(image.reactionLabel)
         if (hiddenCount > 0) {
-            val hiddenLabel = stringResource(R.string.bubble_hidden_images, hiddenCount)
+            val hiddenLabel = pluralStringResource(R.plurals.bubble_hidden_images, hiddenCount, hiddenCount)
             Box(
                 modifier = Modifier
                     .fillMaxSize()

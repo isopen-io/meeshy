@@ -38,7 +38,7 @@ class ProgressionConceptTest {
 
     @Test
     fun `une extension sans le bloc game qui la porte est ignoree`() {
-        val progress = EngagementProgressResolver.resolve(ApiEngagementProgress.empty)
+        val progress = EngagementProgressResolver.resolve(ApiEngagementProgress.empty).copy(achievementSections = emptyList())
 
         assertThat(ProgressionConcepts.served(progress, null).map { it.wire }).containsExactly("level", "flame", "elans", "badges", "succes").inOrder()
     }

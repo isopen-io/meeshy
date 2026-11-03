@@ -85,4 +85,12 @@ public interface ConversationDao {
      */
     @Query("SELECT COALESCE(SUM(unreadCount), 0) FROM conversations")
     public fun totalUnreadCount(): Flow<Int>
+
+    /**
+     * Le nombre de CONVERSATIONS non lues (pas de messages), comme le badge de la liste et
+     * `aps.badge` : une conversation compte pour 1 des que son `unreadCount` denormalise est
+     * positif. `COUNT` rend 0 sur une table vide, jamais NULL.
+     */
+    @Query("SELECT COUNT(*) FROM conversations WHERE unreadCount > 0")
+    public fun unreadConversationCount(): Flow<Int>
 }

@@ -43,6 +43,8 @@ class AudioTrimmerLayoutTest {
                 )
             }
         }
+        player.pause()
+        compose.waitForIdle()
         listOf(320.dp, 200.dp, 120.dp, 600.dp, 1024.dp).forEach { w ->
             width = w
             compose.waitForIdle()

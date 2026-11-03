@@ -13,12 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -155,7 +149,7 @@ private fun ReadyFace(presentation: AttachmentTilePresentation, accent: Color, o
                     .background(MeeshyMediaChromeColors.Scrim),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Edit, contentDescription = null, tint = MeeshyMediaChromeColors.OnMedia, modifier = Modifier.size(12.dp))
+                Icon(MeeshyIcons.EditFilled, contentDescription = null, tint = MeeshyMediaChromeColors.OnMedia, modifier = Modifier.size(12.dp))
             }
         }
     }
@@ -219,7 +213,7 @@ private fun PlaceFace() {
             .background(Brush.linearGradient(listOf(success, success.copy(alpha = 0.7f)))),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Filled.LocationOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+        Icon(MeeshyIcons.LocationFilled, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
     }
 }
 
@@ -237,13 +231,13 @@ private fun RemoveBadge(label: String, onClick: () -> Unit, modifier: Modifier =
             modifier = Modifier.size(18.dp).clip(CircleShape).background(MeeshyTheme.tokens.error),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(10.dp))
+            Icon(MeeshyIcons.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(10.dp))
         }
     }
 }
 
 private fun PendingAttachmentType.glyph(): ImageVector = when (this) {
-    PendingAttachmentType.VIDEO -> Icons.Filled.PlayCircle
+    PendingAttachmentType.VIDEO -> MeeshyIcons.PlayCircleFilled
     PendingAttachmentType.AUDIO -> MeeshyIcons.AccountFilled
-    else -> Icons.AutoMirrored.Filled.InsertDriveFile
+    else -> MeeshyIcons.InsertFile
 }

@@ -91,12 +91,14 @@ fun StoryViewerScreen(
         menu = chrome.showOptions,
         dialog = chrome.dialogOpen || videoExport.busy,
         composing = composing,
+        reading = chrome.captionExpanded || chrome.transcript.requested,
     )
     val actions = rememberStoryViewerActions(
         state = state,
         currentItem = currentItem,
         chrome = chrome,
         haptics = meeshyHaptics,
+        fullscreen = cardMotion.fullscreen,
         viewModel = viewModel,
         onClose = onClose,
         onOpenProfile = onOpenProfile,

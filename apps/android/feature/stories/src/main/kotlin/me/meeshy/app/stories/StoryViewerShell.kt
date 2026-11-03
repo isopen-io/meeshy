@@ -66,7 +66,6 @@ internal fun StoryViewerShell(
     val scope = rememberCoroutineScope()
     var headerHeightPx by remember { mutableIntStateOf(0) }
     var composerHeightPx by remember { mutableIntStateOf(0) }
-    val overlayActiveState = rememberUpdatedState(rail.overlayActive)
     val surfaceOpenState = rememberUpdatedState(
         StoryReaderSurfaceRules.hasActiveReaderFeature(
             showLanguageOptions = rail.languageBarVisible,
@@ -82,6 +81,15 @@ internal fun StoryViewerShell(
     val previousLabel = stringResource(R.string.stories_viewer_previous)
     val hasNextGroupState = rememberUpdatedState(state.hasNextGroup)
     val hasPreviousGroupState = rememberUpdatedState(state.hasPreviousGroup)
+    val dragFrames = remember { StoryDragFrameSource() }
+    val closeSurfaces: () -> Unit = {
+        rail.closeBars()
+        rail.showFullEmojiPicker = false
+        chrome.showComments = false
+        viewModel.closeLanguageExplorer()
+    }
+    val chromeVisible = StoryFullscreenChrome.chromeVisible(isFullscreen = cardMotion.fullscreen.enabled, isHeld = state.isPaused)
+    StoryDragAxisRelease(cardMotion, groupIndex = state.groupIndex, index = state.index)
     StoryCubeEntryOnAuthorChange(cardMotion, authorKey = state.authorUserId, groupIndex = state.groupIndex)
     StoryCardAppearOnOpen(cardMotion)
     StoryViewerImmersiveMode()
@@ -101,23 +109,22 @@ internal fun StoryViewerShell(
                 slideCount = state.slides.size,
                 surfaceOpen = surfaceOpenState,
                 composerEngaged = composerEngagedState,
-                onCloseSurfaces = {
-                    rail.closeBars()
-                    rail.showFullEmojiPicker = false
-                    chrome.showComments = false
-                    viewModel.closeLanguageExplorer()
-                },
+                onCloseSurfaces = closeSurfaces,
                 onDismissComposer = { focusManager.clearFocus() },
                 onNavigate = haptics::light,
                 viewModel = viewModel,
+                resetToken = cardMotion.resetToken,
             )
-            .storyCardDrag(
+            .storyDragLayer(
                 motion = cardMotion,
                 scope = scope,
+                frames = dragFrames,
+                reactionBar = rail::openBarRegion,
                 hasNextGroup = hasNextGroupState,
                 hasPreviousGroup = hasPreviousGroupState,
-                overlayActive = overlayActiveState,
-                onOverlayDismiss = rail::closeBars,
+                surfaceOpen = surfaceOpenState,
+                composerEngaged = composerEngagedState,
+                onDismissSurfaces = closeSurfaces,
                 onCommit = viewModel::onSwipe,
                 onCommitFeedback = haptics::light,
             ),
@@ -138,9 +145,12 @@ internal fun StoryViewerShell(
                     lap = lap,
                     state = state,
                     commentsOpen = chrome.showComments,
+                    chromeVisible = chromeVisible,
+                    fullscreen = cardMotion.fullscreen.enabled,
                     viewModel = viewModel,
+                    captionExpanded = chrome.captionExpanded,
                 )
-                StoryReadingScrims(chromeVisible = !state.isPaused)
+                StoryReadingScrims(chromeVisible = chromeVisible)
             }
 
             StoryStallIndicator(waiting = waiting, modifier = Modifier.align(Alignment.Center))
@@ -152,9 +162,14 @@ internal fun StoryViewerShell(
                 commentThread = commentThread,
                 composerPinned = composerPinned,
                 onComposerHeight = { composerHeightPx = it },
+                currentItem = currentItem,
+                chrome = chrome,
+                haptics = haptics,
+                viewModel = viewModel,
+                chromeVisible = chromeVisible,
             )
 
-            if (!state.isPaused) {
+            if (chromeVisible) {
                 StoryViewerTopBar(
                     state = state,
                     slide = slide,
@@ -170,7 +185,8 @@ internal fun StoryViewerShell(
             }
 
             val railFrame = StoryRailFrame.of(headerHeightPx, composerHeightPx, composerPinned, with(density) { MeeshySpacing.sm.roundToPx() })
-            if (slide != null && !state.isDismissed && !state.isPaused && !keyboardVisible) {
+            StoryDragFrameSync(dragFrames, railShown = chromeVisible, composerHeightPx = if (composerPinned) composerHeightPx else 0, hasScrollableSurface = false)
+            if (slide != null && !state.isDismissed && chromeVisible && !keyboardVisible) {
                 StoryActionRail(
                     plan = railPlan,
                     counts = StoryRailCounts(
@@ -206,6 +222,7 @@ internal fun StoryViewerShell(
                     onLanguageBounds = { rail.languageButtonBounds = it },
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
+                        .trackStoryRailRegion(dragFrames)
                         .padding(top = with(density) { railFrame.topPx.toDp() }, bottom = with(density) { railFrame.bottomPx.toDp() })
                         .padding(end = MeeshySpacing.sm),
                 )

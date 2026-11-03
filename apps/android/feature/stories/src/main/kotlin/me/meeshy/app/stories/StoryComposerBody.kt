@@ -10,7 +10,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import me.meeshy.app.stories.composer.scene.ComposerSceneInvite
+import me.meeshy.app.stories.composer.scene.sceneInviteShown
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.ComposerEditingChrome
 import me.meeshy.sdk.model.composer.ComposerHistoryPlace
 import me.meeshy.sdk.model.composer.ComposerMediaSource
@@ -118,7 +121,10 @@ private fun SceneFirstFrame(
             reduced = reduced,
             scene = { modifier ->
                 CompositionLocalProvider(LocalPlacedReframe provides placedReframe(edition.placedBand, placed, viewModel)) {
-                    StoryComposerScene(state, viewModel, comparison, modifier, capture, captureOffered)
+                    Box(modifier) {
+                        StoryComposerScene(state, viewModel, comparison, Modifier.fillMaxSize(), capture, captureOffered)
+                        ComposerSceneInvite(sceneInviteShown(state, armed, panel != null || typing != null || openSheet != null))
+                    }
                 }
             },
             top = { StorySceneTop(state, viewModel, doors.onClose, editing) },
@@ -602,7 +608,9 @@ private fun StorySocle(
 
 @Composable
 private fun StorySocleNotice(state: StoryComposerUiState, onRetryMedia: () -> Unit) {
+    val audienceEmpty = !ComposerAudienceSelection.isPublishable(state.draft.visibility, state.draft.visibilityUserIds)
     val block = state.publishBlock?.let { stringResource(it.messageRes()) }
+        ?: if (audienceEmpty) stringResource(R.string.composer_socle_blocked_audience) else null
     val notice = block ?: sceneNotice(state) ?: return
     val retries = block == null && state.canRetryMedia && state.errorMessage == StoryComposerViewModel.MEDIA_FAILED
     SceneNoticeLine(notice, onRetry = onRetryMedia.takeIf { retries })

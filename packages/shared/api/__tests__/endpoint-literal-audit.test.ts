@@ -118,6 +118,29 @@ describe("l'appariement dénonce ce qui n'est pas servi, et RIEN d'autre", () =>
   });
 });
 
+describe("le détecteur distingue un chemin d'API d'un chemin de FICHIER", () => {
+  /**
+   * Toute route du manifeste commence par un segment en minuscules ; les
+   * segments de conteneur iOS (`/Data/Application/`, `/Library/`, `/Users/`,
+   * `/Documents/`) commencent par une majuscule. Règle générale, pas une liste.
+   */
+  it('un fragment de chemin du système de fichiers iOS n\u2019est pas un littéral d\u2019endpoint', () => {
+    const source = 'let marker = "/Data/Application/"\nlet lib = "/Library/Caches/stories"\n';
+    expect(endpointLiteralsIn('StoryPublishQueue.swift', source)).toEqual([]);
+  });
+
+  it('un vrai chemin d\u2019API inconnu reste relevé, puis dénoncé', () => {
+    const sites = endpointLiteralsIn('X.swift', 'let p = "/data/application/"\n');
+    expect(sites).toHaveLength(1);
+    expect(unmatchedEndpointLiterals(sites, ['/api/v1/auth/login'], '/api/v1')).toHaveLength(1);
+  });
+
+  it('aucune route du manifeste ne commence par une majuscule : la règle ne masque rien de réel', () => {
+    const masquées = servedPaths().filter((path) => /^\/(?:api\/v1\/)?[A-Z]/.test(path));
+    expect(masquées).toEqual([]);
+  });
+});
+
 describe('AUDIT — aucun chemin écrit à la main ne rend 404', () => {
   /**
    * Le témoin qui aurait trouvé #4588 le jour où il a été écrit. Il balaie les
