@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.audio.BackgroundAudioAnnouncement
 import me.meeshy.sdk.model.FeedMedia
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.StoryBackgroundValue
@@ -87,6 +88,7 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
                 media.firstOrNull { it.id == mediaId }?.url?.let { resolveMediaUrl(it, apiBaseUrl) }
             },
             audioChips = StorySceneObjectsProjection.audioChips(storyEffects),
+            backgroundAudio = BackgroundAudioAnnouncement.of(storyEffects),
             places = storyEffects?.locationObjects.orEmpty().filter { it.place.name?.isNotBlank() == true || it.place.address?.isNotBlank() == true },
             isViewed = isViewed,
             createdAtMillis = isoToEpochMillis(createdAt).takeIf { it > 0L },

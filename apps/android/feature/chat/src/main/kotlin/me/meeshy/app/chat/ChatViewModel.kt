@@ -123,6 +123,7 @@ class ChatViewModel @Inject constructor(
     /** #14591 — le texte d'un tête-à-tête chiffré de bout en bout part scellé, et le fil relit son clair au coffre. */
     private val endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
     private val openConversations: OpenConversationRegistry,
+    reactionRows: me.meeshy.sdk.reaction.ReactionRowStore? = null,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -234,6 +235,7 @@ class ChatViewModel @Inject constructor(
         messageSocketManager = messageSocketManager,
         workManager = workManager,
         ownReactionWithdrawals = ownReactionWithdrawals,
+        rowStore = reactionRows,
     )
 
     private val translation = ChatTranslationController(
@@ -690,6 +692,9 @@ class ChatViewModel @Inject constructor(
 
     /** The picker's "clear all" — reset the armed selection to no effects. */
     fun clearEffects() = composer.clearEffects()
+
+    /** « Tout effacer » du petit panneau : retire les effets du panneau, jamais les protections. */
+    fun clearPanelEffects() = composer.clearPanelEffects()
 
     fun startEdit(messageId: String) = composer.startEdit(messageId)
 

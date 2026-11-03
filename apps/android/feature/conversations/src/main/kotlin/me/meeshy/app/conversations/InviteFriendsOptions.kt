@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,20 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Badge
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -74,7 +61,7 @@ internal fun InviteFriendsOptionsPanel(
     val form = draft.form
     fun edit(transform: (CreateShareLinkForm) -> CreateShareLinkForm) = onEvent(InviteFriendsUiEvent.EditForm(transform))
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg)) {
-        FormSection(stringResource(R.string.invite_section_identity), Icons.Filled.Edit, accent) {
+        FormSection(stringResource(R.string.invite_section_identity), MeeshyIcons.EditFilled, accent) {
             OutlinedTextField(
                 value = form.name,
                 onValueChange = { value -> edit { it.withName(value) } },
@@ -84,13 +71,13 @@ internal fun InviteFriendsOptionsPanel(
                 modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.md),
             )
         }
-        FormSection(stringResource(R.string.invite_section_limits), Icons.Filled.Speed, accent) {
+        FormSection(stringResource(R.string.invite_section_limits), MeeshyIcons.Speed, accent) {
             ExpirationRow(form.expiration, accent) { value -> edit { it.withExpiration(value) } }
             FormDivider()
             InviteToggleRow(
                 title = stringResource(R.string.invite_limitUses),
                 subtitle = if (form.maxUsesEnabled) "${form.maxUses} max" else stringResource(R.string.invite_unlimited),
-                icon = Icons.Filled.Group,
+                icon = MeeshyIcons.GroupFilled,
                 iconColor = MeeshyTheme.tokens.info,
                 accent = accent,
                 checked = form.maxUsesEnabled,
@@ -100,23 +87,23 @@ internal fun InviteFriendsOptionsPanel(
                 MaxUsesStepper(form.maxUses, accent, onStep = { onEvent(InviteFriendsUiEvent.StepMaxUses(it)) })
             }
         }
-        FormSection(stringResource(R.string.invite_section_permissions), Icons.Filled.Tune, accent) {
+        FormSection(stringResource(R.string.invite_section_permissions), MeeshyIcons.Tune, accent) {
             val tokens = MeeshyTheme.tokens
-            InviteToggleRow(stringResource(R.string.invite_perm_messages), null, Icons.Filled.ChatBubble, accent, accent, form.allowAnonymousMessages) { v -> edit { it.withAllowAnonymousMessages(v) } }
+            InviteToggleRow(stringResource(R.string.invite_perm_messages), null, MeeshyIcons.ChatBubble, accent, accent, form.allowAnonymousMessages) { v -> edit { it.withAllowAnonymousMessages(v) } }
             FormDivider()
-            InviteToggleRow(stringResource(R.string.invite_perm_images), null, Icons.Filled.Image, tokens.success, accent, form.allowAnonymousImages) { v -> edit { it.withAllowAnonymousImages(v) } }
+            InviteToggleRow(stringResource(R.string.invite_perm_images), null, MeeshyIcons.PhotoFilled, tokens.success, accent, form.allowAnonymousImages) { v -> edit { it.withAllowAnonymousImages(v) } }
             FormDivider()
-            InviteToggleRow(stringResource(R.string.invite_perm_files), null, Icons.Filled.AttachFile, tokens.warning, accent, form.allowAnonymousFiles) { v -> edit { it.withAllowAnonymousFiles(v) } }
+            InviteToggleRow(stringResource(R.string.invite_perm_files), null, MeeshyIcons.AttachFile, tokens.warning, accent, form.allowAnonymousFiles) { v -> edit { it.withAllowAnonymousFiles(v) } }
             FormDivider()
-            InviteToggleRow(stringResource(R.string.invite_perm_history), null, Icons.Filled.Schedule, tokens.info, accent, form.allowViewHistory) { v -> edit { it.withAllowViewHistory(v) } }
+            InviteToggleRow(stringResource(R.string.invite_perm_history), null, MeeshyIcons.ScheduleFilled, tokens.info, accent, form.allowViewHistory) { v -> edit { it.withAllowViewHistory(v) } }
         }
-        FormSection(stringResource(R.string.invite_section_access), Icons.Filled.Lock, accent) {
+        FormSection(stringResource(R.string.invite_section_access), MeeshyIcons.LockFilled, accent) {
             val tokens = MeeshyTheme.tokens
-            InviteToggleRow(stringResource(R.string.invite_access_account), null, Icons.Filled.Badge, accent, accent, form.requireAccount) { v -> edit { it.withRequireAccount(v) } }
+            InviteToggleRow(stringResource(R.string.invite_access_account), null, MeeshyIcons.Badge, accent, accent, form.requireAccount) { v -> edit { it.withRequireAccount(v) } }
             FormDivider()
-            InviteToggleRow(stringResource(R.string.invite_access_nickname), null, Icons.Filled.Person, tokens.textSecondary, accent, form.effectiveRequireNickname, enabled = form.guestRequirementsEditable) { v -> edit { it.withRequireNickname(v) } }
+            InviteToggleRow(stringResource(R.string.invite_access_nickname), null, MeeshyIcons.PersonFilled, tokens.textSecondary, accent, form.effectiveRequireNickname, enabled = form.guestRequirementsEditable) { v -> edit { it.withRequireNickname(v) } }
             FormDivider()
-            InviteToggleRow(stringResource(R.string.invite_access_email), null, Icons.Filled.Email, tokens.warning, accent, form.effectiveRequireEmail, enabled = form.guestRequirementsEditable) { v -> edit { it.withRequireEmail(v) } }
+            InviteToggleRow(stringResource(R.string.invite_access_email), null, MeeshyIcons.MailFilled, tokens.warning, accent, form.effectiveRequireEmail, enabled = form.guestRequirementsEditable) { v -> edit { it.withRequireEmail(v) } }
         }
     }
 }
@@ -129,7 +116,7 @@ private fun ExpirationRow(selected: ShareLinkExpiration, accent: Color, onSelect
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        IconBadge(Icons.Filled.Timer, MeeshyTheme.tokens.error)
+        IconBadge(MeeshyIcons.Timer, MeeshyTheme.tokens.error)
         Text(
             stringResource(R.string.invite_expiration_title),
             style = MaterialTheme.typography.titleSmall,

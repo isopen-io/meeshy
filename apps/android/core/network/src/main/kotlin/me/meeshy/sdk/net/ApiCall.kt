@@ -46,6 +46,7 @@ private fun ApiResponse<*>.toApiError(
         emailOwner = MaskedEmailOwner.from(emailOwner),
         resetAtEpochMillis = DailyGestureLimit.parseInstant(resetAt),
         retryAfterSeconds = retryAfterSecondsOf(httpStatus, refusalCode, retryAfterHeader),
+        requiredConsents = requiredConsents,
     )
 }
 

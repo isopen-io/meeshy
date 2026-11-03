@@ -38,15 +38,21 @@ import me.meeshy.sdk.model.composer.look.ComposerEditTake
 import me.meeshy.sdk.model.composer.look.ComposerEditTool
 import me.meeshy.sdk.model.composer.look.ComposerEditTools
 import me.meeshy.sdk.model.composer.look.ComposerLookCanvas
+import me.meeshy.sdk.model.composer.look.ComposerPhotoRecipe
 import me.meeshy.sdk.model.composer.look.ComposerRetouchDelivery
 import me.meeshy.sdk.model.composer.look.ComposerRetouchState
 import me.meeshy.sdk.model.composer.look.ComposerRetouchTextBoard
+import me.meeshy.sdk.model.composer.look.recipe
+import me.meeshy.sdk.model.composer.look.restoring
 import java.util.UUID
 
-/** Ce que « Terminé » remet à l'hôte : la prise telle quelle, ou son rendu. */
+/**
+ * Ce que « Terminé » remet à l'hôte : la prise telle quelle, ou son rendu et la recette qui le peint — l'hôte la garde à
+ * côté de l'original pour rouvrir la retouche modifiable (#14844).
+ */
 public sealed interface ComposerRetouchResult {
     public data object Original : ComposerRetouchResult
-    public data class Rendered(val bitmap: Bitmap) : ComposerRetouchResult
+    public data class Rendered(val bitmap: Bitmap, val recipe: ComposerPhotoRecipe = ComposerPhotoRecipe()) : ComposerRetouchResult
 }
 
 /** Les effets que la retouche Android sait peindre sur une photo (#12733) : ceux de l'appel, dans son ordre. */
@@ -61,7 +67,8 @@ public val RetouchPhotoTools: List<ComposerEditTool> = listOf(ComposerEditTool.C
  * remplit l'écran, (x) et « Terminé » en haut tant qu'aucun élément d'édition ne s'affiche, et le rail
  * Filtres · Effets · Cadres · Recadrer en bas ; une famille ouverte déroule sa bande, dont la case au centre est
  * choisie ; Recadrer pose ses équerres sur la prise entière et ses proportions par presets sous la scène.
- * L'aperçu se repeint hors du fil principal ; tant qu'il cuit, l'image d'avant reste — jamais de sablier.
+ * L'aperçu se repeint hors du fil principal ; tant qu'il cuit, l'image d'avant reste — jamais de sablier. Rouverte
+ * sur une recette ([initial], #14844), elle rend son look, son recadrage et ses textes, modifiables.
  */
 @Composable
 public fun ComposerRetouchScreen(
@@ -70,11 +77,15 @@ public fun ComposerRetouchScreen(
     onDone: suspend (ComposerRetouchResult) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
+    initial: ComposerPhotoRecipe? = null,
 ) {
-    var state by remember { mutableStateOf(ComposerRetouchState.opening(ComposerEditTake.Photo, RetouchRenderableEffects, RetouchPhotoTools)) }
+    var state by remember {
+        val opening = ComposerRetouchState.opening(ComposerEditTake.Photo, RetouchRenderableEffects, RetouchPhotoTools)
+        mutableStateOf(initial?.let(opening::restoring) ?: opening)
+    }
     var finishing by remember { mutableStateOf(false) }
-    var lockedPreset by remember { mutableStateOf<ComposerCropPreset?>(null) }
-    var text by remember { mutableStateOf(ComposerRetouchTextBoard()) }
+    var lockedPreset by remember { mutableStateOf(initial?.cropPreset) }
+    var text by remember { mutableStateOf(ComposerRetouchTextBoard(texts = initial?.texts.orEmpty())) }
     val newTextId = { UUID.randomUUID().toString() }
     val scope = rememberCoroutineScope()
     val paintContext = LocalRetouchPaintContext.current
@@ -123,7 +134,7 @@ public fun ComposerRetouchScreen(
                 withContext(paintContext) {
                     ComposerLookPainter.paint(source, settled.look, author, ComposerLookCanvas.EXPORT_LONG_SIDE, settled.crop, face)
                         ?.let { RetouchTextPainter.composited(it, written) }
-                }?.let { ComposerRetouchResult.Rendered(it) }
+                }?.let { ComposerRetouchResult.Rendered(it, settled.recipe(written)) }
             }
             if (result == null) {
                 state = settled.copy(settled = false)

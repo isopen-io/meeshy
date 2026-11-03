@@ -47,9 +47,12 @@ public class StickerEmojiRasterizer(countLimit: Int = DEFAULT_COUNT_LIMIT, byteL
         keys.clear()
     }
 
-    /** Vide le cache dès que le système commence à manquer de mémoire. */
+    /**
+     * Vide le cache quand la mémoire manque vraiment : appli en cours à court critique, ou processus relégué à l'arrière-plan.
+     * `TRIM_MEMORY_UI_HIDDEN` (20) et les paliers « running » légers ne vident rien : l'écran revient dans l'instant.
+     */
     public fun onTrimMemory(level: Int) {
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) clear()
+        if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL || level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) clear()
     }
 
     private fun draw(emoji: String, side: Int): Bitmap {

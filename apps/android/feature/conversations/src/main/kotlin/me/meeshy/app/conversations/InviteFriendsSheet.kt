@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.ui.icons.MeeshyIcons
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -27,18 +28,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Campaign
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -164,7 +153,7 @@ internal fun InviteFriendsContent(
                 onClick = { onEvent(InviteFriendsUiEvent.ToggleOptions) },
                 modifier = Modifier.align(Alignment.CenterHorizontally).semantics { contentDescription = customizeLabel },
             ) {
-                Icon(Icons.Filled.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(MeeshyIcons.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
                 Text(stringResource(R.string.invite_customize), modifier = Modifier.padding(start = MeeshySpacing.xsPlus))
             }
         }
@@ -267,7 +256,7 @@ private fun InviteLinkChip(state: InviteFriendsUiState, accent: Color, onEvent: 
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
-        Icon(Icons.Filled.Link, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
+        Icon(MeeshyIcons.Link, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
         when {
             url != null -> {
                 Text(
@@ -329,7 +318,7 @@ private fun InviteSummaryRow(summary: InviteLinkSummary) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
-        Icon(Icons.Filled.Schedule, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
+        Icon(MeeshyIcons.ScheduleFilled, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
         Text(expiration, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = MeeshyTheme.tokens.textSecondary)
         summary.permissions.forEach { permission ->
             Icon(permission.icon(), contentDescription = null, tint = MeeshyTheme.tokens.success, modifier = Modifier.size(12.dp))
@@ -356,7 +345,7 @@ private fun InviteShareButton(state: InviteFriendsUiState, accent: Color, onShar
         if (state.isCreating && state.joinUrl == null) {
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
         } else {
-            Icon(Icons.Filled.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Icon(MeeshyIcons.ShareFilled, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
         }
         Text(
             stringResource(R.string.invite_share),
@@ -371,7 +360,7 @@ private fun InviteShareButton(state: InviteFriendsUiState, accent: Color, onShar
 @Composable
 private fun InviteErrorRow(message: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus)) {
-        Icon(Icons.Filled.Warning, contentDescription = null, tint = MeeshyTheme.tokens.error, modifier = Modifier.size(16.dp))
+        Icon(MeeshyIcons.WarningFilled, contentDescription = null, tint = MeeshyTheme.tokens.error, modifier = Modifier.size(16.dp))
         Text(message, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.error)
     }
 }
@@ -384,18 +373,18 @@ private fun InvitePermission.labelRes(): Int = when (this) {
 }
 
 private fun InvitePermission.icon(): ImageVector = when (this) {
-    InvitePermission.Messages -> Icons.Filled.ChatBubble
-    InvitePermission.Images -> Icons.Filled.Image
-    InvitePermission.Files -> Icons.Filled.AttachFile
-    InvitePermission.History -> Icons.Filled.Schedule
+    InvitePermission.Messages -> MeeshyIcons.ChatBubble
+    InvitePermission.Images -> MeeshyIcons.PhotoFilled
+    InvitePermission.Files -> MeeshyIcons.AttachFile
+    InvitePermission.History -> MeeshyIcons.ScheduleFilled
 }
 
 private fun String.inviteIcon(): ImageVector = when (lowercase()) {
-    "group" -> Icons.Filled.Groups
-    "community" -> Icons.Filled.Groups
-    "channel", "broadcast" -> Icons.Filled.Campaign
-    "public", "global" -> Icons.Filled.Public
-    else -> Icons.Filled.ChatBubble
+    "group" -> MeeshyIcons.GroupsFilled
+    "community" -> MeeshyIcons.GroupsFilled
+    "channel", "broadcast" -> MeeshyIcons.Campaign
+    "public", "global" -> MeeshyIcons.Public
+    else -> MeeshyIcons.ChatBubble
 }
 
 private fun String.inviteTypeLabelRes(): Int = when (lowercase()) {
