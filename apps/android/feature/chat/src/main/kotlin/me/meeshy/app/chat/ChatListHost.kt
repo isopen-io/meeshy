@@ -510,6 +510,7 @@ internal fun ChatListHost(
                         focalScale = scale,
                         selecting = host.selection.isActive,
                         selectedIds = host.selection.ids,
+                        overlayMessageId = state.actionMessageId,
                     ) }
                     val landed = item is ChatListItem.Message && item.bubble.messageId == host.landing.highlightedMessageId
                     if (focalMode) {
