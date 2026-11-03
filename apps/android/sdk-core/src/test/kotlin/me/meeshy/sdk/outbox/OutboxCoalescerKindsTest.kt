@@ -161,3 +161,48 @@ class OutboxCoalescerStoryReactionTest {
             .isEqualTo(CoalesceDecision.Enqueue(pending("r3", "🔥", "s2")))
     }
 }
+
+class OutboxChatKindsCoalescingTest {
+
+    @Test
+    fun `restoring a message cancels its queued hiding`() {
+        val hide = row("h1", OutboxKind.HIDE_FOR_ME, "m1")
+        val restore = row("r1", OutboxKind.RESTORE_FOR_ME, "m1")
+
+        val decision = OutboxCoalescer.decide(restore, listOf(hide))
+
+        assertThat((decision as CoalesceDecision.Annihilate).cancelledCmids).containsExactly("h1")
+    }
+
+    @Test
+    fun `hiding after a queued restore cancels it as well, and another message is left alone`() {
+        val restore = row("r1", OutboxKind.RESTORE_FOR_ME, "m1")
+
+        val cancelled = OutboxCoalescer.decide(row("h1", OutboxKind.HIDE_FOR_ME, "m1"), listOf(restore))
+        val other = OutboxCoalescer.decide(row("h2", OutboxKind.HIDE_FOR_ME, "m2"), listOf(restore))
+
+        assertThat((cancelled as CoalesceDecision.Annihilate).cancelledCmids).containsExactly("r1")
+        assertThat(other).isInstanceOf(CoalesceDecision.Enqueue::class.java)
+    }
+
+    @Test
+    fun `a repeated hiding keeps only the latest row`() {
+        val first = row("h1", OutboxKind.HIDE_FOR_ME, "m1")
+        val second = row("h2", OutboxKind.HIDE_FOR_ME, "m1")
+
+        val decision = OutboxCoalescer.decide(second, listOf(first)) as CoalesceDecision.Replace
+
+        assertThat(decision.supersededCmids).containsExactly("h1")
+        assertThat(decision.row.cmid).isEqualTo("h2")
+    }
+
+    @Test
+    fun `a repeated received receipt of the same conversation keeps only the latest`() {
+        val decision = OutboxCoalescer.decide(
+            row("a2", OutboxKind.MARK_RECEIVED, "c1"),
+            listOf(row("a1", OutboxKind.MARK_RECEIVED, "c1")),
+        ) as CoalesceDecision.Replace
+
+        assertThat(decision.supersededCmids).containsExactly("a1")
+    }
+}
