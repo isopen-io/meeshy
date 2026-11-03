@@ -14,6 +14,11 @@
     <string name="feed_action_share">Share</string>
     <string name="feed_action_view_profile">View profile</string>
     <string name="feed_bookmark_success">Added to bookmarks</string>
+    <string name="feed_caption_collapse">less</string>
+    <string name="feed_caption_expand">more…</string>
+    <string name="feed_carousel_a11y_position">Media %1$d of %2$d</string>
+    <string name="feed_carousel_next">Next media</string>
+    <string name="feed_carousel_previous">Previous media</string>
     <string name="feed_comment_card_folded">+%1$d replies</string>
     <string name="feed_comment_card_thread">Comment thread</string>
     <string name="feed_comment_imagine">Picture it</string>
@@ -29,6 +34,7 @@
     <string name="feed_load_error">Couldn\'t load the feed</string>
     <string name="feed_location_shared">Shared location</string>
     <string name="feed_media_page_counter">%1$d/%2$d</string>
+    <string name="feed_media_view_fullscreen">Tap to enlarge</string>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d new post</item>
         <item quantity="other">%1$d new posts</item>
@@ -47,6 +53,8 @@
     <string name="feed_pending_waiting">Waiting to send</string>
     <string name="feed_pending_withdrawn">Sending canceled</string>
     <string name="feed_post_deleted">Post deleted</string>
+    <string name="feed_post_detail_document">Document</string>
+    <string name="feed_post_detail_pages">pages</string>
     <string name="feed_post_open">Open</string>
     <string name="feed_post_pinned">Post pinned</string>
     <string name="feed_post_reposted_from">reposted from @%1$s</string>
@@ -121,6 +129,7 @@
         <item quantity="other">View all %1$d comments</item>
     </plurals>
     <string name="hashtag_results_empty">No posts with #%1$s</string>
+    <string name="media_download_video">Download the video</string>
     <string name="mood_bubble_react">Reaction %1$s</string>
     <string name="mood_bubble_reply">Reply</string>
     <string name="mood_spotlight_close">Close</string>

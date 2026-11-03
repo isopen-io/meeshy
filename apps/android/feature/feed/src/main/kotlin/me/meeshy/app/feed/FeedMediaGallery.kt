@@ -3,6 +3,7 @@ package me.meeshy.app.feed
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.GalleryAttribution
 import me.meeshy.sdk.model.GalleryPage
 import me.meeshy.sdk.model.GalleryPageKind
@@ -32,6 +33,9 @@ data class FeedGalleryPage(
     val alt: String? = null,
     /** L'identifiant du média du post que la page montre — l'ancre d'une citation « commenter ce média ». */
     val mediaId: String? = null,
+    /** La page montre une VIDÉO : [FeedGalleryPage.url] est alors le fichier vidéo et [FeedGalleryPage.thumbnailUrl] son poster. */
+    val isVideo: Boolean = false,
+    val durationMillis: Int? = null,
 )
 
 /**
@@ -138,6 +142,40 @@ object FeedMediaGallery {
     }
 
     /**
+     * La galerie que la carte du fil ouvre : ses images ET ses vidéos, dans l'ordre du post ([FeedCardMediaRouting.visuals]).
+     * [index] est le rang du média touché PARMI ces visuels. Une carte sans visuel n'ouvre rien.
+     */
+    fun ofVisuals(post: FeedPostPresentation, index: Int): FeedGallery {
+        val visuals = FeedCardMediaRouting.visuals(post.media)
+        if (visuals.isEmpty()) return EMPTY
+        val carrierText = post.content.takeIf { visuals.size == 1 }
+        val authorName = post.authorName?.trim()?.ifBlank { null }
+        val createdAtIso = post.createdAtIso?.trim()?.ifBlank { null }
+        val pages = visuals.map { item ->
+            FeedGalleryPage(
+                url = item.url,
+                thumbnailUrl = item.thumbnailUrl,
+                caption = mediaCaption(own = item.caption, carrierText = carrierText),
+                authorName = authorName,
+                createdAtIso = createdAtIso,
+                alt = item.alt,
+                mediaId = item.id,
+                isVideo = item.type == FeedMediaType.VIDEO,
+                durationMillis = item.durationSeconds?.let { it * 1000 },
+            )
+        }
+        return FeedGallery(
+            pages = pages,
+            startIndex = index.coerceIn(0, pages.lastIndex),
+            postId = post.id,
+            commentCount = post.commentCount,
+            authorId = post.authorId,
+            authorAvatarUrl = post.authorAvatarUrl,
+            accentHex = post.accentHex,
+        )
+    }
+
+    /**
      * La galerie sociale de [gallery] : ses images (légendes déjà servies par le Prisme, auteur par page) suivies des médias
      * des [comments] du post — la composition commune de `SocialMediaGalleryPresentation`, que le fil rejoint avec ce qu'il tient.
      */
@@ -149,11 +187,12 @@ object FeedMediaGallery {
         val publication = gallery.pages.mapIndexed { index, page ->
             GalleryPage(
                 id = page.mediaId ?: "${gallery.postId.orEmpty()}#$index",
-                kind = GalleryPageKind.IMAGE,
+                kind = if (page.isVideo) GalleryPageKind.VIDEO else GalleryPageKind.IMAGE,
                 url = page.url,
                 thumbnailUrl = page.thumbnailUrl,
                 caption = page.caption,
                 alt = page.alt?.takeIf { it.isNotBlank() },
+                durationMillis = page.durationMillis,
                 attribution = GalleryAttribution(
                     name = page.authorName,
                     avatarUrl = gallery.authorAvatarUrl,
