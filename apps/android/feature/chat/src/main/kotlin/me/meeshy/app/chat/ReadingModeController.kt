@@ -152,7 +152,8 @@ class ReadingModeSession(
 ) {
     private val _state = MutableStateFlow(
         ReadingModeUiState(
-            forcedMode?.let { OrchestratorDecision(it, OrchestratorDecisionReason.DEFAULT) } ?: compute(landsOnMessage),
+            forcedMode?.let { ReadingModeOpening.deliver(OrchestratorDecision(it, OrchestratorDecisionReason.DEFAULT), delivered) }
+                ?: compute(landsOnMessage),
             capabilities,
             delivered,
         ),
