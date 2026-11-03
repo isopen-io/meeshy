@@ -51,6 +51,10 @@ class OutboxKindDiskValuesLockTest {
         "REMOVE_ATTACHMENT",
         "MODERATION_DELETE",
         "MARK_RECEIVED",
+        "REPOST_STORY",
+        "MARK_STORY_VIEWED",
+        "DELETE_COMMENT",
+        "TOGGLE_LIKE_COMMENT",
     )
 
     @Test
