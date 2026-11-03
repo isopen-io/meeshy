@@ -43,7 +43,7 @@ class ImagineRequestBuilderTest {
     private fun subject(m: ApiMessage, prism: List<String>, language: String? = null, quoted: ApiMessage? = null) =
         ImagineRequestBuilder.subject(m, viewer, prism, now, language, quoted)
 
-    private fun photo(id: String = "p1") = ApiMessageAttachment(id = id, mimeType = "image/jpeg", fileUrl = "https://x/$id.jpg", width = 800, height = 400)
+    private fun photo(id: String = "p1") = ApiMessageAttachment(id = id, mimeType = "image/jpeg", fileUrl = "https://x/$id.jpg", width = 800, height = 400, isViewOnce = false, isBlurred = false)
 
     private fun voice(translations: Map<String, ApiAttachmentTranslation>? = null) = ApiMessageAttachment(
         id = "a1", mimeType = "audio/mp4", fileUrl = "https://x/a-en.m4a", duration = 12_000, originalName = "Vocal",
