@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "profile.posts.stat.posts",
+          "androidName": "profile_posts_stat_posts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.posts.stat.reels",
+          "androidName": "profile_posts_stat_reels",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.posts.stat.stories",
+          "androidName": "profile_posts_stat_stories",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.posts.empty",
+          "androidName": "profile_posts_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.posts.empty.subtitle",
+          "androidName": "profile_posts_empty_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.posts.empty.posts",
+          "androidName": "profile_posts_empty_posts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.posts.empty.reels",
+          "androidName": "profile_posts_empty_reels",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.posts.empty.filter.subtitle",
+          "androidName": "profile_posts_empty_filter_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.posts.endOfContent",
+          "androidName": "profile_posts_end_of_content",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.posts.firstPublishedAt",
+          "androidName": "profile_posts_first_published_at",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.posts.loadError",
+          "androidName": "profile_posts_load_error",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

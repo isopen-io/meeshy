@@ -196,6 +196,17 @@
     <string name="post_detail_media_video">Vidéo partagée</string>
     <string name="post_detail_title">Publication</string>
     <string name="post_detail_viewers">Vues</string>
+    <string name="profile_posts_empty">Aucune publication</string>
+    <string name="profile_posts_empty_filter_subtitle">Touchez à nouveau la tuile pour tout revoir</string>
+    <string name="profile_posts_empty_posts">Aucun poste</string>
+    <string name="profile_posts_empty_reels">Aucun réel</string>
+    <string name="profile_posts_empty_subtitle">Les publications apparaîtront ici</string>
+    <string name="profile_posts_end_of_content">Vous avez tout vu</string>
+    <string name="profile_posts_first_published_at">Premier contenu publié le %1$s</string>
+    <string name="profile_posts_load_error">Erreur lors du chargement des publications</string>
+    <string name="profile_posts_stat_posts">Publications</string>
+    <string name="profile_posts_stat_reels">Réels</string>
+    <string name="profile_posts_stat_stories">Stories</string>
     <string name="status_bubble_republish">Republier</string>
     <string name="status_bubble_via">via @%1$s</string>
     <string name="status_composer_bare_add">Ajouter un mot</string>
