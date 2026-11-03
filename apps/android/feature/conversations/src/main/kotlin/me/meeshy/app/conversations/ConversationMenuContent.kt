@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -80,6 +79,7 @@ import me.meeshy.sdk.model.ConversationCategoryPicker
 import me.meeshy.sdk.model.conversationoptions.ConversationMoveMenu
 import me.meeshy.sdk.model.conversationoptions.MoveMenuTarget
 import me.meeshy.ui.haptics.MeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -252,7 +252,7 @@ private fun EntryRow(
 private fun BackHeader(title: String, onBack: () -> Unit) {
     DropdownMenuItem(
         text = { Text(title, style = MaterialTheme.typography.labelLarge) },
-        leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null) },
+        leadingIcon = { Icon(MeeshyIcons.Back, contentDescription = null) },
         onClick = onBack,
         modifier = Modifier.testTag(BACK_TEST_TAG),
     )
