@@ -1,6 +1,14 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="a11y_message_location">موقع مشارَك</string>
+    <string name="attachment_loading_a11y_failed">فشل التحميل</string>
+    <string name="attachment_loading_a11y_ready">جاهز</string>
+    <string name="attachment_loading_cancel_a11y">إلغاء التحميل</string>
+    <string name="attachment_loading_error">خطأ</string>
+    <string name="attachment_stage_compressing">جارٍ الضغط</string>
+    <string name="attachment_stage_hashing">البصمة</string>
+    <string name="attachment_stage_loading">جارٍ التحميل</string>
+    <string name="attachment_stage_thumbnailing">معاينة</string>
     <string name="attachment_sticker">ملصق</string>
     <string name="chat_action_copy_link">نسخ الرابط</string>
     <string name="chat_action_open_link">فتح الرابط</string>
@@ -422,6 +430,9 @@
     <string name="share_action_copy_text">نسخ النص</string>
     <string name="share_action_save">حفظ</string>
     <string name="share_action_share_out">مشاركة خارج Meeshy</string>
+    <string name="share_button_a11y">إرسال إلى %1$d من المستلمين</string>
+    <string name="share_button_forward">إعادة توجيه · %1$d</string>
+    <string name="share_button_send">إرسال · %1$d</string>
     <string name="share_caption_hint">أضف رسالة…</string>
     <string name="share_capture_warning">تم التقاط هذه الوسائط للتو بواسطة التطبيق. سيؤدي نشرها إلى جعلها مرئية خارج هذه المحادثة.</string>
     <string name="share_close">إغلاق</string>
@@ -446,11 +457,16 @@
     <string name="share_detail_group_unsized">مجموعة</string>
     <string name="share_empty_body">ابحث عن شخص باسمه أو اسم المستخدم أو رقمه.</string>
     <string name="share_empty_title">لا أحد هنا بعد</string>
+    <string name="share_encryption_warning">«%1$s» غير مشفّرة: ستخرج هذه الرسالة هناك من التشفير التام بين الطرفين.</string>
     <string name="share_error_generic">خطأ أثناء المشاركة</string>
     <string name="share_flame_note">تختفي النسخة في موعد أقصاه مدة الرسالة الأصلية، ولا يمكن إعادة توجيهها مرة أخرى.</string>
     <string name="share_flame_title">يختفي بعد</string>
     <string name="share_group_create">إنشاء مجموعة مع %1$s</string>
+    <string name="share_grouping_separately">بشكل منفصل</string>
+    <string name="share_grouping_together">معًا</string>
     <string name="share_limits_recipients">10 مستلمين على الأكثر لكل إرسال</string>
+    <string name="share_limits_too_heavy">%1$d ملفات، %2$s. تحمل المشاركة %3$d ملفًا و%4$s على الأكثر.</string>
+    <string name="share_limits_trim">أزل %1$d ملفات للإرسال</string>
     <string name="share_offline">غير متصل. سيُرسَل ما لم يُرسَل عند عودة الشبكة، حتى لو أغلقت Meeshy.</string>
     <string name="share_publish_feed">خلاصتي</string>
     <string name="share_publish_reel">ريل</string>

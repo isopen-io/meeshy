@@ -2,10 +2,11 @@ package me.meeshy.app.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import me.meeshy.app.chat.AppShareSheetHost
 import me.meeshy.app.chat.UniversalComposerHost
@@ -48,8 +49,6 @@ import me.meeshy.ui.share.ShareLauncher
 
 private const val POST_SCENE_IMAGER_KEY = "post-scene-imager"
 
-private data class PendingShare(val subject: ShareSubject, val onDismissed: () -> Unit)
-
 /**
  * **La racine de la feuille de partage unique** (#13474) : fournit [LocalShareLauncher] à toute l'application
  * et monte LA feuille quand une porte (story, post, réel, profil, lien) y pose son [ShareSubject]. L'état
@@ -57,9 +56,19 @@ private data class PendingShare(val subject: ShareSubject, val onDismissed: () -
  * « Envoyé à X · Ouvrir » ouvre la conversation servie.
  */
 @Composable
-fun ShareLaunchHost(navController: NavHostController, content: @Composable () -> Unit) {
-    var pending by remember { mutableStateOf<PendingShare?>(null) }
-    val launcher = remember { ShareLauncher { subject, onDismissed -> pending = PendingShare(subject, onDismissed) } }
+fun ShareLaunchHost(
+    navController: NavHostController,
+    shareState: ShareSheetHostState = hiltViewModel<ShareSheetHostViewModel>().state,
+    content: @Composable () -> Unit,
+) {
+    val pending by shareState.pending.collectAsStateWithLifecycle()
+    val launcher = remember(shareState) { ShareLauncher { subject, onDismissed -> shareState.present(subject, onDismissed) } }
+    // Ouvrir une conversation, par la feuille ou par n'importe quelle porte, ferme la feuille de partage.
+    LaunchedEffect(navController, shareState) {
+        navController.currentBackStackEntryFlow.collect { entry ->
+            if (entry.destination.route == Routes.CHAT) shareState.dismiss()
+        }
+    }
     // La scène d'une story reposté se dessine dans le fil par le lecteur du module des stories (#13654).
     val repostScene: RepostSceneRenderer = remember { { item, author, live, open, modifier -> RepostSceneCard(item, author, live, open, modifier) } }
     // La scène d'un réel remplit sa carte (iOS `ReelCardSceneBackdrop`), au lieu de la carte 9:16 d'une story.
@@ -104,10 +113,7 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
     pending?.let { share ->
         AppShareSheetHost(
             subject = share.subject,
-            onDismiss = {
-                pending = null
-                share.onDismissed()
-            },
+            onDismiss = shareState::dismiss,
             onOpenConversation = { navController.navigate(Routes.chat(it)) },
         )
     }

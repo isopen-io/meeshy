@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        {
+          "androidName": "deep_link_error_forbidden",
+          "status": "android-only"
+        },
+        {
+          "androidName": "deep_link_error_inactive",
+          "status": "android-only"
+        },
+        {
+          "androidName": "deep_link_error_not_found",
+          "status": "android-only"
+        },
+        {
+          "androidName": "deep_link_error_unresolved",
+          "status": "android-only"
+        },
+        {
+          "androidName": "gesture_refusal_slow_mode",
+          "status": "android-only"
+        },
+        {
+          "androidName": "ongoing_action_cancel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "ongoing_action_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "ongoing_action_hang_up",
+          "status": "android-only"
+        },
+        {
+          "androidName": "ongoing_action_mute",
+          "status": "android-only"
+        },
+        {
+          "androidName": "ongoing_action_pause",
+          "status": "android-only"
+        },
+        {
+          "androidName": "ongoing_action_resume",
+          "status": "android-only"
+        },
+        {
+          "androidName": "ongoing_action_unmute",
+          "status": "android-only"
+        },
+        {
+          "androidName": "ongoing_outbox_sent_of_total",
+          "status": "android-only"
+        },
+        {
+          "androidName": "ongoing_playback_protected",
+          "status": "android-only"
+        },
+        {
+          "androidName": "shortcut_publish_post",
+          "status": "android-only"
+        },
+        {
+          "androidName": "shortcut_recent_conversations",
+          "status": "android-only"
+        },
+        {
+          "androidName": "shortcut_unread_conversations",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.audio.BackgroundAudioAnnouncement
 import org.junit.Test
 
 /**
@@ -110,5 +111,16 @@ class StorySlideProjectorTest {
 
         assertThat(transform.scaleX).isEqualTo(transform.scaleY)
         assertThat(transform.scaleX.toDouble()).isWithin(1e-4).of(16.0 / 9.0)
+    }
+
+    @Test
+    fun `la slide annonce son son d arriere-plan`() {
+        val item = StoryItem(
+            id = "s",
+            storyEffects = StoryEffects(audioPlayerObjects = listOf(StoryAudioPlayerObject("a", isBackground = true, soundId = "x", name = "Pulse"))),
+        )
+
+        assertThat(project(item).backgroundAudio).isEqualTo(BackgroundAudioAnnouncement.Credit("Pulse", null, null, null))
+        assertThat(project(StoryItem(id = "s")).backgroundAudio).isEqualTo(BackgroundAudioAnnouncement.None)
     }
 }

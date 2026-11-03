@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.lock
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -13,10 +14,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Backspace
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -84,7 +81,7 @@ public fun LockPinSheet(
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
         ) {
             Icon(
-                imageVector = if (opensLock) Icons.Filled.LockOpen else Icons.Filled.Lock,
+                imageVector = if (opensLock) MeeshyIcons.LockOpenFilled else MeeshyIcons.LockFilled,
                 contentDescription = null,
                 tint = accent,
                 modifier = Modifier.size(44.dp),
@@ -205,7 +202,7 @@ private fun NumpadDeleteKey(enabled: Boolean, description: String, onDelete: () 
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.Backspace,
+            imageVector = MeeshyIcons.Backspace,
             contentDescription = null,
             tint = if (enabled) MeeshyTheme.tokens.textPrimary else MeeshyTheme.tokens.textSecondary.copy(alpha = 0.3f),
             modifier = Modifier.size(24.dp),

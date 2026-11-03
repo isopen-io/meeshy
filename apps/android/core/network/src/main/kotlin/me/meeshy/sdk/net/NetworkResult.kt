@@ -49,4 +49,6 @@ data class ApiError(
     val resetAtEpochMillis: Long? = null,
     /** Les secondes avant de pouvoir réessayer (`NEWCOMER_SLOW_MODE`, plancher d'une seconde ; limites du jour). */
     val retryAfterSeconds: Int? = null,
+    /** Les consentements qu'un 403 demande (null = refus ordinaire). */
+    val requiredConsents: List<String>? = null,
 )

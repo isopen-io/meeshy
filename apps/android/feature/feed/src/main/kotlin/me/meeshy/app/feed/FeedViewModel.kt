@@ -15,6 +15,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.getUserDisplayName
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.postTypeFromWire
 import me.meeshy.sdk.net.MeeshyConfig
@@ -58,6 +59,9 @@ data class FeedUiState(
     val newPostsCount: Int = 0,
     /** L'id de l'utilisateur connecte — decide quel menu d'options porte chaque card. */
     val currentUserId: String? = null,
+    /** Le nom et l'avatar de l'utilisateur connecté : le visage du placeholder de composeur (iOS `MeeshyAvatar(.feedComposer)`). */
+    val currentUserName: String? = null,
+    val currentUserAvatarUrl: String? = null,
     /**
      * On-demand post translations in flight, keyed `postId|language`. Guards a
      * double-tap on a translatable flag chip from firing two requests, and lets the
@@ -147,6 +151,11 @@ class FeedViewModel @Inject constructor(
     /** [postId] just appeared on screen — call once per composition entry. */
     fun trackImpression(postId: String) {
         impressionBatcher.record(postId)
+    }
+
+    /** Le fil sort de l'écran ou passe en arrière-plan : le lot d'impressions part, il n'est pas jeté (iOS `flushNow`). */
+    fun flushImpressions() {
+        impressionBatcher.flushNowAsync()
     }
 
     override fun onCleared() {
@@ -739,6 +748,8 @@ private fun FeedUiState.project(
         loadFailed = stillFailed,
         newPostsCount = newPostsCount,
         currentUserId = user?.id,
+        currentUserName = user?.let { getUserDisplayName(it, fallback = "M") },
+        currentUserAvatarUrl = user?.avatar?.takeIf { it.isNotBlank() }?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
     )
 }
 

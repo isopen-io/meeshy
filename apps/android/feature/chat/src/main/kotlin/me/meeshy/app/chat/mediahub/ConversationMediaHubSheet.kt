@@ -143,7 +143,7 @@ internal fun ConversationMediaHubContent(
     var query by rememberSaveable { mutableStateOf("") }
     var viewerIndex by remember { mutableStateOf<Int?>(null) }
     var video by remember { mutableStateOf<MediaHubLaunch.Video?>(null) }
-    val audioPlayer = rememberChatAudioPlayer(conversationTitle)
+    val audioPlayer = rememberChatAudioPlayer(conversationTitle, conversationId)
     val haptics = rememberMeeshyHaptics()
     val context = LocalContext.current
     val reduceMotion = LocalReduceMotion.current
