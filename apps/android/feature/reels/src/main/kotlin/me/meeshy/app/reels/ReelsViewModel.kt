@@ -525,10 +525,13 @@ class ReelsViewModel @Inject constructor(
         }
     }
 
-    /** Signalement direct, motif « inapproprié » comme sur iOS (`reportPost`). */
-    fun report(reelId: String) {
+    /** Un commentaire parti depuis la feuille : le compteur du rail gagne 1 aussitôt (iOS `onCommentSent`). */
+    fun commentSent(reelId: String) = updateReel(reelId) { it.copy(commentCount = it.commentCount + 1) }
+
+    /** Signalement : le motif choisi dans le dialogue, « inapproprié » par défaut comme sur iOS (`reportPost`). */
+    fun report(reelId: String, reason: ReportReason = ReportReason.INAPPROPRIATE) {
         viewModelScope.launch {
-            when (reportRepository.reportPost(reelId, ReportReason.INAPPROPRIATE, details = null)) {
+            when (reportRepository.reportPost(reelId, reason, details = null)) {
                 is NetworkResult.Success -> toast(R.string.reels_toast_reported, FeedbackKind.Success)
                 else -> toast(R.string.reels_toast_report_failed, FeedbackKind.Error)
             }

@@ -81,6 +81,7 @@ fun ReelsScreen(
     onOpenPost: (String) -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
     onOpenStory: (String) -> Unit = {},
+    onEditPost: ((String) -> Unit)? = null,
     authorHasStory: (String) -> Boolean = { false },
     viewModel: ReelsViewModel = hiltViewModel(),
 ) {
@@ -194,6 +195,7 @@ fun ReelsScreen(
                 onToggleMute = { muted = !muted },
                 onReveal = { chrome.setHidden(false) },
                 onOpen = { id -> onOpenPost(id) },
+                onEdit = onEditPost,
                 // « Partager » (menu « ⋯ ») : la feuille du système, avec le lien suivi de l'utilisateur.
                 onShare = { reel -> shareOut(reel.shareCard(context)) },
             )
@@ -210,6 +212,7 @@ fun ReelsScreen(
             reelId = openCommentsReelId,
             serverCommentCount = state.reels.firstOrNull { it.id == openCommentsReelId }?.commentCount,
             onDismiss = { commentsReelId = null },
+            onCommentSent = viewModel::commentSent,
             onOpenPost = {
                 commentsReelId = null
                 onOpenPost(openCommentsReelId)
