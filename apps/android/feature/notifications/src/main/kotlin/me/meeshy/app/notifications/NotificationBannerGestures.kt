@@ -1,6 +1,9 @@
 package me.meeshy.app.notifications
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -22,7 +25,11 @@ fun Modifier.bannerGestures(
     onLift: (Float) -> Unit,
     onDismiss: () -> Unit,
     onPreview: () -> Unit,
-): Modifier = pointerInput(Unit) {
+): Modifier = composed {
+    val liftTo by rememberUpdatedState(onLift)
+    val dismiss by rememberUpdatedState(onDismiss)
+    val preview by rememberUpdatedState(onPreview)
+    pointerInput(Unit) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         var rested = false
@@ -35,29 +42,29 @@ fun Modifier.bannerGestures(
                 val tracker = VelocityTracker()
                 tracker.addPosition(down.uptimeMillis, down.position)
                 var translation = slop.position.y - down.position.y
-                onLift(NotificationBannerSwipe.lift(translation))
+                liftTo(NotificationBannerSwipe.lift(translation))
                 while (true) {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
                     val change = event.changes.firstOrNull { it.id == slop.id } ?: break
                     change.consume()
                     translation = change.position.y - down.position.y
                     tracker.addPosition(change.uptimeMillis, change.position)
-                    onLift(NotificationBannerSwipe.lift(translation))
+                    liftTo(NotificationBannerSwipe.lift(translation))
                     if (change.changedToUp() || !change.pressed) break
                 }
                 val predicted = NotificationBannerSwipe.predictedEnd(translation, tracker.calculateVelocity().y)
                 when (NotificationBannerSwipe.outcome(translation, predicted)) {
-                    NotificationBannerSwipe.Outcome.Dismiss -> onDismiss()
+                    NotificationBannerSwipe.Outcome.Dismiss -> dismiss()
                     NotificationBannerSwipe.Outcome.Preview -> {
-                        onLift(0f)
-                        onPreview()
+                        liftTo(0f)
+                        preview()
                     }
-                    NotificationBannerSwipe.Outcome.None -> onLift(0f)
+                    NotificationBannerSwipe.Outcome.None -> liftTo(0f)
                 }
             }
             rested -> Unit
             else -> {
-                onPreview()
+                preview()
                 while (true) {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
                     event.changes.forEach { it.consume() }
