@@ -141,35 +141,20 @@ struct PostDetailView: View {
         return max(0, post.likes + (postLikeDelta[postId] ?? 0))
     }
 
-    private struct BookmarkRESTPayload: Decodable { let bookmarked: Bool? }
 
 
     // MARK: - Bookmark / Repost / Share (post detail)
 
     @MainActor
     func toggleDetailBookmark() {
-        guard !isBookmarkInFlight else { return }
+        guard !isBookmarkInFlight, !isPendingPublication else { return }
         let wasBookmarked = isPostBookmarked
         isPostBookmarked.toggle()
         isBookmarkInFlight = true
         Task {
             defer { Task { @MainActor in isBookmarkInFlight = false } }
-            let ok: Bool = await {
-                do {
-                    let _: APIResponse<BookmarkRESTPayload> = try await APIClient.shared.request(
-                        PostsEndpoint.byPostIdBookmark(postId: postId),
-                        method: wasBookmarked ? "DELETE" : "POST"
-                    )
-                    return true
-                } catch { return false }
-            }()
-            if !ok {
+            if !(await PostDetailBookmarkWrite.send(postId: postId, wasBookmarked: wasBookmarked)) {
                 isPostBookmarked = wasBookmarked
-                FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
-            } else {
-                FeedbackToastManager.shared.showSuccess(wasBookmarked
-                    ? String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main)
-                    : String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main))
             }
         }
     }
@@ -187,7 +172,7 @@ struct PostDetailView: View {
 
     @MainActor
     private func toggleDetailRepost(quote: Bool) {
-        guard !isRepostInFlight else { return }
+        guard !isRepostInFlight, !isPendingPublication else { return }
         isPostReposted = true
         isRepostInFlight = true
         // L'instantané se prend AVANT d'ouvrir le `Task`, donc dans le tour de
@@ -327,18 +312,25 @@ struct PostDetailView: View {
             }
         }
 
-        // Actions bar
-        actionsBar(post, renderedItem: renderedItem, scrollProxy: scrollProxy)
+        // Actions bar + separator + comments header (ZONE 3) — absents tant
+        // que la publication attend son envoi : rien ne s'y engage encore.
+        if !isPendingPublication {
+            actionsBar(post, renderedItem: renderedItem, scrollProxy: scrollProxy)
 
-        // Separator + Comments (ZONE 3)
-        Rectangle()
-            .fill(theme.inputBorder.opacity(0.5))
-            .frame(height: 1)
-            .padding(.horizontal, MeeshySpacing.lg)
+            Rectangle()
+                .fill(theme.inputBorder.opacity(0.5))
+                .frame(height: 1)
+                .padding(.horizontal, MeeshySpacing.lg)
 
-        commentsHeader
-            .id("commentsSection")
+            commentsHeader
+                .id("commentsSection")
+        }
 
+        commentsThread
+    }
+
+    @ViewBuilder
+    private var commentsThread: some View {
         // Comments (threaded)
         ForEach(viewModel.topLevelComments) { comment in
             PostDetailCommentThread(
