@@ -67,10 +67,9 @@ final class ComposerSceneRestChromeTests: XCTestCase {
     }
 
     /// Le relevé au SE l'a montré deux fois : un écart suspendu pendant une
-    /// « levée » restait à 0, la scène passant pour levée au repos
-    /// (`ComposerSceneLift.restingInset` vaut 4) ; lu sans l'échelle du repos, il
-    /// ne valait que 3,3 pt. La réduction qui fige l'écart est celle d'un
-    /// panneau, d'une feuille ou du clavier — jamais `sceneLiftInset`.
+    /// « levée » restait à 0, la scène passant pour levée au repos ; lu sans
+    /// l'échelle du repos, il ne valait que 3,3 pt. La réduction qui fige
+    /// l'écart est celle d'une feuille ou du clavier (#15226).
     func test_lEcartDuRepos_suitLEchelleDuRepos_etNeSeFigeQueSurUnPanneau() throws {
         let surface = try ComposerSceneArrangementTests.source("ComposerSceneSurface.swift")
         XCTAssertTrue(surface.contains("ComposerRestChrome.sceneSideInset(layer:"))
@@ -189,12 +188,11 @@ final class ComposerSceneRestChromeTests: XCTestCase {
         XCTAssertFalse(ComposerRestChrome.toolColumnIsShown(etat(camera: true)))
     }
 
-    /// **La scène réduite est nue** (#14191, jumelle d'Android #14186) : un
-    /// panneau du bas (fond, cadrage, effets, frise) réduit la scène au-dessus
-    /// de lui, et rien de ce qu'elle portait en plein écran ne s'y pose plus —
-    /// ni ✕, ni ↶ ↷, ni la rangée des diapos, ni la colonne. Seuls la scène
-    /// réduite et le panneau restent.
-    func test_unPanneauEnBas_laisseLaSceneReduiteNue() {
+    /// **Ce qui occupe le bas laisse la scène nue** (#14191, jumelle d'Android
+    /// #14186) : sous un panneau du bas (fond, cadrage, effets, frise), rien de
+    /// ce que la scène portait au repos ne s'y pose plus — ni ✕, ni ↶ ↷, ni la
+    /// rangée des diapos, ni la colonne. Seuls la scène et le panneau restent.
+    func test_unPanneauEnBas_laisseLaSceneNue() {
         for fond in [etat(panneau: true), etat(panneau: true, frise: true)] {
             XCTAssertFalse(ComposerRestChrome.closeIsShown(fond), "✕ ne se pose plus sur la scène réduite")
             XCTAssertFalse(ComposerRestChrome.historyIsShown(fond), "↶ ↷ non plus")
@@ -210,6 +208,61 @@ final class ComposerSceneRestChromeTests: XCTestCase {
         XCTAssertFalse(ComposerRestChrome.historyIsWithdrawn(etat()), "au repos, ↶ ↷ sont sur la scène")
         XCTAssertFalse(ComposerRestChrome.historyIsWithdrawn(etat(outil: true, panneau: true)),
                        "un outil ouvert garde ↶ ↷ dans SON rail")
+    }
+
+    // MARK: - La scène ne se réduit que pour le clavier ou une vraie feuille (#15226)
+
+    /// Décision porteur (Android #15192) : une bande, la frise ou les effets se
+    /// posent PAR-DESSUS une scène qui garde sa taille.
+    func test_sceneIsReduced_uneBandeOuLaFrise_laisseLaScenePleine() {
+        XCTAssertFalse(ComposerRestChrome.sceneIsReduced(etat(panneau: true)),
+                       "le fond, le cadrage ou les effets se posent sur la scène")
+        XCTAssertFalse(ComposerRestChrome.sceneIsReduced(etat(panneau: true, frise: true)), "la frise aussi")
+    }
+
+    /// Un outil ouvert — ses réglages à plat à la place du rail, le dessin —
+    /// ne réduit pas la scène.
+    func test_sceneIsReduced_unOutilAPlat_laisseLaScenePleine() {
+        XCTAssertFalse(ComposerRestChrome.sceneIsReduced(etat(outil: true)))
+        XCTAssertFalse(ComposerRestChrome.sceneIsReduced(etat()), "au repos non plus")
+    }
+
+    /// Un objet sélectionné remplace la colonne par ses options, sans réduire.
+    func test_sceneIsReduced_uneSelection_laisseLaScenePleine() {
+        let selection = ComposerRestChrome.State(toolIsOpen: false, writesText: false, cameraIsArmed: false,
+                                                 bottomPanelIsOpen: false, timelineIsOpen: false,
+                                                 objectIsSelected: true)
+        XCTAssertFalse(ComposerRestChrome.sceneIsReduced(selection))
+    }
+
+    func test_sceneIsReduced_leClavier_reduitLaScene() {
+        let frappe = ComposerRestChrome.State(toolIsOpen: true, writesText: false, cameraIsArmed: false,
+                                              bottomPanelIsOpen: false, timelineIsOpen: false,
+                                              keyboardIsUp: true)
+        XCTAssertTrue(ComposerRestChrome.sceneIsReduced(frappe))
+    }
+
+    func test_sceneIsReduced_uneVraieFeuille_reduitLaScene() {
+        let feuille = ComposerRestChrome.State(toolIsOpen: false, writesText: false, cameraIsArmed: false,
+                                               bottomPanelIsOpen: false, timelineIsOpen: false,
+                                               sheetIsRaised: true)
+        XCTAssertTrue(ComposerRestChrome.sceneIsReduced(feuille), "une feuille ancrée monte du bas")
+        let proprietes = ComposerRestChrome.State(toolIsOpen: false, writesText: false, cameraIsArmed: false,
+                                                  bottomPanelIsOpen: false, timelineIsOpen: false,
+                                                  objectIsSelected: true, propertiesAreOpen: true)
+        XCTAssertTrue(ComposerRestChrome.sceneIsReduced(proprietes), "la feuille basse des propriétés aussi")
+    }
+
+    /// La surface lit la loi : plus de réduction calculée à côté d'elle, et la
+    /// scène lit le haut du repos sous ce qui se pose par-dessus.
+    func test_laSurface_litLaLoiDeReduction_etLeHautDuRepos() throws {
+        let surface = try ComposerSceneArrangementTests.source("ComposerSceneSurface.swift")
+        XCTAssertTrue(surface.contains("ComposerRestChrome.sceneIsReduced(restState)"))
+        XCTAssertTrue(surface.contains("keyboardIsUp: editingTextId != nil"))
+        XCTAssertTrue(surface.contains("sheetIsRaised: anchoredSheetTop != nil"))
+        XCTAssertTrue(surface.contains("ComposerSceneLift.floorTop("))
+        XCTAssertTrue(surface.contains("ComposerSceneLift.restFloorTop("))
+        XCTAssertFalse(surface.contains("panelIsOpen("), "aucune réduction par panneau ne survit")
     }
 
     /// Les propriétés d'un objet sélectionné réduisent aussi la scène : ses

@@ -46,11 +46,16 @@ nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
 /// viseur retirent tout. Un objet sélectionné retire ✕ et remplace la
 /// colonne, au même endroit, par ses options d'édition (#13957, R6).
 ///
-/// **La scène réduite est nue** (#14191, même loi qu'Android #14186) : un
-/// panneau du bas (fond, cadrage, effets, frise) ou les propriétés d'un objet
-/// réduisent la scène au-dessus d'eux, et ✕, ↶ ↷ et la rangée des diapos ne
-/// s'y posent plus. Au repos, seuls la scène et le panneau restent ; sous une
-/// sélection, ses options restent dans leur colonne.
+/// **La scène ne se réduit que pour le clavier ou une vraie feuille** (#15226,
+/// même loi qu'Android `ComposerSceneReduction`, #15192) : une bande (fond,
+/// cadrage, effets, frise) ou les réglages d'un outil se posent PAR-DESSUS une
+/// scène qui garde sa taille ; une feuille ancrée, les propriétés d'un objet
+/// ou le clavier la réduisent au-dessus d'eux.
+///
+/// **Ce qui occupe le bas laisse la scène nue** (#14191, Android #14186) :
+/// réduite ou non, ✕, ↶ ↷ et la rangée des diapos ne s'y posent plus. Seuls
+/// la scène et le panneau restent ; sous une sélection, ses options restent
+/// dans leur colonne.
 nonisolated enum ComposerRestChrome {
 
     /// La marge entre la colonne d'outils et le bord droit de la scène.
@@ -67,9 +72,13 @@ nonisolated enum ComposerRestChrome {
         /// Ses propriétés ouvertes en bas ne sont pas un outil : la colonne
         /// des options reste, pour passer de l'une à l'autre.
         var objectIsSelected: Bool = false
-        /// Les propriétés de l'objet sélectionné occupent le bas : la scène se
-        /// réduit au-dessus d'elles, comme sous un panneau.
+        /// Les propriétés de l'objet sélectionné occupent le bas, dans leur
+        /// feuille basse : la scène se réduit au-dessus d'elles.
         var propertiesAreOpen: Bool = false
+        /// Le clavier est levé pour écrire SUR la scène.
+        var keyboardIsUp: Bool = false
+        /// Une feuille ancrée du meuble monte du bas (sticker, médias, lieu…).
+        var sheetIsRaised: Bool = false
     }
 
     enum SoundAction: Equatable, Sendable {
@@ -136,25 +145,31 @@ nonisolated enum ComposerRestChrome {
         return max(0, sceneTop - chromeTop)
     }
 
-    /// Un panneau, une feuille ou le clavier réduisent la scène au-delà du
-    /// repos : ses options ne la suivent pas, elles gardent l'écart du repos.
+    /// Une feuille ou le clavier réduisent la scène au-delà du repos : ses
+    /// options ne la suivent pas, elles gardent l'écart du repos.
     static func restInset(measured: CGFloat, sceneIsReduced: Bool, current: CGFloat) -> CGFloat {
         sceneIsReduced ? current : measured
     }
 
     static func sceneIsReduced(_ state: State) -> Bool {
+        state.keyboardIsUp || state.sheetIsRaised || state.propertiesAreOpen
+    }
+
+    /// Une bande, la frise, les effets ou les propriétés occupent le bas : le
+    /// repos quitte la scène, qu'elle soit réduite ou non.
+    static func lowerPanelIsOpen(_ state: State) -> Bool {
         state.bottomPanelIsOpen || state.propertiesAreOpen
     }
 
     static func slideRowIsShown(_ state: State, slideCount: Int) -> Bool {
-        topRowIsShown(state) && !sceneIsReduced(state) && showsSlideRow(slideCount: slideCount)
+        topRowIsShown(state) && !lowerPanelIsOpen(state) && showsSlideRow(slideCount: slideCount)
     }
 
-    /// ↶ ↷ quittent la scène réduite sans passer au rail droit : le repos
-    /// réduit n'a qu'un geste, refermer ce qui occupe le bas. Un outil ouvert
-    /// garde son historique dans son propre rail.
+    /// ↶ ↷ quittent la scène sans passer au rail droit tant qu'un panneau
+    /// occupe le bas : ce repos n'a qu'un geste, refermer ce panneau. Un outil
+    /// ouvert garde son historique dans son propre rail.
     static func historyIsWithdrawn(_ state: State) -> Bool {
-        topRowIsShown(state) && sceneIsReduced(state)
+        topRowIsShown(state) && lowerPanelIsOpen(state)
     }
 
     static func topRowIsShown(_ state: State) -> Bool {
@@ -163,11 +178,11 @@ nonisolated enum ComposerRestChrome {
 
     /// Fermer cède à la sélection : on ne quitte pas le brouillon en éditant.
     static func closeIsShown(_ state: State) -> Bool {
-        topRowIsShown(state) && !state.objectIsSelected && !sceneIsReduced(state)
+        topRowIsShown(state) && !state.objectIsSelected && !lowerPanelIsOpen(state)
     }
 
     static func historyIsShown(_ state: State) -> Bool {
-        topRowIsShown(state) && !state.timelineIsOpen && !sceneIsReduced(state)
+        topRowIsShown(state) && !state.timelineIsOpen && !lowerPanelIsOpen(state)
     }
 
     static func toolColumnIsShown(_ state: State) -> Bool {
