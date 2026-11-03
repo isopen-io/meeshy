@@ -88,3 +88,35 @@ class SocialAudioTrackTest {
             .isNull()
     }
 }
+
+class ServedAudioUrlTest {
+    private val media = ApiPostMedia(
+        id = "m1",
+        mimeType = "audio/mpeg",
+        fileUrl = "/o.mp3",
+        transcription = ApiAttachmentTranscription(language = "en"),
+        translations = mapOf("fr" to ApiAttachmentTranslation(url = "/fr.mp3")),
+    )
+
+    @Test
+    fun `un vocal de commentaire joue la piste de la langue du lecteur`() {
+        assertThat(media.servedAudioUrl(SocialAudioSurface.COMMENT, null, listOf("fr"))).isEqualTo("/fr.mp3")
+    }
+
+    @Test
+    fun `sans piste dans la langue du lecteur l'original joue`() {
+        assertThat(media.servedAudioUrl(SocialAudioSurface.REEL, null, listOf("de"), { "https://h$it" }))
+            .isEqualTo("https://h/o.mp3")
+    }
+
+    @Test
+    fun `la piste est absolutisee comme l'original`() {
+        assertThat(media.servedAudioUrl(SocialAudioSurface.REEL, null, listOf("fr"), { "https://h$it" }))
+            .isEqualTo("https://h/fr.mp3")
+    }
+
+    @Test
+    fun `sans fichier il n'y a rien a jouer`() {
+        assertThat(media.copy(fileUrl = null).servedAudioUrl(SocialAudioSurface.COMMENT, null, listOf("fr"))).isNull()
+    }
+}

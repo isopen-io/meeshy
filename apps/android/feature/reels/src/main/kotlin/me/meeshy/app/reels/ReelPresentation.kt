@@ -11,6 +11,9 @@ import me.meeshy.sdk.model.isTranslated
 import me.meeshy.sdk.model.ReelMediaLayout
 import me.meeshy.sdk.model.FeedMedia
 import me.meeshy.sdk.model.FeedMediaType
+import me.meeshy.sdk.model.SocialAudioSurface
+import me.meeshy.sdk.model.servedAudioUrl
+import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.app.stories.StorySlideView
 import me.meeshy.sdk.model.StoryItem
@@ -89,7 +92,14 @@ object ReelBuilder {
                 if (layout is ReelMediaLayout.Empty && scene == null) return@mapNotNull null
                 val resolve = { url: String -> resolveMediaUrl(url, mediaBaseUrl) }
                 val images = feedMedia.filter { it.type == FeedMediaType.IMAGE }.mapNotNull { it.url?.let(resolve) }
-                val audio = feedMedia.firstOrNull { it.type == FeedMediaType.AUDIO }?.url?.let(resolve)
+                val audioMedia = post.media.orEmpty().sortedBy { it.order ?: Int.MAX_VALUE }
+                    .firstOrNull { it.mimeType.orEmpty().startsWith("audio/") && !it.fileUrl.isNullOrBlank() }
+                val audio = audioMedia?.servedAudioUrl(
+                    surface = SocialAudioSurface.REEL,
+                    carrierLanguage = post.originalLanguage,
+                    preferredLanguages = preferences?.let { ReaderPrism.resolve(it) }.orEmpty(),
+                    resolveUrl = resolve,
+                )
                 val video = (layout as? ReelMediaLayout.Video)?.media
                 ReelPresentation(
                     id = post.id,

@@ -104,3 +104,33 @@ public object SocialAudioTrack {
         return EffectiveAudioTrack.Served(lang, track.url, track.durationMs.takeIf { it > 0 } ?: originalDurationMs)
     }
 }
+
+/**
+ * L'URL d'un média audio de post/commentaire telle que le lecteur l'entend : la piste traduite de la
+ * langue servie quand elle existe, sinon [ApiPostMedia.fileUrl]. `null` sans fichier. [resolveUrl]
+ * absolutise l'URL de l'original ET celle de la piste, pour qu'elles partent ensemble.
+ */
+public fun ApiPostMedia.servedAudioUrl(
+    surface: SocialAudioSurface,
+    carrierLanguage: String?,
+    preferredLanguages: List<String>,
+    resolveUrl: (String) -> String = { it },
+): String? {
+    val original = fileUrl?.takeIf { it.isNotBlank() } ?: return null
+    val tracks = translations.orEmpty().mapNotNull { (language, track) ->
+        val url = track.url?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+        MessageTranslatedAudio(id = "${id}_$language", attachmentId = id, targetLanguage = language, url = url)
+    }
+    val transcriptionLanguage = transcription?.language?.takeIf { it.isNotBlank() }
+        ?.let { MessageTranscription(attachmentId = id, language = it) }
+    val served = SocialAudioTrack.served(
+        surface = surface,
+        originalUrl = original,
+        originalDurationMs = duration,
+        transcription = transcriptionLanguage,
+        carrierLanguage = carrierLanguage,
+        preferredLanguages = preferredLanguages,
+        translatedAudios = tracks,
+    )
+    return resolveUrl(served.url)
+}
