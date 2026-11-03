@@ -54,6 +54,8 @@
     <string name="change_password_hint_match">Le password coincidono</string>
     <string name="change_password_hint_different">Diversa dalla password attuale</string>
     <string name="change_password_error_current">La password attuale non è corretta</string>
+    <string name="change_password_error_weak">La nuova password è troppo debole. Scegline una più lunga e meno prevedibile.</string>
+    <string name="change_password_error_rejected">Password rifiutata. Controllala e riprova.</string>
     <!-- Email / phone change (§K) -->
     <string name="account_contact_title">E-mail e telefono</string>
     <string name="account_contact_email_resend">Invia di nuovo l\'e-mail</string>

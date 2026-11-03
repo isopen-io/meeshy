@@ -61,6 +61,10 @@
     <string name="change_password_hide">Passwort ausblenden</string>
     <string name="change_password_hint_length">Mindestens 8 Zeichen</string>
     <string name="change_password_new_label">Neues Passwort</string>
+    <string name="change_password_section_current">Aktuelles Passwort</string>
+    <string name="change_password_section_new">Neues Passwort</string>
+    <string name="change_password_set_submit">Passwort festlegen</string>
+    <string name="change_password_set_success">Passwort festgelegt</string>
     <string name="change_password_show">Passwort anzeigen</string>
     <string name="change_password_strength_0">Zu schwach</string>
     <string name="change_password_strength_1">Schwach</string>
@@ -69,6 +73,7 @@
     <string name="change_password_strength_4">Stark</string>
     <string name="change_password_strength_5">Ausgezeichnet</string>
     <string name="change_password_submit">Passwort ändern</string>
+    <string name="change_password_success">Passwort geändert</string>
     <string name="change_password_title">Passwort ändern</string>
     <string name="common_cancel">Abbrechen</string>
     <string name="common_delete">Löschen</string>

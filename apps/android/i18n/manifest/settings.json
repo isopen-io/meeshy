@@ -277,6 +277,14 @@
           "status": "android-only"
         },
         {
+          "androidName": "change_password_error_weak",
+          "status": "android-only"
+        },
+        {
+          "androidName": "change_password_error_rejected",
+          "status": "android-only"
+        },
+        {
           "catalog": "app",
           "iosKey": "auth.magiclink.error.generic",
           "androidName": "change_password_error_generic",

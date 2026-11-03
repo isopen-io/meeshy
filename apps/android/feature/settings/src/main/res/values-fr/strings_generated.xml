@@ -61,6 +61,10 @@
     <string name="change_password_hide">Masquer le mot de passe</string>
     <string name="change_password_hint_length">Minimum 8 caractères</string>
     <string name="change_password_new_label">Nouveau mot de passe</string>
+    <string name="change_password_section_current">Mot de passe actuel</string>
+    <string name="change_password_section_new">Nouveau mot de passe</string>
+    <string name="change_password_set_submit">Définir le mot de passe</string>
+    <string name="change_password_set_success">Mot de passe défini</string>
     <string name="change_password_show">Afficher le mot de passe</string>
     <string name="change_password_strength_0">Trop faible</string>
     <string name="change_password_strength_1">Faible</string>
@@ -69,6 +73,7 @@
     <string name="change_password_strength_4">Fort</string>
     <string name="change_password_strength_5">Excellent</string>
     <string name="change_password_submit">Changer le mot de passe</string>
+    <string name="change_password_success">Mot de passe modifié</string>
     <string name="change_password_title">Changer le mot de passe</string>
     <string name="common_cancel">Annuler</string>
     <string name="common_delete">Supprimer</string>
