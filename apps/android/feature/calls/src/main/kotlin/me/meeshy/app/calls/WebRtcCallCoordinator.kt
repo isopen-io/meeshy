@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.call.CallParticipantLeftPayload
 import me.meeshy.sdk.model.call.CallVideoFallback
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.WebRtcError
+import me.meeshy.sdk.playback.CallHandoff
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
 
@@ -41,6 +42,7 @@ class WebRtcCallCoordinator @Inject constructor(
     @ApplicationContext appContext: Context,
     names: GroupCallNameSource,
     statsFeed: CallQualityStatsFeed = CallQualityStatsFeed(),
+    private val handoff: CallHandoff? = null,
     private val dataProfile: CallDataProfileController? = null,
 ) : CallReliabilityMedia {
     private val negotiator = CallNegotiator(engine, signals)
@@ -184,6 +186,7 @@ class WebRtcCallCoordinator @Inject constructor(
     ) {
         val mutedBeforeTrack = userMuted
         teardown()
+        handoff?.onCallStarted()
         userMuted = mutedBeforeTrack
         negotiator.begin(callId, peerId, selfId, isCaller)
         iceMonitor.begin(callId, selfId, onMediaConnected, onMediaStalled)
@@ -336,6 +339,7 @@ class WebRtcCallCoordinator @Inject constructor(
         engine.close()
         iceMonitor.end()
         audio.restore()
+        handoff?.onCallEnded()
     }
 
     /**
