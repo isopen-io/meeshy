@@ -27,6 +27,14 @@ public interface MessageDao {
     public suspend fun mentioning(conversationId: String, postId: String): List<MessageEntity>
 
     /**
+     * Les lignes qui PEUVENT porter [userId] : son propre message (colonne `senderId`) ou une charge qui le nomme
+     * (citation, transfert). Un pré-filtre SQL qui sur-sélectionne — l'id peut figurer dans une URL — ; la loi se
+     * lit sur la charge décodée. [userId] est apparié littéralement : échapper `\`, `%` et `_` par `\` d'abord.
+     */
+    @Query("SELECT * FROM messages WHERE senderId = :rawUserId OR payload LIKE '%' || :userId || '%' ESCAPE '\\'")
+    public suspend fun involving(rawUserId: String, userId: String): List<MessageEntity>
+
+    /**
      * #13792 — parmi les [window] lignes les plus RÉCENTES du fil, celles qui PEUVENT dire le bout en bout (drapeau chiffré,
      * ou « e2ee » dans la charge : mode du message, d'une pièce, avis d'activation, lignes non encore rétro-remplies
      * comprises). Le filtre de texte ne court que sur la fenêtre, jamais sur tout l'historique : la sous-requête ne trie que
@@ -217,7 +225,33 @@ public interface MessageDao {
 
     @Query("DELETE FROM messages")
     public suspend fun clear()
+
+    /** Rétention — les lignes confirmées par le serveur plus vieilles que [cutoff] (une ligne optimiste n'est jamais purgée). */
+    @Query("SELECT id, serverId FROM messages WHERE sendState IS NULL AND createdAt < :cutoff LIMIT :limit")
+    public suspend fun retentionKeysOlderThan(cutoff: Long, limit: Int): List<MessageKeys>
+
+    /** Rétention — les éphémères confirmés dont l'échéance est passée. */
+    @Query("SELECT id, serverId FROM messages WHERE sendState IS NULL AND expiresAt IS NOT NULL AND expiresAt <= :nowMillis LIMIT :limit")
+    public suspend fun retentionKeysExpired(nowMillis: Long, limit: Int): List<MessageKeys>
+
+    /** Rétention — toutes les clés d'un fil, pour purger une conversation entière sans orphelin. */
+    @Query("SELECT id, serverId FROM messages WHERE conversationId = :conversationId")
+    public suspend fun retentionKeysForConversation(conversationId: String): List<MessageKeys>
+
+    /** Rétention — les fils qui dépassent [cap] lignes confirmées. */
+    @Query("SELECT conversationId FROM messages WHERE sendState IS NULL GROUP BY conversationId HAVING COUNT(*) > :cap")
+    public suspend fun conversationsOverCap(cap: Int): List<String>
+
+    /** Rétention — les lignes confirmées au-delà des [keep] plus récentes d'un fil. */
+    @Query(
+        "SELECT id, serverId FROM messages WHERE conversationId = :conversationId AND sendState IS NULL " +
+            "ORDER BY createdAt DESC LIMIT -1 OFFSET :keep",
+    )
+    public suspend fun retentionKeysBeyondNewest(conversationId: String, keep: Int): List<MessageKeys>
 }
+
+/** Les deux identifiants sous lesquels les tables filles peuvent référencer un message. */
+public data class MessageKeys(val id: String, val serverId: String?)
 
 /**
  * Upserts server-truth rows without erasing what only this device knows (retry counter, last

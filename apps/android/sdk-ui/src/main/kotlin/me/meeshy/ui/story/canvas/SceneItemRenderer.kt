@@ -8,9 +8,13 @@ import me.meeshy.sdk.model.scene.MeeshySceneObject
  * rappelle ce composable que pour un élément dont la pose ou le contenu a changé.
  */
 @Composable
-internal fun SceneItemRenderer(node: SceneNode, events: SceneCanvasEvents) {
+internal fun SceneItemRenderer(
+    node: SceneNode,
+    events: SceneCanvasEvents,
+    mediaEnvironment: SceneMediaEnvironment = SceneMediaEnvironment.Default,
+) {
     when (node.item.kind) {
-        MeeshySceneObject.Kind.MEDIA -> SceneMediaLayer(node, events)
+        MeeshySceneObject.Kind.MEDIA -> SceneMediaLayer(node, events, environment = mediaEnvironment)
         MeeshySceneObject.Kind.TEXT -> SceneTextLayer(node)
         MeeshySceneObject.Kind.STICKER -> SceneStickerLayer(node, events)
         MeeshySceneObject.Kind.PLACE -> SceneLocationLayer(node)

@@ -147,12 +147,15 @@
     <string name="my_stories_viewers">Lista de vistas</string>
     <string name="share_story_text">🔗 Historia de %1$s: %2$s</string>
     <string name="stories_action_delete">Eliminar</string>
+    <string name="stories_action_mute">Silenciar</string>
     <string name="stories_action_react">Reaccionar</string>
     <string name="stories_action_reply">Responder</string>
     <string name="stories_action_report">Denunciar</string>
     <string name="stories_action_repost">Republicar</string>
+    <string name="stories_action_save">Guardar</string>
     <string name="stories_action_send">Enviar</string>
     <string name="stories_action_share">Compartir</string>
+    <string name="stories_action_sound">Sonido</string>
     <string name="stories_action_translations">Traducciones</string>
     <string name="stories_action_views">Vistas</string>
     <string name="stories_add">Añadir</string>

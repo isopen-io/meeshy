@@ -18,4 +18,36 @@ public object OpenSourceLicensePresentationBuilder {
             if (inType.isEmpty()) null else OpenSourceLicenseGroup(type, inType)
         }
     }
+
+    /**
+     * Flat list of cards, one per launchable library (iOS `LicensesView`), in the same order as the
+     * groups: license family, then name.
+     */
+    public fun cards(licenses: List<OpenSourceLicense>): List<OpenSourceLicenseCard> =
+        build(licenses).flatMap { group ->
+            group.licenses.map { license ->
+                OpenSourceLicenseCard(
+                    name = license.name,
+                    author = license.author,
+                    type = license.type,
+                    typeName = typeName(license.type),
+                    badge = badge(license.type),
+                    url = license.url,
+                )
+            }
+        }
+
+    public fun badge(type: OpenSourceLicenseType): LicenseBadge = when (type) {
+        OpenSourceLicenseType.MIT -> LicenseBadge.SUCCESS
+        OpenSourceLicenseType.APACHE_2_0 -> LicenseBadge.WARNING
+        OpenSourceLicenseType.BSD -> LicenseBadge.INFO
+        OpenSourceLicenseType.OTHER -> LicenseBadge.NEUTRAL
+    }
+
+    private fun typeName(type: OpenSourceLicenseType): String? = when (type) {
+        OpenSourceLicenseType.MIT -> "MIT"
+        OpenSourceLicenseType.APACHE_2_0 -> "Apache 2.0"
+        OpenSourceLicenseType.BSD -> "BSD"
+        OpenSourceLicenseType.OTHER -> null
+    }
 }

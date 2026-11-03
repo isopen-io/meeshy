@@ -43,6 +43,9 @@
     <string name="feed_notice_reported">Post reported</string>
     <string name="feed_notice_repost_failed">Error reposting</string>
     <string name="feed_notice_translation_failed">Translation error</string>
+    <string name="feed_post_deleted">Post deleted</string>
+    <string name="feed_post_open">Open</string>
+    <string name="feed_post_pinned">Post pinned</string>
     <string name="feed_post_reposted_from">reposted from @%1$s</string>
     <plurals name="feed_post_stat_comments">
         <item quantity="one">%1$d comment</item>
@@ -66,7 +69,9 @@
     <string name="feed_quote_submit">Repost</string>
     <string name="feed_reel">Reel</string>
     <string name="feed_reel_card_a11y">Reel by %1$s</string>
+    <string name="feed_reel_impressions">Impressions</string>
     <string name="feed_reel_republished_by">Reposted by %1$s</string>
+    <string name="feed_reel_views">Views</string>
     <string name="feed_report_reason_harassment">Harassment</string>
     <string name="feed_report_reason_hate_speech">Hate speech</string>
     <string name="feed_report_reason_impersonation">Impersonation</string>
