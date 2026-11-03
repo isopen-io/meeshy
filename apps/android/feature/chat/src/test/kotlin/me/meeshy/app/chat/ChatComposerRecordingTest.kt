@@ -47,7 +47,7 @@ class ChatComposerRecordingTest {
                 if (takeSeconds < 0.5) {
                     null
                 } else {
-                    AudioRecordingResult(File.createTempFile("take", ".m4a"), takeSeconds, listOf(0.5f), "audio/mp4")
+                    AudioRecordingResult(File.createTempFile("take", ".m4a").apply { writeBytes(byteArrayOf(1)) }, takeSeconds, listOf(0.5f), "audio/mp4")
                 },
             )
         }
@@ -81,7 +81,7 @@ class ChatComposerRecordingTest {
         compose.setContent { Host(harness, recorder) }
 
         compose.runOnUiThread { harness.handle!!.request() }
-        compose.waitForIdle()
+        compose.waitUntil(ASYNC_MS) { harness.handle!!.permissions.state != PermissionFlowState.Idle }
 
         assertThat(recorder.started).isEqualTo(0)
         assertThat(harness.handle!!.isRecording).isFalse()
@@ -96,8 +96,7 @@ class ChatComposerRecordingTest {
         compose.setContent { Host(harness, recorder) }
 
         compose.runOnUiThread { harness.handle!!.request() }
-        compose.waitForIdle()
-        assertThat(harness.handle!!.isRecording).isTrue()
+        compose.waitUntil(ASYNC_MS) { harness.handle!!.isRecording }
         compose.runOnUiThread { harness.handle!!.finish() }
         compose.waitForIdle()
 
@@ -113,10 +112,14 @@ class ChatComposerRecordingTest {
         compose.setContent { Host(harness, recorder) }
 
         compose.runOnUiThread { harness.handle!!.request() }
-        compose.waitForIdle()
+        compose.waitUntil(ASYNC_MS) { harness.handle!!.isRecording }
         compose.runOnUiThread { harness.handle!!.finish() }
         compose.waitForIdle()
 
         assertThat(harness.picked).hasSize(1)
+    }
+
+    private companion object {
+        const val ASYNC_MS = 5_000L
     }
 }

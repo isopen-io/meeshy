@@ -1,11 +1,6 @@
 package me.meeshy.app.settings
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.PersonRemove
-import androidx.compose.material.icons.filled.Shield
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.settings.R
@@ -24,18 +19,18 @@ internal fun SettingsAccountSection(
     onOpenDeleteAccount: () -> Unit,
 ) {
     val tint = MeeshyPalette.TrackingAccent
-    SettingsGroup(stringResource(R.string.settings_section_account), Icons.Filled.AccountCircle, tint) {
+    SettingsGroup(stringResource(R.string.settings_section_account), MeeshyIcons.AccountFilled, tint) {
         SettingsRows(rows, tint) { row ->
             val heavy = row.haptic == SettingsHubHaptic.HEAVY
             when (row.id) {
                 SettingsHubRowId.PRIVACY ->
-                    SettingsChevronRow(Icons.Filled.Lock, stringResource(R.string.settings_privacy_title), MeeshyPalette.Indigo500, onOpenPrivacy)
+                    SettingsChevronRow(MeeshyIcons.LockFilled, stringResource(R.string.settings_privacy_title), MeeshyPalette.Indigo500, onOpenPrivacy)
                 SettingsHubRowId.SECURITY ->
-                    SettingsChevronRow(Icons.Filled.Shield, stringResource(R.string.settings_security), MeeshyPalette.Info, onOpenSecurity)
+                    SettingsChevronRow(MeeshyIcons.ShieldFilled, stringResource(R.string.settings_security), MeeshyPalette.Info, onOpenSecurity)
                 SettingsHubRowId.BLOCKED_USERS ->
-                    SettingsChevronRow(Icons.Filled.Block, stringResource(R.string.settings_blocked_users), MeeshyPalette.Error, onOpenBlockedUsers)
+                    SettingsChevronRow(MeeshyIcons.Block, stringResource(R.string.settings_blocked_users), MeeshyPalette.Error, onOpenBlockedUsers)
                 SettingsHubRowId.DELETE_ACCOUNT -> SettingsChevronRow(
-                    icon = Icons.Filled.PersonRemove,
+                    icon = MeeshyIcons.PersonRemove,
                     title = stringResource(R.string.settings_delete_account),
                     color = MeeshyPalette.Error,
                     onClick = onOpenDeleteAccount,

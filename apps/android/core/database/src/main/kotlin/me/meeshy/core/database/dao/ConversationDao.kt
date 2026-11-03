@@ -74,6 +74,14 @@ public interface ConversationDao {
     @Query("DELETE FROM conversations")
     public suspend fun clear()
 
+    /** Purge du cache : une page de charges (l'attribution des médias les relit). */
+    @Query("SELECT payload FROM conversations ORDER BY id LIMIT :limit OFFSET :offset")
+    public suspend fun payloadPage(limit: Int, offset: Int): List<String>
+
+    /** Octets réels des charges en cache (longueur des octets, pas des caractères). */
+    @Query("SELECT COALESCE(SUM(LENGTH(CAST(payload AS BLOB))), 0) FROM conversations")
+    public suspend fun payloadBytes(): Long
+
     /**
      * The unread total across every cached conversation — a SQL `SUM`, never a
      * decode. #5190: five call sites (home-screen widgets, the dashboard badge,

@@ -1,10 +1,6 @@
 package me.meeshy.app.settings
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.Vibration
-import androidx.compose.material.icons.filled.VolumeUp
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.stringResource
@@ -25,7 +21,7 @@ internal fun SettingsNotificationsQuickSection(
     val tint = MeeshyPalette.Error
     val state by viewModel.state.collectAsStateWithLifecycle()
     val notifications = state.notifications
-    SettingsGroup(stringResource(R.string.settings_section_notifications), Icons.Filled.Notifications, tint) {
+    SettingsGroup(stringResource(R.string.settings_section_notifications), MeeshyIcons.BellFilled, tint) {
         SettingsRows(rows, tint) { row ->
             when (row.id) {
                 SettingsHubRowId.NOTIF_PUSH -> PushNotificationToggle(
@@ -37,7 +33,7 @@ internal fun SettingsNotificationsQuickSection(
                     checked = notifications.soundEnabled,
                     enabled = notifications.pushEnabled,
                     onCheckedChange = viewModel::setSoundEnabled,
-                    icon = Icons.Filled.VolumeUp,
+                    icon = MeeshyIcons.VolumeUpFilled,
                     color = MeeshyPalette.Indigo300,
                 )
                 SettingsHubRowId.NOTIF_VIBRATIONS -> NotificationToggleRow(
@@ -45,11 +41,11 @@ internal fun SettingsNotificationsQuickSection(
                     checked = notifications.vibrationEnabled,
                     enabled = notifications.pushEnabled,
                     onCheckedChange = viewModel::setVibrationEnabled,
-                    icon = Icons.Filled.Vibration,
+                    icon = MeeshyIcons.Vibration,
                     color = MeeshyPalette.TrackingAccent,
                 )
                 SettingsHubRowId.NOTIF_MORE_OPTIONS -> SettingsChevronRow(
-                    Icons.Filled.Tune,
+                    MeeshyIcons.Tune,
                     stringResource(R.string.settings_notif_more_options),
                     MeeshyPalette.Error,
                     onOpenNotificationSettings,
