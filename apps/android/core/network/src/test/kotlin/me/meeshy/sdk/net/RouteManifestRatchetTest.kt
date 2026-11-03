@@ -112,7 +112,7 @@ class RouteManifestRatchetTest {
          * 150 : moins `PATCH /guest-sessions/me`, la sonde de session d'invité que porte `GuestSessionApi.me` (elle partait en GET,
          * verbe que la passerelle ne sert pas).
          */
-        const val TO_PORT_CEILING = 150
+        const val TO_PORT_CEILING = 143
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
