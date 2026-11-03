@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "conversation.composer.minorGlobal",
+          "androidName": "chat_composer_minor_global",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.view.closed",
+          "androidName": "chat_composer_closed",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

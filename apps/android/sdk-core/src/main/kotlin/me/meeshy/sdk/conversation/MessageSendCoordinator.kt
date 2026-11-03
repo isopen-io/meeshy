@@ -12,6 +12,7 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaAdoption
 import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.model.ConversationWriteRestriction
 import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
@@ -284,5 +285,6 @@ internal class MessageSendCoordinator(
         messageDao.deleteByIds(listOf(cmid))
     }
 
-    private fun isDefinitive(reason: String?): Boolean = MediaLocationRefusal.isReason(reason) || MediaLoss.isReason(reason)
+    private fun isDefinitive(reason: String?): Boolean =
+        MediaLocationRefusal.isReason(reason) || MediaLoss.isReason(reason) || ConversationWriteRestriction.fromReason(reason) != null
 }

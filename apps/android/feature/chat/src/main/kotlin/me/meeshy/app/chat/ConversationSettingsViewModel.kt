@@ -11,7 +11,9 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ConversationSettingsForm
 import me.meeshy.sdk.model.MemberRole
+import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.session.SessionRepository
 import javax.inject.Inject
 
 /** Lifecycle of an admin settings save. */
@@ -21,6 +23,8 @@ data class ConversationSettingsUiState(
     val conversationId: String? = null,
     val form: ConversationSettingsForm? = null,
     val status: SettingsSaveStatus = SettingsSaveStatus.Idle,
+    /** #15269 — la loi des actions accorde l'édition de la conversation à ce lecteur (jamais Global, jamais un direct). */
+    val mayEdit: Boolean = false,
 ) {
     val isLoaded: Boolean get() = form != null
     val isSaving: Boolean get() = status == SettingsSaveStatus.Saving
@@ -44,6 +48,7 @@ data class ConversationSettingsUiState(
 @HiltViewModel
 class ConversationSettingsViewModel @Inject constructor(
     private val conversationRepository: ConversationRepository,
+    private val sessionRepository: SessionRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationSettingsUiState())
@@ -59,8 +64,10 @@ class ConversationSettingsViewModel @Inject constructor(
         _state.update { ConversationSettingsUiState(conversationId = conversationId) }
         viewModelScope.launch {
             conversationRepository.conversationStream(conversationId).collect { conversation ->
-                if (conversation != null && _state.value.form == null) {
-                    _state.update { it.copy(form = ConversationSettingsForm.from(conversation)) }
+                if (conversation == null) return@collect
+                val mayEdit = ConversationRowMenuCapabilities.forViewer(conversation, sessionRepository.currentUser.value).rename
+                _state.update {
+                    it.copy(mayEdit = mayEdit, form = it.form ?: ConversationSettingsForm.from(conversation))
                 }
             }
         }

@@ -256,7 +256,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             }
             // Moderator+ viewers of a group get the conversation-settings sheet (write-role /
             // announcement / slow-mode); the share link is the « Partager » button of the Options.
-            if (state.slowModeExempt) {
+            if (host.capabilities?.rename == true) {
                 add(ConversationInfoEntry(MeeshyIcons.Tune, stringResource(R.string.conversation_settings_title), openFrom { sheets.settings = true }))
             }
         }

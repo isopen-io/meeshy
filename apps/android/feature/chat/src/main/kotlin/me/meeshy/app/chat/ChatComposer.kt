@@ -75,6 +75,7 @@ internal fun ChatComposer(
     affordances: ComposerAffordances,
     slowMode: SlowModeState,
     isEndToEnd: Boolean = false,
+    closure: me.meeshy.sdk.model.ComposerClosure? = null,
     replyBanner: ComposerReplyBanner?,
     clipboardContent: ClipboardContent?,
     languageCode: String,
@@ -468,6 +469,11 @@ internal fun ChatComposer(
                             sendVoiceWhenStaged = true
                         },
                         modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.smPlus),
+                    )
+                    closure != null -> ComposerClosureNotice(
+                        closure = closure,
+                        accentColor = accentColor,
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),
                     )
                     isEndToEnd -> ComposerEndToEndNotice(
                         modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),

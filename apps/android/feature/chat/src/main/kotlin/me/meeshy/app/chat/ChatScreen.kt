@@ -122,6 +122,9 @@ fun ChatScreen(
     }
     val downloadedFileIds by viewModel.downloadedFileIds.collectAsStateWithLifecycle()
     val landingState by viewModel.landingState.collectAsStateWithLifecycle()
+    val governance = remember(viewModel) { viewModel.controllers.find<ConversationGovernanceController>() }
+    val composerClosure by (governance?.composerClosure ?: NO_CLOSURE).collectAsStateWithLifecycle()
+    val capabilities by (governance?.capabilities ?: NO_CAPABILITIES).collectAsStateWithLifecycle()
     val host = rememberChatHostContext(
         state = state,
         composerText = viewModel.composerText,
@@ -148,6 +151,8 @@ fun ChatScreen(
         downloadedFileIds = downloadedFileIds,
         takeLandingMessageId = viewModel::takeLandingMessageId,
         landing = landingState,
+        composerClosure = composerClosure,
+        capabilities = capabilities,
     )
 
     val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()
@@ -263,6 +268,8 @@ private fun queryDisplayName(resolver: ContentResolver, uri: Uri): String? =
         }
     }.getOrNull()
 
+private val NO_CLOSURE: kotlinx.coroutines.flow.StateFlow<me.meeshy.sdk.model.ComposerClosure?> = kotlinx.coroutines.flow.MutableStateFlow(null)
+private val NO_CAPABILITIES: kotlinx.coroutines.flow.StateFlow<me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 private val NOT_ENDED: kotlinx.coroutines.flow.StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false)
 
 /** Une action qui ne s'exécute qu'une fois : le retour d'un fil qui se ferme (#14645). */

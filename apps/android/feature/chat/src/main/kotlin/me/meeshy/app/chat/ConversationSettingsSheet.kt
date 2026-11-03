@@ -64,6 +64,8 @@ internal fun ConversationSettingsSheet(
     val context = LocalContext.current
 
     LaunchedEffect(conversationId) { viewModel.load(conversationId) }
+    // #15269 — une entrée interdite est absente, jamais grisée : la feuille se referme si la loi n'accorde pas l'édition.
+    LaunchedEffect(state.isLoaded, state.mayEdit) { if (state.isLoaded && !state.mayEdit) onDismiss() }
     LaunchedEffect(state.justSaved) {
         if (state.justSaved) {
             Toast.makeText(
