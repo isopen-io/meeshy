@@ -22,7 +22,8 @@ internal fun Modifier.storyCanvasGestures(
     onDismissComposer: () -> Unit,
     onNavigate: () -> Unit,
     viewModel: StoryViewerViewModel,
-): Modifier = pointerInput(groupIndex, index, slideCount) {
+    resetToken: Int = 0,
+): Modifier = pointerInput(groupIndex, index, slideCount, resetToken) {
     detectStoryCanvasTaps(
         context = {
             StoryGestureContext(

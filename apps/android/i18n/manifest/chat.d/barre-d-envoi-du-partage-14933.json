@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.grouping.together",
+          "androidName": "share_grouping_together",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.grouping.separately",
+          "androidName": "share_grouping_separately",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.button.send",
+          "androidName": "share_button_send",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.button.forward",
+          "androidName": "share_button_forward",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.button.a11y",
+          "androidName": "share_button_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.encryption.warning",
+          "androidName": "share_encryption_warning",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.limits.too-heavy",
+          "androidName": "share_limits_too_heavy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.limits.trim",
+          "androidName": "share_limits_trim",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
