@@ -32,6 +32,12 @@ public interface StoryDraftStoring {
 
     public fun load(draftId: String): StoryDraftRestored?
 
+    /** L'instantané rangé, sans recopier aucun média (une vérification, pas une ouverture). */
+    public fun peek(draftId: String): StoryComposerDraftSnapshot?
+
+    /** Les noms des médias rangés dans le tiroir du brouillon. */
+    public fun mediaNames(draftId: String): Set<String>
+
     /** Du plus récemment modifié au plus ancien ; ne lit que les fiches. */
     public fun listDrafts(): List<StoryDraftSummary>
 
@@ -79,7 +85,14 @@ public class StoryDraftDiskStore(
         lastPersistFailure = null
     }
 
-    private fun dir(draftId: String) = File(root, draftId.filter { it.isLetterOrDigit() || it == '-' || it == '_' })
+    private fun isValidId(draftId: String) =
+        draftId.isNotEmpty() && draftId.all { it.isLetterOrDigit() || it == '-' || it == '_' }
+
+    private fun dir(draftId: String): File {
+        require(isValidId(draftId)) { "invalid draft id" }
+        return File(root, draftId)
+    }
+
     private fun media(draftId: String) = File(dir(draftId), MEDIA)
 
     private fun fail(operation: String, draftId: String, error: Throwable): Boolean {
@@ -87,9 +100,20 @@ public class StoryDraftDiskStore(
             operation = operation,
             message = error.message ?: error.javaClass.simpleName,
             occurredAtMillis = clock(),
-            draftWasEverWritten = File(dir(draftId), DRAFT).isFile,
+            draftWasEverWritten = isValidId(draftId) && File(dir(draftId), DRAFT).isFile,
         )
         return false
+    }
+
+    private fun mediaTarget(mediaDir: File, name: String): File {
+        require(name.isNotEmpty() && name != "." && name != ".." && '/' !in name && '\\' !in name) { "invalid media name" }
+        return File(mediaDir, name)
+    }
+
+    private fun readSnapshot(draftId: String): StoryComposerDraftSnapshot? {
+        if (!isValidId(draftId)) return null
+        val raw = runCatching { File(dir(draftId), DRAFT).readText() }.getOrNull() ?: return null
+        return runCatching { json.decodeFromString(StoryComposerDraftSnapshot.serializer(), raw) }.getOrNull()
     }
 
     private fun writeAtomically(target: File, bytes: ByteArray) {
@@ -102,8 +126,10 @@ public class StoryDraftDiskStore(
         }
     }
 
-    private fun readMeta(draftId: String): StoryDraftMeta? =
-        runCatching { json.decodeFromString(StoryDraftMeta.serializer(), File(dir(draftId), META).readText()) }.getOrNull()
+    private fun readMeta(draftId: String): StoryDraftMeta? {
+        if (!isValidId(draftId)) return null
+        return runCatching { json.decodeFromString(StoryDraftMeta.serializer(), File(dir(draftId), META).readText()) }.getOrNull()
+    }
 
     private fun writeMeta(draftId: String, meta: StoryDraftMeta) =
         writeAtomically(File(dir(draftId), META), json.encodeToString(StoryDraftMeta.serializer(), meta).encodeToByteArray())
@@ -118,8 +144,9 @@ public class StoryDraftDiskStore(
         runCatching {
             val mediaDir = media(draftId)
             if (!mediaDir.isDirectory && !mediaDir.mkdirs()) error("media directory unavailable")
+            val targets = files.mapValues { (name, _) -> mediaTarget(mediaDir, name) }
             files.forEach { (name, source) ->
-                val target = File(mediaDir, name)
+                val target = targets.getValue(name)
                 if (!target.exists() && source.isFile) source.copyTo(target)
             }
             val encoded = json.encodeToString(StoryComposerDraftSnapshot.serializer(), snapshot)
@@ -131,8 +158,7 @@ public class StoryDraftDiskStore(
     }
 
     override fun load(draftId: String): StoryDraftRestored? = synchronized(lock) {
-        val raw = runCatching { File(dir(draftId), DRAFT).readText() }.getOrNull() ?: return null
-        val snapshot = runCatching { json.decodeFromString(StoryComposerDraftSnapshot.serializer(), raw) }.getOrNull() ?: return null
+        val snapshot = readSnapshot(draftId) ?: return null
         val session = File(File(sessionRoot, ComposerAutosaveFileName.SESSION_DIRECTORY), UUID.randomUUID().toString())
         session.mkdirs()
         val copies = media(draftId).listFiles().orEmpty().filter { it.isFile }.mapNotNull { source ->
@@ -141,8 +167,15 @@ public class StoryDraftDiskStore(
         StoryDraftRestored(snapshot, copies)
     }
 
+    override fun peek(draftId: String): StoryComposerDraftSnapshot? = synchronized(lock) { readSnapshot(draftId) }
+
+    override fun mediaNames(draftId: String): Set<String> = synchronized(lock) {
+        if (!isValidId(draftId)) return emptySet()
+        media(draftId).listFiles().orEmpty().filter { it.isFile }.mapTo(mutableSetOf()) { it.name }
+    }
+
     override fun listDrafts(): List<StoryDraftSummary> = synchronized(lock) {
-        root.list().orEmpty().mapNotNull { id ->
+        root.list().orEmpty().filter(::isValidId).mapNotNull { id ->
             readMeta(id)?.toSummary(id, media(id).path) { File(it).isFile }
         }.sortedByDescending { it.updatedAtMillis }
     }
@@ -150,6 +183,7 @@ public class StoryDraftDiskStore(
     override fun isEmpty(): Boolean = listDrafts().isEmpty()
 
     override fun delete(draftId: String): Boolean = synchronized(lock) {
+        if (!isValidId(draftId)) return false
         runCatching { dir(draftId).deleteRecursively() }.getOrElse { fail("delete", draftId, it) }
     }
 
@@ -158,11 +192,12 @@ public class StoryDraftDiskStore(
     }
 
     override fun saveCommandHistory(draftId: String, data: ByteArray): Boolean = synchronized(lock) {
-        if (!File(dir(draftId), DRAFT).isFile) return false
+        if (!isValidId(draftId) || !File(dir(draftId), DRAFT).isFile) return false
         runCatching { writeAtomically(File(dir(draftId), HISTORY), data); true }.getOrElse { fail("save-history", draftId, it) }
     }
 
     override fun loadCommandHistory(draftId: String): ByteArray? = synchronized(lock) {
+        if (!isValidId(draftId)) return null
         runCatching { File(dir(draftId), HISTORY).readBytes() }.getOrNull()
     }
 
@@ -184,8 +219,7 @@ public class StoryDraftDiskStore(
 
     override fun purgeLostMedia(draftId: String, lostMediaIds: Set<String>): Boolean = synchronized(lock) {
         if (lostMediaIds.isEmpty()) return true
-        val raw = runCatching { File(dir(draftId), DRAFT).readText() }.getOrNull() ?: return false
-        val snapshot = runCatching { json.decodeFromString(StoryComposerDraftSnapshot.serializer(), raw) }.getOrNull() ?: return false
+        val snapshot = readSnapshot(draftId) ?: return false
         val kept = snapshot.slides.map { slide ->
             slide.copy(
                 mediaIds = slide.mediaIds.filterNot { it in lostMediaIds },
