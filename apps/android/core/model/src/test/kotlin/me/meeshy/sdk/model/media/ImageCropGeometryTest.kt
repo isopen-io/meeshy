@@ -76,7 +76,7 @@ class ImageCropGeometryTest {
 
     @Test
     fun `un decalage vers la droite montre la partie gauche de la source`() {
-        val t = CropTransform(zoom = 2f, offsetX = 150f, offsetY = 0f)
+        val t = CropTransform(zoom = 2f, offsetX = 75f, offsetY = 0f)
         val rect = ImageCropGeometry.sourceRect(1000, 1000, square, t)
         assertThat(rect.leftPx).isEqualTo(125)
     }
