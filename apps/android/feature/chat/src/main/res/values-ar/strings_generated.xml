@@ -232,6 +232,7 @@
     <string name="contact_card_state_request_sent">تم إرسال الطلب</string>
     <string name="contact_card_toast_request_failed">تعذر إرسال الطلب</string>
     <string name="context_invite_friends">دعوة أصدقائي</string>
+    <string name="conversation_accessRevoked">تم إلغاء الوصول إلى هذه المحادثة</string>
     <string name="conversation_analysis_summary">الملخص</string>
     <string name="conversation_analysis_title">تحليل بالذكاء الاصطناعي</string>
     <string name="conversation_analysis_trait_communication">التواصل</string>

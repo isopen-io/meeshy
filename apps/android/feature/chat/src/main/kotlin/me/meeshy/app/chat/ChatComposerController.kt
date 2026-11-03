@@ -698,6 +698,9 @@ internal class ChatComposerController(
         }
     }
 
+    /** Met le brouillon à l'abri (ON_STOP) : sans effet quand le magasin est déjà à jour. */
+    fun flushDraft() = persistDraft(composerText.text, state.value.replyingToMessageId)
+
     fun startReply(messageId: String) {
         val message = messages.value.firstOrNull {
             it.message.id == messageId && it.sendState == LocalSendState.SYNCED

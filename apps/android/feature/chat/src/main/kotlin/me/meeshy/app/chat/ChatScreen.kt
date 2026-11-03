@@ -74,6 +74,7 @@ fun ChatScreen(
     val endController = remember(viewModel) { viewModel.controllers.find<ConversationEndController>() }
     val conversationEnded by (endController?.ended ?: NOT_ENDED).collectAsStateWithLifecycle()
     LaunchedEffect(conversationEnded) { if (conversationEnded) leave() }
+    ChatShellEffects(viewModel, remember(viewModel) { ChatLifecycleHooks() }, leave)
     EncryptionSwitchAnnouncementEffect(remember(viewModel) { viewModel.controllers.find<EncryptionSwitchAnnouncementController>() })
     val callEntry by viewModel.callEntry.collectAsStateWithLifecycle()
     val mayInviteFriends by viewModel.mayInviteFriends.collectAsStateWithLifecycle()
