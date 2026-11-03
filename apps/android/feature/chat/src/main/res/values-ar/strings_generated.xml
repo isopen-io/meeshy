@@ -365,6 +365,15 @@
     <string name="conversation_stats_type_text">نص</string>
     <string name="conversation_stats_type_video">مقاطع الفيديو</string>
     <string name="conversation_stats_words">الكلمات</string>
+    <string name="dashboard_health">الصحة</string>
+    <string name="dashboard_period_all">منذ البداية</string>
+    <string name="dashboard_period_month">آخر 30 يومًا</string>
+    <string name="dashboard_period_week">آخر 7 أيام</string>
+    <string name="dashboard_section_participant_activity">النشاط حسب المشارك</string>
+    <string name="dashboard_section_statistics">الإحصاءات</string>
+    <string name="dashboard_stat_documents">المستندات</string>
+    <string name="dashboard_stat_links">الروابط</string>
+    <string name="dashboard_tone">النبرة: %1$s</string>
     <string name="encryption_close">إغلاق</string>
     <string name="encryption_detail_activate">تفعيل التشفير</string>
     <string name="encryption_detail_activation_footer_final">لا يُوقَف التشفير التام بين الطرفين أبدًا، ولا التشفير على خوادمنا. يمكنك دائمًا فتح محادثة أخرى، دون تشفير تام بين الطرفين، مع الأشخاص أنفسهم.</string>
