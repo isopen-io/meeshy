@@ -341,18 +341,25 @@ private fun BubbleReactionsAnchor(
         bubble()
         return
     }
+    val showsAdd = !content.isOutgoing && content.isLastReceivedMessage
     Box {
         bubble()
         ReactionStrip(
             reactions = content.reactions,
             accent = accent,
-            showsAddButton = !content.isOutgoing && content.isLastReceivedMessage,
+            showsAddButton = showsAdd,
             onReactionClick = callbacks.onReactionClick,
             onReactionLongPress = callbacks.onReactionLongPress,
             onAddReaction = callbacks.onAddReaction,
+            messageId = content.messageId,
+            onOpenReactPicker = callbacks.onOpenReactPicker,
+            expandsAddHit = showsAdd,
             modifier = Modifier
                 .align(if (content.isOutgoing) Alignment.BottomStart else Alignment.BottomEnd)
-                .offset(x = if (content.isOutgoing) (-4).dp else 4.dp, y = ReactionsRestingOffset),
+                .offset(
+                    x = if (content.isOutgoing) (-4).dp else 4.dp,
+                    y = if (showsAdd) ReactionsRestingOffset - AddHitOverflow else ReactionsRestingOffset,
+                ),
         )
     }
 }

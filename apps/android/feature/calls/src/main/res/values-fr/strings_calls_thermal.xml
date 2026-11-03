@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_video_notice_reduced">Vidéo réduite pour laisser le téléphone refroidir</string>
+    <string name="call_video_notice_low_light">Lumière insuffisante : votre image peut sembler sombre</string>
+    <string name="call_video_thermal_audio_only">Téléphone trop chaud : l\'appel continue en audio seul</string>
+</resources>

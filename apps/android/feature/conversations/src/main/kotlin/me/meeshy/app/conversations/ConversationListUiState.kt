@@ -232,6 +232,7 @@ internal fun ConversationListUiState.withVisible(raw: List<ApiConversation>): Co
         conversations = DraftAwareOrdering.apply(
             ConversationFilters.apply(kept, selectedFilter, searchText, currentUserId),
             drafts,
+            currentUserId,
         ),
     )
 }

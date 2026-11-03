@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.audio
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,9 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -59,6 +57,9 @@ public object MeeshyAudioTrimmerDefaults {
 
 private enum class TrimHandle { START, END }
 
+/** La borne la plus récente, posée dès le geste : le relâchement ne dépend pas d'une recomposition encore en vol. */
+private class LiveRange(var value: ClosedFloatingPointRange<Double>)
+
 /**
  * **Le rognage d'un son — bande défilante, curseur au centre, poignées larges** (miroir de
  * `MeeshyAudioTrimmer`, iOS).
@@ -82,7 +83,8 @@ public fun MeeshyAudioTrimmer(
 ) {
     val playing by player.isPlaying.collectAsState()
     val playhead by player.playhead.collectAsState()
-    val currentRange by rememberUpdatedState(range)
+    val live = remember { LiveRange(range) }
+    live.value = range
     val changeRange by rememberUpdatedState(onRangeChange)
     var zoom by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableFloatStateOf(0f) }
@@ -92,9 +94,10 @@ public fun MeeshyAudioTrimmer(
 
     LaunchedEffect(duration) {
         if (duration <= 0.0) return@LaunchedEffect
-        val clamped = AudioTrimGeometry(duration, stripWidth, 1f).clampedRange(currentRange)
+        val clamped = AudioTrimGeometry(duration, stripWidth, 1f).clampedRange(live.value)
         changeRange(clamped)
         offset = 0f
+        live.value = clamped
         player.play(clamped.start, clamped.endInclusive)
     }
     LaunchedEffect(playhead, playing) {
@@ -151,11 +154,12 @@ public fun MeeshyAudioTrimmer(
                         onGrab = { dragged = it; player.pause() },
                         onMove = { x ->
                             val t = geometry.time(x, offset)
-                            changeRange(geometry.movedStart(t, currentRange.endInclusive)..currentRange.endInclusive)
+                            live.value = geometry.movedStart(t, live.value.endInclusive)..live.value.endInclusive
+                            changeRange(live.value)
                         },
                         onRelease = {
                             dragged = null
-                            player.play(currentRange.start, currentRange.endInclusive)
+                            player.play(live.value.start, live.value.endInclusive)
                         },
                     )
                     TrimHandleFor(
@@ -170,11 +174,12 @@ public fun MeeshyAudioTrimmer(
                         onGrab = { dragged = it; player.pause() },
                         onMove = { x ->
                             val t = geometry.time(x, offset)
-                            changeRange(currentRange.start..geometry.movedEnd(t, currentRange.start))
+                            live.value = live.value.start..geometry.movedEnd(t, live.value.start)
+                            changeRange(live.value)
                         },
                         onRelease = {
                             dragged = null
-                            player.play(currentRange.start, currentRange.endInclusive)
+                            player.play(live.value.start, live.value.endInclusive)
                         },
                     )
                 }
@@ -195,7 +200,7 @@ private fun PlayButton(playing: Boolean, accent: Color, onClick: () -> Unit) {
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(if (playing) Icons.Filled.Stop else Icons.Filled.PlayArrow, null, tint = Color.White)
+        Icon(if (playing) MeeshyIcons.Stop else MeeshyIcons.Play, null, tint = Color.White)
     }
 }
 

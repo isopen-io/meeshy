@@ -108,6 +108,7 @@ class ProfileSheetEnvironmentImpl internal constructor(private val sources: Prof
                     after { navController.navigate(CallRoute.path(conversationId, request.displayName, request.isVideo)) }
                 }
             },
+            onOpenPost = { postId -> after { navController.navigate(Routes.postDetail(postId)) } },
             onViewStory = { id -> after { navController.navigate(Routes.story(id)) } },
             liveSigns = ::signsFor,
         )

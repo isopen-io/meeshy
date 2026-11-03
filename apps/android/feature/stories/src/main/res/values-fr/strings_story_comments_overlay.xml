@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_comments_overlay_expired">Story expirée — les commentaires restent visibles</string>
+    <string name="stories_comments_overlay_reply">Répondre</string>
+    <string name="stories_comments_overlay_more">Options du commentaire</string>
+    <string name="stories_comments_overlay_copy">Copier le texte</string>
+    <string name="stories_comments_overlay_edit">Modifier</string>
+    <string name="stories_comments_overlay_delete">Supprimer</string>
+    <string name="stories_comments_overlay_report">Signaler</string>
+    <string name="stories_comments_overlay_remove">Retirer</string>
+    <string name="stories_comments_overlay_save">Enregistrer</string>
+    <string name="stories_comments_overlay_cancel">Annuler</string>
+    <string name="stories_comments_overlay_editing">Modification du commentaire</string>
+    <string name="stories_comments_overlay_like">J\'aime</string>
+    <string name="stories_comments_overlay_unlike">Je n\'aime plus</string>
+    <string name="stories_comments_overlay_show_original">Voir l\'original</string>
+    <string name="stories_comments_overlay_show_translated">Voir la traduction</string>
+    <string name="stories_comments_overlay_show_replies">Voir les réponses</string>
+    <string name="stories_comments_overlay_hide_replies">Masquer les réponses</string>
+    <string name="stories_comments_overlay_more_replies">Voir plus de réponses</string>
+    <string name="stories_comments_overlay_retry">Réessayer</string>
+    <string name="stories_comments_overlay_media">Média joint</string>
+    <string name="stories_comments_overlay_cancel_reply">Annuler la réponse</string>
+</resources>
