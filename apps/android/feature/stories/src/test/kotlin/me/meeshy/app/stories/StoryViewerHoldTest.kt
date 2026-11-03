@@ -111,6 +111,19 @@ class StoryViewerHoldTest {
     }
 
     @Test
+    fun `the resuming touch relaunches a held story without navigating and the next edge tap navigates`() = runTest(dispatcher) {
+        val vm = viewer()
+        vm.pauseByHold()
+        assertThat(vm.isHeldPaused).isTrue()
+
+        vm.resumeFromTouch()
+        vm.onCanvasTap(StoryTapZone.Next)
+
+        assertThat(vm.isHeldPaused).isFalse()
+        assertThat(vm.state.value.current?.id).isEqualTo("b2")
+    }
+
+    @Test
     fun `a tap on an edge of a frozen story resumes it without navigating`() = runTest(dispatcher) {
         val vm = viewer()
         vm.pauseByHold()
