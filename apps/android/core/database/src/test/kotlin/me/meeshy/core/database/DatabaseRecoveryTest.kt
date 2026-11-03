@@ -134,4 +134,20 @@ class DatabaseRecoveryTest {
         assertThat(probeFailingWith(SQLiteDiskIOException("disk I/O error"))).isTrue()
         assertThat(probeFailingWith(SQLiteException("x"))).isTrue()
     }
+
+    @Test
+    fun `seules les quarantaines les plus recentes sont gardees, avec leurs fichiers compagnons`() {
+        val target = file("bounded.db")
+        listOf("1", "1-wal", "1-shm", "20", "20-wal", "300").forEach { File("${target.path}.corrupted.$it").writeText("old") }
+
+        val removed = DatabaseRecovery.pruneQuarantines(target, keep = 2)
+
+        assertThat(removed.map { it.name }).containsExactly(
+            "bounded.db.corrupted.1",
+            "bounded.db.corrupted.1-wal",
+            "bounded.db.corrupted.1-shm",
+        )
+        assertThat(File("${target.path}.corrupted.20-wal").exists()).isTrue()
+        assertThat(File("${target.path}.corrupted.300").exists()).isTrue()
+    }
 }
