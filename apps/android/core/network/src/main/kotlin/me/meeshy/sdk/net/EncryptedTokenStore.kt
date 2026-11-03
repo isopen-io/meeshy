@@ -1,5 +1,6 @@
 package me.meeshy.sdk.net
 
+import me.meeshy.sdk.model.AuthStorageKeys
 import me.meeshy.sdk.model.security.SecureStore
 
 /**
@@ -12,7 +13,10 @@ import me.meeshy.sdk.model.security.SecureStore
  *
  * Reads are lazy: nothing opens the Keystore before the first token access.
  */
-class EncryptedTokenStore(private val store: SecureStore) : TokenStore {
+class EncryptedTokenStore(
+    private val store: SecureStore,
+    private val nowMillis: () -> Long = System::currentTimeMillis,
+) : TokenStore {
 
     private val vault = EncryptedAccountTokenVault(store)
 
@@ -40,6 +44,9 @@ class EncryptedTokenStore(private val store: SecureStore) : TokenStore {
             vault.adoptLegacyTokens(value)
         }
 
+    override val tokenDateMillis: Long?
+        get() = read(EncryptedAccountTokenVault.KEY_TOKEN_DATE)?.toLongOrNull()
+
     override val isAuthenticated: Boolean get() = jwt != null || sessionToken != null
 
     override fun accountsWithTokens(candidates: Collection<String>): Set<String> = vault.accountsWithTokens(candidates)
@@ -56,7 +63,10 @@ class EncryptedTokenStore(private val store: SecureStore) : TokenStore {
 
     /** Signs the active account out: its tokens and the active pointer go; dormant accounts stay. */
     override fun clear() {
-        store.get(KEY_USER_ID)?.let(vault::remove)
+        store.get(KEY_USER_ID)?.let {
+            vault.remove(it)
+            store.remove(AuthStorageKeys.user(it), it)
+        }
         EncryptedAccountTokenVault.TOKEN_KEYS.forEach { store.remove(it) }
         store.remove(KEY_USER_ID)
     }
@@ -74,6 +84,7 @@ class EncryptedTokenStore(private val store: SecureStore) : TokenStore {
             store.remove(key)
         } else {
             store.put(key, value, account)
+            store.put(EncryptedAccountTokenVault.KEY_TOKEN_DATE, nowMillis().toString(), account)
             if (key == EncryptedAccountTokenVault.KEY_JWT) store.remove(VisitorReaderKey.STORAGE_KEY)
         }
     }

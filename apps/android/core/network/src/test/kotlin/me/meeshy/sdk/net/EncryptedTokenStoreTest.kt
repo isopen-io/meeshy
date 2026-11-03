@@ -76,4 +76,42 @@ class EncryptedTokenStoreTest {
         assertThat(store.jwt).isNull()
         assertThat(store.isAuthenticated).isFalse()
     }
+
+    @Test
+    fun `chaque jeton recu date le jeton`() {
+        var now = 1_000L
+        val vault = InMemorySecureStore()
+        val store = EncryptedTokenStore(vault, nowMillis = { now })
+        store.userId = "A"
+        assertThat(store.tokenDateMillis).isNull()
+        store.jwt = "j1"
+        assertThat(store.tokenDateMillis).isEqualTo(1_000L)
+        now = 5_000L
+        store.jwt = "j2"
+        assertThat(store.tokenDateMillis).isEqualTo(5_000L)
+    }
+
+    @Test
+    fun `la date d'un jeton recu avant le userId suit le compte`() {
+        val vault = InMemorySecureStore()
+        val store = EncryptedTokenStore(vault, nowMillis = { 42L })
+        store.jwt = "j"
+        store.userId = "A"
+        assertThat(vault.get("token_date", "A")).isEqualTo("42")
+        assertThat(store.tokenDateMillis).isEqualTo(42L)
+    }
+
+    @Test
+    fun `clear efface le profil du coffre du compte actif et celui-la seulement`() {
+        val vault = InMemorySecureStore()
+        vault.put("meeshy_user_B", "{}", "B")
+        val store = EncryptedTokenStore(vault)
+        store.userId = "A"
+        store.jwt = "ja"
+        vault.put("meeshy_user_A", "{}", "A")
+        store.clear()
+        assertThat(vault.get("meeshy_user_A", "A")).isNull()
+        assertThat(vault.get("token_date", "A")).isNull()
+        assertThat(vault.get("meeshy_user_B", "B")).isEqualTo("{}")
+    }
 }
