@@ -25,6 +25,12 @@ import me.meeshy.sdk.model.PostEditPayload
 import me.meeshy.sdk.model.StoryVisibility
 import me.meeshy.sdk.model.composer.StoryRepublishAudience
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.StoryComposerDraftSnapshot
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.story.FailedStoryPublish
+import me.meeshy.sdk.story.PendingStoryPublish
+import me.meeshy.sdk.story.StoryComposerDraftStore
+import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
@@ -39,6 +45,31 @@ import javax.inject.Inject
 @Immutable
 data class MyStoryEntry(val item: StoryItem, val viewCount: Int) {
     val id: String get() = item.id
+}
+
+/** Le brouillon du composeur vu comme une carte de l'onglet Brouillons (un seul emplacement, comme le composeur). */
+@Immutable
+data class MyStoryDraftEntry(
+    val id: String,
+    val title: String?,
+    val backgroundHex: String?,
+    val updatedAtEpochMillis: Long,
+) {
+    companion object {
+        const val SLOT_ID = "composer-draft"
+        private val HEX = Regex("^#?[0-9A-Fa-f]{6,8}$")
+
+        fun of(snapshot: StoryComposerDraftSnapshot?, nowMillis: Long): MyStoryDraftEntry? {
+            if (snapshot == null || !snapshot.isWorthRestoring) return null
+            val first = snapshot.slides.firstOrNull { it.id == snapshot.selectedId } ?: snapshot.slides.first()
+            return MyStoryDraftEntry(
+                id = SLOT_ID,
+                title = first.text.trim().takeIf { it.isNotEmpty() } ?: snapshot.postText.trim().takeIf { it.isNotEmpty() },
+                backgroundHex = first.background?.takeIf { HEX.matches(it) },
+                updatedAtEpochMillis = isoToEpochMillisOrNull(snapshot.updatedAt)?.takeIf { it > 0L } ?: nowMillis,
+            )
+        }
+    }
 }
 
 /** Une suppression en attente de confirmation : la cible décide du libellé. */
@@ -75,6 +106,13 @@ data class MyStoriesUiState(
     val pendingRepublish: PendingRepublish? = null,
     /** Le propriétaire : toucher une story ouvre SON lecteur. */
     val ownUserId: String? = null,
+    /** File : publications en cours puis échecs (onglet File). */
+    val pendingUploads: List<PendingStoryPublish> = emptyList(),
+    val failed: List<FailedStoryPublish> = emptyList(),
+    /** Brouillon local jamais envoyé (onglet Brouillons). */
+    val drafts: List<MyStoryDraftEntry> = emptyList(),
+    /** Accent de l'auteur (hex sans #), dérivé de son nom d'utilisateur comme sur iOS. */
+    val accentHex: String = "6366F1",
 )
 
 sealed interface MyStoriesUiEvent {
@@ -92,6 +130,10 @@ sealed interface MyStoriesUiEvent {
     data object DismissRepublish : MyStoriesUiEvent
     data object ConfirmRepublish : MyStoriesUiEvent
     data object Refresh : MyStoriesUiEvent
+    data class RequestDeleteDraft(val draftId: String) : MyStoriesUiEvent
+    /** La dernière copie d'une publication échouée ne se jette pas sans confirmation. */
+    data class RequestDiscardFailed(val cmid: String) : MyStoriesUiEvent
+    data class RetryFailed(val cmid: String) : MyStoriesUiEvent
 }
 
 sealed interface MyStoriesUiEffect {
@@ -119,6 +161,7 @@ class MyStoriesViewModel internal constructor(
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
     private val blocks: BlockCache,
+    private val draftStore: StoryComposerDraftStore,
     private val now: () -> Long,
 ) : ViewModel() {
 
@@ -129,9 +172,17 @@ class MyStoriesViewModel internal constructor(
         sessionRepository: SessionRepository,
         socialSocket: SocialSocketManager,
         blocks: BlockCache,
-    ) : this(storyRepository, postRepository, sessionRepository, socialSocket, blocks, System::currentTimeMillis)
+        draftStore: StoryComposerDraftStore,
+    ) : this(storyRepository, postRepository, sessionRepository, socialSocket, blocks, draftStore, System::currentTimeMillis)
 
-    private val _state = MutableStateFlow(MyStoriesUiState(ownUserId = sessionRepository.currentUserId))
+    private val _state = MutableStateFlow(
+        MyStoriesUiState(
+            ownUserId = sessionRepository.currentUserId,
+            accentHex = runCatching {
+                sessionRepository.currentUser.value?.username?.let(DynamicColorGenerator::colorForName)
+            }.getOrNull() ?: "6366F1",
+        ),
+    )
     val state: StateFlow<MyStoriesUiState> = _state.asStateFlow()
 
     private val _effects = Channel<MyStoriesUiEffect>(Channel.BUFFERED)
@@ -143,11 +194,16 @@ class MyStoriesViewModel internal constructor(
     private var tabChosen = false
     private var loaded = false
     private var trayReady = false
+    private var draftsReady = false
+    private var pendingUploads: List<PendingStoryPublish> = emptyList()
+    private var failed: List<FailedStoryPublish> = emptyList()
+    private var drafts: List<MyStoryDraftEntry> = emptyList()
 
     init {
         viewModelScope.launch { loadCachedArchive() }
         viewModelScope.launch { observeTrayAndQueue() }
         viewModelScope.launch { observeDeletedElsewhere() }
+        viewModelScope.launch { observeDraft() }
         viewModelScope.launch { drainArchive() }
     }
 
@@ -172,6 +228,20 @@ class MyStoriesViewModel internal constructor(
             MyStoriesUiEvent.DismissRepublish -> _state.update { it.copy(pendingRepublish = null) }
             MyStoriesUiEvent.ConfirmRepublish -> confirmRepublish()
             MyStoriesUiEvent.Refresh -> viewModelScope.launch { drainArchive() }
+            is MyStoriesUiEvent.RequestDeleteDraft -> _state.update {
+                it.copy(pendingDelete = PendingMyStoryDelete(MyStoryDeleteConfirmation.Target.DRAFT, event.draftId))
+            }
+            is MyStoriesUiEvent.RequestDiscardFailed -> _state.update {
+                it.copy(pendingDelete = PendingMyStoryDelete(MyStoryDeleteConfirmation.Target.FAILED_ITEM, event.cmid))
+            }
+            is MyStoriesUiEvent.RetryFailed -> viewModelScope.launch {
+                try {
+                    storyRepository.retryPublish(event.cmid)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                }
+            }
         }
     }
 
@@ -190,9 +260,26 @@ class MyStoriesViewModel internal constructor(
         ) { result, queue -> result to queue }.collect { (result, queue) ->
             val posts = result.valueOrNull
             posts?.let { fresh = ownOnly(it) }
+            pendingUploads = queue.pending
+            failed = queue.failed
             hasWork = queue.pending.isNotEmpty() || queue.failed.isNotEmpty()
             trayReady = true
             rebuild(coldDone = posts != null)
+        }
+    }
+
+    private suspend fun observeDraft() {
+        try {
+            draftStore.observe().collect { snapshot ->
+                drafts = listOfNotNull(MyStoryDraftEntry.of(snapshot, now()))
+                draftsReady = true
+                rebuild(coldDone = loaded)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            draftsReady = true
+            rebuild(coldDone = loaded)
         }
     }
 
@@ -231,9 +318,9 @@ class MyStoriesViewModel internal constructor(
         _state.update { current ->
             val visible = MyStoriesTabResolver.visibleTabs(hasWork, archived.isNotEmpty())
             val tab = when {
-                !tabChosen && loaded && trayReady -> {
+                !tabChosen && loaded && trayReady && draftsReady -> {
                     tabChosen = true
-                    MyStoriesTabResolver.initialTab(active.isNotEmpty(), hasWork, hasDraftWork = false)
+                    MyStoriesTabResolver.initialTab(active.isNotEmpty(), hasWork, hasDraftWork = drafts.isNotEmpty())
                 }
                 else -> MyStoriesTabResolver.tabAfterContentChange(current.tab, visible)
             }
@@ -242,6 +329,9 @@ class MyStoriesViewModel internal constructor(
                 active = active,
                 archived = archived,
                 hasQueueWork = hasWork,
+                pendingUploads = pendingUploads,
+                failed = failed,
+                drafts = drafts,
                 visibleTabs = visible,
                 tab = tab,
                 showSkeleton = !loaded && entries.isEmpty(),
@@ -268,7 +358,30 @@ class MyStoriesViewModel internal constructor(
         _state.update { it.copy(pendingDelete = null) }
         when (pending.target) {
             MyStoryDeleteConfirmation.Target.BULK_SELECTION -> deleteSelected()
-            else -> pending.storyId?.let { id -> viewModelScope.launch { deleteOne(id, notify = true) } }
+            MyStoryDeleteConfirmation.Target.DRAFT -> viewModelScope.launch {
+                try {
+                    draftStore.clear()
+                    _effects.send(MyStoriesUiEffect.StoryDeleted)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    _effects.send(MyStoriesUiEffect.DeleteFailed)
+                }
+            }
+            MyStoryDeleteConfirmation.Target.FAILED_ITEM -> pending.storyId?.let { cmid ->
+                viewModelScope.launch {
+                    try {
+                        storyRepository.discardPublish(cmid)
+                        _effects.send(MyStoriesUiEffect.StoryDeleted)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        _effects.send(MyStoriesUiEffect.DeleteFailed)
+                    }
+                }
+            }
+            MyStoryDeleteConfirmation.Target.PUBLISHED_STORY ->
+                pending.storyId?.let { id -> viewModelScope.launch { deleteOne(id, notify = true) } }
         }
     }
 
