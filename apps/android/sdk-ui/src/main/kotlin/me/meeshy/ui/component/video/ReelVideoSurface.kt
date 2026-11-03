@@ -112,6 +112,8 @@ fun ReelVideoSurface(
      * réels.
      */
     textured: Boolean = false,
+    /** Le gain d'auteur (0..1 ; ExoPlayer n'amplifie pas) — sans effet quand [muted]. */
+    volume: Float = 1f,
     /**
      * Le look d'une vidéo réglée du compositeur, que son aperçu peint par le GPU (#14848) : les mêmes effets que la scène
      * ([me.meeshy.ui.component.retouch.rememberStoryVideoLookEffects]). `null` (une publication, déjà cuite) n'ouvre aucun
@@ -154,7 +156,7 @@ fun ReelVideoSurface(
                     .build(),
             )
             repeatMode = Player.REPEAT_MODE_ONE
-            volume = if (muted) 0f else 1f
+            this.volume = if (muted) 0f else volume.coerceIn(0f, 1f)
             playWhenReady = false
             if (painted) setVideoEffects(emptyList())
             prepare()
@@ -164,8 +166,8 @@ fun ReelVideoSurface(
 
     // Le volume suit [muted] a chaud : le player est memoize par URL, donc la
     // valeur passee au constructeur ne refleterait jamais un toggle ulterieur.
-    LaunchedEffect(player, muted, holdsAudioFocus) {
-        player?.volume = if (muted) 0f else 1f
+    LaunchedEffect(player, muted, holdsAudioFocus, volume) {
+        player?.volume = if (muted) 0f else volume.coerceIn(0f, 1f)
         // Le focus suit le son : audible, la lecture le prend ; muet, elle le rend et ne le redemande pas.
         player?.setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted && holdsAudioFocus)
     }
