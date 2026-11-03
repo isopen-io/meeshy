@@ -16,7 +16,7 @@ public class SceneNode(public val item: SceneRenderItem, public val mediaUrl: St
     public val signature: SceneItemSignature get() = item.signature
 
     override fun equals(other: Any?): Boolean =
-        this === other || (other is SceneNode && other.signature == signature && other.mediaUrl == mediaUrl)
+        this === other || (other is SceneNode && other.signature == signature && other.mediaUrl == mediaUrl && other.item.source == item.source)
 
-    override fun hashCode(): Int = 31 * signature.hashCode() + (mediaUrl?.hashCode() ?: 0)
+    override fun hashCode(): Int = 31 * (31 * signature.hashCode() + (mediaUrl?.hashCode() ?: 0)) + item.source.hashCode()
 }
