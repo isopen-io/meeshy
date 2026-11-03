@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:reels": {
+      "resDir": "feature/reels/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.edit",
+          "androidName": "reels_menu_edit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.user.reason.spam",
+          "androidName": "reels_report_reason_spam",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.user.reason.harassment",
+          "androidName": "reels_report_reason_harassment",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.user.reason.inappropriate",
+          "androidName": "reels_report_reason_inappropriate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "report.reason.violence",
+          "androidName": "reels_report_reason_violence",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "report.reason.hate_speech",
+          "androidName": "reels_report_reason_hate_speech",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.user.reason.impersonation",
+          "androidName": "reels_report_reason_impersonation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.user.reason.other",
+          "androidName": "reels_report_reason_other",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

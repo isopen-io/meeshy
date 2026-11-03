@@ -24,6 +24,7 @@
     <string name="reels_like">إعجاب</string>
     <string name="reels_menu_copy_text">نسخ النص</string>
     <string name="reels_menu_delete">حذف</string>
+    <string name="reels_menu_edit">تعديل</string>
     <string name="reels_menu_hint">يفتح قائمة الإجراءات</string>
     <string name="reels_menu_open">فتح</string>
     <string name="reels_menu_pin">تثبيت</string>
@@ -31,6 +32,13 @@
     <string name="reels_menu_share">مشاركة</string>
     <string name="reels_mute">كتم الصوت</string>
     <string name="reels_open_failure_back">رجوع</string>
+    <string name="reels_report_reason_harassment">تحرّش</string>
+    <string name="reels_report_reason_hate_speech">خطاب كراهية</string>
+    <string name="reels_report_reason_impersonation">انتحال الهوية</string>
+    <string name="reels_report_reason_inappropriate">محتوى غير لائق</string>
+    <string name="reels_report_reason_other">أخرى</string>
+    <string name="reels_report_reason_spam">رسائل مزعجة</string>
+    <string name="reels_report_reason_violence">عنف</string>
     <string name="reels_scrub">التقدّم أو الرجوع</string>
     <string name="reels_share">مشاركة</string>
     <string name="reels_toast_delete_failed">خطأ في حذف المنشور</string>
