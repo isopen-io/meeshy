@@ -176,6 +176,8 @@ class MessageRepository internal constructor(
         forwardedAttachmentIds: List<String>? = null,
         sticker: MessageSticker? = null,
         clientMessageId: String? = null,
+        attachmentReplyToId: String? = null,
+        copyAttachmentsFromMessageId: String? = null,
     ): String = history.returnToPresent(conversationId).let { sends.sendOptimistic(
         conversationId = conversationId,
         content = content,
@@ -193,6 +195,8 @@ class MessageRepository internal constructor(
         location = location,
         sticker = sticker,
         clientMessageId = clientMessageId,
+        attachmentReplyToId = attachmentReplyToId,
+        copyAttachmentsFromMessageId = copyAttachmentsFromMessageId,
     ) }
 
     /**
