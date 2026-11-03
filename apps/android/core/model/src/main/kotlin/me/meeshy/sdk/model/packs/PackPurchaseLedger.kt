@@ -1,11 +1,9 @@
 package me.meeshy.sdk.model.packs
 
 import me.meeshy.sdk.model.appearance.AppearancePackDomain
-import me.meeshy.sdk.model.game.GameErrorCode
 import me.meeshy.sdk.model.pack.PackHttpStatus
 
-/** Pourquoi un achat n'a pas abouti ; le texte appartient à l'écran. */
-/** [OFFLINE] : aucune réponse du serveur, rien n'a été débité à notre connaissance ; le geste reste rejouable. */
+/** Pourquoi un achat n'a pas abouti ; le texte appartient à l'écran. [OFFLINE] : aucune réponse du serveur, rien n'a été débité à notre connaissance ; le geste reste rejouable. */
 enum class PackShopFailure { INSUFFICIENT_MEESHES, GENERIC, OFFLINE }
 
 /**
