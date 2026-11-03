@@ -13,7 +13,14 @@ import me.meeshy.ui.component.bubble.BubbleContent
 sealed class ChatListItem {
     abstract val key: String
 
+    /**
+     * Le type de composition de la rangée : `LazyColumn` ne réutilise une composition que d'un item
+     * de MÊME type, donc une bulle ne recompose jamais en séparateur de jour (ni l'inverse).
+     */
+    abstract val contentType: String
+
     data class DayHeader(val dayMillis: Long) : ChatListItem() {
+        override val contentType: String get() = "day"
         override val key: String get() = "day-$dayMillis"
     }
 
@@ -23,12 +30,14 @@ sealed class ChatListItem {
      * (`UnreadCountLabel.messages`); 0 falls back to the plain label.
      */
     data class UnreadSeparator(val count: Int = 0) : ChatListItem() {
+        override val contentType: String get() = "unread"
         override val key: String get() = "unread-separator"
     }
 
     /** The end-to-end-encryption notice, pinned at the very top once the reader
      * has reached the start of an encrypted conversation's history. */
     data object EncryptionNotice : ChatListItem() {
+        override val contentType: String get() = "encryption-notice"
         override val key: String get() = "encryption-notice"
     }
 
@@ -38,10 +47,12 @@ sealed class ChatListItem {
      * du premier message chargé, nul si son horodatage est illisible.
      */
     data class ConversationStart(val conversationName: String, val firstMessageDayMillis: Long?) : ChatListItem() {
+        override val contentType: String get() = "conversation-start"
         override val key: String get() = "conversation-start"
     }
 
     data class Message(val bubble: BubbleContent) : ChatListItem() {
+        override val contentType: String get() = "bubble"
         override val key: String get() = bubble.messageId
     }
 }
@@ -170,3 +181,6 @@ internal fun layoutKeys(items: List<ChatListItem>): List<String> {
         candidate
     }
 }
+
+/** Le type de composition du spinner « historique plus ancien » posé au-dessus du fil. */
+internal const val LOADING_OLDER_CONTENT_TYPE = "loading-older"

@@ -78,13 +78,13 @@ internal fun ChatMessageList(
             // at the visual TOP — so the "loading older history" spinner
             // goes AFTER `items(renderedItems)` (not before, as it did
             // pre-flip) to land above the oldest currently-loaded message.
-            itemsIndexed(renderedItems, key = { index, _ -> rowKeys[index] }) { _, item ->
+            itemsIndexed(renderedItems, key = { index, _ -> rowKeys[index] }, contentType = { _, item -> item.contentType }) { _, item ->
                 Box(Modifier.fillMaxWidth().animateItem(fadeInSpec = ARRIVAL_SPEC, placementSpec = PLACEMENT_SPEC, fadeOutSpec = ARRIVAL_SPEC)) {
                     itemContent(item)
                 }
             }
             if (isLoadingOlder) {
-                item(key = "loading-older") {
+                item(key = "loading-older", contentType = LOADING_OLDER_CONTENT_TYPE) {
                     ChatLoadingOlderIndicator(accentColor)
                 }
             }

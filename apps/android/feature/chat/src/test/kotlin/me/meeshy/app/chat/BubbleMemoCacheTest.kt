@@ -171,3 +171,68 @@ class BubbleMemoCacheTest {
         assertThat(buildArgs(memo, plain, currentUser = me).isMediaLost).isFalse()
     }
 }
+
+/** La signature du cache couvre TOUTES les entrées de la bulle : chacune, changée, force la reconstruction. */
+class BubbleMemoCacheSignatureTest {
+
+    private val me = MeeshyUser(id = "me", username = "me")
+
+    private fun build(
+        memo: BubbleMemoCache,
+        local: LocalMessage = message("a"),
+        currentUser: MeeshyUser? = me,
+        showSenderName: Boolean = true,
+        ownReactions: Set<String> = emptySet(),
+        recipientCount: Int = 1,
+        showOriginal: Boolean = false,
+        activeLanguageCode: String? = null,
+        mediaBaseUrl: String = "https://media.example",
+        showReadReceipts: Boolean = true,
+    ) = memo.build(
+        local, currentUser, showSenderName, ownReactions, recipientCount, showOriginal,
+        activeLanguageCode, mediaBaseUrl, showReadReceipts, isOffline = false,
+    )
+
+    private fun rebuilds(change: (BubbleMemoCache) -> Unit): Boolean {
+        val memo = BubbleMemoCache()
+        build(memo)
+        val before = memo.buildInvocations
+        change(memo)
+        return memo.buildInvocations > before
+    }
+
+    @Test
+    fun `des entrees identiques sont un succes de cache et rendent la meme instance`() {
+        val memo = BubbleMemoCache()
+        val first = build(memo)
+        val second = build(memo)
+
+        assertThat(second).isSameInstanceAs(first)
+        assertThat(memo.buildInvocations).isEqualTo(1)
+    }
+
+    @Test
+    fun `chaque entree de la signature force la reconstruction quand elle change`() {
+        assertThat(rebuilds { build(it, showSenderName = false) }).isTrue()
+        assertThat(rebuilds { build(it, ownReactions = setOf("👍")) }).isTrue()
+        assertThat(rebuilds { build(it, recipientCount = 5) }).isTrue()
+        assertThat(rebuilds { build(it, showOriginal = true) }).isTrue()
+        assertThat(rebuilds { build(it, activeLanguageCode = "es") }).isTrue()
+        assertThat(rebuilds { build(it, mediaBaseUrl = "https://other.example") }).isTrue()
+        assertThat(rebuilds { build(it, showReadReceipts = false) }).isTrue()
+        assertThat(rebuilds { build(it, currentUser = null) }).isTrue()
+        assertThat(rebuilds { build(it, local = message("a", content = "autre")) }).isTrue()
+    }
+
+    @Test
+    fun `un echec de cache sur un message ne touche pas l'entree d'un autre`() {
+        val memo = BubbleMemoCache()
+        val a = build(memo, local = message("a"))
+        build(memo, local = message("b"))
+
+        build(memo, local = message("b", content = "modifie"))
+
+        assertThat(build(memo, local = message("a"))).isSameInstanceAs(a)
+        assertThat(memo.buildInvocations).isEqualTo(3)
+    }
+}
