@@ -1,5 +1,8 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.feedback.DailyGestureLimit
+import me.meeshy.sdk.post.GestureRefusal
+import me.meeshy.sdk.post.PostGesture
 import me.meeshy.sdk.publication.PublicationNotice
 
 /**
@@ -12,6 +15,8 @@ enum class FeedNotice(val isError: Boolean) {
     LOAD_FAILED(true),
     LIKE_FAILED(true),
     BOOKMARK_FAILED(true),
+    BOOKMARKED(false),
+    DAILY_REACTION_LIMIT(true),
     REPOSTED(false),
     REPOST_FAILED(true),
     PIN_FAILED(true),
@@ -29,4 +34,15 @@ internal val PublicationNotice.feedNotice: FeedNotice
     get() = when (this) {
         PublicationNotice.QUEUED -> FeedNotice.PUBLISH_QUEUED
         PublicationNotice.FAILED -> FeedNotice.PUBLISH_FAILED
+    }
+
+/**
+ * Ce que le fil dit d'un geste que la file a perdu : la limite du jour quand la passerelle l'a nommée, sinon l'échec du
+ * geste (iOS `feed.like.error` / `feed.bookmark.error`).
+ */
+internal val GestureRefusal.feedNotice: FeedNotice
+    get() = when {
+        gesture == PostGesture.LIKE && reason?.contains(DailyGestureLimit.REACTION_CODE) == true -> FeedNotice.DAILY_REACTION_LIMIT
+        gesture == PostGesture.LIKE -> FeedNotice.LIKE_FAILED
+        else -> FeedNotice.BOOKMARK_FAILED
     }
