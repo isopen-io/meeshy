@@ -19,7 +19,7 @@ sealed interface SceneBackgroundKind {
 object SceneBackgroundIdentity {
     fun of(kind: SceneBackgroundKind): String = when (kind) {
         is SceneBackgroundKind.SolidColor -> "color:${colorKey(kind.argb)}"
-        is SceneBackgroundKind.Gradient -> "gradient:${kind.argb.joinToString("|", transform = ::colorKey)}:${kind.direction}"
+        is SceneBackgroundKind.Gradient -> "gradient:${kind.argb.joinToString("|", transform = { colorKey(it) })}:${kind.direction}"
         is SceneBackgroundKind.Image -> "image:${kind.mediaId}"
         is SceneBackgroundKind.Video -> "video:${kind.mediaId}:${kind.looping}"
     }
