@@ -29,18 +29,18 @@ class AsyncTranslationJobRepository @Inject constructor(
         maxAttempts: Int = DEFAULT_MAX_ATTEMPTS,
     ): TranslationJobOutcome {
         var lastError: ApiError? = null
-        repeat(maxAttempts) { attempt ->
-            when (val result = apiCall { api.job(jobId) }) {
-                is NetworkResult.Success -> when (result.data.state) {
+        for (attempt in 0 until maxAttempts) {
+            val result = apiCall { api.job(jobId) }
+            if (result is NetworkResult.Success) {
+                when (result.data.state) {
                     TranslationJobStatus.COMPLETED -> return TranslationJobOutcome.Completed(result.data)
                     TranslationJobStatus.FAILED -> return TranslationJobOutcome.Failed(result.data, null)
                     TranslationJobStatus.CANCELLED -> return TranslationJobOutcome.Cancelled
                     else -> lastError = null
                 }
-                is NetworkResult.Failure -> {
-                    if (result.error.httpStatus in TERMINAL_HTTP) return TranslationJobOutcome.Failed(null, result.error)
-                    lastError = result.error
-                }
+            } else if (result is NetworkResult.Failure) {
+                if (result.error.httpStatus in TERMINAL_HTTP) return TranslationJobOutcome.Failed(null, result.error)
+                lastError = result.error
             }
             if (attempt < maxAttempts - 1) delay(intervalMs)
         }

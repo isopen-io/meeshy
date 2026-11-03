@@ -45,7 +45,7 @@ class AsyncTranslationJobRepositoryTest {
 
     @Test
     fun `annuler appelle la route de suppression`() = runTest {
-        coEvery { api.cancelJob("j") } returns ApiResponse(success = true, data = kotlinx.serialization.json.JsonPrimitive("x"))
+        coEvery { api.cancelJob("j") } returns ApiResponse<kotlinx.serialization.json.JsonElement>(success = true, data = kotlinx.serialization.json.JsonPrimitive("x"))
         assertThat(repo.cancel("j").isSuccess).isTrue()
     }
 }

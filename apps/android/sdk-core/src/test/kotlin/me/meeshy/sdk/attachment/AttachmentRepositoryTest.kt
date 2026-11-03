@@ -45,7 +45,7 @@ class AttachmentRepositoryTest {
     @Test
     fun `un 403 avec consentements devient ConsentRequired`() = runTest {
         coEvery { translation.translate(any(), any()) } throws
-            refusal(403, """{"success":false,"error":"AUDIO_TRANSLATION_NOT_ENABLED","message":"m","requiredConsents":["voiceDataConsentAt"]}""")
+            refusal(403, """{"success":false,"error":"m","code":"AUDIO_TRANSLATION_NOT_ENABLED","message":"m","requiredConsents":["voiceDataConsentAt"]}""")
         val out = repo.translate("a1", listOf("fr")) as AttachmentTranslateOutcome.ConsentRequired
         assertThat(out.error.requiredConsents).containsExactly("voiceDataConsentAt")
         assertThat(out.error.code).isEqualTo("AUDIO_TRANSLATION_NOT_ENABLED")
