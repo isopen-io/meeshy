@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_composer_fold">Kommentarbereich ausblenden</string>
+    <string name="story_composer_fold_hint">Schließt die Tastatur und klappt den Kommentarbereich zu einer Blase ein</string>
+    <string name="story_composer_unfold">Kommentarbereich einblenden</string>
+    <string name="story_composer_unfold_hint">Öffnet den Kommentarbereich wieder, ohne die Tastatur zu öffnen</string>
+    <string name="story_composer_unfold_recording">Sprachaufnahme läuft</string>
+    <string name="story_composer_unfold_replying">Antwort in Arbeit</string>
+</resources>
