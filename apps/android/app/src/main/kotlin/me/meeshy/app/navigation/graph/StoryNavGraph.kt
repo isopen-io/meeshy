@@ -13,6 +13,9 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import javax.inject.Inject
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.storyDoor
+import me.meeshy.app.stories.StoryNotificationTargetArgs
+import me.meeshy.app.stories.StoryNotificationTargetScreen
 import me.meeshy.app.stories.StoryViewerScreen
 import me.meeshy.app.stories.StoryViewerViewModel
 
@@ -51,7 +54,32 @@ class StoryNavGraph @Inject constructor() : NavGraphContributor {
         ) {
             StoryViewerHost(navController)
         }
+        builder.composable(
+            route = StoryRoutes.STORY_TARGET,
+            arguments = listOf(navArgument(StoryNotificationTargetArgs.STORY_ID) { type = NavType.StringType }) +
+                StoryRoutes.TARGET_ARGS.map { name -> navArgument(name) { type = NavType.StringType; nullable = true; defaultValue = null } },
+        ) {
+            StoryNotificationTargetHost(navController)
+        }
     }
+}
+
+/** Une story lisible remplace cet écran par le lecteur (retour = la liste des notifications, pas l'écran cible). */
+@androidx.compose.runtime.Composable
+private fun StoryNotificationTargetHost(navController: NavHostController) {
+    StoryNotificationTargetScreen(
+        onClose = { navController.popBackStack() },
+        onOpenViewer = { open ->
+            val targetId = navController.currentDestination?.id
+            navController.navigate(StoryRoutes.storyPost(open.storyId, open.action, open.commentId, open.parentCommentId)) {
+                targetId?.let { popUpTo(it) { inclusive = true } }
+            }
+        },
+        onCreateStory = {
+            val targetId = navController.currentDestination?.id
+            navController.navigate(storyDoor) { targetId?.let { popUpTo(it) { inclusive = true } } }
+        },
+    )
 }
 
 @androidx.compose.runtime.Composable

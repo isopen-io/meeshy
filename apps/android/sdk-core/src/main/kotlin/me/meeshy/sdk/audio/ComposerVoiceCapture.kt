@@ -8,7 +8,10 @@ import android.os.Looper
 import java.io.File
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
+import me.meeshy.sdk.model.waveform.AudioLevelNormalizer
+import me.meeshy.sdk.model.waveform.AudioRecordingSettings
 import me.meeshy.sdk.model.waveform.MicAmplitudeDecibels
+import me.meeshy.sdk.model.waveform.RecordingTakePolicy
 import me.meeshy.sdk.model.waveform.VoiceEncodingProfile
 import me.meeshy.sdk.model.waveform.VoiceRecordingFile
 import me.meeshy.sdk.model.waveform.VoiceRecordingOutcome
@@ -23,7 +26,12 @@ public interface VoiceRecorderEngine {
 }
 
 /** A finished take: its file and how long it lasts. */
-public data class VoiceTake(val file: File, val durationSeconds: Double)
+public data class VoiceTake(
+    val file: File,
+    val durationSeconds: Double,
+    /** Les niveaux de TOUTE la prise (0..1, une valeur par battement), réutilisés pour l'onde persistée du message. */
+    val levels: List<Float> = emptyList(),
+)
 
 /**
  * Where a take's microphone work runs and where its results come back. `MediaRecorder.prepare()`,
@@ -70,6 +78,7 @@ public class ComposerVoiceCapture(
     private val engineFactory: () -> VoiceRecorderEngine,
     private val clockMillis: () -> Long = System::currentTimeMillis,
     private val threads: VoiceRecorderThreads = VoiceRecorderThreads.dedicated(),
+    private val settings: AudioRecordingSettings = AudioRecordingSettings.standard,
 ) {
     var session: VoiceRecordingSession = VoiceRecordingSession.idle()
         private set
@@ -78,6 +87,8 @@ public class ComposerVoiceCapture(
 
     /** One take's file and, once the mic is open, its recorder: published by the recorder thread, read by [tick] for the level. */
     private class Take(val file: File) {
+        val levels: MutableList<Float> = ArrayList()
+
         @Volatile
         var engine: VoiceRecorderEngine? = null
     }
@@ -89,7 +100,7 @@ public class ComposerVoiceCapture(
      */
     fun start(onStarted: (Boolean) -> Unit = {}) {
         if (session.isRecording) return onStarted(false)
-        val opening = Take(File(directory, VoiceRecordingFile.next(clockMillis())))
+        val opening = Take(File(directory, VoiceRecordingFile.next(clockMillis(), settings.fileExtension)))
         take = opening
         session = session.start()
         threads.recorder.execute {
@@ -103,7 +114,9 @@ public class ComposerVoiceCapture(
         if (!session.isRecording) return
         session = session.tick(deltaSeconds)
         val amplitude = take?.engine?.let { runCatching { it.amplitude() }.getOrNull() } ?: return
-        session = session.meter(MicAmplitudeDecibels.toDecibels(amplitude))
+        val decibels = MicAmplitudeDecibels.toDecibels(amplitude)
+        session = session.meter(decibels)
+        take?.levels?.add(AudioLevelNormalizer.normalize(decibels))
     }
 
     /**
@@ -116,12 +129,13 @@ public class ComposerVoiceCapture(
         val stop = session.stop()
         session = stop.session
         val outcome = stop.outcome
+        val levels = closing?.levels?.toList().orEmpty()
         if (closing == null) return onTake(null)
         threads.recorder.execute {
             close(closing)
             val sendable = (outcome as? VoiceRecordingOutcome.Completed)
-                ?.takeIf { closing.file.length() > 0 }
-                ?.let { VoiceTake(closing.file, it.durationSeconds) }
+                ?.takeIf { RecordingTakePolicy.keeps(it.durationSeconds, settings) && closing.file.length() > 0 }
+                ?.let { VoiceTake(closing.file, it.durationSeconds, levels) }
             if (sendable == null) closing.file.delete()
             threads.result.execute { onTake(sendable) }
         }
@@ -227,9 +241,11 @@ public class MediaRecorderEngine internal constructor(
 
     private fun VoiceEncodingProfile.Container.outputFormat(): Int = when (this) {
         VoiceEncodingProfile.Container.MPEG_4 -> MediaRecorder.OutputFormat.MPEG_4
+        VoiceEncodingProfile.Container.OGG -> MediaRecorder.OutputFormat.OGG
     }
 
     private fun VoiceEncodingProfile.Codec.encoder(): Int = when (this) {
         VoiceEncodingProfile.Codec.AAC_LC -> MediaRecorder.AudioEncoder.AAC
+        VoiceEncodingProfile.Codec.OPUS -> MediaRecorder.AudioEncoder.OPUS
     }
 }

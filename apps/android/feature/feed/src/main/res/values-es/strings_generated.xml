@@ -135,6 +135,7 @@
     <string name="nearby_back">Atrás</string>
     <string name="nearby_retry">Reintentar</string>
     <string name="nearby_title">Cerca</string>
+    <string name="post_bookmark_removed">Quitado de favoritos</string>
     <string name="post_comments_cancel_reply">Cancelar respuesta</string>
     <string name="post_comments_composer_hint">Comentar…</string>
     <string name="post_comments_composer_reply_hint">Responder…</string>

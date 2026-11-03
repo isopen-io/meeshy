@@ -16,4 +16,4 @@ internal fun FramedTextBox(
     glyphStyle: TextStyle,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
-) = SceneTextFrameBox(background, frame, pxPerDesign, glyphStyle, modifier, content)
+) = SceneTextFrameBox(background, frame, pxPerDesign, glyphStyle, modifier, content = content)

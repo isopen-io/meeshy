@@ -28,6 +28,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.sdk.model.call.CallPreflightDecision
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallChromeVisibility
@@ -85,7 +86,10 @@ fun CallScreen(
 
     LaunchedEffect(config.peerId, config.isOutgoing, config.isVideo) {
         if (config.isOutgoing) {
-            permissionGate.withMediaPermissions { viewModel.start(config) }
+            permissionGate.preflightOutgoing(config.isVideo) { decision ->
+                viewModel.startAfterPreflight(config, decision)
+                if (decision == CallPreflightDecision.MicrophoneDenied) onClose()
+            }
         } else {
             viewModel.start(config)
             // Bouton « Répondre » de la notification : décrocher directement —
@@ -322,6 +326,12 @@ fun CallScreen(
                 )
             }
 
+            if (state.showsConnectedLayout && !inPip) {
+                CallVideoNoticePill(
+                    notice = state.videoNotice,
+                    modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding().padding(top = MeeshySpacing.xxl * 2),
+                )
+            }
             CallOverlaySlotHost(
                 extensions.overlays, CallOverlaySlot.Center, overlayContext,
                 Modifier.align(Alignment.Center),
