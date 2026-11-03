@@ -84,8 +84,8 @@ public fun AudioPlayerWaveform(
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    if (!currentEnabled.value) return@awaitEachGesture
                     val down = awaitFirstDown(requireUnconsumed = false)
+                    if (!currentEnabled.value) return@awaitEachGesture
                     val width = size.width.toFloat()
                     fun seek(x: Float) = currentSeek.value(AudioScrubLaw.fraction(x, width, currentRtl.value))
                     down.consume()
