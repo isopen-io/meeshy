@@ -137,7 +137,7 @@ class AuthRepository @Inject constructor(
      * la passerelle vient de rendre.
      */
     fun adoptSession(session: AuthSession, origin: SessionOrigin = SessionOrigin.LOGIN) {
-        storeSession(session, origin)
+        writeSession(session, origin)
     }
 
     /**
@@ -500,7 +500,7 @@ class AuthRepository @Inject constructor(
             ?: NetworkResult.Failure(AuthFailureCode.forNonSession(null))
 
     /** L'issue lue, et la session stockée si — et seulement si — c'est une session. */
-    private fun LoginResponse.openIfAuthenticated(typedIdentifier: String = ""): NetworkResult<LoginOutcome> =
+    private suspend fun LoginResponse.openIfAuthenticated(typedIdentifier: String = ""): NetworkResult<LoginOutcome> =
         asOutcome(typedIdentifier).also { result ->
             val outcome = (result as? NetworkResult.Success)?.data
             if (outcome is LoginOutcome.Authenticated) storeSession(outcome.session)
@@ -511,7 +511,15 @@ class AuthRepository @Inject constructor(
         else -> NetworkResult.Failure(AuthFailureCode.forNonSession(this))
     }
 
-    private fun storeSession(session: AuthSession, origin: SessionOrigin = SessionOrigin.LOGIN) {
+    /**
+     * Pose la session sous la barrière de compte ([AccountFence.opening]) : jamais au milieu d'une purge, qui la viderait
+     * juste après son écriture (#15241). [adoptSession], qui ne suspend pas, écrit directement.
+     */
+    private suspend fun storeSession(session: AuthSession, origin: SessionOrigin = SessionOrigin.LOGIN) {
+        if (fence == null) writeSession(session, origin) else fence.opening { writeSession(session, origin) }
+    }
+
+    private fun writeSession(session: AuthSession, origin: SessionOrigin) {
         // #13558 : un compte posé par-dessus un autre, sans purge, retire d'abord les envois en vol du compte remplacé —
         // leur prochaine requête partirait sinon sous les jetons du compte adopté.
         // #13567 : les jetons de B ne s'écrivent jamais sous l'identité de A — ni dans l'emplacement de coffre de A, ni
