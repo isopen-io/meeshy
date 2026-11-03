@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,43 +11,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.Label
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.AdminPanelSettings
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AlternateEmail
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DeleteForever
-import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Inbox
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.ManageAccounts
-import androidx.compose.material.icons.filled.MarkChatRead
-import androidx.compose.material.icons.filled.MarkChatUnread
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.NotificationsOff
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.Report
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -80,6 +44,7 @@ import me.meeshy.sdk.model.ConversationCategoryPicker
 import me.meeshy.sdk.model.conversationoptions.ConversationMoveMenu
 import me.meeshy.sdk.model.conversationoptions.MoveMenuTarget
 import me.meeshy.ui.haptics.MeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -172,8 +137,8 @@ private fun RootPanel(
                 ConversationMenuSection.HEADER -> HeaderTiles(group.entries, accent, select)
                 ConversationMenuSection.MORE -> DropdownMenuItem(
                     text = { Text(stringResource(R.string.context_more_options)) },
-                    leadingIcon = { Icon(Icons.Filled.MoreHoriz, contentDescription = null) },
-                    trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+                    leadingIcon = { Icon(MeeshyIcons.MoreHorizontal, contentDescription = null) },
+                    trailingIcon = { Icon(MeeshyIcons.ChevronForward, contentDescription = null) },
                     onClick = onOpenMore,
                     modifier = Modifier.testTag(MORE_TEST_TAG),
                 )
@@ -236,10 +201,10 @@ private fun EntryRow(
         text = { Text(stringResource(entry.labelRes()), color = tint) },
         leadingIcon = {
             val hasFavorite = entry == ConversationMenuEntry.FAVORITE && !panelState.currentReaction.isNullOrBlank()
-            Icon(if (hasFavorite) Icons.Filled.Star else entry.icon(), contentDescription = null, tint = tint)
+            Icon(if (hasFavorite) MeeshyIcons.StarFilled else entry.icon(), contentDescription = null, tint = tint)
         },
         trailingIcon = if (entry.opensSubmenu) {
-            { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) }
+            { Icon(MeeshyIcons.ChevronForward, contentDescription = null) }
         } else {
             null
         },
@@ -252,7 +217,7 @@ private fun EntryRow(
 private fun BackHeader(title: String, onBack: () -> Unit) {
     DropdownMenuItem(
         text = { Text(title, style = MaterialTheme.typography.labelLarge) },
-        leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null) },
+        leadingIcon = { Icon(MeeshyIcons.BackArrow, contentDescription = null) },
         onClick = onBack,
         modifier = Modifier.testTag(BACK_TEST_TAG),
     )
@@ -294,7 +259,7 @@ private fun FavoritePanel(
         if (!currentReaction.isNullOrBlank()) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.conversations_action_remove_favorite)) },
-                leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) },
+                leadingIcon = { Icon(MeeshyIcons.Close, contentDescription = null) },
                 onClick = { onSet(null) },
                 modifier = Modifier.testTag("conversation-menu-favorite-remove"),
             )
@@ -322,7 +287,7 @@ private fun MovePanel(
             onValueChange = { query = it },
             singleLine = true,
             placeholder = { Text(stringResource(R.string.conversations_category_search_hint)) },
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+            leadingIcon = { Icon(MeeshyIcons.Search, contentDescription = null) },
             colors = TextFieldDefaults.colors(
                 unfocusedContainerColor = MeeshyTheme.tokens.backgroundTertiary,
                 focusedContainerColor = MeeshyTheme.tokens.backgroundTertiary,
@@ -334,7 +299,7 @@ private fun MovePanel(
         if (picker.canCreate) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.conversations_action_create_category, needle)) },
-                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                leadingIcon = { Icon(MeeshyIcons.Add, contentDescription = null) },
                 onClick = { onCreate(needle) },
                 modifier = Modifier.testTag("conversation-menu-move-create"),
             )
@@ -344,10 +309,10 @@ private fun MovePanel(
             DropdownMenuItem(
                 text = { Text(name) },
                 leadingIcon = {
-                    Icon(if (target.categoryId == null) Icons.Filled.Inbox else Icons.Filled.Folder, contentDescription = null)
+                    Icon(if (target.categoryId == null) MeeshyIcons.Inbox else MeeshyIcons.FolderFilled, contentDescription = null)
                 },
                 trailingIcon = if (target.isCurrent) {
-                    { Icon(Icons.Filled.Check, contentDescription = null) }
+                    { Icon(MeeshyIcons.Check, contentDescription = null) }
                 } else {
                     null
                 },
@@ -401,32 +366,32 @@ internal fun ConversationMenuEntry.labelRes(): Int = when (this) {
 }
 
 private fun ConversationMenuEntry.icon(): ImageVector = when (this) {
-    ConversationMenuEntry.PIN, ConversationMenuEntry.UNPIN -> Icons.Filled.PushPin
-    ConversationMenuEntry.MUTE -> Icons.Filled.NotificationsOff
-    ConversationMenuEntry.UNMUTE -> Icons.Filled.Notifications
-    ConversationMenuEntry.MARK_READ -> Icons.Filled.MarkChatRead
-    ConversationMenuEntry.MARK_UNREAD -> Icons.Filled.MarkChatUnread
-    ConversationMenuEntry.SEARCH -> Icons.Filled.Search
-    ConversationMenuEntry.CALL -> Icons.Filled.Call
-    ConversationMenuEntry.READING_MODE -> Icons.Filled.Visibility
-    ConversationMenuEntry.DETAILS -> Icons.Filled.Info
-    ConversationMenuEntry.VIEW_PROFILE -> Icons.Filled.Person
-    ConversationMenuEntry.RENAME -> Icons.Filled.Edit
-    ConversationMenuEntry.MANAGE_MEMBERS -> Icons.Filled.ManageAccounts
-    ConversationMenuEntry.FAVORITE -> Icons.Filled.StarBorder
-    ConversationMenuEntry.TAGS -> Icons.AutoMirrored.Filled.Label
-    ConversationMenuEntry.MOVE -> Icons.Filled.Folder
-    ConversationMenuEntry.MENTIONS_ONLY, ConversationMenuEntry.ALL_NOTIFICATIONS -> Icons.Filled.AlternateEmail
-    ConversationMenuEntry.DISCARD_DRAFT -> Icons.Filled.DeleteSweep
-    ConversationMenuEntry.INVITE -> Icons.Filled.PersonAdd
-    ConversationMenuEntry.LOCK -> Icons.Filled.Lock
-    ConversationMenuEntry.UNLOCK -> Icons.Filled.LockOpen
-    ConversationMenuEntry.ARCHIVE, ConversationMenuEntry.UNARCHIVE -> Icons.Filled.Archive
-    ConversationMenuEntry.BLOCK, ConversationMenuEntry.UNBLOCK -> Icons.Filled.Block
-    ConversationMenuEntry.REPORT -> Icons.Filled.Report
-    ConversationMenuEntry.ADMIN_OPEN -> Icons.Filled.AdminPanelSettings
-    ConversationMenuEntry.LEAVE -> Icons.AutoMirrored.Filled.Logout
-    ConversationMenuEntry.DELETE -> Icons.Filled.Delete
-    ConversationMenuEntry.HIDE -> Icons.Filled.VisibilityOff
-    ConversationMenuEntry.DELETE_FOR_ALL, ConversationMenuEntry.MAKE_OBSOLETE -> Icons.Filled.DeleteForever
+    ConversationMenuEntry.PIN, ConversationMenuEntry.UNPIN -> MeeshyIcons.PinFilled
+    ConversationMenuEntry.MUTE -> MeeshyIcons.BellOff
+    ConversationMenuEntry.UNMUTE -> MeeshyIcons.BellFilled
+    ConversationMenuEntry.MARK_READ -> MeeshyIcons.MarkChatRead
+    ConversationMenuEntry.MARK_UNREAD -> MeeshyIcons.MarkChatUnread
+    ConversationMenuEntry.SEARCH -> MeeshyIcons.Search
+    ConversationMenuEntry.CALL -> MeeshyIcons.Call
+    ConversationMenuEntry.READING_MODE -> MeeshyIcons.EyeFilled
+    ConversationMenuEntry.DETAILS -> MeeshyIcons.InfoFilled
+    ConversationMenuEntry.VIEW_PROFILE -> MeeshyIcons.PersonFilled
+    ConversationMenuEntry.RENAME -> MeeshyIcons.EditFilled
+    ConversationMenuEntry.MANAGE_MEMBERS -> MeeshyIcons.ManageAccounts
+    ConversationMenuEntry.FAVORITE -> MeeshyIcons.StarBorder
+    ConversationMenuEntry.TAGS -> MeeshyIcons.LabelTag
+    ConversationMenuEntry.MOVE -> MeeshyIcons.FolderFilled
+    ConversationMenuEntry.MENTIONS_ONLY, ConversationMenuEntry.ALL_NOTIFICATIONS -> MeeshyIcons.Mention
+    ConversationMenuEntry.DISCARD_DRAFT -> MeeshyIcons.DeleteSweep
+    ConversationMenuEntry.INVITE -> MeeshyIcons.PersonAdd
+    ConversationMenuEntry.LOCK -> MeeshyIcons.LockFilled
+    ConversationMenuEntry.UNLOCK -> MeeshyIcons.LockOpenFilled
+    ConversationMenuEntry.ARCHIVE, ConversationMenuEntry.UNARCHIVE -> MeeshyIcons.Archive
+    ConversationMenuEntry.BLOCK, ConversationMenuEntry.UNBLOCK -> MeeshyIcons.Block
+    ConversationMenuEntry.REPORT -> MeeshyIcons.Report
+    ConversationMenuEntry.ADMIN_OPEN -> MeeshyIcons.AdminPanel
+    ConversationMenuEntry.LEAVE -> MeeshyIcons.SignOut
+    ConversationMenuEntry.DELETE -> MeeshyIcons.DeleteFilled
+    ConversationMenuEntry.HIDE -> MeeshyIcons.EyeOffFilled
+    ConversationMenuEntry.DELETE_FOR_ALL, ConversationMenuEntry.MAKE_OBSOLETE -> MeeshyIcons.DeleteForever
 }

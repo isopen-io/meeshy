@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.sdk.model.story.StoryOptionsMenuEntry
 import me.meeshy.feature.stories.R
 import me.meeshy.ui.haptics.MeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.share.LocalShareLauncher
 import me.meeshy.ui.share.open
 
@@ -48,6 +49,7 @@ internal fun rememberStoryViewerActions(
     currentItem: StoryItem?,
     chrome: StoryViewerChromeState,
     haptics: MeeshyHaptics,
+    fullscreen: StoryFullscreenSession,
     viewModel: StoryViewerViewModel,
     onClose: () -> Unit,
     onOpenProfile: (String) -> Unit,
@@ -87,5 +89,17 @@ internal fun rememberStoryViewerActions(
             haptics.light()
             viewModel.repostCurrentStory()
         },
+        entryHandlers = mapOf(StoryOptionsMenuEntry.Fullscreen to fullscreenMenuEntry(fullscreen, haptics)),
     )
 }
+
+/** « Plein écran » / « Quitter le plein écran » du menu ⋮ : la même bascule que le glissé haut (iOS, un comportement, deux entrées). */
+private fun fullscreenMenuEntry(fullscreen: StoryFullscreenSession, haptics: MeeshyHaptics): StoryMenuEntryAction =
+    StoryMenuEntryAction(
+        labelRes = if (fullscreen.enabled) R.string.stories_viewer_fullscreen_exit else R.string.stories_viewer_fullscreen_enter,
+        icon = if (fullscreen.enabled) MeeshyIcons.CloseFullscreen else MeeshyIcons.OpenInFull,
+        onClick = {
+            haptics.light()
+            fullscreen.toggle()
+        },
+    )

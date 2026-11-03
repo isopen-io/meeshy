@@ -12,6 +12,7 @@ internal data class VoiceTrackSource(
     val avatarUrl: String?,
     val createdAtIso: String?,
     val isProtected: Boolean,
+    val messageId: String? = null,
 )
 
 internal fun BubbleContent.voiceTrackSource(): VoiceTrackSource = VoiceTrackSource(
@@ -19,4 +20,5 @@ internal fun BubbleContent.voiceTrackSource(): VoiceTrackSource = VoiceTrackSour
     avatarUrl = senderAvatarUrl,
     createdAtIso = createdAtIso,
     isProtected = isViewOnce || isBlurred || isEndToEndSealed || expiresAtIso != null,
+    messageId = messageId,
 )
