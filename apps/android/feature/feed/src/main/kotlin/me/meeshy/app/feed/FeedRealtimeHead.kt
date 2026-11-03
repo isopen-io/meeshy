@@ -127,6 +127,21 @@ object FeedRealtimeReducer {
     fun restore(state: FeedRealtimeHead, postId: String): FeedRealtimeHead =
         if (postId in state.removedIds) state.copy(removedIds = state.removedIds - postId) else state
 
+    /**
+     * Lifts the tombstone AND puts a head arrival back where it was: [remove] drops an unseen arrival from
+     * [FeedRealtimeHead.posts], so lifting the tombstone alone would lose it for good. A post that lived in the
+     * cache-projected list needs no re-insertion — it returns at its own place once the tombstone lifts.
+     */
+    fun restore(state: FeedRealtimeHead, postId: String, post: ApiPost?, index: Int): FeedRealtimeHead {
+        val lifted = restore(state, postId)
+        if (post == null || index < 0 || lifted.posts.any { it.id == postId }) return lifted
+        val at = index.coerceAtMost(lifted.posts.size)
+        return lifted.copy(
+            posts = lifted.posts.take(at) + post + lifted.posts.drop(at),
+            newPostsCount = lifted.newPostsCount + 1,
+        )
+    }
+
     fun remove(state: FeedRealtimeHead, postId: String): FeedRealtimeHead {
         if (postId.isBlank()) return state
         val inHead = state.posts.any { it.id == postId }
