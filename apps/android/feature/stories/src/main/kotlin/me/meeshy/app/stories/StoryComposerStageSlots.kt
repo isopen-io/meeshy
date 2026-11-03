@@ -117,7 +117,7 @@ internal fun StoryComposerScene(
                     ?.let { { viewModel.onSelectBackground() } }
                     ?: armsCapture?.takeIf { scene -> scene.offer?.allowsVideo == true }?.let { scene -> { scene.arm(films = true) } },
                 stack = remember(state.deck.selectedSlide) { StorySceneStack.order(state.deck.selectedSlide) },
-                live = LocalComposerLive.current,
+                live = LocalComposerLive.current?.comparing(comparison.mediaId),
                 pins = { ref, width, height -> ScenePin(state, viewModel, ref, width, height) },
             )
             state.selectedSlideBackdropPendingPhase?.let { phase ->

@@ -6,11 +6,14 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import me.meeshy.sdk.net.MeeshyApi
 
-/** L'interface REST des pages du jeu ([GameApi]), sur le client authentifié partagé. */
+/** Les interfaces REST du jeu ([GameApi]) et du décor ([ProfileDecorApi]), sur le client authentifié partagé. */
 @Module
 @InstallIn(SingletonComponent::class)
 internal object GameRoutesModule {
 
     @Provides
     fun providesGameApi(api: MeeshyApi): GameApi = api.service(GameApi::class.java)
+
+    @Provides
+    fun providesProfileDecorApi(api: MeeshyApi): ProfileDecorApi = api.service(ProfileDecorApi::class.java)
 }

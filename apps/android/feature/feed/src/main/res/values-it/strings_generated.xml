@@ -44,6 +44,9 @@
     <string name="feed_notice_reported">Post segnalato</string>
     <string name="feed_notice_repost_failed">Errore durante la ripubblicazione</string>
     <string name="feed_notice_translation_failed">Errore di traduzione</string>
+    <string name="feed_post_deleted">Post eliminato</string>
+    <string name="feed_post_open">Apri</string>
+    <string name="feed_post_pinned">Post fissato</string>
     <string name="feed_post_reposted_from">ha ricondiviso da @%1$s</string>
     <plurals name="feed_post_stat_comments">
         <item quantity="one">%1$d commento</item>
@@ -71,7 +74,9 @@
     <string name="feed_quote_submit">Ripubblica</string>
     <string name="feed_reel">Reel</string>
     <string name="feed_reel_card_a11y">Reel di %1$s</string>
+    <string name="feed_reel_impressions">Impression</string>
     <string name="feed_reel_republished_by">Ricondiviso da %1$s</string>
+    <string name="feed_reel_views">Visualizzazioni</string>
     <string name="feed_report_reason_harassment">Molestie</string>
     <string name="feed_report_reason_hate_speech">Incitamento all\'odio</string>
     <string name="feed_report_reason_impersonation">Furto d\'identità</string>

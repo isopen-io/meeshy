@@ -223,6 +223,8 @@ object SocketEventNames {
     const val AUDIO_TRANSLATION_FAILED = "audio:translation-failed"
     const val AUDIO_TRANSLATIONS_COMPLETED = "audio:translations-completed"
     const val AUDIO_TRANSLATIONS_PROGRESSIVE = "audio:translations-progressive"
+    const val CONVERSATION_JOIN = "conversation:join"
+    const val CONVERSATION_LEAVE = "conversation:leave"
     const val CONVERSATION_JOIN_ERROR = "conversation:join-error"
     const val CONVERSATION_JOINED = "conversation:joined"
     const val CONVERSATION_LEFT = "conversation:left"
@@ -405,6 +407,8 @@ object SocketEventNames {
         AUDIO_TRANSLATION_FAILED,
         AUDIO_TRANSLATIONS_COMPLETED,
         AUDIO_TRANSLATIONS_PROGRESSIVE,
+        CONVERSATION_JOIN,
+        CONVERSATION_LEAVE,
         CONVERSATION_JOIN_ERROR,
         CONVERSATION_JOINED,
         CONVERSATION_LEFT,

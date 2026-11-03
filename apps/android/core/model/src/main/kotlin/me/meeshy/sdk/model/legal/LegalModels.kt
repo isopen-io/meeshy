@@ -55,3 +55,35 @@ public data class LegalNumberedSection(
     val number: Int,
     val key: LegalSectionKey,
 )
+
+/**
+ * A language the legal documents are written in. Mirrors the iOS segmented picker (`fr` / `en`)
+ * and keeps the two extra languages Android already ships (`es`, `pt`). The declaration order is
+ * the segment order. Documents are never machine-translated: a language that is not listed here
+ * is not offered, and the Prisme descent skips it ([LegalDocumentCatalog.initialLanguage]).
+ */
+public enum class LegalDocumentLanguage(public val code: String) {
+    FRENCH("fr"),
+    ENGLISH("en"),
+    SPANISH("es"),
+    PORTUGUESE("pt");
+
+    public companion object {
+        /** Maps `fr`, `fr-CA`, `FR_ca` ... to a delivered language, `null` when not delivered. */
+        public fun fromCode(raw: String?): LegalDocumentLanguage? {
+            val primary = raw?.trim()?.take(2)?.lowercase() ?: return null
+            return entries.firstOrNull { it.code == primary }
+        }
+    }
+}
+
+/** A calendar date without time zone, used for the "last updated" mention of the documents. */
+public data class LegalDate(val year: Int, val month: Int, val day: Int)
+
+/** One legal document in one language: its numbered sections and its "last updated" date. */
+public data class LegalDocument(
+    val kind: LegalDocumentKind,
+    val language: LegalDocumentLanguage,
+    val sections: List<LegalNumberedSection>,
+    val lastUpdated: LegalDate,
+)

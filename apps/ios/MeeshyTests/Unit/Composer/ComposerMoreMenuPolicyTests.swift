@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 @testable import MeeshyUI
+import MeeshySDK
 
 /// **Le menu ⋯ de la scène** (#13839) — le témoin INVERSE de
 /// `ComposerRailGeographyByFormatTests`, qui rangeait lieu, hashtag et mention
@@ -101,6 +102,41 @@ final class ComposerMoreMenuPolicyTests: XCTestCase {
         for entree in ComposerMoreMenuEntry.allCases {
             XCTAssertEqual(entree.isDestructive, entree == .clearAll, "\(entree)")
         }
+    }
+
+    // MARK: - La reprise du son (#4756)
+
+    /// Une vidéo composée : ⋯ offre « Autoriser la reprise du son », entre ce
+    /// qui qualifie la publication et l'export.
+    func test_entries_avecUneVideo_offrentLaRepriseDuSon_apresLeHashtag() {
+        var avecVideo = contexte()
+        avecVideo.offersSoundReuse = true
+        let entrees = ComposerMoreMenuPolicy.entries(avecVideo)
+        XCTAssertEqual(Array(entrees.suffix(2)), [.hashtags, .soundReuse])
+    }
+
+    func test_entries_sansVideo_pasDeRepriseDuSon() {
+        XCTAssertFalse(ComposerMoreMenuPolicy.entries(contexte()).contains(.soundReuse),
+                       "un réglage sans effet n'est pas servi (loi 4)")
+    }
+
+    func test_repriseDuSon_offerteSeulementQuandUneScenePorteUneVideo() {
+        var video = StorySlide()
+        video.effects.mediaObjects = [StoryMediaObject(id: "v", mediaURL: "file:///tmp/v.mov", mediaType: "video", aspectRatio: 1)]
+        var photo = StorySlide()
+        photo.effects.mediaObjects = [StoryMediaObject(id: "p", mediaURL: "file:///tmp/p.jpg", mediaType: "image", aspectRatio: 1)]
+
+        XCTAssertTrue(ComposerSoundReuse.isOffered(slides: [photo, video]))
+        XCTAssertFalse(ComposerSoundReuse.isOffered(slides: [photo, StorySlide()]))
+    }
+
+    /// L'absence vaut accord côté passerelle (#8012) : rien ne part tant que
+    /// l'auteur n'a pas touché, et le premier toucher REFUSE.
+    func test_repriseDuSon_accordeeParDefaut_leToucherRefusePuisReaccorde() {
+        XCTAssertTrue(ComposerSoundReuse.isAllowed(nil))
+        XCTAssertEqual(ComposerSoundReuse.toggled(nil), false)
+        XCTAssertFalse(ComposerSoundReuse.isAllowed(false))
+        XCTAssertEqual(ComposerSoundReuse.toggled(false), true)
     }
 
     // MARK: - La durée de la diapo
