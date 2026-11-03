@@ -273,14 +273,12 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.GAME_UPDATED, _gameUpdated)
     }
 
-    /** Typing emission is fire-and-forget — an offline typing signal has no replay value. */
-    fun emitTypingStart(conversationId: String) {
-        socketManager.emit(SocketEventNames.TYPING_START, JSONObject().put("conversationId", conversationId))
-    }
+    private val activitySignals = ActivitySignalsSocket(socketManager)
 
-    fun emitTypingStop(conversationId: String) {
-        socketManager.emit(SocketEventNames.TYPING_STOP, JSONObject().put("conversationId", conversationId))
-    }
+    /** Fire-and-forget, et gardé par l'état connecté : un signal de frappe hors connexion ne part pas. */
+    fun emitTypingStart(conversationId: String) = activitySignals.emitTypingStart(conversationId)
+
+    fun emitTypingStop(conversationId: String) = activitySignals.emitTypingStop(conversationId)
 
     private inline fun <reified T> MutableList<SocketInboundRoute>.route(
         event: String,

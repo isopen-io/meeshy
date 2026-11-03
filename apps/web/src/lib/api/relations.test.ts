@@ -7,6 +7,9 @@ import {
   decodeRelationLink,
   decodeRitualStep,
   loadRelationLinks,
+  loadRelationRaiseGate,
+  lowerRelation,
+  relationRaiseGateQueryKey,
   relationLinksQueryOptions,
   relationRefusalOf,
   runRitualPhase,
@@ -137,5 +140,46 @@ describe('runRitualPhase — POST /api/v1/relations/:userId/ritual', () => {
   test('une étape illisible ne fabrique rien', () => {
     expect(decodeRitualStep({ token: 3, holdWindowMs: 'x', held: 'yes' })).toEqual({ token: null, holdWindowMs: null, held: null, completed: null });
     expect(decodeRitualStep(null)).toEqual({ token: null, holdWindowMs: null, held: null, completed: null });
+  });
+});
+
+describe('lowerRelation — POST /api/v1/relations/:userId/level (#14910)', () => {
+  test('envoie le niveau visé et lit la vue du lien servie', async () => {
+    const { transport, requests } = fakeTransport({ ok: true, data: servedLink({ effectiveLevel: 'ACQUAINTANCE', grantedByMe: 'ACQUAINTANCE' }) });
+    const result = await lowerRelation({ source: 'gateway', transport }, { userId: 'u 1', level: 'ACQUAINTANCE' });
+    expect(requests.map((r) => [r.method, r.path, r.body])).toEqual([['POST', '/api/v1/relations/u%201/level', { level: 'ACQUAINTANCE' }]]);
+    expect(result.ok && result.data?.effectiveLevel).toBe('ACQUAINTANCE');
+  });
+
+  test('annuler le lien envoie PUBLIC ; un refus remonte tel quel', async () => {
+    const failure = { ok: false as const, status: 400, error: 'Une montée se demande', code: 'RELATION_NOT_A_DROP' };
+    const { transport, requests } = fakeTransport(failure);
+    expect(await lowerRelation({ source: 'gateway', transport }, { userId: 'u1', level: 'PUBLIC' })).toEqual(failure);
+    expect(requests[0]?.body).toEqual({ level: 'PUBLIC' });
+  });
+});
+
+describe('la porte de montée (#14910) — `canRaise` et `raiseBlockedUntil` de GET /relations/:userId', () => {
+  test('lus quand ils sont servis, null sinon (passerelle d’avant)', async () => {
+    const served = fakeTransport({ ok: true, data: servedLink({ canRaise: false, raiseBlockedUntil: '2026-12-01T00:00:00.000Z' }) });
+    expect(await loadRelationRaiseGate({ source: 'gateway', transport: served.transport }, 'u 1')).toEqual({
+      ok: true,
+      data: { canRaise: false, raiseBlockedUntil: '2026-12-01T00:00:00.000Z' },
+    });
+    expect(served.requests.map((r) => [r.method, r.path])).toEqual([['GET', '/api/v1/relations/u%201']]);
+    const old = fakeTransport({ ok: true, data: { userId: 'u1', effectiveLevel: 'FRIEND' } });
+    expect(await loadRelationRaiseGate({ source: 'gateway', transport: old.transport }, 'u1')).toEqual({ ok: true, data: { canRaise: null, raiseBlockedUntil: null } });
+  });
+
+  test('décodés sur le lien quand ils sont servis, sans clé sinon', () => {
+    const link = decodeRelationLink(servedLink({ canRaise: true, raiseBlockedUntil: '2026-12-01T00:00:00.000Z' }));
+    expect(link?.raiseBlockedUntil).toBe('2026-12-01T00:00:00.000Z');
+    expect(link?.canRaise).toBe(true);
+    expect(Object.keys(decodeRelationLink(servedLink()) ?? {})).not.toContain('raiseBlockedUntil');
+    expect(Object.keys(decodeRelationLink(servedLink({ canRaise: 'yes' })) ?? {})).not.toContain('canRaise');
+  });
+
+  test('sa clé vit dans la famille `friends`', () => {
+    expect(relationRaiseGateQueryKey('u1').slice(0, FRIENDS_QUERY_PREFIX.length)).toEqual([...FRIENDS_QUERY_PREFIX]);
   });
 });

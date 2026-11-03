@@ -28,12 +28,14 @@ import me.meeshy.sdk.model.relation.CirclePerson
 import me.meeshy.sdk.model.relation.RelationLevel
 import me.meeshy.sdk.model.relation.RelationLink
 import me.meeshy.sdk.model.relation.RelationLinkWire
+import me.meeshy.sdk.model.relation.RelationRaiseGate
 import me.meeshy.sdk.model.relation.RelationRitualBody
 import me.meeshy.sdk.model.relation.RelationRitualConsents
 import me.meeshy.sdk.model.relation.RelationRitualPhase
 import me.meeshy.sdk.model.relation.RelationRitualStep
 import me.meeshy.sdk.model.relation.RelationsConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.api.RelationLowerBody
 import me.meeshy.sdk.net.api.RelationsApi
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.outbox.OutboxOutcome
@@ -75,6 +77,16 @@ interface CirclesGateway {
         token: String?,
         consents: RelationRitualConsents?,
     ): NetworkResult<RelationRitualStep>
+
+    /**
+     * Baisse MON accord (#14910) : un cran sous le niveau effectif, ou [RelationLevel.PUBLIC] pour annuler le lien. En direct
+     * (un geste destructif ne part pas en file) ; le succès réécrit le lien en cache, et un lien annulé sous Ami quitte
+     * le cache d'amitié. Les refus typés (`RELATION_NOT_A_DROP`) remontent tels quels.
+     */
+    suspend fun lower(userId: String, level: RelationLevel): NetworkResult<RelationLink>
+
+    /** Le verrou de remontée que `GET /relations/:userId` sert ; `null` en panne : rien n'est verrouillé par défaut. */
+    suspend fun raiseGate(userId: String): RelationRaiseGate?
 
     /**
      * Nomme les personnes des cercles : `GET /relations` ne sert jamais un nom (RG-07). Le cache des amis d'abord (sur
@@ -151,6 +163,26 @@ class RelationsRepository internal constructor(
         consents: RelationRitualConsents?,
     ): NetworkResult<RelationRitualStep> =
         apiCall { api.ritual(userId, RelationRitualBody(phase = phase.wire, token = token, consents = consents)) }
+
+    override suspend fun lower(userId: String, level: RelationLevel): NetworkResult<RelationLink> {
+        val ticket = cache.ticket()
+        return when (val served = apiCall { api.lower(userId, RelationLowerBody(level = level.wire)) }) {
+            is NetworkResult.Success -> {
+                val link = served.data.toLink()
+                val kept = link.effectiveLevel >= RelationLevel.ACQUAINTANCE
+                cache.update(NAMESPACE, LINKS_KEY, LINKS_SERIALIZER, ticket) { links ->
+                    links.mapNotNull { if (it.userId != userId) it else served.data.takeIf { kept } }
+                }
+                if (link.effectiveLevel < RelationLevel.FRIEND) friendshipCache.didRemoveFriend(userId)
+                NetworkResult.Success(link)
+            }
+            is NetworkResult.Failure -> served
+        }
+    }
+
+    override suspend fun raiseGate(userId: String): RelationRaiseGate? =
+        (quietly { apiCall { api.byUserId(userId) } } as? NetworkResult.Success)?.data
+            ?.let { RelationRaiseGate(canRaise = it.canRaise, raiseBlockedUntil = it.raiseBlockedUntil) }
 
     override suspend fun people(ids: List<String>): Map<String, CirclePerson> {
         val wanted = ids.distinct()

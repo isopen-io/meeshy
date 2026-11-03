@@ -8,7 +8,6 @@ import dagger.multibindings.IntoSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.meeshy.app.startup.AppInitializer
 import me.meeshy.sdk.model.ongoing.LiveActivityCommand
@@ -31,7 +30,7 @@ internal class OngoingActivityHostInitializer @Inject constructor(
         host.endOrphans()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         scope.launch {
-            processForeground.isForeground.distinctUntilChanged().collect { visible ->
+            processForeground.isForeground.collect { visible ->
                 if (visible) foreground.retryPending()
             }
         }
