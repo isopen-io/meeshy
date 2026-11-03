@@ -15,6 +15,8 @@
     <string name="auth_login_two_factor_label">Two-factor verification code</string>
     <string name="auth_login_two_factor_placeholder">Verification code</string>
     <string name="auth_login_two_factor_title">Two-Factor</string>
+    <string name="auth_magic_cancel">Cancel</string>
+    <string name="auth_magic_countdown_a11y">The link expires in</string>
     <string name="auth_magic_expired">Link expired, send a new one</string>
     <string name="auth_magic_header">Your email address</string>
     <string name="auth_magic_how_label">How it works</string>
@@ -22,7 +24,9 @@
     <string name="auth_magic_nothing_label">Nothing received?</string>
     <string name="auth_magic_nothing_text">Check your spam folder: the message may have landed there.</string>
     <string name="auth_magic_resend">Resend the link</string>
+    <string name="auth_magic_resend_short">Resend</string>
     <string name="auth_magic_send">Get the link</string>
+    <string name="auth_magic_sent_code_and_link">Code and link sent to</string>
     <string name="auth_magic_sent_title">Email sent</string>
     <string name="auth_magic_subtitle">No password to remember: we email you a link. Open it and you\'re signed in.</string>
     <string name="auth_magic_success">Login successful!</string>

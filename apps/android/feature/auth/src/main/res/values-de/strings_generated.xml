@@ -15,6 +15,8 @@
     <string name="auth_login_two_factor_label">Bestätigungscode für Zwei-Faktor-Authentifizierung</string>
     <string name="auth_login_two_factor_placeholder">Bestätigungscode</string>
     <string name="auth_login_two_factor_title">Zwei-Faktor</string>
+    <string name="auth_magic_cancel">Abbrechen</string>
+    <string name="auth_magic_countdown_a11y">Der Link läuft ab in</string>
     <string name="auth_magic_expired">Link abgelaufen, sende einen neuen</string>
     <string name="auth_magic_header">Deine E-Mail-Adresse</string>
     <string name="auth_magic_how_label">So funktioniert es</string>
@@ -22,7 +24,9 @@
     <string name="auth_magic_nothing_label">Nichts erhalten?</string>
     <string name="auth_magic_nothing_text">Sieh in deinem Spam-Ordner nach: Die Nachricht könnte dort gelandet sein.</string>
     <string name="auth_magic_resend">Link erneut senden</string>
+    <string name="auth_magic_resend_short">Erneut senden</string>
     <string name="auth_magic_send">Link erhalten</string>
+    <string name="auth_magic_sent_code_and_link">Code und Link gesendet an</string>
     <string name="auth_magic_sent_title">E-Mail gesendet</string>
     <string name="auth_magic_subtitle">Kein Passwort zum Merken: Wir schicken dir einen Link per E-Mail. Öffne ihn und du bist angemeldet.</string>
     <string name="auth_magic_success">Anmeldung erfolgreich!</string>

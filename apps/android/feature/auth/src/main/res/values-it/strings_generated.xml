@@ -15,6 +15,8 @@
     <string name="auth_login_two_factor_label">Codice di verifica a due fattori</string>
     <string name="auth_login_two_factor_placeholder">Codice di verifica</string>
     <string name="auth_login_two_factor_title">Due fattori</string>
+    <string name="auth_magic_cancel">Annulla</string>
+    <string name="auth_magic_countdown_a11y">Il link scade tra</string>
     <string name="auth_magic_expired">Link scaduto, inviane uno nuovo</string>
     <string name="auth_magic_header">Il tuo indirizzo email</string>
     <string name="auth_magic_how_label">Come funziona</string>
@@ -22,7 +24,9 @@
     <string name="auth_magic_nothing_label">Non hai ricevuto nulla?</string>
     <string name="auth_magic_nothing_text">Controlla la cartella spam: il messaggio potrebbe essere finito lì.</string>
     <string name="auth_magic_resend">Invia di nuovo il link</string>
+    <string name="auth_magic_resend_short">Invia di nuovo</string>
     <string name="auth_magic_send">Ricevi il link</string>
+    <string name="auth_magic_sent_code_and_link">Codice e link inviati a</string>
     <string name="auth_magic_sent_title">Email inviata</string>
     <string name="auth_magic_subtitle">Nessuna password da ricordare: ti inviamo un link via email. Aprilo e hai già effettuato l’accesso.</string>
     <string name="auth_magic_success">Accesso riuscito!</string>

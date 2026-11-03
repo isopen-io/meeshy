@@ -15,6 +15,8 @@
     <string name="auth_login_two_factor_label">رمز التحقق بخطوتين</string>
     <string name="auth_login_two_factor_placeholder">رمز التحقق</string>
     <string name="auth_login_two_factor_title">التحقق بخطوتين</string>
+    <string name="auth_magic_cancel">إلغاء</string>
+    <string name="auth_magic_countdown_a11y">ينتهي الرابط خلال</string>
     <string name="auth_magic_expired">انتهت صلاحية الرابط، أرسل رابطًا جديدًا</string>
     <string name="auth_magic_header">عنوان بريدك الإلكتروني</string>
     <string name="auth_magic_how_label">كيف يعمل</string>
@@ -22,7 +24,9 @@
     <string name="auth_magic_nothing_label">لم يصلك شيء؟</string>
     <string name="auth_magic_nothing_text">تحقّق من مجلد الرسائل غير المرغوب فيها (spam): قد تكون الرسالة وصلت إليه.</string>
     <string name="auth_magic_resend">إعادة إرسال الرابط</string>
+    <string name="auth_magic_resend_short">إعادة الإرسال</string>
     <string name="auth_magic_send">استلام الرابط</string>
+    <string name="auth_magic_sent_code_and_link">تم إرسال الرمز والرابط إلى</string>
     <string name="auth_magic_sent_title">تم إرسال البريد الإلكتروني</string>
     <string name="auth_magic_subtitle">لا كلمة مرور لتتذكرها: نرسل إليك رابطًا عبر البريد الإلكتروني. افتحه وستكون قد سجّلت الدخول.</string>
     <string name="auth_magic_success">تم تسجيل الدخول!</string>
