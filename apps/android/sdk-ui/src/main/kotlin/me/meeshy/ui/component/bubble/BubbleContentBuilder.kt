@@ -183,6 +183,8 @@ public object BubbleContentBuilder {
             isShowingOriginal = isShowingOriginal,
             originalText = if (isTranslated && !isShowingOriginal && !viewOnceSealed) message.content else null,
             languageStrip = languageStrip,
+            primaryLanguageCode = preferredCode ?: originalCode,
+            secondaryTexts = secondaryTexts(languageStrip, message.translations),
             senderName = senderName,
             showSenderName = showSenderName && !isOutgoing,
             senderId = message.senderId,
@@ -369,4 +371,16 @@ public object BubbleContentBuilder {
         this == originalCode || message.translations.any {
             it.targetLanguage.normalizedCode() == this && it.translatedContent.isNotBlank()
         }
+
+    /** `langue -> texte` des langues du pied qui portent un contenu : la matière du panneau secondaire. */
+    private fun secondaryTexts(
+        strip: List<LanguageChip>,
+        translations: List<LanguageResolver.TranslationLike>,
+    ): Map<String, String> {
+        val offered = strip.filter { !it.isTranslatable && !it.isOriginal }.map { it.code }.toSet()
+        if (offered.isEmpty()) return emptyMap()
+        return translations
+            .filter { it.translatedContent.isNotBlank() && it.targetLanguage.normalizedCode() in offered }
+            .associate { it.targetLanguage.normalizedCode().orEmpty() to it.translatedContent }
+    }
 }

@@ -5,6 +5,8 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -27,7 +29,9 @@ import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.FlatRowFocus
 import me.meeshy.ui.format.bubbleClockLabel
+import me.meeshy.sdk.model.BubbleFlagTap
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.sdk.model.reading.focal.FocalFocusTimestamp
 import me.meeshy.sdk.model.PlainSignalAdmission
 import java.time.Instant
@@ -117,6 +121,8 @@ internal fun ChatMessageRow(
     focalScale: Float = 1f,
     /** Le mode sélection multiple est ouvert (#13294) : la rangée ne glisse plus, un toucher la coche. */
     selecting: Boolean = false,
+    /** Les traductions demandées (`messageId|langue`) : le drapeau de la langue attendue montre un indicateur. */
+    translatingLanguages: Set<String> = emptySet(),
     selected: Boolean = false,
     /** L'overlay d'appui long présente CETTE cellule : elle s'efface en fondu, la copie élevée prend sa place. */
     hiddenForOverlay: Boolean = false,
@@ -133,7 +139,10 @@ internal fun ChatMessageRow(
     val replyLabel = stringResource(R.string.chat_action_reply)
     val forwardLabel = stringResource(R.string.chat_action_forward)
     val menuLabel = stringResource(R.string.chat_swipe_action_menu)
-    val callbacks = remember(bubble, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel, menuLabel, reacts, canWrite) {
+    // Le panneau secondaire est un état de vue de la bulle (iOS `@State secondaryLangCode`), pas du fil.
+    var secondaryCode by remember(messageId) { mutableStateOf<String?>(null) }
+    val flagHaptics = rememberMeeshyHaptics()
+    val callbacks = remember(bubble, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel, menuLabel, reacts, canWrite, secondaryCode) {
         BubbleCallbacks(
             onLongPress = { actions.onLongPress(messageId) },
             onReactionClick = { emoji: String -> actions.onReactionClick(messageId, emoji) }.takeIf { reacts },
@@ -152,7 +161,26 @@ internal fun ChatMessageRow(
                 ?.let { postId -> { actions.onStoryCitationOpen(postId) } },
             onQuotedAuthorTap = { actions.onQuotedAuthorTap(bubble) }.takeIf { bubble.replyToAuthor != null },
             onQuotedMediaTap = bubble.replyToId?.let { quotedId -> { actions.onQuotedMediaTap(messageId, quotedId) } },
-            onFlagTap = { code -> actions.onFlagTap(messageId, code) },
+            onFlagTap = { code ->
+                flagHaptics.light()
+                val strip = bubble.languageStrip
+                val active = strip.firstOrNull { it.isActive }?.code
+                val outcome = BubbleFlagTap.handleTap(
+                    code = code,
+                    current = BubbleFlagTap.Context(activeCode = active, secondaryCode = secondaryCode),
+                    originalLanguage = strip.firstOrNull { it.isOriginal }?.code,
+                    preferredCode = bubble.primaryLanguageCode,
+                    contentCodes = strip.filter { !it.isTranslatable }.mapTo(HashSet()) { it.code },
+                )
+                secondaryCode = outcome.secondaryCode
+                when (outcome.action) {
+                    BubbleFlagTap.Action.SwitchPrimary ->
+                        if (outcome.activeCode != active) actions.onFlagTap(messageId, code)
+                    BubbleFlagTap.Action.RequestTranslation -> actions.onFlagTap(messageId, code)
+                    BubbleFlagTap.Action.OpenSecondary, BubbleFlagTap.Action.CloseSecondary, BubbleFlagTap.Action.None -> Unit
+                }
+            },
+            onTranslate = { actions.onTranslationDetail(messageId) },
             onShowReadStatus = { actions.onLongPress(messageId) },
             onRetry = { actions.onRetry(messageId) },
             onSayHi = { actions.onReply(messageId) }.takeIf { canWrite && bubble.isArrivalsNotice },
@@ -171,6 +199,16 @@ internal fun ChatMessageRow(
                 }
             } + BubbleAccessibilityAction(menuLabel) { actions.onLongPress(messageId) },
         )
+    }
+    val translatingCodes = remember(translatingLanguages, messageId) {
+        translatingLanguages.filter { it.startsWith("$messageId|") }.mapTo(HashSet()) { it.removePrefix("$messageId|") }
+    }
+    val shownBubble = remember(bubble, secondaryCode, translatingCodes) {
+        if (secondaryCode == null && translatingCodes.isEmpty()) {
+            bubble
+        } else {
+            bubble.copy(openSecondaryCode = secondaryCode, translatingCodes = translatingCodes)
+        }
     }
     val onSwipeReply: (() -> Unit)? = remember(messageId, actions, offer.canReply) {
         if (offer.canReply) {
@@ -258,7 +296,7 @@ internal fun ChatMessageRow(
     ) {
         ThreadRow(
             rendering = if (flat) ThreadRowRendering.Flat else ThreadRowRendering.Bubble,
-            bubble = bubble,
+            bubble = shownBubble,
             accentColor = accentColor,
             callbacks = callbacks,
             audioPlayback = audioPlayback,
