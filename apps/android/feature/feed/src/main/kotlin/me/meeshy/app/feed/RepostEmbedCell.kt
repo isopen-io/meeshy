@@ -88,7 +88,7 @@ fun RepostEmbedCell(
         val open: () -> Unit = {
             if (openStory != null && authorId != null && !scene.isExpired()) openStory(authorId, embed.id) else onOpen(embed.id)
         }
-        sceneRenderer(scene, embed.authorName, live, open, Modifier.fillMaxWidth().sceneFrame(sceneId))
+        sceneRenderer(scene, embed.authorName, live, open, Modifier.fillMaxWidth().sceneZoom(sceneId?.let(SceneZoomPolicy::sourceKey)).sceneFrame(sceneId))
         return
     }
     val unknownAuthor = stringResource(R.string.feed_unknown_author)

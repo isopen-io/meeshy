@@ -114,4 +114,8 @@ object FeedMediaGallery {
 
     private fun mediaCaption(own: String?, carrierText: String?): String? =
         listOf(own, carrierText).firstNotNullOfOrNull { it?.trim()?.ifBlank { null } }
+
+    /** La clé du zoom carte → galerie : seulement quand la galerie s'ouvre sur la scène du post, jamais sur un média du carrousel. */
+    internal fun zoomKey(postId: String, hasScene: Boolean, startMediaId: String?): String? =
+        SceneZoomPolicy.destinationKey(postId, hasScene, startMediaId)
 }
