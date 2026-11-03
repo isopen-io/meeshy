@@ -115,4 +115,43 @@ class ConversationWriteAdmissionTest {
         )
         assertThat(conv.mayCurrentUserWrite("u1")).isTrue()
     }
+
+    @Test
+    fun `a minor in Global has the composer closed by the served restriction`() {
+        val conv = conversation(type = "global").copy(viewerWriteRestriction = ConversationWriteRestriction.MinorGlobal)
+        assertThat(conv.composerClosure()).isEqualTo(ComposerClosure.MINOR_GLOBAL)
+    }
+
+    @Test
+    fun `a refusal learned at send closes the composer even when the cache served no restriction`() {
+        assertThat(conversation(type = "global").composerClosure(ConversationWriteRestriction.MinorGlobal))
+            .isEqualTo(ComposerClosure.MINOR_GLOBAL)
+    }
+
+    @Test
+    fun `an unknown restriction does not close the composer`() {
+        val conv = conversation().copy(viewerWriteRestriction = ConversationWriteRestriction.Unknown("future"))
+        assertThat(conv.composerClosure(ConversationWriteRestriction.Unknown("future"))).isNull()
+    }
+
+    @Test
+    fun `an ended conversation closes the composer and primes over the restriction`() {
+        val conv = conversation(active = false).copy(viewerWriteRestriction = ConversationWriteRestriction.MinorGlobal)
+        assertThat(conv.composerClosure()).isEqualTo(ComposerClosure.ENDED)
+    }
+
+    @Test
+    fun `an open unrestricted conversation keeps its composer`() {
+        assertThat(conversation().composerClosure()).isNull()
+        assertThat(conversation(active = null).composerClosure()).isNull()
+    }
+
+    @Test
+    fun `the write refusal code is read from a failed send reason as a whole word`() {
+        assertThat(ConversationWriteRestriction.fromReason("Refused: HTTP 403 GLOBAL_ADULTS_ONLY"))
+            .isEqualTo(ConversationWriteRestriction.MinorGlobal)
+        assertThat(ConversationWriteRestriction.fromReason("Refused: HTTP 403 FORBIDDEN")).isNull()
+        assertThat(ConversationWriteRestriction.fromReason("Refused: HTTP 403 NOT_GLOBAL_ADULTS_ONLY_X")).isNull()
+        assertThat(ConversationWriteRestriction.fromReason(null)).isNull()
+    }
 }

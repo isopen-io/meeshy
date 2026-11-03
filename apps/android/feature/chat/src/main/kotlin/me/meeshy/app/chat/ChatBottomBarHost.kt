@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.sdk.composer.ComposerAffordances
 import me.meeshy.sdk.model.composer.ComposerToolbarLaw
 import me.meeshy.sdk.model.composer.ComposerTrayPresenter
 import me.meeshy.sdk.model.composer.PendingPlace
@@ -146,7 +147,8 @@ private fun ChatComposerDock(host: ChatHostContext) {
             onLocationRequest = { pickerOpen = true },
             onPickUris = actions.stagePendingUris,
             isEditing = state.isEditing,
-            affordances = state.composerAffordances,
+            affordances = if (host.composerClosure != null) ComposerAffordances.CLOSED else state.composerAffordances,
+            closure = host.composerClosure,
             guestAllowance = state.guestAttachmentAllowance,
             conversationTitle = state.conversationTitle.orEmpty(),
             slowMode = rememberComposerSlowMode(state),

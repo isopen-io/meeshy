@@ -55,8 +55,10 @@
         <item quantity="other">%1$d أحرف</item>
     </plurals>
     <string name="chat_clipboard_title">محتوى الحافظة</string>
+    <string name="chat_composer_closed">تم إغلاق هذه المحادثة</string>
     <string name="chat_composer_edit_title">تعديل الرسالة</string>
     <string name="chat_composer_language">لغة الرسالة</string>
+    <string name="chat_composer_minor_global">يُفتح Global للكتابة عند بلوغك 18 عامًا</string>
     <string name="chat_composer_reply_a11y">رد على %1$s: %2$s</string>
     <string name="chat_composer_reply_file">ملف</string>
     <string name="chat_composer_reply_location">موقع</string>

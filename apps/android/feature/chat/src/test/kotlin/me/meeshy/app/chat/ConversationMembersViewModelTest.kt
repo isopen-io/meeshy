@@ -822,4 +822,42 @@ class ConversationMembersViewModelTest {
 
         coVerify(exactly = 1) { repository.participants("c1", null, any(), any()) }
     }
+
+    private fun repoOfType(type: String, role: String): ConversationRepository {
+        val repository = repo()
+        every { repository.conversationStream(any()) } returns flowOf(conversation(role).copy(type = type, currentUserRole = role))
+        return repository
+    }
+
+    @Test
+    fun `a group moderator is offered Invite`() = runTest {
+        val vm = viewModel(repoOfType("group", "moderator"))
+        vm.load("c1")
+        advanceUntilIdle()
+        assertThat(vm.state.value.mayInvite).isTrue()
+    }
+
+    @Test
+    fun `a group member is not offered Invite`() = runTest {
+        val vm = viewModel(repoOfType("group", "member"))
+        vm.load("c1")
+        advanceUntilIdle()
+        assertThat(vm.state.value.mayInvite).isFalse()
+    }
+
+    @Test
+    fun `in Global a conversation creator is not offered Invite, only platform admins are`() = runTest {
+        val creator = viewModel(repoOfType("global", "creator"))
+        creator.load("c1")
+        advanceUntilIdle()
+        assertThat(creator.state.value.mayInvite).isFalse()
+
+        val platformAdminSession = mockk<SessionRepository>(relaxed = true).also {
+            every { it.currentUser } returns MutableStateFlow(MeeshyUser(id = "me", username = "me", role = "ADMIN"))
+        }
+        val admin = viewModel(repoOfType("global", "member"), platformAdminSession)
+        admin.load("c1")
+        advanceUntilIdle()
+        assertThat(admin.state.value.mayInvite).isTrue()
+    }
 }

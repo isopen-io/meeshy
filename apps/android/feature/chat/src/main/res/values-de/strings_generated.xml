@@ -51,8 +51,10 @@
         <item quantity="other">%1$d Zeichen</item>
     </plurals>
     <string name="chat_clipboard_title">Inhalt der Zwischenablage</string>
+    <string name="chat_composer_closed">Diese Unterhaltung wurde geschlossen</string>
     <string name="chat_composer_edit_title">Nachricht bearbeiten</string>
     <string name="chat_composer_language">Sprache der Nachricht</string>
+    <string name="chat_composer_minor_global">Global öffnet sich zum Schreiben, wenn du 18 wirst</string>
     <string name="chat_composer_reply_a11y">Antwort an %1$s: %2$s</string>
     <string name="chat_composer_reply_file">Datei</string>
     <string name="chat_composer_reply_location">Standort</string>
