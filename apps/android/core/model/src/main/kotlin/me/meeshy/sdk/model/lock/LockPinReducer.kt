@@ -1,4 +1,4 @@
-package me.meeshy.app.conversations
+package me.meeshy.sdk.model.lock
 
 /**
  * Pure state machine for the conversation lock PIN sheet.

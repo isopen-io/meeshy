@@ -407,4 +407,57 @@ final class PostDetailViewModelTests: PostDetailViewModelTestCase {
         XCTAssertTrue(queue.cancelPendingPublicationCalls.isEmpty)
         XCTAssertEqual(mock.deleteCallCount, 1)
     }
+
+    // MARK: - #14879 — le détail d'une publication en file ne parle pas au serveur
+
+    func test_loadComments_onPendingPublication_neverCallsTheServer() async {
+        let (sut, mock) = makeSUT()
+
+        await sut.loadComments(ClientMutationId.generate())
+
+        XCTAssertEqual(mock.getCommentsCallCount, 0, "aucun commentaire n'existe sous un cmid : pas de toast d'erreur non plus")
+    }
+
+    func test_registerDetailOpen_onPendingPublication_recordsNothing() async {
+        let (sut, mock) = makeSUT()
+
+        await sut.registerDetailOpen(ClientMutationId.generate())
+
+        XCTAssertEqual(mock.recordSocialEventsCallCount, 0)
+    }
+
+    func test_pendingDetail_offersOnlyTheCancellation_andNoComposer() throws {
+        let detail = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/PostDetailView.swift"))
+        let garde = try XCTUnwrap(detail.range(of: "if PendingPublicationMarker.isPending(postId: postId) {"))
+        XCTAssertTrue(detail[garde.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+                        .hasPrefix("PublicationDestructiveMenuItems(postId: postId, onDelete:"),
+                      "ni lien, ni épingle, ni modification : « Annuler l'envoi » seul")
+        XCTAssertTrue(detail.contains("PostDateWithPoints(postId: post.id"), "l'en-tête date par la vue partagée avec la carte")
+        let entete = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/FeedPostCard+Header.swift"))
+        let date = try XCTUnwrap(entete.range(of: "struct PostDateWithPoints"))
+        let corps = try XCTUnwrap(entete.range(of: "var body: some View {", range: date.upperBound..<entete.endIndex))
+        XCTAssertTrue(entete[corps.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+                        .hasPrefix("if PendingPublicationMarker.isPending(postId: postId) {\n            PendingSendClock(color: color)"),
+                      "l'horloge à la place de l'heure, au détail comme sur la carte")
+        XCTAssertTrue(detail.contains("!PendingPublicationMarker.isPending(postId: postId) {\n                VStack(spacing: 0) {"),
+                      "commenter une publication qui n'existe pas encore n'aboutirait jamais")
+    }
+
+    func test_commentPlaceholder_speaksTheInterfaceLanguage() throws {
+        let racineDepot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let modes = try String(contentsOf: racineDepot.appendingPathComponent(
+            "packages/MeeshySDK/Sources/MeeshyUI/Media/MediaTypes.swift"), encoding: .utf8)
+        XCTAssertTrue(modes.contains(#"case .comment: return String(localized: "composer.placeholder.comment""#))
+        let catalogue = try Data(contentsOf: racineDepot.appendingPathComponent(
+            "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings"))
+        let racine = try XCTUnwrap(JSONSerialization.jsonObject(with: catalogue) as? [String: Any])
+        let entree = try XCTUnwrap((racine["strings"] as? [String: Any])?["composer.placeholder.comment"] as? [String: Any])
+        let langues = try XCTUnwrap(entree["localizations"] as? [String: [String: [String: String]]])
+        XCTAssertEqual(Set(langues.keys), ["fr", "en", "es", "de", "it", "pt-BR", "ar"])
+        XCTAssertEqual(langues["es"]?["stringUnit"]?["value"], "Comentar…")
+    }
 }

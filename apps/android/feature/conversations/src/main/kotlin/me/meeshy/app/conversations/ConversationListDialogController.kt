@@ -193,6 +193,22 @@ internal class ConversationListDialogController(
         lock.dismissLockPrompt()
     }
 
+    // ── Blocage, administration : ce que le menu lit ──
+
+    /** `null` : pas un direct à pair connu, donc personne à bloquer ni à débloquer. */
+    fun isPeerBlocked(conversationId: String): Boolean? =
+        peerOf(conversationId)?.let(deps.blocker::isBlocked)
+
+    /** « Ouvrir dans l'administration » : la loi seule l'accorde, l'hôte ouvre l'adresse. */
+    fun openAdminConsole(conversationId: String) {
+        val conversation = conversationOf(conversationId) ?: return
+        if (!capabilities(conversation).adminOpen || deps.webOrigin.isBlank()) return
+        emit(ConversationListDialogEffect.OpenUrl(ConversationRowMenuCapabilities.adminConsoleUrl(conversationId, deps.webOrigin)))
+    }
+
+    /** L'administration est-elle joignable d'ici ? Une origine web inconnue retire l'entrée. */
+    val canOpenAdminConsole: Boolean get() = deps.webOrigin.isNotBlank()
+
     // ── Infos, inviter ──
 
     fun requestInfo(conversationId: String) {
