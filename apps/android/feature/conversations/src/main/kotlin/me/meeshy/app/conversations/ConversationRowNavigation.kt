@@ -14,6 +14,8 @@ data class ConversationRowNavigation(
     val onCreateShareLink: ((conversationId: String) -> Unit)? = null,
     /** La fiche des membres de la conversation, teintée de son accent (#12865). */
     val onManageMembers: ((conversationId: String, accent: Color) -> Unit)? = null,
+    /** L'appel audio du pair d'un direct, composé tout de suite ; `null` = « Appeler » absent. */
+    val onCall: ((conversationId: String, peerName: String) -> Unit)? = null,
 ) {
     companion object {
         val None = ConversationRowNavigation()

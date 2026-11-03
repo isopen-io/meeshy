@@ -10,6 +10,15 @@
     <string name="common_inactive">Inaktiv</string>
     <string name="common_retry">Erneut versuchen</string>
     <string name="common_share">Teilen</string>
+    <string name="context_admin_open">In der Verwaltung öffnen</string>
+    <string name="context_call">Anrufen</string>
+    <string name="context_details">Details</string>
+    <string name="context_favorite">Favorit</string>
+    <string name="context_invite_friends">Meine Freunde einladen</string>
+    <string name="context_more_options">Weitere Optionen</string>
+    <string name="context_rename">Umbenennen</string>
+    <string name="context_report">Melden</string>
+    <string name="context_search">Suchen</string>
     <string name="conversationCard_expired">Link abgelaufen</string>
     <string name="conversations_action_archive">Archivieren</string>
     <string name="conversations_action_create_category">„%1$s\" erstellen</string>
@@ -204,6 +213,7 @@
     <string name="invite_share">Teilen</string>
     <string name="invite_title">Einladung</string>
     <string name="invite_unlimited">Unbegrenzt</string>
+    <string name="lentille_mode_menu_title">Lesemodus</string>
     <string name="links_affiliate_action_copy">Empfehlungslink kopieren</string>
     <string name="links_affiliate_action_create">Empfehlungslink erstellen</string>
     <string name="links_affiliate_action_delete">Empfehlungslink löschen</string>
