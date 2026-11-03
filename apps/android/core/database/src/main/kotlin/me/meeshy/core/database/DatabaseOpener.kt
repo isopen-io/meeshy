@@ -99,11 +99,15 @@ public class DatabaseOpener(
         return memory
     }
 
-    /** La base de repli d'un lancement précédent : ce qu'elle a gardé rejoint la base principale, puis elle disparaît. */
+    /**
+     * La base de repli d'un lancement précédent : ce qu'elle a gardé rejoint la base principale, puis elle disparaît —
+     * seulement si TOUT a été repris. Une ligne perdue (disque plein, contrainte) la garde pour le lancement suivant ; la
+     * purge de session la retire de toute façon.
+     */
     private fun adoptFallback(database: MeeshyDatabase) {
         if (!secondaryFile.exists()) return
-        restore(database, DatabaseRecovery.salvage(secondaryFile))
-        DatabaseRecovery.deleteFallback(secondaryFile)
+        val lost = restore(database, DatabaseRecovery.salvage(secondaryFile))
+        if (lost == 0) DatabaseRecovery.deleteFallback(secondaryFile)
     }
 
     private fun quarantine(file: File): DatabaseSalvage {
@@ -113,37 +117,46 @@ public class DatabaseOpener(
         return salvaged
     }
 
-    private fun restore(database: MeeshyDatabase, salvage: DatabaseSalvage) {
-        if (salvage.isEmpty) return
+    /** Réinjecte [salvage] dans [database] ; rend le nombre de lignes qui n'ont pas pu l'être. */
+    private fun restore(database: MeeshyDatabase, salvage: DatabaseSalvage): Int {
+        if (salvage.isEmpty) return 0
+        val total = salvage.outbox.size + salvage.plaintextErasures.size + salvage.pendingIds.size
         val db = try {
             database.openHelper.writableDatabase
         } catch (_: Exception) {
-            return
+            return total
         }
+        // Une ligne déjà présente (CONFLICT_IGNORE rend -1) est reprise ; seule une écriture qui échoue est perdue, et une
+        // ligne perdue ne fait pas perdre les autres.
         fun insertAll(table: String, rows: List<ContentValues>, conflict: Int): Int = rows.count { values ->
             try {
-                db.insert(table, conflict, values) >= 0
+                db.insert(table, conflict, values)
+                true
             } catch (_: Exception) {
-                // Une ligne illisible ne doit pas faire perdre les autres.
                 false
             }
         }
+        var restored = 0
         if (salvage.outbox.isNotEmpty()) {
-            val restored = insertAll("outbox", salvage.outbox.map { it.toValues() }, SQLiteDatabase.CONFLICT_REPLACE)
-            diagnostics.record(DatabaseInitStage.OUTBOX_SALVAGED, "$restored/${salvage.outbox.size}")
+            val outbox = insertAll("outbox", salvage.outbox.map { it.toValues() }, SQLiteDatabase.CONFLICT_REPLACE)
+            diagnostics.record(DatabaseInitStage.OUTBOX_SALVAGED, "$outbox/${salvage.outbox.size}")
+            restored += outbox
         }
         if (salvage.plaintextErasures.isNotEmpty()) {
-            val restored = insertAll(
+            val erasures = insertAll(
                 "e2ee_plaintext_erasures",
                 salvage.plaintextErasures.map { it.toValues() },
                 SQLiteDatabase.CONFLICT_IGNORE,
             )
-            diagnostics.record(DatabaseInitStage.ERASURES_SALVAGED, "$restored/${salvage.plaintextErasures.size}")
+            diagnostics.record(DatabaseInitStage.ERASURES_SALVAGED, "$erasures/${salvage.plaintextErasures.size}")
+            restored += erasures
         }
         if (salvage.pendingIds.isNotEmpty()) {
-            val restored = insertAll("pending_ids", salvage.pendingIds.map { it.toValues() }, SQLiteDatabase.CONFLICT_IGNORE)
-            diagnostics.record(DatabaseInitStage.PENDING_IDS_SALVAGED, "$restored/${salvage.pendingIds.size}")
+            val pending = insertAll("pending_ids", salvage.pendingIds.map { it.toValues() }, SQLiteDatabase.CONFLICT_IGNORE)
+            diagnostics.record(DatabaseInitStage.PENDING_IDS_SALVAGED, "$pending/${salvage.pendingIds.size}")
+            restored += pending
         }
+        return total - restored
     }
 
     private class Attempt(val database: MeeshyDatabase?, val failure: Throwable?)

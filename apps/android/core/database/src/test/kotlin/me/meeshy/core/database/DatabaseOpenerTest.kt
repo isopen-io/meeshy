@@ -216,6 +216,31 @@ class DatabaseOpenerTest {
     }
 
     @Test
+    fun `une reprise de la base de repli qui perd une ligne garde la base de repli pour le lancement suivant`() =
+        kotlinx.coroutines.runBlocking {
+            val name = "adopt-loses.db"
+            realBuild(context, DatabaseLocation.Named(secondary(name).absolutePath)).apply {
+                outboxDao().upsert(
+                    me.meeshy.core.database.entity.OutboxEntity(
+                        cmid = "c-9", lane = "message:conv", kind = "SEND", targetId = "t", payload = "{}", dependsOn = null,
+                        attempts = 0, state = "PENDING", createdAt = 1L, updatedAt = 1L, ownerId = "u1",
+                    ),
+                )
+                close()
+            }
+            val primary = existing(name)
+            SQLiteDatabase.openDatabase(primary.path, null, SQLiteDatabase.OPEN_READWRITE).use {
+                it.execSQL("CREATE TRIGGER refuse_outbox BEFORE INSERT ON outbox BEGIN SELECT RAISE(ABORT, 'disk full'); END")
+            }
+
+            val database = opener(name, DatabaseInitDiagnostics(), StorageHealth()).open()
+
+            assertThat(database.outboxDao().pendingCount()).isEqualTo(0)
+            assertThat(secondary(name).exists()).isTrue()
+            database.close()
+        }
+
+    @Test
     fun `les copies de reprise sont purgees, sauf la base ouverte`() {
         val name = "leftovers.db"
         val primary = context.getDatabasePath(name).also { it.parentFile?.mkdirs() }
