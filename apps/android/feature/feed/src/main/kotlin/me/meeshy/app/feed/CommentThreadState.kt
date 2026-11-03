@@ -38,6 +38,17 @@ data class CommentThreadState(
         )
     }
 
+    /**
+     * The first page read again after a reconnection: rows unseen by id join the head (newest first), rows already
+     * known stay as they are, and the pagination watermark is untouched — a reader scrolled three pages deep keeps
+     * their place.
+     */
+    fun headResynced(page: List<ApiPostComment>): CommentThreadState {
+        val known = comments.mapTo(HashSet()) { it.id }
+        val fresh = page.filter { it.id !in known }
+        return if (fresh.isEmpty()) this else copy(comments = fresh + comments, hasLoaded = true)
+    }
+
     /** Optimistically prepend a just-sent [comment]; inert if its id is already present. */
     fun optimistic(comment: ApiPostComment): CommentThreadState {
         if (comments.any { it.id == comment.id }) return this

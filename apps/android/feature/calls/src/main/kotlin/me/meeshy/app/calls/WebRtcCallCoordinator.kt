@@ -7,6 +7,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import me.meeshy.sdk.call.CallQualityStatsFeed
 import me.meeshy.sdk.call.CallStatsCollector
@@ -17,6 +18,7 @@ import me.meeshy.sdk.model.call.CallParticipantArrival
 import me.meeshy.sdk.model.call.CallParticipantLeftPayload
 import me.meeshy.sdk.model.call.CallVideoFallback
 import me.meeshy.sdk.model.call.SocketIceServer
+import me.meeshy.sdk.model.call.ThermalState
 import me.meeshy.sdk.model.call.WebRtcError
 import me.meeshy.sdk.playback.CallHandoff
 import me.meeshy.sdk.socket.CallSignalManager
@@ -44,6 +46,8 @@ class WebRtcCallCoordinator @Inject constructor(
     statsFeed: CallQualityStatsFeed = CallQualityStatsFeed(),
     private val handoff: CallHandoff? = null,
     private val dataProfile: CallDataProfileController? = null,
+    private val videoHealth: CallVideoHealthImpl? = null,
+    private val thermalMonitor: ThermalStateMonitor? = null,
 ) : CallReliabilityMedia {
     private val negotiator = CallNegotiator(engine, signals)
     private val iceMonitor = CallIceStateMonitor(engine, signals)
@@ -88,9 +92,12 @@ class WebRtcCallCoordinator @Inject constructor(
     /** L'échelle adaptative de ma caméra et la survie vidéo, propagée au maillage (#13767, #13752). */
     private val videoEncoding = CallVideoEncodingController(
         ticks = statsFeed.ticks,
-        thermal = { appContext.callThermalState() },
+        thermal = { thermalMonitor?.state?.value ?: appContext.callThermalState() },
         apply = { budget, frozen -> engine.setCameraVideoBudget(dataProfile?.capVideo(budget) ?: budget, frozen) },
-        onSurvivalFloor = { mesh.setSurvivalFloor(it) },
+        onSurvivalFloor = {
+            mesh.setSurvivalFloor(it)
+            videoHealth?.setAutoPaused(it)
+        },
     )
 
     init {
@@ -116,6 +123,12 @@ class WebRtcCallCoordinator @Inject constructor(
      * pair doit l'apprendre comme une caméra coupée (iOS `continueAudioOnly`).
      */
     var onVideoUnavailable: ((CallVideoFallback) -> Unit)? = null
+
+    /**
+     * L'appareil est au palier critique : la vidéo ne peut plus continuer. L'hôte coupe la caméra, prévient le
+     * pair et dit pourquoi ; l'appel continue en audio (iOS `shouldDisableVideo`).
+     */
+    var onThermalCritical: (() -> Unit)? = null
 
     /** Les entrées de sous-titres reçues du pair sur le canal de données. */
     val peerCaptions get() = dataChannel.captions
@@ -215,6 +228,7 @@ class WebRtcCallCoordinator @Inject constructor(
             it.begin(cs)
         }
         videoEncoding.begin(cs, wantsVideo = sendsVideo)
+        watchThermal(cs)
         videoEncoding.reapply()
         negotiator.observe(cs)
         iceMonitor.observe(cs, restartIce = ::restartIceAndRenegotiate)
@@ -222,6 +236,17 @@ class WebRtcCallCoordinator @Inject constructor(
             if (mesh.primaryDidLeave()) vacatePrimary() else onRemoteBye?.invoke(reason)
         }
         if (videoUnavailable) onVideoUnavailable?.invoke(engine.videoFallback ?: CallVideoFallback.NoCamera)
+    }
+
+    private fun watchThermal(scope: CoroutineScope) {
+        val monitor = thermalMonitor ?: return
+        monitor.start()
+        scope.launch {
+            monitor.state.collect { state ->
+                videoHealth?.setThermal(state)
+                if (state == ThermalState.CRITICAL) onThermalCritical?.invoke()
+            }
+        }
     }
 
     /** Raccroche in-band : le pair passe à Ended immédiatement. `false` si le canal n'est pas ouvert. */
@@ -329,6 +354,8 @@ class WebRtcCallCoordinator @Inject constructor(
     }
 
     private fun teardown() {
+        thermalMonitor?.stop()
+        videoHealth?.reset()
         videoEncoding.end()
         dataProfile?.end()
         mesh.teardown()

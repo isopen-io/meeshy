@@ -9,7 +9,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.stringResource
+import me.meeshy.feature.stories.R
+import me.meeshy.ui.component.audio.BackgroundSoundBadge
+import me.meeshy.ui.component.audio.BackgroundSoundBadgeLabels
 import me.meeshy.ui.haptics.MeeshyHaptics
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
@@ -75,5 +80,21 @@ internal fun StoryViewerTopBar(
                 StoryOptionsMenu(state, chrome, videoExport, actions, mayRemove = viewModel.mayRemoveCurrentStory())
             }
         }
+        slide?.backgroundAudio?.takeIf { it.showsMuteControl }?.let { announcement ->
+            BackgroundSoundBadge(
+                announcement = announcement,
+                tint = MeeshyPalette.White.copy(alpha = BADGE_OPACITY),
+                isMuted = state.isMuted,
+                labels = BackgroundSoundBadgeLabels(
+                    track = stringResource(R.string.stories_viewer_a11y_background_audio),
+                    muted = stringResource(R.string.stories_action_mute),
+                    sound = stringResource(R.string.stories_action_sound),
+                ),
+                onToggleMute = { haptics.light(); viewModel.toggleMute() },
+                modifier = Modifier.padding(start = MeeshySpacing.xs),
+            )
+        }
     }
 }
+
+private const val BADGE_OPACITY = 0.9f
