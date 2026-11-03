@@ -93,9 +93,9 @@ class StoryNotificationTargetViewModel @Inject constructor(
     private fun load() {
         if (loading?.isActive == true) return
         loading = viewModelScope.launch {
-            cachedPost()?.let(::apply)
+            cachedPost()?.let { applyPost(it) }
             when (val fresh = fetch()) {
-                is Fetched.Post -> apply(fresh.post)
+                is Fetched.Post -> applyPost(fresh.post)
                 is Fetched.Failed -> _state.update {
                     it.copy(target = StoryNotificationTargetResolver.afterFailedRevalidation(it.target, fresh.failure))
                 }
@@ -124,7 +124,7 @@ class StoryNotificationTargetViewModel @Inject constructor(
             Fetched.Failed(failure.toContentFetchFailure())
         }
 
-    private fun apply(post: ApiPost) {
+    private fun applyPost(post: ApiPost) {
         val target = StoryNotificationTargetResolver.stateFor(post, _state.value.nowMillis)
         _state.update { it.copy(target = target) }
         if (target is StoryNotificationTargetState.Active && !viewerOpened) {
