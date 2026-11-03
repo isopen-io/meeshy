@@ -46,11 +46,11 @@ class ConversationEngagementStoreTest {
 
     @Test
     fun `la graine de la liste concourt avec l'instantane tenu et un cumul nul se tait`() {
-        val store = store()
-        store.seed(snap(total = 50))
-        assertThat(store.displayed("c1", seed = snap(total = 80))?.totalPoints).isEqualTo(80)
-        assertThat(store.displayed("c1", seed = snap(total = 10))?.totalPoints).isEqualTo(50)
-        assertThat(store.displayed("c1", seed = snap(total = 80, id = "autre"))?.totalPoints).isEqualTo(50)
+        val held = store()
+        held.seed(snap(total = 50))
+        assertThat(held.displayed("c1", seed = snap(total = 80))?.totalPoints).isEqualTo(80)
+        assertThat(held.displayed("c1", seed = snap(total = 10))?.totalPoints).isEqualTo(50)
+        assertThat(held.displayed("c1", seed = snap(total = 80, id = "autre"))?.totalPoints).isEqualTo(50)
         assertThat(store().displayed("c1", seed = snap(total = 0))).isNull()
         assertThat(store().displayed("c1")).isNull()
     }
