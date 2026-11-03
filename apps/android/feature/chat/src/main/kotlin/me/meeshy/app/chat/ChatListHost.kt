@@ -87,6 +87,7 @@ internal fun ChatListHost(
     val accentColor = host.accentColor
     val bubbleFrames = host.bubbleFrames
     val listState = rememberLazyListState()
+    val expansionHost = rememberLongMessageExpansionHost(listState)
     // La fiche de l'auteur ouverte depuis l'avatar du pied d'identité (iOS `selectedProfileUser`).
     val profileTap = rememberProfileTap(state.conversationId, accentColor)
     // L'en-tête efface sa grappe d'actions pendant le défilement (iOS `hiddenWhileScrolling`).
@@ -487,13 +488,20 @@ internal fun ChatListHost(
                         selectedIds = host.selection.ids,
                         overlayMessageId = state.actionMessageId,
                     ) }
+                    val framed: @Composable (Boolean, Float) -> Unit = { elected, scale ->
+                        if (item is ChatListItem.Message) {
+                            LongMessageExpansionRow(item.bubble.messageId, expansionHost) { row(elected, scale) }
+                        } else {
+                            row(elected, scale)
+                        }
+                    }
                     val landed = item is ChatListItem.Message && item.bubble.messageId == host.landing.highlightedMessageId
                     if (focalMode) {
-                        FocalPassageItem(item.key, focalScene, renderedIndexOf) { elected -> row(elected, focalScene.contentScale) }
+                        FocalPassageItem(item.key, focalScene, renderedIndexOf) { elected -> framed(elected, focalScene.contentScale) }
                     } else if (landed) {
-                        LandingHighlight(accentColor) { row(false, 1f) }
+                        LandingHighlight(accentColor) { framed(false, 1f) }
                     } else {
-                        row(false, 1f)
+                        framed(false, 1f)
                     }
                 }
             }

@@ -124,4 +124,27 @@ object ChatScrollGeometry {
         if (transition == null || transition.perFrame || !transition.isLive(nowMs)) return 0
         return transition.durationMs.toInt()
     }
+
+    /**
+     * Le défilement qui retient immobile le bord ancré d'un message en train de changer de hauteur
+     * (dépliage d'un long message, `LongMessageExpansionLaw`) : [edgeBefore] et [edgeAfter] sont les
+     * ordonnées écran de ce bord avant et après le changement. Un bord descendu se rattrape en
+     * faisant remonter le contenu ; sous `reverseLayout` ([ChatListOrientation.BottomUp]) le sens
+     * du défilement est inversé. Borné à ±[maxDelta] (la hauteur du viewport) : un message plus
+     * long que l'écran ne fait jamais voler la liste ; sous le demi-pixel, rien ne bouge.
+     */
+    fun anchoredScrollDelta(
+        edgeBefore: Float,
+        edgeAfter: Float,
+        orientation: ChatListOrientation,
+        maxDelta: Float,
+    ): Float {
+        val shift = edgeAfter - edgeBefore
+        if (kotlin.math.abs(shift) <= ANCHOR_TOLERANCE_PX) return 0f
+        val signed = if (orientation == ChatListOrientation.BottomUp) -shift else shift
+        val bound = kotlin.math.abs(maxDelta)
+        return signed.coerceIn(-bound, bound)
+    }
+
+    private const val ANCHOR_TOLERANCE_PX = 0.5f
 }

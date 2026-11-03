@@ -31,7 +31,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,6 +49,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -61,7 +61,10 @@ import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import me.meeshy.sdk.model.reading.focal.LongMessageExcerpt
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.R
+import me.meeshy.ui.component.focal.ExpandedGlassFrame
 import me.meeshy.ui.component.focal.FocalIdentityHeader
+import me.meeshy.ui.component.focal.FocalLongMessage
+import me.meeshy.ui.component.focal.LocalFlatRowExpansion
 import me.meeshy.ui.component.focal.FocalMetaColumn
 import me.meeshy.ui.component.focal.FocalRowInput
 import me.meeshy.ui.sticker.MessageStickerArtwork
@@ -185,6 +188,19 @@ private fun FlatStandardBody(
     val namedActions = callbacks.accessibilityActions
     val ink = MeeshyTheme.tokens.textPrimary
     val rowInput = remember(content) { FocalRowInput.of(content) }
+    val expansion = LocalFlatRowExpansion.current
+    val isLong = remember(content.text, content.isEndToEndSealed) {
+        !content.isEndToEndSealed && LongMessageExcerpt.isLong(content.text)
+    }
+    val expansionLabel = expansion?.takeIf { isLong }?.let {
+        stringResource(if (it.isExpanded) R.string.focal_long_message_expanded else R.string.focal_long_message_collapsed)
+    }
+    val expansionAction = expansion?.takeIf { isLong }?.let {
+        CustomAccessibilityAction(
+            stringResource(if (it.isExpanded) R.string.message_long_collapse else R.string.message_long_read_more),
+        ) { it.onToggle(); true }
+    }
+    val glassVisible = expansion?.isExpanded == true && isLong && !focused
     Row(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(FlatRowMetrics.metaSpacing),
@@ -202,10 +218,11 @@ private fun FlatStandardBody(
                 )
             }
             .semantics(mergeDescendants = true) {
-                if (namedActions.isNotEmpty()) {
+                if (expansionLabel != null) stateDescription = expansionLabel
+                if (namedActions.isNotEmpty() || expansionAction != null) {
                     customActions = namedActions.map { named ->
                         CustomAccessibilityAction(named.label) { named.onAction(); true }
-                    }
+                    } + listOfNotNull(expansionAction)
                 }
             },
     ) {
@@ -256,7 +273,7 @@ private fun FlatStandardBody(
             }
         } }
         if (focus == null) {
-            Box(Modifier.weight(1f), propagateMinConstraints = true) { column() }
+            ExpandedGlassFrame(visible = glassVisible, modifier = Modifier.weight(1f)) { column() }
         } else {
             FocalElectedFrame(
                 focus = focus,
@@ -421,28 +438,16 @@ private fun FlatText(content: BubbleContent, accentColor: Color, ink: Color, dec
         Text(text = content.text.trim(), style = largeEmojiTextStyle(emojiFontSize.sp))
         return
     }
-    val excerpt = remember(content.text) { LongMessageExcerpt.of(content.text) }
-    var expanded by rememberSaveable(content.messageId) { mutableStateOf(false) }
-    RichMessageText(
-        text = if (excerpt.truncated && !expanded) excerpt.excerpt + "…" else content.text,
-        color = ink,
-        style = FlatTextStyle,
-        linkColor = accentColor,
-        highlightColor = MeeshyPalette.Warning.copy(alpha = 0.45f),
-        mentionDisplayNames = decor.mentionDisplayNames,
-        highlightTerm = decor.highlightTerm,
-        trackedLinks = decor.trackedLinks,
-    )
-    if (excerpt.truncated) {
-        Text(
-            text = stringResource(if (expanded) R.string.message_long_collapse else R.string.message_long_read_more),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = accentColor,
-            modifier = Modifier
-                .clip(RoundedCornerShape(MeeshyRadius.sm))
-                .clickable { expanded = !expanded }
-                .padding(vertical = MeeshySpacing.xxs),
+    FocalLongMessage(messageId = content.messageId, text = content.text, accentColor = accentColor) { shown ->
+        RichMessageText(
+            text = shown,
+            color = ink,
+            style = FlatTextStyle,
+            linkColor = accentColor,
+            highlightColor = MeeshyPalette.Warning.copy(alpha = 0.45f),
+            mentionDisplayNames = decor.mentionDisplayNames,
+            highlightTerm = decor.highlightTerm,
+            trackedLinks = decor.trackedLinks,
         )
     }
 }
