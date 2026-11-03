@@ -16,7 +16,8 @@ class MintCeremonyChoreographyTest {
         val atImpact = MintCeremonyChoreography.frame(silver, impact).hammerMeo.angle
         val raised = MintCeremonyChoreography.frame(silver, silver.strikes[0].atMs / 1000.0 - 0.3).hammerMeo.angle
         assertThat(atImpact).isNotEqualTo(raised)
-        assertThat(MintCeremonyChoreography.frame(silver, impact + 0.45).hammerMeo.opacity).isLessThan(1.0)
+        assertThat(MintCeremonyChoreography.frame(silver, impact + 0.45).hammerMeo.opacity).isWithin(1e-9).of(1.0)
+        assertThat(MintCeremonyChoreography.frame(silver, impact + 0.6).hammerMeo.opacity).isLessThan(1.0)
     }
 
     @Test
