@@ -38,4 +38,18 @@ class RefusalScreensTest {
         compose.onNodeWithText("Got it").performClick()
         org.junit.Assert.assertEquals(1, acknowledged)
     }
+
+    @Test
+    fun `l ecran d age porte le corps du refus`() {
+        compose.setContent { MeeshyTheme { AgeRefusalScreen(onAcknowledge = {}) } }
+
+        compose.onNodeWithText("This account can't use Meeshy yet. You can join us when you turn 13.").assertExists()
+    }
+
+    @Test
+    fun `l icone du refus suit la police et plafonne a 110 dp`() {
+        org.junit.Assert.assertEquals(72f, refusalIconSize(1f).value, 0.01f)
+        org.junit.Assert.assertEquals(90f, refusalIconSize(1.25f).value, 0.01f)
+        org.junit.Assert.assertEquals(110f, refusalIconSize(2f).value, 0.01f)
+    }
 }
