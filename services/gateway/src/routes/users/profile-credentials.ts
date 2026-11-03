@@ -121,7 +121,7 @@ export async function updateUserPassword(fastify: FastifyInstance) {
         const isPasswordValid = await verifyPassword(body.currentPassword ?? '', user.password);
 
         if (!isPasswordValid) {
-          return sendBadRequest(reply, 'Current password is incorrect');
+          return sendBadRequest(reply, 'Current password is incorrect', { code: 'CURRENT_PASSWORD_INCORRECT' });
         }
       }
 
@@ -132,7 +132,7 @@ export async function updateUserPassword(fastify: FastifyInstance) {
       // oppose.
       const strength = validatePasswordStrength(body.newPassword);
       if (!strength.isValid) {
-        return sendBadRequest(reply, `Password requirements: ${strength.errors.join(', ')}`);
+        return sendBadRequest(reply, `Password requirements: ${strength.errors.join(', ')}`, { code: 'PASSWORD_TOO_WEAK' });
       }
 
       const hashedPassword = await hashPassword(body.newPassword);
@@ -187,7 +187,7 @@ export async function updateUserPassword(fastify: FastifyInstance) {
 
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        return sendBadRequest(reply, error.issues[0]?.message || 'Invalid data');
+        return sendBadRequest(reply, error.issues[0]?.message || 'Invalid data', { code: 'VALIDATION_ERROR' });
       }
 
       logError(fastify.log, 'Update password error:', error);
