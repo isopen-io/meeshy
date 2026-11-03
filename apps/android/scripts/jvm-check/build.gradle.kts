@@ -25,13 +25,14 @@ val androidBoundCryptoTest = "**/core/crypto/primitives/StreamingSealTest.kt"
 
 sourceSets {
     main {
-        kotlin.srcDirs(module.resolve("src/main/kotlin"))
+        kotlin.srcDirs(module.resolve("src/main/kotlin"), crypto.resolve("src/main/kotlin"), e2ee.resolve("src/main/kotlin"))
         kotlin.exclude(androidBoundCrypto)
         kotlin.srcDir(tasks.named("generateCallFrameCatalogue").flatMap { it.property("outputDir") as org.gradle.api.file.DirectoryProperty })
     }
     test {
-        kotlin.srcDirs(module.resolve("src/test/kotlin"))
+        kotlin.srcDirs(module.resolve("src/test/kotlin"), crypto.resolve("src/test/kotlin"), e2ee.resolve("src/test/kotlin"))
         kotlin.exclude(androidBoundCryptoTest)
+        resources.srcDir(crypto.resolve("src/test/resources"))
         resources.srcDir(module.resolve("src/test/resources"))
     }
 }
@@ -40,6 +41,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("com.google.crypto.tink:tink:1.15.0")
+    implementation("org.signal:libsignal-client:0.105.4")
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.google.truth:truth:1.4.4")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
