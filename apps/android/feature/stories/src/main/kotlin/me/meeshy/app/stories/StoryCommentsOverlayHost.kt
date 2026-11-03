@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
@@ -31,7 +32,7 @@ internal fun BoxScope.StoryCommentsOverlayHost(
         StoryCaptionOverlay(
             text = slide.text,
             storyId = slide.id,
-            bottomInset = with(LocalDensity.current) { composerHeightPx.toDp() },
+            bottomInset = if (composerPinned && commentThread != null) with(LocalDensity.current) { composerHeightPx.toDp() } else 0.dp,
         )
     }
     Column(Modifier.align(Alignment.BottomStart).fillMaxWidth()) {
