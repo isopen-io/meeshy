@@ -170,4 +170,36 @@ class StoryDraftStoreTest {
         s.clear()
         assertThat(s.isEmpty()).isTrue()
     }
+
+    @Test
+    fun `an id that names no draft never reaches the other drafts`() {
+        val s = store()
+        s.save("a", snap(), emptyMap())
+
+        assertThat(s.delete("..")).isFalse()
+        assertThat(s.delete("")).isFalse()
+        assertThat(s.save("", snap(), emptyMap())).isFalse()
+        assertThat(s.save("../a", snap(), emptyMap())).isFalse()
+        assertThat(s.listDrafts().map { it.id }).containsExactly("a")
+    }
+
+    @Test
+    fun `a media name cannot leave the draft directory`() {
+        val dir = tmp.newFolder()
+        val s = store(dir)
+
+        assertThat(s.save("a", snap(), mapOf("../evil.jpg" to file("e.jpg")))).isFalse()
+        assertThat(File(dir, "StoryDrafts/a/evil.jpg").exists()).isFalse()
+    }
+
+    @Test
+    fun `the stored snapshot and media names are read without copying the media`() {
+        val sessions = tmp.newFolder()
+        val s = StoryDraftDiskStore(tmp.newFolder(), sessions, json) { now++ }
+        s.save("a", snap(mediaIds = listOf("m")), mapOf("m.jpg" to file("m.jpg")))
+
+        assertThat(s.peek("a")).isEqualTo(snap(mediaIds = listOf("m")))
+        assertThat(s.mediaNames("a")).containsExactly("m.jpg")
+        assertThat(sessions.walkTopDown().filter { it.isFile }.toList()).isEmpty()
+    }
 }
