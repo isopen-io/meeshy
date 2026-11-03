@@ -44,6 +44,7 @@ import me.meeshy.sdk.model.ConversationCategoryPicker
 import me.meeshy.sdk.model.conversationoptions.ConversationMoveMenu
 import me.meeshy.sdk.model.conversationoptions.MoveMenuTarget
 import me.meeshy.ui.haptics.MeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
