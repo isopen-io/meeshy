@@ -28,4 +28,33 @@ class DailyGestureLimitTest {
         assertThat(DailyGestureLimit.from("DAILY_REACTION_LIMIT", null)!!.resetTimeLabel()).isNull()
         assertThat(DailyGestureLimit.from("DAILY_REACTION_LIMIT", "pas une date")!!.resetTimeLabel()).isNull()
     }
+
+    @Test
+    fun `l'accuse socket porte le code, resetAt et limit`() {
+        val limit = DailyGestureLimit.fromAck(
+            mapOf("success" to false, "code" to "DAILY_REACTION_LIMIT", "resetAt" to "2026-11-03T22:00:00.000Z", "limit" to 200),
+        )!!
+        assertThat(limit.gesture).isEqualTo(DailyGestureLimit.Gesture.REACTION)
+        assertThat(limit.resetAtEpochMillis).isEqualTo(1_793_743_200_000L)
+        assertThat(limit.limit).isEqualTo(200)
+    }
+
+    @Test
+    fun `l'accuse d'un autre refus ou sans code n'est pas une limite du jour`() {
+        assertThat(DailyGestureLimit.fromAck(mapOf("code" to "FORBIDDEN"))).isNull()
+        assertThat(DailyGestureLimit.fromAck(emptyMap())).isNull()
+    }
+
+    @Test
+    fun `la limite d'une enveloppe REST garde son plafond`() {
+        assertThat(DailyGestureLimit.from("DAILY_COMMENT_LIMIT", "2026-11-03T22:00:00Z", 50)?.limit).isEqualTo(50)
+        assertThat(DailyGestureLimit.from("DAILY_COMMENT_LIMIT", null)?.limit).isNull()
+    }
+
+    @Test
+    fun `parseInstant accepte avec ou sans millisecondes et refuse le reste`() {
+        assertThat(DailyGestureLimit.parseInstant("2026-11-03T22:00:00Z")).isEqualTo(DailyGestureLimit.parseInstant("2026-11-03T22:00:00.000Z"))
+        assertThat(DailyGestureLimit.parseInstant("")).isNull()
+        assertThat(DailyGestureLimit.parseInstant("demain")).isNull()
+    }
 }

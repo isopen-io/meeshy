@@ -7,7 +7,7 @@ import java.time.format.FormatStyle
 import java.util.Locale
 
 /** Le refus `DAILY_COMMENT_LIMIT` / `DAILY_REACTION_LIMIT` de la passerelle : miroir de `DailyGestureLimit` (iOS). */
-data class DailyGestureLimit(val gesture: Gesture, val resetAtEpochMillis: Long?) {
+data class DailyGestureLimit(val gesture: Gesture, val resetAtEpochMillis: Long?, val limit: Int? = null) {
 
     enum class Gesture { COMMENT, REACTION }
 
@@ -21,15 +21,27 @@ data class DailyGestureLimit(val gesture: Gesture, val resetAtEpochMillis: Long?
         const val COMMENT_CODE = "DAILY_COMMENT_LIMIT"
         const val REACTION_CODE = "DAILY_REACTION_LIMIT"
 
+        fun isDailyLimitCode(code: String?): Boolean = code == COMMENT_CODE || code == REACTION_CODE
+
+        /** `2026-10-07T22:00:00.000Z` (avec ou sans millisecondes) ; illisible ou vide = `null`. */
+        fun parseInstant(iso: String?): Long? =
+            iso?.takeIf { it.isNotBlank() }?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+
+        /**
+         * Le refus porté par l'accusé d'un événement socket (`{ success:false, code, resetAt, limit }`), `null` pour tout
+         * autre accusé. [limit] peut arriver en entier ou en décimal.
+         */
+        fun fromAck(response: Map<String, Any?>): DailyGestureLimit? =
+            from(response["code"] as? String, response["resetAt"] as? String, (response["limit"] as? Number)?.toInt())
+
         /** `null` quand [code] n'est pas une limite du jour ; [resetAtIso] illisible = limite sans heure. */
-        fun from(code: String?, resetAtIso: String?): DailyGestureLimit? {
+        fun from(code: String?, resetAtIso: String?, limit: Int? = null): DailyGestureLimit? {
             val gesture = when (code) {
                 COMMENT_CODE -> Gesture.COMMENT
                 REACTION_CODE -> Gesture.REACTION
                 else -> return null
             }
-            val resetAt = resetAtIso?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
-            return DailyGestureLimit(gesture, resetAt)
+            return DailyGestureLimit(gesture, parseInstant(resetAtIso), limit)
         }
     }
 }
