@@ -6,6 +6,7 @@ import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
@@ -27,7 +28,8 @@ import javax.inject.Inject
 
 /**
  * Les jetons d'une fermeture en attente, gardés dans le coffre chiffré et JAMAIS dans les données du travail
- * WorkManager (base non chiffrée). Retirés dès que la reprise réussit ou abandonne.
+ * WorkManager (base non chiffrée). Retirés dès que la reprise réussit ou abandonne ; une entrée dont le travail a
+ * disparu (processus tué, travail annulé) est reprise au démarrage par [WorkManagerServerLogoutScheduler.resumeOrphans].
  */
 class PendingServerLogoutTokens @Inject constructor(@SecretVault private val vault: SecureStore) {
     fun put(id: String, jwt: String?, sessionToken: String?) {
@@ -39,14 +41,22 @@ class PendingServerLogoutTokens @Inject constructor(@SecretVault private val vau
 
     fun sessionToken(id: String): String? = vault.get(key(id, SESSION))
 
+    /** Les identifiants dont le coffre garde encore un jeton : la vérité de ce qui n'a pas été fermé côté serveur. */
+    fun ids(): Set<String> = vault.keys(null)
+        .filter { it.startsWith(PREFIX) }
+        .map { it.removePrefix(PREFIX).substringBeforeLast('.') }
+        .filter { it.isNotEmpty() }
+        .toSet()
+
     fun remove(id: String) {
         vault.remove(key(id, JWT))
         vault.remove(key(id, SESSION))
     }
 
-    private fun key(id: String, part: String) = "server_logout.$id.$part"
+    private fun key(id: String, part: String) = "$PREFIX$id.$part"
 
     private companion object {
+        const val PREFIX = "server_logout."
         const val JWT = "jwt"
         const val SESSION = "session_token"
     }
@@ -84,6 +94,9 @@ class ServerLogoutWorker @AssistedInject constructor(
     companion object {
         const val KEY_ID = "id"
 
+        /** Un travail par fermeture en attente : nom unique, donc une reprise au démarrage ne le double jamais. */
+        fun uniqueName(id: String): String = "server-logout.$id"
+
         fun buildRequest(id: String): OneTimeWorkRequest =
             OneTimeWorkRequestBuilder<ServerLogoutWorker>()
                 .setInputData(Data.Builder().putString(KEY_ID, id).build())
@@ -102,7 +115,16 @@ class WorkManagerServerLogoutScheduler @Inject constructor(
     override fun schedule(jwt: String?, sessionToken: String?) {
         val id = UUID.randomUUID().toString()
         pending.put(id, jwt, sessionToken)
-        workManager.enqueue(ServerLogoutWorker.buildRequest(id))
+        enqueue(id)
+    }
+
+    /** Au démarrage : toute entrée du coffre sans travail vivant reprend, bornée par `MAX_WORK_RUNS` puis effacée. */
+    fun resumeOrphans() {
+        pending.ids().forEach(::enqueue)
+    }
+
+    private fun enqueue(id: String) {
+        workManager.enqueueUniqueWork(ServerLogoutWorker.uniqueName(id), ExistingWorkPolicy.KEEP, ServerLogoutWorker.buildRequest(id))
     }
 }
 
