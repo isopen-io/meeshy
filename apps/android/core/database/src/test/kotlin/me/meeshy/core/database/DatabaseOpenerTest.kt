@@ -3,7 +3,9 @@ package me.meeshy.core.database
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
+import android.database.sqlite.SQLiteDiskIOException
 import android.database.sqlite.SQLiteFullException
+import android.database.sqlite.SQLiteOutOfMemoryException
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import java.io.File
@@ -26,6 +28,7 @@ class DatabaseOpenerTest {
         health: StorageHealth,
         build: (Context, DatabaseLocation) -> MeeshyDatabase = ::realBuild,
         leftovers: DatabaseLeftovers? = null,
+        readable: (File) -> Boolean = DatabaseRecovery::isReadable,
     ) = DatabaseOpener(
         context = context,
         diagnostics = diagnostics,
@@ -34,6 +37,7 @@ class DatabaseOpenerTest {
         clock = { 42L },
         secondaryFile = secondary(name),
         leftovers = leftovers,
+        readable = readable,
         build = build,
     )
 
@@ -231,5 +235,24 @@ class DatabaseOpenerTest {
         leftovers.purge()
 
         assertThat(secondary.exists()).isFalse()
+    }
+
+    @Test
+    fun `une sonde qui manque de memoire, de disque ou d'E-S ne met jamais la base en quarantaine`() {
+        listOf<() -> Throwable>(
+            { SQLiteOutOfMemoryException("out of memory") },
+            { SQLiteFullException("database or disk is full") },
+            { SQLiteDiskIOException("disk I/O error") },
+            { SQLiteException("unknown error (code 1 SQLITE_ERROR)") },
+        ).forEachIndexed { index, failure ->
+            val name = "probe-transient-$index.db"
+            val file = existing(name)
+            val probe = { candidate: File -> DatabaseRecovery.isReadable(candidate) { throw failure() } }
+
+            opener(name, DatabaseInitDiagnostics(), StorageHealth(), readable = probe).open().close()
+
+            assertThat(file.exists()).isTrue()
+            assertThat(corruptedCopies(file)).isEmpty()
+        }
     }
 }

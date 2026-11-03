@@ -38,11 +38,12 @@ public class DatabaseOpener(
     private val clock: () -> Long = System::currentTimeMillis,
     private val secondaryFile: File = File(context.cacheDir, SECONDARY_NAME),
     private val leftovers: DatabaseLeftovers? = null,
+    private val readable: (File) -> Boolean = DatabaseRecovery::isReadable,
     private val build: (Context, DatabaseLocation) -> MeeshyDatabase,
 ) {
     public fun open(): MeeshyDatabase {
         val primaryFile = context.getDatabasePath(primaryName)
-        if (!DatabaseRecovery.isReadable(primaryFile)) {
+        if (!readable(primaryFile)) {
             diagnostics.record(DatabaseInitStage.FIRST_FAILURE, "unreadable:${primaryFile.name}")
             return recreate(primaryFile)
         }
