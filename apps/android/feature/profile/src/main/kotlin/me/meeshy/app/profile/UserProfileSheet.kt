@@ -187,6 +187,7 @@ private fun ProfileActionsViewModel.callbacks(
     onBlock = this::block,
     onUnblock = this::unblock,
     onRaise = this::requestRaise,
+    onLower = this::lowerCircle,
     onReport = { if (state.profile != null) onReportChoice() },
     onCall = { isVideo ->
         call(isVideo, state.profile?.let { it.displayName ?: it.username } ?: state.user.resolvedDisplayName)
@@ -315,6 +316,7 @@ private fun ProfileActionFeedback.toToastRequest(): FeedbackToastRequest = Feedb
         ProfileActionFeedback.CallNotPlaced -> R.string.profile_call_not_placed
         ProfileActionFeedback.RaiseSent -> me.meeshy.ui.R.string.connection_toast_request_sent
         ProfileActionFeedback.RaiseFailed -> me.meeshy.ui.R.string.connection_toast_request_send_failed
+        ProfileActionFeedback.LowerFailed -> me.meeshy.ui.R.string.circles_notice_lower_failed
         ProfileActionFeedback.ReportSent -> R.string.profile_toast_report_sent
         ProfileActionFeedback.ReportFailed -> R.string.profile_toast_report_failed
     },

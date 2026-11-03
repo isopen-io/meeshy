@@ -72,7 +72,7 @@ class AudioFocusCoordinatorTest {
     }
 
     @Test
-    fun `perte definitive : pause sans reprise automatique`() = runTest {
+    fun `perte definitive, pause sans reprise automatique`() = runTest {
         val rig = Rig(this)
         rig.coordinator.requestPlayback(ContentPlaybackAudibility.Audible)
 

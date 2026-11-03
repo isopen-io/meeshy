@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.model.FeedMedia
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.game.GameMomentPresence
@@ -410,6 +411,14 @@ class StoryViewerViewModel @Inject constructor(
         if (isHoldPaused) resume() else pauseByHold()
     }
 
+    /** Vrai tant qu'un appui long a figé la story (iOS `isLongPressPaused`). */
+    val isHeldPaused: Boolean get() = isHoldPaused
+
+    /** Le toucher de reprise : relance une story figée par un appui long, sans naviguer. */
+    fun resumeFromTouch() {
+        if (isHoldPaused) resume()
+    }
+
     private fun resume() {
         isHoldPaused = false
         _state.update { it.copy(isPaused = false) }
@@ -724,7 +733,7 @@ class StoryViewerViewModel @Inject constructor(
 
         val user = sessionRepository.currentUser.value ?: return present
         val presentLower = presentCodes.mapTo(mutableSetOf()) { it.lowercase() }
-        val translatable = LanguageResolver.preferredContentLanguages(user)
+        val translatable = ReaderPrism.resolve(user)
             .distinctBy { it.lowercase() }
             .filter { it.lowercase() !in presentLower }
             .map { languageOption(it, storyId, isTranslatable = true) }

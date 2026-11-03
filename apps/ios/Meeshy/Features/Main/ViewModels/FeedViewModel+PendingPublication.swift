@@ -4,34 +4,17 @@ import MeeshySDK
 // MARK: - Publications encore dans la file (#10321)
 extension FeedViewModel {
 
-    /// **« Supprimer » sur une carte encore en file d'envoi** (#10321).
-    ///
-    /// La carte optimiste porte le cmid de sa ligne `.createPost` : il n'existe
-    /// rien côté serveur à supprimer, un `DELETE` y échouait et la ligne
-    /// partait quand même au retour du réseau. Le geste retire donc la ligne de
-    /// la file, localement, sans appeler le serveur. Une ligne déjà EN VOL est
-    /// marquée : l'envoi s'arrête au prochain point de contrôle, et si la
-    /// requête était déjà partie, le serveur fait foi — la publication
-    /// apparaîtra en ligne au rechargement, sans carte fantôme ici.
+    /// **« Annuler l'envoi » sur une carte encore en file** (#10321) — la carte
+    /// part tout de suite, l'action est celle de la pastille et du détail
+    /// (`PendingPublicationCancel`). Si rien n'a pu être arrêté (déjà partie,
+    /// base en échec), la carte revient à sa place ; le serveur fait foi.
     func withdrawPendingPublication(_ cmid: String) async {
         let removedIndex = posts.firstIndex(where: { $0.id == cmid })
         let removedPost = removedIndex.map { posts[$0] }
         removeOptimisticPost(id: cmid)
-        // Remet CETTE carte à sa place — le fil chargé pendant l'attente reste (`OptimisticRollback`).
-        let putBack = { [weak self] in
-            guard let self, let removedPost, let removedIndex else { return }
-            self.posts = OptimisticRollback.restoring(removedPost, at: removedIndex, into: self.posts)
-        }
-        switch await offlineQueue.cancelPendingPublication(clientMutationId: cmid) {
-        case .removed, .cancelRequested:
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.pending.withdrawn", defaultValue: "Envoi annulé", bundle: .main))
-        case .notFound:
-            putBack()
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.pending.alreadySent", defaultValue: "Cette publication vient de partir. Supprimez-la une fois en ligne.", bundle: .main))
-        case .failed:
-            putBack()
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main))
-        }
+        guard !(await PendingPublicationCancel.run(cmid, queue: offlineQueue, feedCache: feedCache)),
+              let removedPost, let removedIndex else { return }
+        posts = OptimisticRollback.restoring(removedPost, at: removedIndex, into: posts)
     }
 
     /// Returns the last POST/REEL that got stuck offline (unsent for more than

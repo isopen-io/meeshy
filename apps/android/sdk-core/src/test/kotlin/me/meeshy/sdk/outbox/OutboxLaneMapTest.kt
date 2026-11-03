@@ -82,6 +82,8 @@ class OutboxLaneMapTest {
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS))
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_AUDIO_SETTINGS))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS))
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_APPLICATION_SETTINGS))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS))
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.PUBLISH_STORY))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.STORY))
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPLOAD_MEDIA))
