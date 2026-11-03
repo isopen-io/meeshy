@@ -109,8 +109,10 @@ class RouteManifestRatchetTest {
          * porte `RelationsApi.lower`.
          * 151 : moins les dix-neuf routes `/voice/…` et les deux de `/me/consents` (#15085 : le profil vocal, le consentement
          * au clonage et la traduction vocale suivie par job), que portent `VoiceApi` et `ConsentsApi`.
+         * 150 : moins `PATCH /guest-sessions/me`, la sonde de session d'invité que porte `GuestSessionApi.me` (elle partait en GET,
+         * verbe que la passerelle ne sert pas).
          */
-        const val TO_PORT_CEILING = 151
+        const val TO_PORT_CEILING = 150
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
