@@ -57,13 +57,18 @@ internal class ReelPlayerPool<T : Any>(
 @UnstableApi
 internal object ReelPlayers {
 
-    @Volatile
     private var pool: ReelPlayerPool<ExoPlayer>? = null
+    private var owner: Context? = null
 
+    /** Le pool est lié à l'application qui l'a créé : une autre application (tests) en obtient un neuf. */
+    @Synchronized
     fun get(context: Context): ReelPlayerPool<ExoPlayer> {
-        pool?.let { return it }
-        return synchronized(this) {
-            pool ?: build(context.applicationContext).also { pool = it }
+        val app = context.applicationContext
+        pool?.takeIf { owner === app }?.let { return it }
+        pool?.trim()
+        return build(app).also {
+            pool = it
+            owner = app
         }
     }
 
@@ -79,7 +84,7 @@ internal object ReelPlayers {
                 player.playWhenReady = false
                 player.volume = 1f
             },
-            destroy = { player -> player.release() },
+            destroy = { player -> runCatching { player.release() } },
         )
         app.registerComponentCallbacks(
             object : ComponentCallbacks2 {
