@@ -2,6 +2,8 @@ package me.meeshy.app.chat
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,6 +53,8 @@ import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.MemberRoleAction
 import me.meeshy.sdk.model.PaginatedParticipant
+import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.sdk.model.profile.from
 import me.meeshy.sdk.model.displayLabel
 import me.meeshy.sdk.model.role
 import me.meeshy.ui.component.MeeshyAvatar
@@ -102,6 +106,7 @@ internal fun ConversationMembersContent(
     // Taper une ligne n'ouvrait RIEN avant #3943 : la fiche d'un participant
     // n'existait pas sur Android, alors que iOS et web la rendent depuis #3877.
     var openProfileFor by remember { mutableStateOf<PaginatedParticipant?>(null) }
+    val profileTap = rememberProfileTap(conversationId, accentColor)
 
     LaunchedEffect(conversationId) { viewModel.load(conversationId) }
     LaunchedEffect(state.actionFailed) {
@@ -206,7 +211,10 @@ internal fun ConversationMembersContent(
                             onRoleAction = { action -> viewModel.changeRole(member, action) },
                             onRemove = { pendingRemoval = member },
                             onBan = { pendingBan = member },
-                            onOpenProfile = { openProfileFor = member },
+                            onOpenProfile = {
+                                if (state.isSelf(member)) openProfileFor = member else profileTap(ProfileSheetUser.from(member))
+                            },
+                            onOpenParticipation = { openProfileFor = member },
                         )
                     }
                     if (state.isLoadingMore) {
@@ -291,6 +299,7 @@ internal fun ConversationMembersContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun MemberRow(
     member: PaginatedParticipant,
@@ -304,15 +313,22 @@ internal fun MemberRow(
     onRemove: () -> Unit,
     onBan: () -> Unit,
     onOpenProfile: () -> Unit,
+    onOpenParticipation: () -> Unit = onOpenProfile,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val name = member.displayLabel
 
     val openProfileLabel = stringResource(R.string.participant_profile_open_a11y, name)
+    val participationLabel = stringResource(R.string.conversation_members_open_participation_a11y, name)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClickLabel = openProfileLabel, onClick = onOpenProfile)
+            .combinedClickable(
+                onClickLabel = openProfileLabel,
+                onLongClickLabel = participationLabel,
+                onLongClick = onOpenParticipation,
+                onClick = onOpenProfile,
+            )
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),

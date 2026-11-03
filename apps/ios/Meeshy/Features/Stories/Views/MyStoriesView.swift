@@ -134,7 +134,13 @@ struct MyStoriesView: View {
     }
 
     private var hasQueueWork: Bool {
-        !viewModel.activeUploads.isEmpty || !publishService.failedItems.isEmpty
+        !viewModel.activeUploads.isEmpty || !publishService.failedItems.isEmpty || !waitingStories.isEmpty
+    }
+
+    /// Les stories en attente d'envoi que l'UI ne téléverse pas déjà (#10331).
+    private var waitingStories: [StoryPublishQueueItem] {
+        let suivies = Set(viewModel.activeUploads.compactMap(\.queueId))
+        return publishService.waitingItems.filter { !suivies.contains($0.id) }
     }
 
     private var visibleTabs: [MyStoriesTab] {
@@ -162,7 +168,7 @@ struct MyStoriesView: View {
                 }
             }
             .task {
-                draftsViewModel.reload()
+                await reloadLocalQueues()
                 // Archive complète (stories en cours ET passées) : les stories
                 // ne sont plus jamais détruites — cette page liste l'historique
                 // au-delà de la fenêtre de 7 j que la page du tray borne.
@@ -396,7 +402,7 @@ struct MyStoriesView: View {
             tab: .queue,
             hasPublishedStories: !activeStories.isEmpty,
             hasDrafts: !draftsViewModel.drafts.isEmpty,
-            hasActiveUpload: !viewModel.activeUploads.isEmpty,
+            hasActiveUpload: !viewModel.activeUploads.isEmpty || !waitingStories.isEmpty,
             hasFailedItems: !publishService.failedItems.isEmpty,
             hasArchivedStories: !archivedStories.isEmpty
         ) {
@@ -425,6 +431,10 @@ struct MyStoriesView: View {
                         onCancel: { viewModel.cancelUpload(id: upload.id) }
                     )
                     .padding(.horizontal, MeeshySpacing.lg)
+                }
+                ForEach(waitingStories) { item in
+                    WaitingStoryRow(item: item, onCancel: { cancelWaitingStory(item) })
+                        .padding(.horizontal, MeeshySpacing.lg)
                 }
                 if !publishService.failedItems.isEmpty {
                     // Les échecs vivent ici : un onglet « Publiées » ne peut
@@ -816,6 +826,15 @@ struct MyStoriesView: View {
             }
             isResumingFailedItem = false
         }
+    }
+
+    private func reloadLocalQueues() async {
+        draftsViewModel.reload()
+        await publishService.refresh()
+    }
+
+    private func cancelWaitingStory(_ item: StoryPublishQueueItem) {
+        Task { await StoryWaitingCancellation.run(item, on: viewModel) { await publishService.cancelPending($0) } }
     }
 
     private func retryFailedItem(_ item: StoryPublishQueueItem) {

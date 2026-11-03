@@ -24,6 +24,8 @@ class StoryComposerPreviewLookTest {
 
     private fun photo(id: String) = UploadedMedia(id, "2026/11/$id/photo.jpg", "image/jpeg", 10L, 1080, 1920, null, null)
 
+    private fun clip(id: String) = UploadedMedia(id, "2026/11/$id/clip.mp4", "video/mp4", 10L, 720, 1280, 6_000L, "2026/11/$id/poster.jpg")
+
     private fun slide(id: String, background: String, placed: List<String>, looks: Map<String, StoryMediaLook>) = StorySlide(
         id = id,
         mediaIds = listOf(background) + placed,
@@ -32,9 +34,9 @@ class StoryComposerPreviewLookTest {
         mediaLooks = looks,
     )
 
-    private fun state(vararg slides: StorySlide) = StoryComposerUiState(
+    private fun state(vararg slides: StorySlide, videos: Set<String> = emptySet()) = StoryComposerUiState(
         deck = StorySlideDeck(slides.toList(), slides.first().id),
-        attachments = slides.flatMap { it.mediaIds }.distinct().map(::photo),
+        attachments = slides.flatMap { it.mediaIds }.distinct().map { if (it in videos) clip(it) else photo(it) },
     )
 
     private fun StoryComposerUiState.scenes() =
@@ -75,5 +77,26 @@ class StoryComposerPreviewLookTest {
         val item = StoryComposerPreview.items(state(slide("a", "bg", emptyList(), mapOf("bg" to warm))), "fr", null).single()
 
         assertThat(StorySlideProjector(base).project(item, "#6366F1", NoContentPreferences).composerLooks).isNull()
+    }
+
+    @Test
+    fun `a set video plays its filter and frame in the preview, at the size the server serves`() {
+        val framedWarm = StoryMediaLook(filterPreset = "warm", frameId = "classic:polaroid")
+        val view = state(slide("a", "bg", listOf("p"), mapOf("bg" to framedWarm, "p" to warm)), videos = setOf("bg", "p")).scenes().single().second
+
+        val background = view.backgroundVideoUrl!!
+        val placed = view.foregroundMedia.single().url
+        assertThat(view.composerLooks?.videoLookOf(background)).isEqualTo(framedWarm)
+        assertThat(view.composerLooks?.sizeOf(background)).isEqualTo(720 to 1280)
+        assertThat(view.composerLooks?.videoLookOf(placed)).isEqualTo(warm)
+        assertThat(view.composerLooks?.sizeOf(placed)).isEqualTo(720 to 1280)
+    }
+
+    @Test
+    fun `a video paints no face effect, in the preview as in the publication`() {
+        val toad = StoryMediaLook(filterPreset = "warm", faceEffect = "toad")
+        val view = state(slide("a", "bg", emptyList(), mapOf("bg" to toad)), videos = setOf("bg")).scenes().single().second
+
+        assertThat(view.composerLooks?.videoLookOf(view.backgroundVideoUrl)).isEqualTo(toad.copy(faceEffect = null))
     }
 }

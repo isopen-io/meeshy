@@ -25,6 +25,12 @@ public interface SignedInIdentityStore {
     /** Garde [user] ; ne bloque jamais, et une écriture qui échoue ne garde rien. */
     public fun remember(user: MeeshyUser)
 
+    /**
+     * Oublie l'identité gardée pour [userId] — le compte qui QUITTE l'appareil — sans toucher à celle d'un autre compte
+     * (un compte dormant garde la sienne). Une écriture encore en file pour ce compte ne la rétablit pas.
+     */
+    public suspend fun forget(userId: String): Unit = Unit
+
     public companion object {
         /** Aucune mémoire : rien n'est gardé ni rendu (tests, aperçus). */
         public val NONE: SignedInIdentityStore = object : SignedInIdentityStore {

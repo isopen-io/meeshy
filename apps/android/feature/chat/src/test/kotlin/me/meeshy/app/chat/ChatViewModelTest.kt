@@ -283,6 +283,7 @@ class ChatViewModelTest {
                 handle,
                 ownReactionWithdrawals = OwnReactionWithdrawals(),
                 outOfThreadSendGate = OutOfThreadSendGate { OutOfThreadAdmission.SEND },
+                openConversations = io.mockk.mockk(relaxed = true),
                 mentionContacts = mentionContacts,
             ),
             repo,

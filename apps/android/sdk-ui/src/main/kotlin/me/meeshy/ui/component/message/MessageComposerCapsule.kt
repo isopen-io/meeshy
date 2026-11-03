@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.composer.ComposerFocusBorderPolicy
 import me.meeshy.sdk.model.composer.ComposerPlaceholderFit
 import me.meeshy.sdk.model.composer.ComposerLineBounds
-import me.meeshy.sdk.model.composer.ComposerToolbarLaw
+import me.meeshy.sdk.model.composer.ComposerReturnKey
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.theme.MeeshyGradients
 import me.meeshy.ui.theme.MeeshyMotion
@@ -73,6 +73,7 @@ public fun MessageComposerCapsule(
     trailing: (@Composable () -> Unit)? = null,
     focusRequester: FocusRequester = remember { FocusRequester() },
     onFocusChange: (Boolean) -> Unit = {},
+    fieldModifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
     val reduceMotion = LocalReduceMotion.current
@@ -86,7 +87,7 @@ public fun MessageComposerCapsule(
         label = "composer-field-scale",
     )
     val leadingVisible = leading != null && !(hidesLeadingOnFocus && focused)
-    val returnSends = ComposerToolbarLaw.returnSends(value.text)
+    val returnSends = ComposerReturnKey.imeSends(value.text)
     Row(
         modifier = modifier
             .graphicsLayer {
@@ -116,6 +117,7 @@ public fun MessageComposerCapsule(
             onValueChange = onValueChange,
             modifier = Modifier
                 .weight(1f)
+                .then(fieldModifier)
                 .focusRequester(focusRequester)
                 .onFocusChanged {
                     focused = it.isFocused

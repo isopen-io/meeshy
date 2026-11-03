@@ -64,6 +64,10 @@ final class StoryPublishService: ObservableObject {
     /// as `pendingCount` (see `refreshQueueState`).
     @Published private(set) var failedItems: [StoryPublishQueueItem] = []
 
+    /// Les stories EN ATTENTE d'envoi (#10331) — dans la file, ni en échec ni
+    /// revendiquées par un téléversement : celles que l'auteur peut annuler.
+    @Published private(set) var waitingItems: [StoryPublishQueueItem] = []
+
     /// Executor that actually runs queued uploads. Set by the view that owns
     /// the StoryViewModel (typically RootView via .onAppear). Held weakly so
     /// a logout / view-rebuild does not trap stale references.
@@ -218,6 +222,18 @@ final class StoryPublishService: ObservableObject {
         await refreshQueueState()
     }
 
+    /// **Annule une story en attente d'envoi** (#10331) : rien ne part au
+    /// retour du réseau. Un item en vol reste à son téléversement.
+    func cancelPending(_ item: StoryPublishQueueItem) async -> StoryPendingCancellation {
+        let verdict = await StoryPublishQueue.shared.cancelPendingItem(item.id)
+        await refreshQueueState()
+        return verdict
+    }
+
+    func refresh() async {
+        await refreshQueueState()
+    }
+
     /// Moves a permanently-failed item back into the active retry queue and
     /// kicks off an immediate drain attempt. Called from `MyStoriesView`'s
     /// failed-items history row.
@@ -309,6 +325,7 @@ final class StoryPublishService: ObservableObject {
     private func refreshQueueState() async {
         pendingCount = await StoryPublishQueue.shared.count
         failedItems = await StoryPublishQueue.shared.failedPendingItems
+        waitingItems = await StoryPublishQueue.shared.waitingItems
     }
 }
 
@@ -323,3 +340,23 @@ final class StoryPublishService: ObservableObject {
 #if canImport(UIKit)
 import UIKit
 #endif
+
+/// **« Annuler l'envoi » d'une story en attente** (#10331). Retirée de la file,
+/// elle ne partira pas au retour du réseau : ses lignes optimistes quittent le
+/// tray et son brouillon redevient éditable (sans erreur — rien n'a échoué,
+/// l'auteur a changé d'avis), comme `StoryViewModel.cancelUpload`.
+@MainActor
+enum StoryWaitingCancellation {
+    static func run(
+        _ item: StoryPublishQueueItem,
+        on viewModel: StoryViewModel,
+        cancel: (StoryPublishQueueItem) async -> StoryPendingCancellation
+    ) async {
+        let verdict = await cancel(item)
+        if verdict == .removed {
+            viewModel.removeOptimisticStories(tempStoryId: item.tempStoryId)
+            if let draftId = item.draftId { viewModel.draftStore.clearPendingPublish(draftId: draftId) }
+        }
+        PendingSendNotice.announce(verdict)
+    }
+}

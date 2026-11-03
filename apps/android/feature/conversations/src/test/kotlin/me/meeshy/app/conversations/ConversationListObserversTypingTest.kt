@@ -41,6 +41,8 @@ class ConversationListObserversTypingTest {
                 every { typingStarted } returns started
                 every { typingStopped } returns MutableSharedFlow()
                 every { messageReceived } returns received
+                every { messageEdited } returns MutableSharedFlow()
+                every { messageDeleted } returns MutableSharedFlow()
             },
             categoryRepository = mockk(relaxed = true),
             categorySocketManager = mockk(relaxed = true),

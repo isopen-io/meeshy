@@ -76,9 +76,6 @@ internal fun StoryViewerTopBar(
                     .weight(1f)
                     .padding(start = MeeshySpacing.xs),
             )
-            if (slide != null && slide.hasSound) {
-                StoryMuteButton(isMuted = state.isMuted, onToggle = viewModel::toggleMute)
-            }
             if (slide?.isTranslated == true) {
                 TranslatedBadge()
             }
