@@ -3,6 +3,7 @@ package me.meeshy.sdk.outbox
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.media.MediaLoss
+import me.meeshy.sdk.net.withMutationId
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
 
@@ -19,8 +20,14 @@ public sealed interface SendResult {
      */
     public data class SuccessWithId(val producedId: String) : SendResult
 
-    /** A retryable failure — network down, 5xx, timeout. */
+    /** A retryable failure the server answered — 408, 429, 503, 5xx, 409. Costs an attempt of the budget, then backs off. */
     public data object TransientFailure : SendResult
+
+    /**
+     * The transport itself failed (connection, DNS, timeout, roaming): the server never judged the request. Costs NO attempt —
+     * a network outage of a few minutes must not exhaust any row — and the row backs off on its own.
+     */
+    public data object TransportFailure : SendResult
 
     /**
      * A non-retryable failure — 4xx (other than 404), validation.
@@ -217,10 +224,16 @@ public class OutboxDrainer(
                     delivered++
                 }
                 SendResult.TransientFailure -> {
-                    if (outbox.markFailed(row.cmid, "Transient delivery failure") == OutboxState.EXHAUSTED) {
+                    val attempts = (outbox.row(row.cmid)?.attempts ?: row.attempts) + 1
+                    val backoff = OutboxBackoff.delayMs(attempts)
+                    if (outbox.markFailed(row.cmid, "Transient delivery failure", backoff) == OutboxState.EXHAUSTED) {
                         onExhausted(settled(row, "Transient delivery failure"))
                         exhausted++
                     }
+                    return DrainReport(delivered, exhausted, stoppedOnTransientFailure = true)
+                }
+                SendResult.TransportFailure -> {
+                    outbox.markTransportFailed(row.cmid, "Transport failure", OutboxBackoff.transportDelayMs())
                     return DrainReport(delivered, exhausted, stoppedOnTransientFailure = true)
                 }
                 is SendResult.Deferred -> {
@@ -276,7 +289,7 @@ public class OutboxDrainer(
     /** The send, under [ticket]'s account when fenced; `null` once that account closed (the send was cancelled, or its outcome is moot). */
     private suspend fun sendUnder(ticket: AccountTicket?, sender: MutationSender, row: OutboxEntity): SendResult? {
         val send: suspend () -> SendResult = {
-            outbox.sendingLive(row.cmid) { sender.send(row) }
+            outbox.sendingLive(row.cmid) { withMutationId(row.cmid) { sender.send(row) } }
         }
         val fence = fence
         if (fence == null || ticket == null) return send()
@@ -295,6 +308,6 @@ public class OutboxDrainer(
         public const val DEFERRED_RETRY_MS: Long = 15_000L
 
         /** Beyond this, a row that is still deferred gives up (an origin that never arrives). */
-        public const val DEFERRED_MAX_WAIT_MS: Long = 60 * 60 * 1000L
+        public const val DEFERRED_MAX_WAIT_MS: Long = 30 * 60 * 1000L
     }
 }

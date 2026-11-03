@@ -33,8 +33,7 @@ public interface OutboxKindHandler : MutationSender {
 }
 
 /**
- * The delivery contract shared by every handler until the flusher classifies
- * statuses (persist-outbox-flusher-classifie): a failed call is retryable — except a
+ * The delivery contract shared by every handler: a failed call is classified by [SendFailureClassifier] — and refused for good when a
  * gesture the gateway refuses in clear for an end-to-end conversation ([SignalChannelRefusal]),
  * which would be refused identically forever. A handler that knows the row's
  * [conversationId] lets the [ledger] learn it, so no later row leaves in clear.
@@ -44,7 +43,7 @@ internal fun NetworkResult<*>.toSendResult(
     ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ): SendResult = when (this) {
     is NetworkResult.Success -> SendResult.Success
-    is NetworkResult.Failure -> SignalChannelRefusal.of(this, conversationId, ledger) ?: SendResult.TransientFailure
+    is NetworkResult.Failure -> SignalChannelRefusal.of(this, conversationId, ledger) ?: SendFailureClassifier.classify(error)
 }
 
 /**

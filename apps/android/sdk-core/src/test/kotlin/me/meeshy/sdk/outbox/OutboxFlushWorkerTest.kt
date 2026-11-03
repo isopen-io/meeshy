@@ -9,6 +9,7 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -25,14 +26,19 @@ class OutboxFlushWorkerTest {
         }
     }
 
-    private fun workerOver(outbox: OutboxRepository, handlers: Map<OutboxKind, OutboxKindHandler>): OutboxFlushWorker {
+    private fun workerOver(
+        outbox: OutboxRepository,
+        handlers: Map<OutboxKind, OutboxKindHandler>,
+        scheduler: RecordingOutboxScheduler = RecordingOutboxScheduler(),
+        network: InMemoryNetworkMonitor = InMemoryNetworkMonitor(),
+    ): OutboxFlushWorker {
         val registry = MutationSenderRegistry(handlers)
         val factory = object : WorkerFactory() {
             override fun createWorker(
                 appContext: Context,
                 workerClassName: String,
                 workerParameters: WorkerParameters,
-            ): ListenableWorker = OutboxFlushWorker(appContext, workerParameters, outbox, registry)
+            ): ListenableWorker = OutboxFlushWorker(appContext, workerParameters, outbox, registry, network, scheduler)
         }
         return TestListenableWorkerBuilder.from(
             ApplicationProvider.getApplicationContext<Context>(),
@@ -75,18 +81,41 @@ class OutboxFlushWorkerTest {
     }
 
     @Test
-    fun `a transient failure asks WorkManager to retry the pass`() = withOutbox { outbox ->
-        val worker = workerOver(outbox, mapOf(OutboxKind.BLOCK_USER to RecordingHandler(SendResult.TransientFailure)))
+    fun `a transient failure backs the row off and plans the next pass without a global retry`() = withOutbox { outbox ->
+        val scheduler = RecordingOutboxScheduler()
+        val worker = workerOver(outbox, mapOf(OutboxKind.BLOCK_USER to RecordingHandler(SendResult.TransientFailure)), scheduler)
         outbox.enqueue(mutation(OutboxKind.BLOCK_USER, OutboxLanes.BLOCK, "u1", cmid = "b1"))
 
         val result = worker.doWork()
 
-        assertThat(result).isEqualTo(ListenableWorker.Result.retry())
+        assertThat(result).isEqualTo(ListenableWorker.Result.success())
         assertThat(outbox.stateOf("b1")).isEqualTo(OutboxState.PENDING)
+        assertThat(outbox.row("b1")?.nextAttemptAt).isNotNull()
+        assertThat(scheduler.plannedDelays).hasSize(1)
+        assertThat(scheduler.plannedDelays.single()).isAtLeast(OutboxFlushNext.MIN_DELAY_MS)
     }
 
     @Test
-    fun `a row left in flight by a killed process is replayed`() = withOutbox { outbox ->
+    fun `offline the worker dispatches nothing and plans its next pass in 60 seconds`() = withOutbox { outbox ->
+        val block = RecordingHandler()
+        val scheduler = RecordingOutboxScheduler()
+        val worker = workerOver(
+            outbox,
+            mapOf(OutboxKind.BLOCK_USER to block),
+            scheduler,
+            InMemoryNetworkMonitor(initialOnline = false),
+        )
+        outbox.enqueue(mutation(OutboxKind.BLOCK_USER, OutboxLanes.BLOCK, "u1", cmid = "b1"))
+
+        val result = worker.doWork()
+
+        assertThat(result).isEqualTo(ListenableWorker.Result.success())
+        assertThat(block.sent).isEmpty()
+        assertThat(scheduler.plannedDelays).containsExactly(OutboxFlushGate.OFFLINE_RETRY_MS)
+    }
+
+    @Test
+    fun `a row in flight for less than 30 minutes is left alone, it may really be on the wire`() = withOutbox { outbox ->
         val block = RecordingHandler()
         val worker = workerOver(outbox, mapOf(OutboxKind.BLOCK_USER to block))
         outbox.enqueue(mutation(OutboxKind.BLOCK_USER, OutboxLanes.BLOCK, "u1", cmid = "b1"))
@@ -95,7 +124,8 @@ class OutboxFlushWorkerTest {
         val result = worker.doWork()
 
         assertThat(result).isEqualTo(ListenableWorker.Result.success())
-        assertThat(block.sent.map { it.cmid }).containsExactly("b1")
+        assertThat(block.sent).isEmpty()
+        assertThat(outbox.stateOf("b1")).isEqualTo(OutboxState.INFLIGHT)
     }
 
     @Test
