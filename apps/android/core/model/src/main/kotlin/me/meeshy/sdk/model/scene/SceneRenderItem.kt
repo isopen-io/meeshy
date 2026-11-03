@@ -28,7 +28,7 @@ public data class SceneRenderItem(
 
     private fun contentKey(): String? = when (val s = source) {
         is MeeshySceneObject.Text -> displayText
-        is MeeshySceneObject.Media -> s.value.postMediaId
+        is MeeshySceneObject.Media -> with(s.value) { "$postMediaId|$crop|$sourceStart|$sourceEnd|$volume|$loop" }
         is MeeshySceneObject.Sticker -> s.value.emoji
         is MeeshySceneObject.Place, is MeeshySceneObject.Audio -> null
     }
