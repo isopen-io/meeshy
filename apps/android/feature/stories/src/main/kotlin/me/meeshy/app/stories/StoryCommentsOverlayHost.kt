@@ -26,8 +26,19 @@ internal fun BoxScope.StoryCommentsOverlayHost(
     commentThread: PostCommentsViewModel?,
     composerPinned: Boolean,
     onComposerHeight: (Int) -> Unit,
+    comments: StoryCommentsOverlayRequest = StoryCommentsOverlayRequest(),
 ) {
     var composerHeightPx by remember { mutableIntStateOf(0) }
+    // Les commentaires passent SOUS le composeur et la légende, au-dessus de la scène : aucun fond, aucun voile global.
+    comments.storyId?.takeIf { comments.open }?.let { id ->
+        StoryCommentsOverlayLayer(
+            storyId = id,
+            request = comments,
+            composerPinned = composerPinned && commentThread != null,
+            composerHeightPx = composerHeightPx,
+            commentThread = commentThread,
+        )
+    }
     if (slide != null && slide.text.isNotBlank()) {
         StoryCaptionOverlay(
             text = slide.text,
@@ -49,3 +60,14 @@ internal fun BoxScope.StoryCommentsOverlayHost(
         }
     }
 }
+
+/** Ce que le lecteur demande à l'overlay : ouvert ou non, pour quelle story, avec quelle cible de notification. */
+internal class StoryCommentsOverlayRequest(
+    val open: Boolean = false,
+    val storyId: String? = null,
+    val isStoryExpired: Boolean = false,
+    val targetCommentId: String? = null,
+    val targetParentCommentId: String? = null,
+    val topReservedPx: Int = 0,
+    val onListTop: (Float) -> Unit = {},
+)

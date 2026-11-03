@@ -28,6 +28,8 @@ import me.meeshy.sdk.model.StoryCommentPage
 import me.meeshy.sdk.model.StoryCommentStatus
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.PostModerationRepository
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.StoryCommentsRepository
@@ -44,6 +46,8 @@ class StoryCommentsViewModelTest {
     private val repository: StoryCommentsRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
     private val socket: SocialSocketManager = mockk(relaxed = true)
+    private val moderation: PostModerationRepository = mockk()
+    private val reports: ReportRepository = mockk()
     private val added = MutableSharedFlow<SocketCommentAddedData>(extraBufferCapacity = 16)
     private val updated = MutableSharedFlow<SocketCommentUpdatedData>(extraBufferCapacity = 16)
     private val deleted = MutableSharedFlow<SocketCommentDeletedData>(extraBufferCapacity = 16)
@@ -72,7 +76,7 @@ class StoryCommentsViewModelTest {
         every { socket.commentReactionAdded } returns reactionAdded
         every { socket.commentReactionRemoved } returns reactionRemoved
         every { socket.commentTranslationUpdated } returns translated
-        return StoryCommentsViewModel(repository, session, socket)
+        return StoryCommentsViewModel(repository, session, socket, moderation, reports)
     }
 
     private fun StoryCommentsViewModel.ids() = state.value.comments.roots.map { it.id }
@@ -261,5 +265,59 @@ class StoryCommentsViewModelTest {
         vm.edit("r", "neuf")
 
         assertThat(vm.state.value.comments.find("r")!!.content).isEqualTo("neuf")
+    }
+
+    private fun loadedViewModel(): StoryCommentsViewModel {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r"), row("q")))
+        val vm = viewModel()
+        vm.begin("s1")
+        return vm
+    }
+
+    @Test
+    fun `a moderation removal drops the row at once and keeps it gone when the gateway agrees`() = runTest {
+        coEvery { moderation.removeComment("s1", "r", "spam abusif") } returns NetworkResult.Success(Unit)
+        val vm = loadedViewModel()
+
+        vm.remove("r", "  spam abusif ")
+
+        assertThat(vm.ids()).containsExactly("q")
+        coVerify { moderation.removeComment("s1", "r", "spam abusif") }
+    }
+
+    @Test
+    fun `a refused removal brings the row back`() = runTest {
+        coEvery { moderation.removeComment("s1", "r", any()) } returns NetworkResult.Failure(ApiError("non"))
+        val vm = loadedViewModel()
+
+        vm.remove("r", "spam abusif")
+
+        assertThat(vm.ids()).containsExactly("r", "q").inOrder()
+    }
+
+    @Test
+    fun `a reason out of bounds sends nothing`() = runTest {
+        val vm = loadedViewModel()
+
+        vm.remove("r", "ab")
+
+        assertThat(vm.ids()).containsExactly("r", "q").inOrder()
+    }
+
+    @Test
+    fun `reply target is exposed then cleared`() = runTest {
+        val vm = loadedViewModel()
+
+        vm.setReplyTarget(row("r"))
+        assertThat(vm.state.value.replyTarget?.id).isEqualTo("r")
+        vm.clearReplyTarget()
+        assertThat(vm.state.value.replyTarget).isNull()
+    }
+
+    @Test
+    fun `the viewer is read from the session when a story begins`() = runTest {
+        val vm = loadedViewModel()
+
+        assertThat(vm.state.value.viewerId).isEqualTo("me")
     }
 }
