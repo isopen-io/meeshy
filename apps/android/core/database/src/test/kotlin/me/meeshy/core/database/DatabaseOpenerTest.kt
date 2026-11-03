@@ -3,7 +3,9 @@ package me.meeshy.core.database
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
+import android.database.sqlite.SQLiteDiskIOException
 import android.database.sqlite.SQLiteFullException
+import android.database.sqlite.SQLiteOutOfMemoryException
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import java.io.File
@@ -26,6 +28,7 @@ class DatabaseOpenerTest {
         health: StorageHealth,
         build: (Context, DatabaseLocation) -> MeeshyDatabase = ::realBuild,
         leftovers: DatabaseLeftovers? = null,
+        readable: (File) -> Boolean = DatabaseRecovery::isReadable,
     ) = DatabaseOpener(
         context = context,
         diagnostics = diagnostics,
@@ -34,6 +37,7 @@ class DatabaseOpenerTest {
         clock = { 42L },
         secondaryFile = secondary(name),
         leftovers = leftovers,
+        readable = readable,
         build = build,
     )
 
@@ -73,6 +77,20 @@ class DatabaseOpenerTest {
         ).inOrder()
         assertThat(health.current.value).isInstanceOf(StorageState.Degraded::class.java)
         database.close()
+    }
+
+    @Test
+    fun `une nouvelle quarantaine ne garde que les plus recentes`() {
+        val file = context.getDatabasePath("repeated.db").also { it.parentFile?.mkdirs() }
+        listOf("1", "2", "3").forEach { File("${file.path}.corrupted.$it").writeText("old") }
+        file.writeBytes(ByteArray(8192) { (it * 13 + 5).toByte() })
+
+        opener("repeated.db", DatabaseInitDiagnostics(), StorageHealth()).open().close()
+
+        assertThat(corruptedCopies(file).filterNot { it.contains("-") }).containsExactly(
+            "repeated.db.corrupted.42",
+            "repeated.db.corrupted.3",
+        )
     }
 
     @Test
@@ -212,6 +230,31 @@ class DatabaseOpenerTest {
     }
 
     @Test
+    fun `une reprise de la base de repli qui perd une ligne garde la base de repli pour le lancement suivant`() =
+        kotlinx.coroutines.runBlocking {
+            val name = "adopt-loses.db"
+            realBuild(context, DatabaseLocation.Named(secondary(name).absolutePath)).apply {
+                outboxDao().upsert(
+                    me.meeshy.core.database.entity.OutboxEntity(
+                        cmid = "c-9", lane = "message:conv", kind = "SEND", targetId = "t", payload = "{}", dependsOn = null,
+                        attempts = 0, state = "PENDING", createdAt = 1L, updatedAt = 1L, ownerId = "u1",
+                    ),
+                )
+                close()
+            }
+            val primary = existing(name)
+            SQLiteDatabase.openDatabase(primary.path, null, SQLiteDatabase.OPEN_READWRITE).use {
+                it.execSQL("CREATE TRIGGER refuse_outbox BEFORE INSERT ON outbox BEGIN SELECT RAISE(ABORT, 'disk full'); END")
+            }
+
+            val database = opener(name, DatabaseInitDiagnostics(), StorageHealth()).open()
+
+            assertThat(database.outboxDao().pendingCount()).isEqualTo(0)
+            assertThat(secondary(name).exists()).isTrue()
+            database.close()
+        }
+
+    @Test
     fun `les copies de reprise sont purgees, sauf la base ouverte`() {
         val name = "leftovers.db"
         val primary = context.getDatabasePath(name).also { it.parentFile?.mkdirs() }
@@ -231,5 +274,24 @@ class DatabaseOpenerTest {
         leftovers.purge()
 
         assertThat(secondary.exists()).isFalse()
+    }
+
+    @Test
+    fun `une sonde qui manque de memoire, de disque ou d'E-S ne met jamais la base en quarantaine`() {
+        listOf<() -> Throwable>(
+            { SQLiteOutOfMemoryException("out of memory") },
+            { SQLiteFullException("database or disk is full") },
+            { SQLiteDiskIOException("disk I/O error") },
+            { SQLiteException("unknown error (code 1 SQLITE_ERROR)") },
+        ).forEachIndexed { index, failure ->
+            val name = "probe-transient-$index.db"
+            val file = existing(name)
+            val probe = { candidate: File -> DatabaseRecovery.isReadable(candidate) { throw failure() } }
+
+            opener(name, DatabaseInitDiagnostics(), StorageHealth(), readable = probe).open().close()
+
+            assertThat(file.exists()).isTrue()
+            assertThat(corruptedCopies(file)).isEmpty()
+        }
     }
 }

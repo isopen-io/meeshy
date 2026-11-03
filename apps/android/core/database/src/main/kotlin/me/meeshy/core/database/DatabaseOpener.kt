@@ -19,7 +19,8 @@ public sealed interface DatabaseLocation {
  * Ouvre la base sans JAMAIS lever pour cause de fichier abîmé ou de disque qui refuse (iOS `ResilientDatabaseQueue`), et
  * sans JAMAIS masquer un bug de code :
  * 1. fichier CORROMPU ([OpenFailureKind.CORRUPTION]) : outbox, clairs E2EE à effacer et identifiants en attente sauvés en
- *    lecture seule, fichiers mis en quarantaine (`.corrupted.<ts>`), base recréée, ce qui a été sauvé réinjecté ;
+ *    lecture seule, fichiers mis en quarantaine (`.corrupted.<ts>`, [MAX_QUARANTINES] au plus), base recréée, ce qui a
+ *    été sauvé réinjecté ;
  * 2. disque qui refuse ([OpenFailureKind.UNAVAILABLE]), ou recréation impossible : base de repli sur un chemin
  *    secondaire (cache de l'app), le fichier principal restant en place ;
  * 3. sinon base en mémoire, [StorageHealth] passe en éphémère.
@@ -38,11 +39,12 @@ public class DatabaseOpener(
     private val clock: () -> Long = System::currentTimeMillis,
     private val secondaryFile: File = File(context.cacheDir, SECONDARY_NAME),
     private val leftovers: DatabaseLeftovers? = null,
+    private val readable: (File) -> Boolean = DatabaseRecovery::isReadable,
     private val build: (Context, DatabaseLocation) -> MeeshyDatabase,
 ) {
     public fun open(): MeeshyDatabase {
         val primaryFile = context.getDatabasePath(primaryName)
-        if (!DatabaseRecovery.isReadable(primaryFile)) {
+        if (!readable(primaryFile)) {
             diagnostics.record(DatabaseInitStage.FIRST_FAILURE, "unreadable:${primaryFile.name}")
             return recreate(primaryFile)
         }
@@ -98,51 +100,65 @@ public class DatabaseOpener(
         return memory
     }
 
-    /** La base de repli d'un lancement précédent : ce qu'elle a gardé rejoint la base principale, puis elle disparaît. */
+    /**
+     * La base de repli d'un lancement précédent : ce qu'elle a gardé rejoint la base principale, puis elle disparaît —
+     * seulement si TOUT a été repris. Une ligne perdue (disque plein, contrainte) la garde pour le lancement suivant ; la
+     * purge de session la retire de toute façon.
+     */
     private fun adoptFallback(database: MeeshyDatabase) {
         if (!secondaryFile.exists()) return
-        restore(database, DatabaseRecovery.salvage(secondaryFile))
-        DatabaseRecovery.deleteFallback(secondaryFile)
+        val lost = restore(database, DatabaseRecovery.salvage(secondaryFile))
+        if (lost == 0) DatabaseRecovery.deleteFallback(secondaryFile)
     }
 
     private fun quarantine(file: File): DatabaseSalvage {
         val salvaged = DatabaseRecovery.salvage(file)
         val moved = DatabaseRecovery.quarantine(file, clock())
         diagnostics.record(DatabaseInitStage.QUARANTINED, moved.joinToString(",") { it.name })
+        DatabaseRecovery.pruneQuarantines(file, keep = MAX_QUARANTINES)
         return salvaged
     }
 
-    private fun restore(database: MeeshyDatabase, salvage: DatabaseSalvage) {
-        if (salvage.isEmpty) return
+    /** Réinjecte [salvage] dans [database] ; rend le nombre de lignes qui n'ont pas pu l'être. */
+    private fun restore(database: MeeshyDatabase, salvage: DatabaseSalvage): Int {
+        if (salvage.isEmpty) return 0
+        val total = salvage.outbox.size + salvage.plaintextErasures.size + salvage.pendingIds.size
         val db = try {
             database.openHelper.writableDatabase
         } catch (_: Exception) {
-            return
+            return total
         }
+        // Une ligne déjà présente (CONFLICT_IGNORE rend -1) est reprise ; seule une écriture qui échoue est perdue, et une
+        // ligne perdue ne fait pas perdre les autres.
         fun insertAll(table: String, rows: List<ContentValues>, conflict: Int): Int = rows.count { values ->
             try {
-                db.insert(table, conflict, values) >= 0
+                db.insert(table, conflict, values)
+                true
             } catch (_: Exception) {
-                // Une ligne illisible ne doit pas faire perdre les autres.
                 false
             }
         }
+        var restored = 0
         if (salvage.outbox.isNotEmpty()) {
-            val restored = insertAll("outbox", salvage.outbox.map { it.toValues() }, SQLiteDatabase.CONFLICT_REPLACE)
-            diagnostics.record(DatabaseInitStage.OUTBOX_SALVAGED, "$restored/${salvage.outbox.size}")
+            val outbox = insertAll("outbox", salvage.outbox.map { it.toValues() }, SQLiteDatabase.CONFLICT_REPLACE)
+            diagnostics.record(DatabaseInitStage.OUTBOX_SALVAGED, "$outbox/${salvage.outbox.size}")
+            restored += outbox
         }
         if (salvage.plaintextErasures.isNotEmpty()) {
-            val restored = insertAll(
+            val erasures = insertAll(
                 "e2ee_plaintext_erasures",
                 salvage.plaintextErasures.map { it.toValues() },
                 SQLiteDatabase.CONFLICT_IGNORE,
             )
-            diagnostics.record(DatabaseInitStage.ERASURES_SALVAGED, "$restored/${salvage.plaintextErasures.size}")
+            diagnostics.record(DatabaseInitStage.ERASURES_SALVAGED, "$erasures/${salvage.plaintextErasures.size}")
+            restored += erasures
         }
         if (salvage.pendingIds.isNotEmpty()) {
-            val restored = insertAll("pending_ids", salvage.pendingIds.map { it.toValues() }, SQLiteDatabase.CONFLICT_IGNORE)
-            diagnostics.record(DatabaseInitStage.PENDING_IDS_SALVAGED, "$restored/${salvage.pendingIds.size}")
+            val pending = insertAll("pending_ids", salvage.pendingIds.map { it.toValues() }, SQLiteDatabase.CONFLICT_IGNORE)
+            diagnostics.record(DatabaseInitStage.PENDING_IDS_SALVAGED, "$pending/${salvage.pendingIds.size}")
+            restored += pending
         }
+        return total - restored
     }
 
     private class Attempt(val database: MeeshyDatabase?, val failure: Throwable?)
@@ -199,5 +215,8 @@ public class DatabaseOpener(
 
     public companion object {
         public const val SECONDARY_NAME: String = "meeshy-fallback.db"
+
+        /** Les quarantaines gardées sur l'appareil : les plus récentes, pour le support ; les autres sont supprimées. */
+        public const val MAX_QUARANTINES: Int = 2
     }
 }

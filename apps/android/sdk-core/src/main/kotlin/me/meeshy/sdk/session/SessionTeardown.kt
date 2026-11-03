@@ -97,7 +97,9 @@ public class DefaultSessionTeardown(
 
     /**
      * La purge est inconditionnelle ([LogoutPurgePolicy]) ; seul l'avertissement dépend de la cause et de la file.
-     * [admitted] est relu sous la barrière, après l'arrêt des envois en vol : faux, rien n'est vidé.
+     * [admitted] est lu sous la barrière AVANT de fermer le compte — faux, la barrière ne change rien (ni génération, ni
+     * envoi annulé) —, puis relu après l'arrêt des envois en vol : faux, rien n'est vidé. Une ouverture de session
+     * ([AccountFence.opening]) ne s'intercale jamais entre ces lectures et la fin du vidage.
      */
     private suspend fun purge(cause: PurgeCause, admitted: () -> Boolean = { true }): Boolean {
         var decision = LogoutPurgePolicy.decide(cause, pendingSends = 0)
@@ -108,7 +110,7 @@ public class DefaultSessionTeardown(
             clearAll()
             purged = true
         }
-        if (fence == null) run() else fence.close { run() }
+        if (fence == null) run() else fence.closeIf(admitted) { run() }
         if (purged && decision.warnLostSends) lostSends?.notify(decision.lostSends)
         return purged
     }

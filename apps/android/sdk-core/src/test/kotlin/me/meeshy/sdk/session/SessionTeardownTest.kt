@@ -496,4 +496,17 @@ class SessionTeardownTest {
         assertThat(purged).isTrue()
         assertThat(outboxRepository.observeAll().first()).isEmpty()
     }
+
+    @Test
+    fun wipeIfStillSignedOut_aRefusedPurgeLeavesTheAccountGenerationAsItWas() = runTest {
+        val fence = AccountFence(me.meeshy.sdk.outbox.OutboxOwnerSource { "A" })
+        val before = fence.ticket()
+        outboxRepository.enqueue(pendingSend())
+
+        val purged = teardown(fence = fence).wipeIfStillSignedOut { false }
+
+        assertThat(purged).isFalse()
+        assertThat(fence.isCurrent(before)).isTrue()
+        assertThat(outboxRepository.observeAll().first()).isNotEmpty()
+    }
 }

@@ -159,26 +159,46 @@ public class AccountFence @Inject constructor(
 
     /** Closes the current account: no write of it commits any more, its sends are cancelled and awaited, then [wipe] runs. */
     public suspend fun close(wipe: suspend () -> Unit) {
+        closeIf(admitted = { true }, wipe = wipe)
+    }
+
+    /**
+     * [close], only when [admitted] still holds once no other close and no session opening ([opening]) is running. Not
+     * admitted: nothing changes — no new generation, no send cancelled, no ticket retired — and `false` is returned.
+     */
+    public suspend fun closeIf(admitted: () -> Boolean, wipe: suspend () -> Unit): Boolean =
         closes.withLock {
-            val wiped = CompletableDeferred<Unit>()
-            val (doomed, drain) = synchronized(lock) {
-                generation += 1
-                wiping = wiped
-                val waitWriters = if (writers > 0) CompletableDeferred<Unit>().also { drained = it } else null
-                inFlight.toList() to waitWriters
+            if (!admitted()) return@withLock false
+            closeLocked(wipe)
+            true
+        }
+
+    /**
+     * Opens a session ([open] writes its tokens and adopts its user) never in the middle of a [close]: it waits for the
+     * close in progress, wipe included, to end — a session restored while a launch purge runs is never wiped right
+     * after it was written, and the purge re-reads, under the same lock, whether a session now exists.
+     */
+    public suspend fun <T> opening(open: () -> T): T = closes.withLock { open() }
+
+    private suspend fun closeLocked(wipe: suspend () -> Unit) {
+        val wiped = CompletableDeferred<Unit>()
+        val (doomed, drain) = synchronized(lock) {
+            generation += 1
+            wiping = wiped
+            val waitWriters = if (writers > 0) CompletableDeferred<Unit>().also { drained = it } else null
+            inFlight.toList() to waitWriters
+        }
+        try {
+            doomed.forEach { it.cancel(AccountClosedException()) }
+            doomed.joinAll()
+            drain?.await()
+            wipe()
+        } finally {
+            synchronized(lock) {
+                wiping = null
+                drained = null
             }
-            try {
-                doomed.forEach { it.cancel(AccountClosedException()) }
-                doomed.joinAll()
-                drain?.await()
-                wipe()
-            } finally {
-                synchronized(lock) {
-                    wiping = null
-                    drained = null
-                }
-                wiped.complete(Unit)
-            }
+            wiped.complete(Unit)
         }
     }
 }

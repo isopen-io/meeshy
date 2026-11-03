@@ -6,6 +6,7 @@ import android.database.sqlite.SQLiteDatabaseCorruptException
 import android.database.sqlite.SQLiteDiskIOException
 import android.database.sqlite.SQLiteException
 import android.database.sqlite.SQLiteFullException
+import android.database.sqlite.SQLiteOutOfMemoryException
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import java.io.File
@@ -118,5 +119,35 @@ class DatabaseRecoveryTest {
         assertThat(salvage.outbox).isEmpty()
         assertThat(salvage.plaintextErasures.map { it.itemId }).containsExactly("m1")
         assertThat(salvage.pendingIds.map { it.localId to it.serverId }).containsExactly("cid_1" to "srv1")
+    }
+
+    @Test
+    fun `la sonde ne declare illisible qu'un fichier corrompu`() {
+        val target = file("probe.db").also { SQLiteDatabase.openOrCreateDatabase(it, null).close() }
+        fun probeFailingWith(failure: Throwable) = DatabaseRecovery.isReadable(target) { throw failure }
+
+        assertThat(probeFailingWith(SQLiteDatabaseCorruptException("database disk image is malformed"))).isFalse()
+        assertThat(probeFailingWith(SQLiteException("file is not a database (code 26 SQLITE_NOTADB)"))).isFalse()
+        assertThat(probeFailingWith(SQLiteException("malformed (code 779 SQLITE_CORRUPT_INDEX)"))).isFalse()
+        assertThat(probeFailingWith(SQLiteOutOfMemoryException("out of memory"))).isTrue()
+        assertThat(probeFailingWith(SQLiteFullException("database or disk is full"))).isTrue()
+        assertThat(probeFailingWith(SQLiteDiskIOException("disk I/O error"))).isTrue()
+        assertThat(probeFailingWith(SQLiteException("x"))).isTrue()
+    }
+
+    @Test
+    fun `seules les quarantaines les plus recentes sont gardees, avec leurs fichiers compagnons`() {
+        val target = file("bounded.db")
+        listOf("1", "1-wal", "1-shm", "20", "20-wal", "300").forEach { File("${target.path}.corrupted.$it").writeText("old") }
+
+        val removed = DatabaseRecovery.pruneQuarantines(target, keep = 2)
+
+        assertThat(removed.map { it.name }).containsExactly(
+            "bounded.db.corrupted.1",
+            "bounded.db.corrupted.1-wal",
+            "bounded.db.corrupted.1-shm",
+        )
+        assertThat(File("${target.path}.corrupted.20-wal").exists()).isTrue()
+        assertThat(File("${target.path}.corrupted.300").exists()).isTrue()
     }
 }
