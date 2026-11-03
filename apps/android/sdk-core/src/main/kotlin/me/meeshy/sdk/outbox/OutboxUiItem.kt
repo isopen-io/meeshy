@@ -74,6 +74,11 @@ public fun OutboxEntity.toUiItem(): OutboxUiItem? {
             titlePreview = body.string("content")?.takeIf { it.isNotEmpty() }?.let(OutboxUiProjection::truncatePreview),
             iconKind = OutboxUiIcon.TEXT,
         )
+        OutboxKind.REPOST_POST -> base.copy(
+            titlePreview = body.string("content")?.takeIf { it.isNotEmpty() }?.let(OutboxUiProjection::truncatePreview),
+            iconKind = OutboxUiIcon.TEXT,
+            source = OutboxNavigationSource.forPost(targetId),
+        )
         else -> base
     }
 }

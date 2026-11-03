@@ -74,6 +74,15 @@ class OutboxUiItemTest {
     }
 
     @Test
+    fun `a queued repost reads as a repost and leads to the source post`() {
+        val item = row(OutboxKind.REPOST_POST, """{"targetType":"POST","content":"à voir","isQuote":true}""", targetId = "p9").toUiItem()!!
+        assertThat(item.kind).isEqualTo(OutboxUiKind.OTHER)
+        assertThat(item.otherKey).isEqualTo("repostPost")
+        assertThat(item.titlePreview).isEqualTo("à voir")
+        assertThat(item.source).isEqualTo(OutboxNavigationSource.Post("p9"))
+    }
+
+    @Test
     fun `the state maps and an exhausted row is terminal`() {
         val item = row(OutboxKind.SEND_MESSAGE, state = OutboxState.EXHAUSTED).toUiItem()!!
         assertThat(item.status).isEqualTo(OutboxUiStatus.EXHAUSTED)

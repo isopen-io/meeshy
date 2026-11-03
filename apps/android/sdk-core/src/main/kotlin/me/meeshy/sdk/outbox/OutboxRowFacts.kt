@@ -41,6 +41,7 @@ public object OutboxRowFacts {
         OutboxKind.SEND_FRIEND_REQUEST -> other("sendFriendRequest")
         OutboxKind.RESPOND_FRIEND_REQUEST -> other("respondFriendRequest")
         OutboxKind.CREATE_POST -> other("createPost")
+        OutboxKind.REPOST_POST -> other("repostPost")
     }
 
     private fun other(key: String) = OutboxPillFacts(OutboxUiKind.OTHER, key)
