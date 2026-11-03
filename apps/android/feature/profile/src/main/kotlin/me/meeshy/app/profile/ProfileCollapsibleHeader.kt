@@ -47,6 +47,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.appearance.ProfileBannerPaint
+import me.meeshy.sdk.model.profile.ProfileDecorLayersPolicy
 import me.meeshy.sdk.model.profile.ProfileHeaderMetrics
 import me.meeshy.sdk.model.profile.ProfilePresenceLine
 import me.meeshy.sdk.model.profile.ProfilePresenceTone
@@ -165,6 +166,9 @@ internal fun ProfileCollapsibleHeader(
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
         ) {
             val apiBaseUrl = LocalMediaBaseUrl.current
+            val ring = remember(profile.banner, profile.profileDecor, catalog, signs.isBlockedByTarget) {
+                ProfileDecorLayersPolicy.resolve(profile.banner, profile.servedDecor, catalog, signs.isBlockedByTarget).ring
+            }
             val avatarUrl = remember(profile.avatar, apiBaseUrl) { resolveServedImageUrl(profile.avatar, apiBaseUrl) ?: profile.avatar }
             ProfileAvatar(
                 name = header.displayName,
@@ -175,6 +179,7 @@ internal fun ProfileCollapsibleHeader(
                 presence = signs.presence,
                 isBlockedByMe = signs.isBlockedByMe,
                 isBlockedByTarget = signs.isBlockedByTarget,
+                ring = ring,
                 onOpenImage = onOpenImage,
                 onViewStory = onViewStory,
                 onMoodTap = onMoodTap,
