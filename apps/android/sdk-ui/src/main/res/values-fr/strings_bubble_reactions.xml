@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_reactions_add_hint">Appuyer pour réagir rapidement, maintenir pour choisir un emoji</string>
+    <string name="bubble_reactions_pick_emoji">Choisir un emoji</string>
+    <string name="bubble_reactions_more_count">%1$d réactions de plus</string>
+    <string name="bubble_reactions_view_all_hint">Voir toutes les réactions</string>
+    <string name="bubble_reactions_chip">%1$s %2$d réactions</string>
+    <string name="bubble_reactions_chip_mine">%1$s %2$d réactions, vous avez réagi</string>
+    <string name="bubble_reactions_toggle_hint">Appuyer pour basculer la réaction, maintenir pour voir toutes les réactions</string>
+</resources>

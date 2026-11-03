@@ -125,3 +125,10 @@ public object MediaAutoDownloadDecider {
         sizeBytes = sizeBytes,
     )
 }
+
+/** Le cache typé où vit un média de ce [MediaKind] : l'audio traduit partage le dossier de l'audio. */
+public fun MediaKind.cacheCategory(): me.meeshy.sdk.model.mediacache.MediaCacheCategory = when (this) {
+    MediaKind.IMAGE -> me.meeshy.sdk.model.mediacache.MediaCacheCategory.IMAGES
+    MediaKind.AUDIO, MediaKind.AUDIO_TRANSLATION -> me.meeshy.sdk.model.mediacache.MediaCacheCategory.AUDIO
+    MediaKind.VIDEO -> me.meeshy.sdk.model.mediacache.MediaCacheCategory.VIDEO
+}

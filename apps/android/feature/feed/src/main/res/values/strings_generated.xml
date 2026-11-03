@@ -128,6 +128,7 @@
     <string name="nearby_back">Back</string>
     <string name="nearby_retry">Try again</string>
     <string name="nearby_title">Nearby</string>
+    <string name="post_bookmark_removed">Removed from bookmarks</string>
     <string name="post_comments_cancel_reply">Cancel reply</string>
     <string name="post_comments_composer_hint">Comment…</string>
     <string name="post_comments_composer_reply_hint">Reply…</string>

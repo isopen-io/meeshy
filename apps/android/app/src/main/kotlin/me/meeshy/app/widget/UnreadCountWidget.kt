@@ -50,9 +50,14 @@ internal class UnreadCountWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val entryPoint = EntryPointAccessors.fromApplication(context, WidgetEntryPoint::class.java)
-        val shared = entryPoint.unreadBadgeCoordinator().state.value
-        val total = if (shared.seeded) shared.total else entryPoint.conversationRepository().totalUnreadCount().first()
-        val presentation = UnreadWidgetPresentation.from(total)
+        val presentation = if (entryPoint.tokenStore().userId.isNullOrBlank()) {
+            UnreadWidgetPresentation.signedOut()
+        } else {
+            val shared = entryPoint.unreadBadgeCoordinator().state.value
+            UnreadWidgetPresentation.from(
+                if (shared.seeded) shared.total else entryPoint.conversationRepository().totalUnreadCount().first(),
+            )
+        }
 
         provideContent {
             UnreadCountWidgetContent(presentation)

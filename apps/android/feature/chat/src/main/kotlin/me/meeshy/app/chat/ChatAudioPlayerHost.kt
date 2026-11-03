@@ -62,6 +62,9 @@ internal class ChatAudioPlayer internal constructor(
     /** Le titre de la conversation, relu à chaque nouvelle carte : un renommage ne recrée pas le lecteur. */
     var conversationTitle: String? = conversationTitle
 
+    /** La conversation jouée, pour que la notification ramène à la bulle ; `null` hors conversation. */
+    var conversationId: String? = null
+
     private var card: VoicePlaybackCard? = null
     private val ledger = InterruptionResumeLedger()
     private val focus = audioManager?.let { ChatAudioFocus(it, ::onSystemEvent) }
@@ -245,6 +248,8 @@ internal class ChatAudioPlayer internal constructor(
         artworkUrl = source?.avatarUrl?.takeIf(VoicePlaybackCardRules::isArtworkFetchable),
         isProtected = source?.isProtected == true,
         durationMs = (audio.durationSeconds ?: 0) * 1000L,
+        conversationId = conversationId,
+        messageId = source?.messageId,
     )
 
     private fun publish() {
@@ -266,7 +271,7 @@ internal class ChatAudioPlayer internal constructor(
 }
 
 @Composable
-internal fun rememberChatAudioPlayer(conversationTitle: String? = null): ChatAudioPlayer {
+internal fun rememberChatAudioPlayer(conversationTitle: String? = null, conversationId: String? = null): ChatAudioPlayer {
     val context = LocalContext.current
     val host = LocalVoicePlaybackHost.current
     val audioPlayer = remember(host) {
@@ -277,7 +282,10 @@ internal fun rememberChatAudioPlayer(conversationTitle: String? = null): ChatAud
             conversationTitle = conversationTitle,
         )
     }
-    SideEffect { audioPlayer.conversationTitle = conversationTitle }
+    SideEffect {
+        audioPlayer.conversationTitle = conversationTitle
+        audioPlayer.conversationId = conversationId
+    }
     DisposableEffect(audioPlayer) {
         val unplugged = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
