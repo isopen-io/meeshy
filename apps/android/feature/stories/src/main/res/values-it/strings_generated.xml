@@ -233,6 +233,7 @@
     <string name="stories_delete_confirm_title">Eliminare la storia?</string>
     <string name="stories_mood_kind">Stato d\'animo</string>
     <string name="stories_publish_retry">Riprova</string>
+    <string name="stories_reply_cancel">Annulla la risposta</string>
     <string name="stories_reply_failed">La risposta non è stata inviata</string>
     <string name="stories_reply_placeholder">Rispondi a %1$s…</string>
     <string name="stories_reply_send">Invia risposta</string>
