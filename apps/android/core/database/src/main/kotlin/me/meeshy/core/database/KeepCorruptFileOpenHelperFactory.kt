@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
+import java.io.File
 
 /**
  * Le fichier d'une base corrompue n'est JAMAIS supprimé par la couche SQLite : c'est [DatabaseOpener] qui en sauve
@@ -17,6 +18,10 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
  *   `room_master_table`), réessaie puis supprime la base pour la recréer vide.
  * [KeepFileOnCorruption] neutralise le premier et emballe l'échec de `onOpen` pour que le second ne s'applique pas ;
  * la cause reste dans la chaîne, et [DatabaseRecovery.classify] la lit.
+ *
+ * Garder le fichier ne suffit pas quand la corruption est découverte EN COURS D'USAGE : au lancement suivant, la base
+ * s'ouvrirait normalement et la même page échouerait de nouveau. `onCorruption` pose donc un marqueur durable
+ * ([DatabaseRecovery.markCorrupted]) que [DatabaseOpener] traite au lancement suivant comme une base illisible.
  */
 public class KeepCorruptFileOpenHelperFactory(
     private val delegate: SupportSQLiteOpenHelper.Factory = FrameworkSQLiteOpenHelperFactory(),
@@ -65,7 +70,9 @@ internal class KeepFileOnCorruption(
     }
 
     override fun onCorruption(db: SupportSQLiteDatabase) {
-        Log.e(TAG, "Corruption signalee par SQLite : le fichier est garde pour le sauvetage et la quarantaine")
+        val path = db.path?.takeUnless { it.isBlank() || it == DatabaseRecovery.IN_MEMORY_PATH } ?: return
+        val marked = DatabaseRecovery.markCorrupted(File(path))
+        Log.e(TAG, "Corruption signalee par SQLite : fichier garde, reparation au prochain lancement (marqueur=$marked)")
     }
 
     private companion object {

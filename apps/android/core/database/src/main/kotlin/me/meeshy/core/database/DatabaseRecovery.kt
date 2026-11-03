@@ -11,7 +11,9 @@ import android.database.sqlite.SQLiteDiskIOException
 import android.database.sqlite.SQLiteException
 import android.database.sqlite.SQLiteFullException
 import android.database.sqlite.SQLiteReadOnlyDatabaseException
+import androidx.sqlite.db.SupportSQLiteDatabase
 import java.io.File
+import java.io.FileOutputStream
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.core.database.entity.PendingIdEntity
 import me.meeshy.core.database.entity.PlaintextErasureEntity
@@ -60,6 +62,65 @@ public object DatabaseRecovery {
      */
     private fun openReadOnly(database: File): SQLiteDatabase =
         SQLiteDatabase.openDatabase(database.path, null, SQLiteDatabase.OPEN_READONLY, DatabaseErrorHandler { })
+
+    /**
+     * Le marqueur posé à côté de [database] quand SQLite y signale une corruption en cours d'usage : la sonde ne lit que
+     * le catalogue et Room que `room_master_table`, donc une page abîmée de `messages` laisserait la base s'ouvrir
+     * « normalement » à chaque lancement, et la même requête échouer à chaque fois.
+     */
+    public fun corruptionMarker(database: File): File = File(database.path + CORRUPTION_MARKER_SUFFIX)
+
+    /**
+     * Pose le marqueur de corruption de [database], hors SQLite et de façon atomique (fichier temporaire synchronisé puis
+     * renommé). Ne lève jamais : rend `false` si le disque l'a refusé.
+     */
+    public fun markCorrupted(database: File): Boolean {
+        val marker = corruptionMarker(database)
+        val pending = File(marker.path + ".tmp")
+        return try {
+            FileOutputStream(pending).use { out ->
+                out.write(System.currentTimeMillis().toString().toByteArray())
+                out.fd.sync()
+            }
+            pending.renameTo(marker) || marker.exists()
+        } catch (_: Exception) {
+            false
+        } finally {
+            pending.delete()
+        }
+    }
+
+    public fun isMarkedCorrupted(database: File): Boolean = corruptionMarker(database).exists()
+
+    public fun clearCorruptionMarker(database: File): Boolean = corruptionMarker(database).delete()
+
+    /**
+     * Efface le marqueur de corruption de [db] s'il est périmé : après une purge de session (`clearAllTables` finit par
+     * un `VACUUM`, qui réécrit le fichier), `PRAGMA quick_check` peut le trouver sain, et une réparation au lancement
+     * suivant ne ferait que vider le cache du compte suivant. Le marqueur reste au moindre doute (contrôle qui échoue ou
+     * qui rapporte une erreur). Rend `true` si le marqueur a été effacé.
+     */
+    public fun clearStaleCorruptionMarker(db: SupportSQLiteDatabase): Boolean {
+        val path = db.path?.takeUnless { it.isBlank() || it == IN_MEMORY_PATH } ?: return false
+        val file = File(path)
+        if (!isMarkedCorrupted(file)) return false
+        val healthy = try {
+            db.query("PRAGMA quick_check").use { cursor ->
+                buildList { while (cursor.moveToNext()) add(cursor.getString(0)) } == listOf("ok")
+            }
+        } catch (_: Exception) {
+            false
+        }
+        return healthy && clearCorruptionMarker(file)
+    }
+
+    /** [database] en lecture-écriture, avec un gestionnaire d'erreurs inerte ; `null` si elle ne s'ouvre pas. */
+    public fun openWritable(database: File): SQLiteDatabase? =
+        try {
+            SQLiteDatabase.openDatabase(database.path, null, SQLiteDatabase.OPEN_READWRITE, DatabaseErrorHandler { })
+        } catch (_: SQLiteException) {
+            null
+        }
 
     /**
      * Le fichier s'ouvre et son catalogue se lit : un en-tête ou une page racine corrompus échouent ici. SEULE une vraie
@@ -115,12 +176,17 @@ public object DatabaseRecovery {
         }
 
     /**
-     * Les copies laissées par une reprise : `<base>.corrupted.<ts>*` et la base de repli. Elles ne sont pas chiffrées et
-     * portent l'historique du compte qui les a écrites : elles quittent l'appareil avec la session.
+     * Les copies laissées par une reprise : `<base>.corrupted.<ts>*`, la base de repli, et les marqueurs de corruption.
+     * Les copies ne sont pas chiffrées et portent l'historique du compte qui les a écrites : elles quittent l'appareil
+     * avec la session.
      */
-    public fun leftovers(primary: File, secondary: File): List<File> = quarantined(primary) + fallbackFiles(secondary)
+    public fun leftovers(primary: File, secondary: File): List<File> =
+        quarantined(primary) + listOf(corruptionMarker(primary)).filter { it.exists() } + fallbackFiles(secondary)
 
-    /** Supprime [leftovers], sauf les fichiers de la base [inUse] (ouverte : on ne retire pas un fichier sous SQLite). */
+    /**
+     * Supprime [leftovers], sauf les fichiers de la base [inUse] : on ne retire pas un fichier sous SQLite, et son marqueur
+     * de corruption, qui ne porte aucune donnée, doit encore armer la réparation du lancement suivant.
+     */
     public fun deleteLeftovers(primary: File, secondary: File, inUse: File? = null): List<File> {
         val kept = inUse?.let { fallbackPaths(it) }.orEmpty().map { it.absolutePath }.toSet()
         return leftovers(primary, secondary)
@@ -147,7 +213,8 @@ public object DatabaseRecovery {
             .orEmpty()
             .filter { it.name.startsWith("${primary.name}.corrupted.") }
 
-    private fun fallbackPaths(database: File): List<File> = SIDE_SUFFIXES.map { File(database.path + it) }
+    private fun fallbackPaths(database: File): List<File> =
+        SIDE_SUFFIXES.map { File(database.path + it) } + corruptionMarker(database)
 
     private fun fallbackFiles(secondary: File): List<File> = fallbackPaths(secondary).filter { it.exists() }
 
@@ -241,6 +308,11 @@ public object DatabaseRecovery {
 
     /** Une exception d'ouverture qui relève d'un fichier abîmé ou d'un disque qui refuse, plutôt que d'un bug de code. */
     public fun isStorageFailure(failure: Throwable): Boolean = classify(failure) != OpenFailureKind.DEFECT
+
+    public const val CORRUPTION_MARKER_SUFFIX: String = ".corruption-detected"
+
+    /** Le chemin que SQLite donne à une base en mémoire : elle n'a ni fichier ni marqueur. */
+    public const val IN_MEMORY_PATH: String = ":memory:"
 
     private const val MAX_CAUSES = 8
 

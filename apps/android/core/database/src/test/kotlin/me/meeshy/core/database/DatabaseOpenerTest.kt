@@ -277,6 +277,27 @@ class DatabaseOpenerTest {
     }
 
     @Test
+    fun `la purge de session retire le marqueur de corruption, sauf celui de la base ouverte`() {
+        val name = "marker-leftovers.db"
+        val primary = context.getDatabasePath(name).also { it.parentFile?.mkdirs() }
+        val secondary = secondary(name).also { it.parentFile?.mkdirs() }
+        val primaryMarker = File(primary.path + DatabaseRecovery.CORRUPTION_MARKER_SUFFIX).apply { writeText("") }
+        val secondaryMarker = File(secondary.path + DatabaseRecovery.CORRUPTION_MARKER_SUFFIX).apply { writeText("") }
+        val leftovers = DatabaseLeftovers(primary, secondary)
+
+        leftovers.markInUse(primary)
+        leftovers.purge()
+
+        assertThat(primaryMarker.exists()).isTrue()
+        assertThat(secondaryMarker.exists()).isFalse()
+
+        leftovers.markInUse(null)
+        leftovers.purge()
+
+        assertThat(primaryMarker.exists()).isFalse()
+    }
+
+    @Test
     fun `une sonde qui manque de memoire, de disque ou d'E-S ne met jamais la base en quarantaine`() {
         listOf<() -> Throwable>(
             { SQLiteOutOfMemoryException("out of memory") },
