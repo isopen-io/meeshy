@@ -41,6 +41,9 @@ import me.meeshy.feature.reels.R
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
+import me.meeshy.sdk.chrome.FloatingButtonPositionStore
+import me.meeshy.sdk.chrome.InMemoryFloatingButtonPositionStore
+import me.meeshy.sdk.playback.PlaybackCoordinator
 import javax.inject.Inject
 
 data class ReelsUiState(
@@ -69,7 +72,20 @@ class ReelsViewModel @Inject constructor(
     private val privacyPreferencesStore: PrivacyPreferencesStore,
     private val reportRepository: ReportRepository,
     private val emojiUsageStore: EmojiUsageStore = InMemoryEmojiUsageStore(),
+    private val playbackCoordinator: PlaybackCoordinator = PlaybackCoordinator(),
+    floatingButtonPositions: FloatingButtonPositionStore = InMemoryFloatingButtonPositionStore(),
 ) : ViewModel() {
+
+    /** Où le bouton Flux est rangé : le dévoilement des réels naît à son centre exact (iOS `feedButtonPosition`). */
+    val feedButtonStorage: StateFlow<String> = floatingButtonPositions.leftStorage
+
+    /**
+     * La fermeture coupe tout ce qui joue — vidéo partagée ET réel-audio (iOS `SharedAVPlayerManager.pause()` +
+     * `PlaybackCoordinator.stopAllAudio()`) : pendant le rétrécissement du disque, rien ne doit encore sonner.
+     */
+    fun stopAllMedia() {
+        playbackCoordinator.stopAll()
+    }
 
     /** Les émojis de la palette : les mêmes, dans le même ordre que messages et stories (récents d'abord). */
     val quickEmojis: StateFlow<List<String>> = emojiUsageStore.usage

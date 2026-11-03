@@ -1120,4 +1120,29 @@ class StoryComposerAutosaveTest {
         assertThat(restored.frame).isEqualTo(StoryTextFrame())
         assertThat(restored.sourceLanguage).isNull()
     }
+
+    // ---- démontage sans sortie (rotation, pliage) ----
+
+    @Test
+    fun `a draft written at teardown reopens into the next pristine composer`() {
+        val written = (StoryComposerAutosave.resolve(
+            deck = textDeck("a demain"),
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = null,
+        ) as StoryDraftPersist.Save).snapshot
+
+        val reopened = StoryComposerAutosave.restore(stored = written, deckIsPristine = StoryComposerAutosave.deckIsPristine(blankDeck()))
+
+        assertThat(reopened).isEqualTo(written)
+        assertThat(reopened!!.toDeck()!!.slides.single().text).isEqualTo("a demain")
+    }
+
+    @Test
+    fun `a composer already touched is not overwritten by the reopened draft`() {
+        val written = (StoryComposerAutosave.resolve(textDeck("x"), StoryVisibility.PUBLIC, null, now, null) as StoryDraftPersist.Save).snapshot
+
+        assertThat(StoryComposerAutosave.restore(written, deckIsPristine = StoryComposerAutosave.deckIsPristine(textDeck("deja")))).isNull()
+    }
 }

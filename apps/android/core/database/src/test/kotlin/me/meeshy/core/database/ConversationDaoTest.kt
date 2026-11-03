@@ -94,6 +94,21 @@ class ConversationDaoTest {
     }
 
     @Test
+    fun `unreadConversationCount counts conversations with unread messages, not messages`() = runTest {
+        assertThat(dao.unreadConversationCount().first()).isEqualTo(0)
+
+        dao.upsertAll(
+            listOf(
+                conversation("a", 1, unreadCount = 7),
+                conversation("b", 2, unreadCount = 0),
+                conversation("c", 3, unreadCount = 1),
+            ),
+        )
+
+        assertThat(dao.unreadConversationCount().first()).isEqualTo(2)
+    }
+
+    @Test
     fun `recentByUpdatedAt returns at most limit rows, most-recently-updated first`() = runTest {
         dao.upsertAll((0 until 10).map { i -> conversation("c$i", updatedAt = i.toLong()) })
 

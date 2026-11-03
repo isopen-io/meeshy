@@ -2,6 +2,13 @@ package me.meeshy.app.feed
 
 import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.background
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material.icons.filled.Bookmark
@@ -37,6 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.BookmarkBorder
@@ -123,10 +131,18 @@ fun PostDetailScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var viewersOpen by remember { mutableStateOf(false) }
+    var authorChipShown by remember(viewModel) { mutableStateOf(false) }
     if (viewersOpen) state.post?.id?.let { id -> viewersSheet(id) { viewersOpen = false } }
     val quickEmojis by viewModel.quickEmojis.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val linkCopied = stringResource(R.string.feed_link_copied)
+
+    // Le post supprime : l'ecran se ferme.
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect -> if (effect == PostDetailEffect.Close) onBack() }
+    }
 
     // Collected (not keyed) so consuming the notice never cancels the toast on screen, as in the feed.
     LaunchedEffect(viewModel) {
@@ -151,14 +167,19 @@ fun PostDetailScreen(
     MeeshyBackground {
         Scaffold(
             topBar = {
-                TopAppBar(
+                CenterAlignedTopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
                         scrolledContainerColor = Color.Transparent,
                         titleContentColor = MeeshyTheme.tokens.textPrimary,
                     ),
                     title = {
-                        Text(stringResource(R.string.post_detail_title), fontWeight = FontWeight.Bold)
+                        val shownPost = state.post
+                        if (authorChipShown && shownPost != null) {
+                            PostDetailAuthorChip(post = shownPost, onOpenProfile = onOpenProfile)
+                        } else {
+                            Text(stringResource(R.string.post_detail_title), fontWeight = FontWeight.Bold)
+                        }
                     },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
@@ -169,7 +190,13 @@ fun PostDetailScreen(
                             )
                         }
                     },
-                    actions = { state.post?.let { PostDetailImagerMenu(it) } },
+                    actions = {
+                        state.post?.let { shown ->
+                            PostDetailMenu(shown, rememberPostDetailMenuActions(shown, viewModel) {
+                                scope.launch { snackbar.showSnackbar(linkCopied) }
+                            })
+                        }
+                    },
                 )
             },
             containerColor = Color.Transparent,
@@ -210,6 +237,7 @@ fun PostDetailScreen(
                         onOpenProfile = onOpenProfile,
                         onOpenHashtag = onOpenHashtag,
                         onOpenViewers = if (state.canListViewers) ({ viewersOpen = true }) else null,
+                        onAuthorChipReveal = { authorChipShown = it },
                         onRepost = viewModel::repost,
                         onQuote = viewModel::beginQuote,
                         onLike = viewModel::toggleLike,
@@ -258,7 +286,10 @@ internal fun PostDetailContent(
     commentsSection: @Composable () -> Unit = { PostCommentsSection(onNotice = onCommentNotice, support = post.commentCardSupport) },
     commentComposer: @Composable () -> Unit = { PostCommentsComposerBar() },
     snackbarHost: @Composable () -> Unit = {},
+    onAuthorChipReveal: (Boolean) -> Unit = {},
 ) {
+    var viewportTop by remember { mutableFloatStateOf(0f) }
+    val revealChip by rememberUpdatedState(onAuthorChipReveal)
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     var gallery by remember(post.id) { mutableStateOf<FeedGallery?>(null) }
     var explorerOpen by rememberSaveable(post.id) { mutableStateOf(false) }
@@ -272,7 +303,7 @@ internal fun PostDetailContent(
     }
     gallery?.let { opened -> FeedImageViewerHost(gallery = opened, onDismiss = { gallery = null }) }
     Column(Modifier.fillMaxSize()) {
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        Box(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { viewportTop = it.positionInRoot().y }) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -284,7 +315,12 @@ internal fun PostDetailContent(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(Modifier.padding(MeeshySpacing.lg)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.onGloballyPositioned { block ->
+                                revealChip(PostDetailHeaderReveal.revealed(block.positionInRoot().y + block.size.height, viewportTop))
+                            },
+                        ) {
                             val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
                             MeeshyAvatar(
                                 name = post.authorName ?: unknownAuthor,
@@ -427,6 +463,7 @@ private fun PostReachLine(post: FeedPostPresentation) {
         isAuthor = post.isAuthor,
         viewCount = post.viewCount,
         impressionCount = post.impressionCount,
+        uniqueViewCount = post.uniqueViewCount,
     )
     if (reach.pseudo == null && reach.views == null) return
     val a11yLabel = stringResource(R.string.feed_post_reach_a11y)
@@ -447,158 +484,11 @@ private fun PostReachLine(post: FeedPostPresentation) {
             Text(text = "·", style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
             Icon(Icons.Filled.BarChart, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
             Text(text = reach.impressions, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
-        }
-    }
-}
-
-@Composable
-private fun DetailStatsRow(
-    post: FeedPostPresentation,
-    isReposted: Boolean,
-    onRepost: () -> Unit,
-    onQuote: () -> Unit,
-    onLike: () -> Unit,
-    quickEmojis: List<String>,
-    onReact: (PostReactionPick) -> Unit,
-    onBookmark: () -> Unit,
-) {
-    var palette by remember { mutableStateOf(PostReactionPaletteState()) }
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box {
-        DetailStat(
-            icon = { tint ->
-                Icon(
-                    if (post.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    contentDescription = stringResource(if (post.isLiked) R.string.feed_unlike else R.string.feed_like),
-                    tint = tint,
-                    modifier = Modifier.size(20.dp),
-                )
-            },
-            count = post.likeCount,
-            active = post.isLiked,
-            activeTint = MeeshyPalette.Error,
-            heart = true,
-            onClick = onLike,
-            triggerModifier = Modifier.reactionPaletteTrigger(onOpen = { palette = palette.opened() }),
-        )
-        PostReactionPalette(
-            isOpen = palette.isOpen,
-            onDismiss = { palette = palette.dismissed() },
-            onPick = { emoji ->
-                val (next, pick) = palette.picked(emoji)
-                palette = next
-                pick?.let(onReact)
-            },
-            emojis = quickEmojis,
-            anchor = PostReactionPaletteAnchor.Start,
-        )
-        }
-        DetailStat(
-            icon = { tint ->
-                Icon(Icons.Filled.ChatBubbleOutline, contentDescription = stringResource(R.string.feed_comments), tint = tint, modifier = Modifier.size(18.dp))
-            },
-            count = post.commentCount,
-            active = false,
-        )
-        DetailRepostStat(
-            count = post.repostCount,
-            active = isReposted,
-            onRepost = onRepost,
-            onQuote = onQuote,
-        )
-        DetailStat(
-            icon = { tint ->
-                Icon(
-                    if (post.isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
-                    contentDescription = stringResource(if (post.isBookmarked) R.string.feed_unbookmark else R.string.feed_bookmark),
-                    tint = tint,
-                    modifier = Modifier.size(20.dp),
-                )
-            },
-            count = post.bookmarkCount,
-            active = post.isBookmarked,
-            onClick = onBookmark,
-        )
-    }
-}
-
-@Composable
-private fun DetailStat(
-    icon: @Composable (Color) -> Unit,
-    count: Int,
-    active: Boolean,
-    activeTint: Color = MeeshyPalette.Indigo500,
-    onClick: (() -> Unit)? = null,
-    triggerModifier: Modifier = Modifier,
-    heart: Boolean = false,
-) {
-    val tint = if (active) activeTint else MeeshyTheme.tokens.textSecondary
-    val haptics = rememberMeeshyHaptics()
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = triggerModifier
-            .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
-            .clip(RoundedCornerShape(MeeshyRadius.sm))
-            .let { base -> if (onClick == null) base else base.clickable(role = Role.Button, onClick = { haptics.light(); onClick() }) }
-            .padding(horizontal = MeeshySpacing.xs),
-    ) {
-        EngagementGlyph(active = active, tint = tint, size = 20.dp, burst = heart, tilt = heart) { icon(tint) }
-        if (count > 0) {
-            Spacer(Modifier.width(MeeshySpacing.xs))
-            EngagementCount(count = count, color = MeeshyTheme.tokens.textSecondary)
-        }
-    }
-}
-
-/**
- * The repost stat, made interactive: a tap opens a Repost / Quote choice — the Android take on
- * iOS's post-detail repost button + alert (`PostDetailView.toggleDetailRepost`). The icon fills
- * once the reader has reposted (optimistic [active]); the menu items route to the ViewModel,
- * whose tested [RepostCommand] SSOT decides what to send.
- */
-@Composable
-private fun DetailRepostStat(
-    count: Int,
-    active: Boolean,
-    onRepost: () -> Unit,
-    onQuote: () -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val tint = if (active) MeeshyPalette.Success else MeeshyTheme.tokens.textSecondary
-    val a11y = stringResource(R.string.feed_reposts)
-    val haptics = rememberMeeshyHaptics()
-    Box {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .clip(RoundedCornerShape(MeeshyRadius.sm))
-                .clickable { haptics.light(); expanded = true }
-                .semantics { contentDescription = a11y },
-        ) {
-            EngagementIcon(icon = Icons.Filled.Repeat, active = active, tint = tint)
-            if (count > 0) {
-                Spacer(Modifier.width(MeeshySpacing.xs))
-                EngagementCount(count = count, color = MeeshyTheme.tokens.textSecondary)
+            reach.uniqueViews?.let { people ->
+                Text(text = "·", style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
+                Icon(Icons.Filled.Person, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
+                Text(text = people, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
             }
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.feed_action_repost)) },
-                onClick = {
-                    expanded = false
-                    onRepost()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.feed_action_quote)) },
-                onClick = {
-                    expanded = false
-                    onQuote()
-                },
-            )
         }
     }
 }

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "story.viewer.fullscreen.enter",
+          "androidName": "stories_viewer_fullscreen_enter",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.viewer.fullscreen.exit",
+          "androidName": "stories_viewer_fullscreen_exit",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
