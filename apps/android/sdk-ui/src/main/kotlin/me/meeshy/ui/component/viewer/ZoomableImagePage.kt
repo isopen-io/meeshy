@@ -100,7 +100,7 @@ internal fun ZoomableImagePage(
     val latestOnTap by rememberUpdatedState(onTap)
     val latestOnDragProgress by rememberUpdatedState(onDragProgress)
     val latestOnDismiss by rememberUpdatedState(onDismiss)
-        val dragStartPx = with(density) { FullscreenVideoGestures.DRAG_START_DISTANCE.dp.toPx() }
+    val dragStartPx = with(density) { FullscreenVideoGestures.DRAG_START_DISTANCE.dp.toPx() }
 
     LaunchedEffect(isActive) {
         if (isActive) return@LaunchedEffect
