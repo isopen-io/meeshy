@@ -104,6 +104,7 @@
     <string name="composer_slide_rail_delete">Excluir a cena %1$d</string>
     <string name="composer_slide_rail_position">Cena %1$d de %2$d</string>
     <string name="composer_socle_audience">Público</string>
+    <string name="composer_socle_blocked_audience">Escolha pelo menos uma pessoa para publicar</string>
     <string name="composer_socle_publish">Publicar</string>
     <string name="composer_sound_background_a11y">Som de fundo</string>
     <string name="composer_text_frame_cloud">Nuvem</string>
@@ -261,7 +262,10 @@
     <string name="stories_tray_add_story">Adicionar uma story</string>
     <string name="stories_tray_manage">Gerenciar meus stories</string>
     <string name="stories_tray_view_my_story">Ver meu story</string>
+    <string name="stories_viewer_a11y_background_audio">Áudio de fundo</string>
     <string name="stories_viewer_close">Fechar</string>
+    <string name="stories_viewer_fullscreen_enter">Tela cheia</string>
+    <string name="stories_viewer_fullscreen_exit">Sair da tela cheia</string>
     <string name="stories_viewer_mute">Silenciar som de fundo</string>
     <string name="stories_viewer_next">Próxima story</string>
     <string name="stories_viewer_not_found_description">Não foi possível carregar esta story. Tente novamente ou feche.</string>
@@ -290,6 +294,8 @@
     <string name="story_canvas_action_edit">Editar</string>
     <string name="story_canvas_action_leaveScene">Tirar da cena</string>
     <string name="story_canvas_action_sendBackward">Enviar para trás</string>
+    <string name="story_caption_scroll_to_top">Voltar ao início do texto</string>
+    <string name="story_caption_scroll_to_top_hint">Rola a descrição até a primeira palavra</string>
     <string name="story_composer_cancel">Cancelar</string>
     <string name="story_composer_edit_slide_background">Editar o fundo</string>
     <string name="story_composer_fab_badge">%1$d elemento(s) ativo(s)</string>
@@ -324,6 +330,10 @@
     <string name="story_media_soundExtraction_a11yHint">Outras pessoas poderão reaproveitar a trilha sonora dos vídeos desta publicação em suas próprias publicações.</string>
     <string name="story_media_soundExtraction_caption">Outras pessoas poderão reaproveitar a trilha sonora dos vídeos desta publicação.</string>
     <string name="story_media_soundExtraction_label">Permitir reaproveitamento do som</string>
+    <string name="story_notification_expired_back">Voltar às notificações</string>
+    <string name="story_notification_expired_cta_create">Criar um story</string>
+    <string name="story_notification_expired_subtitle">Este story não está mais disponível.</string>
+    <string name="story_notification_expired_title">Story expirado</string>
     <string name="story_reader_buffering">Carregando a story</string>
     <string name="story_reader_loading">Carregando story…</string>
     <string name="story_repost_error_forbidden">Este story não pode ser repostado</string>
@@ -389,4 +399,5 @@
     <string name="story_tray_a11y_changeMood">Mudar meu humor</string>
     <string name="story_tray_menu_profile">Ver o perfil</string>
     <string name="story_tray_menu_viewStories">Ver os stories</string>
+    <string name="story_viewer_transcript_title">Transcrição</string>
 </resources>

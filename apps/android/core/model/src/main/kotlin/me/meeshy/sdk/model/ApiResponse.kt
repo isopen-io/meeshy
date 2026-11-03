@@ -42,6 +42,8 @@ data class ApiResponse<T>(
     val resetAt: String? = null,
     /** Secondes avant de pouvoir réessayer (`NEWCOMER_SLOW_MODE`, limites du jour), entier ou décimal. */
     val retryAfter: Double? = null,
+    /** Les consentements à donner d'un 403 de pièce jointe (`/attachments/:id/translate`). */
+    val requiredConsents: List<String>? = null,
 )
 
 /**

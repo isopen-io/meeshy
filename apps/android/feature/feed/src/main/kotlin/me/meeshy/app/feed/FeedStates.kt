@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.Icon
@@ -53,6 +52,7 @@ internal fun FeedNotice.messageRes(): Int = when (this) {
     FeedNotice.PUBLISHED -> R.string.feed_notice_published
     FeedNotice.PUBLISH_QUEUED -> R.string.feed_notice_publish_queued
     FeedNotice.TRANSLATION_FAILED -> R.string.feed_notice_translation_failed
+    FeedNotice.UNBOOKMARKED -> R.string.post_bookmark_removed
 }
 
 /**
@@ -60,16 +60,6 @@ internal fun FeedNotice.messageRes(): Int = when (this) {
  * context — and, for the error, « Réessayer ». Scrollable so the pull-to-refresh of the
  * parent `PullToRefreshBox` still starts from an empty screen.
  */
-@Composable
-internal fun FeedEmptyState(modifier: Modifier = Modifier) {
-    FeedStatePane(
-        icon = { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(48.dp)) },
-        title = stringResource(R.string.feed_empty),
-        subtitle = stringResource(R.string.feed_empty_subtitle),
-        modifier = modifier,
-    )
-}
-
 @Composable
 internal fun FeedErrorState(onRetry: () -> Unit, modifier: Modifier = Modifier) {
     FeedStatePane(

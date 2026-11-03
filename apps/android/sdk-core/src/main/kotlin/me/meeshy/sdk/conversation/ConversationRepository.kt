@@ -138,6 +138,9 @@ class ConversationRepository @Inject constructor(
      */
     fun totalUnreadCount(): Flow<Int> = conversationDao.totalUnreadCount()
 
+    /** Le nombre de conversations non lues (SQL `COUNT`, aucun decodage) : le chiffre du badge de la liste. */
+    fun unreadConversationCount(): Flow<Int> = conversationDao.unreadConversationCount()
+
     /**
      * Une empreinte de la fenêtre que lisent les widgets ([recentCachedConversations]) : elle change
      * quand une conversation de la fenêtre change (message reçu, lecture, épingle), jamais sinon.

@@ -130,7 +130,7 @@ class DefaultAudioRecorderTest {
         assertThat(short.finished()).isNull()
 
         val long = Rig(this, AudioRecordingSettings.voiceSample)
-        long.record(10.1)
+        long.record(10.2)
         assertThat(long.finished()).isNotNull()
     }
 
