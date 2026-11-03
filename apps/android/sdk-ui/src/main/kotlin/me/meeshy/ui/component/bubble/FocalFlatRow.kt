@@ -66,6 +66,9 @@ import me.meeshy.ui.component.focal.FocalAttachmentBlock
 import me.meeshy.ui.component.focal.FocalIdentityHeader
 import me.meeshy.ui.component.focal.FocalLongMessage
 import me.meeshy.ui.component.focal.FocalProtectedContent
+import me.meeshy.ui.component.focal.FocalSpecialRowView
+import me.meeshy.ui.component.focal.focalSpecialRow
+import me.meeshy.sdk.model.reading.focal.FocalSpecialRow
 import me.meeshy.ui.component.focal.LocalFlatRowExpansion
 import me.meeshy.ui.component.focal.FocalMetaColumn
 import me.meeshy.ui.component.focal.FocalQuotedReply
@@ -124,9 +127,9 @@ public fun FocalFlatRow(
                 // Envoi optimiste : 0,7 tant que le gateway n'a pas accusé (iOS `isOptimistic`).
                 .alpha(if (content.isPending) 0.7f else 1f),
         ) {
+            val special = remember(content.isDeleted, content.isSystem, content.callSummary, content.joinNotice, content.text) { content.focalSpecialRow() }
             when {
-                renderKind.isSystem -> SystemNoticeLine(content = content, callbacks = callbacks)
-                content.isDeleted -> FlatMutedLine(stringResource(R.string.bubble_message_deleted), callbacks.onLongPress)
+                special != FocalSpecialRow.None -> FocalSpecialRowView(special, content, accentColor, callbacks)
                 renderKind.isBurned -> FlatMutedLine(stringResource(R.string.bubble_burned), callbacks.onLongPress)
                 else -> FlatStandardBody(
                     content = content,
@@ -355,7 +358,7 @@ private fun FlatContentSections(
             MessageStickerArtwork(sticker, side = FlatRowMetrics.stickerSide)
             return@Column
         }
-        if (content.hasRenderedAttachments) FocalAttachmentBlock(content, ink, callbacks, audioPlayback)
+        if (content.hasRenderedAttachments) FocalAttachmentBlock(content, ink, callbacks, audioPlayback, accentColor)
         FlatText(content, accentColor, ink, decor)
         if (!content.isEndToEndSealed) bodyAccessory?.invoke(ink)
     }
