@@ -43,6 +43,7 @@ object ComposerSceneReferences {
         val pinnedNames = pinned.mapNotNull { it.username?.lowercase() }.toSet()
         val others = declared.filterNot { mention ->
             mention.display == null || mention.display == PostReferenceDisplay.PINNED.wire ||
+                mention.display == PostReferenceDisplay.INLINE.wire ||
                 mention.username?.lowercase() in pinnedNames
         }
         return (pinned + others).take(MAX_MENTIONS)

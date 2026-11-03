@@ -64,7 +64,7 @@ internal fun ConversationRowPreviewLine(
             tint = textSecondary,
             italic = true,
         )
-        MessageSummaryKind.VIEW_ONCE -> RowPreviewKindStyle(
+        MessageSummaryKind.VIEW_ONCE, MessageSummaryKind.AFTER_READ -> RowPreviewKindStyle(
             icon = Icons.Filled.LocalFireDepartment,
             contentDescriptionRes = R.string.conversations_preview_view_once_content_description,
             tint = primaryAccent,

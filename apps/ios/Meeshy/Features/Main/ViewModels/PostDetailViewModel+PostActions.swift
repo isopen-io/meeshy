@@ -29,6 +29,7 @@ extension PostDetailViewModel {
     /// Suppression, retrait ou passage en privé (#11535) : `true` quand le serveur l'a appliqué — l'écran se referme.
     @discardableResult
     func withdrawPost(_ postId: String, _ withdrawal: PublicationWithdrawal) async -> Bool {
+        guard !ClientMutationId.isValid(postId) else { return await cancelPendingSend(postId) }
         do {
             try await withdrawal.perform(postId: postId, with: postService)
             FeedbackToastManager.shared.showSuccess(withdrawal.successText(deleted: String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main)))
@@ -37,6 +38,13 @@ extension PostDetailViewModel {
             FeedbackToastManager.shared.showError(withdrawal.failureText(deleteError: String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main)))
             return false
         }
+    }
+
+    /// **Une publication encore dans la file d'envoi s'ANNULE** (#10331) : son
+    /// id est le cmid de sa ligne `.createPost`, et rien n'existe côté serveur
+    /// à supprimer. Même action que la pastille (`PendingPublicationCancel`).
+    private func cancelPendingSend(_ cmid: String) async -> Bool {
+        await PendingPublicationCancel.run(cmid, queue: offlineQueue)
     }
 
     func pinPost(_ postId: String) async {

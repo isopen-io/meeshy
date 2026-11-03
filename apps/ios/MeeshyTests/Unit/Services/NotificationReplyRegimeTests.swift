@@ -51,11 +51,14 @@ final class NotificationReplyRegimeTests: XCTestCase {
     }
 
     private struct Unreachable: Error {}
+    /// La relecture SANS refus typés (`getById`) : un 404 servi y redevient
+    /// opaque (#14708). Le handler ne doit jamais la prendre.
+    private struct UntypedRead: Error {}
 
     /// Les refus que la passerelle SERT pour une conversation qu'elle ne sert
     /// plus (#14693) : enveloppe `sendError` et son code.
     private static let conversationNotFound = MeeshyError.rejected(APIRejection(
-        statusCode: 404, code: "CONVERSATION_NOT_FOUND", message: "Conversation introuvable"
+        statusCode: 404, code: "CONVERSATION_NOT_FOUND", message: "Conversation introuvable", isGatewayEnvelope: true
     ))
     private static let notAMember = MeeshyError.forbidden(
         reason: "Refusé",
@@ -66,6 +69,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
     private static let intermediaryRefusals: [Error] = [
         MeeshyError.server(statusCode: 404, message: "404 page not found"),
         MeeshyError.rejected(APIRejection(statusCode: 404, message: "404 page not found")),
+        MeeshyError.rejected(APIRejection(statusCode: 404, code: "CONVERSATION_NOT_FOUND", message: "Introuvable")),
         MeeshyError.server(statusCode: 410, message: "Gone"),
         MeeshyError.forbidden(reason: nil, body: Data("<html><body>Forbidden</body></html>".utf8)),
         MeeshyError.forbidden(reason: nil, body: nil),
@@ -94,14 +98,17 @@ final class NotificationReplyRegimeTests: XCTestCase {
         var preservedSessions: Set<String> = ["user1", "user2"]
     }
 
-    private func makeSUT(served: Result<APIConversation, Error> = .success(conversation(mode: nil))) -> SUT {
+    private func makeSUT(
+        served: Result<APIConversation, Error> = .success(conversation(mode: nil)),
+        awaiting: NotificationRepliesAwaitingRegime = NotificationRepliesAwaitingRegime(fileURL: nil)
+    ) -> SUT {
         let messages = MockMessageService()
         let conversations = MockConversationService()
-        conversations.getByIdResult = served
+        conversations.getByIdTypedRefusalsResult = served
+        conversations.getByIdResult = .failure(UntypedRead())
         let queue = ReplyQueueSpy()
         let persistence = PersistenceSpy()
         let vault = MockEndToEndMessaging()
-        let awaiting = NotificationRepliesAwaitingRegime(fileURL: nil)
         var refusals: [EndToEndSendRefusal] = []
         let log = NoticeLog()
         let rules = NotificationReplyRegimeWait.Rules(
@@ -196,7 +203,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
         XCTAssertEqual(sut.persistence.insertedRecords.map(\.content), [E2EEWire.contentPlaceholder])
         XCTAssertEqual(vaultTexts(sut), [Self.secret], "le clair est au coffre, d'où le fil le renverra chiffré")
         XCTAssertEqual(sut.refusals(), [.sealedOnlyInConversation])
-        XCTAssertEqual(sut.conversations.getByIdCallCount, 0, "le push suffit à fermer : aucune relecture")
+        XCTAssertEqual(sut.conversations.getByIdTypedRefusalsCallCount, 0, "le push suffit à fermer : aucune relecture")
     }
 
     func test_handleReply_pushCarriesUnknownMode_writesNoPlaintextAnywhere() async {
@@ -224,7 +231,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
         await reply(sut, userInfo: replyUserInfo())
 
         assertNoPlaintextLeft(sut)
-        XCTAssertEqual(sut.conversations.getByIdCallCount, 1)
+        XCTAssertEqual(sut.conversations.getByIdTypedRefusalsCallCount, 1)
         XCTAssertEqual(sut.refusals(), [.sealedOnlyInConversation])
     }
 
@@ -268,7 +275,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
     func test_confirmAwaiting_networkBackOnPlainConversation_sendsTheReplyAndEmptiesTheVault() async {
         let sut = makeSUT(served: .failure(Unreachable()))
         await reply(sut, userInfo: replyUserInfo())
-        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+        sut.conversations.getByIdTypedRefusalsResult = .success(Self.conversation(mode: nil))
 
         await sut.handler.confirmRepliesAwaitingRegime()
 
@@ -283,7 +290,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
     func test_confirmAwaiting_networkBackOnEndToEndConversation_writesTheSealedBubbleOnly() async {
         let sut = makeSUT(served: .failure(Unreachable()))
         await reply(sut, userInfo: replyUserInfo())
-        sut.conversations.getByIdResult = .success(Self.conversation(mode: "e2ee"))
+        sut.conversations.getByIdTypedRefusalsResult = .success(Self.conversation(mode: "e2ee"))
 
         await sut.handler.confirmRepliesAwaitingRegime()
 
@@ -371,7 +378,9 @@ final class NotificationReplyRegimeTests: XCTestCase {
         )
     }
 
-    func test_awaitingStore_corruptedFile_isNeverOverwrittenByAnAdd() throws {
+    /// #14707 — des octets LUS qui ne se décodent pas ne sont pas un fichier
+    /// verrouillé : ils partent à côté, à l'identique, et le magasin guérit.
+    func test_awaitingStore_undecodableFile_isSetAsideAsIs_andTheStoreWritesAgain() throws {
         let url = Self.temporaryStoreURL()
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -381,9 +390,85 @@ final class NotificationReplyRegimeTests: XCTestCase {
         let store = NotificationRepliesAwaitingRegime(fileURL: url)
         let added = Self.fiche()
         store.add(added)
+        let relaunched = NotificationRepliesAwaitingRegime(fileURL: url)
 
-        XCTAssertEqual(try Data(contentsOf: url), corrupted, "le fichier illisible reste tel quel")
-        XCTAssertEqual(store.awaiting.map(\.clientMessageId), [added.clientMessageId], "la fiche tient en mémoire")
+        let aside = try Self.setAside(next: url)
+        XCTAssertEqual(aside.count, 1, "le fichier corrompu est mis de côté, jamais écrasé")
+        let kept = try XCTUnwrap(aside.first)
+        XCTAssertEqual(try Data(contentsOf: kept), corrupted, "à l'identique")
+        XCTAssertEqual(try kept.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, true)
+        XCTAssertEqual(relaunched.awaiting.map(\.clientMessageId), [added.clientMessageId],
+                       "la fiche ajoutée après la corruption survit à une relance")
+    }
+
+    func test_awaitingStore_oneInvalidFiche_doesNotTakeTheOthersWithIt() throws {
+        let kept = Self.fiche("gardée")
+        let url = try Self.storeFile(withValid: [kept], invalid: [Self.invalidFiche, #"{"pas":"une fiche"}"#])
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        let store = NotificationRepliesAwaitingRegime(fileURL: url)
+
+        let returned = store.awaiting.first { $0.clientMessageId == kept.clientMessageId }
+        XCTAssertEqual(returned?.replyToId, "msg1", "la fiche valide est rendue")
+        XCTAssertNil(returned?.withdrawnAt)
+        XCTAssertEqual(try Self.setAside(next: url).count, 1, "l'original est gardé de côté")
+    }
+
+    /// Le clair d'une fiche que le fichier corrompu nommait encore ne reste pas
+    /// au coffre sans fiche : il s'efface, et l'utilisateur lit que la réponse
+    /// n'est pas partie, sans son texte.
+    func test_awaitingStore_invalidFicheStillNamed_isNeverSent_itsPlaintextLeavesTheVaultAndItIsSaid() async throws {
+        let url = try Self.storeFile(withValid: [], invalid: [Self.invalidFiche])
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let sut = makeSUT(served: .success(Self.conversation(mode: nil)), awaiting: NotificationRepliesAwaitingRegime(fileURL: url))
+        let orphan = E2EEContent(text: Self.secret, language: "fr", replyTo: nil, conversationId: "conv1",
+                                 clientMessageId: "cm-bad", sentAt: Date())
+        _ = await sut.vault.remember(orphan, from: "user1", as: ["cm-bad"])
+
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        XCTAssertEqual(sut.messages.sendCallCount, 0, "une fiche illisible ne part jamais")
+        XCTAssertTrue(sut.queue.enqueuedItems.isEmpty)
+        XCTAssertFalse(sut.vault.storedIds.contains("cm-bad"), "son clair quitte le coffre")
+        XCTAssertEqual(sut.notices.dropped, ["conv1"], "et l'utilisateur le lit")
+        XCTAssertTrue(sut.awaiting.awaiting.isEmpty)
+    }
+
+    /// Une fiche du FICHIER sans date n'est pas une fiche héritée : le fichier
+    /// a toujours écrit la sienne. Sans elle, l'âge est inconnu : elle est
+    /// échue, et ne repart pas pour 24 h (audit de #14707).
+    func test_awaitingStore_storedFicheWithoutItsDate_isExpiredNotRearmed() async throws {
+        let undated = #"{"clientMessageId":"cm-undated","conversationId":"conv1","senderId":"user1","replyToId":"msg1"}"#
+        let url = try Self.storeFile(withValid: [], invalid: [undated])
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let sut = makeSUT(served: .success(Self.conversation(mode: nil)), awaiting: NotificationRepliesAwaitingRegime(fileURL: url))
+        sut.notices.now = Date()
+        let kept = E2EEContent(text: Self.secret, language: "fr", replyTo: nil, conversationId: "conv1",
+                               clientMessageId: "cm-undated", sentAt: Date())
+        _ = await sut.vault.remember(kept, from: "user1", as: ["cm-undated"])
+
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        XCTAssertEqual(sut.messages.sendCallCount, 0, "une fiche sans date ne part pas")
+        XCTAssertFalse(sut.vault.storedIds.contains("cm-undated"), "son clair quitte le coffre")
+        XCTAssertEqual(sut.notices.dropped, ["conv1"])
+        XCTAssertTrue(sut.awaiting.awaiting.isEmpty)
+    }
+
+    private static let invalidFiche =
+        #"{"clientMessageId":"cm-bad","conversationId":"conv1","senderId":"user1","createdAt":"une date future"}"#
+
+    private static func storeFile(withValid valid: [NotificationReplyAwaitingRegime], invalid: [String]) throws -> URL {
+        let url = temporaryStoreURL()
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let encoded = try valid.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
+        try Data("[\((encoded + invalid).joined(separator: ","))]".utf8).write(to: url)
+        return url
+    }
+
+    private static func setAside(next url: URL) throws -> [URL] {
+        try FileManager.default.contentsOfDirectory(at: url.deletingLastPathComponent(), includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix("awaiting-regime.corrupt-") }
     }
 
     /// Avant le premier déverrouillage, le fichier existe mais ne se lit pas :
@@ -440,7 +525,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
     // MARK: - L'attente se voit, et finit (#14673)
 
     private func waitingReply(_ sut: SUT) async -> String {
-        sut.conversations.getByIdResult = .failure(Unreachable())
+        sut.conversations.getByIdTypedRefusalsResult = .failure(Unreachable())
         await reply(sut, userInfo: replyUserInfo())
         return sut.awaiting.awaiting.first?.clientMessageId ?? ""
     }
@@ -465,7 +550,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
     func test_confirmAwaiting_sent_withdrawsTheWaitNotice() async {
         let sut = makeSUT()
         let id = await waitingReply(sut)
-        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+        sut.conversations.getByIdTypedRefusalsResult = .success(Self.conversation(mode: nil))
 
         await sut.handler.confirmRepliesAwaitingRegime()
 
@@ -476,7 +561,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
     func test_confirmAwaiting_gatewayNoLongerServesTheConversation_withdrawsAndSaysIt() async {
         let sut = makeSUT()
         _ = await waitingReply(sut)
-        sut.conversations.getByIdResult = .failure(Self.notAMember)
+        sut.conversations.getByIdTypedRefusalsResult = .failure(Self.notAMember)
 
         await sut.handler.confirmRepliesAwaitingRegime()
 
@@ -486,7 +571,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
     func test_confirmAwaiting_conversationGone_withdrawsAndSaysIt() async {
         let sut = makeSUT()
         _ = await waitingReply(sut)
-        sut.conversations.getByIdResult = .failure(Self.conversationNotFound)
+        sut.conversations.getByIdTypedRefusalsResult = .failure(Self.conversationNotFound)
 
         await sut.handler.confirmRepliesAwaitingRegime()
 
@@ -498,7 +583,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
         for error in transient + Self.intermediaryRefusals {
             let sut = makeSUT()
             _ = await waitingReply(sut)
-            sut.conversations.getByIdResult = .failure(error)
+            sut.conversations.getByIdTypedRefusalsResult = .failure(error)
 
             await sut.handler.confirmRepliesAwaitingRegime()
 
@@ -546,7 +631,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
     func test_confirmAwaiting_accountSwitchedWhileReadingTheVault_sendsNothing() async {
         let sut = makeSUT()
         _ = await waitingReply(sut)
-        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+        sut.conversations.getByIdTypedRefusalsResult = .success(Self.conversation(mode: nil))
         let log = sut.notices
         sut.vault.onPlaintexts = { @MainActor in log.activeUser = "user2" }
 
@@ -559,23 +644,55 @@ final class NotificationReplyRegimeTests: XCTestCase {
         XCTAssertEqual(vaultTexts(sut), [Self.secret])
     }
 
+    /// #14706 — le compte change PENDANT la relecture du régime : le refus que
+    /// la passerelle sert au nouveau compte ne dit rien de l'ancien.
+    func test_confirmAwaiting_accountSwitchedWhileReadingTheRegime_refusalWithdrawsNothing() async {
+        let sut = makeSUT()
+        _ = await waitingReply(sut)
+        sut.conversations.getByIdTypedRefusalsResult = .failure(Self.conversationNotFound)
+        let log = sut.notices
+        sut.conversations.onGetByIdTypedRefusals = { log.activeUser = "user2" }
+
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        XCTAssertEqual(sut.awaiting.awaiting.map(\.senderId), ["user1"], "la fiche attend son compte")
+        XCTAssertNil(sut.awaiting.awaiting.first?.withdrawnAt)
+        XCTAssertTrue(sut.notices.dropped.isEmpty, "rien n'est déclaré non envoyé")
+        XCTAssertEqual(vaultTexts(sut), [Self.secret], "le clair reste au coffre")
+    }
+
+    func test_confirmAwaiting_accountSwitchedWhileReadingTheRegime_writesNoSealedBubble() async {
+        let sut = makeSUT()
+        _ = await waitingReply(sut)
+        sut.conversations.getByIdTypedRefusalsResult = .success(Self.conversation(mode: "e2ee"))
+        let log = sut.notices
+        sut.conversations.onGetByIdTypedRefusals = { log.activeUser = "user2" }
+
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        XCTAssertTrue(sut.persistence.insertedRecords.isEmpty, "aucune bulle de user1 née sous user2")
+        XCTAssertEqual(sut.awaiting.awaiting.map(\.senderId), ["user1"])
+        XCTAssertTrue(sut.notices.settled.isEmpty)
+        XCTAssertEqual(vaultTexts(sut), [Self.secret])
+    }
+
     func test_confirmAwaiting_pastItsAge_isWithdrawnWithoutReadingTheGateway() async {
         let sut = makeSUT()
         _ = await waitingReply(sut)
-        let reads = sut.conversations.getByIdCallCount
-        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+        let reads = sut.conversations.getByIdTypedRefusalsCallCount
+        sut.conversations.getByIdTypedRefusalsResult = .success(Self.conversation(mode: nil))
         sut.notices.now = sut.notices.now.addingTimeInterval(NotificationReplyRegimeWait.maxAge + 1)
 
         await sut.handler.confirmRepliesAwaitingRegime()
 
         assertWithdrawn(sut)
-        XCTAssertEqual(sut.conversations.getByIdCallCount, reads, "une réponse échue ne se relit plus")
+        XCTAssertEqual(sut.conversations.getByIdTypedRefusalsCallCount, reads, "une réponse échue ne se relit plus")
     }
 
     func test_confirmAwaiting_withinItsAge_stillSends() async {
         let sut = makeSUT()
         _ = await waitingReply(sut)
-        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+        sut.conversations.getByIdTypedRefusalsResult = .success(Self.conversation(mode: nil))
         sut.notices.now = sut.notices.now.addingTimeInterval(NotificationReplyRegimeWait.maxAge - 60)
 
         await sut.handler.confirmRepliesAwaitingRegime()
@@ -610,7 +727,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
 
         sut.notices.preservedSessions = ["user1"]
         sut.vault.erasureAccepted = true
-        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+        sut.conversations.getByIdTypedRefusalsResult = .success(Self.conversation(mode: nil))
         await sut.handler.confirmRepliesAwaitingRegime()
 
         XCTAssertEqual(sut.messages.sendCallCount, 0, "une réponse retirée à la déconnexion ne part jamais")
@@ -640,10 +757,10 @@ final class NotificationReplyRegimeTests: XCTestCase {
         let sut = makeSUT()
         _ = await waitingReply(sut)
         sut.notices.activeUser = "user2"
-        sut.conversations.getByIdResult = .success(Self.conversation(mode: "e2ee"))
+        sut.conversations.getByIdTypedRefusalsResult = .success(Self.conversation(mode: "e2ee"))
 
         await sut.handler.confirmRepliesAwaitingRegime()
-        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+        sut.conversations.getByIdTypedRefusalsResult = .success(Self.conversation(mode: nil))
         await sut.handler.confirmRepliesAwaitingRegime()
 
         XCTAssertEqual(sut.messages.sendCallCount, 0, "la réponse de user1 ne part pas sous user2")
@@ -656,7 +773,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
     func test_confirmAwaiting_twoConcurrentWakes_sendTheReplyOnce() async {
         let sut = makeSUT()
         _ = await waitingReply(sut)
-        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+        sut.conversations.getByIdTypedRefusalsResult = .success(Self.conversation(mode: nil))
         sut.vault.onPlaintexts = { try? await Task.sleep(for: .milliseconds(200)) }
 
         let handler = sut.handler

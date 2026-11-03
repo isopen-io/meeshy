@@ -154,7 +154,7 @@ fun messageSummaryLine(
             text = kindLabelWithSender(message, currentUserId, showSender, labels, labels.hidden),
             kind = kind,
         )
-        MessageSummaryKind.VIEW_ONCE -> SummaryLine(
+        MessageSummaryKind.VIEW_ONCE, MessageSummaryKind.AFTER_READ -> SummaryLine(
             text = kindLabelWithSender(message, currentUserId, showSender, labels, labels.viewOnce),
             kind = kind,
         )
