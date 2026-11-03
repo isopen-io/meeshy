@@ -125,7 +125,7 @@ object ShareContentSummary {
             val withdrawn = plan.withdrawn.firstOrNull { it.id == message.id }?.reason
             ShareMessageRow(
                 id = message.id,
-                senderName = message.sender?.name?.takeIf { it.isNotBlank() } ?: message.senderDisplayName,
+                senderName = message.sender?.name?.takeIf { it.isNotBlank() },
                 preview = preview(message),
                 withdrawn = withdrawn,
                 removable = plan.kept.size > 1 && withdrawn == null,
