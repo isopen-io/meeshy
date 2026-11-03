@@ -19,6 +19,7 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.reading.mode.ConversationReadingMode
 import me.meeshy.sdk.model.reading.mode.LensRow
 import me.meeshy.sdk.model.reading.mode.OrchestratorDecision
+import me.meeshy.sdk.model.reading.mode.OrchestratorDecisionReason
 import me.meeshy.sdk.model.reading.mode.ReadingModeCapabilities
 import me.meeshy.sdk.model.reading.mode.ReadingModeConversationType
 import me.meeshy.sdk.model.reading.mode.ReadingModeCycle
@@ -53,6 +54,9 @@ interface ReadingModePreferenceStoring {
     fun setMode(mode: ConversationReadingMode?, conversationId: String, scope: ReadingModePreferenceScope)
     fun lastOpenedAtMs(conversationId: String, scope: ReadingModePreferenceScope): Long?
     fun noteOpened(conversationId: String, scope: ReadingModePreferenceScope, atMs: Long)
+
+    /** Efface toutes les préférences de lecture (changement de compte) ; les drapeaux restent. */
+    fun clearAll() {}
 }
 
 /** Les drapeaux des modes de lecture — miroir de `LentilleFeatureFlag` : actifs tant qu'aucune valeur n'est écrite. */
@@ -91,11 +95,21 @@ class SharedPreferencesReadingModeStore @Inject constructor(
         prefs.edit().putLong(ReadingModePreferenceScope.lastOpenedKey(scope, conversationId), atMs).apply()
     }
 
+    override fun clearAll() {
+        prefs.edit().apply {
+            prefs.all.keys
+                .filter { it.startsWith(MODE_KEY_PREFIX) || it.startsWith(LAST_OPEN_KEY_PREFIX) }
+                .forEach { remove(it) }
+        }.apply()
+    }
+
     override val isReadingModesEnabled: Boolean get() = prefs.getBoolean(FLAG_READING_MODES, true)
     override val isRiviereModeEnabled: Boolean get() = prefs.getBoolean(FLAG_RIVIERE_MODE, true)
 
     private companion object {
         const val PREFS = "meeshy.readingModes"
+        const val MODE_KEY_PREFIX = "meeshy_readmode_"
+        const val LAST_OPEN_KEY_PREFIX = "meeshy_lastopen_"
         const val FLAG_READING_MODES = "meeshy.flag.reading_modes"
         const val FLAG_RIVIERE_MODE = "meeshy.flag.riviere_mode"
     }
@@ -121,6 +135,8 @@ data class ReadingModeUiState(
  * Le mode de lecture d'UNE conversation ouverte — miroir de `ReadingModeController` (iOS). Les
  * entrées (non-lus, capacités, drapeau) sont figées à l'ouverture ; [select] écrit la préférence
  * collante puis recalcule, [resetToAuto] efface la clé puis recalcule. Pur hors du [store].
+ * [forcedMode] (ouverture depuis une notification ou un aperçu) est ÉPHÉMÈRE : il décide de
+ * l'ouverture seulement, n'est jamais écrit, et le premier choix manuel reprend la loi.
  */
 class ReadingModeSession(
     private val conversationId: String,
@@ -132,9 +148,14 @@ class ReadingModeSession(
     private val now: () -> Long,
     private val delivered: Set<ConversationReadingMode> = DELIVERED_READING_MODES,
     landsOnMessage: Boolean = false,
+    forcedMode: ConversationReadingMode? = null,
 ) {
     private val _state = MutableStateFlow(
-        ReadingModeUiState(compute(landsOnMessage), capabilities, delivered),
+        ReadingModeUiState(
+            forcedMode?.let { OrchestratorDecision(it, OrchestratorDecisionReason.DEFAULT) } ?: compute(landsOnMessage),
+            capabilities,
+            delivered,
+        ),
     )
     val state: StateFlow<ReadingModeUiState> = _state.asStateFlow()
 
@@ -183,6 +204,7 @@ class ReadingModeSession(
             store: ReadingModePreferenceStoring,
             now: () -> Long,
             delivered: Set<ConversationReadingMode> = DELIVERED_READING_MODES,
+            forcedMode: ConversationReadingMode? = null,
         ): ReadingModeSession {
             val capabilities = ReadingModeOrchestrator.resolveCapabilities(
                 isAnonymous = scope is ReadingModePreferenceScope.Anonymous,
@@ -200,6 +222,7 @@ class ReadingModeSession(
                 store = store,
                 now = now,
                 delivered = delivered,
+                forcedMode = forcedMode,
             ).also { it.noteOpened() }
         }
     }
