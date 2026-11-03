@@ -384,6 +384,15 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    /**
+     * La preuve de l'adresse est faite (feuille [EmailVerificationSheet]) : la session s'ouvre, ou le défi de
+     * second facteur prend le relais.
+     */
+    fun completeEmailProof(outcome: LoginOutcome) {
+        abandonRestoration()
+        followOutcome(outcome, adopt = true)
+    }
+
     /** « Renvoyer le code » : la passerelle répond succès même sans compte (anti-énumération). */
     fun resendVerification() {
         val pending = _state.value.pendingVerification ?: return
