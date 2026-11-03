@@ -170,6 +170,7 @@ internal object BubbleAttachmentBuilder {
     ): BubbleAudio {
         val resolved = resolveTranscription(attachment, preferences)
         val translatedAudio = resolveTranslatedAudio(attachment, preferences)
+            ?.takeIf { track -> resolved == null || (resolved.isTranslated && resolved.language.equals(track.language, ignoreCase = true)) }
         val playableUrl = translatedAudio?.url ?: attachment.fileUrl
         val durationSeconds = translatedAudio?.durationMs?.let { it / 1000 }
             ?: attachment.duration?.let { it / 1000 }
@@ -217,40 +218,16 @@ internal object BubbleAttachmentBuilder {
         }
     }
 
-    private data class ResolvedAudio(
-        val url: String,
-        val language: String,
-        val durationMs: Int?,
-    )
-
     /**
-     * Prisme rule 1 for the audio source: prefer a cloned-voice translation targeting one
-     * of the viewer's preferred languages (in priority order). When the highest-priority
-     * preferred language is the attachment's original transcription language the original
-     * voice wins (returns null) — never an arbitrary translation. Returns null when no
-     * preferred-language translation carries a playable audio url, in which case the
-     * caller falls back to the original voice note. Mirrors [resolveTranscription] so the
-     * played voice and the surfaced transcription line resolve to the same language.
+     * The played voice: [AttachmentTranscriptPrism.track], the SAME single Prisme descent as the
+     * transcription line next to it, so the voice and the text are always in one language. Null
+     * means the original voice note.
      */
     private fun resolveTranslatedAudio(
         attachment: ApiMessageAttachment,
         preferences: LanguageResolver.ContentLanguagePreferences,
-    ): ResolvedAudio? {
-        val originalLanguage = attachment.transcription?.language?.trim()?.ifBlank { null }
-        val translations = attachment.translations.orEmpty()
-
-        for (language in LanguageResolver.preferredContentLanguages(preferences)) {
-            if (originalLanguage != null && originalLanguage.equals(language, ignoreCase = true)) {
-                return null
-            }
-            val translated = translations.entries
-                .firstOrNull { it.key.equals(language, ignoreCase = true) }
-                ?.value
-            val url = translated?.url?.trim()?.ifBlank { null }
-            if (url != null) return ResolvedAudio(url, language, translated.durationMs)
-        }
-        return null
-    }
+    ): AttachmentTranscriptPrism.Track? =
+        AttachmentTranscriptPrism.track(attachment.transcription, attachment.translations, preferences)
 
     /** The Prisme-served transcription line — [AttachmentTranscriptPrism], the site the transcription fiche reads too. */
     private fun resolveTranscription(

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_tray_type_image">Foto</string>
+    <string name="composer_tray_type_video">Vídeo</string>
+    <string name="composer_tray_type_audio">Áudio</string>
+    <string name="composer_tray_type_file">Arquivo</string>
+    <string name="composer_tray_type_place">Localização</string>
+    <string name="composer_tray_item_a11y">Item %1$d de %2$d, %3$s, %4$s</string>
+    <string name="composer_tray_remove_action">Remover</string>
+    <string name="composer_tray_cancel_preparing">Cancelar a preparação de %1$s</string>
+    <string name="composer_tray_edit">Editar</string>
+    <string name="composer_tray_preview">Pré-visualização</string>
+</resources>

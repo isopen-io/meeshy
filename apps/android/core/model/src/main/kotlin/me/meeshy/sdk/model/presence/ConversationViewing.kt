@@ -73,6 +73,8 @@ public data class ConversationViewers(
     val usersByConversation: Map<String, Set<String>> = emptyMap(),
     val activeByConversation: Map<String, Set<String>> = emptyMap(),
     val focusedByConversation: Map<String, Set<String>> = emptyMap(),
+    /** Dernière activité servie, par `conversation\u0000user` : sert l'extinction après [ACTIVITY_HOLD_MS]. */
+    val activityStamps: Map<String, Long> = emptyMap(),
 ) {
     public fun usersIn(conversationId: String): Set<String> = usersByConversation[conversationId].orEmpty()
 
@@ -97,6 +99,36 @@ public data class ConversationViewers(
         is ViewingEvent.Active -> stirring(event.change.userId, event.change.conversationId, event.change.focus)
         ViewingEvent.SessionStarted -> ConversationViewers()
     }
+
+    public companion object {
+        /** Le temps qu'un pair reste actif après son dernier `viewing:activity`. */
+        public const val ACTIVITY_HOLD_MS: Long = 4_000L
+    }
+
+    /** Comme [applying], en datant l'activité pour que [settled] sache quand l'éteindre. */
+    public fun applying(event: ViewingEvent, nowMillis: Long): ConversationViewers {
+        val next = applying(event)
+        return when (event) {
+            is ViewingEvent.Active -> next.copy(
+                activityStamps = next.activityStamps + (stampKey(event.change.conversationId, event.change.userId) to nowMillis),
+            )
+            is ViewingEvent.Left -> next.copy(
+                activityStamps = next.activityStamps - stampKey(event.change.conversationId, event.change.userId),
+            )
+            else -> next
+        }
+    }
+
+    /** Remet « ici au repos » tout pair dont la dernière activité date de [activityHoldMillis] ou plus. */
+    public fun settled(nowMillis: Long, activityHoldMillis: Long = ACTIVITY_HOLD_MS): ConversationViewers {
+        val expired = activityStamps.filterValues { nowMillis - it >= activityHoldMillis }.keys
+        return expired.fold(copy(activityStamps = activityStamps - expired)) { acc, key ->
+            val (conversationId, userId) = key.split('\u0000', limit = 2)
+            acc.resting(userId, conversationId)
+        }
+    }
+
+    private fun stampKey(conversationId: String, userId: String) = "$conversationId\u0000$userId"
 
     /** Chaque activité dit si elle vient d'un plein écran : une activité sans `focus` y met fin. */
     public fun stirring(userId: String, conversationId: String, focus: Boolean = false): ConversationViewers {
