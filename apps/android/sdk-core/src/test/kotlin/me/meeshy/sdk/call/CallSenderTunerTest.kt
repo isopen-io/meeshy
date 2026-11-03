@@ -9,17 +9,13 @@ import org.junit.Test
 import org.webrtc.Priority
 import org.webrtc.RtpParameters
 import org.webrtc.RtpSender
+import org.webrtc.rtpEncoding
+import org.webrtc.rtpParameters
 
 class CallSenderTunerTest {
 
-    private fun parameters(encodings: Int): RtpParameters {
-        val constructor = RtpParameters::class.java.declaredConstructors.first { it.parameterCount == 6 }
-        constructor.isAccessible = true
-        return constructor.newInstance(
-            "tx", null, null, emptyList<RtpParameters.HeaderExtension>(),
-            List(encodings) { RtpParameters.Encoding(null, true, null) }, emptyList<RtpParameters.Codec>(),
-        ) as RtpParameters
-    }
+    private fun parameters(encodings: Int): RtpParameters =
+        rtpParameters(null, List(encodings) { rtpEncoding(null, null, null) })
 
     private class Sender(val sender: RtpSender, val written: io.mockk.CapturingSlot<RtpParameters>)
 
