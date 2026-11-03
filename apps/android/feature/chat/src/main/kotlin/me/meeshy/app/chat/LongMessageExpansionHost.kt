@@ -52,7 +52,7 @@ internal class LongMessageExpansionHost(
     /** Lu au dessin (`graphicsLayer`) : aucune recomposition de rangée. */
     fun alphaFor(messageId: String): Float {
         if (holdTick < 0L) return 1f
-        return state.alphaFor(messageId, expandedRowOnScreen, clock())
+        return state.alphaFor(messageId, expandedOnScreen, clock())
     }
 
     fun setExpandedOnScreen(onScreen: Boolean) {
