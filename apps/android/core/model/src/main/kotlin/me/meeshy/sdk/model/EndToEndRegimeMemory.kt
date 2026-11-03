@@ -41,11 +41,13 @@ object EndToEndRegimeMemory {
      * #13794 — la conversation en cache sous le mode que `conversation:encryption-changed` annonce, comme iOS
      * (`MeeshyConversation.adoptingEncryption`) : tous les modes repeignent, le bout en bout s'écrit sous son mode canonique.
      * `null` quand l'annonce ne change rien, ou quand elle ferait quitter le bout en bout une conversation vue e2ee — par sa
-     * ligne ou par le registre ([seenEndToEnd]) : le bout en bout ne se désactive pas (#12949).
+     * ligne ou par le registre ([seenEndToEnd]) : le bout en bout ne se désactive pas (#12949). Un mode en cache que la garde
+     * du clair tient pour chiffré ([ConversationClearance.ofServed], un protocole inconnu) ne se repeint pas non plus en lisible.
      */
     fun adopting(cached: ApiConversation, announcedMode: String?, seenEndToEnd: Boolean): ApiConversation? {
         val toEndToEnd = EndToEndRegime.isEndToEnd(announcedMode)
-        if (!toEndToEnd && (seenEndToEnd || EndToEndRegime.isEndToEnd(cached.encryptionMode))) return null
+        val cachedHeldEncrypted = ConversationClearance.ofServed(cached.encryptionMode) == ConversationClearance.END_TO_END
+        if (!toEndToEnd && (seenEndToEnd || cachedHeldEncrypted)) return null
         val mode = if (toEndToEnd) EndToEndRegime.MODE else announcedMode?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
         return if (cached.encryptionMode == mode) null else cached.copy(encryptionMode = mode)
     }

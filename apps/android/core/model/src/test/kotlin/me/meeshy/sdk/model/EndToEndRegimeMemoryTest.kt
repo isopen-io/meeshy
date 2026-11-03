@@ -64,6 +64,15 @@ class EndToEndRegimeMemoryTest {
     }
 
     @Test
+    fun `#13794 une annonce lisible ne repeint pas un mode inconnu que la garde du clair tient pour chiffre`() {
+        listOf("server", "hybrid", null, "").forEach { downgrade ->
+            assertThat(EndToEndRegimeMemory.adopting(conversation("mls"), announcedMode = downgrade, seenEndToEnd = false)).isNull()
+        }
+        assertThat(EndToEndRegimeMemory.adopting(conversation("mls"), announcedMode = "e2ee", seenEndToEnd = false)?.encryptionMode)
+            .isEqualTo("e2ee")
+    }
+
+    @Test
     fun `le registre apprend une fois et ne recule jamais`() {
         val learned = EndToEndSealedConversations().learn("c1")
         assertThat(learned.isSealed("c1")).isTrue()
