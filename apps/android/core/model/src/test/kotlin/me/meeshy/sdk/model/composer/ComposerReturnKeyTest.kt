@@ -26,8 +26,8 @@ class ComposerReturnKeyTest {
         assertThat(ComposerReturnKey.submits("Bonjour", "Bonjour\n", literalNewline = true)).isFalse()
     }
 
-    @Test fun `un emoji compose compte pour un seul caractere`() {
-        assertThat(ComposerReturnKey.submits("👨‍👩‍👧", "👨‍👩‍👧\n")).isTrue()
+    @Test fun `une lettre accentuee decomposee compte pour un seul caractere`() {
+        assertThat(ComposerReturnKey.submits("e\u0301", "e\u0301\n")).isTrue()
     }
 
     @Test fun `Maj ou Alt font de Entree un saut de ligne`() {

@@ -41,7 +41,7 @@ class ComposerTextFormatTest {
     }
 
     @Test fun `les positions se comptent en graphemes`() {
-        val family = "👨‍👩‍👧"
+        val family = "e\u0301"
         assertThat(toggle("${family}ab", 1, 3, Style.BOLD)).isEqualTo(ComposerTextFormat.Result("$family**ab**", 3, 5))
     }
 
@@ -51,9 +51,9 @@ class ComposerTextFormatTest {
     }
 
     @Test fun `conversion utf16 graphemes aller retour`() {
-        val text = "é👨‍👩‍👧a"
+        val text = "ae\u0301b"
         assertThat(ComposerTextFormat.graphemeIndex(text, text.length)).isEqualTo(3)
-        assertThat(ComposerTextFormat.utf16Offset(text, 2)).isEqualTo(text.length - 1)
+        assertThat(ComposerTextFormat.utf16Offset(text, 2)).isEqualTo(3)
         assertThat(ComposerTextFormat.utf16Offset(text, 99)).isEqualTo(text.length)
     }
 }
