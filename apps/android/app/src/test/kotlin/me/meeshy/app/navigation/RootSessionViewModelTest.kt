@@ -13,7 +13,6 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.model.rootnav.RootRoute
-import me.meeshy.sdk.net.SessionTransitionFlags
 import me.meeshy.sdk.session.SessionRepository
 import org.junit.After
 import org.junit.Before
@@ -35,7 +34,6 @@ class RootSessionViewModelTest {
     private class Harness(
         val vm: RootSessionViewModel,
         val resolved: MutableStateFlow<Boolean>,
-        val flags: SessionTransitionFlags,
     )
 
     private fun harness(storedSession: Boolean = false, resolved: Boolean = false): Harness {
@@ -44,8 +42,7 @@ class RootSessionViewModelTest {
         every { session.hasResolvedStoredSession } returns resolvedFlow
         val auth = mockk<AuthRepository>(relaxed = true)
         every { auth.isAuthenticated } returns storedSession
-        val flags = SessionTransitionFlags()
-        return Harness(RootSessionViewModel(session, auth, flags), resolvedFlow, flags)
+        return Harness(RootSessionViewModel(session, auth), resolvedFlow)
     }
 
     @Test
@@ -81,17 +78,5 @@ class RootSessionViewModelTest {
         assertThat(h.vm.state.value.showsPendingLinkNotice).isTrue()
         h.vm.onEvent(RootSessionEvent.AuthChanged(isAuthenticated = true, isRestoringSession = false))
         assertThat(h.vm.state.value.showsPendingLinkNotice).isFalse()
-    }
-
-    @Test
-    fun `tant qu'un changement de compte est en cours la connexion reste inerte`() = runTest {
-        val h = harness()
-        backgroundScope.launch { h.vm.state.collect {} }
-        h.flags.isSwitchingAccount = true
-        h.vm.onEvent(RootSessionEvent.AuthChanged(isAuthenticated = false, isRestoringSession = false))
-        assertThat(h.vm.state.value.route).isEqualTo(RootRoute.NONE)
-        h.flags.isSwitchingAccount = false
-        h.vm.onEvent(RootSessionEvent.AuthChanged(isAuthenticated = false, isRestoringSession = false, isSwitchingAccount = false))
-        assertThat(h.vm.state.value.route).isEqualTo(RootRoute.LOGIN)
     }
 }

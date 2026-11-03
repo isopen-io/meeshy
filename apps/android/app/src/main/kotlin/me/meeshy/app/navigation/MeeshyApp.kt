@@ -331,9 +331,9 @@ fun MeeshyApp(
 
         NotificationPermissionOnArrival(isAuthenticated = authState.isAuthenticated)
 
-        LoggingOutVeil(visible = authState.isLoggingOut)
-
         OverlayHost()
+
+        LoggingOutVeil(visible = authState.isLoggingOut)
 
         SplashOverlay()
     }

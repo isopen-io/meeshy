@@ -15,7 +15,6 @@ import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.model.rootnav.RootCoverage
 import me.meeshy.sdk.model.rootnav.RootPresentationRules
 import me.meeshy.sdk.model.rootnav.RootRoute
-import me.meeshy.sdk.net.SessionTransitionFlags
 import me.meeshy.sdk.session.SessionRepository
 
 /** Ce que la racine sait de la session, projeté depuis l'authentification, la restauration et le lien en attente. */
@@ -29,7 +28,6 @@ sealed interface RootSessionEvent {
     data class AuthChanged(
         val isAuthenticated: Boolean,
         val isRestoringSession: Boolean,
-        val isSwitchingAccount: Boolean = false,
     ) : RootSessionEvent
 
     data class PendingLinkChanged(val opensAfterSignIn: Boolean) : RootSessionEvent
@@ -44,13 +42,11 @@ sealed interface RootSessionEvent {
 class RootSessionViewModel @Inject constructor(
     sessionRepository: SessionRepository,
     authRepository: AuthRepository,
-    private val transition: SessionTransitionFlags,
 ) : ViewModel() {
 
     private data class Inputs(
         val isAuthenticated: Boolean = false,
         val isRestoring: Boolean = true,
-        val isSwitching: Boolean = false,
         val pendingLink: Boolean = false,
     )
 
@@ -64,7 +60,7 @@ class RootSessionViewModel @Inject constructor(
     private fun present(i: Inputs, resolved: Boolean): RootSessionUiState {
         val route = RootPresentationRules.route(
             isAuthenticated = i.isAuthenticated,
-            isSwitchingAccount = i.isSwitching || transition.isSwitchingAccount,
+            isSwitchingAccount = false,
             hasCheckedSession = RootCoverage.hasCheckedSession(resolved, i.isRestoring),
             previewReplacesLogin = false,
         )
@@ -84,7 +80,6 @@ class RootSessionViewModel @Inject constructor(
                 it.copy(
                     isAuthenticated = event.isAuthenticated,
                     isRestoring = event.isRestoringSession,
-                    isSwitching = event.isSwitchingAccount || transition.isSwitchingAccount,
                 )
             }
             is RootSessionEvent.PendingLinkChanged -> inputs.update { it.copy(pendingLink = event.opensAfterSignIn) }
