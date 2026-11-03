@@ -97,6 +97,7 @@ internal fun StoryComposerScene(
                 onElementDragEnd = viewModel::onTextElementDragEnd,
                 onElementTransform = viewModel::onTextElementTransform,
                 onElementTextChange = viewModel::onTextChange,
+                onInlineEditYield = viewModel::onInlineEditSuspended,
                 onStickerTap = viewModel::onSelectSticker,
                 onStickerLongPress = viewModel::onOpenStickerMenu,
                 onStickerDrag = viewModel::onStickerMoved,

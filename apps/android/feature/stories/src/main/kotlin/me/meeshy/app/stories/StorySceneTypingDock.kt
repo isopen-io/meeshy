@@ -31,6 +31,7 @@ import kotlin.math.roundToInt
 import me.meeshy.sdk.model.composer.ComposerKeyboardOrOptions
 import me.meeshy.sdk.model.composer.ComposerKeyboardOrOptions.Options
 import me.meeshy.sdk.model.composer.ComposerKeyboardOrOptions.Surface
+import me.meeshy.sdk.model.scene.InlineEditTouchPolicy
 
 /** Le clavier tel que l'état de frappe le lit, en dp au-dessus des barres système : ce qu'il occupe, et où il va. */
 internal interface TypingKeyboard {
@@ -49,6 +50,7 @@ internal class StoryTypingSlot(
     val options: @Composable (Options) -> Unit,
     val onKeyboardRaised: () -> Unit,
     val keyboard: TypingKeyboard? = null,
+    val onKeyboardClosed: () -> Unit = {},
 )
 
 /** Le clavier de la fenêtre : l'encart IME, moins la barre de navigation que la disposition a déjà déduite. */
@@ -140,12 +142,21 @@ internal fun BoxScope.TypingDock(slot: StoryTypingSlot, keyboard: TypingKeyboard
 internal fun TypingKeyboardWatcher(slot: StoryTypingSlot, keyboard: TypingKeyboard, measures: TypingMeasures) {
     val density = LocalDensity.current
     val raised by rememberUpdatedState(slot.onKeyboardRaised)
+    val currentSlot by rememberUpdatedState(slot)
     LaunchedEffect(keyboard, density) {
         var wasRaised = keyboard.target(density) > 0f
         snapshotFlow { keyboard.bottom(density) to keyboard.target(density) }.collect { (bottom, target) ->
             measures.lastKeyboard.floatValue = ComposerKeyboardOrOptions.rememberedKeyboard(measures.lastKeyboard.floatValue, bottom, target)
             val isRaised = target > 0f
             if (isRaised && !wasRaised) raised()
+            // Le clavier qui se range (et non les choix d'une icône qui le remplacent) rend le texte à sa place réelle.
+            val closed = InlineEditTouchPolicy.suspendsOnKeyboardClosed(
+                yieldsManipulation = true,
+                editing = true,
+                keyboardWasShown = wasRaised,
+                keyboardShown = isRaised,
+            )
+            if (closed && currentSlot.surface !is Surface.Showing) currentSlot.onKeyboardClosed()
             wasRaised = isRaised
         }
     }

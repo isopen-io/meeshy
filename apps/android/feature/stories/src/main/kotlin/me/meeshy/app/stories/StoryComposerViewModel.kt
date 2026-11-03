@@ -287,6 +287,9 @@ class StoryComposerViewModel @Inject constructor(
 
     fun onDeselectTextElement() = reduce { StoryComposerTextReducer.deselected(it) }
 
+    /** La saisie en place cède au doigt (geste de manipulation, clavier rangé) : le texte retrouve sa position réelle. */
+    fun onInlineEditSuspended() = reduce { StoryComposerTextReducer.suspendedForManipulation(it) }
+
     fun onOpenElementMenu(id: String) = reduce { StoryComposerTextReducer.menuOpened(it, id) }
 
     fun onDismissElementMenu() = reduce { StoryComposerSceneReducer.menuDismissed(it) }
