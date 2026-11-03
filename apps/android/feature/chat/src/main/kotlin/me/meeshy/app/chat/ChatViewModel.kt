@@ -37,6 +37,7 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.OpenConversationRegistry
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.lang.ComposeLanguageDefault
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.media.MediaUploadQueue
@@ -371,7 +372,7 @@ class ChatViewModel @Inject constructor(
                         encryptionMode = conversation.encryptionMode,
                         directPeerUserId = conversation.otherParticipantUserId(currentUserId),
                         composerLanguageSeed = sessionRepository.currentUser.value
-                            ?.let { user -> LanguageResolver.resolveUserLanguage(user) }
+                            ?.let { user -> ComposeLanguageDefault.of(user, null) }
                             ?: it.composerLanguageSeed,
                     )
                 }
@@ -904,6 +905,20 @@ class ChatViewModel @Inject constructor(
     fun onForwardGatewayRefusal(code: String?) = forward.onGatewayRefusal(code)
 
     // --- Search ---------------------------------------------------------------------------
+
+    /** Le routeur demande d'atterrir sur [messageId] (fil déjà ouvert ou ouverture). */
+    fun landOnMessage(messageId: String) = landing.land(messageId)
+
+    /** L'app quitte le premier plan : le brouillon est mis à l'abri. */
+    fun flushDraft() = composer.flushDraft()
+
+    /** Le clavier actif ne sert la langue de composition que si aucune langue de contenu n'est configurée. */
+    fun seedComposerLanguageFromKeyboard(keyboardLanguageTag: String?) {
+        val user = sessionRepository.currentUser.value ?: return
+        if (ComposeLanguageDefault.of(user, null) != null) return
+        val code = ComposeLanguageDefault.of(user, keyboardLanguageTag) ?: return
+        _state.update { it.copy(composerLanguageSeed = code) }
+    }
 
     fun openSearch() {
         _state.update { it.copy(search = it.search.activated()) }
