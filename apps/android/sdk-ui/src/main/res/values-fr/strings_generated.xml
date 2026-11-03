@@ -37,6 +37,9 @@
     <string name="audio_split_handle_start">Début de la coupe</string>
     <string name="audio_trim_handle_end">Fin de la sélection</string>
     <string name="audio_trim_handle_start">Début de la sélection</string>
+    <string name="audio_trim_play">Écouter la sélection</string>
+    <string name="audio_trim_stop">Arrêter</string>
+    <string name="audio_trim_strip">Bande de rognage</string>
     <string name="avatar_a11y_mood">humeur %1$s</string>
     <string name="bubble_contact_card_a11y_on_meeshy">Sur Meeshy : %1$s</string>
     <string name="bubble_contact_card_on_meeshy">Sur Meeshy</string>

@@ -37,6 +37,9 @@
     <string name="audio_split_handle_start">Cut start</string>
     <string name="audio_trim_handle_end">Selection end</string>
     <string name="audio_trim_handle_start">Selection start</string>
+    <string name="audio_trim_play">Play selection</string>
+    <string name="audio_trim_stop">Stop</string>
+    <string name="audio_trim_strip">Trim strip</string>
     <string name="avatar_a11y_mood">mood %1$s</string>
     <string name="bubble_contact_card_a11y_on_meeshy">On Meeshy: %1$s</string>
     <string name="bubble_contact_card_on_meeshy">On Meeshy</string>

@@ -37,6 +37,9 @@
     <string name="audio_split_handle_start">Beginn des Schnitts</string>
     <string name="audio_trim_handle_end">Auswahlende</string>
     <string name="audio_trim_handle_start">Auswahlbeginn</string>
+    <string name="audio_trim_play">Auswahl abspielen</string>
+    <string name="audio_trim_stop">Stopp</string>
+    <string name="audio_trim_strip">Zuschneide-Leiste</string>
     <string name="avatar_a11y_mood">Stimmung %1$s</string>
     <string name="bubble_contact_card_a11y_on_meeshy">Auf Meeshy: %1$s</string>
     <string name="bubble_contact_card_on_meeshy">Auf Meeshy</string>

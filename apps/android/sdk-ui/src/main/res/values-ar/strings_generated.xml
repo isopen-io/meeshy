@@ -37,6 +37,9 @@
     <string name="audio_split_handle_start">بداية القص</string>
     <string name="audio_trim_handle_end">نهاية التحديد</string>
     <string name="audio_trim_handle_start">بداية التحديد</string>
+    <string name="audio_trim_play">تشغيل التحديد</string>
+    <string name="audio_trim_stop">إيقاف</string>
+    <string name="audio_trim_strip">شريط القص</string>
     <string name="avatar_a11y_mood">المزاج %1$s</string>
     <string name="bubble_contact_card_a11y_on_meeshy">على Meeshy: %1$s</string>
     <string name="bubble_contact_card_on_meeshy">على Meeshy</string>
