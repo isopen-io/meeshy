@@ -46,6 +46,8 @@ export type RelationLink = {
   readonly eligibleFor: RelationEligibility | null;
   /** Jusqu'à quand je ne peux pas redemander de monter (#14910), servi par `GET /relations/:userId` ; absent, la loi habituelle. */
   readonly raiseBlockedUntil?: string;
+  /** La loi SERVEUR de montée (demande en suspens, éligibilité), servie par `GET /relations/:userId` ; absente, la loi locale décide. */
+  readonly canRaise?: boolean;
 };
 
 export { RELATION_LINKS_QUERY_KEY } from './friends-keys';
@@ -69,6 +71,8 @@ const eligibilityOf = (value: unknown): RelationEligibility | null => (value ===
 
 const countOf = (value: unknown): number | null => (typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null);
 
+const flagOf = (value: unknown): boolean | null => (typeof value === 'boolean' ? value : null);
+
 const textOf = (value: unknown): string | null => (typeof value === 'string' && value !== '' ? value : null);
 
 function decodeProgress(raw: unknown): RelationProgress {
@@ -82,6 +86,7 @@ export function decodeRelationLink(raw: unknown): RelationLink | null {
   const userId = textOf(wire?.userId);
   if (wire === null || userId === null) return null;
   const raiseBlockedUntil = textOf(wire.raiseBlockedUntil);
+  const canRaise = flagOf(wire.canRaise);
   return {
     userId,
     effectiveLevel: levelOf(wire.effectiveLevel),
@@ -90,6 +95,7 @@ export function decodeRelationLink(raw: unknown): RelationLink | null {
     progress: decodeProgress(wire.progress),
     eligibleFor: eligibilityOf(wire.eligibleFor),
     ...(raiseBlockedUntil === null ? {} : { raiseBlockedUntil }),
+    ...(canRaise === null ? {} : { canRaise }),
   };
 }
 
@@ -112,23 +118,28 @@ export function relationLinksQueryOptions(deps: RelationDeps) {
 }
 
 /**
- * **LE DÉLAI AVANT DE REDEMANDER** (#14910) — `GET /relations/:userId` sert
- * `raiseBlockedUntil` (ISO) depuis le lot passerelle de #14910 ; une passerelle
- * d'avant ne le sert pas, et `null` laisse la loi de demande décider seule.
+ * **LA PORTE DE MONTÉE** (#14910) — `GET /relations/:userId` sert `canRaise` (la
+ * loi serveur : demande en suspens, éligibilité) et `raiseBlockedUntil` (toujours
+ * `null` aujourd'hui : le cool-down ne se dit qu'au refus, RG-07). Une passerelle
+ * d'avant ne sert ni l'un ni l'autre : `null` laisse la loi locale décider.
  */
-export const relationRaiseBlockQueryKey = (userId: string) => [...RELATION_LINKS_QUERY_KEY, 'raise-block', userId] as const;
+export type RaiseGate = { readonly canRaise: boolean | null; readonly raiseBlockedUntil: string | null };
 
-export async function loadRelationRaiseBlock(deps: RelationDeps & { readonly signal?: AbortSignal }, userId: string): Promise<ApiResult<string | null>> {
-  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: null };
+export const relationRaiseGateQueryKey = (userId: string) => [...RELATION_LINKS_QUERY_KEY, 'raise-gate', userId] as const;
+
+export async function loadRelationRaiseGate(deps: RelationDeps & { readonly signal?: AbortSignal }, userId: string): Promise<ApiResult<RaiseGate>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: { canRaise: null, raiseBlockedUntil: null } };
   const result = await deps.transport.request<unknown>({ method: 'GET', path: relationsEndpoints.byUserId(userId), ...withSignal(deps.signal) });
-  return result.ok ? { ok: true, data: textOf(objectOf(result.data)?.raiseBlockedUntil) } : result;
+  if (!result.ok) return result;
+  const wire = objectOf(result.data);
+  return { ok: true, data: { canRaise: flagOf(wire?.canRaise), raiseBlockedUntil: textOf(wire?.raiseBlockedUntil) } };
 }
 
-export function relationRaiseBlockQueryOptions(deps: RelationDeps, userId: string) {
+export function relationRaiseGateQueryOptions(deps: RelationDeps, userId: string) {
   return {
-    queryKey: relationRaiseBlockQueryKey(userId),
+    queryKey: relationRaiseGateQueryKey(userId),
     staleTime: RELATION_LINKS_STALE_TIME,
-    queryFn: async ({ signal }: { readonly signal?: AbortSignal }) => unwrap(await loadRelationRaiseBlock({ ...deps, ...withSignal(signal) }, userId)),
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }) => unwrap(await loadRelationRaiseGate({ ...deps, ...withSignal(signal) }, userId)),
   };
 }
 
@@ -157,8 +168,6 @@ export type RitualStep = {
   readonly held: boolean | null;
   readonly completed: boolean | null;
 };
-
-const flagOf = (value: unknown): boolean | null => (typeof value === 'boolean' ? value : null);
 
 export function decodeRitualStep(raw: unknown): RitualStep {
   const wire = objectOf(raw);

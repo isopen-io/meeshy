@@ -7,7 +7,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { performSendRequest, type FriendActionOutcome } from '@/lib/api/friend-actions';
 import { flattenFriendRequests, friendRequestsQueryOptions, type PersonSummary } from '@/lib/api/friend-requests';
 import { appQueryClient } from '@/lib/api/query-client';
-import { relationLinksQueryOptions, relationRaiseBlockQueryOptions, type RelationDeps, type RelationLink } from '@/lib/api/relations';
+import { relationLinksQueryOptions, relationRaiseGateQueryOptions, type RelationDeps, type RelationLink } from '@/lib/api/relations';
 import { translate } from '@/lib/i18n-catalog';
 import { translateCircles } from '@/lib/i18n-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -187,14 +187,22 @@ export function ProfileCircleRow({
 }) {
   const ready = useCirclesCatalog(language);
   const links = useQuery(relationLinksQueryOptions(deps), appQueryClient);
-  const raiseBlock = useQuery(relationRaiseBlockQueryOptions(deps, person.id), appQueryClient);
+  const gate = useQuery(relationRaiseGateQueryOptions(deps, person.id), appQueryClient);
   const sent = useInfiniteQuery(friendRequestsQueryOptions(deps, 'sent'), appQueryClient);
   const [confirming, setConfirming] = useState<Demotion | null>(null);
   const served = useMemo(() => links.data?.find((candidate) => candidate.userId === person.id) ?? null, [links.data, person.id]);
-  const blockedUntil = raiseBlock.data ?? null;
+  const canRaise = gate.data?.canRaise ?? null;
+  const blockedUntil = gate.data?.raiseBlockedUntil ?? null;
   const link = useMemo(
-    () => (served === null || blockedUntil === null || served.raiseBlockedUntil !== undefined ? served : { ...served, raiseBlockedUntil: blockedUntil }),
-    [served, blockedUntil],
+    () =>
+      served === null
+        ? null
+        : {
+            ...served,
+            ...(canRaise === null ? {} : { canRaise }),
+            ...(blockedUntil === null ? {} : { raiseBlockedUntil: blockedUntil }),
+          },
+    [served, canRaise, blockedUntil],
   );
   const pendingLevel = pendingRaiseOf(flattenFriendRequests(sent.data), person.id);
   const raise = (target: RelationRequestLevel): void => {

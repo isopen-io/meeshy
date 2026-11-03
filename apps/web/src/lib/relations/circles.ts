@@ -55,12 +55,14 @@ const dateOf = (iso: string | undefined): Date | null => {
 
 /**
  * Le cran suivant, ouvert ou verrouillé selon la loi de demande ; plus rien au
- * sommet. Le délai servi (`raiseBlockedUntil`, #14910) verrouille tant qu'il
- * court ; absent ou illisible, la loi décide seule.
+ * sommet. Quand la passerelle sert `canRaise` (#14910), c'est SA loi qui
+ * décide (demande en suspens, éligibilité) ; sinon la loi de demande locale,
+ * et le délai servi (`raiseBlockedUntil`) verrouille tant qu'il court.
  */
 export function raiseOffer(link: RelationLink, now: Date): RaiseOffer {
   const target = relationRungAfter(link.effectiveLevel);
   if (target === null) return { kind: 'none' };
+  if (link.canRaise !== undefined) return { kind: link.canRaise ? 'available' : 'locked', target };
   const cooldownUntil = dateOf(link.raiseBlockedUntil);
   const verdict = evaluateRelationRequest({ targetLevel: target, currentLevel: link.effectiveLevel, eligibleFor: link.eligibleFor, cooldownUntil, now });
   return verdict.allowed ? { kind: 'available', target } : { kind: 'locked', target };
