@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.scene.ResolvedKeyframeTransform
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
+import me.meeshy.sdk.model.StoryTransitionEffect
 import me.meeshy.sdk.model.scene.StoryClipTransitionResolver
 import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryKeyframeResolver
@@ -198,6 +199,9 @@ data class StorySlideView(
      * flat constant. Defaults to the 6s static baseline.
      */
     val autoAdvanceMillis: Int = StorySlideDuration.DEFAULT_STATIC_MS,
+    /** L'ouverture et la fermeture choisies par l'auteur (`effects.opening` / `effects.closing`), jouées 1,2 s par la scène. */
+    val opening: StoryTransitionEffect? = null,
+    val closing: StoryTransitionEffect? = null,
     /**
      * The author's colour backdrop (`StoryEffects.background`), parsed once at
      * projection time via the shared [StoryBackgroundValue] rule: a solid colour or
