@@ -102,6 +102,10 @@
     <string name="location_fullscreen_directions">Directions</string>
     <string name="location_fullscreen_mapStyle">Map style</string>
     <string name="location_fullscreen_sharedPosition">Shared position</string>
+    <string name="media_audio_open_fullscreen">Open full screen, playback %1$d%%</string>
+    <string name="media_audio_open_fullscreen_hint">Shows the full-screen view with saving options</string>
+    <string name="media_audio_play">Play audio</string>
+    <string name="media_audio_speed_cycle">Playback speed %1$s</string>
     <string name="media_audio_transcribe">Transcribe</string>
     <string name="media_caption_see_less">see less</string>
     <string name="media_caption_see_less_hint">Collapses the caption</string>
