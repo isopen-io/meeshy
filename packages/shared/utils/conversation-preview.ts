@@ -427,7 +427,7 @@ function withText(head: readonly PreviewSegment[], text: PreviewSegment | null):
 }
 
 /** « 450 × 456 » : le × entre deux espaces insécables, qui ne se coupe jamais en fin de ligne. */
-export function dimensionsLabel(width: number, height: number): string {
+function dimensionsLabel(width: number, height: number): string {
   return `${Math.round(width)}\u00a0×\u00a0${Math.round(height)}`;
 }
 
