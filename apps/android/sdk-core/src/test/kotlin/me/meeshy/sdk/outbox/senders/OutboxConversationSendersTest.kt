@@ -10,7 +10,7 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
-import me.meeshy.sdk.net.api.ConversationApi
+import me.meeshy.sdk.net.api.ConversationDetailsApi
 import me.meeshy.sdk.net.api.UpdateConversationDetailsRequest
 import me.meeshy.sdk.outbox.CreateConversationPayload
 import me.meeshy.sdk.outbox.OutboxKind
@@ -21,7 +21,7 @@ import org.junit.Test
 class OutboxConversationSendersTest {
 
     private val repository = mockk<ConversationRepository>(relaxed = true)
-    private val api = mockk<ConversationApi>()
+    private val api = mockk<ConversationDetailsApi>()
 
     private fun createRow() = outboxRow(
         OutboxKind.CREATE_CONVERSATION,

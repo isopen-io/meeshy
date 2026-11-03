@@ -2,6 +2,7 @@ package me.meeshy.sdk.outbox.senders
 
 import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoMap
@@ -9,7 +10,7 @@ import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.net.NetworkResult
-import me.meeshy.sdk.net.api.ConversationApi
+import me.meeshy.sdk.net.api.ConversationDetailsApi
 import me.meeshy.sdk.net.api.UpdateConversationDetailsRequest
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.outbox.CreateConversationPayload
@@ -20,6 +21,7 @@ import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.outbox.UpdateConversationPayload
 import me.meeshy.sdk.outbox.toSendResult
 import me.meeshy.sdk.outbox.withPayload
+import retrofit2.Retrofit
 import javax.inject.Inject
 
 /**
@@ -50,7 +52,7 @@ public class CreateConversationHandler @Inject constructor(
 
 /** `UPDATE_CONVERSATION` : pousse le titre, la description et l'avatar changés (les champs absents restent intacts). */
 public class UpdateConversationHandler @Inject constructor(
-    private val conversationApi: ConversationApi,
+    private val detailsApi: ConversationDetailsApi,
     private val conversationRepository: ConversationRepository,
     private val json: Json,
 ) : OutboxKindHandler {
@@ -58,7 +60,7 @@ public class UpdateConversationHandler @Inject constructor(
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<UpdateConversationPayload>(row) { payload ->
             val body = UpdateConversationDetailsRequest(payload.title, payload.description, payload.avatar)
-            apiCall { conversationApi.updateDetails(row.targetId, body) }.toSendResult(row.targetId)
+            apiCall { detailsApi.updateDetails(row.targetId, body) }.toSendResult(row.targetId)
         }
 
     /** Le serveur a refusé : la liste relit la conversation, qui reprend ses vraies valeurs. */
@@ -83,4 +85,13 @@ public interface ConversationKindsSendersModule {
     @IntoMap
     @OutboxKindKey(OutboxKind.UPDATE_CONVERSATION)
     public fun updateConversation(handler: UpdateConversationHandler): OutboxKindHandler
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+public object ConversationDetailsApiModule {
+
+    @Provides
+    public fun conversationDetailsApi(retrofit: Retrofit): ConversationDetailsApi =
+        retrofit.create(ConversationDetailsApi::class.java)
 }
