@@ -75,6 +75,7 @@ internal fun EffectsPickerSheet(
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
     inline: Boolean = false,
+    sections: Set<MessageEffectSection> = MessageEffectSection.entries.toSet(),
 ) {
     val presentation = MessageEffectsPickerPresenter.build(effects)
     Column(
@@ -107,7 +108,7 @@ internal fun EffectsPickerSheet(
             )
         }
 
-        presentation.sections.filter { !inline || it.section != MessageEffectSection.BEHAVIOR }.forEach { section ->
+        presentation.sections.filter { it.section in sections && (!inline || it.section != MessageEffectSection.BEHAVIOR) }.forEach { section ->
             Text(
                 text = stringResource(effectSectionLabel(section.section)),
                 style = MaterialTheme.typography.labelMedium,

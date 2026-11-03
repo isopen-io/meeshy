@@ -27,6 +27,7 @@ public enum class ReportReason(public val wireValue: String) {
     HATE_SPEECH("hate_speech"),
     IMPERSONATION("impersonation"),
     OTHER("other"),
+    FAKE_PROFILE("fake_profile"),
     ;
 
     public companion object {
@@ -40,5 +41,13 @@ public enum class ReportReason(public val wireValue: String) {
          */
         public val messageOrdered: List<ReportReason> =
             listOf(SPAM, INAPPROPRIATE, HARASSMENT, VIOLENCE, HATE_SPEECH, IMPERSONATION, OTHER)
+
+        /**
+         * Presentation order of the **two-tap** report of the profile sheet — parity with the iOS
+         * `UserProfileSheet.reportReasons` (spam, inappropriate, harassment, violence, hate_speech,
+         * fake_profile, impersonation, other). The detailed report screen keeps [ordered].
+         */
+        public val profileOrdered: List<ReportReason> =
+            listOf(SPAM, INAPPROPRIATE, HARASSMENT, VIOLENCE, HATE_SPEECH, FAKE_PROFILE, IMPERSONATION, OTHER)
     }
 }

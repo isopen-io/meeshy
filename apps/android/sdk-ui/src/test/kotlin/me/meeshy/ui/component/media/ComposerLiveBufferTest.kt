@@ -1,10 +1,11 @@
 package me.meeshy.ui.component.media
 
 import androidx.media3.common.C
-import androidx.media3.common.Timeline
+import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.LoadControl
 import androidx.media3.exoplayer.analytics.PlayerId
 import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.source.SinglePeriodTimeline
 import androidx.media3.exoplayer.upstream.Allocation
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
@@ -24,24 +25,36 @@ class ComposerLiveBufferTest {
 
     private val player = PlayerId("composer-live")
 
+    /** La source d'un lecteur vivant : un fichier de l'appareil, que Media3 1.10 reconnaît comme une lecture locale. */
+    private val localSource = SinglePeriodTimeline(
+        C.TIME_UNSET,
+        true,
+        false,
+        false,
+        null,
+        MediaItem.fromUri("file:///data/user/0/me.meeshy.app/cache/scene.mp4"),
+    )
+
     private fun parameters(bufferedMillis: Long, rebuffering: Boolean = false) = LoadControl.Parameters(
         player,
-        Timeline.EMPTY,
-        MediaSource.MediaPeriodId(Any()),
+        localSource,
+        MediaSource.MediaPeriodId(localSource.getUidOfPeriod(0)),
         0L,
         bufferedMillis * MICROS_PER_MILLI,
         1f,
         true,
         rebuffering,
         C.TIME_UNSET,
+        C.TIME_UNSET,
     )
 
     /** Ce qu'un lecteur retient avant de cesser de charger, la tête à [bufferedMillis] d'avance (borné par [ceiling] tampons). */
     private fun heldBytes(control: LoadControl, bufferedMillis: Long, ceiling: Int = 400): Long {
+        val allocator = control.getAllocator(player)
         val held = mutableListOf<Allocation>()
-        while (held.size < ceiling && control.shouldContinueLoading(parameters(bufferedMillis))) held += control.allocator.allocate()
+        while (held.size < ceiling && control.shouldContinueLoading(parameters(bufferedMillis))) held += allocator.allocate()
         val bytes = held.sumOf { it.data.size.toLong() }
-        held.forEach(control.allocator::release)
+        held.forEach(allocator::release)
         return bytes
     }
 

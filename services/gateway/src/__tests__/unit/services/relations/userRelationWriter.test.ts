@@ -50,8 +50,8 @@ describe('recordFriendship — une demande acceptée se lit FRIEND des deux côt
     await recordFriendship(store.prisma, { userA: LOW, userB: HIGH, origin: 'request', at: NOW });
 
     expect(store.relations()[0].transitions).toEqual([
-      { actorId: LOW, from: 'PUBLIC', to: 'FRIEND', at: NOW },
-      { actorId: HIGH, from: 'PUBLIC', to: 'FRIEND', at: NOW },
+      { actorId: LOW, from: 'PUBLIC', to: 'FRIEND', at: NOW, cause: 'explicit' },
+      { actorId: HIGH, from: 'PUBLIC', to: 'FRIEND', at: NOW, cause: 'explicit' },
     ]);
   });
 
@@ -85,7 +85,7 @@ describe('recordFriendship — une demande acceptée se lit FRIEND des deux côt
     expect(outcome).toBe('raised');
     const [row] = store.relations();
     expect(row).toMatchObject({ grantedByLow: 'CLOSE', grantedByHigh: 'FRIEND', levelSince: LATER, origin: 'auto-acquaintance' });
-    expect(row.transitions).toEqual([{ actorId: HIGH, from: 'ACQUAINTANCE', to: 'FRIEND', at: LATER }]);
+    expect(row.transitions).toEqual([{ actorId: HIGH, from: 'ACQUAINTANCE', to: 'FRIEND', at: LATER, cause: 'explicit' }]);
   });
 
   it('relit une valeur stockée illisible comme PUBLIC et la relève', async () => {
@@ -137,8 +137,8 @@ describe('resetFriendship — la rupture ramène les deux accords à PUBLIC, en 
     const [row] = store.relations();
     expect(row).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC', levelSince: LATER });
     expect(row.transitions).toEqual([
-      { actorId: LOW, from: 'CLOSE', to: 'PUBLIC', at: LATER },
-      { actorId: HIGH, from: 'FRIEND', to: 'PUBLIC', at: LATER },
+      { actorId: LOW, from: 'CLOSE', to: 'PUBLIC', at: LATER, cause: 'explicit' },
+      { actorId: HIGH, from: 'FRIEND', to: 'PUBLIC', at: LATER, cause: 'explicit' },
     ]);
   });
 

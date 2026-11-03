@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_options_obsolete">Rendi obsoleta</string>
+    <string name="conversation_options_obsolete_title">Rendere obsoleta questa conversazione?</string>
+    <string name="conversation_options_obsolete_message">Scompare subito per tutti i membri e il contenuto viene cancellato entro 48 ore. L\'azione è irreversibile.</string>
+    <string name="conversation_options_error_obsolete">Impossibile rendere obsoleta la conversazione.</string>
+</resources>

@@ -6,26 +6,27 @@ import SwiftUI
 
 /// **Ce que montre l'espace réservé d'un média qui entre** (#13906).
 ///
-/// Une photo montre sa vignette dès qu'elle est lisible sur l'appareil, avant
-/// la fin de la préparation ; une vidéo et un sticker gardent la forme neutre —
-/// la règle d'Android (`IncomingMediaPlaceholder`). La vignette vient de la
-/// photothèque quand l'accès est accordé (immédiate, sans réseau), sinon du
-/// fichier copié, réduite sans décoder l'image entière.
+/// Une photo ou une vidéo montre sa vignette dès qu'elle est lisible sur
+/// l'appareil, avant la fin de la préparation ; un sticker garde la forme
+/// neutre. La vidéo, l'ajout le plus long, est celle qui a le plus besoin de
+/// montrer ce qui arrive. La vignette vient de la photothèque quand l'accès est
+/// accordé (immédiate, sans réseau, l'affiche d'une vidéo comprise), sinon du
+/// fichier copié : réduite sans décoder l'image entière pour une photo, sa
+/// première image pour une vidéo.
 nonisolated enum ComposerSceneIntakePreview {
 
     /// Le plus grand côté d'une vignette, en pixels : de quoi couvrir la carte
     /// sans garder en mémoire une photo de douze mégapixels.
     static let maxPixel: CGFloat = 600
 
-    static func showsThumbnail(kind: ComposerSceneIntake.Kind, isVideo: Bool) -> Bool {
-        kind == .media && !isVideo
+    static func showsThumbnail(kind: ComposerSceneIntake.Kind) -> Bool {
+        kind == .media
     }
 
     /// Dès le choix : la vignette que la photothèque tient déjà.
     @MainActor
     static func request(_ item: PhotosPickerItem?, for id: UUID, into intake: Binding<ComposerSceneIntake?>) {
-        guard let item, let identifiant = item.itemIdentifier,
-              showsThumbnail(kind: .media, isVideo: ComposerPhotoLibraryStaging.isVideo(item)) else { return }
+        guard let item, let identifiant = item.itemIdentifier else { return }
         Task { @MainActor in
             guard let image = await libraryThumbnail(localIdentifier: identifiant) else { return }
             intake.wrappedValue = intake.wrappedValue?.showing(image, for: id)
@@ -35,25 +36,28 @@ nonisolated enum ComposerSceneIntakePreview {
     /// Sans accès à la photothèque : la vignette du fichier copié, réduite hors
     /// du fil principal — inutile quand la photothèque l'a déjà donnée.
     @MainActor
-    static func request(staged url: URL, of item: PhotosPickerItem, for id: UUID,
-                        into intake: Binding<ComposerSceneIntake?>) {
-        guard intake.wrappedValue?.thumbnail == nil,
-              showsThumbnail(kind: .media, isVideo: ComposerPhotoLibraryStaging.isVideo(item)) else { return }
+    static func request(staged url: URL, for id: UUID, into intake: Binding<ComposerSceneIntake?>) {
+        guard intake.wrappedValue?.thumbnail == nil else { return }
         Task { @MainActor in
-            let image = await Task.detached(priority: .userInitiated) { thumbnail(at: url) }.value
-            guard let image else { return }
+            guard let image = await thumbnail(at: url) else { return }
             intake.wrappedValue = intake.wrappedValue?.showing(image, for: id)
         }
     }
 
-    /// La vignette d'une photo déjà copiée sur l'appareil.
-    static func thumbnail(at url: URL, maxPixel: CGFloat = maxPixel) -> UIImage? {
-        ImageDownsampler.thumbnail(fileURL: url, maxPixelSize: maxPixel, decodeImmediately: true)
-            .map { UIImage(cgImage: $0) }
+    /// La vignette d'un média déjà copié sur l'appareil, hors du fil principal :
+    /// une photo réduite, sinon la première image d'une vidéo.
+    @concurrent
+    static func thumbnail(at url: URL, maxPixel: CGFloat = maxPixel) async -> UIImage? {
+        if let photo = ImageDownsampler.thumbnail(fileURL: url, maxPixelSize: maxPixel, decodeImmediately: true) {
+            return UIImage(cgImage: photo)
+        }
+        return await VideoThumbnailGenerator.shared.image(
+            for: .firstFrame(of: url, maxDimension: maxPixel, cachesResult: false))
     }
 
-    /// La vignette tenue par la photothèque — `nil` sans accès (aucune demande
-    /// d'autorisation n'est faite ici) ou pour une photo restée dans iCloud.
+    /// La vignette tenue par la photothèque — l'affiche d'une vidéo comprise —,
+    /// `nil` sans accès (aucune demande d'autorisation n'est faite ici) ou pour
+    /// un média resté dans iCloud.
     static func libraryThumbnail(localIdentifier: String, maxPixel: CGFloat = maxPixel) async -> UIImage? {
         let acces = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         guard acces == .authorized || acces == .limited,

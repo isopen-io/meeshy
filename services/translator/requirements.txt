@@ -5,7 +5,7 @@ python-dotenv==1.2.4
 fastapi==0.161.1
 uvicorn[standard]==0.54.0
 pydantic-settings==2.15.0
-pydantic==2.13.5
+pydantic==2.14.2
 
 # Communication gRPC et ZeroMQ
 # PIN EXACT lockstep (verified against PyPI metadata + `uv pip install --dry-run`).
@@ -173,7 +173,7 @@ diffusers==0.41.0
 resemble-perth==1.0.1
 omegaconf==2.4.0
 conformer==0.3.2
-spacy==3.8.16
+spacy==3.8.18
 einops==0.8.2
 soxr==1.1.0  # Requis par transformers/audio_utils pour chatterbox-tts
 # chatterbox-tts==0.1.6 (installé dans Dockerfile avec --no-deps)
@@ -230,7 +230,7 @@ ffmpeg-python==0.2.0
 pyannote.audio==3.4.0  # ✅ ACTIVÉ - Compatible torch 2.6.0 (4.0+ exige torch>=2.8.0)
 
 # Priorité 2: SpeechBrain - Alternative à pyannote (SANS token HuggingFace requis)
-speechbrain==1.1.1  # ✅ ACTIVÉ - Fallback si pyannote indisponible
+speechbrain==1.1.2  # ✅ ACTIVÉ - Fallback si pyannote indisponible
 scikit-learn==1.7.2  # Requis pour clustering et nettoyage (DiarizationCleaner)
 # librosa déjà inclus dans requirements.txt via chatterbox-tts
 

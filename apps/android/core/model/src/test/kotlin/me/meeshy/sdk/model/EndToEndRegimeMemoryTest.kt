@@ -36,6 +36,43 @@ class EndToEndRegimeMemoryTest {
     }
 
     @Test
+    fun `#13794 une bascule server vers hybrid repeint la conversation en cache`() {
+        assertThat(EndToEndRegimeMemory.adopting(conversation("server"), announcedMode = "hybrid", seenEndToEnd = false)?.encryptionMode)
+            .isEqualTo("hybrid")
+        assertThat(EndToEndRegimeMemory.adopting(conversation(null), announcedMode = "server", seenEndToEnd = false)?.encryptionMode)
+            .isEqualTo("server")
+    }
+
+    @Test
+    fun `#13794 un passage au bout en bout repeint la conversation, ecrit sous le mode canonique`() {
+        assertThat(EndToEndRegimeMemory.adopting(conversation("hybrid"), announcedMode = " E2EE ", seenEndToEnd = false)?.encryptionMode)
+            .isEqualTo("e2ee")
+    }
+
+    @Test
+    fun `#13794 une annonce qui ne change rien ne repeint rien`() {
+        assertThat(EndToEndRegimeMemory.adopting(conversation("hybrid"), announcedMode = "hybrid", seenEndToEnd = false)).isNull()
+        assertThat(EndToEndRegimeMemory.adopting(conversation("e2ee"), announcedMode = "e2ee", seenEndToEnd = true)).isNull()
+    }
+
+    @Test
+    fun `#13794 une retrogradation annoncee ne repeint jamais une conversation vue e2ee`() {
+        listOf("server", "hybrid", null, "").forEach { downgrade ->
+            assertThat(EndToEndRegimeMemory.adopting(conversation("e2ee"), announcedMode = downgrade, seenEndToEnd = false)).isNull()
+            assertThat(EndToEndRegimeMemory.adopting(conversation("server"), announcedMode = downgrade, seenEndToEnd = true)).isNull()
+        }
+    }
+
+    @Test
+    fun `#13794 une annonce lisible ne repeint pas un mode inconnu que la garde du clair tient pour chiffre`() {
+        listOf("server", "hybrid", null, "").forEach { downgrade ->
+            assertThat(EndToEndRegimeMemory.adopting(conversation("mls"), announcedMode = downgrade, seenEndToEnd = false)).isNull()
+        }
+        assertThat(EndToEndRegimeMemory.adopting(conversation("mls"), announcedMode = "e2ee", seenEndToEnd = false)?.encryptionMode)
+            .isEqualTo("e2ee")
+    }
+
+    @Test
     fun `le registre apprend une fois et ne recule jamais`() {
         val learned = EndToEndSealedConversations().learn("c1")
         assertThat(learned.isSealed("c1")).isTrue()

@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.EngagementSessions
@@ -19,6 +20,7 @@ import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.toContentFetchFailure
 import me.meeshy.sdk.model.ContentFetchFailure
+import me.meeshy.sdk.post.PostPage
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
@@ -130,12 +132,15 @@ class ReelsViewModel @Inject constructor(
      * Feed's in-memory cache already holds [seed], the thread renders from it INSTANTLY —
      * moved to the front, no spinner — while the real affinity thread loads in the background.
      * When [seed] is NOT in that cache (a notification opens a reel the Feed never rendered —
-     * the common case), it is fetched explicitly by id ([loadSeedAndPrepend]) rather than
+     * the common case), it is fetched explicitly by id ([resolveSeed]) rather than
      * assumed to be in the network page: the gateway's `getReels` EXCLUDES [seed] from every
      * page it returns ("already shown by the client, entry point of the thread"), so a thread
      * opened straight from a notification would otherwise never contain the very reel the user
-     * tapped. Either way, once [seed] is present in [ReelsUiState.reels] (from the cache or
-     * from [loadSeedAndPrepend]), the network page is APPENDED to it (deduplicated, like
+     * tapped. Until that fetch settles, the thread is HELD (recette S8, #13863): the pager keys its pages by id, so a
+     * reel shown before the seed would stay under the finger while the seed slid in above it — the player would open on
+     * another reel than the one touched. The page is fetched concurrently and applied once the seed has landed. Either
+     * way, once [seed] is present in [ReelsUiState.reels] (from the cache or
+     * from [resolveSeed]), the network page is APPENDED to it (deduplicated, like
      * [loadMore]) rather than replacing it — a page that legitimately excludes [seed] must
      * never evict it from the thread.
      */
@@ -150,40 +155,49 @@ class ReelsViewModel @Inject constructor(
             .orEmpty()
         val seedInCache = seed != null && cachedFeed.any { it.id == seed }
         val cached = ReelBuilder.withSeedFirst(cachedFeed, seed)
+        val heldSeed = seed?.takeIf { !seedInCache && _state.value.reels.none { reel -> reel.id == it } }
         _state.update {
             // Une relecture garde ce que le lecteur affiche deja : l'ordre ne bouge que par refreshed.
-            val shown = if (cached.isEmpty()) it.reels else cached
+            val shown = when {
+                heldSeed != null -> emptyList()
+                cached.isEmpty() -> it.reels
+                else -> cached
+            }
             it.copy(reels = shown, isLoading = shown.isEmpty(), errorMessage = null, loadFailure = null, hasLoadedOnce = shown.isNotEmpty(), seedFailure = null)
         }
 
-        if (seed != null && !seedInCache) loadSeedAndPrepend(seed)
-
         viewModelScope.launch {
-            when (val result = postRepository.getReelsPage(seed = seed)) {
-                is NetworkResult.Success -> {
-                    val page = result.data
-                    hasLoadedFirstPage = true
-                    nextCursor = page.nextCursor
-                    hasMoreReels = page.hasMore
-                    val fresh = ReelBuilder.build(page.posts, config.apiBaseUrl, sessionRepository.currentUser.value)
-                    _state.update { current ->
-                        val seedAlreadyPresent = seed != null && current.reels.any { it.id == seed }
-                        // Le reel regarde et ceux qui le precedent ne bougent jamais ; sans reel
-                        // regarde, une graine presente garde tout le fil deja a l'ecran.
-                        val anchorId = currentReelId ?: current.reels.lastOrNull()?.id.takeIf { seedAlreadyPresent }
-                        val reels = ReelThreadOrder.refreshed(current.reels, anchorId, fresh) { it.id }
-                        current.copy(reels = reels, isLoading = false, loadFailure = null, hasLoadedOnce = true)
-                    }
+            val firstPage = async { postRepository.getReelsPage(seed = seed) }
+            heldSeed?.let { resolveSeed(it, held = cached) }
+            applyFirstPage(firstPage.await(), seed)
+        }
+    }
+
+    private fun applyFirstPage(result: NetworkResult<PostPage>, seed: String?) {
+        when (result) {
+            is NetworkResult.Success -> {
+                val page = result.data
+                hasLoadedFirstPage = true
+                nextCursor = page.nextCursor
+                hasMoreReels = page.hasMore
+                val fresh = ReelBuilder.build(page.posts, config.apiBaseUrl, sessionRepository.currentUser.value)
+                _state.update { current ->
+                    val seedAlreadyPresent = seed != null && current.reels.any { it.id == seed }
+                    // Le reel regarde et ceux qui le precedent ne bougent jamais ; sans reel
+                    // regarde, une graine presente garde tout le fil deja a l'ecran.
+                    val anchorId = currentReelId ?: current.reels.lastOrNull()?.id.takeIf { seedAlreadyPresent }
+                    val reels = ReelThreadOrder.refreshed(current.reels, anchorId, fresh) { it.id }
+                    current.copy(reels = reels, isLoading = false, loadFailure = null, hasLoadedOnce = true)
                 }
-                is NetworkResult.Failure -> _state.update {
-                    // The cache-seeded reels (if any) are left in place rather than cleared —
-                    // a network failure degrades to what the Feed already had, never to blank.
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = if (it.reels.isEmpty()) result.error.message else it.errorMessage,
-                        loadFailure = if (it.reels.isEmpty()) result.error.toContentFetchFailure() else it.loadFailure,
-                    )
-                }
+            }
+            is NetworkResult.Failure -> _state.update {
+                // The cache-seeded reels (if any) are left in place rather than cleared —
+                // a network failure degrades to what the Feed already had, never to blank.
+                it.copy(
+                    isLoading = false,
+                    errorMessage = if (it.reels.isEmpty()) result.error.message else it.errorMessage,
+                    loadFailure = if (it.reels.isEmpty()) result.error.toContentFetchFailure() else it.loadFailure,
+                )
             }
         }
     }
@@ -194,26 +208,19 @@ class ReelsViewModel @Inject constructor(
     fun retry() = load(currentSeed)
 
     /**
-     * Fetches [seedId] by id and pins it at the front of the thread, for the cold-start case
-     * where [load] found it absent from the Feed cache. Best-effort and order-agnostic against
-     * the concurrent [load] page fetch — whichever of the two lands second still sees (and
-     * dedupes against) whatever the other already wrote, since both read [ReelsUiState.reels]
-     * fresh inside their own [MutableStateFlow.update] transform. A non-REEL post (filtered out
-     * by [ReelBuilder.build]) or a failed fetch simply leaves the thread as the page populates it.
+     * Fetches [seedId] by id and pins it at the front of the thread, for the cold-start case where [load] found it absent
+     * from the Feed cache, then releases the [held] cache-seeded reels behind it. A non-REEL post (filtered out by
+     * [ReelBuilder.build]) releases the thread as it is; a failed fetch says why ([ReelsUiState.seedFailure]).
      */
-    private fun loadSeedAndPrepend(seedId: String) {
-        viewModelScope.launch {
-            val result = postRepository.getPost(seedId)
-            if (result is NetworkResult.Failure) {
-                _state.update { it.copy(seedFailure = result.error.toContentFetchFailure()) }
-                return@launch
-            }
-            if (result !is NetworkResult.Success) return@launch
-            val seedReel = ReelBuilder.build(listOf(result.data), config.apiBaseUrl, sessionRepository.currentUser.value).firstOrNull() ?: return@launch
-            _state.update { current ->
-                if (current.reels.any { it.id == seedReel.id }) return@update current
-                current.copy(reels = listOf(seedReel) + current.reels, isLoading = false)
-            }
+    private suspend fun resolveSeed(seedId: String, held: List<ReelPresentation>) {
+        val result = postRepository.getPost(seedId)
+        val seedReel = (result as? NetworkResult.Success)
+            ?.let { ReelBuilder.build(listOf(it.data), config.apiBaseUrl, sessionRepository.currentUser.value).firstOrNull() }
+        _state.update { current ->
+            val released = ReelThreadOrder.appended(current.reels, held) { it.id }
+            val reels = seedReel?.let { listOf(it) + released.filterNot { reel -> reel.id == it.id } } ?: released
+            val failure = (result as? NetworkResult.Failure)?.error?.toContentFetchFailure()
+            current.copy(reels = reels, isLoading = reels.isEmpty() && failure == null, hasLoadedOnce = reels.isNotEmpty(), seedFailure = failure)
         }
     }
 

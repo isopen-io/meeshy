@@ -463,6 +463,8 @@ struct ConversationRowMenuActions {
     let onArchive: () -> Void
     let onBlock: () -> Void
     let onDelete: () -> Void
+    /// « Rendre obsolète » (#14645) : arme la confirmation, jamais l'effet.
+    let onObsolete: () -> Void
     let onLeave: () -> Void
     let onReport: () -> Void
     let onOpenAdmin: () -> Void

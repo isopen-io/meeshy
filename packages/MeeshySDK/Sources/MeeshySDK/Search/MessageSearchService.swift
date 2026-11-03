@@ -49,4 +49,17 @@ public struct MessageSearchService: Sendable {
             return try MessageRecord.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
         }
     }
+
+    /// Les traductions déjà reçues des messages trouvés, rangées par message —
+    /// de quoi servir chaque résultat dans la langue du Prisme du lecteur sans
+    /// une requête par ligne.
+    public func translations(forMessageLocalIds ids: [String]) async throws -> [String: [TranslationRecord]] {
+        guard !ids.isEmpty else { return [:] }
+        let records = try await reader.read { db in
+            try TranslationRecord
+                .filter(ids.contains(Column("messageLocalId")))
+                .fetchAll(db)
+        }
+        return Dictionary(grouping: records, by: \.messageLocalId)
+    }
 }

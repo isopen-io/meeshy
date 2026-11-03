@@ -465,9 +465,39 @@ struct ProfileSheetEnvironment: ViewModifier {
     /// injection, toutes les feuilles de profil la reçoivent.
     func body(content: Content) -> some View {
         content
-            .environment(\.profileGameSection, ProfileGameSection { userId, _ in
-                AnyView(GameBannerBadge(userId: userId))
+            .environment(\.profileGameSection, ProfileGameSection { userId, displayName in
+                ProfileSlot.view(.banner, userId: userId, displayName: displayName)
+            })
+            .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName in
+                ProfileSlot.view(.relation, userId: userId, displayName: displayName)
             })
             .environment(\.profileLoading, LiveProfileLoading())
+    }
+}
+
+/// Les emplacements opaques de la fiche de profil, effacés en UN seul point : le jeu sur la bannière et le cercle à la
+/// place de « Connectés » (#13940). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
+/// membre à l'autre, et le niveau du précédent ne doit jamais se peindre sous le nom du suivant.
+enum ProfileSlot {
+    case banner, relation
+
+    static func view(_ slot: ProfileSlot, userId: String, displayName: String) -> AnyView {
+        AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName))
+    }
+}
+
+private struct ProfileSlotContent: View {
+    let slot: ProfileSlot
+    let userId: String
+    let displayName: String
+
+    var body: some View {
+        switch slot {
+        case .banner:
+            GameBannerBadge(userId: userId)
+        case .relation:
+            ProfileCircleSection(userId: userId, displayName: displayName)
+                .id(userId)
+        }
     }
 }

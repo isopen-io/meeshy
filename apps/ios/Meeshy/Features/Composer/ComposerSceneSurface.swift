@@ -481,7 +481,8 @@ struct ComposerSceneSurface: View {
                                    pasteEntry: railSystemEntry,
                                    backgroundIsMedia: restBackgroundIsMedia,
                                    postText: restPostText,
-                                   selection: selectionColumn)
+                                   selection: selectionColumn,
+                                   sceneSideInset: sceneCardLeading - railLaneLeading)
     }
 
     /// **Le volet de description, borné à la CARTE.**

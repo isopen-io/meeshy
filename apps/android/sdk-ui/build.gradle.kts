@@ -52,6 +52,11 @@ dependencies {
     implementation(libs.lottie.compose)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
+    // lot: socle-media3-1-10 (#14567) — les médias passent par le client OkHttp (HTTP/2) dérivé du pool partagé ;
+    // FrameExtractor sert les vignettes vidéo.
+    implementation(libs.androidx.media3.datasource.okhttp)
+    implementation(libs.androidx.media3.inspector.frame)
+    implementation(libs.okhttp)
     // lot: viseur-de-capture-du-composeur (#13423) — preview, photo, segments vidéo, torche, zoom, mise au point
     implementation(libs.camerax.core)
     implementation(libs.camerax.camera2)

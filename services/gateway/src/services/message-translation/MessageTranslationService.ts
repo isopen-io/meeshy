@@ -41,6 +41,7 @@ import { applyPreset, mergeVoiceCloneParams, type ChatterboxTTSParams, type Voic
 import { isEmojiOnly } from '../../utils/emoji-only';
 import { guardedInterval } from '../../utils/guarded-timer';
 import { implicitConversationRegime } from '../conversations/creationRegime';
+import { isEndToEndMode } from '../messaging/e2eePlaintextAdmission';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -55,7 +56,7 @@ export interface MessageData {
   replyToId?: string;
   targetLanguage?: string;
   isEncrypted?: boolean;
-  encryptionMode?: 'e2ee' | 'server' | 'hybrid' | null;
+  encryptionMode?: string | null;
   modelType?: string;
 }
 
@@ -255,7 +256,7 @@ export class MessageTranslationService extends EventEmitter {
       }
 
       // SECURITY: Skip translation for E2EE messages
-      if (messageData.encryptionMode === 'e2ee') {
+      if (isEndToEndMode(messageData.encryptionMode)) {
         logger.debug('Skipping translation for E2EE message', {
           conversationId: messageData.conversationId,
           encryptionMode: messageData.encryptionMode

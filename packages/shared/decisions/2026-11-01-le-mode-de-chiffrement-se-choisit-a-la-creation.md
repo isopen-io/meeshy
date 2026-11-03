@@ -6,8 +6,8 @@
 
 **Décisions** :
 - **Trois modes, aucun « sans chiffrement ».** Le serveur chiffre toujours au repos. L'écran de création propose Serveur, Hybride, et Bout en bout ; Serveur est le défaut d'un utilisateur.
-- **Bout en bout** se choisit par le rôle de plateforme qui peut déjà l'activer (ANALYST et plus, #12588), et il est présélectionné pour ces rôles LÀ OÙ IL FONCTIONNE : un tête-à-tête, sur un client qui sait le lire et l'écrire (iOS, Android). Dans un groupe, ou sur le web, il paraît « bientôt » et le défaut reste Serveur. Un rôle inférieur ne le voit pas.
-- **Hybride** reste visible. Il chiffre aujourd'hui comme Serveur ; la fiche le dit sans jargon.
+- **Bout en bout** se choisit par le rôle de plateforme qui peut déjà l'activer (ANALYST et plus, #12588), et il est présélectionné pour ces rôles LÀ OÙ IL FONCTIONNE : un tête-à-tête, sur un client qui sait le lire et l'écrire. **Correction du 2026-11-02 (#14369)** : seul iOS lit et écrit le bout en bout aujourd'hui ; Android (#14591) et le web (#14592) portent libsignal dans des chantiers en cours, et la règle `creationEncryptionOffer` les traite comme des clients qui ne le savent pas encore. Dans un groupe, ou sur un client sans libsignal, il paraît « bientôt » et le défaut reste Serveur. Un rôle inférieur ne le voit pas.
+- **Hybride** reste visible. ~~Il chiffre aujourd'hui comme Serveur~~ — depuis le 2026-11-02 (#14369), il chiffre deux fois : la couche serveur scellée au repos et une couche appareil libsignal posée par les clients qui la savent (iOS, en tête-à-tête). Protocole et modèle de menace : `services/gateway/decisions/2026-11-02-le-mode-hybride-chiffre-deux-fois-14369.md`.
 - **Les créations hors de l'écran de création** (ouvrir la conversation depuis un profil, un partage, un transfert, une réponse depuis une notification) ne choisissent rien : la passerelle pose Serveur. Jamais Bout en bout d'office, ces chemins portant des pièces jointes que le bout en bout ne scelle pas encore.
 - **Le chiffrement au repos ne se désactive plus** (`409 ENCRYPTION_AT_REST_PERMANENT`). Serveur et Hybride passent directement à un autre mode, Bout en bout compris. Bout en bout ne se quitte jamais (#12949).
 - **Le contrat** : `POST /conversations` accepte `encryptionMode: 'server' | 'hybrid' | 'e2ee'`. Absent, ou avec `plaintext: true` : `server`. `e2ee` : 403 `ENCRYPTION_ACTIVATION_RESTRICTED` sous ANALYST, 400 `ENCRYPTION_MODE_CONFLICT` avec `plaintext`, et il rouvre le tête-à-tête chiffré de la paire s'il existe. Le régime est écrit par le `create`, sous une clé obtenue AVANT : sans clé maîtresse, 503 `SERVER_AT_REST_UNAVAILABLE` et rien n'est créé.
@@ -26,13 +26,13 @@
 |---|---|
 | en-tête du choix | Chiffrement |
 | Serveur | **Serveur** — Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent. (La recherche serveur revient avant la promotion en production.) |
-| Hybride | **Hybride** — Chiffré sur nos serveurs, comme Serveur. Le double chiffrement par vos appareils arrive bientôt. |
+| Hybride | **Hybride** — Chiffré deux fois : sur nos serveurs, pour la traduction et la recherche, et de bout en bout par les appareils compatibles, qui vérifient que chaque message arrive intact. (#14369, remplace « … arrive bientôt ») |
 | Bout en bout | **Bout en bout** — Seuls vos appareils et ceux des participants lisent les messages. La traduction se fait sur votre appareil. |
 | Bout en bout, groupe | Bientôt disponible pour les groupes |
 | Bout en bout, web | Bientôt disponible sur le web |
 | pied du choix | Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes. |
 | résumé Serveur | Chiffrée sur nos serveurs |
-| résumé Hybride | Chiffrée sur nos serveurs (mode hybride) |
+| résumé Hybride | Chiffrée deux fois : sur nos serveurs et par les appareils compatibles (#14369) |
 | résumé ancienne conversation sans mode | Conversation créée avant le chiffrement systématique : ses messages ne sont pas chiffrés |
 | résumé Bout en bout | Chiffrée de bout en bout : seuls les appareils des participants lisent les messages |
 

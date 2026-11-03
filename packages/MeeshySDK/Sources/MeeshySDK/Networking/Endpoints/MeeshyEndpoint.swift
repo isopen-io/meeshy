@@ -126,3 +126,24 @@ public enum MeeshyEndpointRejectionPolicy: Sendable, Equatable {
     /// DOCUMENTE — un code inventé côté client ne serait jamais servi.
     case structured
 }
+
+/// La MÊME adresse, dont les refus 4xx gardent leur `code` machine
+/// (`MeeshyError.rejected`, `.structured`) au lieu de la seule phrase.
+///
+/// Un appelant qui doit distinguer le refus SERVI par la passerelle (son
+/// enveloppe et son code) d'un 404 d'intermédiaire (Traefik pendant un
+/// déploiement) la demande ainsi, sans changer la forme d'erreur que les autres
+/// appelants de l'adresse filtrent (#14693). Chemin, identité et réessais sont
+/// ceux de l'adresse enveloppée.
+public struct TypedRefusals: MeeshyEndpoint {
+    public let endpoint: any MeeshyEndpoint
+
+    public init(_ endpoint: any MeeshyEndpoint) {
+        self.endpoint = endpoint
+    }
+
+    public var path: String { endpoint.path }
+    public var authKind: MeeshyEndpointAuthKind { endpoint.authKind }
+    public var retryPolicy: MeeshyEndpointRetryPolicy { endpoint.retryPolicy }
+    public var rejectionPolicy: MeeshyEndpointRejectionPolicy { .structured }
+}

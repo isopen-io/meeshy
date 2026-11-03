@@ -83,8 +83,8 @@ public fun StickerCustomPage(
 ) {
     val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
     var typed by rememberSaveable { mutableStateOf("") }
-    val textTemplates = remember { StickerTemplateCatalog.templates(StickerTemplateFamily.TEXT) }
-    val timeTemplates = remember { StickerTemplateCatalog.templates(StickerTemplateFamily.TIME) }
+    val textTemplates = remember { StickerTemplateCatalog.templates(StickerTemplateFamily.TEXT).filter { StickerTemplateArtwork.knows(it.id) } }
+    val timeTemplates = remember { StickerTemplateCatalog.templates(StickerTemplateFamily.TIME).filter { StickerTemplateArtwork.knows(it.id) } }
     val textTitle = stringResource(R.string.sticker_custom_text)
     val timeTitle = stringResource(R.string.sticker_custom_time)
     StickerArtGrid(modifier) {

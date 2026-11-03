@@ -50,18 +50,30 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import { announceConversationLanguageChange } from '../message-translation/conversationLanguageChanges';
 import { withOrphanedSenderRepair } from './withOrphanedSenderRepair';
 import { announceSenderBacklogRead, type ReadBroadcastDepsProvider } from './senderBacklogRead';
+import { startedGroupAnnouncer, type StartedGroupAnnouncer } from '../conversations/announceStartedGroup';
 import { isE2eePlaintextRefusal } from './e2eePlaintextAdmission';
 import { isServerAtRestCiphertextRefusal, isServerAtRestUnavailable } from './serverAtRest';
 import { isE2eeRelayRefusal } from '../e2ee/e2ee-relay-errors';
 import { persistableEncryption } from './e2eeRelayPayload';
+import { sealMessageIfConversationObsoleted } from '../conversations/obsoleteMessageSeal';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
+
+/**
+ * #14107 (audit B5) — un compte dont un droit de média est explicitement FERMÉ
+ * (l'expéditeur d'une demande non acceptée, à tout âge) voit ses transferts et diffusions
+ * gardés comme ses rattachements : sinon un transfert recopie l'image fermée.
+ */
+const closesSomeMedia = (rights: { readonly [K: string]: boolean | null | undefined } | null): boolean =>
+  rights !== null && ['canSendFiles', 'canSendImages', 'canSendVideos', 'canSendAudios'].some((right) => rights[right] === false);
 
 export class MessagingService {
   private validator: MessageValidator;
   private processor: MessageProcessor;
   private readStatusService: MessageReadStatusService;
   private engagementService: EngagementService;
+  /** #14644 — l'annonce d'un groupe démarré par son premier message. */
+  private readonly startedGroups: StartedGroupAnnouncer;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -74,6 +86,11 @@ export class MessagingService {
     this.processor = new MessageProcessor(prisma, notificationService, translationService);
     this.readStatusService = new MessageReadStatusService(prisma);
     this.engagementService = new EngagementService(prisma);
+    this.startedGroups = startedGroupAnnouncer(() => ({
+      prisma,
+      io: readBroadcastDeps?.().io,
+      notificationService,
+    }));
   }
 
   /**
@@ -333,7 +350,7 @@ export class MessagingService {
       //      la même garde que les pièces rattachées. Un compte n'est pas
       //      concerné (la règle de #5151 ne visait que le rattachement).
       const guestShareLinkId = participant.anonymousSession?.shareLinkId;
-      const carried = guestShareLinkId
+      const carried = guestShareLinkId || closesSomeMedia(senderRights)
         ? request
         : { attachmentIds: request.attachmentIds };
       if ((senderRights || guestShareLinkId) && carriesAttachments(carried)) {
@@ -489,6 +506,7 @@ export class MessagingService {
           senderId: participant!.id,
           mentionedUserIds: request.mentionedUserIds,
           ...persistableEncryption(request.encryptedPayload),
+          deviceLayerRelay: request.deviceLayer,
           clientMessageId: request.clientMessageId
         }),
         { ...corr, conversationId }
@@ -524,6 +542,16 @@ export class MessagingService {
           messageId: message.id, dedupHit: true
         });
         return response;
+      }
+
+      // 5 bis. #14643 — admis quand la conversation était ouverte, écrit
+      //        pendant son obsolescence : le message naît effacé et ne part
+      //        nulle part (cf. `obsoleteConversation`, second verrou).
+      if (await sealMessageIfConversationObsoleted(this.prisma, { conversationId, messageId: message.id })) {
+        logger.info('message sealed: conversation obsoleted while writing', { ...corr, conversationId, messageId: message.id });
+        return this.createErrorResponse(
+          describeConversationWriteRefusal({ admitted: false, reason: 'conversation-closed' })
+        );
       }
 
       // 6. Réponse unifiée — générée immédiatement après la persistance.
@@ -624,6 +652,7 @@ export class MessagingService {
       prisma: this.prisma,
       translationService: this.translationService,
       engagementService: this.engagementService,
+      startedGroupAnnouncer: this.startedGroups,
       message: {
         id: message.id,
         conversationId: message.conversationId,

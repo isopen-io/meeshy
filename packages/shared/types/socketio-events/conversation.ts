@@ -492,6 +492,17 @@ export interface ConversationClosedEventData {
 }
 
 /**
+ * #14643 — `conversation:obsoleted`. `obsoletedAt` and `purgeAfter` are ISO
+ * 8601 strings; after `purgeAfter` the conversation no longer exists server-side.
+ */
+export interface ConversationObsoletedEventData {
+  readonly conversationId: string;
+  readonly obsoletedBy: string;
+  readonly obsoletedAt: string;
+  readonly purgeAfter: string;
+}
+
+/**
  * Données pour rejoindre/quitter une conversation
  */
 export interface ConversationActionData {
