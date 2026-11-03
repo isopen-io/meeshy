@@ -26,7 +26,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 private val LOGO_SIZE = 100.dp
 private val LOGO_LINE_WIDTH = 10.dp
 private const val TITLE_SIZE_SP = 40
-private const val BRAND_NAME = "Meeshy"
+internal const val BRAND_NAME = "Meeshy"
 
 /** Le dégradé du titre et des liens de marque (iOS `purple700 → purple600 → purple500`). */
 internal fun loginTitleBrush(): Brush =
