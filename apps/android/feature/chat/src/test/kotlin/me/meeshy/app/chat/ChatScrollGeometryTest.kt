@@ -158,4 +158,56 @@ class ChatScrollGeometryBottomMarginTest {
     @org.junit.Test fun `apres la fin du mouvement aucune animation n'est rejouee`() {
         org.junit.Assert.assertEquals(0, ChatScrollGeometry.bottomMarginAnimationMs(transition(perFrame = false), 10_000L))
     }
+
+    // -- anchoredScrollDelta (dépliage d'un long message) ----------------
+
+    @org.junit.Test fun `un bord ancre qui n'a pas bouge ne demande aucun defilement`() {
+        org.junit.Assert.assertEquals(
+            0f,
+            ChatScrollGeometry.anchoredScrollDelta(100f, 100f, ChatListOrientation.TopDown, 500f),
+            0f,
+        )
+    }
+
+    @org.junit.Test fun `liste classique un bord descendu se compense par un defilement positif`() {
+        org.junit.Assert.assertEquals(
+            40f,
+            ChatScrollGeometry.anchoredScrollDelta(100f, 140f, ChatListOrientation.TopDown, 500f),
+            0f,
+        )
+    }
+
+    @org.junit.Test fun `liste inversee le meme decalage se compense par un defilement negatif`() {
+        org.junit.Assert.assertEquals(
+            -40f,
+            ChatScrollGeometry.anchoredScrollDelta(100f, 140f, ChatListOrientation.BottomUp, 500f),
+            0f,
+        )
+        org.junit.Assert.assertEquals(
+            25f,
+            ChatScrollGeometry.anchoredScrollDelta(100f, 75f, ChatListOrientation.BottomUp, 500f),
+            0f,
+        )
+    }
+
+    @org.junit.Test fun `la compensation est bornee a la hauteur du viewport`() {
+        org.junit.Assert.assertEquals(
+            500f,
+            ChatScrollGeometry.anchoredScrollDelta(0f, 9_000f, ChatListOrientation.TopDown, 500f),
+            0f,
+        )
+        org.junit.Assert.assertEquals(
+            500f,
+            ChatScrollGeometry.anchoredScrollDelta(9_000f, 0f, ChatListOrientation.BottomUp, 500f),
+            0f,
+        )
+    }
+
+    @org.junit.Test fun `un decalage sous le demi pixel est ignore`() {
+        org.junit.Assert.assertEquals(
+            0f,
+            ChatScrollGeometry.anchoredScrollDelta(100f, 100.4f, ChatListOrientation.TopDown, 500f),
+            0f,
+        )
+    }
 }
