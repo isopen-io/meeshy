@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -236,7 +235,7 @@ private fun SuccessOverlay(visible: Boolean, isChange: Boolean, modifier: Modifi
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {
                 Icon(
-                    imageVector = Icons.Filled.VerifiedUser,
+                    imageVector = MeeshyIcons.VerifiedUser,
                     contentDescription = null,
                     tint = MeeshyPalette.Success,
                     modifier = Modifier.size(56.dp),
