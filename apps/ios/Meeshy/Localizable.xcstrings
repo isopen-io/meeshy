@@ -326126,53 +326126,6 @@
         }
       }
     },
-    "feed.unsent.banner": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld منشور(ات) غير مُرسلة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld nicht gesendete(r) Beitrag/Beiträge"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld unsent post(s)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld publicación(es) no enviada(s)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld publication(s) non envoyée(s)"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld pubblicazione/i non inviata/e"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld publicação(ões) não enviada(s)"
-          }
-        }
-      }
-    },
     "feed.unsent.composerBusy": {
       "extractionState": "manual",
       "localizations": {
@@ -328284,6 +328237,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Você pode criá-lo sozinho, para uma auditoria ou para coletar opiniões, e convidar depois."
+          }
+        }
+      }
+    },
+    "story.mine.failed.missingMedia": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر العثور على وسائط محلية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine lokale Mediendatei wurde nicht gefunden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A local media file can't be found"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se encuentra un archivo multimedia local"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un média local est introuvable"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un file multimediale locale non è stato trovato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um arquivo de mídia local não foi encontrado"
           }
         }
       }
