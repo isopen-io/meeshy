@@ -62,18 +62,20 @@ public object DatabaseRecovery {
         SQLiteDatabase.openDatabase(database.path, null, SQLiteDatabase.OPEN_READONLY, DatabaseErrorHandler { })
 
     /**
-     * Le fichier s'ouvre et son catalogue se lit : un en-tête ou une page racine corrompus échouent ici. Un refus du disque
-     * ([OpenFailureKind.UNAVAILABLE]) ne prouve rien contre le fichier : il est réputé lisible, et l'ouverture tranchera.
+     * Le fichier s'ouvre et son catalogue se lit : un en-tête ou une page racine corrompus échouent ici. SEULE une vraie
+     * corruption ([OpenFailureKind.CORRUPTION] : `SQLITE_CORRUPT`, `SQLITE_NOTADB`) rend `false`. Un disque plein, une
+     * erreur d'E/S, un verrou, une mémoire saturée ou tout autre échec ne prouvent rien contre le fichier : il est réputé
+     * lisible, et l'ouverture tranchera — jamais une quarantaine pour un échec passager.
      */
-    public fun isReadable(database: File): Boolean {
+    public fun isReadable(database: File, open: (File) -> SQLiteDatabase = ::openReadOnly): Boolean {
         if (!database.exists()) return true
         return try {
-            openReadOnly(database).use { db ->
+            open(database).use { db ->
                 db.rawQuery("SELECT count(*) FROM sqlite_master", null).use { it.moveToFirst() }
             }
             true
         } catch (failure: SQLiteException) {
-            classify(failure) == OpenFailureKind.UNAVAILABLE
+            classify(failure) != OpenFailureKind.CORRUPTION
         }
     }
 
@@ -143,11 +145,16 @@ public object DatabaseRecovery {
     public fun classify(failure: Throwable): OpenFailureKind {
         val chain = generateSequence(failure) { current -> current.cause?.takeIf { it !== current } }.take(MAX_CAUSES).toList()
         return when {
-            chain.any { it is SQLiteDatabaseCorruptException } -> OpenFailureKind.CORRUPTION
+            chain.any(::isCorruption) -> OpenFailureKind.CORRUPTION
             chain.any(::isUnavailable) -> OpenFailureKind.UNAVAILABLE
             else -> OpenFailureKind.DEFECT
         }
     }
+
+    /** `SQLITE_CORRUPT` (et ses codes étendus) ou `SQLITE_NOTADB`, quelle que soit la classe qui les porte. */
+    private fun isCorruption(failure: Throwable): Boolean =
+        failure is SQLiteDatabaseCorruptException ||
+            (failure is SQLiteException && CORRUPTION_CODES.any { failure.message.orEmpty().contains(it) })
 
     private fun isUnavailable(failure: Throwable): Boolean =
         failure is SQLiteFullException ||
@@ -226,4 +233,6 @@ public object DatabaseRecovery {
     public fun isStorageFailure(failure: Throwable): Boolean = classify(failure) != OpenFailureKind.DEFECT
 
     private const val MAX_CAUSES = 8
+
+    private val CORRUPTION_CODES = listOf("SQLITE_CORRUPT", "SQLITE_NOTADB")
 }

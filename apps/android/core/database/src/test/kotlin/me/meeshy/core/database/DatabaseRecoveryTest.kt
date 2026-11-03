@@ -6,6 +6,7 @@ import android.database.sqlite.SQLiteDatabaseCorruptException
 import android.database.sqlite.SQLiteDiskIOException
 import android.database.sqlite.SQLiteException
 import android.database.sqlite.SQLiteFullException
+import android.database.sqlite.SQLiteOutOfMemoryException
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import java.io.File
@@ -118,5 +119,19 @@ class DatabaseRecoveryTest {
         assertThat(salvage.outbox).isEmpty()
         assertThat(salvage.plaintextErasures.map { it.itemId }).containsExactly("m1")
         assertThat(salvage.pendingIds.map { it.localId to it.serverId }).containsExactly("cid_1" to "srv1")
+    }
+
+    @Test
+    fun `la sonde ne declare illisible qu'un fichier corrompu`() {
+        val target = file("probe.db").also { SQLiteDatabase.openOrCreateDatabase(it, null).close() }
+        fun probeFailingWith(failure: Throwable) = DatabaseRecovery.isReadable(target) { throw failure }
+
+        assertThat(probeFailingWith(SQLiteDatabaseCorruptException("database disk image is malformed"))).isFalse()
+        assertThat(probeFailingWith(SQLiteException("file is not a database (code 26 SQLITE_NOTADB)"))).isFalse()
+        assertThat(probeFailingWith(SQLiteException("malformed (code 779 SQLITE_CORRUPT_INDEX)"))).isFalse()
+        assertThat(probeFailingWith(SQLiteOutOfMemoryException("out of memory"))).isTrue()
+        assertThat(probeFailingWith(SQLiteFullException("database or disk is full"))).isTrue()
+        assertThat(probeFailingWith(SQLiteDiskIOException("disk I/O error"))).isTrue()
+        assertThat(probeFailingWith(SQLiteException("x"))).isTrue()
     }
 }
