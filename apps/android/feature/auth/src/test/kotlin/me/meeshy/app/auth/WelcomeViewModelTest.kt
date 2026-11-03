@@ -62,7 +62,7 @@ class WelcomeViewModelTest {
         val rig = Rig()
         rig.vm.onEvent(WelcomeUiEvent.SwitchToLogin("ana@example.com"))
         assertThat(rig.settled()).isTrue()
-        assertThat(rig.handoffs.take()).isEqualTo("ana@example.com")
-        assertThat(rig.handoffs.take()).isNull()
+        assertThat(rig.handoffs.signupEmail.take()).isEqualTo("ana@example.com")
+        assertThat(rig.handoffs.signupEmail.take()).isNull()
     }
 }

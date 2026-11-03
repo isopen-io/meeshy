@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.auth.AuthRepository
+import me.meeshy.sdk.auth.LoginHandoffs
 import me.meeshy.sdk.model.auth.EmailRecoveryInput
 import me.meeshy.sdk.model.auth.EmailRecoveryState
 import me.meeshy.sdk.model.auth.MagicLinkCountdown
@@ -35,9 +36,11 @@ data class ForgotPasswordUiState(
 @HiltViewModel
 class ForgotPasswordViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    loginHandoffs: LoginHandoffs = LoginHandoffs(),
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(ForgotPasswordUiState())
+    /** L'adresse tapée dans l'identifiant de la connexion l'attend ici (iOS `MeeshyForgotPasswordView(prefilledEmail:)`). */
+    private val _state = MutableStateFlow(ForgotPasswordUiState(email = loginHandoffs.recoveryEmail.take().orEmpty()))
     val state: StateFlow<ForgotPasswordUiState> = _state.asStateFlow()
 
     fun setEmail(value: String) {
@@ -81,9 +84,11 @@ data class MagicLinkUiState(
 @HiltViewModel
 class MagicLinkViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    loginHandoffs: LoginHandoffs = LoginHandoffs(),
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(MagicLinkUiState())
+    /** L'adresse tapée dans l'identifiant de la connexion l'attend ici (iOS `MagicLinkView(prefilledEmail:)`). */
+    private val _state = MutableStateFlow(MagicLinkUiState(email = loginHandoffs.recoveryEmail.take().orEmpty()))
     val state: StateFlow<MagicLinkUiState> = _state.asStateFlow()
 
     private var tickJob: Job? = null

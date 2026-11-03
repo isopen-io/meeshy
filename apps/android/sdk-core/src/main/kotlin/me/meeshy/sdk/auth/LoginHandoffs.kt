@@ -1,20 +1,21 @@
 package me.meeshy.sdk.auth
 
-import java.util.concurrent.atomic.AtomicReference
+import me.meeshy.sdk.model.auth.LoginAccountIntent
+import me.meeshy.sdk.model.auth.LoginHandoffSlot
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * L'e-mail déjà tapé dans l'inscription, remis à la connexion quand l'utilisateur bascule (iOS `LoginEmailHandoff`).
- * Il se lit UNE fois : le reprendre l'efface.
+ * Les transferts d'intention vers l'écran de connexion (iOS `LoginEmailHandoff` +
+ * `LoginAccountHandoff`), à usage unique chacun.
+ *
+ * - [signupEmail] : l'inscription bascule vers la connexion avec l'adresse qu'on venait de taper.
+ * - [account] : « Changer de compte » / « Ajouter un compte » a quitté le compte actuel.
+ * - [recoveryEmail] : l'adresse tapée dans l'identifiant, pour le lien par e-mail et le mot de passe oublié.
  */
 @Singleton
-public class LoginHandoffs @Inject constructor() {
-    private val held = AtomicReference<String?>(null)
-
-    public fun hold(email: String?) {
-        held.set(email?.trim()?.takeIf { it.isNotEmpty() })
-    }
-
-    public fun take(): String? = held.getAndSet(null)
+class LoginHandoffs @Inject constructor() {
+    val signupEmail: LoginHandoffSlot<String> = LoginHandoffSlot()
+    val account: LoginHandoffSlot<LoginAccountIntent> = LoginHandoffSlot()
+    val recoveryEmail: LoginHandoffSlot<String> = LoginHandoffSlot()
 }

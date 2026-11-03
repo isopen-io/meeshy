@@ -56,7 +56,7 @@ class WelcomeViewModel @Inject constructor(
             WelcomeUiEvent.SignInTapped -> settle()
             WelcomeUiEvent.AccountCreated -> settle()
             is WelcomeUiEvent.SwitchToLogin -> {
-                handoffs.hold(event.email)
+                handoffs.signupEmail.hold(event.email?.trim()?.takeIf { it.isNotEmpty() })
                 settle()
             }
         }
