@@ -153,9 +153,10 @@ object MessageMergePolicy {
 
     private fun mergedReactions(next: ApiMessage, existing: ApiMessage, guards: MessageMergeGuards): ApiMessage =
         if (!guards.pendingReaction) {
-            next
+            next.copy(reactionRows = ReactionLedger.reconciled(next.reactionRows ?: existing.reactionRows, next.reactionSummary, null))
         } else {
             next.copy(
+                reactionRows = existing.reactionRows,
                 reactionSummary = existing.reactionSummary,
                 currentUserReactions = existing.currentUserReactions,
                 reactionCount = existing.reactionCount,

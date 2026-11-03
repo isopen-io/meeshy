@@ -506,6 +506,9 @@ export const callersIn = (contents, nsNames) => {
 // 277 -> 281 (#13933, 2026-10-31) : `relations.byUserIdLevel`, `byUserIdRitual`, `config`, `root`, les quatre routes
 // des cercles que la passerelle sert et que les clients appelleront avec l'écran des cercles (#13933, ui-cercles).
 // Entrées PRÉMATURÉES, pas de faux morts (#5427). Valeur MESURÉE en CI (Gardes du dépôt, PR #14082) : quatre nouvelles.
+// 277 -> 276 (#14910, 2026-11-03) : `relations.byUserIdLevel` (`POST /api/v1/relations/:userId/level`) a son
+// appelant web — `apps/web/src/lib/api/relations.ts#lowerRelation`, « Rétrograder » / « Annuler le lien » de la
+// fiche. Valeur MESURÉE en local sur origin/dev.
 // ENTRÉES EN ATTENTE DE CLIENT — déclarées, jamais comptées dans la référence.
 //
 // Une route que la passerelle sert AVANT que son client n'existe n'est pas une
@@ -534,7 +537,7 @@ const PENDING_CLIENT_ENTRIES = {
   'relations.byUserIdSettings': { issue: 13936, reason: 'GET|PUT /relations/:userId/settings — bloquer le Bring de quelqu’un, sous-lot web' },
 };
 
-const BASELINE_DEAD_ENTRIES = 277;
+const BASELINE_DEAD_ENTRIES = 276;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

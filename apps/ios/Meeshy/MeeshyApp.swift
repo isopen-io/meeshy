@@ -468,8 +468,8 @@ struct ProfileSheetEnvironment: ViewModifier {
             .environment(\.profileGameSection, ProfileGameSection { userId, displayName in
                 ProfileSlot.view(.banner, userId: userId, displayName: displayName)
             })
-            .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName in
-                ProfileSlot.view(.relation, userId: userId, displayName: displayName)
+            .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName, linked in
+                ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked)
             })
             .environment(\.profileLoading, LiveProfileLoading())
     }
@@ -481,8 +481,8 @@ struct ProfileSheetEnvironment: ViewModifier {
 enum ProfileSlot {
     case banner, relation
 
-    static func view(_ slot: ProfileSlot, userId: String, displayName: String) -> AnyView {
-        AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName))
+    static func view(_ slot: ProfileSlot, userId: String, displayName: String, linked: Binding<Bool> = .constant(false)) -> AnyView {
+        AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, linked: linked))
     }
 }
 
@@ -490,13 +490,14 @@ private struct ProfileSlotContent: View {
     let slot: ProfileSlot
     let userId: String
     let displayName: String
+    @Binding var linked: Bool
 
     var body: some View {
         switch slot {
         case .banner:
             GameBannerBadge(userId: userId)
         case .relation:
-            ProfileCircleSection(userId: userId, displayName: displayName)
+            ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked)
                 .id(userId)
         }
     }

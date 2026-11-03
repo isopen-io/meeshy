@@ -23,7 +23,25 @@ describe('relationLevelResponseSchema (GET /relations/:userId)', () => {
   });
 
   it("retire un champ inconnu : un client plus ancien lit un serveur plus récent sans l'échouer", () => {
-    const lu = relationLevelResponseSchema.parse({ userId: USER_ID, effectiveLevel: 'CLOSE', since: '2026-10-31' });
+    const lu = relationLevelResponseSchema.parse({ userId: USER_ID, effectiveLevel: 'CLOSE', futureField: '2026-10-31' });
     expect(Object.keys(lu).sort()).toEqual(['effectiveLevel', 'userId']);
+  });
+
+  it('lit la forme élargie (#14910) : vue du lien, canRaise et raiseBlockedUntil', () => {
+    const servi = {
+      userId: USER_ID,
+      effectiveLevel: 'FRIEND',
+      grantedByMe: 'CLOSE',
+      since: '2026-10-01T00:00:00.000Z',
+      progress: { activeWeeks: 2, needed: 4, missing: [] },
+      eligibleFor: null,
+      canRaise: false,
+      raiseBlockedUntil: '2026-11-30T00:00:00.000Z',
+    };
+    expect(relationLevelResponseSchema.parse(servi)).toEqual(servi);
+  });
+
+  it('refuse un canRaise qui n’est pas un booléen', () => {
+    expect(relationLevelResponseSchema.safeParse({ userId: USER_ID, effectiveLevel: 'FRIEND', canRaise: 'oui' }).success).toBe(false);
   });
 });

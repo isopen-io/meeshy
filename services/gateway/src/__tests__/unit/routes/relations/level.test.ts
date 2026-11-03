@@ -1,12 +1,14 @@
 /**
  * `GET /relations/:userId` — le niveau EFFECTIF du lien du lecteur avec une
- * personne, et RIEN de plus (#13998, spec cercles § 4).
+ * personne (#13998, spec cercles § 4), et la vue du lien élargie par #14910
+ * (`grantedByMe`, `since`, `progress`, `eligibleFor`, `canRaise`, `raiseBlockedUntil`).
  *
  * Le double Prisme honore la clé de paire : ce que la route lit passe par
  * `niveauEffectifUniforme` (la loi de `niveauEffectif`), jamais par une comparaison
  * locale, et il compare les ObjectId sans casse, comme Mongo. La réponse
  * est comparée à l'IDENTIQUE (`toEqual`) : un champ de plus — un second niveau,
  * un identifiant de demande, un drapeau de blocage — ferait rougir le témoin.
+ * Le détail de `canRaise` et du cool-down est témoigné par `relation-link-manage.test.ts`.
  *
  * @jest-environment node
  */
@@ -84,8 +86,24 @@ function prismaDouble({ niveaux, bloques = [], acceptees = [] }: Monde) {
       return trouvee ? { ...trouvee, updatedAt: trouvee.respondedAt } : null;
     }),
   };
-  return { user, userRelation, friendRequest };
+  const pairInteractionDay = { findMany: jest.fn<any>(async () => []) };
+  return { user, userRelation, friendRequest, pairInteractionDay };
 }
+
+const VUE_VIDE = { since: null, progress: { activeWeeks: 0, needed: null, missing: [] }, eligibleFor: null, raiseBlockedUntil: null };
+
+/** La réponse attendue : sous Connaissance, la vue vide ; au-dessus, ce que J'accorde et la possibilité de monter. */
+const SEMAINES_REQUISES: Record<string, number> = { FRIEND: 4, CLOSE: 12 };
+
+const vue = (userId: string, effectiveLevel: string, extra: Record<string, unknown> = {}) => ({
+  userId,
+  effectiveLevel,
+  grantedByMe: ['PUBLIC', 'COMMUNITY'].includes(effectiveLevel) ? 'PUBLIC' : effectiveLevel,
+  ...VUE_VIDE,
+  progress: { ...VUE_VIDE.progress, needed: SEMAINES_REQUISES[effectiveLevel] ?? null },
+  canRaise: false,
+  ...extra,
+});
 
 async function monter(monde: Monde = {}, { authentifie = true }: { authentifie?: boolean } = {}) {
   const prisma = prismaDouble(monde);
@@ -109,20 +127,20 @@ const lire = (app: Awaited<ReturnType<typeof monter>>['app'], id: string) =>
   app.inject({ method: 'GET', url: `${PREFIXE}/${id}` });
 
 describe('GET /relations/:userId', () => {
-  it('sert FRIEND pour un ami, et UNIQUEMENT userId et effectiveLevel', async () => {
+  it('sert FRIEND pour un ami, et UNIQUEMENT la vue du lien déclarée', async () => {
     const { app } = await monter({ niveaux: { low: 'FRIEND', high: 'FRIEND' } });
 
     const res = await lire(app, AUTRE);
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ success: true, data: { userId: AUTRE, effectiveLevel: 'FRIEND' } });
+    expect(res.json()).toEqual({ success: true, data: vue(AUTRE, 'FRIEND') });
     await app.close();
   });
 
   it('sert CLOSE pour un proche', async () => {
     const { app } = await monter({ niveaux: { low: 'CLOSE', high: 'CLOSE' } });
 
-    expect((await lire(app, AUTRE)).json().data).toEqual({ userId: AUTRE, effectiveLevel: 'CLOSE' });
+    expect((await lire(app, AUTRE)).json().data).toEqual(vue(AUTRE, 'CLOSE'));
     await app.close();
   });
 
@@ -136,7 +154,7 @@ describe('GET /relations/:userId', () => {
   it("sert PUBLIC pour quelqu'un qu'aucun lien ne relie", async () => {
     const { app } = await monter();
 
-    expect((await lire(app, AUTRE)).json().data).toEqual({ userId: AUTRE, effectiveLevel: 'PUBLIC' });
+    expect((await lire(app, AUTRE)).json().data).toEqual(vue(AUTRE, 'PUBLIC'));
     await app.close();
   });
 
@@ -146,7 +164,7 @@ describe('GET /relations/:userId', () => {
       bloques: [{ id: MOI, bloque: AUTRE }],
     });
 
-    expect((await lire(app, AUTRE)).json().data).toEqual({ userId: AUTRE, effectiveLevel: 'PUBLIC' });
+    expect((await lire(app, AUTRE)).json().data).toEqual(vue(AUTRE, 'PUBLIC'));
     await app.close();
   });
 
@@ -156,7 +174,7 @@ describe('GET /relations/:userId', () => {
       bloques: [{ id: AUTRE, bloque: MOI }],
     });
 
-    expect((await lire(app, AUTRE)).json().data).toEqual({ userId: AUTRE, effectiveLevel: 'PUBLIC' });
+    expect((await lire(app, AUTRE)).json().data).toEqual(vue(AUTRE, 'PUBLIC'));
     await app.close();
   });
 
@@ -166,7 +184,7 @@ describe('GET /relations/:userId', () => {
     const inconnu = await lire(app, INCONNU);
 
     expect(inconnu.statusCode).toBe(200);
-    expect(inconnu.json()).toEqual({ success: true, data: { userId: INCONNU, effectiveLevel: 'PUBLIC' } });
+    expect(inconnu.json()).toEqual({ success: true, data: vue(INCONNU, 'PUBLIC') });
     await app.close();
   });
 
@@ -178,7 +196,8 @@ describe('GET /relations/:userId', () => {
       return {
         blocage: prisma.user.findFirst.mock.calls.length,
         lien: prisma.userRelation.findUnique.mock.calls.length,
-        acceptation: prisma.friendRequest.findFirst.mock.calls.length,
+        demandes: prisma.friendRequest.findFirst.mock.calls.length,
+        serie: prisma.pairInteractionDay.findMany.mock.calls.length,
       };
     };
     const proche = { low: 'CLOSE', high: 'CLOSE' };
@@ -192,7 +211,8 @@ describe('GET /relations/:userId', () => {
       await lectures({ bloques: [{ id: AUTRE, bloque: MOI }] }, AUTRE),
     ];
 
-    mesures.forEach((m) => expect(m).toEqual({ blocage: 1, lien: 1, acceptation: 1 }));
+    mesures.forEach((m) => expect(m).toEqual(mesures[0]));
+    expect(mesures[0]).toEqual({ blocage: 1, lien: 2, demandes: 2, serie: 1 });
   });
 
   it('un identifiant en MAJUSCULES désigne la même personne : même niveau, identifiant servi canonique', async () => {
@@ -200,7 +220,7 @@ describe('GET /relations/:userId', () => {
 
     const res = await lire(app, AUTRE.toUpperCase());
 
-    expect(res.json()).toEqual({ success: true, data: { userId: AUTRE, effectiveLevel: 'CLOSE' } });
+    expect(res.json()).toEqual({ success: true, data: vue(AUTRE, 'CLOSE') });
     await app.close();
   });
 

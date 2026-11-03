@@ -21,6 +21,8 @@ import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.composer.ComposerHostState
 import me.meeshy.sdk.model.composer.ComposerIntent
 import me.meeshy.sdk.model.composer.ComposerOpening
+import me.meeshy.sdk.model.composer.ComposerPortal
+import me.meeshy.sdk.model.composer.ComposerPortalSlot
 import me.meeshy.sdk.model.composer.ComposerProfile
 import me.meeshy.sdk.model.composer.ComposerTextSelection
 import me.meeshy.sdk.model.composer.sceneOpening
@@ -94,6 +96,15 @@ class ComposerHostViewModel @Inject constructor(
     fun onSeedApplied() {
         _seed.update { if (it is SeedState.Ready) SeedState.None else it }
     }
+
+    private val _portal = MutableStateFlow(ComposerPortalSlot())
+
+    /** La feuille modale ouverte : une seule à la fois, ouvrir la suivante ferme la précédente ([ComposerPortalSlot]). */
+    val portal: StateFlow<ComposerPortalSlot> = _portal.asStateFlow()
+
+    fun present(portal: ComposerPortal) = _portal.update { it.present(portal) }
+
+    fun dismiss(portal: ComposerPortal) = _portal.update { it.dismiss(portal) }
 
     fun choose(format: ComposerFormat) = _state.update { it.choose(format) }
 
