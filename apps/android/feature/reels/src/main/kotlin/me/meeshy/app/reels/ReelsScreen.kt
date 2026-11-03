@@ -149,7 +149,6 @@ fun ReelsScreen(
     val openStory by rememberUpdatedState(onOpenStory)
     val hasStory by rememberUpdatedState(authorHasStory)
     val profileOpener = LocalProfileSheetOpener.current
-    val reelsNow by rememberUpdatedState(state.reels)
     // Un auteur qui a une story non vue : son avatar ouvre cette story (un seul groupe), sinon sa fiche (iOS).
     val openAuthor = remember(profileOpener) {
         { id: String ->
