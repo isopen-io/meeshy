@@ -134,3 +134,56 @@ struct FailedStoryRow: View {
         )
     }
 }
+
+// MARK: - Waiting Story Row
+
+/// Une story EN ATTENTE d'envoi (#10331) — dans la file, que rien ne
+/// téléverse en ce moment (hors ligne, ou relancée au prochain réseau).
+/// « Annuler l'envoi » la retire : rien ne partira au retour du réseau.
+struct WaitingStoryRow: View {
+    let item: StoryPublishQueueItem
+    let onCancel: () -> Void
+
+    private var relativeTime: String {
+        RelativeTimeFormatter.fullString(for: item.createdAt)
+    }
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.md) {
+            ZStack {
+                Circle().fill(Color.secondary.opacity(0.15))
+                Image(systemName: "clock.arrow.circlepath")
+                    .foregroundStyle(Color.secondary)
+            }
+            .frame(width: 44, height: 44)
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                Text(UnsentPublicationsCopy.waiting)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                Text(relativeTime)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                    .foregroundStyle(Color.secondary)
+            }
+
+            Spacer()
+
+            Button(role: .destructive, action: onCancel) {
+                Text(WaitingStoryCopy.cancel)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+            }
+            .buttonStyle(.bordered)
+            .frame(minHeight: 44)
+            .accessibilityIdentifier("story.mine.waiting.cancel")
+        }
+        .padding(.vertical, MeeshySpacing.xs)
+        .accessibilityElement(children: .combine)
+        .accessibilityAction(named: WaitingStoryCopy.cancel, onCancel)
+    }
+}
+
+enum WaitingStoryCopy {
+    static var cancel: String {
+        String(localized: "story.mine.waiting.cancel", defaultValue: "Annuler l'envoi", bundle: .main)
+    }
+}

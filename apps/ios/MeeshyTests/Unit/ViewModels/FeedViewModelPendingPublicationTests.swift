@@ -87,4 +87,19 @@ final class FeedViewModelPendingPublicationTests: XCTestCase {
 
         XCTAssertEqual(queue.cancelCreatePostCalls, ["cmid_p"])
     }
+
+    // MARK: - #10331 — la carte en file se voit comme telle
+
+    func test_pendingMarker_onQueuedCard_saysWaitingToSend() async throws {
+        let (sut, queue, _) = makeSUT()
+        let cmid = try await queuedPostId(sut, queue)
+
+        XCTAssertEqual(PendingPublicationMarker.label(postId: cmid),
+                       String(localized: "feed.unsent.waiting", defaultValue: "En attente d'envoi", bundle: .main))
+    }
+
+    func test_pendingMarker_onServerPost_showsNothing() {
+        XCTAssertNil(PendingPublicationMarker.label(postId: "665f1c2e9b1d4a0012345678"),
+                     "une publication en ligne garde son heure")
+    }
 }
