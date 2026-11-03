@@ -75,6 +75,7 @@ fun FeedScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var commentsPostId by remember { mutableStateOf<String?>(null) }
+    var commentsReplyTo by remember { mutableStateOf<String?>(null) }
     FeedMediaPrefetchEffect(listState = listState, posts = state.posts)
     // Une seule scène joue dans le fil, la plus visible ; les autres sont une image fixe sans lecteur (#13663).
     val sceneCoordinator = remember { FeedSceneCoordinator() }
@@ -263,7 +264,8 @@ fun FeedScreen(
                             onPin = { viewModel.pinPost(post.id) },
                             onReport = { reportPostId = post.id },
                             onDelete = { deletePostId = post.id },
-                            onComments = { commentsPostId = post.id },
+                            onComments = { commentsPostId = post.id; commentsReplyTo = null },
+                            onReplyToComment = { commentId -> commentsPostId = post.id; commentsReplyTo = commentId },
                             modifier = Modifier.animateItem().padding(horizontal = MeeshySpacing.lg),
                         )
                     }
@@ -291,7 +293,8 @@ fun FeedScreen(
     FeedCommentsSheetHost(
         postId = commentsPostId,
         serverCount = state.posts.firstOrNull { it.id == commentsPostId }?.commentCount ?: 0,
-        onDismiss = { commentsPostId = null },
+        replyToCommentId = commentsReplyTo,
+        onDismiss = { commentsPostId = null; commentsReplyTo = null },
         onCommentSent = viewModel::onCommentSent,
     )
     state.imageViewer?.let { gallery ->
