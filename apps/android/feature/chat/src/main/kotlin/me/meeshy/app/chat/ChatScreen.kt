@@ -26,7 +26,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import android.widget.Toast
+import me.meeshy.feature.chat.R
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -68,6 +72,7 @@ fun ChatScreen(
     val endController = remember(viewModel) { viewModel.controllers.find<ConversationEndController>() }
     val conversationEnded by (endController?.ended ?: NOT_ENDED).collectAsStateWithLifecycle()
     LaunchedEffect(conversationEnded) { if (conversationEnded) leave() }
+    EncryptionSwitchAnnouncementEffect(remember(viewModel) { viewModel.controllers.find<EncryptionSwitchAnnouncementController>() })
     val callEntry by viewModel.callEntry.collectAsStateWithLifecycle()
     val mayInviteFriends by viewModel.mayInviteFriends.collectAsStateWithLifecycle()
 
@@ -264,5 +269,15 @@ internal class OnceAction(private val action: () -> Unit) : () -> Unit {
         if (done) return
         done = true
         action()
+    }
+}
+
+/** #13794 — le passage au bout en bout fait sous les yeux du fil s'annonce, avec le libellé d'iOS (toast d'information). */
+@Composable
+private fun EncryptionSwitchAnnouncementEffect(announcer: EncryptionSwitchAnnouncementController?) {
+    val context = LocalContext.current
+    val notice = stringResource(R.string.conversation_encryption_switched_enabled)
+    LaunchedEffect(announcer, notice) {
+        announcer?.announcements?.collect { Toast.makeText(context, notice, Toast.LENGTH_LONG).show() }
     }
 }

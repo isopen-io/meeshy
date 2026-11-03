@@ -104,6 +104,7 @@
     <string name="conversation_appearance_section_solid">لون موحد</string>
     <string name="conversation_appearance_sheet_title">الخلفية واللون المميز</string>
     <string name="conversation_appearance_signature">Signature</string>
+    <string name="conversation_encryption_switched_enabled">تم تفعيل التشفير التام بين الطرفين: تُشفّر الرسائل الجديدة على أجهزتك.</string>
     <string name="conversation_info_pinned_see_all">عرض الرسائل المثبّتة (%1$d)</string>
     <string name="conversation_info_tab_media">الوسائط</string>
     <string name="conversation_info_tab_members">الأعضاء</string>

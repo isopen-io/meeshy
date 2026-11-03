@@ -101,6 +101,7 @@
     <string name="conversation_appearance_section_solid">Couleur unie</string>
     <string name="conversation_appearance_sheet_title">Fond et accent</string>
     <string name="conversation_appearance_signature">Signature</string>
+    <string name="conversation_encryption_switched_enabled">Chiffrement de bout en bout activé : les nouveaux messages sont chiffrés sur vos appareils.</string>
     <string name="conversation_info_pinned_see_all">Voir les %1$d messages épinglés</string>
     <string name="conversation_info_tab_media">Médias</string>
     <string name="conversation_info_tab_members">Membres</string>
