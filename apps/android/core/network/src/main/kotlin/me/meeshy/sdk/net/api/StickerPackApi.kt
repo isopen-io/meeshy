@@ -1,5 +1,6 @@
 package me.meeshy.sdk.net.api
 
+import kotlinx.serialization.json.JsonElement
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.sticker.StickerPackList
 import me.meeshy.sdk.model.sticker.StickerPackSummary
@@ -26,4 +27,25 @@ interface StickerPackApi {
 
     @DELETE(ApiRoutesStickerPacks.BY_SLUG_INSTALL)
     suspend fun uninstall(@Path("slug") slug: String): ApiResponse<StickerPackSummary>
+}
+
+/**
+ * `/sticker-packs`, contrat INCHANGÉ à l'octet, lu sans modèle pour le moteur générique des packs : les stickers
+ * gardent leurs adresses, les autres domaines passent par `/packs/<domaine>` ([PackRawApi]).
+ */
+interface StickerPackRawApi {
+    @GET(ApiRoutesStickerPacks.ROOT)
+    suspend fun catalogue(): ApiResponse<JsonElement>
+
+    @GET(ApiRoutesStickerPacks.INSTALLED)
+    suspend fun installed(): ApiResponse<JsonElement>
+
+    @GET(ApiRoutesStickerPacks.BY_SLUG)
+    suspend fun detail(@Path("slug") slug: String): ApiResponse<JsonElement>
+
+    @PUT(ApiRoutesStickerPacks.BY_SLUG_INSTALL)
+    suspend fun install(@Path("slug") slug: String): ApiResponse<JsonElement>
+
+    @DELETE(ApiRoutesStickerPacks.BY_SLUG_INSTALL)
+    suspend fun uninstall(@Path("slug") slug: String): ApiResponse<JsonElement>
 }

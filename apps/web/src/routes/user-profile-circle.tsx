@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import type { RelationRequestLevel } from '@meeshy/shared/types/relation';
+import type { RelationLevel, RelationRequestLevel } from '@meeshy/shared/types/relation';
 import { memo, useMemo, useState } from 'react';
 
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -9,7 +9,7 @@ import { flattenFriendRequests, friendRequestsQueryOptions, type PersonSummary }
 import { appQueryClient } from '@/lib/api/query-client';
 import { relationLinksQueryOptions, relationRaiseGateQueryOptions, type RelationDeps, type RelationLink } from '@/lib/api/relations';
 import { translate } from '@/lib/i18n-catalog';
-import { translateCircles } from '@/lib/i18n-circles-catalog';
+import { translateCircles, type CirclesCatalogKey } from '@/lib/i18n-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { CIRCLE_LEVELS, demotionOf, pendingRaiseOf, progressSummary, raiseOffer, type Demotion } from '@/lib/relations/circles';
 import { performLowerRelation } from '@/lib/relations/lower-relation';
@@ -78,6 +78,7 @@ export const ProfileCircleRowView = memo(function ProfileCircleRowView({
   const title = relationLevelLabel(language, level);
   const line = progressText(language, progressSummary(link, now));
   const offer = raiseOffer(link, now);
+  const promote = offer.kind === 'available' ? PROMOTE[offer.target] : undefined;
   const demotion = demotionOf(link);
   return (
     <div className="grid gap-2">
@@ -100,16 +101,16 @@ export const ProfileCircleRowView = memo(function ProfileCircleRowView({
           <span data-profile-circle-pending={pendingLevel} className="shrink-0 text-end text-caption font-semibold" style={{ color: INK_2 }}>
             {translateCircles(language, 'circles.pending', { level: relationLevelLabel(language, pendingLevel) })}
           </span>
-        ) : raisable && offer.kind === 'available' ? (
+        ) : raisable && offer.kind === 'available' && promote !== undefined ? (
           <button
             type="button"
             data-profile-circle-raise={offer.target}
-            aria-label={translateCircles(language, 'circles.action.requestLabel', { level: relationLevelLabel(language, offer.target), name })}
+            aria-label={translateCircles(language, promote.detail, { name })}
             onClick={() => onRaise(offer.target)}
             className={`grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold text-ios-on-brand ${FOCUS}`}
             style={{ minHeight: 44, backgroundColor: BRAND_FILL, outlineColor: BRAND }}
           >
-            {translateCircles(language, 'circles.action.promote', { level: relationLevelLabel(language, offer.target) })}
+            {translateCircles(language, promote.label)}
           </button>
         ) : null}
       </div>
@@ -126,14 +127,33 @@ export const ProfileCircleRowView = memo(function ProfileCircleRowView({
             outlineColor: DANGER,
           }}
         >
-          {demotion.kind === 'unlink'
-            ? translateCircles(language, 'circles.action.unlink')
-            : translateCircles(language, 'circles.action.demote', { level: relationLevelLabel(language, demotion.to) })}
+          {lowerLabel(language, demotion)}
         </button>
       )}
     </div>
   );
 });
+
+type WordingLabel = `circles.promote.${'friend' | 'close' | 'blood'}` | `circles.demote.${'close' | 'friend' | 'acquaintance'}`;
+type WordingDetail = `circles.promote.${'friend' | 'close' | 'blood'}.a11y` | `circles.demote.${'close' | 'friend' | 'acquaintance'}.confirm.title`;
+type Wording = { readonly label: WordingLabel & CirclesCatalogKey; readonly detail: WordingDetail & CirclesCatalogKey };
+
+const PROMOTE: Readonly<Partial<Record<RelationLevel, Wording>>> = {
+  FRIEND: { label: 'circles.promote.friend', detail: 'circles.promote.friend.a11y' },
+  CLOSE: { label: 'circles.promote.close', detail: 'circles.promote.close.a11y' },
+  BLOOD: { label: 'circles.promote.blood', detail: 'circles.promote.blood.a11y' },
+};
+
+const DEMOTE: Readonly<Partial<Record<RelationLevel, Wording>>> = {
+  CLOSE: { label: 'circles.demote.close', detail: 'circles.demote.close.confirm.title' },
+  FRIEND: { label: 'circles.demote.friend', detail: 'circles.demote.friend.confirm.title' },
+  ACQUAINTANCE: { label: 'circles.demote.acquaintance', detail: 'circles.demote.acquaintance.confirm.title' },
+};
+
+function lowerLabel(language: InterfaceLanguage, demotion: Demotion): string {
+  const wording = demotion.kind === 'demote' ? DEMOTE[demotion.to] : undefined;
+  return translateCircles(language, wording === undefined ? 'circles.action.unlink' : wording.label);
+}
 
 function LowerConfirm({
   language,
@@ -151,13 +171,14 @@ function LowerConfirm({
   const from = relationLevelLabel(language, demotion.from);
   const unlink = demotion.kind === 'unlink';
   const to = relationLevelLabel(language, demotion.to);
+  const wording = demotion.kind === 'demote' ? DEMOTE[demotion.to] : undefined;
   return (
     <ConfirmDialog
       name={unlink ? 'circle-unlink' : 'circle-demote'}
-      title={unlink ? translateCircles(language, 'circles.unlink.confirm.title', { name }) : translateCircles(language, 'circles.demote.confirm.title', { name, level: to })}
+      title={wording === undefined ? translateCircles(language, 'circles.unlink.confirm.title', { name }) : translateCircles(language, wording.detail, { name })}
       body={unlink ? translateCircles(language, 'circles.unlink.confirm.body', { name }) : translateCircles(language, 'circles.demote.confirm.body', { name, from, to })}
       cancelLabel={translate(language, 'common.cancel')}
-      confirmLabel={unlink ? translateCircles(language, 'circles.action.unlink') : translateCircles(language, 'circles.action.demote', { level: to })}
+      confirmLabel={lowerLabel(language, demotion)}
       tone="destructive"
       onConfirm={onConfirm}
       onCancel={onCancel}
