@@ -238,6 +238,8 @@ class LayoutKeysTest {
 
 class FocalCellsTest {
 
+    private val zone = ZoneOffset.UTC
+
     private class Row(
         override val index: Int,
         override val key: Any,

@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -45,6 +44,8 @@ import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.ui.component.bubble.BubbleFile
 import me.meeshy.ui.component.bubble.BubbleFileRow
+import me.meeshy.ui.component.composer.PieceRemoveBadge
+import me.meeshy.ui.component.composer.PieceRemoveBadgeGeometry
 import me.meeshy.ui.component.retouch.RetouchSourceDecoder
 import me.meeshy.ui.component.retouch.RetouchVideoProbe
 import me.meeshy.ui.icons.MeeshyIcons
@@ -55,8 +56,6 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 private val PieceShape = RoundedCornerShape(MeeshyRadius.md)
 private val PieceSize = 56.dp
-private val PieceRemoveDisc = 20.dp
-private val PieceRemoveTouch = 32.dp
 private val MediaSize = 120.dp
 
 /** Assez pour une vignette de 56 dp nette, l'orientation EXIF cuite : une prise de l'objectif n'y arrive pas couchée. */
@@ -123,52 +122,38 @@ private fun CommentVisualStrip(media: List<CommentMediaPreview>) {
 }
 
 /**
- * Le bandeau des pièces du composeur (#12972) : une vignette par pièce ; la toucher l'ouvre dans la retouche
- * unique (#12735), (x) la retire ; une pièce qui se téléverse porte son indicateur.
+ * Le bandeau des pièces du composeur (#12972) : une vignette par pièce ; la toucher, son centre compris, l'ouvre dans la
+ * retouche unique (#12735) ; le ✕ à cheval sur son coin la retire (#15229) ; une pièce qui se téléverse porte son indicateur.
  */
 @Composable
 internal fun CommentAttachmentBar(tray: CommentAttachmentTray, onEdit: (CommentPendingPiece) -> Unit, onRemove: (String) -> Unit) {
     if (!tray.hasMedia) return
     val removeLabel = stringResource(R.string.feed_composer_remove_media)
+    val editLabel = stringResource(R.string.post_comments_edit_media)
     Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+            .padding(start = MeeshySpacing.md, end = PieceRemoveBadgeGeometry.ReachEnd, top = PieceRemoveBadgeGeometry.ReachTop, bottom = MeeshySpacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(PieceRemoveBadgeGeometry.ReachEnd),
     ) {
         tray.pieces.forEach { piece ->
-            val editLabel = stringResource(R.string.post_comments_edit_media)
             Box(Modifier.size(PieceSize)) {
                 Box(
                     Modifier.size(PieceSize).clip(PieceShape).background(MeeshyTheme.tokens.inputBackground)
-                        .clickable(onClickLabel = editLabel, role = Role.Button) { onEdit(piece) },
+                        .clickable(onClickLabel = editLabel, role = Role.Button) { onEdit(piece) }
+                        .semantics { contentDescription = editLabel },
                     contentAlignment = Alignment.Center,
                 ) {
                     PieceThumbnail(piece)
                     if (piece.uploaded == null) CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
                 }
-                PieceRemoveButton(label = removeLabel, onClick = { onRemove(piece.id) }, modifier = Modifier.align(Alignment.TopEnd))
+                PieceRemoveBadge(
+                    label = removeLabel,
+                    onClick = { onRemove(piece.id) },
+                    discColor = Color.Black.copy(alpha = 0.6f),
+                    glyphColor = MeeshyPalette.White,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                )
             }
-        }
-    }
-}
-
-/**
- * Le ✕ d'une pièce (#14287) : un rond net de 20 dp dans le coin de la vignette. La zone touchée, plus large, reste
- * transparente ; un `IconButton` l'aurait portée à 48 dp et peinte en gris, débordant en demi-disque derrière le ✕.
- */
-@Composable
-private fun PieceRemoveButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .size(PieceRemoveTouch)
-            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = label },
-        contentAlignment = Alignment.TopEnd,
-    ) {
-        Box(
-            Modifier.size(PieceRemoveDisc).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(MeeshyIcons.Close, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(12.dp))
         }
     }
 }
