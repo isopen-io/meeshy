@@ -337,56 +337,48 @@ class SignupViewModelTest {
     }
 
     @Test
-    fun aTypedPseudoWinsAndClearingItLeavesItEmptyAndRefused() {
+    fun aTypedPseudoWinsAndClearingItShowsTheDerivationAsPlaceholder() {
         val vm = scenario().viewModel
         vm.onPhoneEntryChange("0612345678")
         vm.onEmailChange("ada@meeshy.me")
 
         vm.onUsernameChange("@ada_l")
+        assertThat(vm.state.value.usernameInput).isEqualTo("ada_l")
         assertThat(vm.state.value.shownUsername).isEqualTo("ada_l")
-        assertThat(vm.state.value.form.effectiveUsername).isEqualTo("ada_l")
 
         vm.onUsernameChange("")
-        assertThat(vm.state.value.shownUsername).isEmpty()
-        assertThat(vm.state.value.form.effectiveUsername).isEmpty()
-        assertThat(vm.state.value.usernameRefusal)
-            .isEqualTo(me.meeshy.sdk.model.auth.RegistrationIdentity.UsernameRefusal.TOO_SHORT)
+        assertThat(vm.state.value.usernameInput).isEmpty()
+        assertThat(vm.state.value.usernamePlaceholder).isEqualTo("ada")
+        assertThat(vm.state.value.shownUsername).isEqualTo("ada")
+        assertThat(vm.state.value.form.effectiveUsername).isEqualTo("ada")
     }
 
     @Test
-    fun register_afterClearingTheDerivedUsername_neverSendsTheErasedPseudo() = runTest(dispatcher) {
+    fun register_afterClearingTheNameAndPseudo_sendsThePlaceholdersTheCardShows() = runTest(dispatcher) {
         val scenario = scenario(ApiResponse(success = true, data = session()))
         scenario.viewModel.onPhoneEntryChange("0612345678")
-        scenario.viewModel.onEmailChange("jean.dupont.1985@exemple.fr")
-        assertThat(scenario.viewModel.state.value.shownUsername).isNotEmpty()
+        scenario.viewModel.onEmailChange("jean.dupont@meeshy.me")
 
         scenario.viewModel.onUsernameChange("")
-        assertThat(scenario.viewModel.state.value.canSubmit).isFalse()
-        scenario.viewModel.register()
-        advanceUntilIdle()
-
-        assertThat(scenario.api.captured).isEmpty()
-    }
-
-    @Test
-    fun register_afterClearingTheDerivedDisplayName_neverSendsTheErasedName() = runTest(dispatcher) {
-        val scenario = scenario(ApiResponse(success = true, data = session()))
-        scenario.viewModel.onPhoneEntryChange("0612345678")
-        scenario.viewModel.onEmailChange("jean.dupont.1985@exemple.fr")
-        assertThat(scenario.viewModel.state.value.shownDisplayName).isNotEmpty()
-
         scenario.viewModel.onDisplayNameChange("")
-        assertThat(scenario.viewModel.state.value.shownDisplayName).isEmpty()
-        assertThat(scenario.viewModel.state.value.displayNameErased).isTrue()
-        assertThat(scenario.viewModel.state.value.canSubmit).isFalse()
+        val state = scenario.viewModel.state.value
+        assertThat(state.usernameInput).isEmpty()
+        assertThat(state.displayNameInput).isEmpty()
+        assertThat(state.usernamePlaceholder).isEqualTo("jean-dupont")
+        assertThat(state.displayNamePlaceholder).isEqualTo("Jean Dupont")
+        assertThat(state.canSubmit).isTrue()
         scenario.viewModel.register()
         advanceUntilIdle()
 
-        assertThat(scenario.api.captured).isEmpty()
+        val sent = scenario.api.captured.single()
+        assertThat(sent.username).isEqualTo(state.shownUsername)
+        assertThat(sent.displayName).isEqualTo(state.shownDisplayName)
+        assertThat(sent.username).isEqualTo("jean-dupont")
+        assertThat(sent.displayName).isEqualTo("Jean Dupont")
     }
 
     @Test
-    fun register_afterRetypingAnErasedPseudo_sendsWhatWasTyped() = runTest(dispatcher) {
+    fun register_afterRetypingAClearedPseudo_sendsWhatWasTyped() = runTest(dispatcher) {
         val scenario = scenario(ApiResponse(success = true, data = session()))
         scenario.viewModel.fillValid()
         scenario.viewModel.onUsernameChange("")
@@ -395,6 +387,7 @@ class SignupViewModelTest {
         advanceUntilIdle()
 
         assertThat(scenario.api.captured.single().username).isEqualTo("jdupont")
+        assertThat(scenario.viewModel.state.value.shownUsername).isEqualTo("jdupont")
     }
 
     @Test
