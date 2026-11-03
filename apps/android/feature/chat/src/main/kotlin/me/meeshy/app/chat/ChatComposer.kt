@@ -182,6 +182,7 @@ internal fun ChatComposer(
         }
     }
     var cameraChooserOpen by remember { mutableStateOf(false) }
+    me.meeshy.app.chat.camera.ComposerCameraPrewarm(offered = configuration.offers(ComposerCapability.CAMERA))
     val ladderTiles = remember(affordances, onLocationRequest != null, guestAllowance, configuration) {
         ComposerAttachmentLadder.tiles(
             affordances,
