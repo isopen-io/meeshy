@@ -303,6 +303,8 @@
     <string name="story_composer_grabber">مقبض شريط الأدوات</string>
     <string name="story_composer_grabber_hint_dismiss">اسحب لأسفل للتصغير أو الإغلاق.</string>
     <string name="story_composer_grabber_hint_resize">اسحب لأعلى للتكبير، ولأسفل للتصغير أو الإغلاق.</string>
+    <string name="story_composer_loadingImage">جارٍ تحميل الصورة...</string>
+    <string name="story_composer_loadingVideo">جارٍ تحميل الفيديو...</string>
     <string name="story_composer_redo">إعادة</string>
     <string name="story_composer_soundLibrary">المكتبة</string>
     <string name="story_composer_undo">تراجع</string>
@@ -325,6 +327,7 @@
     <string name="story_media_soundExtraction_a11yHint">سيتمكن أشخاص آخرون من إعادة استخدام مسار صوت مقاطع الفيديو في هذا المنشور في منشوراتهم الخاصة.</string>
     <string name="story_media_soundExtraction_caption">سيتمكن أشخاص آخرون من إعادة استخدام مسار صوت مقاطع الفيديو في هذا المنشور.</string>
     <string name="story_media_soundExtraction_label">السماح بإعادة استخدام الصوت</string>
+    <string name="story_reader_buffering">جارٍ تحميل القصة</string>
     <string name="story_repost_error_forbidden">لا يمكن إعادة مشاركة هذه القصة</string>
     <string name="story_repost_error_generic">فشلت إعادة النشر</string>
     <string name="story_repost_error_unavailable">لم تعد هذه القصة متاحة</string>

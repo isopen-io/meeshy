@@ -380,8 +380,12 @@
     <string name="new_conversation_contacts_loading">جارٍ تحميل جهات الاتصال</string>
     <string name="new_conversation_contacts_section">جهات اتصالك</string>
     <string name="new_conversation_create">إنشاء</string>
+    <string name="new_conversation_encryption_collapsed">مطوية</string>
+    <string name="new_conversation_encryption_expanded">موسّعة</string>
     <string name="new_conversation_error_create">تعذّر إنشاء المحادثة</string>
-    <string name="new_conversation_group_title">اسم المجموعة</string>
+    <string name="new_conversation_group_solo_hint">يمكنك إنشاؤها بمفردك، لتدقيق أو لجمع الآراء، ثم دعوة الآخرين لاحقًا.</string>
+    <string name="new_conversation_group_title">اسم المجموعة (إلزامي)</string>
+    <string name="new_conversation_group_toggle">مجموعة جديدة</string>
     <string name="new_conversation_no_user_found">لم يتم العثور على مستخدم</string>
     <string name="new_conversation_remove">احذف</string>
     <string name="new_conversation_selected">محدَّد</string>

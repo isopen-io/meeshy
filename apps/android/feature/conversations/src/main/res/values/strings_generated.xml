@@ -352,8 +352,12 @@
     <string name="new_conversation_contacts_loading">Loading contacts</string>
     <string name="new_conversation_contacts_section">Your contacts</string>
     <string name="new_conversation_create">Create</string>
+    <string name="new_conversation_encryption_collapsed">Collapsed</string>
+    <string name="new_conversation_encryption_expanded">Expanded</string>
     <string name="new_conversation_error_create">Couldn\'t create the conversation</string>
-    <string name="new_conversation_group_title">Group name</string>
+    <string name="new_conversation_group_solo_hint">You can create it on your own, for an audit or to gather feedback, and invite people later.</string>
+    <string name="new_conversation_group_title">Group name (required)</string>
+    <string name="new_conversation_group_toggle">New group</string>
     <string name="new_conversation_no_user_found">No user found</string>
     <string name="new_conversation_remove">Remove</string>
     <string name="new_conversation_selected">Selected</string>

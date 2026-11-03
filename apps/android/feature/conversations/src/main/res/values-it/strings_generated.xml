@@ -359,8 +359,12 @@
     <string name="new_conversation_contacts_loading">Caricamento dei contatti</string>
     <string name="new_conversation_contacts_section">I tuoi contatti</string>
     <string name="new_conversation_create">Crea</string>
+    <string name="new_conversation_encryption_collapsed">Ridotta</string>
+    <string name="new_conversation_encryption_expanded">Espansa</string>
     <string name="new_conversation_error_create">Impossibile creare la conversazione</string>
-    <string name="new_conversation_group_title">Nome del gruppo</string>
+    <string name="new_conversation_group_solo_hint">Puoi crearlo da solo, per un audit o per raccogliere pareri, e invitare più tardi.</string>
+    <string name="new_conversation_group_title">Nome del gruppo (obbligatorio)</string>
+    <string name="new_conversation_group_toggle">Nuovo gruppo</string>
     <string name="new_conversation_no_user_found">Nessun utente trovato</string>
     <string name="new_conversation_remove">Rimuovi</string>
     <string name="new_conversation_selected">Selezionato</string>

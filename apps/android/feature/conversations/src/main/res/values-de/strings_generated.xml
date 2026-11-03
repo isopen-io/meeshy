@@ -352,8 +352,12 @@
     <string name="new_conversation_contacts_loading">Kontakte werden geladen</string>
     <string name="new_conversation_contacts_section">Deine Kontakte</string>
     <string name="new_conversation_create">Erstellen</string>
+    <string name="new_conversation_encryption_collapsed">Eingeklappt</string>
+    <string name="new_conversation_encryption_expanded">Ausgeklappt</string>
     <string name="new_conversation_error_create">Unterhaltung konnte nicht erstellt werden</string>
-    <string name="new_conversation_group_title">Gruppenname</string>
+    <string name="new_conversation_group_solo_hint">Du kannst sie allein erstellen, für ein Audit oder um Meinungen zu sammeln, und später einladen.</string>
+    <string name="new_conversation_group_title">Gruppenname (erforderlich)</string>
+    <string name="new_conversation_group_toggle">Neue Gruppe</string>
     <string name="new_conversation_no_user_found">Kein Benutzer gefunden</string>
     <string name="new_conversation_remove">Entfernen</string>
     <string name="new_conversation_selected">Ausgewählt</string>
