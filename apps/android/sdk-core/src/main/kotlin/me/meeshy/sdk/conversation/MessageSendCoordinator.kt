@@ -4,11 +4,13 @@ import androidx.room.withTransaction
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.media.MediaAdoption
 import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.model.ApiMessage
@@ -40,6 +42,8 @@ internal class MessageSendCoordinator(
     private val clock: CacheClock,
     /** #13792 — l'accusé d'envoi nourrit le registre des régimes comme tout message servi. */
     private val regime: EndToEndRegimeKeeper? = null,
+    /** #14890 — à l'accusé, le fichier local d'un média envoyé rejoint le cache typé sous son adresse canonique. */
+    private val adoption: MediaAdoption? = null,
 ) {
 
     /**
@@ -161,13 +165,20 @@ internal class MessageSendCoordinator(
      */
     suspend fun reconcileSent(cmid: String, serverMessage: ApiMessage) {
         val now = clock.nowMillis()
+        val optimisticAttachments = adoption?.let { optimisticAttachmentsOf(cmid) }.orEmpty()
         database.withTransaction {
             messageDao.deleteByIds(listOf(cmid))
             messageDao.upsertAll(listOf(MessageEntityFactory.cached(serverMessage, now)))
             MessageIdReconciliation.recordAck(database, cmid, serverMessage.id, serverMessage.conversationId, now)
         }
         regime?.learnFromServed(listOf(serverMessage))
+        adoption?.adopt(optimisticAttachments, serverMessage.attachments)
     }
+
+    private suspend fun optimisticAttachmentsOf(cmid: String): List<ApiMessageAttachment> =
+        messageDao.find(cmid)?.let { row ->
+            runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload).attachments }.getOrNull()
+        }.orEmpty()
 
     /**
      * The outbox exhausted its retries — surface the bubble as retryable. A send refused because a media's

@@ -1,8 +1,8 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.lang.ReaderPrism
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
-import me.meeshy.sdk.lang.LanguageResolver.preferredContentLanguages
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.StoryItem
@@ -144,7 +144,7 @@ object RepostEmbedBuilder {
             location = FeedPostLocationBuilder.build(repost.location),
             reelCover = repost.takeIf { it.type.equals("reel", ignoreCase = true) }?.let {
                 ReelCoverResolver.resolve(
-                    media = FeedMediaMapper.map(it.media, preferredContentLanguages(preferences), mediaBaseUrl),
+                    media = FeedMediaMapper.map(it.media, ReaderPrism.resolve(preferences), mediaBaseUrl),
                     accentHex = DynamicColorGenerator.colorForName(repost.author?.id?.takeIf { id -> id.isNotBlank() } ?: authorLabel(repost).orEmpty()),
                 ) { null }
             },

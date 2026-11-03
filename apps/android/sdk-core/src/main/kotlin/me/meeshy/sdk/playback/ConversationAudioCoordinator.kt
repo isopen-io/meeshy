@@ -2,6 +2,8 @@ package me.meeshy.sdk.playback
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,6 +56,18 @@ public class ConversationAudioCoordinator(
     public val snapshot: StateFlow<CoordinatorSnapshot> = mutableSnapshot.asStateFlow()
     public val attachmentFinished: SharedFlow<AttachmentFinishedEvent> = mutableFinished.asSharedFlow()
 
+    private val mutableGrace = MutableStateFlow<ActiveAudioContext?>(null)
+    private var graceJob: Job? = null
+
+    /** L'état du moteur (progression, vitesse, lecture) tel que les bulles actives et le mini-lecteur le lisent. */
+    public val playback: StateFlow<me.meeshy.sdk.model.playback.AudioPlaybackState> get() = engine.state
+
+    /**
+     * Après épuisement de la file, le dernier contexte reste [GRACE_MS] pour que le mini-lecteur
+     * ne disparaisse pas d'un coup ; [dismissGrace] (la croix) le ferme tout de suite.
+     */
+    public val graceContext: StateFlow<ActiveAudioContext?> = mutableGrace.asStateFlow()
+
     init {
         scope.launch {
             engine.events.collect { event ->
@@ -76,6 +90,7 @@ public class ConversationAudioCoordinator(
     ) {
         val accepted = engine.play(current.attachmentId, current.fileUrl, PlaybackCommandOrigin.InApp)
         if (!accepted) return
+        dismissGrace()
         val queue = mutableSnapshot.value.queue.started(current, tail)
         mutableSnapshot.value = CoordinatorSnapshot(
             queue = queue,
@@ -117,6 +132,25 @@ public class ConversationAudioCoordinator(
     public fun stop() {
         engine.stop()
         mutableSnapshot.value = CoordinatorSnapshot()
+        dismissGrace()
+    }
+
+    /** La croix du mini-lecteur : le contexte de grâce disparaît immédiatement. */
+    public fun dismissGrace() {
+        graceJob?.cancel()
+        graceJob = null
+        mutableGrace.value = null
+    }
+
+    private fun exhaust(last: ActiveAudioContext?) {
+        mutableSnapshot.value = CoordinatorSnapshot()
+        dismissGrace()
+        if (last == null) return
+        mutableGrace.value = last
+        graceJob = scope.launch {
+            delay(GRACE_MS)
+            mutableGrace.value = null
+        }
     }
 
     /** Le message est supprimé : s'il est joué, on passe au suivant ; ses vocaux quittent la file. */
@@ -151,13 +185,14 @@ public class ConversationAudioCoordinator(
         if (snapshot.queue.hasNext) {
             switchTo(snapshot.queue.advanced(), PlaybackCommandOrigin.Automatic)
             // Une garde d'appel qui refuse l'enchaînement laisse la file au vocal terminé : on la vide.
-            if (mutableSnapshot.value.queue.current?.attachmentId == finished.attachmentId) mutableSnapshot.value = CoordinatorSnapshot()
+            if (mutableSnapshot.value.queue.current?.attachmentId == finished.attachmentId) exhaust(snapshot.context)
         } else {
-            mutableSnapshot.value = CoordinatorSnapshot()
+            exhaust(snapshot.context)
         }
     }
 
     private companion object {
         const val RESTART_THRESHOLD_MS = 3_000L
+        const val GRACE_MS = 5_000L
     }
 }

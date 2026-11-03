@@ -1,6 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="a11y_message_location">shared location</string>
+    <string name="attachment_sticker">Sticker</string>
     <string name="chat_action_copy_link">Copy link</string>
     <string name="chat_action_open_link">Open link</string>
     <string name="chat_action_reactions">Reactions</string>
@@ -292,6 +293,11 @@
     <string name="export_card_typeface_systeme">System</string>
     <string name="export_discussion_title">Conversation</string>
     <string name="forward_image_discussion">Picture the conversation</string>
+    <string name="forward_media_placeholder">[Media]</string>
+    <string name="forward_preview_audio">Audio</string>
+    <string name="forward_preview_file">File</string>
+    <string name="forward_preview_image">Photo</string>
+    <string name="forward_preview_video">Video</string>
     <string name="guest_attach_cancel">Cancel</string>
     <string name="guest_attach_create_account">Create an account to share everything else.</string>
     <string name="guest_attach_inline_audio">audio</string>
@@ -409,18 +415,29 @@
     <string name="share_a11y_online">online</string>
     <string name="share_a11y_selected">selected</string>
     <string name="share_action_copy_link">Copy link</string>
+    <string name="share_action_copy_text">Copy text</string>
+    <string name="share_action_save">Save</string>
     <string name="share_action_share_out">Share outside Meeshy</string>
     <string name="share_button_a11y">Send to %1$d recipients</string>
     <string name="share_button_forward">Forward · %1$d</string>
     <string name="share_button_send">Send · %1$d</string>
     <string name="share_caption_hint">Add a message…</string>
+    <string name="share_capture_warning">This media was just captured by the app. Publishing it will make it visible beyond this conversation.</string>
     <string name="share_close">Close</string>
     <string name="share_community_channels">Channels where you can write</string>
     <string name="share_community_no_channel">No channel where you can write</string>
     <string name="share_content_messages_kept">What’s being sent · %1$d of %2$d messages</string>
+    <string name="share_content_move_backward">Move later</string>
+    <string name="share_content_move_forward">Move earlier</string>
     <string name="share_content_over_budget">Files not copied: %1$d. A share carries at most %2$d files and %3$s.</string>
+    <string name="share_content_over_limit">over the limit</string>
+    <string name="share_content_piece_number">Item %1$d</string>
+    <string name="share_content_piece_of">Item %1$d of %2$d</string>
     <string name="share_content_refused_source">This app only handed over a file path, which Meeshy does not open. Share the file itself, or save it to Photos or Files first.</string>
+    <string name="share_content_remove">Remove</string>
+    <string name="share_content_remove_last">Remove the last %1$d</string>
     <string name="share_content_unprepared">Some files could not be prepared. Download them first, then try again.</string>
+    <string name="share_content_whole_message">Whole message</string>
     <string name="share_copied">Copied</string>
     <string name="share_detail_channel">Channel of %1$s</string>
     <string name="share_detail_direct">Conversation</string>
@@ -430,6 +447,7 @@
     <string name="share_empty_title">No one here yet</string>
     <string name="share_encryption_warning">“%1$s” isn’t encrypted: this message will leave end-to-end encryption there.</string>
     <string name="share_error_generic">Error while sharing</string>
+    <string name="share_flame_note">The copy disappears no later than the original message\'s duration, and can\'t be forwarded again.</string>
     <string name="share_flame_title">Disappears after</string>
     <string name="share_group_create">Create a group with %1$s</string>
     <string name="share_grouping_separately">Separately</string>
@@ -438,6 +456,10 @@
     <string name="share_limits_too_heavy">%1$d files, %2$s. A share carries at most %3$d files and %4$s.</string>
     <string name="share_limits_trim">Remove %1$d files to send</string>
     <string name="share_offline">Offline. What hasn’t been sent will go when the network is back, even if you close Meeshy.</string>
+    <string name="share_publish_feed">My feed</string>
+    <string name="share_publish_reel">Reel</string>
+    <string name="share_publish_section">Publish</string>
+    <string name="share_publish_story">My story</string>
     <string name="share_refused_encrypted_destination">This conversation is encrypted: sharing sends nothing there for now.</string>
     <string name="share_refused_undecrypted_source">This message wasn’t decrypted on this device: it can’t be copied.</string>
     <string name="share_search_hint">Search for a person or a group</string>
@@ -457,8 +479,16 @@
     <string name="share_toast_open">Open</string>
     <string name="share_toast_sent_to">Sent to %1$s</string>
     <string name="share_withdrawn_after_read">A message that disappears after reading stays in this conversation.</string>
+    <string name="share_withdrawn_others_leave">The other %1$d messages are sent.</string>
     <string name="share_withdrawn_unavailable">A message that’s no longer available isn’t sent.</string>
     <string name="share_withdrawn_view_once">A view-once message stays in this conversation.</string>
+    <string name="share_withheld_blurred">A blurred message is forwarded blurred; nothing else leaves.</string>
+    <string name="share_withheld_cites_protected">A message quoting protected content can’t be turned into an image.</string>
+    <string name="share_withheld_encrypted">An encrypted message can’t be published. It’s forwarded, copied and saved on this device.</string>
+    <string name="share_withheld_flame">A flame can’t be published, saved or copied. Its copy disappears too and can’t be forwarded again.</string>
+    <string name="share_withheld_not_a_reel">This content doesn’t make a reel.</string>
+    <string name="share_withheld_single_photo">A single photo doesn’t make a reel.</string>
+    <string name="share_withheld_too_many">A post carries at most 10 media.</string>
     <string name="share_zone_content">What’s being sent</string>
     <string name="starred_more_options">More options</string>
     <string name="starred_remove">Remove from favourites</string>

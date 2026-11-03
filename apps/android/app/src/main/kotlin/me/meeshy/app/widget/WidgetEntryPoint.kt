@@ -27,6 +27,9 @@ internal interface WidgetEntryPoint {
      */
     fun tokenStore(): TokenStore
 
+    /** Le total partage : le widget compteur affiche le meme nombre que la cloche et l'icone. */
+    fun unreadBadgeCoordinator(): me.meeshy.sdk.notification.UnreadBadgeCoordinator
+
     /** La carte de présence vivante : l'état SERVI des pairs affichés, rien d'autre (#13747). */
     fun presenceStore(): PresenceStore
 }
