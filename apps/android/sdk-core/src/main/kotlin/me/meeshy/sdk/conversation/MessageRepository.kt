@@ -63,9 +63,11 @@ class MessageRepository internal constructor(
         erasures: PlaintextErasureLedger? = null,
         /** #14890 — le fichier local d'un média envoyé rejoint le cache typé à l'accusé. */
         adoption: MediaAdoption? = null,
+        /** L'aperçu de la liste de conversations suit mon envoi optimiste et son retrait. */
+        previews: SendPreviewSink? = null,
     ) : this(
         history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures),
-        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption),
+        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption, previews),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao, fence),
             outboxRepository,

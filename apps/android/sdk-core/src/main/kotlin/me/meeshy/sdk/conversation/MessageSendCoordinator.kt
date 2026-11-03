@@ -1,6 +1,7 @@
 package me.meeshy.sdk.conversation
 
 import androidx.room.withTransaction
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -50,7 +51,10 @@ internal class MessageSendCoordinator(
     private val regime: EndToEndRegimeKeeper? = null,
     /** #14890 — à l'accusé, le fichier local d'un média envoyé rejoint le cache typé sous son adresse canonique. */
     private val adoption: MediaAdoption? = null,
+    /** L'aperçu de la liste suit mon envoi : posé à l'envoi optimiste, recalculé quand la bulle est retirée. */
+    previews: SendPreviewSink? = null,
 ) {
+    private val stager = OptimisticMessageStager(database, messageDao, previews)
 
     /**
      * Optimistic send: the message appears instantly as a `SENDING` bubble backed by Room, and a
@@ -155,9 +159,7 @@ internal class MessageSendCoordinator(
             SendAttemptContext(cid, now, effects, originalLanguage, reusesExistingRow = clientMessageId != null),
             content = content,
         )
-        database.withTransaction {
-            messageDao.upsertAll(listOf(MessageEntityFactory.local(optimistic, now, LocalSendState.SENDING)))
-        }
+        stager.stage(optimistic, now)
         try {
             val queued = outboxRepository.tryEnqueue(
                 OutboxMutation(
@@ -172,8 +174,12 @@ internal class MessageSendCoordinator(
             )
             if (queued is OutboxEnqueueResult.QueueFull) markSendFailed(cid)
         } catch (closed: AccountClosedException) {
-            withContext(NonCancellable) { messageDao.deleteByIds(listOf(cid)) }
+            stager.withdraw(cid)
             throw closed
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            withContext(NonCancellable) { stager.failEnqueue(cid, failure) }
         }
         return cid
     }
@@ -224,7 +230,7 @@ internal class MessageSendCoordinator(
         val row = messageDao.find(cmid) ?: return
         if (isDefinitive(row.lastError)) {
             outboxRepository.discard(cmid)
-            messageDao.deleteByIds(listOf(cmid))
+            stager.withdraw(cmid)
             return
         }
         messageDao.updateSendState(cmid, LocalSendState.SENDING.name)
@@ -275,14 +281,14 @@ internal class MessageSendCoordinator(
      * parti (en vol) n'est pas annulé — sa bulle reste.
      */
     suspend fun cancelPendingSend(cmid: String) {
-        if (outboxRepository.cancelPendingSend(cmid)) messageDao.deleteByIds(listOf(cmid))
+        if (outboxRepository.cancelPendingSend(cmid)) stager.withdraw(cmid)
     }
 
     /** Retire la ligne d'outbox d'un envoi échoué (quel que soit son état sauf en vol) et sa bulle optimiste. */
     suspend fun clearSendMessageRow(cmid: String) {
         if (outboxRepository.row(cmid)?.state == OutboxState.INFLIGHT.name) return
         outboxRepository.clearSendMessageRow(cmid)
-        messageDao.deleteByIds(listOf(cmid))
+        stager.withdraw(cmid)
     }
 
     private fun isDefinitive(reason: String?): Boolean =
