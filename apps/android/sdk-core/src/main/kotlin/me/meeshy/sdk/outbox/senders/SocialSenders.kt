@@ -17,6 +17,7 @@ import me.meeshy.sdk.outbox.OutboxKindHandler
 import me.meeshy.sdk.outbox.OutboxKindKey
 import me.meeshy.sdk.outbox.OutboxPayloadGraft
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.SendFailureClassifier
 import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.outbox.toSendResult
 import me.meeshy.sdk.outbox.withPayload
@@ -52,7 +53,7 @@ public class PublishStoryHandler @Inject constructor(
                     runCatching { draftConfirmation.settle(delivered = row.cmid) }
                     SendResult.Success
                 }
-                is NetworkResult.Failure -> result.error.onlyUnlinkedRefusal() ?: SendResult.TransientFailure
+                is NetworkResult.Failure -> result.error.onlyUnlinkedRefusal() ?: SendFailureClassifier.classify(result.error)
             }
         }
 }

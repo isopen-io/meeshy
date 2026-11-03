@@ -44,6 +44,7 @@ extension PostDetailView {
         if !isRepostInFlight, let p = displayPost, p.isRepostedByMe {
             isPostReposted = true
         }
+        guard !PendingPublicationMarker.isPending(postId: postId) else { return }
         await viewModel.loadComments(postId)
         viewModel.subscribeToSocket(postId)
         // Join the post room for real-time reaction events (single focused post).

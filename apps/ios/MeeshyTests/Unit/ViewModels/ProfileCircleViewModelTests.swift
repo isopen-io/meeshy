@@ -13,6 +13,15 @@ final class ProfileCircleViewModelTests: XCTestCase {
         let relations: MockRelationsService
         let friends: MockFriendService
         let queue: MockOfflineQueue
+        let forgotten: ForgottenFriendships
+    }
+
+    final class ForgottenFriendships: @unchecked Sendable {
+        var ids: [String] = []
+    }
+
+    final class Observed: @unchecked Sendable {
+        var level: RelationLevel?
     }
 
     override func setUp() async throws {
@@ -29,14 +38,16 @@ final class ProfileCircleViewModelTests: XCTestCase {
         let relations = MockRelationsService()
         let friends = MockFriendService()
         let queue = MockOfflineQueue()
+        let forgotten = ForgottenFriendships()
         let sut = ProfileCircleViewModel(
             userId: userId,
             relations: relations,
             friendService: friends,
             offlineQueue: queue,
-            networkMonitor: FakeNetworkMonitor(isOnline: true)
+            networkMonitor: FakeNetworkMonitor(isOnline: true),
+            forgetFriendship: { forgotten.ids.append($0) }
         )
-        return Rig(sut: sut, relations: relations, friends: friends, queue: queue)
+        return Rig(sut: sut, relations: relations, friends: friends, queue: queue, forgotten: forgotten)
     }
 
     private func link(_ userId: String, _ level: RelationLevel, eligibleFor: RelationLevel? = nil) -> RelationLink {
@@ -134,5 +145,174 @@ final class ProfileCircleViewModelTests: XCTestCase {
 
         XCTAssertEqual(rig.sut.pendingLevel, .close)
         XCTAssertNil(rig.sut.offeredRaise)
+    }
+
+    // MARK: - Promouvoir : seulement si c'est possible (#14910)
+
+    func test_offeredRaise_aServedRaiseBlockInTheFuture_hidesThePromotion() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .acquaintance)])
+        rig.relations.linkResult = .success(RelationLink(
+            userId: "a", effectiveLevel: .acquaintance, grantedByMe: .acquaintance,
+            raiseBlockedUntil: Date().addingTimeInterval(86_400)
+        ))
+
+        await rig.sut.load()
+
+        XCTAssertNil(rig.sut.offeredRaise, "un blocage de montée servi masque Promouvoir")
+        XCTAssertEqual(rig.sut.shownLevel, .acquaintance)
+    }
+
+    func test_offeredRaise_aServedCanRaiseFalse_hidesThePromotion() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .acquaintance)])
+        rig.relations.linkResult = .success(RelationLink(
+            userId: "a", effectiveLevel: .acquaintance, grantedByMe: .acquaintance, canRaise: false
+        ))
+
+        await rig.sut.load()
+
+        XCTAssertNil(rig.sut.offeredRaise)
+    }
+
+    func test_offeredRaise_withoutAServedBlock_keepsTheCurrentOffer() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .acquaintance)])
+
+        await rig.sut.load()
+
+        XCTAssertEqual(rig.sut.offeredRaise, .friend, "absent ⇒ comportement d'avant")
+    }
+
+    func test_load_anAcquaintanceServedOnlyByTheDetailRead_isShown() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([])
+        rig.relations.linkResult = .success(link("a", .acquaintance))
+
+        await rig.sut.load()
+
+        XCTAssertEqual(rig.sut.shownLevel, .acquaintance)
+    }
+
+    // MARK: - Rétrograder d'un cran, annuler le lien à Connaissance (#14910)
+
+    func test_offeredLowering_goesDownOneRungAndUnlinksAtAcquaintance() async {
+        let cases: [(RelationLevel, ProfileCircleLowering)] = [
+            (.blood, .demote(.close)), (.close, .demote(.friend)),
+            (.friend, .demote(.acquaintance)), (.acquaintance, .unlink),
+        ]
+        for (level, expected) in cases {
+            await CacheCoordinator.shared.relationLinks.invalidate(for: CirclesViewModel.cacheKey)
+            let rig = makeRig()
+            rig.relations.linksResult = .success([link("a", level)])
+            await rig.sut.load()
+            XCTAssertEqual(rig.sut.offeredLowering, expected, "depuis \(level)")
+        }
+    }
+
+    func test_offeredLowering_withoutALink_isNil() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([])
+
+        await rig.sut.load()
+
+        XCTAssertNil(rig.sut.offeredLowering)
+    }
+
+    func test_offeredLowering_followsTheEffectiveLevel_notMyHigherGrant() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([RelationLink(userId: "a", effectiveLevel: .friend, grantedByMe: .blood)])
+
+        await rig.sut.load()
+
+        XCTAssertEqual(rig.sut.offeredLowering, .demote(.acquaintance))
+    }
+
+    func test_lower_isAppliedLocallyBeforeTheServerAnswers_thenSendsTheRungBelow() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        await rig.sut.load()
+        let observed = Observed()
+        let sut = rig.sut
+        rig.relations.lowerHook = { await MainActor.run { observed.level = sut.shownLevel } }
+
+        let lowered = await rig.sut.lower()
+
+        XCTAssertTrue(lowered)
+        XCTAssertEqual(observed.level, .friend, "le niveau change avant la réponse du serveur")
+        XCTAssertEqual(rig.relations.lowerCalls, [.init(userId: "a", level: .friend)])
+        XCTAssertEqual(rig.sut.shownLevel, .friend)
+        XCTAssertNil(rig.sut.notice)
+    }
+
+    func test_lower_atAcquaintance_unlinksWithPublic() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .acquaintance)])
+        await rig.sut.load()
+
+        let lowered = await rig.sut.lower()
+
+        XCTAssertTrue(lowered)
+        XCTAssertEqual(rig.relations.lowerCalls, [.init(userId: "a", level: .public)])
+        XCTAssertNil(rig.sut.shownLevel)
+        XCTAssertTrue(rig.sut.didUnlink)
+        XCTAssertNil(rig.sut.offeredLowering)
+    }
+
+    func test_lower_failure_rollsBackAndSaysIt() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend)])
+        await rig.sut.load()
+        rig.relations.lowerResult = .failure(NSError(domain: "test", code: 1))
+
+        let lowered = await rig.sut.lower()
+
+        XCTAssertFalse(lowered)
+        XCTAssertEqual(rig.sut.shownLevel, .friend)
+        XCTAssertFalse(rig.sut.didUnlink)
+        XCTAssertNotNil(rig.sut.notice)
+        XCTAssertTrue(rig.forgotten.ids.isEmpty)
+    }
+
+    func test_lower_belowFriend_forgetsTheFriendship_aboveItDoesNot() async {
+        let fromFriend = makeRig()
+        fromFriend.relations.linksResult = .success([link("a", .friend)])
+        await fromFriend.sut.load()
+        _ = await fromFriend.sut.lower()
+        XCTAssertEqual(fromFriend.forgotten.ids, ["a"])
+
+        let fromClose = makeRig()
+        fromClose.relations.linksResult = .success([link("a", .close)])
+        await fromClose.sut.load()
+        _ = await fromClose.sut.lower()
+        XCTAssertTrue(fromClose.forgotten.ids.isEmpty, "Proche → Ami reste un ami")
+    }
+
+    func test_lower_clearsAPendingRequestAboveTheNewLevel() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend, eligibleFor: .close)])
+        rig.friends.sentRequestsResult = .success(
+            OffsetPaginatedAPIResponse(success: true, data: [sentRequest(to: "a", level: "CLOSE")], pagination: nil, error: nil)
+        )
+        await rig.sut.load()
+
+        _ = await rig.sut.lower()
+
+        XCTAssertNil(rig.sut.pendingLevel, "la passerelle retire la demande au-dessus du niveau baissé")
+    }
+
+    func test_lower_invalidatesTheCachedLinks_soTheNextOpenRevalidates() async {
+        let first = makeRig()
+        first.relations.linksResult = .success([link("a", .friend)])
+        await first.sut.load()
+        XCTAssertEqual(first.relations.linksCallCount, 1)
+        _ = await first.sut.lower()
+
+        let second = makeRig()
+        second.relations.linksResult = .success([link("a", .acquaintance)])
+        await second.sut.load()
+
+        XCTAssertEqual(second.relations.linksCallCount, 1, "le cache invalidé force la relecture")
+        XCTAssertEqual(second.sut.shownLevel, .acquaintance)
     }
 }

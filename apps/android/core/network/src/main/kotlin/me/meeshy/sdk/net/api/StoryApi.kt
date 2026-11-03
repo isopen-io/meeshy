@@ -12,6 +12,7 @@ import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.HTTP
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -105,6 +106,40 @@ interface StoryApi {
         @Path("id") storyId: String,
         @Body body: CreateCommentRequest,
     ): ApiResponse<ApiPostComment>
+
+    /** Les réponses d'un commentaire racine, par pages de 20 en ordre ASC (curseur = dernier id servi). */
+    @GET("posts/{id}/comments/{commentId}/replies")
+    suspend fun commentReplies(
+        @Path("id") storyId: String,
+        @Path("commentId") commentId: String,
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): ApiResponse<List<ApiPostComment>>
+
+    @POST("posts/{id}/comments/{commentId}/like")
+    suspend fun likeComment(
+        @Path("id") storyId: String,
+        @Path("commentId") commentId: String,
+    ): ApiResponse<Unit>
+
+    @DELETE("posts/{id}/comments/{commentId}/like")
+    suspend fun unlikeComment(
+        @Path("id") storyId: String,
+        @Path("commentId") commentId: String,
+    ): ApiResponse<Unit>
+
+    @PATCH("posts/{id}/comments/{commentId}")
+    suspend fun updateComment(
+        @Path("id") storyId: String,
+        @Path("commentId") commentId: String,
+        @Body body: UpdateCommentRequest,
+    ): ApiResponse<ApiPostComment>
+
+    @DELETE("posts/{id}/comments/{commentId}")
+    suspend fun deleteComment(
+        @Path("id") storyId: String,
+        @Path("commentId") commentId: String,
+    ): ApiResponse<Unit>
 
     @POST("posts/{id}/repost")
     suspend fun repost(

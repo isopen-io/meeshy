@@ -33,6 +33,18 @@ public enum RelationRequestRule {
         }
     }
 
+    /// Le cran d'une RÉTROGRADATION depuis `level` (#14910) : un seul à la fois, et sous
+    /// Connaissance on SORT du cercle (`public`, l'annulation du lien). `nil` sans lien.
+    public static func rung(below level: RelationLevel) -> RelationLevel? {
+        switch level {
+        case .blood: return .close
+        case .close: return .friend
+        case .friend: return .acquaintance
+        case .acquaintance: return .public
+        case .public, .community: return nil
+        }
+    }
+
     public static func evaluate(
         target: RelationLevel,
         current: RelationLevel,

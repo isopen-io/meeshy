@@ -2,29 +2,39 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// La ligne du cercle sur le profil d'un Ami ou d'un Proche (#13940), posée là où la fiche disait « Connectés » :
-/// le niveau commun, ce qui manque pour monter, et « Demander X » quand c'est possible. Sans lien servi, la fiche garde
-/// son badge d'avant.
+/// Le cercle sur le profil d'une personne liée, Connaissance comprise (#13940, #14910), posé là où la fiche disait
+/// « Connectés » ou proposait la demande de connexion : le niveau commun, ce qui manque pour monter, puis en bas
+/// « Promouvoir en X » quand c'est possible et « Rétrograder en Y » (ou « Annuler le lien » à Connaissance), chacun
+/// confirmé. Sans lien servi, rien : `linked` reste faux et la fiche garde ce qu'elle montrait avant.
 struct ProfileCircleSection: View {
     @StateObject private var viewModel: ProfileCircleViewModel
     let displayName: String
+    @Binding var linked: Bool
+    @State private var confirmsLowering = false
     private var theme: ThemeManager { ThemeManager.shared }
 
-    init(userId: String, displayName: String) {
+    init(userId: String, displayName: String, linked: Binding<Bool>) {
         _viewModel = StateObject(wrappedValue: ProfileCircleViewModel(userId: userId))
         self.displayName = displayName
+        _linked = linked
     }
 
     var body: some View {
         Group {
             if let level = viewModel.shownLevel {
-                row(level)
+                VStack(spacing: MeeshySpacing.smPlus) {
+                    row(level)
+                    promoteButton
+                    loweringButton(from: level)
+                }
             } else {
-                ProfileConnectedBadge()
+                Color.clear.frame(height: 0)
             }
         }
         .animation(.easeOut(duration: 0.2), value: viewModel.pendingLevel)
+        .animation(.easeOut(duration: 0.2), value: viewModel.shownLevel)
         .task(id: viewModel.userId) { await viewModel.load() }
+        .adaptiveOnChange(of: viewModel.claimsTheSlot, initial: true) { _, claims in linked = claims }
         .adaptiveOnChange(of: viewModel.notice) { _, new in
             guard let new else { return }
             FeedbackToastManager.shared.showError(new)
@@ -48,7 +58,12 @@ struct ProfileCircleSection: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel(levelAccessibility(level))
             Spacer(minLength: MeeshySpacing.sm)
-            trailing
+            if let waiting = viewModel.pendingLevel {
+                Text(String(format: String(localized: "circles.pending", defaultValue: "Demande envoyée · %@", bundle: .main), CircleLevelNames.title(of: waiting)))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.textMuted)
+                    .multilineTextAlignment(.trailing)
+            }
         }
         .padding(MeeshySpacing.md)
         .background(CircleLevelColor.color(for: level).opacity(MeeshyOpacity.subtle))
@@ -56,26 +71,100 @@ struct ProfileCircleSection: View {
     }
 
     @ViewBuilder
-    private var trailing: some View {
-        if let waiting = viewModel.pendingLevel {
-            Text(String(format: String(localized: "circles.pending", defaultValue: "Demande envoyée · %@", bundle: .main), CircleLevelNames.title(of: waiting)))
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(theme.textMuted)
-                .multilineTextAlignment(.trailing)
-        } else if let target = viewModel.offeredRaise {
+    private var promoteButton: some View {
+        if let target = viewModel.offeredRaise {
             let targetTitle = CircleLevelNames.title(of: target)
-            Button {
+            actionButton(
+                icon: "arrow.up.circle.fill",
+                label: String(format: String(localized: "circles.action.promote", defaultValue: "Promouvoir en %@", bundle: .main), targetTitle),
+                color: CircleLevelColor.color(for: target)
+            ) {
                 Task { await viewModel.requestRaise() }
-            } label: {
-                Text(String(format: String(localized: "circles.action.request", defaultValue: "Demander %@", bundle: .main), targetTitle))
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Color.white)
-                    .padding(.horizontal, MeeshySpacing.md)
-                    .frame(minHeight: MeeshyControlSize.tapTarget)
-                    .background(Capsule().fill(CircleLevelColor.color(for: target)))
             }
-            .buttonStyle(.plain)
             .accessibilityLabel(String(format: String(localized: "circles.action.request.a11y", defaultValue: "Demander le niveau %1$@ à %2$@", bundle: .main), targetTitle, displayName))
+        }
+    }
+
+    @ViewBuilder
+    private func loweringButton(from level: RelationLevel) -> some View {
+        if let lowering = viewModel.offeredLowering {
+            actionButton(icon: loweringIcon(lowering), label: loweringLabel(lowering), color: theme.error) {
+                confirmsLowering = true
+            }
+            .disabled(viewModel.isLowering)
+            .confirmationDialog(
+                confirmationTitle(lowering),
+                isPresented: $confirmsLowering,
+                titleVisibility: .visible
+            ) {
+                Button(loweringLabel(lowering), role: .destructive) {
+                    Task { await viewModel.lower() }
+                }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+            } message: {
+                Text(confirmationBody(lowering, from: level))
+            }
+        }
+    }
+
+    private func actionButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button {
+            HapticFeedback.medium()
+            action()
+        } label: {
+            HStack(spacing: MeeshySpacing.sm) {
+                Image(systemName: icon)
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                Text(label)
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+            }
+            .foregroundStyle(color)
+            .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.tapTarget)
+            .background(color.opacity(MeeshyOpacity.subtle))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+            .overlay(
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                    .stroke(color.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.emphasis)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    private func loweringIcon(_ lowering: ProfileCircleLowering) -> String {
+        switch lowering {
+        case .demote: return "arrow.down.circle.fill"
+        case .unlink: return "person.crop.circle.badge.xmark"
+        }
+    }
+
+    private func loweringLabel(_ lowering: ProfileCircleLowering) -> String {
+        switch lowering {
+        case .demote(let target):
+            return String(format: String(localized: "circles.action.demote", defaultValue: "Rétrograder en %@", bundle: .main), CircleLevelNames.title(of: target))
+        case .unlink:
+            return String(localized: "circles.action.unlink", defaultValue: "Annuler le lien", bundle: .main)
+        }
+    }
+
+    private func confirmationTitle(_ lowering: ProfileCircleLowering) -> String {
+        switch lowering {
+        case .demote(let target):
+            return String(format: String(localized: "circles.demote.confirm.title", defaultValue: "Rétrograder %1$@ en %2$@ ?", bundle: .main), displayName, CircleLevelNames.title(of: target))
+        case .unlink:
+            return String(format: String(localized: "circles.unlink.confirm.title", defaultValue: "Annuler le lien avec %@ ?", bundle: .main), displayName)
+        }
+    }
+
+    private func confirmationBody(_ lowering: ProfileCircleLowering, from level: RelationLevel) -> String {
+        switch lowering {
+        case .demote(let target):
+            return String(
+                format: String(localized: "circles.demote.confirm.body", defaultValue: "%1$@ passera de %2$@ à %3$@. Vous perdrez ce que %2$@ partage. %1$@ n'en sera pas averti(e) et ne pourra pas vous redemander de remonter avant 30 jours.", bundle: .main),
+                displayName, CircleLevelNames.title(of: level), CircleLevelNames.title(of: target)
+            )
+        case .unlink:
+            return String(format: String(localized: "circles.unlink.confirm.body", defaultValue: "Vous ne serez plus liés : plus aucun cercle commun. %@ n'en sera pas averti(e) et ne pourra pas vous redemander de lien avant 30 jours.", bundle: .main), displayName)
         }
     }
 
