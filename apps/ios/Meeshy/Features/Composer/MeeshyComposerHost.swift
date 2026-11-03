@@ -663,6 +663,8 @@ struct MeeshyComposerHost: View {
 
     /// « Tout effacer » demande confirmation depuis ⋯ (#13839).
     @State var sceneClearAllAsked = false
+    /// La reprise du son des vidéos (#4756) : `nil` tant que l'auteur n'a rien touché.
+    @State var soundExtractionChoice: Bool?
     @State var sceneLayout = ComposerSceneLayoutState()
 
     /// La hauteur RENDUE de la zone de saisie — déclarée à l'atelier en

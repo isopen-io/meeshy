@@ -31,6 +31,7 @@ import { StatusHandler } from './handlers/StatusHandler';
 import { ConversationViewingHandler } from './handlers/ConversationViewingHandler';
 import { captureNoticeDelivery, listenContentCapture } from './handlers/ContentCaptureHandler';
 import { e2eeSignalHandlerDeps, listenE2EESignals } from './handlers/E2EESignalHandler';
+import { listenTalkie, talkieHandlerDeps } from './handlers/TalkieHandler';
 import { ReactionHandler } from './handlers/ReactionHandler';
 import { AttachmentReactionHandler } from './handlers/AttachmentReactionHandler';
 import { AttachmentReactionService } from '../services/AttachmentReactionService';
@@ -103,7 +104,7 @@ import { socketIoCorsOrigin } from '../config/cors-origins';
 import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 import { handleAgentResponse, type AgentResponsePayload } from './agent-response-bridge';
-import { MentionService, resolveUsernamesToIds } from '../services/MentionService';
+import { MentionService, resolveUsernamesToIds, withoutPendingMessageRequests } from '../services/MentionService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import { linkMessageEmissions, type SocketEmission } from './linkMessageEmissions';
@@ -1861,6 +1862,8 @@ export class MeeshySocketIOManager {
       listenContentCapture(socket, { prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers, deliver: captureNoticeDelivery({ io: this.io, prisma: this.prisma, readStatusService: this.readStatusService, bridgeService: this.bridgeService }) });
       // #13142 — la porte unique des signaux chiffrés d'une conversation e2ee.
       listenE2EESignals(socket, e2eeSignalHandlerDeps({ prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers }));
+      // #13935 — le talkie : chaque fragment repart vers le destinataire à l'instant où il arrive.
+      listenTalkie(socket, talkieHandlerDeps({ prisma: this.prisma, io: this.io, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers }));
 
       this.callEventsHandler.setupCallEvents(
         socket,
@@ -3076,7 +3079,7 @@ export class MeeshySocketIOManager {
       const mentionUsernames = (message.validatedMentions ?? []) as unknown as string[];
       if (mentionUsernames.length > 0) {
         try {
-          const mentionedUserIds = await resolveUsernamesToIds(this.prisma, mentionUsernames);
+          const mentionedUserIds = await withoutPendingMessageRequests(this.prisma, normalizedId, await resolveUsernamesToIds(this.prisma, mentionUsernames));
           for (const targetUserId of mentionedUserIds) {
             if (targetUserId && targetUserId !== resolvedSenderId) {
               this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {

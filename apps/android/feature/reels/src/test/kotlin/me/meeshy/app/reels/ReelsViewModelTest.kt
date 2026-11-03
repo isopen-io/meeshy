@@ -497,6 +497,43 @@ class ReelsViewModelTest {
     }
 
     @Test
+    fun `a touched reel absent from the cache opens on itself, never on a reel that lands before it`() = runTest {
+        // Recette S8 (#13863) : le fil et la page arrivaient avant la graine ; le lecteur, dont les pages sont clées par
+        // identifiant, restait sur le premier réel montré et la graine se glissait AU-DESSUS de lui.
+        val vm = viewModel(cachedFeed = listOf(reel("unrelated")))
+        val seed = kotlinx.coroutines.CompletableDeferred<NetworkResult<ApiPost>>()
+        coEvery { repository.getPost("tapped") } coAnswers { seed.await() }
+        coEvery { repository.getReelsPage("tapped", any(), any()) } returns
+            NetworkResult.Success(PostPage(posts = listOf(reel("other-1")), nextCursor = null, hasMore = false))
+
+        vm.load(seed = "tapped")
+
+        assertThat(vm.state.value.reels).isEmpty()
+        assertThat(vm.state.value.isLoading).isTrue()
+
+        seed.complete(NetworkResult.Success(reel("tapped")))
+
+        assertThat(vm.state.value.reels.map { it.id }).containsExactly("tapped", "unrelated", "other-1").inOrder()
+        assertThat(vm.state.value.isLoading).isFalse()
+    }
+
+    @Test
+    fun `a seed that fails while the thread is held still releases the thread behind its failure`() = runTest {
+        val vm = viewModel(cachedFeed = listOf(reel("unrelated")))
+        val seed = kotlinx.coroutines.CompletableDeferred<NetworkResult<ApiPost>>()
+        coEvery { repository.getPost("tapped") } coAnswers { seed.await() }
+        coEvery { repository.getReelsPage("tapped", any(), any()) } returns
+            NetworkResult.Success(PostPage(posts = listOf(reel("other-1")), nextCursor = null, hasMore = false))
+        vm.load(seed = "tapped")
+
+        seed.complete(NetworkResult.Failure(ApiError("nope", "HTTP_404", 404)))
+
+        assertThat(vm.state.value.seedFailure).isEqualTo(me.meeshy.sdk.model.ContentFetchFailure.NOT_FOUND)
+        assertThat(vm.state.value.reels.map { it.id }).contains("other-1")
+        assertThat(vm.state.value.isLoading).isFalse()
+    }
+
+    @Test
     fun `load never duplicates a seed that both the explicit fetch and the network page could resolve`() = runTest {
         val vm = viewModel(cachedFeed = null)
         coEvery { repository.getPost("tapped") } returns NetworkResult.Success(reel("tapped"))

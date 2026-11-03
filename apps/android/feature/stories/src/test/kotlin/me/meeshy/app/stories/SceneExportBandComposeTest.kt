@@ -6,9 +6,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.isDialog
@@ -37,8 +34,8 @@ import org.robolectric.annotation.Config
  * bas, dans une fenêtre qui ne prend ni le focus ni les gestes de l'écran. Aucune fenêtre modale ; la scène qu'on peint
  * voyage avec le bandeau, invisible.
  *
- * #13951 — le bandeau se tient AU-DESSUS de la barre de navigation système (à boutons comme à gestes), et la fin de l'export
- * s'y annonce : « Enregistré », « Partagé », ou l'échec avec « Réessayer », lus par TalkBack.
+ * #13951 — le bandeau se tient AU-DESSUS de la barre de navigation système (à boutons comme à gestes). La fin de l'export
+ * s'annonce par l'annonceur de l'application (#14557), dans le même bandeau : voir `SceneExportStatusComposeTest`.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w360dp-h800dp-xhdpi")
@@ -98,64 +95,6 @@ class SceneExportBandComposeTest {
     }
 
     @Test
-    fun `the outcome stands above the navigation bar too`() {
-        assertBandClearsNavigationBar(navigationBar = 48.dp) {
-            SceneExportBand(fraction = null, onCancel = {}, outcome = SceneExportOutcome.SAVED)
-        }
-    }
-
-    @Test
-    fun `a saved export says so, politely announced, then leaves`() {
-        var shown = 0
-        compose.mainClock.autoAdvance = false
-        compose.setContent {
-            SceneExportBand(fraction = null, onCancel = {}, outcome = SceneExportOutcome.SAVED, onOutcomeShown = { shown++ })
-        }
-        compose.mainClock.advanceTimeByFrame()
-
-        compose.onNodeWithText("Saved to Photos").assertExists()
-        compose.onNode(announced(LiveRegionMode.Polite)).assertExists()
-        compose.onNodeWithText("Cancel").assertDoesNotExist()
-        compose.onNodeWithText("Retry").assertDoesNotExist()
-        assertThat(shown).isEqualTo(0)
-
-        compose.mainClock.advanceTimeBy(SceneExportBandTiming.OUTCOME_MILLIS + 100)
-
-        assertThat(shown).isEqualTo(1)
-    }
-
-    @Test
-    fun `a shared export says so`() {
-        compose.setContent { SceneExportBand(fraction = null, onCancel = {}, outcome = SceneExportOutcome.SHARED) }
-
-        compose.onNodeWithText("Shared").assertExists()
-        compose.onNode(announced(LiveRegionMode.Polite)).assertExists()
-    }
-
-    @Test
-    fun `a failed export says so assertively and offers to retry`() {
-        var retries = 0
-        compose.setContent {
-            SceneExportBand(fraction = null, onCancel = {}, outcome = SceneExportOutcome.FAILED, onRetry = { retries++ })
-        }
-
-        compose.onNodeWithText("Export failed. Try again.").assertExists()
-        compose.onNode(announced(LiveRegionMode.Assertive)).assertExists()
-        compose.onNodeWithText("Retry").performClick()
-
-        assertThat(retries).isEqualTo(1)
-    }
-
-    @Test
-    fun `a running export outranks the previous outcome`() {
-        compose.setContent { SceneExportBand(fraction = 0.2f, onCancel = {}, outcome = SceneExportOutcome.FAILED) }
-
-        compose.onNodeWithText("Exporting…").assertExists()
-        compose.onNodeWithText("Export failed. Try again.").assertDoesNotExist()
-        compose.onAllNodes(isPopup()).assertCountEquals(1)
-    }
-
-    @Test
     fun `each end of the export has its outcome`() {
         val share = SceneExportDestination.SHARE
         assertThat(SceneExportOutcome.of(SceneExportState.Saved)).isEqualTo(SceneExportOutcome.SAVED)
@@ -164,8 +103,6 @@ class SceneExportBandComposeTest {
         assertThat(SceneExportOutcome.of(SceneExportState.Running(0.5f, share))).isNull()
         assertThat(SceneExportOutcome.of(SceneExportState.Idle)).isNull()
     }
-
-    private fun announced(mode: LiveRegionMode) = SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, mode)
 
     /**
      * La fenêtre du bandeau ne reçoit pas les encarts de l'écran : seuls ceux de l'hôte disent où passe la barre de

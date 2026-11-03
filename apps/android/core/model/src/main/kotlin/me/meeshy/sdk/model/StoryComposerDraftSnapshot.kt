@@ -220,6 +220,8 @@ data class StoryDraftSlideSnapshot(
     val backgroundRotation: Float = 0f,
     val backgroundVolume: Float = 1f,
     val backgroundMutedVolumeMemento: Float? = null,
+    /** Le recadrage du média de FOND (iOS `crop` de l'objet `isBackground`, #13973) ; un blob d'avant se lit « entier ». */
+    val backgroundCrop: StoryMediaCrop? = null,
     /** Les pastilles de lieu posées sur la scène (#13846) ; un blob d'avant se lit « aucune ». */
     val places: List<StoryLocationObject> = emptyList(),
     /** La transcription de chaque piste (#13848) ; un blob d'avant se lit « aucune ». */

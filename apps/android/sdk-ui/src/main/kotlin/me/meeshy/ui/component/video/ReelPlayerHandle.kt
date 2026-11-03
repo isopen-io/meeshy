@@ -40,6 +40,28 @@ public class ReelPlayerHandle internal constructor(private val player: Player) {
     }
 
     /**
+     * Dit si le lecteur ATTEND des données (mise en mémoire tampon, premier chargement) : `true` d'abord pendant la
+     * préparation, puis à chaque famine ; `false` dès qu'il peut jouer. Annoncé tout de suite à l'abonnement, puis à
+     * chaque changement. La valeur retournée se désabonne.
+     */
+    public fun observeBuffering(onChange: (Boolean) -> Unit): () -> Unit {
+        var last: Boolean? = null
+        fun report() {
+            val buffering = player.playbackState == Player.STATE_BUFFERING
+            if (buffering != last) {
+                last = buffering
+                onChange(buffering)
+            }
+        }
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) = report()
+        }
+        player.addListener(listener)
+        report()
+        return { player.removeListener(listener) }
+    }
+
+    /**
      * Dit si le média porte une PISTE AUDIO, dès que le lecteur a lu ses pistes (immédiatement s'il les connaît
      * déjà) ; rien n'est annoncé avant : un fichier non sondé n'est ni sonore ni muet. La valeur retournée se
      * désabonne.

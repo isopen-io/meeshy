@@ -66,6 +66,14 @@
     <string name="profile_progression_hint">Opens your progress</string>
     <string name="profile_progression_subtitle">Badges, level and streak</string>
     <string name="profile_progression_title">Progress</string>
+    <string name="profile_report_quick_reason_fake_profile">Fake profile</string>
+    <string name="profile_report_quick_reason_harassment">Harassment</string>
+    <string name="profile_report_quick_reason_hate_speech">Hate speech</string>
+    <string name="profile_report_quick_reason_impersonation">Impersonation</string>
+    <string name="profile_report_quick_reason_inappropriate">Inappropriate content</string>
+    <string name="profile_report_quick_reason_other">Other</string>
+    <string name="profile_report_quick_reason_spam">Spam</string>
+    <string name="profile_report_quick_reason_violence">Violence</string>
     <string name="profile_save">Save</string>
     <string name="profile_save_error">Error while saving</string>
     <string name="profile_section_about">About</string>
@@ -98,6 +106,8 @@
     <string name="profile_tab_posts">Posts</string>
     <string name="profile_title">Profile</string>
     <string name="profile_toast_block_failed">Unable to block</string>
+    <string name="profile_toast_report_failed">Unable to send the report</string>
+    <string name="profile_toast_report_sent">Report sent</string>
     <string name="profile_toast_unblock_failed">Unable to unblock</string>
     <string name="profile_toast_user_blocked">User blocked</string>
     <string name="profile_toast_user_unblocked">User unblocked</string>

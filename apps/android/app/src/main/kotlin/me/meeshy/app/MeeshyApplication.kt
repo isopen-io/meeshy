@@ -1,6 +1,7 @@
 package me.meeshy.app
 
 import android.app.Application
+import android.content.Context
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -15,6 +16,10 @@ import me.meeshy.app.push.DeclinedCallStore
 import me.meeshy.app.push.NotificationChannelInstaller
 import me.meeshy.app.settings.CrashDiagnosticsRecorder
 import me.meeshy.app.startup.AppInitializerRunner
+import me.meeshy.app.theme.UiLanguageBootstrap
+import me.meeshy.app.startup.AppLifecycleRunner
+import me.meeshy.sdk.lifecycle.AppLifecycleDispatcher
+import me.meeshy.sdk.model.lifecycle.TrimLevel
 import me.meeshy.sdk.call.frames.CallFrameSceneImages
 import me.meeshy.sdk.socket.AppStatePresenceReporter
 import me.meeshy.sdk.socket.CallSignalManager
@@ -54,6 +59,12 @@ class MeeshyApplication : Application(), Configuration.Provider, ImageLoaderFact
     @Inject
     lateinit var appInitializerRunner: AppInitializerRunner
 
+    @Inject
+    lateinit var lifecycleDispatcher: AppLifecycleDispatcher
+
+    @Inject
+    lateinit var lifecycleRunner: AppLifecycleRunner
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -61,6 +72,11 @@ class MeeshyApplication : Application(), Configuration.Provider, ImageLoaderFact
 
     /** Le chargeur partagé de Coil : il respecte l'orientation EXIF de toute photo (`MeeshyImageLoader`). */
     override fun newImageLoader(): ImageLoader = MeeshyImageLoader.build(this)
+
+    /** La langue d'interface s'écrit avant tout : locale du process posée avant l'Activity (#14731). */
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(UiLanguageBootstrap.wrap(base))
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -79,6 +95,13 @@ class MeeshyApplication : Application(), Configuration.Provider, ImageLoaderFact
         // Les illustrations des cadres d'appel se lisent dans les actifs de l'app (le `Bundle.main` d'iOS).
         CallFrameSceneImages.install(this)
         appInitializerRunner.runAll()
+        lifecycleDispatcher.onAppCreate()
+        lifecycleRunner.runStartup()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        TrimLevel.fromComponentCallbacks(level)?.let { lifecycleDispatcher.onTrimMemory(it) }
     }
 
     /**
@@ -94,8 +117,15 @@ class MeeshyApplication : Application(), Configuration.Provider, ImageLoaderFact
         processOwner.lifecycle.addObserver(
             LifecycleEventObserver { _, event ->
                 when (event) {
-                    Lifecycle.Event.ON_START -> presenceReporter.onAppStateChanged(foreground = true)
-                    Lifecycle.Event.ON_STOP -> presenceReporter.onAppStateChanged(foreground = false)
+                    Lifecycle.Event.ON_START -> {
+                        presenceReporter.onAppStateChanged(foreground = true)
+                        lifecycleDispatcher.onForeground()
+                        lifecycleRunner.runForeground()
+                    }
+                    Lifecycle.Event.ON_STOP -> {
+                        presenceReporter.onAppStateChanged(foreground = false)
+                        lifecycleDispatcher.onBackground()
+                    }
                     else -> Unit
                 }
             },

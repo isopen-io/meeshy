@@ -123,6 +123,9 @@ export const nearbyDensity = '/api/v1/posts/nearby/density';
 /** POST /api/v1/posts */
 export const root = '/api/v1/posts';
 
+/** GET /api/v1/posts/search */
+export const search = '/api/v1/posts/search';
+
 /** GET /api/v1/posts/stories/mine */
 export const storiesMine = '/api/v1/posts/stories/mine';
 

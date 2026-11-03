@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.about
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.media.DeviceMediaTier
 import org.junit.Test
 
 /**
@@ -16,7 +17,8 @@ class AboutPresentationBuilderTest {
         osRelease: String = "14",
         applicationId: String = "me.meeshy.app",
         sdkVersion: String = "1.0.0",
-    ) = AboutParams(versionName, versionCode, osRelease, applicationId, sdkVersion)
+        mediaTier: DeviceMediaTier? = DeviceMediaTier.HIGH,
+    ) = AboutParams(versionName, versionCode, osRelease, applicationId, sdkVersion, mediaTier)
 
     private fun AboutPresentation.value(key: AboutInfoKey): String =
         infoRows.first { it.key == key }.value
@@ -71,7 +73,45 @@ class AboutPresentationBuilderTest {
     @Test
     fun build_infoRows_areInFixedOrder() {
         assertThat(AboutPresentationBuilder.build(params()).infoRows.map { it.key })
-            .containsExactly(AboutInfoKey.PLATFORM, AboutInfoKey.APPLICATION_ID, AboutInfoKey.SDK_VERSION)
+            .containsExactly(
+                AboutInfoKey.PLATFORM,
+                AboutInfoKey.APPLICATION_ID,
+                AboutInfoKey.SDK_VERSION,
+                AboutInfoKey.MEDIA_TIER,
+            )
+            .inOrder()
+    }
+
+    @Test
+    fun build_mediaTierRow_carriesTheDeviceTierForEveryLevel() {
+        DeviceMediaTier.entries.forEach { tier ->
+            assertThat(AboutPresentationBuilder.build(params(mediaTier = tier)).mediaTier).isEqualTo(tier)
+            assertThat(
+                AboutPresentationBuilder.build(params(mediaTier = tier)).infoRows.map { it.key },
+            ).contains(AboutInfoKey.MEDIA_TIER)
+        }
+    }
+
+    @Test
+    fun build_unknownMediaTier_omitsTheRowInsteadOfInventingALevel() {
+        val presentation = AboutPresentationBuilder.build(params(mediaTier = null))
+        assertThat(presentation.mediaTier).isNull()
+        assertThat(presentation.infoRows.map { it.key }).doesNotContain(AboutInfoKey.MEDIA_TIER)
+    }
+
+    @Test
+    fun build_links_areTheEightIosLinksInOrder() {
+        assertThat(AboutPresentationBuilder.build(params()).links.map { it.kind })
+            .containsExactly(
+                AboutLinkKind.WEBSITE,
+                AboutLinkKind.ABOUT,
+                AboutLinkKind.TERMS,
+                AboutLinkKind.PRIVACY,
+                AboutLinkKind.CONTACT,
+                AboutLinkKind.PARTNERS,
+                AboutLinkKind.TWITTER,
+                AboutLinkKind.GITHUB,
+            )
             .inOrder()
     }
 

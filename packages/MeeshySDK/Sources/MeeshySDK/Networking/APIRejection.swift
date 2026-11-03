@@ -62,6 +62,10 @@ public struct APIRejection: Error, Sendable, Equatable {
     public let limit: Int?
     /// L'écart Sesame d'un 409 `E2EE_DEVICES_MISMATCH` (#3707) — `nil` pour tout autre refus.
     public let e2eeMismatch: E2EEDevicesMismatch?
+    /// Le corps était l'enveloppe de la passerelle (`success: false`, celle de
+    /// `sendError`) : un refus qu'elle a DÉCIDÉ, et non le JSON d'un
+    /// intermédiaire qui lui ressemble (#14693, #14708).
+    public let isGatewayEnvelope: Bool
 
     public init(
         statusCode: Int,
@@ -73,7 +77,8 @@ public struct APIRejection: Error, Sendable, Equatable {
         emailOwner: EmailOwner? = nil,
         resetAt: Date? = nil,
         limit: Int? = nil,
-        e2eeMismatch: E2EEDevicesMismatch? = nil
+        e2eeMismatch: E2EEDevicesMismatch? = nil,
+        isGatewayEnvelope: Bool = false
     ) {
         self.statusCode = statusCode
         self.code = code
@@ -85,6 +90,7 @@ public struct APIRejection: Error, Sendable, Equatable {
         self.resetAt = resetAt
         self.limit = limit
         self.e2eeMismatch = e2eeMismatch
+        self.isGatewayEnvelope = isGatewayEnvelope
     }
 
     /// La phrase à poser SOUS `field`, en préférant la violation qui le nomme.
@@ -120,6 +126,8 @@ public struct APIRejection: Error, Sendable, Equatable {
 /// `{ success, error, message, code, violations?, …details }` — `code`, `field`
 /// et les appoints à la RACINE, jamais imbriqués.
 struct APIRejectionEnvelope: Decodable {
+    /// `false` dans l'enveloppe de `sendError` ; absent d'un JSON étranger.
+    let success: Bool?
     let error: String?
     let message: String?
     let code: String?
@@ -130,11 +138,12 @@ struct APIRejectionEnvelope: Decodable {
     let e2eeMismatch: E2EEDevicesMismatch?
 
     private enum CodingKeys: String, CodingKey {
-        case error, message, code, field, suggestions, violations, emailOwner, missing, extra, stale
+        case success, error, message, code, field, suggestions, violations, emailOwner, missing, extra, stale
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        success = try? container.decodeIfPresent(Bool.self, forKey: .success)
         error = try container.decodeIfPresent(String.self, forKey: .error)
         message = try container.decodeIfPresent(String.self, forKey: .message)
         code = try container.decodeIfPresent(String.self, forKey: .code)
@@ -167,7 +176,24 @@ struct APIRejectionEnvelope: Decodable {
             suggestions: suggestions ?? [],
             violations: violations ?? [],
             emailOwner: emailOwner,
-            e2eeMismatch: e2eeMismatch
+            e2eeMismatch: e2eeMismatch,
+            isGatewayEnvelope: success == false
         )
+    }
+}
+
+// MARK: - Le refus servi par la passerelle
+
+public extension APIRejection {
+    /// Le refus tel que la passerelle l'a SERVI : son enveloppe (`success: false`)
+    /// et un `code` machine. `nil` pour tout autre corps — page d'un proxy,
+    /// texte de Traefik, JSON étranger —, que l'appelant ne doit pas lire comme
+    /// une décision de la passerelle (#14693). Sert aux refus qui transportent
+    /// leur corps brut (`MeeshyError.forbidden(reason:body:)`).
+    static func gatewayRefusal(statusCode: Int, body: Data?) -> APIRejection? {
+        guard let body,
+              let envelope = try? JSONDecoder().decode(APIRejectionEnvelope.self, from: body),
+              envelope.success == false, envelope.code != nil else { return nil }
+        return envelope.rejection(statusCode: statusCode, fallbackMessage: "Refus de la passerelle")
     }
 }

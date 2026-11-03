@@ -1,6 +1,5 @@
 package me.meeshy.app.chat.export
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -45,6 +44,10 @@ import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.card.PostCommentCardSubject
 import me.meeshy.ui.component.LocalMediaBaseUrl
 import me.meeshy.ui.component.bubble.BubbleContent
+import me.meeshy.ui.component.export.ExportAnnouncement
+import me.meeshy.ui.component.export.ExportAnnouncer
+import me.meeshy.ui.component.export.ExportAnnouncerHost
+import me.meeshy.ui.component.export.rememberExportAnnouncer
 import me.meeshy.ui.component.permission.PermissionFlow
 import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.rememberPermissionFlow
@@ -140,6 +143,10 @@ private fun CardExportSheet(
         state.thumbSource(thumbnails, subject)
     }
     val haptic = LocalHapticFeedback.current
+    // La fin d'un export s'annonce APRÈS la feuille, par l'annonceur de l'application : le bandeau du compositeur (#14557).
+    val announcer = rememberExportAnnouncer()
+    // Ce qui se dit pendant que la feuille reste ouverte s'y annonce, dans le même bandeau, au-dessus d'elle.
+    val sheetAnnouncer = remember { ExportAnnouncer() }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -149,13 +156,14 @@ private fun CardExportSheet(
             Modifier.fillMaxHeight().navigationBarsPadding().padding(horizontal = MeeshySpacing.md),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         ) {
-            Header(state, haptic, onDismiss)
+            Header(state, haptic, sheetAnnouncer, onDismiss)
             Stage(state, Modifier.weight(1f), haptic)
             Notice(state)
             CardExportTray(trayState(state, subject, thumbs), trayActions(state, haptic))
-            ActionRow(state, subject, permissions, onDismiss, haptic)
+            ActionRow(state, subject, permissions, announcer, onDismiss, haptic)
         }
         PermissionFlowHost(permissions)
+        ExportAnnouncerHost(sheetAnnouncer)
     }
     if (state.galleryOpen) {
         CardExportGallery(
@@ -184,9 +192,8 @@ private fun trayActions(state: CardExportState, haptic: HapticFeedback) = CardTr
 )
 
 @Composable
-private fun Header(state: CardExportState, haptic: HapticFeedback, onClose: () -> Unit) {
+private fun Header(state: CardExportState, haptic: HapticFeedback, announcer: ExportAnnouncer, onClose: () -> Unit) {
     val tokens = MeeshyTheme.tokens
-    val context = LocalContext.current
     val defaultSaved = stringResource(R.string.export_announce_defaultSaved)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onClose) {
@@ -207,7 +214,7 @@ private fun Header(state: CardExportState, haptic: HapticFeedback, onClose: () -
             onClick = {
                 state.saveAsDefault()
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                Toast.makeText(context.applicationContext, defaultSaved, Toast.LENGTH_SHORT).show()
+                announcer.announce(ExportAnnouncement(defaultSaved))
             },
             enabled = !state.isDefault,
         ) {
@@ -243,6 +250,7 @@ private fun ActionRow(
     state: CardExportState,
     subject: CardSubject,
     permissions: PermissionFlow,
+    announcer: ExportAnnouncer,
     onDismiss: () -> Unit,
     haptic: HapticFeedback,
 ) {
@@ -256,7 +264,7 @@ private fun ActionRow(
         if (outcome != CardOutcome.GALLERY && outcome != CardOutcome.SHARED) { state.outcome = outcome; return }
         state.recordUse()
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-        Toast.makeText(context.applicationContext, if (outcome == CardOutcome.GALLERY) savedMessage else sharedMessage, Toast.LENGTH_SHORT).show()
+        cardExportAnnouncement(outcome, savedMessage, sharedMessage)?.let(announcer::announce)
         onDismiss()
     }
     fun run(output: suspend (CardInput) -> Result<Unit>, done: CardOutcome) {

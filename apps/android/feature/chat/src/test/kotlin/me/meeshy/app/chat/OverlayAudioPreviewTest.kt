@@ -28,6 +28,10 @@ class OverlayAudioPreviewTest {
             calls += "load:$url"
         }
 
+        override fun loadUncached(url: String) {
+            calls += "loadUncached:$url"
+        }
+
         override fun start() {
             calls += "start"
         }
@@ -53,9 +57,9 @@ class OverlayAudioPreviewTest {
         }
     }
 
-    private class Harness(val engine: FakeEngine = FakeEngine()) {
+    private class Harness(val engine: FakeEngine = FakeEngine(), isProtected: Boolean = false) {
         val published = mutableListOf<OverlayMediaTransport>()
-        val preview = OverlayAudioPreview(engine) { published += it }
+        val preview = OverlayAudioPreview(engine, isProtected) { published += it }
     }
 
     private val translated = "https://cdn.meeshy.me/a1/fr.opus"
@@ -65,6 +69,15 @@ class OverlayAudioPreviewTest {
         engine.prepared()
         preview.tick()
         engine.calls.clear()
+    }
+
+    @Test
+    fun `a protected voice note previewed from the message menu is loaded uncached`() {
+        val h = Harness(isProtected = true)
+
+        h.preview.toggle(translated)
+
+        assertThat(h.engine.calls).containsExactly("loadUncached:$translated")
     }
 
     @Test

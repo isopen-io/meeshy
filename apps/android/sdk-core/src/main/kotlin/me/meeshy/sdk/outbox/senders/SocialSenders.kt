@@ -7,6 +7,7 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoMap
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.model.feedback.DailyGestureLimit
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.PostApi
@@ -66,6 +67,8 @@ public class PublishStoryHandler @Inject constructor(
  *   privé ou bloqué, `VALIDATION_ERROR`, accès refusé) : refus DÉFINITIF, échec immédiat, le geste est défait tout de suite.
  *   Le même statut sans enveloppe (code synthétique `HTTP_<n>`) ne vient pas de la passerelle : le 404 de Traefik pendant
  *   qu'elle redémarre en est un, et défaire le geste pour lui perdrait un j'aime que le serveur aurait accepté.
+ * - 429 `DAILY_REACTION_LIMIT` : la limite du jour tient jusqu'à demain, la rejouer serait vain. Refus définitif, le geste est défait
+ *   et la raison (`reason`) porte le code pour que le fil dise la limite plutôt qu'un échec muet.
  * - tout le reste (401 le temps d'un renouvellement de session, 408, 429, 5xx, réseau) : transitoire, réessayé.
  */
 internal fun NetworkResult<*>.toToggleSendResult(): SendResult {
@@ -74,6 +77,7 @@ internal fun NetworkResult<*>.toToggleSendResult(): SendResult {
     return when {
         status in ALREADY_APPLIED_STATUSES -> SendResult.Success
         status in DEFINITIVE_REFUSALS && error?.code != "HTTP_$status" -> SendResult.PermanentFailure("Refused: HTTP $status ${error?.code}")
+        status == 429 && error?.code == DailyGestureLimit.REACTION_CODE -> SendResult.PermanentFailure("Refused: HTTP 429 ${DailyGestureLimit.REACTION_CODE}")
         else -> toSendResult()
     }
 }
@@ -91,7 +95,7 @@ public class LikePostHandler @Inject constructor(
         apiCall { postApi.like(row.targetId) }.toToggleSendResult().also { if (it == SendResult.Success) postRepository.settleGesture(row.cmid) }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        postRepository.rollbackLike(row.targetId, liked = false, cmid = row.cmid)
+        postRepository.rollbackLike(row.targetId, liked = false, cmid = row.cmid, reason = row.lastError)
     }
 }
 
@@ -105,7 +109,7 @@ public class UnlikePostHandler @Inject constructor(
         apiCall { postApi.unlike(row.targetId) }.toToggleSendResult().also { if (it == SendResult.Success) postRepository.settleGesture(row.cmid) }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        postRepository.rollbackLike(row.targetId, liked = true, cmid = row.cmid)
+        postRepository.rollbackLike(row.targetId, liked = true, cmid = row.cmid, reason = row.lastError)
     }
 }
 
@@ -119,7 +123,7 @@ public class BookmarkPostHandler @Inject constructor(
         apiCall { postApi.bookmark(row.targetId) }.toToggleSendResult().also { if (it == SendResult.Success) postRepository.settleGesture(row.cmid) }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        postRepository.rollbackBookmark(row.targetId, bookmarked = false, cmid = row.cmid)
+        postRepository.rollbackBookmark(row.targetId, bookmarked = false, cmid = row.cmid, reason = row.lastError)
     }
 }
 
@@ -133,7 +137,7 @@ public class UnbookmarkPostHandler @Inject constructor(
         apiCall { postApi.removeBookmark(row.targetId) }.toToggleSendResult().also { if (it == SendResult.Success) postRepository.settleGesture(row.cmid) }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        postRepository.rollbackBookmark(row.targetId, bookmarked = true, cmid = row.cmid)
+        postRepository.rollbackBookmark(row.targetId, bookmarked = true, cmid = row.cmid, reason = row.lastError)
     }
 }
 

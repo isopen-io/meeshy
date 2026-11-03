@@ -1,9 +1,14 @@
 package me.meeshy.app.chat
 
+import android.content.Context
+import android.media.AudioManager
 import android.os.Looper
+import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import java.time.Duration
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import me.meeshy.sdk.model.playback.ContentPlaybackSessionLaw
 import me.meeshy.sdk.model.playback.MediaSessionEvent
 import me.meeshy.sdk.model.playback.VoicePlaybackCard
 import me.meeshy.sdk.model.playback.VoicePlaybackCommand
@@ -45,6 +50,7 @@ class ChatAudioPlayerSystemTest {
 
     private class FakeEngine : VoiceNoteEngine {
         val loaded = mutableListOf<String>()
+        val loadedUncached = mutableListOf<String>()
         var started = 0
         var playing = false
         private var prepared: () -> Unit = {}
@@ -57,6 +63,10 @@ class ChatAudioPlayerSystemTest {
 
         override fun load(url: String) {
             loaded += url
+        }
+
+        override fun loadUncached(url: String) {
+            loadedUncached += url
         }
 
         fun becomesReady() = prepared()
@@ -232,5 +242,67 @@ class ChatAudioPlayerSystemTest {
         player.release()
 
         assertThat(host.retired).isEqualTo(1)
+    }
+
+    @Test
+    fun `a protected voice note is loaded uncached so nothing of it is written to the disk cache`() {
+        val engine = FakeEngine()
+        val player = ChatAudioPlayer(engine, RecordingHost(), audioManager = null)
+
+        player.toggle(voice, source.copy(isProtected = true))
+
+        assertThat(engine.loadedUncached).containsExactly("https://cdn.meeshy.me/a1.m4a")
+        assertThat(engine.loaded).isEmpty()
+    }
+
+    @Test
+    fun `an ordinary voice note is loaded through the cache`() {
+        val engine = FakeEngine()
+        val player = ChatAudioPlayer(engine, RecordingHost(), audioManager = null)
+
+        player.toggle(voice, source)
+
+        assertThat(engine.loaded).containsExactly("https://cdn.meeshy.me/a1.m4a")
+        assertThat(engine.loadedUncached).isEmpty()
+    }
+
+    @Test
+    fun `a play refused by the system is explicit, the card is published as still paused`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val audioManager = context.getSystemService(AudioManager::class.java)
+        val host = RecordingHost()
+        val engine = FakeEngine()
+        val player = ChatAudioPlayer(engine, host, audioManager = audioManager, conversationTitle = "Famille")
+        player.toggle(voice, source)
+        engine.becomesReady()
+        player.handle(VoicePlaybackCommand.Pause)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ContentPlaybackSessionLaw.USER_PAUSE_RELEASE_DELAY_MILLIS + 1))
+        val publishedBefore = host.published.size
+        val startedBefore = engine.started
+        shadowOf(audioManager).setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_FAILED)
+
+        player.handle(VoicePlaybackCommand.Play)
+
+        assertThat(engine.started).isEqualTo(startedBefore)
+        assertThat(player.playback.transport.isPlaying).isFalse()
+        assertThat(host.published.size).isEqualTo(publishedBefore + 1)
+        assertThat(host.published.last().second.isPlaying).isFalse()
+    }
+
+    @Test
+    fun `a play granted by the system after the focus was given back resumes the voice note`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val audioManager = context.getSystemService(AudioManager::class.java)
+        val engine = FakeEngine()
+        val player = ChatAudioPlayer(engine, RecordingHost(), audioManager = audioManager, conversationTitle = "Famille")
+        player.toggle(voice, source)
+        engine.becomesReady()
+        player.handle(VoicePlaybackCommand.Pause)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ContentPlaybackSessionLaw.USER_PAUSE_RELEASE_DELAY_MILLIS + 1))
+
+        player.handle(VoicePlaybackCommand.Play)
+
+        assertThat(player.playback.transport.isPlaying).isTrue()
+        assertThat(engine.playing).isTrue()
     }
 }

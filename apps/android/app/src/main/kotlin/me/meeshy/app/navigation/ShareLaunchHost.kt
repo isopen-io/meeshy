@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import me.meeshy.app.chat.AppShareSheetHost
 import me.meeshy.app.chat.UniversalComposerHost
+import me.meeshy.app.settings.LocationSharingSettingsSheet
 import me.meeshy.app.chat.export.CommentCardExportSheet
 import me.meeshy.app.feed.CommentCardExporter
 import me.meeshy.app.feed.LocalCommentCardExporter
@@ -39,6 +40,9 @@ import me.meeshy.ui.component.composer.ComposerStickerSheet
 import me.meeshy.ui.component.composer.LocalComposerStickerSheet
 import me.meeshy.app.stories.ConversationStickerSheet
 import me.meeshy.ui.component.composer.UniversalComposer
+import me.meeshy.ui.component.export.ExportAnnouncer
+import me.meeshy.ui.component.export.ExportAnnouncerHost
+import me.meeshy.ui.component.export.LocalExportAnnouncer
 import me.meeshy.ui.share.LocalShareLauncher
 import me.meeshy.ui.share.ShareLauncher
 
@@ -74,10 +78,12 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
     // « Imager » un commentaire peint sa carte par l'atelier des conversations, que le fil ne connaît pas (#13922).
     val commentCardExport: CommentCardExporter = remember { { key, card, onDismiss -> CommentCardExportSheet(key, card, onDismiss) } }
     // Les commentaires s'écrivent dans le composeur des conversations, réglé pour un commentaire (#14265).
-    val universalComposer: UniversalComposer = remember { { spec, modifier -> UniversalComposerHost(spec, modifier) } }
+    val universalComposer: UniversalComposer = remember { { spec, modifier -> UniversalComposerHost(spec, modifier, locationSettingsSheet = { accent, onDismiss -> LocationSharingSettingsSheet(accent = accent, onDismiss = onDismiss) }) } }
     // Sa porte sticker ouvre la feuille de la scène des stories, que la conversation ne connaît pas (#14320).
     val composerStickerSheet: ComposerStickerSheet = remember { { onPick, onDismiss -> ConversationStickerSheet(onPick, onDismiss) } }
     // Toucher une story republiée l'ouvre en plein écran, comme iOS : le lecteur de stories de son auteur, pas la fiche du post.
+    // La fin d'un export (compositeur, « Imager ») s'annonce ici, une fois pour l'application : elle survit à l'écran qui l'a dite (#14557).
+    val exportAnnouncer = remember { ExportAnnouncer() }
     val openStory: (String, String) -> Unit = remember(navController) { { authorId, storyId -> navController.navigate(Routes.story(authorId, storyId)) } }
     CompositionLocalProvider(
         LocalShareLauncher provides launcher,
@@ -92,7 +98,9 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
         LocalStoryOpener provides openStory,
         LocalUniversalComposer provides universalComposer,
         LocalComposerStickerSheet provides composerStickerSheet,
+        LocalExportAnnouncer provides exportAnnouncer,
     ) { content() }
+    ExportAnnouncerHost(exportAnnouncer)
     pending?.let { share ->
         AppShareSheetHost(
             subject = share.subject,

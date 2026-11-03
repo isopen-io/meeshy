@@ -44,16 +44,36 @@ data class NewConversationUiState(
     val platformRole: String? = null,
     /** Le mode touché dans la section Chiffrement ; `null` = le défaut de l'offre. */
     val pickedEncryptionMode: CreationEncryptionMode? = null,
+    /** « Nouveau groupe » touché : un groupe, même sans invité (iOS `groupRequested`, #14646). */
+    val groupRequested: Boolean = false,
+    /** Les modes de chiffrement dépliés sous la ligne « Chiffrement · <mode> » (iOS `showsEncryptionOptions`). */
+    val encryptionExpanded: Boolean = false,
 ) {
-    val isGroup: Boolean get() = selected.size >= 2
+    /** What the selection draws (iOS `NewConversationShape`). */
+    val shape: NewConversationShape get() = NewConversationLogic.shape(selected.size, groupRequested)
+
+    /** A group — the switch, or two peers and more: its title field shows, and the title is required. */
+    val isGroup: Boolean get() = shape == NewConversationShape.GROUP
+
+    /** « Créer » appears once the selection draws something (iOS: hidden while the shape is `.none`). */
+    val showsCreate: Boolean get() = shape != NewConversationShape.NONE
+
+    /** Two peers and more already make a group: the switch says so and does not turn off. */
+    val groupToggleEnabled: Boolean get() = selected.size <= 1
+
+    /** « Vous pouvez le créer seul… » under the switch while the group has no invitee yet. */
+    val showsSoloHint: Boolean get() = groupRequested && selected.isEmpty()
 
     /** La section Chiffrement (décision du 2026-11-01) : les modes offerts pour ce rôle et ce type. */
     val encryptionOffer: CreationEncryptionOffer
-        get() = NewConversationLogic.encryptionOffer(platformRole, selected.size)
+        get() = NewConversationLogic.encryptionOffer(platformRole, selected.size, groupRequested)
 
     /** Le mode coché, celui qui partira avec la demande. */
     val encryptionMode: CreationEncryptionMode
         get() = NewConversationLogic.resolvedEncryptionMode(encryptionOffer, pickedEncryptionMode)
+
+    /** La ligne « Chiffrement · <mode> » apparaît dès que la sélection dessine une conversation (iOS `shape != .none`). */
+    val showsEncryption: Boolean get() = showsCreate
 
     /** Before a searchable query, the picker shows « Your contacts » (iOS `NewConversationView`). */
     val showsContacts: Boolean get() = query.trim().length < NewConversationLogic.MIN_QUERY_LENGTH
@@ -69,7 +89,7 @@ data class NewConversationUiState(
     val showsNoResults: Boolean
         get() = !isSearching && results.isEmpty() && answeredQuery != null && answeredQuery == query.trim()
     val canCreate: Boolean
-        get() = NewConversationLogic.canCreate(selected.size) && !isCreating
+        get() = NewConversationLogic.canCreate(selected.size, groupRequested, groupTitle) && !isCreating
 }
 
 /** A creation failure, told in words (parity iOS `new_conversation.error.blocked` / `conversation.new.create.error`). */
@@ -126,6 +146,16 @@ class NewConversationViewModel @Inject constructor(
         _state.update { it.copy(groupTitle = value) }
     }
 
+    /** « Nouveau groupe » : bascule, sauf quand deux invités et plus font déjà un groupe. */
+    fun toggleGroupRequested() {
+        _state.update { if (it.groupToggleEnabled) it.copy(groupRequested = !it.groupRequested) else it }
+    }
+
+    /** Déplie ou replie les modes sous la ligne « Chiffrement · <mode> ». */
+    fun toggleEncryptionOptions() {
+        _state.update { it.copy(encryptionExpanded = !it.encryptionExpanded) }
+    }
+
     /** Coche un mode de la section Chiffrement ; un mode « bientôt » ne se coche pas. */
     fun selectEncryptionMode(mode: CreationEncryptionMode) {
         val available = _state.value.encryptionOffer.choices.any { it.mode == mode && it.available }
@@ -147,7 +177,7 @@ class NewConversationViewModel @Inject constructor(
         val current = _state.value
         if (!current.canCreate) return
         val participants = selectedById.keys.toList()
-        val request = NewConversationLogic.request(participants, current.groupTitle, current.encryptionMode)
+        val request = NewConversationLogic.request(participants, current.groupTitle, current.groupRequested, current.encryptionMode)
         _state.update { it.copy(isCreating = true, error = null) }
         viewModelScope.launch {
             try {

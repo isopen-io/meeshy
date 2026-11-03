@@ -58,6 +58,9 @@ export const reportItemSchema = {
     createdAt: dateServie,
     updatedAt: dateServie,
     resolvedAt: dateNulle,
+    // #14110 (MIN-04) — la priorité de modération, lue du seul staff.
+    priority: { type: 'integer' },
+    priorityReasons: { type: 'array', items: chaine },
     reporter: personneSchema,
     moderator: personneSchema,
     reportedEntity: reportedEntitySchema,

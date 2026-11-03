@@ -263,6 +263,8 @@ data class StorySlideView(
     val createdAtMillis: Long? = null,
     /** Le look du fond (filtre de slide puis réglages) — neutre : aucun coût de rendu. */
     val lookRecipe: SceneLookRecipe = SceneLookRecipe.NEUTRAL,
+    /** Les filtres, effets et cadres d'une scène PAS ENCORE publiée (aperçu, export du compositeur, #13841) ; `null` partout ailleurs. */
+    val composerLooks: StorySceneMediaLooks? = null,
 ) {
     /** La slide fait du son : vidéo de fond ou de premier plan, ou piste audio. */
     val hasSound: Boolean
@@ -292,6 +294,11 @@ data class StoryLanguageOption(
  * reads the CURRENT group's slides plus the index so its segmented progress and
  * auto-advance stay simple; group roll-over and dismissal are decided by the
  * pure engine.
+ *
+ * RÈGLE D'EXTENSION (lot story-viewer-decomposition-and-nav-graph) : ce type ne reçoit plus de champ. Un lot
+ * qui ajoute une fonction au lecteur expose SON contrôleur ou son `StateFlow` et le lit dans son fichier
+ * emplacement (`StoryViewerShell`, `StoryRailOverlays`, `StoryViewerSheetsHost`…) ; l'hôte
+ * `StoryViewerScreen` ne grossit pas.
  */
 data class StoryViewerUiState(
     val authorName: String = "",

@@ -31,6 +31,10 @@ internal enum class MeeFigureMode { EMPTY, STILL, ANIMATED }
 internal val MeeFigureModeKey = SemanticsPropertyKey<MeeFigureMode>("MeeFigureMode")
 internal var SemanticsPropertyReceiver.meeFigureMode by MeeFigureModeKey
 
+/** Vrai quand la figure dessine au-delà de son carré (#14534) : ses étincelles ne sont pas rognées. */
+internal val MeeFigureBleedsKey = SemanticsPropertyKey<Boolean>("MeeFigureBleeds")
+internal var SemanticsPropertyReceiver.meeFigureBleeds by MeeFigureBleedsKey
+
 internal fun meeFigureMode(filmId: String, animates: Boolean, reduceMotion: Boolean): MeeFigureMode = when {
     MeeFilmCatalog.assetPath(filmId) == null -> MeeFigureMode.EMPTY
     animates && !reduceMotion && MeeFilmCatalog.isAnimated(filmId) -> MeeFigureMode.ANIMATED
@@ -40,7 +44,8 @@ internal fun meeFigureMode(filmId: String, animates: Boolean, reduceMotion: Bool
 /**
  * Un colibri, Mee ou Meo, dans un carré de [side]. Fixe (première image) sous « Réduire les animations » ou quand
  * [animates] est faux (tenant d'une brique) ; décoratif : il ne prend ni le focus ni le toucher du texte voisin.
- * [mirrored] retourne Meo pour qu'il regarde vers l'intérieur de l'objet.
+ * [mirrored] retourne Meo pour qu'il regarde vers l'intérieur de l'objet. [bleeds] laisse le film dessiner hors de son
+ * carré, comme iOS qui ne le rogne pas : l'hôte lui réserve alors la marge ([me.meeshy.sdk.model.StickerBoxLaw.filmBleed]).
  */
 @Composable
 public fun MeeFigure(
@@ -49,13 +54,16 @@ public fun MeeFigure(
     modifier: Modifier = Modifier,
     animates: Boolean = true,
     mirrored: Boolean = false,
+    bleeds: Boolean = false,
 ) {
     val mode = meeFigureMode(filmId, animates, LocalReduceMotion.current)
-    val frame = modifier
-        .size(side)
-        .clipToBounds()
+    val sized = modifier.size(side)
+    val frame = (if (bleeds) sized else sized.clipToBounds())
         .graphicsLayer { scaleX = if (mirrored) -1f else 1f }
-        .semantics { meeFigureMode = mode }
+        .semantics {
+            meeFigureMode = mode
+            meeFigureBleeds = bleeds
+        }
     val path = MeeFilmCatalog.assetPath(filmId)
     if (mode == MeeFigureMode.EMPTY || path == null) {
         Box(frame)
@@ -66,7 +74,12 @@ public fun MeeFigure(
         return
     }
     val composition by rememberLottieComposition(LottieCompositionSpec.Asset(path))
-    LottieAnimation(composition, frame, iterations = LottieConstants.IterateForever)
+    LottieAnimation(
+        composition,
+        frame,
+        iterations = LottieConstants.IterateForever,
+        clipToCompositionBounds = !bleeds,
+    )
 }
 
 /**

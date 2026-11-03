@@ -18,13 +18,10 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
@@ -44,12 +41,12 @@ import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.app.navigation.WarmDeepLink
 import me.meeshy.app.push.LaunchIntentProof
 import me.meeshy.app.push.MeeshyFcmService
+import me.meeshy.app.push.PushTapConsumer
 import me.meeshy.app.push.PushTapExtras
 import me.meeshy.app.shortcuts.DynamicShortcutsPublisher
 import me.meeshy.app.theme.LanguageViewModel
 import me.meeshy.app.theme.ThemeViewModel
 import me.meeshy.sdk.conversation.ConversationRepository
-import me.meeshy.sdk.model.AppLanguage
 import me.meeshy.sdk.model.SystemBarsAppearance
 import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.model.call.CallPictureInPicturePolicy
@@ -65,10 +62,13 @@ import me.meeshy.ui.component.video.LocalVideoPictureInPicture
 import me.meeshy.ui.component.video.VideoPictureInPictureCoordinator
 import me.meeshy.ui.profile.LocalProfileGameSlot
 import me.meeshy.ui.theme.MeeshyTheme
-import java.util.Locale
 import javax.inject.Inject
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.net.SessionExpiryNotifier
+import me.meeshy.sdk.media.MediaDownloadPreferencesStore
+import me.meeshy.sdk.media.NetworkConditionMonitor
+import me.meeshy.ui.component.bubble.BubbleMediaAutoDownload
+import me.meeshy.ui.component.bubble.LocalBubbleMediaAutoDownload
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -124,8 +124,22 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var authRepository: AuthRepository
 
+    /** La suite d'un toucher de push : ouverture sur le bus, puis notification marquée lue. */
+    @Inject
+    lateinit var pushTapConsumer: PushTapConsumer
+
+    /** L'identifiant serveur de la notification dont le toucher a produit [launchRoute]. */
+    private var pendingTapNotificationId: String? = null
+
     @Inject
     lateinit var composerSeedStore: ComposerSeedStore
+
+    /** Le réseau du moment et « Réglages › Médias » : [LocalBubbleMediaAutoDownload] les fournit aux bulles (#14639). */
+    @Inject
+    lateinit var networkCondition: NetworkConditionMonitor
+
+    @Inject
+    lateinit var mediaDownloadPreferences: MediaDownloadPreferencesStore
 
     private val gameSlot = gameProfileSlot()
 
@@ -170,6 +184,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
             val languageCode by languageViewModel.languageCode.collectAsStateWithLifecycle()
+            val condition by networkCondition.condition.collectAsStateWithLifecycle()
+            val downloadPrefs by mediaDownloadPreferences.preferences.collectAsStateWithLifecycle()
+            val bubbleMediaPolicy = remember(condition, downloadPrefs) { BubbleMediaAutoDownload(condition, downloadPrefs) }
             val systemBars = SystemBarsAppearance.of(themeMode, isSystemInDarkTheme())
             // Les icônes de la barre d'état suivent le thème CHOISI dans l'app, pas seulement celui du système (#13666).
             DisposableEffect(systemBars) {
@@ -185,13 +202,17 @@ class MainActivity : ComponentActivity() {
                         // Le niveau et le rang d'un membre, posés sur sa bannière (iOS `ProfileSheetEnvironment`).
                         LocalProfileGameSlot provides gameSlot,
                         LocalVideoPictureInPicture provides videoPictureInPicture,
+                        LocalBubbleMediaAutoDownload provides bubbleMediaPolicy,
                     ) {
                         ProvideRootSplash {
                             MeeshyApp(
                                 floatingButtonPositions = floatingButtonPositions,
                                 sessionExpiry = sessionExpiry,
                                 launchRoute = launchRoute,
-                                onLaunchRouteConsumed = { launchRoute = null },
+                                onLaunchRouteConsumed = {
+                                    launchRoute = null
+                                    pushTapConsumer.onNavigated(pendingTapNotificationId.also { pendingTapNotificationId = null })
+                                },
                                 warmDeepLink = warmDeepLink,
                                 warmDeepLinkAwaitsAccount = warmDeepLinkAwaitsAccount,
                                 onWarmDeepLinkHandled = {
@@ -221,7 +242,10 @@ class MainActivity : ComponentActivity() {
      * que ni une restauration de l'activite ni une relecture ne rejoue un jeton a usage unique.
      */
     private fun launchRouteOf(intent: Intent): String? {
-        val route = LaunchRouter.route(intent.launchExtras()) ?: LaunchRouter.routeForDeepLink(intent.dataString)
+        val extras = intent.launchExtras()
+        val tapRoute = LaunchRouter.route(extras, sessionRepository.currentUserId)
+        pendingTapNotificationId = extras.tap.notificationId.takeIf { tapRoute != null && extras.callId.isNullOrBlank() }
+        val route = tapRoute ?: LaunchRouter.routeForDeepLink(intent.dataString)
         if (LaunchRouter.opensWithoutSession(route)) intent.data = null
         return route
     }
@@ -320,45 +344,6 @@ class MainActivity : ComponentActivity() {
                 currentUserId = sessionRepository.currentUserId,
             )
         }
-    }
-}
-
-/**
- * Applies the persisted interface-language preference app-wide by re-localising the
- * [Context]/[Configuration] the whole Compose tree resolves `stringResource`s against.
- *
- * The *decision* — which locale tag to force, or `null` to leave the device locale in
- * place — lives in the pure, tested [AppLanguage.resolveInterfaceLocaleTag]. When the
- * preference is "System" (`null`) the original context is used unchanged, so a device
- * locale the app has no translation for still falls back through Android's own resource
- * resolution. Works on every supported API level (minSdk 26) with no extra dependency.
- * The Activity stays the context's base ([localizedContext]) so links, shares and
- * permission prompts keep working when a language is forced.
- */
-@androidx.compose.runtime.Composable
-private fun LocalizedContent(
-    languageCode: String?,
-    content: @androidx.compose.runtime.Composable () -> Unit,
-) {
-    val tag = AppLanguage.resolveInterfaceLocaleTag(languageCode)
-    val baseContext = LocalContext.current
-    val baseConfiguration = LocalConfiguration.current
-    val locale = remember(tag) { tag?.let(Locale::forLanguageTag) }
-    if (locale != null) SideEffect { Locale.setDefault(locale) }
-    val context = remember(tag, baseContext, baseConfiguration) {
-        tag?.let { localizedContext(baseContext, it, baseConfiguration) } ?: baseContext
-    }
-    val localizedConfiguration = remember(locale, baseConfiguration) {
-        locale?.let { Configuration(baseConfiguration).apply { setLocale(it) } } ?: baseConfiguration
-    }
-
-    // Toujours le même nœud : passer de « Système » à une langue ne recrée pas l'arbre,
-    // donc la navigation reste sur l'écran où la langue a été choisie.
-    CompositionLocalProvider(
-        LocalContext provides context,
-        LocalConfiguration provides localizedConfiguration,
-    ) {
-        content()
     }
 }
 

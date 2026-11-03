@@ -85,6 +85,7 @@ object SocketEventNames {
     const val COMMENT_ADDED = "comment:added"
     const val COMMENT_DELETED = "comment:deleted"
     const val COMMENT_LIKED = "comment:liked"
+    const val COMMENT_MEDIA_UPDATED = "comment:media-updated"
     const val COMMENT_REACTION_ADDED = "comment:reaction-added"
     const val COMMENT_REACTION_REMOVED = "comment:reaction-removed"
     const val COMMENT_TRANSLATION_UPDATED = "comment:translation-updated"
@@ -96,6 +97,7 @@ object SocketEventNames {
     const val CONVERSATION_DELETED = "conversation:deleted"
     const val CONVERSATION_ENCRYPTION_CHANGED = "conversation:encryption-changed"
     const val CONVERSATION_NEW = "conversation:new"
+    const val CONVERSATION_OBSOLETED = "conversation:obsoleted"
     const val CONVERSATION_PARTICIPANT_BANNED = "conversation:participant-banned"
     const val CONVERSATION_PARTICIPANT_JOINED = "conversation:participant-joined"
     const val CONVERSATION_PARTICIPANT_LEFT = "conversation:participant-left"
@@ -103,6 +105,9 @@ object SocketEventNames {
     const val CONVERSATION_RESTORED = "conversation:restored"
     const val CONVERSATION_UNREAD_UPDATED = "conversation:unread-updated"
     const val CONVERSATION_UPDATED = "conversation:updated"
+
+    // e2ee (#14591) — vers la room de la GÉNÉRATION de l'appareil, jamais de l'utilisateur
+    const val E2EE_ENVELOPE = "e2ee:envelope"
 
     // location
     const val LOCATION_LIVE_START = "location:live-start"
@@ -144,6 +149,8 @@ object SocketEventNames {
     const val POST_JOIN = "post:join"
     const val POST_LEAVE = "post:leave"
     const val POST_LIKED = "post:liked"
+    const val POST_REACTION_ADDED = "post:reaction-added"
+    const val POST_REACTION_REMOVED = "post:reaction-removed"
     const val POST_REPOSTED = "post:reposted"
     const val POST_TRANSLATION_UPDATED = "post:translation-updated"
     const val POST_UNLIKED = "post:unliked"
@@ -299,6 +306,7 @@ object SocketEventNames {
         COMMENT_ADDED,
         COMMENT_DELETED,
         COMMENT_LIKED,
+        COMMENT_MEDIA_UPDATED,
         COMMENT_REACTION_ADDED,
         COMMENT_REACTION_REMOVED,
         COMMENT_TRANSLATION_UPDATED,
@@ -308,6 +316,7 @@ object SocketEventNames {
         CONVERSATION_DELETED,
         CONVERSATION_ENCRYPTION_CHANGED,
         CONVERSATION_NEW,
+        CONVERSATION_OBSOLETED,
         CONVERSATION_PARTICIPANT_BANNED,
         CONVERSATION_PARTICIPANT_JOINED,
         CONVERSATION_PARTICIPANT_LEFT,
@@ -315,6 +324,7 @@ object SocketEventNames {
         CONVERSATION_RESTORED,
         CONVERSATION_UNREAD_UPDATED,
         CONVERSATION_UPDATED,
+        E2EE_ENVELOPE,
         ENGAGEMENT_CONVERSATION_UPDATED,
         GAME_UPDATED,
         LOCATION_LIVE_START,
@@ -346,6 +356,8 @@ object SocketEventNames {
         POST_JOIN,
         POST_LEAVE,
         POST_LIKED,
+        POST_REACTION_ADDED,
+        POST_REACTION_REMOVED,
         POST_REPOSTED,
         POST_TRANSLATION_UPDATED,
         POST_UNLIKED,

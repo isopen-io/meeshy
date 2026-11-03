@@ -427,7 +427,7 @@ final class StoryTrayMediaPreloader {
 
     /// Décision PURE : ce type de média de story doit-il être PRÉCHARGÉ, la
     /// politique d'auto-téléchargement étant déjà résolue ? Miroir exact de
-    /// `BubbleCarouselView.shouldPrefetchAttachment` — extraite pour être
+    /// `BubbleCarouselView.shouldPrefetch` — extraite pour être
     /// testable sans monter la vue ni le monitor réseau.
     ///
     /// `.document` n'a pas de politique propre : il transite par le store
