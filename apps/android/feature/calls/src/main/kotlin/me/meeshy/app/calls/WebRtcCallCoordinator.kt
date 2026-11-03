@@ -39,6 +39,7 @@ class WebRtcCallCoordinator @Inject constructor(
     @ApplicationContext appContext: Context,
     names: GroupCallNameSource,
     statsFeed: CallQualityStatsFeed = CallQualityStatsFeed(),
+    private val dataProfile: CallDataProfileController? = null,
 ) {
     private val negotiator = CallNegotiator(engine, signals)
     private val iceMonitor = CallIceStateMonitor(engine, signals)
@@ -83,7 +84,7 @@ class WebRtcCallCoordinator @Inject constructor(
     private val videoEncoding = CallVideoEncodingController(
         ticks = statsFeed.ticks,
         thermal = { appContext.callThermalState() },
-        apply = { budget, frozen -> engine.setCameraVideoBudget(budget, frozen) },
+        apply = { budget, frozen -> engine.setCameraVideoBudget(dataProfile?.capVideo(budget) ?: budget, frozen) },
         onSurvivalFloor = { mesh.setSurvivalFloor(it) },
     )
 
@@ -192,7 +193,12 @@ class WebRtcCallCoordinator @Inject constructor(
         }
         mesh.bind(cs, callId, selfId, isOutgoing = isCaller, primaryUserId = peerId, iceServers = iceServers,
             sendsAudio = !userMuted && !interrupted, sendsVideo = isVideo, conversationId = conversationId)
+        dataProfile?.let {
+            it.onChanged = videoEncoding::reapply
+            it.begin(cs)
+        }
         videoEncoding.begin(cs, wantsVideo = isVideo)
+        videoEncoding.reapply()
         negotiator.observe(cs)
         iceMonitor.observe(cs, restartIce = ::restartIceAndRenegotiate)
         dataChannel.observe(cs) { reason ->
@@ -287,6 +293,7 @@ class WebRtcCallCoordinator @Inject constructor(
 
     private fun teardown() {
         videoEncoding.end()
+        dataProfile?.end()
         mesh.teardown()
         callScope?.cancel()
         callScope = null
