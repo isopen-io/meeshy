@@ -182,4 +182,20 @@ class StorySlideDurationTest {
         val sevenSeconds = StoryEffects(textObjects = listOf(text("t", (1..36).joinToString(" ") { "mot" })))
         assertThat(StorySlideDuration.computeMillis(sevenSeconds)).isEqualTo(7000)
     }
+
+    @Test
+    fun `a slide whose effects name no background plays the video the reader resolves for its whole length`() {
+        assertThat(StorySlideDuration.computeSeconds(null, backgroundVideoSeconds = 30.0)).isEqualTo(30.0)
+        assertThat(StorySlideDuration.computeMillis(StoryEffects(), backgroundVideoSeconds = 30.0)).isEqualTo(30_000)
+        assertThat(StorySlideDuration.computeSeconds(null, backgroundVideoSeconds = 4.0)).isEqualTo(8.0)
+    }
+
+    @Test
+    fun `a named background, a pin or a non-positive length keeps the slide its own duration`() {
+        val named = StoryEffects(mediaObjects = listOf(media("bg", isBackground = true, duration = 12.0)))
+        assertThat(StorySlideDuration.computeSeconds(named, backgroundVideoSeconds = 30.0)).isEqualTo(12.0)
+        assertThat(StorySlideDuration.computeSeconds(StoryEffects(timelineDuration = 9.0), backgroundVideoSeconds = 30.0)).isEqualTo(9.0)
+        assertThat(StorySlideDuration.computeSeconds(null, backgroundVideoSeconds = 0.0)).isEqualTo(StorySlideDuration.DEFAULT_STATIC_SECONDS)
+        assertThat(StorySlideDuration.computeSeconds(null, backgroundVideoSeconds = Double.NaN)).isEqualTo(StorySlideDuration.DEFAULT_STATIC_SECONDS)
+    }
 }

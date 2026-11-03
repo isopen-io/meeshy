@@ -63,7 +63,7 @@ internal class RenderedContentProof(private val luma: SceneContentLuma = Android
     /**
      * L'instant [at] dans le cadre de [video] ; `null` quand elle n'est pas à juger (absente, en fondu, illisible, ou un cadre
      * réglé qui peut couvrir son cœur ou celui de la vidéo de fond, #14875). Un réglage sans cadre se relit : sa région dans le
-     * cadrage, sous son filtre.
+     * cadrage, sous son filtre ; le fond qu'elle recouvre, sous son look puis celui de sa diapo (#15224).
      */
     private fun placedSample(job: SceneExportJob, planned: SceneComposition, video: SceneExportPlacedVideo, at: Long): PlacedVideoSample? {
         val source = video.clock.sourceAt(at) ?: return null
@@ -77,7 +77,7 @@ internal class RenderedContentProof(private val luma: SceneContentLuma = Android
             is SceneContentProbe.Picture -> luma.imageRegion(probe.file, region)
             is SceneContentProbe.VideoFrame -> luma.videoRegion(probe.file, probe.atMillis, region)
             else -> SceneColor.BLACK
-        }?.under(fillLook?.colorMatrix) ?: return null
+        }?.under(fillLook?.colorMatrix)?.under(fillLook?.sceneColorMatrix) ?: return null
         val below = job.overlays.filter { it.depth <= video.depth && shows(job, it, at) }
         val under = below.fold(fill) { base, layer -> (regionOf(layer, region) ?: return null).over(base) }
         val above = job.overlays.filter { it.depth > video.depth && shows(job, it, at) }.mapNotNull { regionOf(it, region) }
