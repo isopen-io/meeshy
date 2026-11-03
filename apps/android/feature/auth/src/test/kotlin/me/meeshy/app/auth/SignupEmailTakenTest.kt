@@ -27,6 +27,8 @@ import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.auth.LoginHandoffs
 import me.meeshy.sdk.auth.RegisterOutcome
 import me.meeshy.sdk.locale.DeviceLocaleProvider
+import me.meeshy.sdk.model.AuthSession
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RegisterRequest
 import me.meeshy.sdk.model.auth.EmailCodeDispatch
 import me.meeshy.sdk.model.auth.SentEmailCode
@@ -162,7 +164,7 @@ class SignupEmailTakenTest {
     fun `not me replays the signup claiming the address and awaits the code without a session`() {
         val rig = rig()
         val sent = slot<RegisterRequest>()
-        coEvery { rig.repository.registerHoldingSession(capture(sent)) } returns
+        coEvery { rig.repository.register(capture(sent)) } returns
             NetworkResult.Success(RegisterOutcome.VerificationRequired("ada@meeshy.me", "pend"))
 
         rig.viewModel.claimEmail()
@@ -173,6 +175,19 @@ class SignupEmailTakenTest {
         assertThat(card.step.email).isEqualTo("ada@meeshy.me")
         assertThat(card.step.pendingSessionToken).isEqualTo("pend")
         assertThat(rig.viewModel.state.value.showsEmailTakenActions).isFalse()
+    }
+
+    @Test
+    fun `not me on an address freed meanwhile signs the new account in through the storing register`() {
+        val rig = rig()
+        coEvery { rig.repository.register(match { it.claimEmail == true }) } returns
+            NetworkResult.Success(RegisterOutcome.Created(AuthSession(MeeshyUser(id = "u1", username = "ada"), token = "jwt")))
+
+        rig.viewModel.claimEmail()
+
+        coVerify(exactly = 0) { rig.repository.registerHoldingSession(any()) }
+        coVerify { rig.repository.register(match { it.claimEmail == true }) }
+        assertThat(rig.viewModel.state.value.isRegistered).isTrue()
     }
 
     @Test
@@ -223,14 +238,14 @@ class SignupEmailTakenTest {
     @Test
     fun `tapping not me sends the claim`() {
         val rig = rig()
-        coEvery { rig.repository.registerHoldingSession(any()) } returns
+        coEvery { rig.repository.register(match { it.claimEmail == true }) } returns
             NetworkResult.Success(RegisterOutcome.VerificationRequired("ada@meeshy.me", null))
         show(rig)
 
         compose.onNodeWithTag(SIGNUP_EMAIL_NOT_ME_TAG).performScrollTo().performClick()
         compose.waitForIdle()
 
-        coVerify { rig.repository.registerHoldingSession(match { it.claimEmail == true }) }
+        coVerify { rig.repository.register(match { it.claimEmail == true }) }
         compose.onNodeWithTag(SIGNUP_CODE_STEP_TAG).assertIsDisplayed()
     }
 }

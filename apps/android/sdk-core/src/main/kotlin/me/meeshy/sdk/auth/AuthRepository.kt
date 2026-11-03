@@ -231,7 +231,9 @@ class AuthRepository @Inject constructor(
                     result.data.phoneOwnershipConflict ->
                         NetworkResult.Success(RegisterOutcome.PhoneOwnershipConflict)
                     // « Ce n'est pas moi » (#8214) : le compte existe SANS session, un code est parti à l'adresse.
-                    pending != null && session == null -> NetworkResult.Success(
+                    // L'attente du code PRIME sur une identité servie à côté (iOS `AuthManager+EmailAccess`) :
+                    // une réponse qui demande la preuve n'ouvre jamais de session, quoi qu'elle porte d'autre.
+                    pending != null -> NetworkResult.Success(
                         RegisterOutcome.VerificationRequired(pending.email, pending.pendingSessionToken),
                     )
                     session != null -> NetworkResult.Success(

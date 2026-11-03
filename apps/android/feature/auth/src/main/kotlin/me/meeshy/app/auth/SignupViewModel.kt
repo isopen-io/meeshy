@@ -319,6 +319,10 @@ class SignupViewModel @Inject constructor(
      * « Ce n'est pas moi » (iOS `claimEmail`) : rejoue la MÊME inscription en REVENDIQUANT l'adresse — la passerelle
      * crée le compte SANS session et envoie un code à l'adresse, que sa preuve seule donne au nouveau compte. La
      * carte attend alors le code ([awaitCode]). Sans numéro plausible rien ne part, comme le bouton principal.
+     *
+     * Elle part par [AuthRepository.register], qui POSE la session d'un compte créé : si l'adresse s'est libérée
+     * entre le refus et le geste, la passerelle crée un compte ordinaire AVEC session, et [applyOutcome] le traite
+     * comme une inscription nominale (iOS `claimEmail` → `submit` → `register`).
      */
     fun claimEmail() {
         val current = _state.value
@@ -330,7 +334,7 @@ class SignupViewModel @Inject constructor(
         _state.update { it.copy(isSubmitting = true, submitError = null, emailTaken = null, signInLinkFailure = null) }
         val request = current.form.toPhasedRegisterRequest(referralCode = referrals.recall()).claimingEmail()
         viewModelScope.launch {
-            when (val result = authRepository.registerHoldingSession(request)) {
+            when (val result = authRepository.register(request)) {
                 is NetworkResult.Failure -> rejected(result.error)
                 is NetworkResult.Success -> applyOutcome(result.data)
             }
