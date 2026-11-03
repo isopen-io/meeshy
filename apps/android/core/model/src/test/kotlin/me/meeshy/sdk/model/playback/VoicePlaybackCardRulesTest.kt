@@ -103,4 +103,47 @@ class VoicePlaybackCardRulesTest {
         assertThat(VoicePlaybackCardRules.sentAtLabel("pas une date", java.util.Locale.FRANCE, java.time.ZoneId.of("UTC"))).isNull()
         assertThat(VoicePlaybackCardRules.sentAtLabel(null, java.util.Locale.FRANCE, java.time.ZoneId.of("UTC"))).isNull()
     }
+
+    @Test
+    fun `the send date of a queued voice reads from its epoch in the viewer zone and locale`() {
+        val label = VoicePlaybackCardRules.sentAtLabel(1_760_434_200_000L, java.util.Locale.FRANCE, java.time.ZoneId.of("UTC"))
+
+        assertThat(label).isEqualTo(
+            VoicePlaybackCardRules.sentAtLabel("2025-10-14T09:30:00.000Z", java.util.Locale.FRANCE, java.time.ZoneId.of("UTC")),
+        )
+    }
+
+    @Test
+    fun `a protected voice shows neither author, conversation, date nor artwork`() {
+        val shown = VoicePlaybackCardRules.shown(
+            card(isProtected = true).copy(artworkUrl = "https://cdn.meeshy.me/nour.jpg", conversationId = "c1", messageId = "m1"),
+        )
+
+        assertThat(shown.sender).isNull()
+        assertThat(shown.conversation).isNull()
+        assertThat(shown.sentAtLabel).isNull()
+        assertThat(shown.artworkUrl).isNull()
+        assertThat(shown.attachmentId).isEqualTo("a1")
+        assertThat(shown.isProtected).isTrue()
+    }
+
+    @Test
+    fun `a public voice is shown as it is`() {
+        val public = card().copy(artworkUrl = "https://cdn.meeshy.me/nour.jpg")
+
+        assertThat(VoicePlaybackCardRules.shown(public)).isEqualTo(public)
+    }
+
+    @Test
+    fun `a queue card always offers previous and offers next only when the queue has one`() {
+        assertThat(VoicePlaybackCardRules.queueActions(VoicePlaybackQueueControls(hasNext = true, hasPrevious = false)))
+            .isEqualTo(VoicePlaybackQueueActions(previous = true, next = true))
+        assertThat(VoicePlaybackCardRules.queueActions(VoicePlaybackQueueControls(hasNext = false, hasPrevious = true)))
+            .isEqualTo(VoicePlaybackQueueActions(previous = true, next = false))
+    }
+
+    @Test
+    fun `a card without a queue offers neither next nor previous`() {
+        assertThat(VoicePlaybackCardRules.queueActions(null)).isEqualTo(VoicePlaybackQueueActions(previous = false, next = false))
+    }
 }
