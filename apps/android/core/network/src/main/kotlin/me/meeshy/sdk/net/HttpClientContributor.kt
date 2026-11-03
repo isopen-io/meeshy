@@ -1,5 +1,6 @@
 package me.meeshy.sdk.net
 
+import me.meeshy.sdk.model.media.MediaClientRole
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 
@@ -19,9 +20,20 @@ interface HttpClientContributor {
     val priority: Int
     fun contribute(builder: OkHttpClient.Builder)
 
+    /** Le droit de monter aussi sur un client des médias (#14613) ; seul ce module en émet. Sans lui, jamais. */
+    val mediaGrant: MediaClientGrant? get() = null
+
     companion object {
         fun of(id: String, priority: Int, block: (OkHttpClient.Builder) -> Unit): HttpClientContributor =
             FunctionContributor(id, priority, block)
+
+        /** Un contributeur qui tient [role] sur les clients des médias : l'épinglage et la frontière de session. */
+        internal fun granted(
+            id: String,
+            priority: Int,
+            role: MediaClientRole,
+            block: (OkHttpClient.Builder) -> Unit,
+        ): HttpClientContributor = FunctionContributor(id, priority, block, MediaClientGrant(role))
     }
 }
 
@@ -29,6 +41,7 @@ private class FunctionContributor(
     override val id: String,
     override val priority: Int,
     private val block: (OkHttpClient.Builder) -> Unit,
+    override val mediaGrant: MediaClientGrant? = null,
 ) : HttpClientContributor {
     override fun contribute(builder: OkHttpClient.Builder) = block(builder)
 }
@@ -89,7 +102,7 @@ internal fun builtInContributors(
     transition: SessionTransitionFlags = SessionTransitionFlags(),
     visitorKey: VisitorReaderKeyProviding? = null,
 ): List<HttpClientContributor> = listOfNotNull(
-    HttpClientContributor.of("session-boundary", HttpPriority.SESSION_BOUNDARY) {
+    HttpClientContributor.granted("session-boundary", HttpPriority.SESSION_BOUNDARY, MediaClientRole.SESSION_BOUNDARY) {
         it.addInterceptor(SessionBoundaryInterceptor(transition))
     },
     HttpClientContributor.of("upload-timeouts", HttpPriority.UPLOAD_TIMEOUTS) { it.addInterceptor(UploadTransferTimeoutInterceptor()) },
