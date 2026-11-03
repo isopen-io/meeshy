@@ -81,6 +81,26 @@ class SharedVoiceCardProjectionTest {
     }
 
     @Test
+    fun `the send date comes from the caller label when it supplies one`() {
+        val asked = mutableListOf<Long>()
+        val shared = SharedVoiceCardProjection.of(
+            audio = audio(),
+            conversationName = "Famille",
+            conversationArtworkUrl = null,
+            playback = playback(),
+            hasNext = false,
+            hasPrevious = false,
+            callActive = false,
+            locale = Locale.FRANCE,
+            zone = ZoneId.of("UTC"),
+            sentAtLabel = { epochMs -> asked += epochMs; "hier" },
+        )!!
+
+        assertThat(shared.card.sentAtLabel).isEqualTo("hier")
+        assertThat(asked).containsExactly(1_760_434_200_000L)
+    }
+
+    @Test
     fun `the artwork is the sender avatar before the conversation one`() {
         assertThat(project()!!.card.artworkUrl).isEqualTo("https://cdn.meeshy.me/nour.jpg")
         assertThat(project(audio = audio(avatar = null))!!.card.artworkUrl).isEqualTo("https://cdn.meeshy.me/famille.jpg")

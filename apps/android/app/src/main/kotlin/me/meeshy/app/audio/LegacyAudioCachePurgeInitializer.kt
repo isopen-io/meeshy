@@ -28,10 +28,13 @@ internal class LegacyAudioCachePurgeInitializer @Inject constructor(
 ) : AppInitializer {
     override fun initialize() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            val database = StandaloneDatabaseProvider(context)
             try {
-                LegacyAudioPlaybackCache.purge(context.cacheDir, StandaloneDatabaseProvider(context))
+                LegacyAudioPlaybackCache.purge(context.cacheDir, database)
             } catch (failure: Exception) {
                 Timber.w(failure, "ancien cache audio non purgé")
+            } finally {
+                database.close()
             }
         }
     }

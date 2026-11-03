@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.QueuedAudio
 import me.meeshy.sdk.model.media.PlaybackSpeed
 import me.meeshy.sdk.model.playback.AudioPlaybackState
 import me.meeshy.sdk.model.playback.PlaybackCommandOrigin
+import me.meeshy.sdk.model.playback.VoicePlaybackCardRules
 import me.meeshy.sdk.model.playback.VoicePlaybackCommand
 import me.meeshy.sdk.model.playback.VoicePlaybackQueueControls
 import me.meeshy.sdk.model.playback.VoicePlaybackTransportState
@@ -83,6 +84,7 @@ class SharedAudioSessionPublisherTest {
         var now = 0L
         val bridge = VoicePlaybackSessionBridge(clock = { now })
         val coordinator = ConversationAudioCoordinator(engine, StandardTestDispatcher(scope.testScheduler))
+        val formatted = mutableListOf<Long>()
         val publisher = SharedAudioSessionPublisher(
             coordinator = coordinator,
             callGate = gate,
@@ -91,6 +93,10 @@ class SharedAudioSessionPublisherTest {
             clock = { now },
             locale = { Locale.FRANCE },
             zone = { ZoneId.of("UTC") },
+            formatSentAt = { epochMs, locale, zone ->
+                formatted += epochMs
+                VoicePlaybackCardRules.sentAtLabel(epochMs, locale, zone)
+            },
         )
     }
 
@@ -233,6 +239,23 @@ class SharedAudioSessionPublisherTest {
         rig.engine.mutable.value = rig.engine.mutable.value.copy(currentTimeMs = 15_000)
         runCurrent()
         assertThat(rig.bridge.snapshot.value!!.anchorMillis).isEqualTo(2_000)
+    }
+
+    @Test
+    fun `the send date is formatted once, not at every playback tick`() = runTest {
+        val rig = playing("b")
+
+        (1..20).forEach { tick ->
+            rig.now = tick * 100L
+            rig.engine.mutable.value = rig.engine.mutable.value.copy(currentTimeMs = tick * 100L)
+            runCurrent()
+        }
+        assertThat(rig.formatted).hasSize(1)
+
+        rig.bridge.dispatch(VoicePlaybackCommand.Next)
+        runCurrent()
+        assertThat(rig.formatted).hasSize(1)
+        assertThat(rig.bridge.snapshot.value?.card?.sentAtLabel).isNotEmpty()
     }
 
     @Test

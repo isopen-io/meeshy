@@ -28,6 +28,10 @@ public object SharedVoiceCardProjection {
     /** Un écart de position au-delà duquel l'horloge de la carte n'a plus raison : un déplacement dans le vocal. */
     public const val SEEK_TOLERANCE_MS: Long = 1_500L
 
+    /**
+     * La projection tourne à chaque tic du moteur (dix par seconde) : [sentAtLabel] laisse l'appelant mémoriser la
+     * date formatée d'un vocal, la seule étape coûteuse ; par défaut, elle se compose à chaque appel.
+     */
     @Suppress("LongParameterList")
     public fun of(
         audio: QueuedAudio?,
@@ -39,6 +43,7 @@ public object SharedVoiceCardProjection {
         callActive: Boolean,
         locale: Locale,
         zone: ZoneId,
+        sentAtLabel: (epochMs: Long) -> String = { VoicePlaybackCardRules.sentAtLabel(it, locale, zone) },
     ): SharedVoiceCard? {
         if (audio == null || callActive) return null
         val loaded = playback.attachmentId == audio.attachmentId
@@ -46,7 +51,7 @@ public object SharedVoiceCardProjection {
             attachmentId = audio.attachmentId,
             sender = audio.senderName,
             conversation = conversationName,
-            sentAtLabel = VoicePlaybackCardRules.sentAtLabel(audio.receivedAtEpochMs, locale, zone),
+            sentAtLabel = sentAtLabel(audio.receivedAtEpochMs),
             artworkUrl = NowPlayingArtworkPlan.preferredAvatarUrl(audio.senderAvatarUrl, conversationArtworkUrl),
             isProtected = audio.isProtected,
             durationMs = playback.durationMs.takeIf { loaded && it > 0L } ?: audio.durationMs,

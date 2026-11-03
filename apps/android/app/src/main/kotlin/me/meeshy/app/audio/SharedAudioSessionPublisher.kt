@@ -20,6 +20,7 @@ import me.meeshy.sdk.call.CallActivityGate
 import me.meeshy.sdk.model.playback.PlaybackCommandOrigin
 import me.meeshy.sdk.model.playback.SharedVoiceCard
 import me.meeshy.sdk.model.playback.SharedVoiceCardProjection
+import me.meeshy.sdk.model.playback.VoicePlaybackCardRules
 import me.meeshy.sdk.model.playback.VoicePlaybackCommand
 import me.meeshy.sdk.playback.ConversationAudioCoordinator
 import timber.log.Timber
@@ -41,10 +42,16 @@ internal class SharedAudioSessionPublisher(
     private val clock: () -> Long = SystemClock::elapsedRealtime,
     private val locale: () -> Locale = Locale::getDefault,
     private val zone: () -> ZoneId = ZoneId::systemDefault,
+    private val formatSentAt: (epochMs: Long, locale: Locale, zone: ZoneId) -> String = { epochMs, locale, zone ->
+        VoicePlaybackCardRules.sentAtLabel(epochMs, locale, zone)
+    },
 ) {
     private class Published(val card: SharedVoiceCard, val atMs: Long)
 
+    private data class SentAtKey(val epochMs: Long, val locale: Locale, val zone: ZoneId)
+
     private var published: Published? = null
+    private var sentAt: Pair<SentAtKey, String>? = null
 
     fun start() {
         scope.launch {
@@ -60,12 +67,20 @@ internal class SharedAudioSessionPublisher(
                     callActive = callActive,
                     locale = locale(),
                     zone = zone(),
+                    sentAtLabel = ::sentAtLabel,
                 )
             }.collect { card -> guarded("publication") { apply(card) } }
         }
         scope.launch {
             bridge.sharedCommands.collect { command -> guarded("ordre ${command::class.simpleName}") { route(command) } }
         }
+    }
+
+    /** La date d'un vocal ne se formate qu'une fois : la projection, elle, tourne à chaque tic du moteur. */
+    private fun sentAtLabel(epochMs: Long): String {
+        val key = SentAtKey(epochMs, locale(), zone())
+        sentAt?.takeIf { it.first == key }?.let { return it.second }
+        return formatSentAt(epochMs, key.locale, key.zone).also { sentAt = key to it }
     }
 
     private fun apply(card: SharedVoiceCard?) {
