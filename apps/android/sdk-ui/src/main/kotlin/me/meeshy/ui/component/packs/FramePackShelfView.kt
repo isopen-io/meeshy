@@ -15,10 +15,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.SystemUpdate
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,6 +40,7 @@ import me.meeshy.sdk.model.pack.FrameTile
 import me.meeshy.sdk.model.pack.PackAssetRef
 import me.meeshy.ui.R
 import me.meeshy.ui.component.lottie.PackFileReader
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -68,9 +65,9 @@ public fun FramePackShelfView(
     when (content) {
         FrameShelfContent.Loading -> LoadingGrid(modifier)
         FrameShelfContent.NeedsUpdate ->
-            ShelfNotice(stringResource(R.string.pack_shelf_needsUpdate), Icons.Filled.SystemUpdate, modifier)
+            ShelfNotice(stringResource(R.string.pack_shelf_needsUpdate), MeeshyIcons.Download, modifier)
         FrameShelfContent.Unavailable ->
-            ShelfNotice(stringResource(R.string.pack_shelf_unavailable), Icons.Filled.WifiOff, modifier)
+            ShelfNotice(stringResource(R.string.pack_shelf_unavailable), MeeshyIcons.WifiProblem, modifier)
         is FrameShelfContent.Frames -> FramesGrid(content.tiles, thumbnails, modifier)
     }
 }
@@ -136,7 +133,7 @@ private fun FrameTileView(tile: FrameTile, thumbnails: PackFileReader) {
         )
         Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus), verticalAlignment = Alignment.Top) {
             Icon(
-                Icons.Filled.Verified,
+                MeeshyIcons.Verified,
                 contentDescription = null,
                 tint = MeeshyTheme.tokens.textSecondary,
                 modifier = Modifier.size(14.dp).padding(top = 1.dp),

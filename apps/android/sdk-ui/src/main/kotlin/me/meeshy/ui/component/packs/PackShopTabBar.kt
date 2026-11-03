@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.pack.PackShopPage
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -88,7 +87,7 @@ private fun PackShopTab(entry: PackShopTabEntry, selected: Boolean, onClick: () 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (entry.page == PackShopPage.Shop) {
-            Icon(Icons.Filled.Storefront, contentDescription = null, tint = ink, modifier = Modifier.size(14.dp))
+            Icon(MeeshyIcons.ShoppingFilled, contentDescription = null, tint = ink, modifier = Modifier.size(14.dp))
         }
         Text(
             text = entry.title,
