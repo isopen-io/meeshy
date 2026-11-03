@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -74,10 +75,11 @@ public fun CodeFullSheet(
     onCopied: () -> Unit = {},
 ) {
     val theme = remember(isDark) { SyntaxTheme.github(isDark) }
+    val clipboard = LocalClipboardManager.current
     Dialog(onDismissRequest = onDismiss, properties = viewerDialogProperties(secure = protectedContent)) {
         FullScreenDialogWindow()
         Column(modifier.fillMaxSize().background(syntaxColor(theme.background)).statusBarsPadding().navigationBarsPadding()) {
-            CodeSheetBar(fileName, language, content, accent, theme, exitAllowed, onDismiss, onCopied)
+            CodeSheetBar(fileName, language, content, accent, theme, exitAllowed, clipboard, onDismiss, onCopied)
             when (content) {
                 CodeContent.Loading -> CodeSheetStatus(fileName, language, stringResource(R.string.code_viewer_loading_file), theme)
                 CodeContent.Failed -> CodeSheetStatus(fileName, language, stringResource(R.string.code_viewer_load_error), theme)
@@ -95,10 +97,10 @@ private fun CodeSheetBar(
     accent: Color,
     theme: SyntaxTheme,
     exitAllowed: Boolean,
+    clipboard: ClipboardManager,
     onDismiss: () -> Unit,
     onCopied: () -> Unit,
 ) {
-    val clipboard = LocalClipboardManager.current
     val haptics = rememberMeeshyHaptics()
     val langColor = codeLanguageColor(language)
     Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {

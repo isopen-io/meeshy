@@ -13,12 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Android
-import androidx.compose.material.icons.filled.Computer
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.TabletAndroid
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -36,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.session.SessionRowPresentation
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -142,11 +137,11 @@ private fun RevokeButton(title: String, enabled: Boolean, onClick: () -> Unit) {
 }
 
 private fun sessionIcon(icon: SessionRowPresentation.Icon): ImageVector = when (icon) {
-    SessionRowPresentation.Icon.TABLET -> Icons.Filled.TabletAndroid
-    SessionRowPresentation.Icon.PHONE -> Icons.Filled.PhoneAndroid
-    SessionRowPresentation.Icon.DESKTOP -> Icons.Filled.Computer
-    SessionRowPresentation.Icon.ANDROID_APP -> Icons.Filled.Android
-    SessionRowPresentation.Icon.WEB -> Icons.Filled.Language
+    SessionRowPresentation.Icon.TABLET -> MeeshyIcons.TabletAndroid
+    SessionRowPresentation.Icon.PHONE -> MeeshyIcons.PhoneAndroid
+    SessionRowPresentation.Icon.DESKTOP -> MeeshyIcons.Computer
+    SessionRowPresentation.Icon.ANDROID_APP -> MeeshyIcons.Android
+    SessionRowPresentation.Icon.WEB -> MeeshyIcons.Language
 }
 
 private const val ROW_FILL_ALPHA = 0.08f
