@@ -167,3 +167,40 @@ class ReadingModeSessionTest {
         assertThat(guest.state.value.isAuto).isTrue()
     }
 }
+
+class ReadingModeForcedOpeningTest {
+    private val me = ReadingModePreferenceScope.Registered("u1")
+
+    private class Store : ReadingModePreferenceStoring, ReadingModeFlags {
+        val writes = mutableListOf<ConversationReadingMode?>()
+        override var isReadingModesEnabled = true
+        override var isRiviereModeEnabled = true
+        override fun mode(conversationId: String, scope: ReadingModePreferenceScope): ConversationReadingMode? = null
+        override fun setMode(mode: ConversationReadingMode?, conversationId: String, scope: ReadingModePreferenceScope) {
+            writes += mode
+        }
+        override fun lastOpenedAtMs(conversationId: String, scope: ReadingModePreferenceScope): Long? = null
+        override fun noteOpened(conversationId: String, scope: ReadingModePreferenceScope, atMs: Long) = Unit
+    }
+
+    @Test
+    fun `un mode forcé décide de l'ouverture sans jamais être écrit`() {
+        val store = Store()
+        val session = ReadingModeSession.open(
+            "c1", me, "group", 8, 0, store, store, { 1L }, forcedMode = ConversationReadingMode.FOCAL,
+        )
+        assertThat(session.state.value.mode).isEqualTo(ConversationReadingMode.FOCAL)
+        assertThat(store.writes).isEmpty()
+    }
+
+    @Test
+    fun `le premier choix manuel reprend la loi et s'écrit`() {
+        val store = Store()
+        val session = ReadingModeSession.open(
+            "c1", me, "group", 8, 0, store, store, { 1L }, forcedMode = ConversationReadingMode.FOCAL,
+        )
+        session.resetToAuto()
+        assertThat(session.state.value.mode).isEqualTo(ConversationReadingMode.SCRIPT)
+        assertThat(store.writes).containsExactly(null)
+    }
+}

@@ -104,6 +104,7 @@
     <string name="composer_slide_rail_delete">Elimina la scena %1$d</string>
     <string name="composer_slide_rail_position">Scena %1$d di %2$d</string>
     <string name="composer_socle_audience">Pubblico</string>
+    <string name="composer_socle_blocked_audience">Scegli almeno una persona per pubblicare</string>
     <string name="composer_socle_publish">Pubblica</string>
     <string name="composer_sound_background_a11y">Suono di sottofondo</string>
     <string name="composer_text_frame_cloud">Nuvola</string>
@@ -293,6 +294,8 @@
     <string name="story_canvas_action_edit">Modifica</string>
     <string name="story_canvas_action_leaveScene">Togli dalla scena</string>
     <string name="story_canvas_action_sendBackward">Porta indietro</string>
+    <string name="story_caption_scroll_to_top">Torna all\'inizio del testo</string>
+    <string name="story_caption_scroll_to_top_hint">Fa scorrere la descrizione fino alla prima parola</string>
     <string name="story_composer_cancel">Annulla</string>
     <string name="story_composer_edit_slide_background">Modifica sfondo</string>
     <string name="story_composer_fab_badge">%1$d elemento/i attivo/i</string>
@@ -336,6 +339,8 @@
     <string name="story_repost_error_forbidden">Questa storia non può essere ricondivisa</string>
     <string name="story_repost_error_generic">Ripubblicazione non riuscita</string>
     <string name="story_repost_error_unavailable">Questa storia non è più disponibile</string>
+    <string name="story_repost_success">Ripubblicato nel tuo feed</string>
+    <string name="story_repost_success_reel">Ricondiviso nei tuoi reel</string>
     <string name="story_send_caption_hint">Aggiungi un messaggio…</string>
     <string name="story_send_loading">Caricamento delle conversazioni…</string>
     <plurals name="story_send_members">
@@ -396,4 +401,5 @@
     <string name="story_tray_a11y_changeMood">Cambia il mio stato d\'animo</string>
     <string name="story_tray_menu_profile">Vedi il profilo</string>
     <string name="story_tray_menu_viewStories">Vedi le storie</string>
+    <string name="story_viewer_transcript_title">Trascrizione</string>
 </resources>

@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +39,7 @@ import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.sdk.model.settings.LogoutPhase
 
 private val BottomMargin = 40.dp
 
@@ -49,7 +51,7 @@ private val BottomMargin = 40.dp
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
-    onLogout: () -> Unit,
+    onSignedOut: () -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenStarred: () -> Unit = {},
     onOpenSaved: () -> Unit = {},
@@ -72,13 +74,17 @@ fun SettingsScreen(
     onOpenPrivacyPolicy: () -> Unit = {},
     onOpenDeleteAccount: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
+    signOutViewModel: SignOutViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val appVersion = rememberAppVersionName()
     val haptics = rememberMeeshyHaptics()
     val scrollState = rememberScrollState()
     val sections = remember { SettingsHubCatalog.sections() }
-    var confirmLogout by remember { mutableStateOf(false) }
+    val logoutPhase by signOutViewModel.phase.collectAsStateWithLifecycle()
+    LaunchedEffect(signOutViewModel) {
+        signOutViewModel.effects.collect { if (it == SignOutEffect.SignedOut) onSignedOut() }
+    }
 
     MeeshyBackground {
         Box(Modifier.fillMaxSize()) {
@@ -118,9 +124,10 @@ fun SettingsScreen(
                         onOpenTerms = onOpenTerms,
                         onOpenPrivacyPolicy = onOpenPrivacyPolicy,
                         onOpenDeleteAccount = onOpenDeleteAccount,
+                        signOutEnabled = !logoutPhase.blocksInteraction,
                         onSignOut = {
                             haptics.heavy()
-                            confirmLogout = true
+                            signOutViewModel.onEvent(SignOutEvent.Requested)
                         },
                     )
                 }
@@ -131,15 +138,13 @@ fun SettingsScreen(
         }
     }
 
-    if (confirmLogout) {
+    if (logoutPhase == LogoutPhase.Confirming) {
         SettingsLogoutConfirmation(
-            onConfirm = {
-                confirmLogout = false
-                onLogout()
-            },
-            onDismiss = { confirmLogout = false },
+            onConfirm = { signOutViewModel.onEvent(SignOutEvent.Confirmed) },
+            onDismiss = { signOutViewModel.onEvent(SignOutEvent.Cancelled) },
         )
     }
+    SignOutOverlay(phase = logoutPhase)
 }
 
 /** L'offset de défilement n'est lu qu'ici : seul l'en-tête se recompose pendant le geste. */
@@ -186,6 +191,7 @@ private fun SettingsHubSectionHost(
     onOpenTerms: () -> Unit,
     onOpenPrivacyPolicy: () -> Unit,
     onOpenDeleteAccount: () -> Unit,
+    signOutEnabled: Boolean,
     onSignOut: () -> Unit,
 ) {
     val rows = section.rows
@@ -206,6 +212,6 @@ private fun SettingsHubSectionHost(
         SettingsHubSectionId.ABOUT -> SettingsAboutSection(
             rows, appVersion, onOpenAbout, onOpenTerms, onOpenPrivacyPolicy, onOpenLicenses, onOpenDiagnostics,
         )
-        SettingsHubSectionId.SIGN_OUT -> SettingsSignOutButton(onClick = onSignOut)
+        SettingsHubSectionId.SIGN_OUT -> SettingsSignOutButton(enabled = signOutEnabled, onClick = onSignOut)
     }
 }

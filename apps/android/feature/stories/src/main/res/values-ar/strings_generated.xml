@@ -104,6 +104,7 @@
     <string name="composer_slide_rail_delete">حذف المشهد %1$d</string>
     <string name="composer_slide_rail_position">المشهد %1$d من %2$d</string>
     <string name="composer_socle_audience">الجمهور</string>
+    <string name="composer_socle_blocked_audience">اختر شخصًا واحدًا على الأقل للنشر</string>
     <string name="composer_socle_publish">نشر</string>
     <string name="composer_sound_background_a11y">صوت الخلفية</string>
     <string name="composer_text_frame_cloud">سحابة</string>
@@ -299,6 +300,8 @@
     <string name="story_canvas_action_edit">تعديل</string>
     <string name="story_canvas_action_leaveScene">إخراج من المشهد</string>
     <string name="story_canvas_action_sendBackward">إرسال للخلف</string>
+    <string name="story_caption_scroll_to_top">العودة إلى بداية النص</string>
+    <string name="story_caption_scroll_to_top_hint">يمرّر الوصف حتى أول كلمة فيه</string>
     <string name="story_composer_cancel">إلغاء</string>
     <string name="story_composer_edit_slide_background">تعديل الخلفية</string>
     <string name="story_composer_fab_badge">%1$d عنصر نشط</string>
@@ -342,6 +345,8 @@
     <string name="story_repost_error_forbidden">لا يمكن إعادة مشاركة هذه القصة</string>
     <string name="story_repost_error_generic">فشلت إعادة النشر</string>
     <string name="story_repost_error_unavailable">لم تعد هذه القصة متاحة</string>
+    <string name="story_repost_success">تمت إعادة النشر في خلاصتك</string>
+    <string name="story_repost_success_reel">تمت إعادة النشر في الريلز الخاصة بك</string>
     <string name="story_send_caption_hint">أضف رسالة…</string>
     <string name="story_send_loading">جارٍ تحميل المحادثات…</string>
     <plurals name="story_send_members">
@@ -414,4 +419,5 @@
     <string name="story_tray_a11y_changeMood">تغيير حالتي</string>
     <string name="story_tray_menu_profile">عرض الملف الشخصي</string>
     <string name="story_tray_menu_viewStories">عرض القصص</string>
+    <string name="story_viewer_transcript_title">النص المكتوب</string>
 </resources>

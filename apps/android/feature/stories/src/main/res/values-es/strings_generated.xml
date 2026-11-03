@@ -104,6 +104,7 @@
     <string name="composer_slide_rail_delete">Eliminar la escena %1$d</string>
     <string name="composer_slide_rail_position">Escena %1$d de %2$d</string>
     <string name="composer_socle_audience">Audiencia</string>
+    <string name="composer_socle_blocked_audience">Elige al menos una persona para publicar</string>
     <string name="composer_socle_publish">Publicar</string>
     <string name="composer_sound_background_a11y">Sonido de fondo</string>
     <string name="composer_text_frame_cloud">Nube</string>
@@ -293,6 +294,8 @@
     <string name="story_canvas_action_edit">Editar</string>
     <string name="story_canvas_action_leaveScene">Sacar de la escena</string>
     <string name="story_canvas_action_sendBackward">Enviar atrás</string>
+    <string name="story_caption_scroll_to_top">Volver al inicio del texto</string>
+    <string name="story_caption_scroll_to_top_hint">Desplaza la descripción hasta su primera palabra</string>
     <string name="story_composer_cancel">Cancelar</string>
     <string name="story_composer_edit_slide_background">Editar el fondo</string>
     <string name="story_composer_fab_badge">%1$d elemento(s) activo(s)</string>
@@ -336,6 +339,8 @@
     <string name="story_repost_error_forbidden">Esta historia no se puede volver a compartir</string>
     <string name="story_repost_error_generic">Error al republicar</string>
     <string name="story_repost_error_unavailable">Esta historia ya no está disponible</string>
+    <string name="story_repost_success">Republicado en tu feed</string>
+    <string name="story_repost_success_reel">Republicado en tus reels</string>
     <string name="story_send_caption_hint">Añadir un mensaje…</string>
     <string name="story_send_loading">Cargando conversaciones…</string>
     <plurals name="story_send_members">
@@ -396,4 +401,5 @@
     <string name="story_tray_a11y_changeMood">Cambiar mi estado de ánimo</string>
     <string name="story_tray_menu_profile">Ver el perfil</string>
     <string name="story_tray_menu_viewStories">Ver las stories</string>
+    <string name="story_viewer_transcript_title">Transcripción</string>
 </resources>
