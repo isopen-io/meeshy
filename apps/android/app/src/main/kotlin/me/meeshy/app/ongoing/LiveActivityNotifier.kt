@@ -1,5 +1,6 @@
 package me.meeshy.app.ongoing
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
@@ -25,6 +26,7 @@ import javax.inject.Singleton
 internal class LiveActivityNotifier @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
+    @SuppressLint("NewApi")
     fun build(plan: LiveActivityPlan, timeoutMs: Long? = null, sdk: Int = Build.VERSION.SDK_INT): Notification {
         OngoingChannel.ensure(context)
         val styled = plan.isOngoing && (plan.progress != null || plan.indeterminate)
