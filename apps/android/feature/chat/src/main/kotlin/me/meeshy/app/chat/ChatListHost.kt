@@ -430,7 +430,7 @@ internal fun ChatListHost(
     CompositionLocalProvider(LocalBubbleFileTransfers provides fileTransfers, LocalViewOnceConsumer provides viewOnceConsumer) {
     Box(modifier = modifier.fillMaxSize()) {
         when {
-            state.showSkeleton -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) { ChatSkeleton() }
+            state.loadingPhase(host.landing.isLoadingNewer).isBlockingSpinnerNeeded -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) { ChatSkeleton() }
 
             state.messages.isEmpty() && state.errorMessage != null -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) {
                 ChatNotice(state.errorMessage!!, onRetry = actions.refresh)
