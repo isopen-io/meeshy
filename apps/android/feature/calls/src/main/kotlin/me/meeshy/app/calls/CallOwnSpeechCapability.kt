@@ -22,6 +22,7 @@ import me.meeshy.sdk.call.WebRtcEngine
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.call.CallCaptionsState
 import me.meeshy.sdk.model.call.CallState
+import me.meeshy.sdk.model.call.CallTranscriptionEvents
 import me.meeshy.sdk.model.call.DataChannelCodec
 import me.meeshy.sdk.model.call.OwnSpeechCaptureAction
 import me.meeshy.sdk.model.call.OwnSpeechCapturePolicy
@@ -188,7 +189,9 @@ class CallOwnSpeechController internal constructor(
     private fun send(emission: OwnSpeechEmission) {
         if (!mayLeave()) return
         wires.sendToPeer(DataChannelCodec.encodeTranscriptEntry(emission.entry))
-        emission.relay?.let { wires.relay(emission.entry.callId, it.fields()) }
+        emission.relay?.let { wire ->
+            CallTranscriptionEvents.relayFrame(emission.entry.callId, callId, wire)?.let { wires.relay(emission.entry.callId, it) }
+        }
         captions.receiveOwn(emission.journal)
     }
 

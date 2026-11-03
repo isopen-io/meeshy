@@ -7,11 +7,15 @@ import io.mockk.verify
 import me.meeshy.sdk.model.call.CallErrorSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallState
+import me.meeshy.sdk.socket.CallAccessoryRequest
 import me.meeshy.sdk.socket.CallSignalManager
 import org.junit.Test
 
 class CallErrorControllerTest {
-    private val signals: CallSignalManager = mockk(relaxed = true)
+    private var answeredAccessory: CallAccessoryRequest? = null
+    private val signals: CallSignalManager = mockk(relaxed = true) {
+        every { accessoryRequestAnswered(any()) } answers { answeredAccessory }
+    }
     private val dispatched = mutableListOf<CallEvent>()
     private var pendingTurnRequest = false
     private var resuming = false
@@ -29,6 +33,14 @@ class CallErrorControllerTest {
     @Test
     fun `a refused TURN refresh does not end the call`() {
         pendingTurnRequest = true
+        controller.handle(host, CallErrorSignal("NOT_A_PARTICIPANT", "c1", "nope"))
+        assertThat(dispatched).isEmpty()
+        verify(exactly = 0) { host.endMedia() }
+    }
+
+    @Test
+    fun `an error answering a recent accessory request does not end the call`() {
+        answeredAccessory = CallAccessoryRequest.Reaction
         controller.handle(host, CallErrorSignal("NOT_A_PARTICIPANT", "c1", "nope"))
         assertThat(dispatched).isEmpty()
         verify(exactly = 0) { host.endMedia() }
