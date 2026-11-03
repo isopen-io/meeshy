@@ -22,6 +22,13 @@ import me.meeshy.sdk.model.StoryCommentsReducer
 import me.meeshy.sdk.model.StoryCommentsState
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.model.StoryCommentStatus
+import me.meeshy.sdk.media.MediaIntake
+import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.MediaUploadSource
+import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.story.StoryCommentAttachmentTray
+import me.meeshy.sdk.model.story.StoryCommentDraft
+import me.meeshy.sdk.model.story.StoryCommentPiece
 import me.meeshy.sdk.model.story.StoryCommentPublish
 import me.meeshy.sdk.model.story.StoryViewerParticipationMark
 import me.meeshy.sdk.story.StoryCommentPublication
@@ -71,10 +78,32 @@ class StoryCommentsViewModel @Inject constructor(
     private val publisher: StoryCommentPublisher? = null,
     private val drafts: StoryCommentDraftStore? = null,
     private val participation: StoryViewerParticipationStore? = null,
+    private val mediaUploader: StoryCommentMediaUploader? = null,
 ) : ViewModel() {
 
     /** Un commentaire que la file a refusé : son texte (et son parent) retournent au composeur. */
-    data class RefusedComment(val text: String, val parentId: String?)
+    data class RefusedComment(
+        val text: String,
+        val parentId: String?,
+        val pieces: List<StoryCommentPiece> = emptyList(),
+        val place: SharedPlace? = null,
+    )
+
+    /** Ce qui part À CÔTÉ du texte : les pièces téléversées, le lieu et les effets (flou, éphémère). */
+    private data class Extras(val pieces: List<StoryCommentPiece>, val effectFlags: Int?, val place: SharedPlace?) {
+        val attachmentIds: List<String>? get() = pieces.mapNotNull { it.uploadedId }.takeIf { it.isNotEmpty() }
+    }
+
+    private val _tray = MutableStateFlow(StoryCommentAttachmentTray())
+    val tray: StateFlow<StoryCommentAttachmentTray> = _tray.asStateFlow()
+    private val _place = MutableStateFlow<SharedPlace?>(null)
+    val place: StateFlow<SharedPlace?> = _place.asStateFlow()
+    private var effectFlags: Int? = null
+    private var pieceSeq = 0
+    private val sentExtras = mutableMapOf<String, Extras>()
+    private val mediaFailures = Channel<Unit>(Channel.BUFFERED)
+    /** Une pièce n'a pas pu être téléversée : elle a quitté le plateau, l'écran le dit. */
+    val mediaFailed: kotlinx.coroutines.flow.Flow<Unit> = mediaFailures.receiveAsFlow()
 
     private val refusals = Channel<RefusedComment>(Channel.BUFFERED)
     val refused: kotlinx.coroutines.flow.Flow<RefusedComment> = refusals.receiveAsFlow()
@@ -104,6 +133,9 @@ class StoryCommentsViewModel @Inject constructor(
         storyId?.let { socialSocket.leavePostRoom(it) }
         loadJob?.cancel()
         storyId = newStoryId?.takeIf { it.isNotBlank() }
+        _tray.value = StoryCommentAttachmentTray()
+        _place.value = null
+        effectFlags = null
         val viewer = sessionRepository.currentUser.value
         _state.value = StoryCommentsUiState(
             comments = StoryCommentsState(count = payloadCount),
@@ -218,7 +250,9 @@ class StoryCommentsViewModel @Inject constructor(
         if (publisher == null) return false
         val clean = text.trim()
         val user = sessionRepository.currentUser.value ?: return false
-        if (clean.isEmpty()) return false
+        val tray = _tray.value
+        val place = _place.value
+        if (tray.isUploading || (clean.isEmpty() && !tray.hasMedia && place == null)) return false
         val target = _state.value.replyTarget
         val parentId = target?.let { it.parentId?.takeIf { p -> p.isNotBlank() } ?: it.id }
         val tempId = "pending-${pendingSeq++}"
@@ -227,7 +261,12 @@ class StoryCommentsViewModel @Inject constructor(
         _state.update { it.copy(replyTarget = null) }
         drafts?.sent(id)
         participation?.note(StoryViewerParticipationMark.COMMENTED, id)
-        dispatch(id, tempId, clean, parentId, language)
+        val extras = Extras(tray.pieces, effectFlags, place)
+        _tray.value = StoryCommentAttachmentTray()
+        _place.value = null
+        effectFlags = null
+        sentExtras[tempId] = extras
+        dispatch(id, tempId, clean, parentId, language, extras)
         return true
     }
 
@@ -236,25 +275,85 @@ class StoryCommentsViewModel @Inject constructor(
         val id = storyId ?: return
         val row = _state.value.comments.find(tempId)?.takeIf { it.status == StoryCommentStatus.Failed } ?: return
         update { StoryCommentPublish.retrying(it, tempId) }
-        dispatch(id, tempId, row.originalContent, row.parentId, language)
+        dispatch(id, tempId, row.originalContent, row.parentId, language, sentExtras[tempId] ?: Extras(emptyList(), null, null))
     }
 
-    private fun dispatch(id: String, tempId: String, text: String, parentId: String?, language: String?) {
+    private fun dispatch(id: String, tempId: String, text: String, parentId: String?, language: String?, extras: Extras) {
         val queue = publisher ?: return
         viewModelScope.launch {
-            val outcome = guarded { queue.publish(id, text, parentId, language) }
+            val outcome = guarded { queue.publish(id, text, parentId, language, extras.attachmentIds, extras.effectFlags, extras.place) }
             if (!isViewing(id)) return@launch
+            if (outcome == StoryCommentPublication.Delivered || outcome == StoryCommentPublication.Dropped) sentExtras.remove(tempId)
             when (outcome) {
                 StoryCommentPublication.Delivered -> update { StoryCommentPublish.delivered(it, tempId) }
                 StoryCommentPublication.Dropped -> Unit
                 null, StoryCommentPublication.Failed -> update { StoryCommentPublish.failed(it, tempId) }
                 is StoryCommentPublication.Refused -> {
                     update { current -> StoryCommentPublish.refused(current, tempId)?.state ?: current }
-                    drafts?.refused(id, outcome.text, System.currentTimeMillis())
-                    refusals.trySend(RefusedComment(outcome.text, parentId))
+                    sentExtras.remove(tempId)
+                    drafts?.refused(id, outcome.text, System.currentTimeMillis(), extras.pieces, extras.place)
+                    _tray.update { it.restoring(extras.pieces) }
+                    if (_place.value == null) _place.value = extras.place
+                    refusals.trySend(RefusedComment(outcome.text, parentId, extras.pieces, extras.place))
                 }
             }
         }
+    }
+
+    /** Joint une photo, une vidéo, un fichier ou une voix : elle entre au plateau et se téléverse aussitôt. */
+    fun attachMedia(item: MediaUploadItem) {
+        val path = (item.source as? MediaUploadSource.OnDisk)?.file?.path.orEmpty()
+        val piece = StoryCommentPiece("piece-${pieceSeq++}", path, item.fileName, item.mimeType, item.durationMs)
+        val before = _tray.value
+        val after = before.adding(piece)
+        if (after === before) {
+            MediaIntake.release(item)
+            return
+        }
+        _tray.value = after
+        viewModelScope.launch {
+            val outcome = mediaUploader?.upload(item) ?: StoryCommentUpload.Failed
+            val stillThere = _tray.value.piece(piece.id) != null
+            when {
+                !stillThere -> Unit
+                outcome is StoryCommentUpload.Done -> _tray.update { it.uploaded(piece.id, outcome.serverId) }
+                else -> {
+                    _tray.update { it.failed(piece.id) }
+                    MediaIntake.release(item)
+                    mediaFailures.trySend(Unit)
+                }
+            }
+        }
+    }
+
+    fun removeMedia(pieceId: String) {
+        val piece = _tray.value.piece(pieceId) ?: return
+        _tray.update { it.removing(pieceId) }
+        if (piece.localPath.isNotBlank()) {
+            MediaIntake.release(MediaUploadItem.onDisk(java.io.File(piece.localPath), piece.fileName, piece.mimeType, piece.durationMs))
+        }
+    }
+
+    fun setPlace(place: SharedPlace?) {
+        _place.value = place
+    }
+
+    fun setEffectFlags(flags: Int?) {
+        effectFlags = flags?.takeIf { it > 0 }
+    }
+
+    /** Le brouillon de la story : le texte saisi, avec les pièces et le lieu du plateau. */
+    fun saveDraft(text: String) {
+        val id = storyId ?: return
+        drafts?.save(id, text, _tray.value.pieces, _place.value)
+    }
+
+    /** Rouvre le brouillon de la story : ses pièces et son lieu reprennent leur place ; rend le texte à replacer. */
+    fun restoreDraft(): StoryCommentDraft? {
+        val draft = storyId?.let { drafts?.draftOf(it) } ?: return null
+        _tray.update { it.restoring(draft.pieces) }
+        if (_place.value == null) _place.value = draft.place
+        return draft
     }
 
     /** « Répondre » : le composeur épinglé répond à ce commentaire ; le fil le met en vue. */

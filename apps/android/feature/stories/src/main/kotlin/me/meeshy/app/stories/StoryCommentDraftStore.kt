@@ -9,8 +9,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.story.StoryCommentDraft
 import me.meeshy.sdk.model.story.StoryCommentDrafts
+import me.meeshy.sdk.model.story.StoryCommentPiece
 import me.meeshy.sdk.session.PerAccountCache
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,11 +30,18 @@ class StoryCommentDraftStore @Inject constructor() : PerAccountCache {
 
     fun draftOf(storyId: String): StoryCommentDraft? = _drafts.value.draftOf(storyId)
 
-    fun save(storyId: String, text: String) = _drafts.update { it.saved(storyId, text) }
+    fun save(storyId: String, text: String, pieces: List<StoryCommentPiece> = emptyList(), place: SharedPlace? = null) =
+        _drafts.update { it.saved(storyId, text, pieces, place) }
 
     fun sent(storyId: String) = _drafts.update { it.sent(storyId) }
 
-    fun refused(storyId: String, text: String, atMillis: Long) = _drafts.update { it.refused(storyId, text, atMillis) }
+    fun refused(
+        storyId: String,
+        text: String,
+        atMillis: Long,
+        pieces: List<StoryCommentPiece> = emptyList(),
+        place: SharedPlace? = null,
+    ) = _drafts.update { it.refused(storyId, text, atMillis, pieces, place) }
 
     override suspend fun clear() {
         _drafts.update { if (it.byStory.isEmpty()) it else StoryCommentDrafts() }
