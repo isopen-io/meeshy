@@ -1,13 +1,19 @@
 package me.meeshy.app.stories
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.composer.scene.SceneExportDestination
 import me.meeshy.sdk.model.composer.scene.SceneExportState
+import me.meeshy.ui.component.export.ExportAnnouncer
+import me.meeshy.ui.component.export.ExportAnnouncerHost
+import me.meeshy.ui.component.export.LocalExportAnnouncer
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -71,5 +77,65 @@ class SceneExportStatusComposeTest {
         compose.waitForIdle()
 
         compose.onNodeWithText("Saved to Photos").assertExists()
+    }
+
+    @Composable
+    private fun Status(state: () -> SceneExportState, onRetry: () -> Unit = {}, onAcknowledge: () -> Unit = {}) {
+        SceneExportStatus(
+            exportState = state(),
+            painting = null,
+            onCancel = {},
+            onRetry = onRetry,
+            onAcknowledge = onAcknowledge,
+            onReady = {},
+        )
+    }
+
+    @Test
+    fun `the composer announces its outcome through the application's announcer, which outlives it`() {
+        val announcer = ExportAnnouncer()
+        var state by mutableStateOf<SceneExportState>(SceneExportState.Running(0.9f, SceneExportDestination.GALLERY))
+        var composerOpen by mutableStateOf(true)
+        compose.setContent {
+            CompositionLocalProvider(LocalExportAnnouncer provides announcer) {
+                if (composerOpen) Status({ state }, onAcknowledge = { state = SceneExportState.Idle })
+                ExportAnnouncerHost(announcer)
+            }
+        }
+
+        state = SceneExportState.Saved
+        compose.waitForIdle()
+        assertThat(announcer.current?.message).isEqualTo("Saved to Photos")
+        composerOpen = false
+        compose.waitForIdle()
+
+        compose.onNodeWithText("Saved to Photos").assertExists()
+    }
+
+    @Test
+    fun `a shared export says so`() {
+        var state by mutableStateOf<SceneExportState>(SceneExportState.Running(0.9f, SceneExportDestination.SHARE))
+        compose.setContent { Status({ state }) }
+
+        state = SceneExportState.Ready("/x.mp4", SceneExportDestination.SHARE)
+        compose.waitForIdle()
+
+        compose.onNodeWithText("Shared").assertExists()
+    }
+
+    @Test
+    fun `retry relaunches the export and a running export outranks the previous outcome`() {
+        var state by mutableStateOf<SceneExportState>(SceneExportState.Failed)
+        var retries = 0
+        compose.setContent { Status({ state }, onRetry = { retries++ }) }
+        compose.onNodeWithText("Export failed. Try again.").assertExists()
+
+        compose.onNodeWithText("Retry").performClick()
+        state = SceneExportState.Running(0.2f, SceneExportDestination.GALLERY)
+        compose.waitForIdle()
+
+        assertThat(retries).isEqualTo(1)
+        compose.onNodeWithText("Exporting…").assertExists()
+        compose.onNodeWithText("Export failed. Try again.").assertDoesNotExist()
     }
 }

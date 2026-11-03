@@ -41,28 +41,29 @@ object NewConversationLogic {
     const val TYPE_DIRECT: String = DIRECT_CONVERSATION_TYPE
     const val TYPE_GROUP: String = "group"
 
-    /** Min selected participants before a conversation can be created. */
-    const val MIN_PARTICIPANTS: Int = 1
-
     /** A query shorter than this is not searched: the picker shows the contacts instead. */
     const val MIN_QUERY_LENGTH: Int = 2
 
-    /** A single peer is a direct chat; two or more is a group. */
+    /**
+     * A single peer is a direct chat; anything else is a group — two or more peers, or nobody at all:
+     * a group of myself alone (#14646), which the gateway accepts as long as it carries a title.
+     */
     fun conversationType(selectedCount: Int): String =
-        if (selectedCount >= 2) TYPE_GROUP else TYPE_DIRECT
+        if (selectedCount == 1) TYPE_DIRECT else TYPE_GROUP
 
-    fun canCreate(selectedCount: Int): Boolean = selectedCount >= MIN_PARTICIPANTS
+    /** At least one peer, or a titled group of myself alone (the gateway refuses it untitled: `MISSING_REQUIRED_FIELD`). */
+    fun canCreate(selectedCount: Int, rawTitle: String): Boolean =
+        selectedCount >= 1 || rawTitle.isNotBlank()
 
     /** Group conversations carry a user-typed title; direct chats derive theirs. */
     fun resolvedTitle(rawTitle: String, selectedCount: Int): String? =
         rawTitle.trim().takeIf { it.isNotEmpty() && conversationType(selectedCount) == TYPE_GROUP }
 
     /**
-     * Ce téléphone ne sait encore ni lire ni écrire le bout en bout (pile libsignal, #13015) :
-     * l'écran de création le montre « bientôt » aux rôles qui pourraient le choisir, et le défaut
-     * reste Serveur. Passe à `true` le jour où l'Android natif chiffre un tête-à-tête.
+     * Ce téléphone chiffre et lit le texte d'un tête-à-tête de bout en bout (libsignal, #14591) : l'écran de création
+     * le propose aux rôles qui peuvent le choisir, comme iOS. Un groupe le montre toujours « bientôt ».
      */
-    const val END_TO_END_SUPPORTED: Boolean = false
+    const val END_TO_END_SUPPORTED: Boolean = true
 
     /** Ce que la section Chiffrement propose pour [selectedCount] personnes choisies (`creationEncryptionOffer`). */
     fun encryptionOffer(platformRole: String?, selectedCount: Int): CreationEncryptionOffer =
@@ -79,7 +80,7 @@ object NewConversationLogic {
      * The creation request for the picker's selection. A single peer is a DIRECT, built by the
      * very [directConversationRequest] that the story/mood reply and a profile's Message button
      * create through (`ConversationRepository.directConversationWith`, #11615) — so no two
-     * entry points can ever describe a direct differently; two or more peers are a group.
+     * entry points can ever describe a direct differently; two or more peers, or none, are a group.
      * Seul cet écran choisit un mode de chiffrement : il part avec la demande, les autres
      * chemins n'en envoient aucun (la passerelle pose Serveur).
      */

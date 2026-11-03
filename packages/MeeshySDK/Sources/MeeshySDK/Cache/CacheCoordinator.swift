@@ -212,6 +212,7 @@ public actor CacheCoordinator {
         translationHydrationTask = Task { self.hydrateTranslationCachesFromDisk() }
         subscribeToLifecycle()
         subscribeToPostEngagement()
+        subscribeToConversationObsolescence()
         Task { await self.backfillSearchIndexIfNeeded() }
     }
 

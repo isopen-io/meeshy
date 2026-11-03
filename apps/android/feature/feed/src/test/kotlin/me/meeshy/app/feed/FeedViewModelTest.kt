@@ -103,6 +103,9 @@ class FeedViewModelTest {
         every { socialSocket.commentDeleted } returns commentDeleted
         every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
         every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
+        every { socialSocket.postReactionAdded } returns MutableSharedFlow()
+        every { socialSocket.postReactionRemoved } returns MutableSharedFlow()
+        every { socialSocket.reconnected } returns kotlinx.coroutines.flow.emptyFlow()
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
         return FeedViewModel(repository, session, socialSocket, config, reportRepository, workManager, engagement, publications)

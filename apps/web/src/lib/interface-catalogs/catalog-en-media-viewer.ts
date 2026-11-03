@@ -11,6 +11,7 @@ const enMediaViewer = {
   'media.viewer.compose': 'Create with this media',
   'media.viewer.imager': 'Picture it',
   'media.viewer.saved': 'Saved',
+  'media.viewer.already_saved': 'Already saved',
   'media.viewer.save_failed': 'Couldn’t save',
   'media.viewer.offline': 'Offline — try again once connected',
   'media.viewer.retry': 'Tap again to save',

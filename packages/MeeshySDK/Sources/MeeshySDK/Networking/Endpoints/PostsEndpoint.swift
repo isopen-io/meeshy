@@ -49,6 +49,7 @@ public enum PostsEndpoint: MeeshyEndpoint, Sendable {
     case nearby
     case nearbyDensity
     case root
+    case search
     case storiesMine
     case userByUserId(userId: String)
 
@@ -91,6 +92,7 @@ public enum PostsEndpoint: MeeshyEndpoint, Sendable {
         case .nearby: return "/api/v1/posts/nearby"
         case .nearbyDensity: return "/api/v1/posts/nearby/density"
         case .root: return "/api/v1/posts"
+        case .search: return "/api/v1/posts/search"
         case .storiesMine: return "/api/v1/posts/stories/mine"
         case .userByUserId(let userId): return "/api/v1/posts/user/\(userId)"
         }

@@ -4,8 +4,10 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import type { Attachment } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { feedVideoPreload } from '@/lib/media/feed-media-preload';
 import { useRememberSeenAttachment } from '@/lib/media/recent-media-scope';
 import { useServedVideoSrc } from '@/lib/media/served-video';
+import { useOnline } from '@/lib/net/online';
 import { PIECE_RATIO_ATTRIBUTE, pieceAspectRatio } from '@/lib/view/message-preview';
 import {
   DURATION_BADGE_OPACITY,
@@ -151,6 +153,8 @@ export function VideoTile({
   );
   /* Vue, une vidéo de message se relit hors ligne — si la bulle la déclare standard (#12052). */
   const videoSrc = useServedVideoSrc(attachment);
+  /* Sous 100 Ko, la vidéo arrive avec la bulle, hors ligne excepté (#14639). */
+  const preload = feedVideoPreload({ sizeBytes: attachment.fileSize, online: useOnline() });
   useRememberSeenAttachment({ element, attachmentId: attachment.id, src: videoSrc, active: true });
 
   if (attachment.fileUrl === '') return <VideoFallback attachment={attachment} />;
@@ -205,7 +209,7 @@ export function VideoTile({
       <video
         key={videoSrc}
         ref={bindElement}
-        preload="none"
+        preload={preload}
         playsInline
         {...(posterUrl !== undefined ? { poster: posterUrl } : {})}
         src={videoSrc}

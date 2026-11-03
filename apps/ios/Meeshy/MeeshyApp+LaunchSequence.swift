@@ -46,6 +46,7 @@ extension MeeshyApp {
         NotificationActionHandler.shared.observeRevocations(from: NotificationToastManager.shared.notificationWasDeleted.eraseToAnyPublisher())
         await NotificationActionHandler.sweepExpiredEphemeralBanners()
         NotificationActionHandler.shared.observeForegroundSweep()
+        NotificationActionHandler.shared.observeSignOutsForAwaitingReplies(AuthManager.shared.$isAuthenticated.eraseToAnyPublisher())
     }
 
     func bootCaches() async {

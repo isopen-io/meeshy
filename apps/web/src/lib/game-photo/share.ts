@@ -11,7 +11,7 @@
  */
 
 import type { GallerySaver } from '@/lib/gallery/gallery-saver';
-import { saveToGallery } from '@/lib/gallery/save-to-gallery';
+import { isInGallery, saveToGallery } from '@/lib/gallery/save-to-gallery';
 import type { FileDeliveryHost } from '@/lib/media/file-delivery-host';
 
 export type ShareOutcome = 'shared' | 'downloaded' | 'cancelled' | 'failed';
@@ -135,7 +135,7 @@ export async function sharePhoto(file: File, title: string, doors: PhotoDoors, t
 export async function savePhoto(file: File, doors: PhotoDoors): Promise<ShareOutcome> {
   const mimeType = file.type === '' ? 'image/png' : file.type;
   const notice = await saveToGallery({ blob: file, fileName: file.name, mimeType, saver: doors.saver }).catch(() => 'media.viewer.save_failed' as const);
-  if (notice !== null) return notice === 'media.viewer.saved' ? 'downloaded' : 'failed';
+  if (notice !== null) return isInGallery(notice) ? 'downloaded' : 'failed';
   const download = anchorDownload(doors.host);
   if (download !== null) {
     try {

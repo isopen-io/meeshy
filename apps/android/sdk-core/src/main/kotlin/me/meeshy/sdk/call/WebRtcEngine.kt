@@ -268,6 +268,7 @@ class WebRtcEngine internal constructor(
         applyDescription(desc, local = true)
         applyCameraEncoding()
         if (desc.type == SessionDescription.Type.OFFER) remoteDescriptions.onLocalOfferSet()
+        if (desc.type == SessionDescription.Type.ROLLBACK) remoteDescriptions.onLocalOfferRolledBack()
     }
 
     /**

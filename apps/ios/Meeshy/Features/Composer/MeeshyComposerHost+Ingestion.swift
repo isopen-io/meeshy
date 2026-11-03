@@ -27,7 +27,7 @@ extension MeeshyComposerHost {
             defer { advanceSceneIntake(ajout, done: rang + 1) }
             let declaredType = item.supportedContentTypes.first
             guard let url = await ComposerPhotoLibraryStaging.file(for: item, declaredType: declaredType) else { continue }
-            if rang == 0 { ComposerSceneIntakePreview.request(staged: url, of: item, for: ajout, into: $sceneIntake) }
+            if rang == 0 { ComposerSceneIntakePreview.request(staged: url, for: ajout, into: $sceneIntake) }
             let mime = ComposerMediaProbe.mime(forURL: url, declaredType: declaredType)
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: mime)
             // **Ce qu'on vient d'ingérer se DIT** (#4879). Le mime décide de

@@ -36,7 +36,8 @@ extension MeeshyComposerHost {
             sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
             format: selectedFormat,
             stage: sceneCameraStage,
-            toolIsOpen: sceneToolOwnsScreen),
+            toolIsOpen: sceneToolOwnsScreen,
+            mediaIsEntering: sceneIntake?.isPreparing == true),
               ComposerSceneQuickCapture.tap(format: selectedFormat) != nil else { return false }
         HapticFeedback.light()
         armSceneCamera()
@@ -50,7 +51,8 @@ extension MeeshyComposerHost {
             sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
             format: selectedFormat,
             stage: sceneCameraStage,
-            toolIsOpen: sceneToolOwnsScreen)
+            toolIsOpen: sceneToolOwnsScreen,
+            mediaIsEntering: sceneIntake?.isPreparing == true)
             && ComposerSceneQuickCapture.tap(format: selectedFormat) != nil
     }
 

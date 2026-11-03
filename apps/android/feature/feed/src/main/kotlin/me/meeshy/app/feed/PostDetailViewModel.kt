@@ -17,6 +17,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.sdk.model.EngagementSessions
+import me.meeshy.sdk.model.navigation.PostDetailLanding
 import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PublicationViewersAccess
@@ -102,6 +103,13 @@ class PostDetailViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
+
+    /** Où le détail atterrit (commentaires ouverts, commentaire visé) : lu une fois, depuis la route (#14523). */
+    val landing: PostDetailLanding = PostDetailLanding.from(
+        savedStateHandle[SHOW_COMMENTS_ARG],
+        savedStateHandle[COMMENT_ID_ARG],
+        savedStateHandle[PARENT_COMMENT_ID_ARG],
+    )
 
     /** Les émojis de la palette : les mêmes, dans le même ordre que messages et stories (récents d'abord). */
     val quickEmojis: StateFlow<List<String>> = emojiUsageStore.usage
@@ -654,7 +662,10 @@ class PostDetailViewModel @Inject constructor(
     }
 
     companion object {
-        const val POST_ID_ARG = "postId"
+        const val POST_ID_ARG = PostDetailLanding.POST_ID_ARG
+        const val SHOW_COMMENTS_ARG = PostDetailLanding.SHOW_COMMENTS_ARG
+        const val COMMENT_ID_ARG = PostDetailLanding.COMMENT_ID_ARG
+        const val PARENT_COMMENT_ID_ARG = PostDetailLanding.PARENT_COMMENT_ID_ARG
     }
 }
 

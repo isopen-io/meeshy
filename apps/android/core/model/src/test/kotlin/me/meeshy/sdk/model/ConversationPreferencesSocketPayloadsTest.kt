@@ -95,6 +95,8 @@ class ConversationPreferencesSocketPayloadsTest {
                 mentionsOnly = true,
                 reaction = "❤️",
                 tags = listOf("work", "urgent"),
+                orderInCategory = 3,
+                clearHistoryBefore = "2026-08-28T10:00:00.000Z",
                 version = 4,
             ),
         )

@@ -251,7 +251,8 @@ struct BubbleCarouselView: View {
                     thumbnailUrl: thumbUrl,
                     fullUrl: fullUrl ?? thumbUrl,
                     onFullImageLoaded: { _ = landedImageIds.insert(attachment.id) },
-                    reloadToken: originalLanded
+                    reloadToken: originalLanded,
+                    byteSize: attachment.fileSize
                 ) {
                     Color(hex: attachment.thumbnailColor).shimmer()
                 }
@@ -299,18 +300,21 @@ struct BubbleCarouselView: View {
 
     // MARK: - Prefetch
 
-    /// Pure gate: should this attachment kind be prefetched given the
-    /// resolved auto-download policy? Extracted so the wiring in
-    /// `prefetchAdjacentPages` (2026-07-21 fix — the ±1 carousel neighbor
+    /// Pure gate: should this attachment be prefetched? Extracted so the wiring
+    /// in `prefetchAdjacentPages` (2026-07-21 fix — the ±1 carousel neighbor
     /// prefetch previously ignored `MediaDownloadPolicyEngine` entirely,
     /// burning cellular data against 'Never'/'Wi-Fi only') is testable
-    /// without spinning up the full carousel view.
-    nonisolated static func shouldPrefetchAttachment(
-        kind: MessageAttachment.AttachmentType,
-        allowImage: Bool,
-        allowVideo: Bool
+    /// without spinning up the full carousel view. Sous 100 Ko, la pièce part
+    /// quel que soit le réseau (#14639) ; au-delà, la politique de son type.
+    nonisolated static func shouldPrefetch(
+        _ attachment: MessageAttachment,
+        condition: NetworkCondition,
+        prefs: MediaDownloadPreferences
     ) -> Bool {
-        kind == .video ? allowVideo : allowImage
+        MediaDownloadPolicyEngine.shouldAutoDownload(
+            kind: attachment.type == .video ? .video : .image,
+            condition: condition, prefs: prefs, byteSize: attachment.fileSize
+        )
     }
 
     private func prefetchAdjacentPages(around index: Int) {
@@ -321,11 +325,9 @@ struct BubbleCarouselView: View {
         // regardless of the 'Never'/'Wi-Fi only' preference.
         let condition = NetworkConditionMonitor.shared.condition
         let prefs = MediaDownloadPreferencesStore.shared.preferences
-        let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .image, condition: condition, prefs: prefs)
-        let allowVideo = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .video, condition: condition, prefs: prefs)
         for i in prefetchRange {
             let attachment = items[i]
-            guard Self.shouldPrefetchAttachment(kind: attachment.type, allowImage: allowImage, allowVideo: allowVideo) else { continue }
+            guard Self.shouldPrefetch(attachment, condition: condition, prefs: prefs) else { continue }
             // BUG C fix : pour une vidéo, NE JAMAIS prefetch le body MP4 dans
             // le cache image (téléchargement complet + échec de décodage
             // UIImage). On prefetch le thumbnail uniquement ; si absent, skip.
