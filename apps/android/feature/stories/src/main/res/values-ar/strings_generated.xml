@@ -264,6 +264,7 @@
     <string name="stories_tray_add_story">إضافة قصة</string>
     <string name="stories_tray_manage">إدارة قصصي</string>
     <string name="stories_tray_view_my_story">عرض قصتي</string>
+    <string name="stories_viewer_a11y_background_audio">صوت الخلفية</string>
     <string name="stories_viewer_close">إغلاق</string>
     <string name="stories_viewer_mute">كتم صوت الخلفية</string>
     <string name="stories_viewer_next">القصة التالية</string>

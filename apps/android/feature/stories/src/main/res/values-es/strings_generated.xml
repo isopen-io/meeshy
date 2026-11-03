@@ -261,6 +261,7 @@
     <string name="stories_tray_add_story">Añadir una story</string>
     <string name="stories_tray_manage">Gestionar mis stories</string>
     <string name="stories_tray_view_my_story">Ver mi story</string>
+    <string name="stories_viewer_a11y_background_audio">Audio de fondo</string>
     <string name="stories_viewer_close">Cerrar</string>
     <string name="stories_viewer_mute">Silenciar el sonido de fondo</string>
     <string name="stories_viewer_next">Historia siguiente</string>
