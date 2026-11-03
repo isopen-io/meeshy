@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.meeshy.core.database.DatabaseRecovery
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.core.crypto.session.E2eeSessionClearer
 import me.meeshy.sdk.category.CategorySnapshotStore
 import me.meeshy.sdk.preferences.PreferenceSnapshotStore
 import me.meeshy.sdk.chat.ConversationDraftStore
@@ -35,9 +36,7 @@ import timber.log.Timber
  *
  * [wipe] is called by [me.meeshy.sdk.auth.AuthRepository.logout] before the caller
  * treats the session as ended, so a subsequent login never races a still-running
- * wipe. E2EE key material has no analogue here yet — Android carries no client-side
- * Signal/identity-key store to wipe (unlike iOS's Keychain-backed one); this seam is
- * where that clear would land once one exists.
+ * wipe. Les cles E2EE (sessions et cles de l'appareil) du compte SORTANT sont effacees par [E2eeSessionClearer].
  */
 public interface SessionTeardown {
     /** Clears every per-account store. Idempotent — safe to call on an already-clear device. */
@@ -78,6 +77,7 @@ public class DefaultSessionTeardown(
     private val fence: AccountFence? = null,
     private val feedbackToasts: FeedbackToastCenter? = null,
     private val lostSends: LostSendsNotifier? = null,
+    private val e2eeSessions: E2eeSessionClearer? = null,
 ) : SessionTeardown {
 
     /**
@@ -152,6 +152,14 @@ public class DefaultSessionTeardown(
         // Une session invitee persistee survivait a la deconnexion : ses droits d'envoi bridaient le composeur du compte
         // suivant, et son jeton restait sur le disque. Une fin de session invitee purge tout, comme une deconnexion.
         guestSessions?.clear()
+        // Le userId courant est deja nul ici : le gestionnaire efface le compte SORTANT grace a son dernier userId connu.
+        try {
+            e2eeSessions?.clearSessions()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            Timber.e(failure, "E2EE : echec de l'effacement des cles de session")
+        }
         perAccountCaches.forEach { cache ->
             try {
                 cache.clear()

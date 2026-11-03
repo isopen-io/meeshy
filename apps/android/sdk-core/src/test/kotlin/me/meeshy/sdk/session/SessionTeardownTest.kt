@@ -75,6 +75,7 @@ class SessionTeardownTest {
         feedbackToasts: me.meeshy.sdk.feedback.FeedbackToastCenter? = null,
         lostSends: LostSendsNotifier? = null,
         fence: AccountFence? = null,
+        e2eeSessions: me.meeshy.core.crypto.session.E2eeSessionClearer? = null,
     ) = DefaultSessionTeardown(
         db,
         categoryStore,
@@ -90,6 +91,7 @@ class SessionTeardownTest {
         fence = fence,
         feedbackToasts = feedbackToasts,
         lostSends = lostSends,
+        e2eeSessions = e2eeSessions,
     )
 
     private fun pendingSend() = OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1")
@@ -110,6 +112,24 @@ class SessionTeardownTest {
         selectedId = "s1",
         updatedAt = "2026-08-27T12:00:00Z",
     )
+
+    @Test
+    fun wipe_clearsTheE2eeSessionsAndDeviceKeys() = runTest {
+        var clears = 0
+
+        teardown(e2eeSessions = { clears++ }).wipe()
+
+        assertThat(clears).isEqualTo(1)
+    }
+
+    @Test
+    fun wipe_stillClearsTheOtherStoresWhenTheE2eeClearFails() = runTest {
+        val caches = RecordingCache()
+
+        teardown(perAccountCaches = setOf(caches), e2eeSessions = { error("coffre indisponible") }).wipe()
+
+        assertThat(caches.clears).isEqualTo(1)
+    }
 
     @Test
     fun wipe_dropsTheGuestSessionSoNoLaterAccountInheritsItsPermissionsOrToken() = runTest {

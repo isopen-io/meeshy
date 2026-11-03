@@ -334,6 +334,7 @@ object SdkModule {
         fence: me.meeshy.sdk.session.AccountFence,
         feedbackToasts: me.meeshy.sdk.feedback.FeedbackToastCenter,
         lostSends: me.meeshy.sdk.session.LostSendsNotifier,
+        e2eeSessions: me.meeshy.core.crypto.session.E2eeSessionClearer,
     ): SessionTeardown =
         DefaultSessionTeardown(
             database,
@@ -350,6 +351,7 @@ object SdkModule {
             fence,
             feedbackToasts,
             lostSends,
+            e2eeSessions,
         )
 
     @Provides
