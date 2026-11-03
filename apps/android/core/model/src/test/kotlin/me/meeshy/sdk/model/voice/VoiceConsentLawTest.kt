@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.voice
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import org.junit.Test
 
@@ -32,7 +33,7 @@ class VoiceConsentLawTest {
 
     @Test
     fun `the update body carries the current policy version`() {
-        val body = Json { encodeDefaults = true }.encodeToString(ConsentUpdateRequest.serializer(), ConsentUpdateRequest(granted = true))
+        val body = Json { encodeDefaults = false }.encodeToString(ConsentUpdateRequest.serializer(), ConsentUpdateRequest(granted = true))
 
         assertThat(body).isEqualTo("""{"granted":true,"policyVersion":"2026-08-30"}""")
     }

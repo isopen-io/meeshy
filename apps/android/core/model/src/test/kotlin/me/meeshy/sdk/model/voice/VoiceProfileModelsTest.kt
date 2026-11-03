@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.voice
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.VoiceConsentRequest

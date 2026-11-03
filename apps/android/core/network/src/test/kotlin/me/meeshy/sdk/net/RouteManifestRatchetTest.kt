@@ -107,8 +107,10 @@ class RouteManifestRatchetTest {
          * autocollants), que portent `GameApi.kt` et `ProfileDecorApi.kt`.
          * 191 : moins `POST /relations/:userId/level` (#14910 : rétrograder un lien ou l'annuler depuis le profil), que
          * porte `RelationsApi.lower`.
+         * 169 : moins les dix-neuf routes `/voice/*` et les deux de `/me/consents` (#15085 : le profil vocal, le consentement
+         * au clonage et la traduction vocale suivie par job), que portent `VoiceApi` et `ConsentsApi`.
          */
-        const val TO_PORT_CEILING = 190
+        const val TO_PORT_CEILING = 169
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

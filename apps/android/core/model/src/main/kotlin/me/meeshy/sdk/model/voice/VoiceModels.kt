@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model.voice
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -52,10 +54,11 @@ data class ConsentEntry(
 data class ConsentsSnapshot(val consents: List<ConsentEntry> = emptyList())
 
 /** Corps entier de `PUT /me/consents/{purpose}` (strict côté passerelle : aucune date, le serveur horodate). */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ConsentUpdateRequest(
     val granted: Boolean,
-    val policyVersion: String = ConsentPolicy.DEFAULT_VERSION,
+    @EncodeDefault val policyVersion: String = ConsentPolicy.DEFAULT_VERSION,
 )
 
 /** Les finalités accordées d'une relecture, ancêtres compris ; une finalité inconnue est ignorée. */
