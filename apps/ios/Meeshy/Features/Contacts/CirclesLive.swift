@@ -41,7 +41,11 @@ extension ProfileCircleViewModel {
             relations: RelationsService.shared,
             friendService: FriendService.shared,
             offlineQueue: OfflineQueue.shared,
-            networkMonitor: NetworkMonitor.shared
+            networkMonitor: NetworkMonitor.shared,
+            forgetFriendship: { userId in
+                FriendshipCache.shared.didRemoveFriend(userId)
+                await FriendshipCache.shared.invalidatePersistedFriendCaches()
+            }
         )
     }
 }

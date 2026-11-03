@@ -75,6 +75,65 @@ struct RelationLinkTests {
         #expect(link(.blood).raiseOffer() == .none)
     }
 
+    // MARK: - Le blocage de montée servi par `GET /relations/:userId` (#14910)
+
+    @Test func decodesTheServedRaiseBlock() throws {
+        let link = try decode("""
+        {"userId":"u1","effectiveLevel":"FRIEND","grantedByMe":"FRIEND","raiseBlockedUntil":"2026-12-01T10:00:00.000Z","canRaise":false}
+        """)
+        #expect(link.raiseBlockedUntil == ISO8601DateFormatter().date(from: "2026-12-01T10:00:00Z"))
+        #expect(link.canRaise == false)
+    }
+
+    @Test func anAbsentRaiseBlockKeepsTheCurrentOffer() throws {
+        let link = try decode(#"{"userId":"u1","effectiveLevel":"ACQUAINTANCE","grantedByMe":"ACQUAINTANCE"}"#)
+        #expect(link.raiseBlockedUntil == nil)
+        #expect(link.canRaise == nil)
+        #expect(link.raiseOffer() == .available(.friend))
+    }
+
+    @Test func aFutureRaiseBlockLocksTheOffer_aPastOneDoesNot() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let blocked = RelationLink(userId: "u", effectiveLevel: .acquaintance, grantedByMe: .acquaintance,
+                                   raiseBlockedUntil: now.addingTimeInterval(60))
+        let lapsed = RelationLink(userId: "u", effectiveLevel: .acquaintance, grantedByMe: .acquaintance,
+                                  raiseBlockedUntil: now.addingTimeInterval(-60))
+        #expect(blocked.raiseOffer(now: now) == .locked(.friend))
+        #expect(lapsed.raiseOffer(now: now) == .available(.friend))
+    }
+
+    @Test func aServedCanRaiseFalseLocksTheOffer() {
+        let link = RelationLink(userId: "u", effectiveLevel: .acquaintance, grantedByMe: .acquaintance, canRaise: false)
+        #expect(link.raiseOffer() == .locked(.friend))
+    }
+
+    @Test func theRaiseBlockRoundTripsThroughTheCacheEncoding() throws {
+        let link = RelationLink(userId: "u", effectiveLevel: .friend, grantedByMe: .friend,
+                                raiseBlockedUntil: Date(timeIntervalSince1970: 1_800_000_000), canRaise: true)
+        let decoded = try JSONDecoder().decode(RelationLink.self, from: JSONEncoder().encode(link))
+        #expect(decoded == link)
+    }
+
+    // MARK: - Rétrograder d'UN cran (#14910)
+
+    @Test func theDemotionGoesDownOneRungAtATime_andLeavesAtAcquaintance() {
+        #expect(RelationRequestRule.rung(below: .blood) == .close)
+        #expect(RelationRequestRule.rung(below: .close) == .friend)
+        #expect(RelationRequestRule.rung(below: .friend) == .acquaintance)
+        #expect(RelationRequestRule.rung(below: .acquaintance) == .public)
+        #expect(RelationRequestRule.rung(below: .community) == nil)
+        #expect(RelationRequestRule.rung(below: .public) == nil)
+    }
+
+    @Test func aLoweredLinkCapsBothTheEffectiveLevelAndMyGrant() {
+        let link = RelationLink(userId: "u", effectiveLevel: .close, grantedByMe: .blood, eligibleFor: .blood)
+        let lowered = link.lowered(to: .friend)
+        #expect(lowered.effectiveLevel == .friend)
+        #expect(lowered.grantedByMe == .friend)
+        #expect(lowered.eligibleFor == nil)
+        #expect(lowered.userId == "u")
+    }
+
     // MARK: - La config (libellés des sept langues)
 
     @Test func theConfigServesTheLabelOfALanguageAndFallsBackToNil() throws {
