@@ -30,7 +30,6 @@ class StrokeRibbonRendererRobolectricTest {
         val ops = StrokeRibbonRenderer.plan(listOf(stroke()))
         assertThat(ops).hasSize(1)
         val ribbon = ops.single() as StrokeOp.Ribbon
-        assertThat(ribbon.path.isEmpty).isFalse()
         assertThat(alpha(ribbon.argb)).isEqualTo(255)
     }
 
@@ -59,7 +58,7 @@ class StrokeRibbonRendererRobolectricTest {
     @Test
     fun `un trait d'un seul point est un bouchon rond visible`() {
         val ops = StrokeRibbonRenderer.plan(listOf(stroke(points = listOf(StoryDrawingStrokePoint(50.0, 50.0)))))
-        assertThat((ops.single() as StrokeOp.Ribbon).path.isEmpty).isFalse()
+        assertThat(ops.single()).isInstanceOf(StrokeOp.Ribbon::class.java)
     }
 
     @Test

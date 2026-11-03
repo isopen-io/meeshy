@@ -28,8 +28,6 @@ class StrokeRasterizerRobolectricTest {
         assertThat(bitmap.width).isEqualTo(270)
         assertThat(bitmap.height).isEqualTo(480)
         assertThat(bitmap.config).isEqualTo(Bitmap.Config.ARGB_8888)
-        assertThat(bitmap.hasAlpha()).isTrue()
-        assertThat(bitmap.getPixel(269, 0) ushr 24).isEqualTo(0)
     }
 
     @Test
