@@ -25,6 +25,7 @@ import me.meeshy.sdk.model.RegisterResponse
 import me.meeshy.sdk.model.auth.CountryCatalog
 import me.meeshy.sdk.model.auth.SignupField
 import me.meeshy.sdk.model.auth.SignupFieldIssue
+import me.meeshy.sdk.model.auth.SignupPhase
 import me.meeshy.sdk.model.auth.SignupFieldMessage
 import me.meeshy.sdk.model.auth.SignupRefusal
 import me.meeshy.sdk.model.auth.SignupSubmitError
@@ -149,6 +150,8 @@ class SignupViewModelTest {
         registerResponse: ApiResponse<RegisterResponse> = ApiResponse(success = false),
         registerFailure: IOException? = null,
         deviceLocaleProvider: DeviceLocaleProvider = FakeDeviceLocaleProvider(),
+        referrals: me.meeshy.sdk.auth.PendingReferralStore = me.meeshy.sdk.auth.InMemoryPendingReferralStore(),
+        handoffs: me.meeshy.sdk.auth.LoginHandoffs = me.meeshy.sdk.auth.LoginHandoffs(),
     ): Scenario {
         val api = FakeAuthApi(registerResponse, registerFailure)
         val store = InMemoryTokenStore()
@@ -160,7 +163,7 @@ class SignupViewModelTest {
             mockk<SessionTeardown>(relaxed = true),
             SyncSeqTracker(),
         )
-        return Scenario(SignupViewModel(repository, coordinator, deviceLocaleProvider, me.meeshy.sdk.notification.InMemoryPushPermissionDeferralStore()), api, coordinator, store)
+        return Scenario(SignupViewModel(repository, coordinator, deviceLocaleProvider, me.meeshy.sdk.notification.InMemoryPushPermissionDeferralStore(), referrals, handoffs), api, coordinator, store)
     }
 
     private fun session() = RegisterResponse(
@@ -172,6 +175,7 @@ class SignupViewModelTest {
     private fun SignupViewModel.fillValid() {
         onDisplayNameChange("Ada Lovelace")
         onEmailChange("ada@meeshy.me")
+        onPhoneEntryChange("0612345678")
         onPasswordChange("secret1")
     }
 
@@ -234,24 +238,129 @@ class SignupViewModelTest {
     }
 
     @Test
-    fun submitButtonLightsUpAsSoonAsNameEmailAndPasswordAreValid() {
+    fun phasesAppearInOrder_phoneFirstThenTheAddressThenTheCard() {
+        val vm = scenario().viewModel
+        assertThat(vm.state.value.phase).isEqualTo(SignupPhase.PHONE)
+
+        vm.onEmailChange("ada@meeshy.me")
+        assertThat(vm.state.value.progress.emailShown).isFalse()
+
+        vm.onPhoneEntryChange("0612345678")
+        assertThat(vm.state.value.phase).isEqualTo(SignupPhase.CARD)
+        assertThat(vm.state.value.progress.emailShown).isTrue()
+        assertThat(vm.state.value.progress.cardShown).isTrue()
+    }
+
+    @Test
+    fun aPhaseNeverDisappears_evenWhenTheNumberIsEmptiedAgain() {
+        val vm = scenario().viewModel
+        vm.onPhoneEntryChange("0612345678")
+        assertThat(vm.state.value.progress.emailShown).isTrue()
+
+        vm.onPhoneEntryChange("")
+
+        assertThat(vm.state.value.progress.emailShown).isTrue()
+    }
+
+    @Test
+    fun submitButtonLightsUpOnlyOnceTheCardIsThereAndTheFormIsReady() {
         val vm = scenario().viewModel
 
-        vm.onDisplayNameChange("Ada")
+        vm.onPhoneEntryChange("0612345678")
         assertThat(vm.state.value.canSubmit).isFalse()
         vm.onEmailChange("ada@meeshy.me")
-        assertThat(vm.state.value.canSubmit).isFalse()
-        vm.onPasswordChange("secret1")
         assertThat(vm.state.value.canSubmit).isTrue()
     }
 
     @Test
-    fun anEmptyPhoneNeverBlocksTheButton() {
+    fun thePasswordIsOptional_andOnlyAppearsOnceTheIdentityIsDefined() {
+        val vm = scenario().viewModel
+        vm.onPhoneEntryChange("0612345678")
+        assertThat(vm.state.value.passwordRevealed).isFalse()
+
+        vm.onEmailChange("ada@meeshy.me")
+
+        assertThat(vm.state.value.passwordRevealed).isTrue()
+        assertThat(vm.state.value.canSubmit).isTrue()
+    }
+
+    @Test
+    fun anEmptyPhoneBlocksTheButton() {
         val vm = scenario().viewModel
         vm.fillValid()
+        vm.onPhoneEntryChange("")
 
-        assertThat(vm.state.value.form.phoneDigits).isEmpty()
-        assertThat(vm.state.value.canSubmit).isTrue()
+        assertThat(vm.state.value.canSubmit).isFalse()
+    }
+
+    @Test
+    fun aFillerPhoneIsOnlyRefusedOutLoudOnceTheFieldIsLeft() {
+        val vm = scenario().viewModel
+        vm.onPhoneEntryChange("11111111")
+        assertThat(vm.state.value.messageFor(SignupField.PHONE)).isNull()
+
+        vm.onPhoneFieldLeft()
+
+        assertThat(vm.state.value.messageFor(SignupField.PHONE)).isNotNull()
+    }
+
+    @Test
+    fun leavingAnEmptyPhoneFieldSaysNothing() {
+        val vm = scenario().viewModel
+
+        vm.onPhoneFieldLeft()
+
+        assertThat(vm.state.value.shownPhoneRefusal).isNull()
+        assertThat(vm.state.value.phoneRequiredShown).isFalse()
+    }
+
+    @Test
+    fun touchingTheInactiveButtonExplainsTheMissingPhone() = runTest(dispatcher) {
+        val scenario = scenario()
+
+        scenario.viewModel.register()
+        advanceUntilIdle()
+
+        assertThat(scenario.viewModel.state.value.phoneRequiredShown).isTrue()
+        assertThat(scenario.api.captured).isEmpty()
+    }
+
+    @Test
+    fun theDisplayNameAndThePseudoFollowTheAddressUntilTheyAreTouched() {
+        val vm = scenario().viewModel
+
+        vm.onPhoneEntryChange("0612345678")
+        vm.onEmailChange("jean.dupont@meeshy.me")
+
+        assertThat(vm.state.value.shownDisplayName).isEqualTo("Jean Dupont")
+        assertThat(vm.state.value.shownUsername).isEqualTo("jean-dupont")
+    }
+
+    @Test
+    fun aTypedPseudoWinsAndClearingItBringsTheDerivationBack() {
+        val vm = scenario().viewModel
+        vm.onPhoneEntryChange("0612345678")
+        vm.onEmailChange("ada@meeshy.me")
+
+        vm.onUsernameChange("@ada_l")
+        assertThat(vm.state.value.shownUsername).isEqualTo("ada_l")
+        assertThat(vm.state.value.form.effectiveUsername).isEqualTo("ada_l")
+
+        vm.onUsernameChange("")
+        assertThat(vm.state.value.form.effectiveUsername).isEqualTo("ada")
+    }
+
+    @Test
+    fun aTooShortPseudoIsRefusedLiveWhileTyping() {
+        val vm = scenario().viewModel
+        vm.onPhoneEntryChange("0612345678")
+        vm.onEmailChange("ada@meeshy.me")
+
+        vm.onUsernameChange("ab")
+
+        assertThat(vm.state.value.usernameRefusal)
+            .isEqualTo(me.meeshy.sdk.model.auth.RegistrationIdentity.UsernameRefusal.TOO_SHORT)
+        assertThat(vm.state.value.canSubmit).isFalse()
     }
 
     @Test
@@ -290,21 +399,35 @@ class SignupViewModelTest {
         assertThat(sent.password).isEqualTo("secret1")
         assertThat(sent.systemLanguage).isEqualTo("fr")
         assertThat(sent.regionalLanguage).isEqualTo("en")
-        assertThat(sent.username).isNull()
+        assertThat(sent.username).isEqualTo("ada")
         assertThat(sent.firstName).isNull()
         assertThat(sent.lastName).isNull()
     }
 
     @Test
-    fun register_emptyPhone_omitsBothPhoneFields() = runTest(dispatcher) {
+    fun register_withoutPassword_omitsTheKeyAndStillCreatesTheAccount() = runTest(dispatcher) {
         val scenario = scenario(ApiResponse(success = true, data = session()))
         scenario.viewModel.fillValid()
+        scenario.viewModel.onPasswordChange("")
+        scenario.viewModel.register()
+        advanceUntilIdle()
+
+        assertThat(scenario.api.captured.single().password).isNull()
+        assertThat(scenario.viewModel.state.value.isRegistered).isTrue()
+    }
+
+    @Test
+    fun register_sendsTheEditedNameAndPseudo() = runTest(dispatcher) {
+        val scenario = scenario(ApiResponse(success = true, data = session()))
+        scenario.viewModel.fillValid()
+        scenario.viewModel.onDisplayNameChange("Ada L.")
+        scenario.viewModel.onUsernameChange("adal")
         scenario.viewModel.register()
         advanceUntilIdle()
 
         val sent = scenario.api.captured.single()
-        assertThat(sent.phoneNumber).isNull()
-        assertThat(sent.phoneCountryCode).isNull()
+        assertThat(sent.displayName).isEqualTo("Ada L.")
+        assertThat(sent.username).isEqualTo("adal")
     }
 
     @Test
@@ -480,7 +603,7 @@ class SignupViewModelTest {
         scenario.viewModel.onPhoneEntryChange("")
 
         assertThat(scenario.viewModel.state.value.messageFor(SignupField.PHONE)).isNull()
-        assertThat(scenario.viewModel.state.value.canSubmit).isTrue()
+        assertThat(scenario.viewModel.state.value.canSubmit).isFalse()
     }
 
     @Test
@@ -502,13 +625,12 @@ class SignupViewModelTest {
     // ---- verdict local affiché -----------------------------------------------
 
     @Test
-    fun aTypedButInvalidEmailShowsItsIssue_whileAnUntouchedOneShowsNothing() {
+    fun aHalfTypedEmailNeverNagsWhileTyping() {
         val vm = scenario().viewModel
 
-        assertThat(vm.state.value.messageFor(SignupField.EMAIL)).isNull()
         vm.onEmailChange("ada-at-meeshy")
-        assertThat(vm.state.value.messageFor(SignupField.EMAIL))
-            .isEqualTo(SignupFieldMessage.Local(SignupFieldIssue.EMAIL_INVALID))
+
+        assertThat(vm.state.value.messageFor(SignupField.EMAIL)).isNull()
     }
 
     @Test
@@ -522,7 +644,7 @@ class SignupViewModelTest {
     }
 
     @Test
-    fun aFillerPhoneShowsItsReasonAndBlocksSubmit_whileAnEmptyOneNeverDoes() {
+    fun aFillerPhoneShowsItsReasonAndBlocksSubmit_whileAnEmptyOneOnlyBlocks() {
         val vm = scenario().viewModel
         vm.fillValid()
         assertThat(vm.state.value.canSubmit).isTrue()
@@ -539,7 +661,7 @@ class SignupViewModelTest {
 
         vm.onPhoneEntryChange("")
         assertThat(vm.state.value.messageFor(SignupField.PHONE)).isNull()
-        assertThat(vm.state.value.canSubmit).isTrue()
+        assertThat(vm.state.value.canSubmit).isFalse()
     }
 
     // ---- langue de lecture ---------------------------------------------------
@@ -566,5 +688,76 @@ class SignupViewModelTest {
         val sent = scenario.api.captured.single()
         assertThat(sent.systemLanguage).isEqualTo("en")
         assertThat(sent.regionalLanguage).isNull()
+    }
+
+    // ---- pseudo pris, parrainage, passage à la connexion ----------------------
+
+    @Test
+    fun usernameTaken_offersTheFreePseudosTheGatewaySuggests() = runTest(dispatcher) {
+        val scenario = scenario(
+            ApiResponse(
+                success = false,
+                error = "Username taken",
+                code = "USERNAME_TAKEN",
+                fieldName = "username",
+                suggestions = listOf("ada1", "ada_l"),
+            ),
+        )
+        scenario.viewModel.fillValid()
+        scenario.viewModel.register()
+        advanceUntilIdle()
+
+        assertThat(scenario.viewModel.state.value.usernameSuggestions).containsExactly("ada1", "ada_l").inOrder()
+
+        scenario.viewModel.onUsernameSuggestionPicked("ada1")
+
+        assertThat(scenario.viewModel.state.value.usernameSuggestions).isEmpty()
+        assertThat(scenario.viewModel.state.value.form.effectiveUsername).isEqualTo("ada1")
+    }
+
+    @Test
+    fun aPendingReferralCodeTravelsWithTheRequest_andIsForgottenOnceTheAccountExists() = runTest(dispatcher) {
+        val referrals = me.meeshy.sdk.auth.InMemoryPendingReferralStore().apply { remember("friend-42") }
+        val scenario = scenario(ApiResponse(success = true, data = session()), referrals = referrals)
+        scenario.viewModel.fillValid()
+        scenario.viewModel.register()
+        advanceUntilIdle()
+
+        assertThat(scenario.api.captured.single().affiliateToken).isEqualTo("friend-42")
+        assertThat(referrals.recall()).isNull()
+    }
+
+    @Test
+    fun aRefusedSignupKeepsTheReferralCodeForTheNextTry() = runTest(dispatcher) {
+        val referrals = me.meeshy.sdk.auth.InMemoryPendingReferralStore().apply { remember("friend-42") }
+        val scenario = scenario(ApiResponse(success = false, error = "boom"), referrals = referrals)
+        scenario.viewModel.fillValid()
+        scenario.viewModel.register()
+        advanceUntilIdle()
+
+        assertThat(referrals.recall()).isEqualTo("friend-42")
+    }
+
+    @Test
+    fun switchingToLogin_handsOverACompleteAddressOnce() {
+        val handoffs = me.meeshy.sdk.auth.LoginHandoffs()
+        val vm = scenario(handoffs = handoffs).viewModel
+        vm.onEmailChange("  ada@meeshy.me ")
+
+        vm.onSwitchToLogin()
+
+        assertThat(handoffs.signupEmail.take()).isEqualTo("ada@meeshy.me")
+        assertThat(handoffs.signupEmail.take()).isNull()
+    }
+
+    @Test
+    fun switchingToLogin_neverHandsOverAHalfTypedAddress() {
+        val handoffs = me.meeshy.sdk.auth.LoginHandoffs()
+        val vm = scenario(handoffs = handoffs).viewModel
+        vm.onEmailChange("ada@")
+
+        vm.onSwitchToLogin()
+
+        assertThat(handoffs.signupEmail.take()).isNull()
     }
 }

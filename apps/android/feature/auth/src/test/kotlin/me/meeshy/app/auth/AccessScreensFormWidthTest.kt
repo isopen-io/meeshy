@@ -109,7 +109,7 @@ class AccessScreensFormWidthTest {
         val viewModel = signupViewModel()
         show { SignupScreen(onClose = {}, onRegistered = {}, viewModel = viewModel) }
 
-        compose.assertSpansPhoneWidth(hasSetTextAction(), horizontalPadding = MeeshySpacing.lg)
+        compose.assertSpansPhoneWidth(hasTestTag(SIGNUP_PRIMARY_TAG), horizontalPadding = MeeshySpacing.lg)
     }
 
     @Test
