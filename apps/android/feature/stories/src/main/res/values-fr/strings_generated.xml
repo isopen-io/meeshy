@@ -104,6 +104,7 @@
     <string name="composer_slide_rail_delete">Supprimer la scène %1$d</string>
     <string name="composer_slide_rail_position">Scène %1$d sur %2$d</string>
     <string name="composer_socle_audience">Audience</string>
+    <string name="composer_socle_blocked_audience">Choisissez au moins une personne pour publier</string>
     <string name="composer_socle_publish">Publier</string>
     <string name="composer_sound_background_a11y">Son de fond</string>
     <string name="composer_text_frame_cloud">Nuage</string>
@@ -261,7 +262,10 @@
     <string name="stories_tray_add_story">Ajouter une story</string>
     <string name="stories_tray_manage">Gérer mes stories</string>
     <string name="stories_tray_view_my_story">Voir ma story</string>
+    <string name="stories_viewer_a11y_background_audio">Audio de fond</string>
     <string name="stories_viewer_close">Fermer</string>
+    <string name="stories_viewer_fullscreen_enter">Plein écran</string>
+    <string name="stories_viewer_fullscreen_exit">Quitter le plein écran</string>
     <string name="stories_viewer_mute">Couper le son de fond</string>
     <string name="stories_viewer_next">Story suivante</string>
     <string name="stories_viewer_not_found_description">Impossible de charger cette story. Réessayez ou fermez.</string>
@@ -290,6 +294,8 @@
     <string name="story_canvas_action_edit">Modifier</string>
     <string name="story_canvas_action_leaveScene">Sortir de la scène</string>
     <string name="story_canvas_action_sendBackward">Mettre à l\'arrière</string>
+    <string name="story_caption_scroll_to_top">Revenir au début du texte</string>
+    <string name="story_caption_scroll_to_top_hint">Fait défiler la description jusqu\'à son premier mot</string>
     <string name="story_composer_cancel">Annuler</string>
     <string name="story_composer_edit_slide_background">Éditer le fond</string>
     <string name="story_composer_fab_badge">%1$d élément(s) actif(s)</string>
@@ -393,4 +399,5 @@
     <string name="story_tray_a11y_changeMood">Changer mon mood</string>
     <string name="story_tray_menu_profile">Voir le profil</string>
     <string name="story_tray_menu_viewStories">Voir les stories</string>
+    <string name="story_viewer_transcript_title">Transcription</string>
 </resources>

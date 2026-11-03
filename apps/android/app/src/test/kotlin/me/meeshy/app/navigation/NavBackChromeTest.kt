@@ -38,7 +38,9 @@ class NavBackChromeTest {
     private fun sheetHostedRoutes(): List<String> =
         declaredRoutes(Regex("""sheetComposable\(\s*(?:route = )?("[^"]*"|[A-Za-z_.]+)"""))
 
-    private fun declaredRoutes(call: Regex): List<String> = graphDir.listFiles { f -> f.extension == "kt" }.orEmpty()
+    private val chatDestination = File(androidRoot, "app/src/main/kotlin/me/meeshy/app/navigation/ChatDestination.kt")
+
+    private fun declaredRoutes(call: Regex): List<String> = (graphDir.listFiles { f -> f.extension == "kt" }.orEmpty().toList() + chatDestination)
         .flatMap { file ->
             call.findAll(file.readText()).map { m ->
                 val raw = m.groupValues[1]

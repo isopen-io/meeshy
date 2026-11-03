@@ -240,6 +240,29 @@ class PostCommentsViewModel @Inject constructor(
         viewModelScope.launch {
             socialSocket.commentTranslationUpdated.collect { event -> onCommentTranslationUpdated(event) }
         }
+        viewModelScope.launch {
+            try {
+                socialSocket.reconnected.collect { resyncHead() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // a flow that cannot be collected is simply not listened to
+            }
+        }
+    }
+
+    /** After a reconnection the comments emitted during the cut are lost: the first page is read again, silently. */
+    private suspend fun resyncHead() {
+        socialSocket.joinPostRoom(postId)
+        try {
+            (postRepository.getComments(postId, null, PAGE_SIZE) as? NetworkResult.Success)?.let { ok ->
+                thread.update { it.headResynced(ok.data) }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // best-effort — the thread on screen stays
+        }
     }
 
     /**
@@ -444,7 +467,7 @@ class PostCommentsViewModel @Inject constructor(
         val effectFlags = CommentEffects.wire(composerDraft.value.effects)
         val place = composerDraft.value.place
         attachments.value = CommentAttachmentTray()
-        tray.pieces.forEach { MediaIntake.release(it.item) }
+        tray.pieces.flatMap { it.owned }.forEach(MediaIntake::release)
         composer.value?.let { target ->
             clearDraft()
             sendReply(target.parentId, content, attachmentIds, pill, CommentExtras(effectFlags, place))
@@ -484,16 +507,20 @@ class PostCommentsViewModel @Inject constructor(
         upload(id, item)
     }
 
-    /** La pièce retouchée (#12735) remplace l'autre à sa place, et se téléverse de nouveau. */
-    fun replaceMedia(id: String, item: MediaUploadItem) {
+    /**
+     * La pièce retouchée (#12735) remplace l'autre à sa place, et se téléverse de nouveau ; son original et sa recette
+     * ([retouch], #14844) restent pour la rouvrir. Seuls les fichiers que la nouvelle pièce ne tient plus quittent le disque.
+     */
+    fun replaceMedia(id: String, item: MediaUploadItem, retouch: CommentPieceRetouch? = null) {
         val replaced = attachments.value.piece(id) ?: return
-        attachments.update { it.replacing(id, item) }
-        if (replaced.item !== item) MediaIntake.release(replaced.item)
+        attachments.update { it.replacing(id, item, retouch) }
+        val kept = listOfNotNull(item, retouch?.original)
+        replaced.owned.filter { owned -> kept.none { it === owned } }.forEach(MediaIntake::release)
         upload(id, item)
     }
 
     fun removeMedia(id: String) {
-        attachments.value.piece(id)?.let { MediaIntake.release(it.item) }
+        attachments.value.piece(id)?.owned?.forEach(MediaIntake::release)
         attachments.update { it.removing(id) }
     }
 

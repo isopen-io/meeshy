@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.bubble
 
+import me.meeshy.ui.icons.MeeshyIcons
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -10,8 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -53,7 +52,7 @@ public fun YouTubeFacade(
             modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
         )
         Box(Modifier.size(56.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+            Icon(MeeshyIcons.Play, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
         }
     }
 }

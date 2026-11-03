@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -73,6 +74,12 @@ import me.meeshy.sdk.model.avatar.PresenceHereWave
 import me.meeshy.ui.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.appearance.AvatarRingLayer
+import me.meeshy.ui.component.avatar.AvatarGestureHost
+import me.meeshy.ui.component.avatar.AvatarGestures
+import me.meeshy.ui.component.avatar.AvatarStoryRing
+import me.meeshy.ui.component.avatar.LocalSocialChrome
+import me.meeshy.ui.component.avatar.storyRingRotates
+import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.motion.pulse
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
@@ -239,19 +246,26 @@ public fun MeeshyAvatar(
     onDotTap: (() -> Unit)? = null,
     ring: AvatarRingDesign? = null,
     imageUrl: String? = null,
+    thumbHash: String? = null,
+    userId: String? = null,
+    gestures: AvatarGestures? = null,
 ) {
+    val social = LocalSocialChrome.current
     val reduceMotion = LocalReduceMotion.current
     val apiBaseUrl = LocalMediaBaseUrl.current
     val face = remember(name, imageUrl, apiBaseUrl) { AvatarFace.resolve(name, imageUrl, apiBaseUrl) }
     val density = LocalDensity.current
     val size = context.size.dp
-    val effectiveRing = if (isUser && context.showsStoryRing) storyRing else StoryRingState.None
+    val servedRing = if (storyRing != StoryRingState.None) storyRing else social.ringFor(userId)
+    val effectiveRing = if (isUser && context.showsStoryRing) servedRing else StoryRingState.None
     val hasRing = effectiveRing != StoryRingState.None
+    val servedMood = moodEmoji ?: social.moodFor(userId)
+    val servedMoodTap = onMoodTap ?: social.moodTapFor(userId)
     val frame = if (hasRing) context.ringSize.dp else size
     val gradientEnd = secondaryColor ?: containerColor.copy(alpha = 0.6f)
     val dot = AvatarPresenceDot.resolve(presence, isHere = here.isHere)
     val corner = AvatarCornerBadge.resolve(
-        context = context, isUser = isUser, moodEmoji = moodEmoji, dot = dot, here = here,
+        context = context, isUser = isUser, moodEmoji = servedMood, dot = dot, here = here,
         enablePulse = enablePulse, hasStoryRing = hasRing, reduceMotion = reduceMotion,
     )
     val resources = LocalContext.current.resources
@@ -268,34 +282,54 @@ public fun MeeshyAvatar(
     var transition by remember { mutableStateOf(AvatarPresenceTransition.initial(dot)) }
     LaunchedEffect(dot?.transitionKey) { transition = transition.observe(dot) }
 
-    Box(modifier = modifier.size(frame), contentAlignment = Alignment.Center) {
-        AvatarRingLayer(ring, footprint = size, storyRingSize = if (hasRing) frame else null) {
-            when (effectiveRing) {
-                StoryRingState.Unread -> Box(Modifier.size(frame).border(context.ringWidth.dp * 2, MeeshyPalette.Indigo500, CircleShape))
-                StoryRingState.Read -> Box(Modifier.size(frame).border(context.ringWidth.dp, containerColor.copy(alpha = 0.3f), CircleShape))
-                StoryRingState.None -> Unit
-            }
-            AvatarDisc(
-                face = face,
-                size = size,
-                brush = Brush.linearGradient(listOf(containerColor, gradientEnd)),
-                contentColor = contentColor,
-                fontSize = with(density) { context.initialFont.dp.toSp() },
-                modifier = Modifier.semantics { contentDescription = spokenName },
-            )
-        }
-        AvatarCorner(
-            corner = corner,
-            context = context,
-            frame = frame,
-            transition = transition,
-            here = here,
-            reduceMotion = reduceMotion,
-            onMoodTap = onMoodTap,
-            modifier = Modifier.align(Alignment.BottomEnd),
+    val hosted = gestures?.let {
+        AvatarGestures(
+            onTap = it.onTap,
+            onViewProfile = it.onViewProfile,
+            onViewStory = it.onViewStory ?: social.storyOpenerFor(userId),
+            menuItems = it.menuItems,
         )
-        if (onDotTap != null && corner is AvatarCornerBadge.Dot) {
-            AvatarDotTouchZone(corner.dot, context.size, frame.value, onDotTap, Modifier.align(Alignment.BottomEnd))
+    } ?: social.storyOpenerFor(userId)?.let { AvatarGestures(onViewStory = it) } ?: AvatarGestures()
+    AvatarGestureHost(
+        gestures = hosted,
+        contextTappable = context.isTappable,
+        isUser = isUser,
+        storyUnread = effectiveRing == StoryRingState.Unread,
+        hasStory = effectiveRing != StoryRingState.None,
+        modifier = modifier.size(frame),
+    ) {
+        Box(modifier = Modifier.size(frame), contentAlignment = Alignment.Center) {
+            AvatarRingLayer(ring, footprint = size, storyRingSize = if (hasRing) frame else null) {
+                AvatarStoryRing(
+                    state = effectiveRing,
+                    frame = frame,
+                    width = context.ringWidth.dp,
+                    accent = containerColor,
+                    rotates = storyRingRotates(effectiveRing, context.animatesStoryRing, reduceMotion),
+                )
+                AvatarDisc(
+                    face = face,
+                    size = size,
+                    brush = Brush.linearGradient(listOf(containerColor, gradientEnd)),
+                    contentColor = contentColor,
+                    fontSize = with(density) { context.initialFont.dp.toSp() },
+                    thumbHash = thumbHash,
+                    modifier = Modifier.semantics { contentDescription = spokenName },
+                )
+            }
+            AvatarCorner(
+                corner = corner,
+                context = context,
+                frame = frame,
+                transition = transition,
+                here = here,
+                reduceMotion = reduceMotion,
+                onMoodTap = servedMoodTap,
+                modifier = Modifier.align(Alignment.BottomEnd),
+            )
+            if (onDotTap != null && corner is AvatarCornerBadge.Dot) {
+                AvatarDotTouchZone(corner.dot, context.size, frame.value, onDotTap, Modifier.align(Alignment.BottomEnd))
+            }
         }
     }
 }
@@ -355,8 +389,10 @@ private fun AvatarDisc(
     contentColor: Color,
     fontSize: TextUnit,
     modifier: Modifier = Modifier,
+    thumbHash: String? = null,
 ) {
     val context = LocalContext.current
+    val hashPainter = rememberThumbHashPainter(thumbHash)
     val sidePx = with(LocalDensity.current) { size.roundToPx() }
     val resident = remember(face, sidePx) { face is AvatarFace.Photo && context.imageLoader.holds(face.model, sidePx) }
     var photoState by remember(face) { mutableStateOf(AvatarPhotoState.firstFrame(resident)) }
@@ -369,7 +405,9 @@ private fun AvatarDisc(
             .background(brush),
         contentAlignment = Alignment.Center,
     ) {
-        if (layer is AvatarLayer.Initials) {
+        if (layer is AvatarLayer.Initials && hashPainter != null && photoState == AvatarPhotoState.Loading) {
+            Image(painter = hashPainter, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(size))
+        } else if (layer is AvatarLayer.Initials) {
             Text(
                 text = layer.text,
                 color = contentColor,

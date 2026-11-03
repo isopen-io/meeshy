@@ -213,18 +213,18 @@ private fun PieceFileThumbnail(piece: CommentPendingPiece) {
  * pièce intouchée ne bouge pas. Rend le geste « Éditer » du bandeau.
  */
 @Composable
-internal fun rememberCommentPieceRetouch(onReplace: (String, MediaUploadItem) -> Unit): (CommentPendingPiece) -> Unit {
+internal fun rememberCommentPieceRetouch(onReplace: (String, MediaUploadItem, CommentPieceRetouch?) -> Unit): (CommentPendingPiece) -> Unit {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var photo by remember { mutableStateOf<Pair<String, FeedRetouchPending>?>(null) }
     var video by remember { mutableStateOf<Pair<String, FeedVideoRetouchPending>?>(null) }
     photo?.let { (id, pending) ->
-        FeedCaptureRetouchHost(pending, onDeliver = { item -> photo = null; if (item !== pending.item) onReplace(id, item) }, onDismiss = { photo = null })
+        FeedCaptureRetouchHost(pending, onDeliver = { piece -> photo = null; piece?.let { onReplace(id, it.item, it.retouch) } }, onDismiss = { photo = null })
     }
     video?.let { (id, pending) ->
         FeedVideoRetouchHost(
             pending,
-            onDeliver = { item -> video = null; item?.takeIf { it.fileName != pending.fileName }?.let { onReplace(id, it) } },
+            onDeliver = { item -> video = null; item?.takeIf { it.fileName != pending.fileName }?.let { onReplace(id, it, null) } },
             onDismiss = { pending.discard(); video = null },
         )
     }
@@ -233,7 +233,7 @@ internal fun rememberCommentPieceRetouch(onReplace: (String, MediaUploadItem) ->
             if (piece.isVideo) {
                 commentVideoPending(context, piece.item)?.let { video = piece.id to it }
             } else {
-                withContext(Dispatchers.Default) { FeedRetouchPending.of(piece.item) }?.let { photo = piece.id to it }
+                withContext(Dispatchers.Default) { FeedRetouchPending.of(piece.source, piece.retouch) }?.let { photo = piece.id to it }
             }
         }
     }
