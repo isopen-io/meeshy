@@ -36,6 +36,14 @@
     <string name="audio_editor_tool_transcribe">Transcribir</string>
     <string name="audio_editor_tool_trim">Recortar</string>
     <string name="audio_editor_tool_volume">Volumen</string>
+    <string name="audio_editor_transcription_denied">Acceso al reconocimiento de voz denegado. Actívalo en Ajustes.</string>
+    <string name="audio_editor_transcription_empty">La grabación está vacía.</string>
+    <string name="audio_editor_transcription_failed">No se ha podido transcribir.</string>
+    <string name="audio_editor_transcription_filemissing">Archivo de audio no encontrado.</string>
+    <string name="audio_editor_transcription_nospeech">No se ha detectado ninguna voz.</string>
+    <string name="audio_editor_transcription_retry">Transcribir de nuevo</string>
+    <string name="audio_editor_transcription_running">Transcribiendo…</string>
+    <string name="audio_editor_transcription_start">Transcribir</string>
     <string name="audio_editor_trim_hint">Arrastra los tiradores para conservar una parte.</string>
     <string name="audio_editor_undo">Deshacer</string>
     <string name="audio_editor_use">Usar el audio</string>

@@ -28,3 +28,12 @@ public sealed interface AudioTranscriptionState {
     public fun exported(): AudioEditTranscription? =
         (this as? Done)?.takeIf { it.text.isNotBlank() }?.let { AudioEditTranscription(it.language, it.text) }
 }
+
+/** Les langues proposées à la transcription : celles de l'interface, la langue de l'appareil en tête de choix par défaut. */
+public object AudioTranscriptionLanguages {
+    public val CODES: List<String> = listOf("fr", "en", "es", "pt", "de", "it", "ar")
+
+    /** La langue de l'appareil si on sait la transcrire, l'anglais sinon. */
+    public fun defaultFor(deviceLanguage: String?): String =
+        deviceLanguage?.lowercase()?.takeIf { it in CODES } ?: "en"
+}

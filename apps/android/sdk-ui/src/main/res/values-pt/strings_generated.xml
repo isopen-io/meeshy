@@ -36,6 +36,14 @@
     <string name="audio_editor_tool_transcribe">Transcrever</string>
     <string name="audio_editor_tool_trim">Aparar</string>
     <string name="audio_editor_tool_volume">Volume</string>
+    <string name="audio_editor_transcription_denied">Acesso ao reconhecimento de fala negado. Ative-o nos Ajustes.</string>
+    <string name="audio_editor_transcription_empty">A gravação está vazia.</string>
+    <string name="audio_editor_transcription_failed">Não foi possível transcrever.</string>
+    <string name="audio_editor_transcription_filemissing">Arquivo de áudio não encontrado.</string>
+    <string name="audio_editor_transcription_nospeech">Nenhuma fala detectada.</string>
+    <string name="audio_editor_transcription_retry">Transcrever novamente</string>
+    <string name="audio_editor_transcription_running">Transcrevendo…</string>
+    <string name="audio_editor_transcription_start">Transcrever</string>
     <string name="audio_editor_trim_hint">Arraste as alças para manter um trecho.</string>
     <string name="audio_editor_undo">Desfazer</string>
     <string name="audio_editor_use">Usar o áudio</string>

@@ -36,6 +36,14 @@
     <string name="audio_editor_tool_transcribe">نسخ نصي</string>
     <string name="audio_editor_tool_trim">اقتصاص</string>
     <string name="audio_editor_tool_volume">مستوى الصوت</string>
+    <string name="audio_editor_transcription_denied">تم رفض الوصول إلى التعرّف على الكلام. فعّله في الإعدادات.</string>
+    <string name="audio_editor_transcription_empty">التسجيل فارغ.</string>
+    <string name="audio_editor_transcription_failed">تعذّر النسخ النصي.</string>
+    <string name="audio_editor_transcription_filemissing">لم يُعثر على الملف الصوتي.</string>
+    <string name="audio_editor_transcription_nospeech">لم يُرصد أي كلام.</string>
+    <string name="audio_editor_transcription_retry">إعادة النسخ النصي</string>
+    <string name="audio_editor_transcription_running">جارٍ النسخ النصي…</string>
+    <string name="audio_editor_transcription_start">نسخ نصي</string>
     <string name="audio_editor_trim_hint">اسحب المقابض للاحتفاظ بجزء.</string>
     <string name="audio_editor_undo">تراجع</string>
     <string name="audio_editor_use">استخدام الصوت</string>

@@ -36,6 +36,14 @@
     <string name="audio_editor_tool_transcribe">Trascrivi</string>
     <string name="audio_editor_tool_trim">Ritaglia</string>
     <string name="audio_editor_tool_volume">Volume</string>
+    <string name="audio_editor_transcription_denied">Accesso al riconoscimento vocale negato. Attivalo in Impostazioni.</string>
+    <string name="audio_editor_transcription_empty">La registrazione è vuota.</string>
+    <string name="audio_editor_transcription_failed">Trascrizione non riuscita.</string>
+    <string name="audio_editor_transcription_filemissing">File audio non trovato.</string>
+    <string name="audio_editor_transcription_nospeech">Nessun parlato rilevato.</string>
+    <string name="audio_editor_transcription_retry">Trascrivi di nuovo</string>
+    <string name="audio_editor_transcription_running">Trascrizione in corso…</string>
+    <string name="audio_editor_transcription_start">Trascrivi</string>
     <string name="audio_editor_trim_hint">Trascina le maniglie per conservare una porzione.</string>
     <string name="audio_editor_undo">Annulla</string>
     <string name="audio_editor_use">Usa l\'audio</string>

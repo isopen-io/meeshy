@@ -51,4 +51,11 @@ class AudioEditorTranscriptionStatesTest {
         assertThat(AudioTranscriptionFailure.entries.map { it.name })
             .containsExactly("FILE_MISSING", "EMPTY", "NO_SPEECH", "FAILED")
     }
+
+    @Test
+    fun `la langue par défaut est celle de l'appareil si elle se transcrit, l'anglais sinon`() {
+        assertThat(AudioTranscriptionLanguages.defaultFor("FR")).isEqualTo("fr")
+        assertThat(AudioTranscriptionLanguages.defaultFor("ja")).isEqualTo("en")
+        assertThat(AudioTranscriptionLanguages.defaultFor(null)).isEqualTo("en")
+    }
 }

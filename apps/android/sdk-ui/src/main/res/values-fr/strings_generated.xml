@@ -36,6 +36,14 @@
     <string name="audio_editor_tool_transcribe">Transcrire</string>
     <string name="audio_editor_tool_trim">Rogner</string>
     <string name="audio_editor_tool_volume">Volume</string>
+    <string name="audio_editor_transcription_denied">Accès à la reconnaissance vocale refusé. Activez-le dans Réglages.</string>
+    <string name="audio_editor_transcription_empty">L\'enregistrement est vide.</string>
+    <string name="audio_editor_transcription_failed">Transcription impossible.</string>
+    <string name="audio_editor_transcription_filemissing">Fichier audio introuvable.</string>
+    <string name="audio_editor_transcription_nospeech">Aucune parole détectée.</string>
+    <string name="audio_editor_transcription_retry">Transcrire à nouveau</string>
+    <string name="audio_editor_transcription_running">Transcription en cours…</string>
+    <string name="audio_editor_transcription_start">Transcrire</string>
     <string name="audio_editor_trim_hint">Glissez les poignées pour garder une portion.</string>
     <string name="audio_editor_undo">Annuler</string>
     <string name="audio_editor_use">Utiliser l\'audio</string>
