@@ -59,5 +59,11 @@ data class PackShelfState<P : InstallablePack<P>>(
         )
     }
 
+    /** Un pack lu à nouveau (achat confirmé, relecture) remplace le sien partout où il figure, sans toucher aux gestes en vol. */
+    fun replacing(pack: P): PackShelfState<P> = copy(
+        catalogue = catalogue?.map { if (it.slug == pack.slug) pack else it },
+        installed = installed?.map { if (it.slug == pack.slug) pack else it },
+    )
+
     fun clearFailure(): PackShelfState<P> = if (failed) copy(failed = false) else this
 }
