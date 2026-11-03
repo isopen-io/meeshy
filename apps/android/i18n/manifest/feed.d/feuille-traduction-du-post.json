@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "feed.post.translation.requested", "androidName": "feed_translation_requested", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.post.translation.confidence.a11y", "androidName": "feed_translation_confidence_a11y", "status": "adopted" }
+      ]
+    }
+  }
+}
