@@ -155,6 +155,70 @@
     "meeshy-bordures-vivantes": {
       "name": "Marcos vivos",
       "description": "Cuatro marcos de portada animados de Meeshy: un reflejo que se desliza sobre el oro, perlas que brillan, una noche que centellea y un neón."
+    },
+    "noel-enneige": {
+      "name": "Navidad nevada",
+      "description": "Dos contornos animados para el invierno: copos que caen suavemente alrededor del avatar y una corona de acebo con bayas que brillan."
+    },
+    "lumieres-de-noel": {
+      "name": "Luces de Navidad",
+      "description": "Dos contornos animados que se encienden en las fiestas: una guirnalda de bombillas que parpadean por turnos y la estrella del árbol que resplandece."
+    },
+    "atelier-du-pere-noel": {
+      "name": "Taller de Papá Noel",
+      "description": "Dos contornos animados recién salidos del taller: un gorro rojo con un pompón que se balancea y un bastón de caramelo que gira, atado con una cinta verde."
+    },
+    "bannieres-illustrees": {
+      "name": "Marcos ilustrados",
+      "description": "Los marcos de portada a juego con «Marcos ilustrados»: Máscara felina, Telaraña, Alas de ángel, Círculo rúnico, Garras de hueso y Alas de demonio, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-asiatiques": {
+      "name": "Marcos de Asia",
+      "description": "Los marcos de portada a juego con «Marcos de Asia»: Dragón de jade, Nubes de seda y Farolillos de papel, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-africaines": {
+      "name": "Marcos de África",
+      "description": "Los marcos de portada a juego con «Marcos de África»: Máscara de ébano, Bandas tejidas y Collar de cuentas, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-celtes": {
+      "name": "Marcos celtas",
+      "description": "Los marcos de portada a juego con «Marcos celtas»: Nudo entrelazado, Espiral triple y Hiedra esmeralda, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-nordiques": {
+      "name": "Marcos nórdicos",
+      "description": "Los marcos de portada a juego con «Marcos nórdicos»: Cuervos en círculo, Aurora boreal, Anillo de piedra grabada y Proa tallada, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-egyptiennes": {
+      "name": "Marcos egipcios",
+      "description": "Los marcos de portada a juego con «Marcos egipcios»: Cobra dorada, Escarabajo alado, Sol del desierto y Loto del Nilo, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-mayas": {
+      "name": "Marcos mayas",
+      "description": "Los marcos de portada a juego con «Marcos mayas»: Serpiente de jade, Cartuchos de glifos, Friso escalonado y Jaguar de la selva, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-indiennes": {
+      "name": "Marcos indios",
+      "description": "Los marcos de portada a juego con «Marcos indios»: Mandala floral, Pavo real en abanico y Guirnalda de caléndulas, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-amerindiennes": {
+      "name": "Marcos amerindios",
+      "description": "Los marcos de portada a juego con «Marcos amerindios»: Aro tejido con plumas, Rombos de cuentas y Sol sobre las montañas, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-australes": {
+      "name": "Marcos australes",
+      "description": "Los marcos de portada a juego con «Marcos australes»: Círculos de puntos, Tortuga marina y Cruz del Sur, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-noel-enneige": {
+      "name": "Navidad nevada",
+      "description": "Los marcos de portada a juego con «Navidad nevada»: Copos que caen y Corona de acebo, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-lumieres-noel": {
+      "name": "Luces de Navidad",
+      "description": "Los marcos de portada a juego con «Luces de Navidad»: Guirnalda de luces y Estrella del árbol, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-atelier-noel": {
+      "name": "Taller de Papá Noel",
+      "description": "Los marcos de portada a juego con «Taller de Papá Noel»: Gorro de Papá Noel y Bastón de caramelo, en el borde para que tu foto siga a la vista."
     }
   },
   "designs": {
@@ -260,7 +324,13 @@
     "pulsation": "Pulso",
     "scintillement": "Destello",
     "comete": "Cometa",
-    "houle": "Oleaje"
+    "houle": "Oleaje",
+    "flocons-tombants": "Copos que caen",
+    "couronne-de-houx": "Corona de acebo",
+    "guirlande-lumineuse": "Guirnalda de luces",
+    "etoile-du-sapin": "Estrella del árbol",
+    "bonnet-du-pere-noel": "Gorro de Papá Noel",
+    "sucre-d-orge": "Bastón de caramelo"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",
@@ -310,6 +380,48 @@
     "liseret-lumiere": "Ribete de luz",
     "perles-vives": "Perlas vivas",
     "nuit-vive": "Noche centelleante",
-    "neon": "Neón"
+    "neon": "Neón",
+    "masque-felin": "Máscara felina",
+    "toile-araignee": "Telaraña",
+    "ailes-ange": "Alas de ángel",
+    "cercle-runique": "Círculo rúnico",
+    "griffes-os": "Garras de hueso",
+    "ailes-demon": "Alas de demonio",
+    "dragon-jade": "Dragón de jade",
+    "nuages-soie": "Nubes de seda",
+    "lanternes-papier": "Farolillos de papel",
+    "masque-ebene": "Máscara de ébano",
+    "bandes-tissees": "Bandas tejidas",
+    "collier-perles": "Collar de cuentas",
+    "noeud-entrelace": "Nudo entrelazado",
+    "spirale-triple": "Espiral triple",
+    "lierre-emeraude": "Hiedra esmeralda",
+    "corbeaux-tournoyants": "Cuervos en círculo",
+    "aurore-boreale": "Aurora boreal",
+    "anneau-pierre-gravee": "Anillo de piedra grabada",
+    "proue-sculptee": "Proa tallada",
+    "cobra-dore": "Cobra dorada",
+    "scarabee-aile": "Escarabajo alado",
+    "soleil-du-desert": "Sol del desierto",
+    "lotus-du-nil": "Loto del Nilo",
+    "serpent-de-jade": "Serpiente de jade",
+    "cartouches-de-glyphes": "Cartuchos de glifos",
+    "frise-a-gradins": "Friso escalonado",
+    "jaguar-de-jungle": "Jaguar de la selva",
+    "mandala-floral": "Mandala floral",
+    "paon-roue": "Pavo real en abanico",
+    "guirlande-soucis": "Guirnalda de caléndulas",
+    "cercle-tisse": "Aro tejido con plumas",
+    "perlage-losanges": "Rombos de cuentas",
+    "soleil-montagnes": "Sol sobre las montañas",
+    "cercles-points": "Círculos de puntos",
+    "tortue-marine": "Tortuga marina",
+    "croix-du-sud": "Cruz del Sur",
+    "flocons-tombants": "Copos que caen",
+    "couronne-de-houx": "Corona de acebo",
+    "guirlande-lumineuse": "Guirnalda de luces",
+    "etoile-du-sapin": "Estrella del árbol",
+    "bonnet-du-pere-noel": "Gorro de Papá Noel",
+    "sucre-d-orge": "Bastón de caramelo"
   }
 }

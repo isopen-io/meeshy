@@ -155,6 +155,70 @@
     "meeshy-bordures-vivantes": {
       "name": "Molduras vivas",
       "description": "Quatro molduras de capa animadas da Meeshy: um reflexo que desliza sobre o ouro, pérolas que brilham, uma noite que cintila e um néon."
+    },
+    "noel-enneige": {
+      "name": "Natal com neve",
+      "description": "Dois contornos animados para o inverno: flocos que caem suavemente à volta do avatar e uma coroa de azevinho com bagas que brilham."
+    },
+    "lumieres-de-noel": {
+      "name": "Luzes de Natal",
+      "description": "Dois contornos animados que se acendem nas festas: uma grinalda de lâmpadas que piscam à vez e a estrela da árvore que brilha."
+    },
+    "atelier-du-pere-noel": {
+      "name": "Oficina do Pai Natal",
+      "description": "Dois contornos animados acabados de sair da oficina: um gorro vermelho cujo pompom balança e um bastão de doce que gira, atado com uma fita verde."
+    },
+    "bannieres-illustrees": {
+      "name": "Molduras ilustradas",
+      "description": "As molduras de capa a condizer com «Molduras ilustradas»: Máscara felina, Teia de aranha, Asas de anjo, Círculo rúnico, Garras de osso e Asas de demônio, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-asiatiques": {
+      "name": "Molduras da Ásia",
+      "description": "As molduras de capa a condizer com «Molduras da Ásia»: Dragão de jade, Nuvens de seda e Lanternas de papel, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-africaines": {
+      "name": "Molduras de África",
+      "description": "As molduras de capa a condizer com «Molduras de África»: Máscara de ébano, Faixas tecidas e Colar de contas, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-celtes": {
+      "name": "Molduras celtas",
+      "description": "As molduras de capa a condizer com «Molduras celtas»: Nó entrelaçado, Espiral tripla e Hera esmeralda, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-nordiques": {
+      "name": "Molduras nórdicas",
+      "description": "As molduras de capa a condizer com «Molduras nórdicas»: Corvos em círculo, Aurora boreal, Anel de pedra gravada e Proa esculpida, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-egyptiennes": {
+      "name": "Molduras egípcias",
+      "description": "As molduras de capa a condizer com «Molduras egípcias»: Naja dourada, Escaravelho alado, Sol do deserto e Lótus do Nilo, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-mayas": {
+      "name": "Molduras maias",
+      "description": "As molduras de capa a condizer com «Molduras maias»: Serpente de jade, Cartuchos de glifos, Friso em degraus e Jaguar da selva, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-indiennes": {
+      "name": "Molduras indianas",
+      "description": "As molduras de capa a condizer com «Molduras indianas»: Mandala floral, Pavão em leque e Grinalda de cravos, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-amerindiennes": {
+      "name": "Molduras ameríndias",
+      "description": "As molduras de capa a condizer com «Molduras ameríndias»: Aro tecido com penas, Losangos de miçangas e Sol sobre as montanhas, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-australes": {
+      "name": "Molduras austrais",
+      "description": "As molduras de capa a condizer com «Molduras austrais»: Círculos de pontos, Tartaruga marinha e Cruzeiro do Sul, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-noel-enneige": {
+      "name": "Natal com neve",
+      "description": "As molduras de capa a condizer com «Natal com neve»: Flocos a cair e Coroa de azevinho, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-lumieres-noel": {
+      "name": "Luzes de Natal",
+      "description": "As molduras de capa a condizer com «Luzes de Natal»: Grinalda de luzes e Estrela da árvore, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-atelier-noel": {
+      "name": "Oficina do Pai Natal",
+      "description": "As molduras de capa a condizer com «Oficina do Pai Natal»: Gorro do Pai Natal e Bastão de doce, na borda para que a tua foto fique à vista."
     }
   },
   "designs": {
@@ -260,7 +324,13 @@
     "pulsation": "Pulsação",
     "scintillement": "Cintilação",
     "comete": "Cometa",
-    "houle": "Ondulação"
+    "houle": "Ondulação",
+    "flocons-tombants": "Flocos a cair",
+    "couronne-de-houx": "Coroa de azevinho",
+    "guirlande-lumineuse": "Grinalda de luzes",
+    "etoile-du-sapin": "Estrela da árvore",
+    "bonnet-du-pere-noel": "Gorro do Pai Natal",
+    "sucre-d-orge": "Bastão de doce"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",
@@ -310,6 +380,48 @@
     "liseret-lumiere": "Debrum de luz",
     "perles-vives": "Pérolas vivas",
     "nuit-vive": "Noite cintilante",
-    "neon": "Néon"
+    "neon": "Néon",
+    "masque-felin": "Máscara felina",
+    "toile-araignee": "Teia de aranha",
+    "ailes-ange": "Asas de anjo",
+    "cercle-runique": "Círculo rúnico",
+    "griffes-os": "Garras de osso",
+    "ailes-demon": "Asas de demônio",
+    "dragon-jade": "Dragão de jade",
+    "nuages-soie": "Nuvens de seda",
+    "lanternes-papier": "Lanternas de papel",
+    "masque-ebene": "Máscara de ébano",
+    "bandes-tissees": "Faixas tecidas",
+    "collier-perles": "Colar de contas",
+    "noeud-entrelace": "Nó entrelaçado",
+    "spirale-triple": "Espiral tripla",
+    "lierre-emeraude": "Hera esmeralda",
+    "corbeaux-tournoyants": "Corvos em círculo",
+    "aurore-boreale": "Aurora boreal",
+    "anneau-pierre-gravee": "Anel de pedra gravada",
+    "proue-sculptee": "Proa esculpida",
+    "cobra-dore": "Naja dourada",
+    "scarabee-aile": "Escaravelho alado",
+    "soleil-du-desert": "Sol do deserto",
+    "lotus-du-nil": "Lótus do Nilo",
+    "serpent-de-jade": "Serpente de jade",
+    "cartouches-de-glyphes": "Cartuchos de glifos",
+    "frise-a-gradins": "Friso em degraus",
+    "jaguar-de-jungle": "Jaguar da selva",
+    "mandala-floral": "Mandala floral",
+    "paon-roue": "Pavão em leque",
+    "guirlande-soucis": "Grinalda de cravos",
+    "cercle-tisse": "Aro tecido com penas",
+    "perlage-losanges": "Losangos de miçangas",
+    "soleil-montagnes": "Sol sobre as montanhas",
+    "cercles-points": "Círculos de pontos",
+    "tortue-marine": "Tartaruga marinha",
+    "croix-du-sud": "Cruzeiro do Sul",
+    "flocons-tombants": "Flocos a cair",
+    "couronne-de-houx": "Coroa de azevinho",
+    "guirlande-lumineuse": "Grinalda de luzes",
+    "etoile-du-sapin": "Estrela da árvore",
+    "bonnet-du-pere-noel": "Gorro do Pai Natal",
+    "sucre-d-orge": "Bastão de doce"
   }
 }

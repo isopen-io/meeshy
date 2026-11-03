@@ -22,7 +22,25 @@ const load = (env: NodeJS.ProcessEnv = {}) => loadPackIndex([DESIGN], env, ASSET
 
 /** Les collections Meeshy de #15158 ont leur propre bloc ; les comptes ci-dessous portent sur le catalogue qui les précède. */
 const COLLECTIONS = ['meeshy-signature', 'meeshy-vivants', 'meeshy-fonds', 'meeshy-fonds-vivants', 'meeshy-bordures', 'meeshy-bordures-vivantes'];
-const beforeCollections = <T extends { readonly slug: string }>(entries: readonly T[]): readonly T[] => entries.filter((entry) => !COLLECTIONS.includes(entry.slug));
+/** Les packs de Noël et les bannières assorties de #15553 ont aussi leur propre bloc. */
+const CHRISTMAS = ['noel-enneige', 'lumieres-de-noel', 'atelier-du-pere-noel'];
+const ASSORTED: readonly (readonly [string, string])[] = [
+  ['cadres-illustres', 'bannieres-illustrees'],
+  ['cadres-asiatiques', 'bannieres-asiatiques'],
+  ['cadres-africains', 'bannieres-africaines'],
+  ['cadres-celtes', 'bannieres-celtes'],
+  ['cadres-nordiques', 'bannieres-nordiques'],
+  ['cadres-egyptiens', 'bannieres-egyptiennes'],
+  ['cadres-mayas', 'bannieres-mayas'],
+  ['cadres-indiens', 'bannieres-indiennes'],
+  ['cadres-amerindiens', 'bannieres-amerindiennes'],
+  ['cadres-australs', 'bannieres-australes'],
+  ['noel-enneige', 'bannieres-noel-enneige'],
+  ['lumieres-de-noel', 'bannieres-lumieres-noel'],
+  ['atelier-du-pere-noel', 'bannieres-atelier-noel'],
+];
+const LATER = [...COLLECTIONS, ...CHRISTMAS, ...ASSORTED.map(([, banner]) => banner)];
+const beforeCollections = <T extends { readonly slug: string }>(entries: readonly T[]): readonly T[] => entries.filter((entry) => !LATER.includes(entry.slug));
 
 describe('registres d’apparence générés', () => {
   const index = load();
@@ -208,5 +226,23 @@ describe('registres d’apparence générés', () => {
     expect(sample).toMatchObject({ origin: 'official', price: 20, installedByDefault: false, removable: true });
     expect(staging.itemKeys(sample as never)).toEqual(['aurore', 'maille']);
     expect(staging.rejected).toBe(0);
+  });
+
+  it('chaque pack de contours illustrés ou de Noël a son pack de cadres de bannière, aux mêmes clés, au même nom, proposé par la boutique (#15553)', () => {
+    const rings = index.entries('avatar-ring');
+    const frames = index.entries('banner-frame');
+    ASSORTED.forEach(([ringSlug, bannerSlug]) => {
+      const ring = rings.find((pack) => pack.slug === ringSlug);
+      const banner = frames.find((pack) => pack.slug === bannerSlug);
+      expect({ bannerSlug, served: banner !== undefined && ring !== undefined }).toEqual({ bannerSlug, served: true });
+      expect(index.itemKeys(banner!)).toEqual(index.itemKeys(ring!));
+      expect(Object.keys(banner!.names)).toHaveLength(7);
+      expect(Object.entries(banner!.names).every(([lang, names]) => names?.name === ring!.names[lang as keyof typeof ring.names]?.name)).toBe(true);
+      expect([banner!.installedByDefault, banner!.removable, banner!.usage]).toEqual([false, true, { kind: 'free', surfaces: ['banner'] }]);
+    });
+    CHRISTMAS.forEach((slug) => {
+      const pack = rings.find((entry) => entry.slug === slug);
+      expect([pack?.installedByDefault, pack?.removable, pack?.usage]).toEqual([false, true, { kind: 'free', surfaces: ['avatar'] }]);
+    });
   });
 });

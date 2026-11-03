@@ -1,7 +1,8 @@
 /**
  * Pose des packs dans une SOURCE du catalogue d'apparence (`{ "$comment", "packs": [ … ] }`, indentée de deux
  * espaces) sans toucher un octet de ce qui ne leur appartient pas : un pack déjà présent est remplacé À SA
- * PLACE, un pack absent s'ajoute À LA FIN. Deux compositeurs qui écrivent la même source (cadres illustrés,
+ * PLACE, un pack absent s'ajoute À LA FIN — ou, si `before` nomme des packs présents, juste avant le premier
+ * d'entre eux (les bannières assorties de #15553 se rangent avant les collections Meeshy). Deux compositeurs qui écrivent la même source (cadres illustrés,
  * collections Meeshy) se rejouent donc dans n'importe quel ordre sans s'effacer.
  */
 const OPEN = '\n    {\n      "slug": ';
@@ -21,11 +22,19 @@ function blockOf(text: string, slug: string): { readonly start: number; readonly
   return { start, end: closing + CLOSE.length };
 }
 
-export function upsertPacks(text: string, packs: readonly { readonly slug: string }[]): string {
+export function upsertPacks(text: string, packs: readonly { readonly slug: string }[], before: readonly string[] = []): string {
   if (!text.endsWith(TAIL)) throw new Error('la source ne finit pas par la liste de packs attendue');
   return packs.reduce((current, pack) => {
     const block = blockOf(current, pack.slug);
     if (block !== null) return `${current.slice(0, block.start)}${render(pack)}${current.slice(block.end)}`;
+    const starts = before.flatMap((slug) => {
+      const found = blockOf(current, slug);
+      return found === null ? [] : [found.start];
+    });
+    if (starts.length > 0) {
+      const at = Math.min(...starts);
+      return `${current.slice(0, at)}${render(pack)},\n${current.slice(at)}`;
+    }
     return `${current.slice(0, -TAIL.length)},\n${render(pack)}${TAIL}`;
   }, text);
 }

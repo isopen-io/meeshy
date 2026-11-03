@@ -155,6 +155,70 @@
     "meeshy-bordures-vivantes": {
       "name": "Lebendige Rahmen",
       "description": "Vier animierte Bannerrahmen von Meeshy: ein Glanz, der über Gold gleitet, schimmernde Perlen, eine funkelnde Nacht und ein Neonlicht."
+    },
+    "noel-enneige": {
+      "name": "Verschneite Weihnacht",
+      "description": "Zwei animierte Rahmen für den Winter: Schneeflocken, die sanft um deinen Avatar fallen, und ein Stechpalmenkranz mit leuchtenden Beeren."
+    },
+    "lumieres-de-noel": {
+      "name": "Weihnachtslichter",
+      "description": "Zwei animierte Rahmen, die zum Fest leuchten: eine Lichterkette, deren Birnen abwechselnd blinken, und der strahlende Stern auf der Tanne."
+    },
+    "atelier-du-pere-noel": {
+      "name": "Werkstatt des Weihnachtsmanns",
+      "description": "Zwei animierte Rahmen frisch aus der Werkstatt: eine rote Mütze mit schaukelndem Bommel und eine kreisende Zuckerstange mit grüner Schleife."
+    },
+    "bannieres-illustrees": {
+      "name": "Illustrierte Rahmen",
+      "description": "Bannerrahmen passend zu „Illustrierte Rahmen“: Katzenmaske, Spinnennetz, Engelsflügel, Runenkreis, Knochenkrallen und Dämonenflügel, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-asiatiques": {
+      "name": "Asiatische Rahmen",
+      "description": "Bannerrahmen passend zu „Asiatische Rahmen“: Jadedrache, Seidenwolken und Papierlaternen, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-africaines": {
+      "name": "Afrikanische Rahmen",
+      "description": "Bannerrahmen passend zu „Afrikanische Rahmen“: Ebenholzmaske, Webbänder und Perlenkette, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-celtes": {
+      "name": "Keltische Rahmen",
+      "description": "Bannerrahmen passend zu „Keltische Rahmen“: Flechtknoten, Dreifachspirale und Smaragdefeu, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-nordiques": {
+      "name": "Nordische Rahmen",
+      "description": "Bannerrahmen passend zu „Nordische Rahmen“: Kreisende Raben, Nordlicht, Gravierter Steinring und Geschnitzter Bug, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-egyptiennes": {
+      "name": "Ägyptische Rahmen",
+      "description": "Bannerrahmen passend zu „Ägyptische Rahmen“: Goldene Kobra, Geflügelter Skarabäus, Wüstensonne und Nil-Lotus, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-mayas": {
+      "name": "Maya-Rahmen",
+      "description": "Bannerrahmen passend zu „Maya-Rahmen“: Jadeschlange, Glyphenkartuschen, Stufenfries und Dschungeljaguar, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-indiennes": {
+      "name": "Indische Rahmen",
+      "description": "Bannerrahmen passend zu „Indische Rahmen“: Blumenmandala, Radschlagender Pfau und Ringelblumengirlande, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-amerindiennes": {
+      "name": "Indigene amerikanische Rahmen",
+      "description": "Bannerrahmen passend zu „Indigene amerikanische Rahmen“: Gewebter Federreif, Perlenrauten und Sonne über den Bergen, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-australes": {
+      "name": "Südliche Rahmen",
+      "description": "Bannerrahmen passend zu „Südliche Rahmen“: Punktkreise, Meeresschildkröte und Kreuz des Südens, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-noel-enneige": {
+      "name": "Verschneite Weihnacht",
+      "description": "Bannerrahmen passend zu „Verschneite Weihnacht“: Fallende Flocken und Stechpalmenkranz, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-lumieres-noel": {
+      "name": "Weihnachtslichter",
+      "description": "Bannerrahmen passend zu „Weihnachtslichter“: Lichterkette und Tannenstern, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-atelier-noel": {
+      "name": "Werkstatt des Weihnachtsmanns",
+      "description": "Bannerrahmen passend zu „Werkstatt des Weihnachtsmanns“: Weihnachtsmütze und Zuckerstange, nur am Rand, damit dein Foto sichtbar bleibt."
     }
   },
   "designs": {
@@ -260,7 +324,13 @@
     "pulsation": "Puls",
     "scintillement": "Funkeln",
     "comete": "Komet",
-    "houle": "Dünung"
+    "houle": "Dünung",
+    "flocons-tombants": "Fallende Flocken",
+    "couronne-de-houx": "Stechpalmenkranz",
+    "guirlande-lumineuse": "Lichterkette",
+    "etoile-du-sapin": "Tannenstern",
+    "bonnet-du-pere-noel": "Weihnachtsmütze",
+    "sucre-d-orge": "Zuckerstange"
   },
   "gamut": {
     "indigo": "Meeshy-Indigo",
@@ -310,6 +380,48 @@
     "liseret-lumiere": "Lichtpaspel",
     "perles-vives": "Schimmerperlen",
     "nuit-vive": "Funkelnde Nacht",
-    "neon": "Neon"
+    "neon": "Neon",
+    "masque-felin": "Katzenmaske",
+    "toile-araignee": "Spinnennetz",
+    "ailes-ange": "Engelsflügel",
+    "cercle-runique": "Runenkreis",
+    "griffes-os": "Knochenkrallen",
+    "ailes-demon": "Dämonenflügel",
+    "dragon-jade": "Jadedrache",
+    "nuages-soie": "Seidenwolken",
+    "lanternes-papier": "Papierlaternen",
+    "masque-ebene": "Ebenholzmaske",
+    "bandes-tissees": "Webbänder",
+    "collier-perles": "Perlenkette",
+    "noeud-entrelace": "Flechtknoten",
+    "spirale-triple": "Dreifachspirale",
+    "lierre-emeraude": "Smaragdefeu",
+    "corbeaux-tournoyants": "Kreisende Raben",
+    "aurore-boreale": "Nordlicht",
+    "anneau-pierre-gravee": "Gravierter Steinring",
+    "proue-sculptee": "Geschnitzter Bug",
+    "cobra-dore": "Goldene Kobra",
+    "scarabee-aile": "Geflügelter Skarabäus",
+    "soleil-du-desert": "Wüstensonne",
+    "lotus-du-nil": "Nil-Lotus",
+    "serpent-de-jade": "Jadeschlange",
+    "cartouches-de-glyphes": "Glyphenkartuschen",
+    "frise-a-gradins": "Stufenfries",
+    "jaguar-de-jungle": "Dschungeljaguar",
+    "mandala-floral": "Blumenmandala",
+    "paon-roue": "Radschlagender Pfau",
+    "guirlande-soucis": "Ringelblumengirlande",
+    "cercle-tisse": "Gewebter Federreif",
+    "perlage-losanges": "Perlenrauten",
+    "soleil-montagnes": "Sonne über den Bergen",
+    "cercles-points": "Punktkreise",
+    "tortue-marine": "Meeresschildkröte",
+    "croix-du-sud": "Kreuz des Südens",
+    "flocons-tombants": "Fallende Flocken",
+    "couronne-de-houx": "Stechpalmenkranz",
+    "guirlande-lumineuse": "Lichterkette",
+    "etoile-du-sapin": "Tannenstern",
+    "bonnet-du-pere-noel": "Weihnachtsmütze",
+    "sucre-d-orge": "Zuckerstange"
   }
 }

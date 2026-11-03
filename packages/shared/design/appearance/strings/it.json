@@ -155,6 +155,70 @@
     "meeshy-bordures-vivantes": {
       "name": "Cornici vive",
       "description": "Quattro cornici animate per il banner di Meeshy: un riflesso che scorre sull’oro, perle che brillano, una notte che scintilla e un neon."
+    },
+    "noel-enneige": {
+      "name": "Natale innevato",
+      "description": "Due contorni animati per l’inverno: fiocchi che cadono piano intorno all’avatar e una corona di agrifoglio con bacche che brillano."
+    },
+    "lumieres-de-noel": {
+      "name": "Luci di Natale",
+      "description": "Due contorni animati che si accendono per le feste: una ghirlanda di lampadine che lampeggiano a turno e la stella dell’albero che risplende."
+    },
+    "atelier-du-pere-noel": {
+      "name": "Laboratorio di Babbo Natale",
+      "description": "Due contorni animati appena usciti dal laboratorio: un berretto rosso con il pompon che dondola e un bastoncino di zucchero che gira, legato da un nastro verde."
+    },
+    "bannieres-illustrees": {
+      "name": "Cornici illustrate",
+      "description": "Le cornici per il banner abbinate a «Cornici illustrate»: Maschera felina, Ragnatela, Ali d’angelo, Cerchio runico, Artigli d’osso e Ali di demone, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-asiatiques": {
+      "name": "Cornici d’Asia",
+      "description": "Le cornici per il banner abbinate a «Cornici d’Asia»: Drago di giada, Nuvole di seta e Lanterne di carta, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-africaines": {
+      "name": "Cornici d’Africa",
+      "description": "Le cornici per il banner abbinate a «Cornici d’Africa»: Maschera d’ebano, Bande tessute e Collana di perle, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-celtes": {
+      "name": "Cornici celtiche",
+      "description": "Le cornici per il banner abbinate a «Cornici celtiche»: Nodo intrecciato, Spirale tripla e Edera smeraldo, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-nordiques": {
+      "name": "Cornici nordiche",
+      "description": "Le cornici per il banner abbinate a «Cornici nordiche»: Corvi in volo, Aurora boreale, Anello di pietra incisa e Prua scolpita, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-egyptiennes": {
+      "name": "Cornici egizie",
+      "description": "Le cornici per il banner abbinate a «Cornici egizie»: Cobra d’oro, Scarabeo alato, Sole del deserto e Loto del Nilo, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-mayas": {
+      "name": "Cornici maya",
+      "description": "Le cornici per il banner abbinate a «Cornici maya»: Serpente di giada, Cartigli di glifi, Fregio a gradoni e Giaguaro della giungla, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-indiennes": {
+      "name": "Cornici indiane",
+      "description": "Le cornici per il banner abbinate a «Cornici indiane»: Mandala floreale, Pavone che fa la ruota e Ghirlanda di calendule, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-amerindiennes": {
+      "name": "Cornici amerindie",
+      "description": "Le cornici per il banner abbinate a «Cornici amerindie»: Cerchio intrecciato con piume, Rombi di perline e Sole sulle montagne, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-australes": {
+      "name": "Cornici australi",
+      "description": "Le cornici per il banner abbinate a «Cornici australi»: Cerchi di punti, Tartaruga marina e Croce del Sud, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-noel-enneige": {
+      "name": "Natale innevato",
+      "description": "Le cornici per il banner abbinate a «Natale innevato»: Fiocchi che cadono e Corona di agrifoglio, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-lumieres-noel": {
+      "name": "Luci di Natale",
+      "description": "Le cornici per il banner abbinate a «Luci di Natale»: Ghirlanda luminosa e Stella dell’albero, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-atelier-noel": {
+      "name": "Laboratorio di Babbo Natale",
+      "description": "Le cornici per il banner abbinate a «Laboratorio di Babbo Natale»: Berretto di Babbo Natale e Bastoncino di zucchero, al bordo perché la tua foto resti visibile."
     }
   },
   "designs": {
@@ -260,7 +324,13 @@
     "pulsation": "Pulsazione",
     "scintillement": "Scintillio",
     "comete": "Cometa",
-    "houle": "Onda lunga"
+    "houle": "Onda lunga",
+    "flocons-tombants": "Fiocchi che cadono",
+    "couronne-de-houx": "Corona di agrifoglio",
+    "guirlande-lumineuse": "Ghirlanda luminosa",
+    "etoile-du-sapin": "Stella dell’albero",
+    "bonnet-du-pere-noel": "Berretto di Babbo Natale",
+    "sucre-d-orge": "Bastoncino di zucchero"
   },
   "gamut": {
     "indigo": "Indaco Meeshy",
@@ -310,6 +380,48 @@
     "liseret-lumiere": "Filetto di luce",
     "perles-vives": "Perle vive",
     "nuit-vive": "Notte scintillante",
-    "neon": "Neon"
+    "neon": "Neon",
+    "masque-felin": "Maschera felina",
+    "toile-araignee": "Ragnatela",
+    "ailes-ange": "Ali d’angelo",
+    "cercle-runique": "Cerchio runico",
+    "griffes-os": "Artigli d’osso",
+    "ailes-demon": "Ali di demone",
+    "dragon-jade": "Drago di giada",
+    "nuages-soie": "Nuvole di seta",
+    "lanternes-papier": "Lanterne di carta",
+    "masque-ebene": "Maschera d’ebano",
+    "bandes-tissees": "Bande tessute",
+    "collier-perles": "Collana di perle",
+    "noeud-entrelace": "Nodo intrecciato",
+    "spirale-triple": "Spirale tripla",
+    "lierre-emeraude": "Edera smeraldo",
+    "corbeaux-tournoyants": "Corvi in volo",
+    "aurore-boreale": "Aurora boreale",
+    "anneau-pierre-gravee": "Anello di pietra incisa",
+    "proue-sculptee": "Prua scolpita",
+    "cobra-dore": "Cobra d’oro",
+    "scarabee-aile": "Scarabeo alato",
+    "soleil-du-desert": "Sole del deserto",
+    "lotus-du-nil": "Loto del Nilo",
+    "serpent-de-jade": "Serpente di giada",
+    "cartouches-de-glyphes": "Cartigli di glifi",
+    "frise-a-gradins": "Fregio a gradoni",
+    "jaguar-de-jungle": "Giaguaro della giungla",
+    "mandala-floral": "Mandala floreale",
+    "paon-roue": "Pavone che fa la ruota",
+    "guirlande-soucis": "Ghirlanda di calendule",
+    "cercle-tisse": "Cerchio intrecciato con piume",
+    "perlage-losanges": "Rombi di perline",
+    "soleil-montagnes": "Sole sulle montagne",
+    "cercles-points": "Cerchi di punti",
+    "tortue-marine": "Tartaruga marina",
+    "croix-du-sud": "Croce del Sud",
+    "flocons-tombants": "Fiocchi che cadono",
+    "couronne-de-houx": "Corona di agrifoglio",
+    "guirlande-lumineuse": "Ghirlanda luminosa",
+    "etoile-du-sapin": "Stella dell’albero",
+    "bonnet-du-pere-noel": "Berretto di Babbo Natale",
+    "sucre-d-orge": "Bastoncino di zucchero"
   }
 }

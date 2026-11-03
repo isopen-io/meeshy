@@ -155,6 +155,70 @@
     "meeshy-bordures-vivantes": {
       "name": "Living borders",
       "description": "Four animated banner frames by Meeshy: a glint gliding over gold, shining pearls, a twinkling night and a neon light."
+    },
+    "noel-enneige": {
+      "name": "Snowy Christmas",
+      "description": "Two animated rings for winter: snowflakes drifting gently around your avatar, and a holly wreath with shining berries."
+    },
+    "lumieres-de-noel": {
+      "name": "Christmas lights",
+      "description": "Two animated rings that light up for the holidays: a string of bulbs blinking in turn, and a tree-top star that shines."
+    },
+    "atelier-du-pere-noel": {
+      "name": "Santa’s workshop",
+      "description": "Two animated rings straight from the workshop: a red hat with a swinging pompom, and a spinning candy cane tied with a green ribbon."
+    },
+    "bannieres-illustrees": {
+      "name": "Illustrated frames",
+      "description": "Banner frames to match “Illustrated frames”: Feline mask, Spider web, Angel wings, Runic circle, Bone claws and Demon wings, kept to the edge so your photo stays in view."
+    },
+    "bannieres-asiatiques": {
+      "name": "Asian frames",
+      "description": "Banner frames to match “Asian frames”: Jade dragon, Silk clouds and Paper lanterns, kept to the edge so your photo stays in view."
+    },
+    "bannieres-africaines": {
+      "name": "African frames",
+      "description": "Banner frames to match “African frames”: Ebony mask, Woven bands and Bead necklace, kept to the edge so your photo stays in view."
+    },
+    "bannieres-celtes": {
+      "name": "Celtic frames",
+      "description": "Banner frames to match “Celtic frames”: Interlaced knot, Triple spiral and Emerald ivy, kept to the edge so your photo stays in view."
+    },
+    "bannieres-nordiques": {
+      "name": "Nordic frames",
+      "description": "Banner frames to match “Nordic frames”: Circling ravens, Northern lights, Carved stone ring and Carved prow, kept to the edge so your photo stays in view."
+    },
+    "bannieres-egyptiennes": {
+      "name": "Egyptian frames",
+      "description": "Banner frames to match “Egyptian frames”: Golden cobra, Winged scarab, Desert sun and Nile lotus, kept to the edge so your photo stays in view."
+    },
+    "bannieres-mayas": {
+      "name": "Maya frames",
+      "description": "Banner frames to match “Maya frames”: Jade serpent, Glyph cartouches, Stepped frieze and Jungle jaguar, kept to the edge so your photo stays in view."
+    },
+    "bannieres-indiennes": {
+      "name": "Indian frames",
+      "description": "Banner frames to match “Indian frames”: Floral mandala, Fanning peacock and Marigold garland, kept to the edge so your photo stays in view."
+    },
+    "bannieres-amerindiennes": {
+      "name": "Native American frames",
+      "description": "Banner frames to match “Native American frames”: Feathered woven hoop, Beaded diamonds and Sun over the mountains, kept to the edge so your photo stays in view."
+    },
+    "bannieres-australes": {
+      "name": "Southern frames",
+      "description": "Banner frames to match “Southern frames”: Dot circles, Sea turtle and Southern Cross, kept to the edge so your photo stays in view."
+    },
+    "bannieres-noel-enneige": {
+      "name": "Snowy Christmas",
+      "description": "Banner frames to match “Snowy Christmas”: Falling snowflakes and Holly wreath, kept to the edge so your photo stays in view."
+    },
+    "bannieres-lumieres-noel": {
+      "name": "Christmas lights",
+      "description": "Banner frames to match “Christmas lights”: String lights and Tree-top star, kept to the edge so your photo stays in view."
+    },
+    "bannieres-atelier-noel": {
+      "name": "Santa’s workshop",
+      "description": "Banner frames to match “Santa’s workshop”: Santa hat and Candy cane, kept to the edge so your photo stays in view."
     }
   },
   "designs": {
@@ -260,7 +324,13 @@
     "pulsation": "Pulse",
     "scintillement": "Twinkle",
     "comete": "Comet",
-    "houle": "Swell"
+    "houle": "Swell",
+    "flocons-tombants": "Falling snowflakes",
+    "couronne-de-houx": "Holly wreath",
+    "guirlande-lumineuse": "String lights",
+    "etoile-du-sapin": "Tree-top star",
+    "bonnet-du-pere-noel": "Santa hat",
+    "sucre-d-orge": "Candy cane"
   },
   "gamut": {
     "indigo": "Meeshy Indigo",
@@ -310,6 +380,48 @@
     "liseret-lumiere": "Light piping",
     "perles-vives": "Shining pearls",
     "nuit-vive": "Twinkling night",
-    "neon": "Neon"
+    "neon": "Neon",
+    "masque-felin": "Feline mask",
+    "toile-araignee": "Spider web",
+    "ailes-ange": "Angel wings",
+    "cercle-runique": "Runic circle",
+    "griffes-os": "Bone claws",
+    "ailes-demon": "Demon wings",
+    "dragon-jade": "Jade dragon",
+    "nuages-soie": "Silk clouds",
+    "lanternes-papier": "Paper lanterns",
+    "masque-ebene": "Ebony mask",
+    "bandes-tissees": "Woven bands",
+    "collier-perles": "Bead necklace",
+    "noeud-entrelace": "Interlaced knot",
+    "spirale-triple": "Triple spiral",
+    "lierre-emeraude": "Emerald ivy",
+    "corbeaux-tournoyants": "Circling ravens",
+    "aurore-boreale": "Northern lights",
+    "anneau-pierre-gravee": "Carved stone ring",
+    "proue-sculptee": "Carved prow",
+    "cobra-dore": "Golden cobra",
+    "scarabee-aile": "Winged scarab",
+    "soleil-du-desert": "Desert sun",
+    "lotus-du-nil": "Nile lotus",
+    "serpent-de-jade": "Jade serpent",
+    "cartouches-de-glyphes": "Glyph cartouches",
+    "frise-a-gradins": "Stepped frieze",
+    "jaguar-de-jungle": "Jungle jaguar",
+    "mandala-floral": "Floral mandala",
+    "paon-roue": "Fanning peacock",
+    "guirlande-soucis": "Marigold garland",
+    "cercle-tisse": "Feathered woven hoop",
+    "perlage-losanges": "Beaded diamonds",
+    "soleil-montagnes": "Sun over the mountains",
+    "cercles-points": "Dot circles",
+    "tortue-marine": "Sea turtle",
+    "croix-du-sud": "Southern Cross",
+    "flocons-tombants": "Falling snowflakes",
+    "couronne-de-houx": "Holly wreath",
+    "guirlande-lumineuse": "String lights",
+    "etoile-du-sapin": "Tree-top star",
+    "bonnet-du-pere-noel": "Santa hat",
+    "sucre-d-orge": "Candy cane"
   }
 }
