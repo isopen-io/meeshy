@@ -156,6 +156,11 @@
     <string name="emoji_category_travel">Reisen</string>
     <string name="emoji_picker_expand">Weitere Emojis</string>
     <string name="emoji_picker_title">Reaktionen</string>
+    <string name="engagement_pill_a11y_streak">%1$s · Funken: %2$d · Heute: %3$d</string>
+    <string name="engagement_pill_a11y_streak_days_one">%1$d Tag</string>
+    <string name="engagement_pill_a11y_streak_days_other">%1$d Tage</string>
+    <string name="engagement_pill_a11y_total_one">%1$s Funke in dieser Unterhaltung gesammelt</string>
+    <string name="engagement_pill_a11y_total_other">%1$s Funken in dieser Unterhaltung gesammelt</string>
     <string name="focal_focus_add_reaction">Reaktion hinzufügen</string>
     <string name="focal_focus_translation_detail">Übersetzungsdetails</string>
     <string name="focal_row_anonymousSender">Kein Konto</string>
@@ -265,6 +270,8 @@
     <string name="post_daily_limit_comment_untimed">Du hast heute alle erlaubten Kommentare geschrieben. Das Limit zählt deine Aktionen, nie deine Funken.</string>
     <string name="post_daily_limit_reaction">Du hast heute alle erlaubten Reaktionen gesetzt. Das Limit zählt deine Aktionen, nie deine Funken: Ab %1$s kannst du wieder reagieren.</string>
     <string name="post_daily_limit_reaction_untimed">Du hast heute alle erlaubten Reaktionen gesetzt. Das Limit zählt deine Aktionen, nie deine Funken.</string>
+    <string name="post_points_a11y_one">Dieser Beitrag hat dir %1$s Funken eingebracht</string>
+    <string name="post_points_a11y_other">Dieser Beitrag hat dir %1$s Funken eingebracht</string>
     <string name="presence_away">Abwesend</string>
     <string name="presence_here">Im Gespräch</string>
     <string name="presence_idle">Inaktiv</string>
@@ -412,6 +419,15 @@
     <string name="viewer_caption_see_less_hint">Klappt die Bildunterschrift ein</string>
     <string name="viewer_caption_see_more">mehr anzeigen</string>
     <string name="viewer_caption_see_more_hint">Zeigt die vollständige Bildunterschrift</string>
+    <string name="viewer_engagement_comments_one">%1$d Kommentar</string>
+    <string name="viewer_engagement_comments_other">%1$d Kommentare</string>
+    <string name="viewer_engagement_reactions">Reaktionen: %1$s</string>
+    <string name="viewer_engagement_replies_one">%1$d Antwort</string>
+    <string name="viewer_engagement_replies_other">%1$d Antworten</string>
+    <string name="viewer_engagement_reposts_one">%1$d Repost</string>
+    <string name="viewer_engagement_reposts_other">%1$d Reposts</string>
+    <string name="viewer_engagement_shares_one">%1$d Mal geteilt</string>
+    <string name="viewer_engagement_shares_other">%1$d Mal geteilt</string>
     <string name="viewer_media_unavailable">Dieses Medium ist nicht mehr verfügbar</string>
     <string name="viewer_more">Mehr</string>
     <string name="viewer_position">Medium %1$d von %2$d</string>

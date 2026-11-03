@@ -164,6 +164,11 @@
     <string name="emoji_category_travel">السفر</string>
     <string name="emoji_picker_expand">رموز تعبيرية أخرى</string>
     <string name="emoji_picker_title">التفاعلات</string>
+    <string name="engagement_pill_a11y_streak">%1$s · الشرارات: %2$d · اليوم: %3$d</string>
+    <string name="engagement_pill_a11y_streak_days_one">%1$d يوم</string>
+    <string name="engagement_pill_a11y_streak_days_other">%1$d أيام</string>
+    <string name="engagement_pill_a11y_total_one">%1$s شرارة مكتسبة في هذه المحادثة</string>
+    <string name="engagement_pill_a11y_total_other">%1$s شرارات مكتسبة في هذه المحادثة</string>
     <string name="focal_focus_add_reaction">إضافة تفاعل</string>
     <string name="focal_focus_translation_detail">تفاصيل الترجمة</string>
     <string name="focal_row_anonymousSender">بدون حساب</string>
@@ -273,6 +278,8 @@
     <string name="post_daily_limit_comment_untimed">لقد كتبت كل التعليقات المسموح بها اليوم. الحدّ يعدّ إجراءاتك، لا شراراتك أبدًا.</string>
     <string name="post_daily_limit_reaction">لقد قمت بكل التفاعلات المسموح بها اليوم. الحدّ يعدّ إجراءاتك، لا شراراتك أبدًا: يمكنك التفاعل مجددًا عند الساعة %1$s.</string>
     <string name="post_daily_limit_reaction_untimed">لقد قمت بكل التفاعلات المسموح بها اليوم. الحدّ يعدّ إجراءاتك، لا شراراتك أبدًا.</string>
+    <string name="post_points_a11y_one">منحك هذا المنشور %1$s شرارة</string>
+    <string name="post_points_a11y_other">منحك هذا المنشور %1$s شرارات</string>
     <string name="presence_away">بعيد</string>
     <string name="presence_here">في المحادثة</string>
     <string name="presence_idle">غير نشط</string>
@@ -432,6 +439,15 @@
     <string name="viewer_caption_see_less_hint">يطوي الشرح</string>
     <string name="viewer_caption_see_more">عرض المزيد</string>
     <string name="viewer_caption_see_more_hint">يعرض الشرح كاملاً</string>
+    <string name="viewer_engagement_comments_one">تعليق واحد (%1$d)</string>
+    <string name="viewer_engagement_comments_other">%1$d تعليقات</string>
+    <string name="viewer_engagement_reactions">التفاعلات: %1$s</string>
+    <string name="viewer_engagement_replies_one">رد واحد (%1$d)</string>
+    <string name="viewer_engagement_replies_other">%1$d ردود</string>
+    <string name="viewer_engagement_reposts_one">إعادة نشر واحدة (%1$d)</string>
+    <string name="viewer_engagement_reposts_other">%1$d إعادات نشر</string>
+    <string name="viewer_engagement_shares_one">مشاركة واحدة (%1$d)</string>
+    <string name="viewer_engagement_shares_other">%1$d مشاركات</string>
     <string name="viewer_media_unavailable">هذه الوسائط لم تعد متاحة</string>
     <string name="viewer_more">المزيد</string>
     <string name="viewer_position">الوسائط %1$d من %2$d</string>

@@ -1,5 +1,6 @@
 package me.meeshy.sdk.socket
 
+import me.meeshy.sdk.model.PostEngagementSnapshot
 import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.Flow
@@ -71,6 +72,7 @@ class SocialSocketManager @Inject constructor(
     private val _postTranslationUpdated = SocketInboundRoute.subject<SocketPostTranslationUpdatedData>()
     private val _postReactionAdded = SocketInboundRoute.subject<SocketPostReactionUpdateData>()
     private val _postReactionRemoved = SocketInboundRoute.subject<SocketPostReactionUpdateData>()
+    private val _postEngagementUpdated = SocketInboundRoute.subject<PostEngagementSnapshot>()
     private val _commentMediaUpdated = SocketInboundRoute.subject<SocketCommentMediaUpdatedData>()
     private val _commentAdded = SocketInboundRoute.subject<SocketCommentAddedData>()
     private val _commentUpdated = SocketInboundRoute.subject<SocketCommentUpdatedData>()
@@ -130,6 +132,9 @@ class SocialSocketManager @Inject constructor(
 
     /** `post:reaction-removed` : meme forme que [postReactionAdded], le sens vit dans le flux. */
     val postReactionRemoved: SharedFlow<SocketPostReactionUpdateData> = _postReactionRemoved.exposed()
+
+    /** `engagement:post-updated` : ce qu'un post a rapporté au lecteur, poussé à sa seule room (#9569). */
+    val postEngagementUpdated: SharedFlow<PostEngagementSnapshot> = _postEngagementUpdated.exposed()
 
     /** `comment:media-updated` : le commentaire enrichi (transcription audio prete) a substituer. */
     val commentMediaUpdated: SharedFlow<SocketCommentMediaUpdatedData> = _commentMediaUpdated.exposed()
@@ -226,6 +231,7 @@ class SocialSocketManager @Inject constructor(
         route(SocketEventNames.POST_TRANSLATION_UPDATED, _postTranslationUpdated)
         route(SocketEventNames.POST_REACTION_ADDED, _postReactionAdded)
         route(SocketEventNames.POST_REACTION_REMOVED, _postReactionRemoved)
+        route(SocketEventNames.ENGAGEMENT_POST_UPDATED, _postEngagementUpdated)
         route(SocketEventNames.COMMENT_MEDIA_UPDATED, _commentMediaUpdated)
         route(SocketEventNames.COMMENT_ADDED, _commentAdded)
         route(SocketEventNames.COMMENT_UPDATED, _commentUpdated)
