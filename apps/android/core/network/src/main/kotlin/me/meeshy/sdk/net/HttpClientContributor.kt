@@ -61,6 +61,9 @@ object HttpPriority {
 
     /** Apres l'identite : voit la requete telle qu'elle part, sous son jeton. */
     const val GUEST_SESSION_END = 1_350
+
+    /** Compte supprimé et refus d'âge : voit la réponse AVANT l'expiration, pour poser « en attente de retrait » d'abord. */
+    const val SESSION_REFUSAL = 1_360
     const val AUTHENTICATOR = 1_400
     const val SLOW_REQUEST = 1_500
     const val LOGGING = 9_000

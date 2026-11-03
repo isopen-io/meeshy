@@ -1,5 +1,6 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="ageGate_body">Dieses Konto kann Meeshy noch nicht nutzen. Du kannst mit 13 dabei sein.</string>
     <string name="auth_back">Zurück</string>
     <string name="auth_email_label">E-Mail</string>
     <string name="auth_forgot_never_had_label">Noch nie ein Passwort gehabt?</string>

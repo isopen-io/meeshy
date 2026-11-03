@@ -454,6 +454,14 @@ class AuthRepository @Inject constructor(
         return true
     }
 
+    /**
+     * La passerelle a dit que le compte de CETTE session n'existe plus : l'appareil est purgé comme après une déconnexion,
+     * mais rien ne part vers la passerelle — le compte n'y est plus, `POST /auth/logout` n'aurait personne à fermer.
+     */
+    suspend fun closeDeletedAccountSession() {
+        purgeLocalSession()
+    }
+
     private suspend fun purgeLocalSession() {
         val leaving = tokenStore.userId?.takeIf { it.isNotBlank() } ?: sessionRepository.currentUserId
         tokenStore.clear()
