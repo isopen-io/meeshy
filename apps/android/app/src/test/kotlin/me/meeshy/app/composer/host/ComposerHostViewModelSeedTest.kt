@@ -18,12 +18,14 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.security.SecureRandom
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
+@Config(application = android.app.Application::class)
 class ComposerHostViewModelSeedTest {
     @get:Rule val folder = TemporaryFolder()
 
