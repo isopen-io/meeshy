@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -216,6 +217,55 @@ class NotificationsViewModelTest {
         events.emit(incoming)
 
         verify(exactly = 1) { repo.prependLive(incoming) }
+    }
+
+    @Test
+    fun `an arrival refreshes the list once after 500 ms and reloads the unread count`() = runTest {
+        val events = MutableSharedFlow<ApiNotification>()
+        val repo = repository()
+        coEvery { repo.unreadCount() } returns NetworkResult.Success(4)
+        NotificationsViewModel(repo, socketManager(events), SyncSeqTracker(), performer())
+
+        events.emit(notification("a"))
+        advanceTimeBy(499)
+        coVerify(exactly = 0) { repo.refresh() }
+
+        advanceTimeBy(2)
+        coVerify(exactly = 1) { repo.refresh() }
+        verify(exactly = 1) { repo.setUnreadCount(4) }
+    }
+
+    @Test
+    fun `a burst of arrivals collapses into a single refresh`() = runTest {
+        val events = MutableSharedFlow<ApiNotification>()
+        val repo = repository()
+        NotificationsViewModel(repo, socketManager(events), SyncSeqTracker(), performer())
+
+        events.emit(notification("a"))
+        advanceTimeBy(300)
+        events.emit(notification("b"))
+        advanceTimeBy(300)
+        coVerify(exactly = 0) { repo.refresh() }
+        advanceTimeBy(300)
+
+        coVerify(exactly = 1) { repo.refresh() }
+    }
+
+    @Test
+    fun `a failing arrival refresh stays silent and keeps the cached rows`() = runTest {
+        val events = MutableSharedFlow<ApiNotification>()
+        val cache = MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
+        val repo = repository(notifications = cache)
+        coEvery { repo.refresh() } throws RuntimeException("offline")
+        val vm = NotificationsViewModel(repo, socketManager(events), SyncSeqTracker(), performer())
+        cache.emit(CacheResult.Fresh(listOf(notification("n1")), ageMillis = 0))
+
+        events.emit(notification("a"))
+        advanceTimeBy(600)
+
+        assertThat(vm.state.value.notifications.map { it.id }).containsExactly("n1")
+        assertThat(vm.state.value.loadDidFail).isFalse()
+        verify(exactly = 0) { repo.setUnreadCount(any()) }
     }
 
     // --- Notification sync family (issue notif-sync) — the other four lifecycle events ---

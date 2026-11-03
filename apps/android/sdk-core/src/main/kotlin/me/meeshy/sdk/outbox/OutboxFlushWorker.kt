@@ -11,6 +11,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import me.meeshy.sdk.media.UploadLeaseRunner
 import me.meeshy.sdk.network.NetworkMonitor
 import java.util.concurrent.TimeUnit
 
@@ -33,6 +34,7 @@ class OutboxFlushWorker @AssistedInject constructor(
     private val registry: MutationSenderRegistry,
     private val network: NetworkMonitor,
     private val scheduler: OutboxScheduler,
+    private val uploadLeases: UploadLeaseRunner = UploadLeaseRunner.Passthrough,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -46,7 +48,9 @@ class OutboxFlushWorker @AssistedInject constructor(
         }
         outboxRepository.reclaimStaleInflight()
 
-        val reports = registry.drainAll(outboxRepository)
+        val leased = outboxRepository.hasDeliverable(OutboxLanes.MEDIA, OutboxKind.UPLOAD_MEDIA)
+        val reports = uploadLeases.run(this, leased) { registry.drainAll(outboxRepository) }
+            ?: return Result.retry().also { outboxRepository.recoverInflight() }
 
         val next = OutboxFlushNext.after(reports, outboxRepository.earliestScheduledAttempt(), System.currentTimeMillis())
         if (next is FlushNext.RunAfter) scheduler.flushAfter(next.delayMs)

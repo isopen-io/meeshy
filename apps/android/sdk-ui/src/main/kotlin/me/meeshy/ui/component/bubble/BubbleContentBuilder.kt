@@ -64,8 +64,14 @@ public object BubbleContentBuilder {
         readerTimeZoneId: String? = null,
         /** Mon identité de session : l'écho allégé de MON message (sans expéditeur imbriqué) n'a pas de nom vide. */
         sessionIdentity: MessageSenderIdentity.Session? = null,
+        /**
+         * Couture inerte tant que le rendu du scellé n'est pas câblé : vrai, une vue unique non ouverte par CE lecteur
+         * ne porte ni texte, ni légende, ni pièce (iOS `viewOnceSealed`).
+         */
+        sealUnopenedViewOnce: Boolean = false,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
+        val viewOnceSealed = sealUnopenedViewOnce && BubbleKindBuilder.isViewOnceSealed(message, isDeleted)
         // #13106 — un blob chiffré de bout en bout scelle la bulle entière, même servie en clair.
         val isEndToEndSealed = !isDeleted && (message.isEndToEndSealed || message.attachments.any { it.isEndToEndBlob })
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
@@ -107,7 +113,7 @@ public object BubbleContentBuilder {
             message.replyTo != null -> null
             else -> BubbleStoryReplyBuilder.build(message.postReplyTo, message.storyReplyToId, mediaBaseUrl)
         }
-        val visibleAttachments = if (isDeleted || isEndToEndSealed) emptyList() else message.attachments
+        val visibleAttachments = if (isDeleted || isEndToEndSealed || viewOnceSealed) emptyList() else message.attachments
         val attachments = BubbleAttachmentBuilder.build(
             visibleAttachments = visibleAttachments,
             effects = message.effects,
@@ -117,7 +123,7 @@ public object BubbleContentBuilder {
             contactScope = ContactCardResolutionScope.of(message),
         )
         val messagePlace = message.location
-            ?.takeUnless { isDeleted || isEndToEndSealed }
+            ?.takeUnless { isDeleted || isEndToEndSealed || viewOnceSealed }
             ?.let { BubbleLocation.fromPlace(message.id, it) }
         // Une pièce qui disparaît (vue unique, floue, éphémère) ou que la loi de sortie retient ne s'ouvre ni ne se
         // télécharge : sa rangée ne promet rien (#13492) — le même verdict que l'aperçu et le contrôleur.
@@ -125,7 +131,7 @@ public object BubbleContentBuilder {
         val files = attachments.files.map { if (it.attachmentId in protectedIds) it.copy(isProtected = true) else it }
         // Un avis système (capture, arrivées) se compose CHEZ LE LECTEUR, dans sa langue et son fuseau ;
         // une métadonnée qui ne se lit pas retombe sur le `content` (repli français). Jamais une bulle.
-        val noticeText = if (isDeleted || isEndToEndSealed) {
+        val noticeText = if (isDeleted || isEndToEndSealed || viewOnceSealed) {
             null
         } else {
             SystemNoticeText.of(
@@ -137,7 +143,7 @@ public object BubbleContentBuilder {
         }
         val text = when {
             noticeText != null -> noticeText
-            isDeleted || isEndToEndSealed -> ""
+            isDeleted || isEndToEndSealed || viewOnceSealed -> ""
             activeIsOriginal -> message.content
             else -> message.translations
                 .firstOrNull {
@@ -146,7 +152,7 @@ public object BubbleContentBuilder {
                 ?.translatedContent
                 ?: message.displayContent(preferences)
         }
-        val languageStrip = if (isDeleted) {
+        val languageStrip = if (isDeleted || viewOnceSealed) {
             emptyList()
         } else {
             MessageLanguageStrip.build(
@@ -174,7 +180,7 @@ public object BubbleContentBuilder {
             isOutgoing = isOutgoing,
             isTranslated = isTranslated,
             isShowingOriginal = isShowingOriginal,
-            originalText = if (isTranslated && !isShowingOriginal) message.content else null,
+            originalText = if (isTranslated && !isShowingOriginal && !viewOnceSealed) message.content else null,
             languageStrip = languageStrip,
             senderName = senderName,
             showSenderName = showSenderName && !isOutgoing,
@@ -186,7 +192,7 @@ public object BubbleContentBuilder {
             senderHasAccount = identity.hasAccount,
             senderRing = identity.avatarRing,
             sourceKind = message.sourceKind,
-            servedMentionNames = if (isDeleted || isEndToEndSealed) emptyMap() else servedMentionNames(message),
+            servedMentionNames = if (isDeleted || isEndToEndSealed || viewOnceSealed) emptyMap() else servedMentionNames(message),
             senderColorHex = (senderName ?: message.senderId)?.let(DynamicColorGenerator::colorForName),
             isEdited = message.isEdited,
             isDeleted = isDeleted,
@@ -235,7 +241,7 @@ public object BubbleContentBuilder {
                     },
                 )
             },
-            blurReveal = if (isDeleted) null else buildBlurReveal(message.effects),
+            blurReveal = if (isDeleted || viewOnceSealed) null else buildBlurReveal(message.effects),
             // Visual-treatment effects (glow / pulse / rainbow / one-shot appearance)
             // fed to `Modifier.messageEffects` — lifecycle bits stripped, empty when
             // deleted (a tombstone never glows). The played-appearance gate is resolved
@@ -260,7 +266,12 @@ public object BubbleContentBuilder {
             replyToIsMe = !replyToDeleted && currentUserId != null &&
                 message.replyTo?.senderId == currentUserId,
             isSlowSend = isOutgoing && isSlowSend,
-            sticker = if (isDeleted || isEndToEndSealed) null else stickerOf(message, visibleAttachments, attachments.images),
+            sticker = if (isDeleted || isEndToEndSealed || viewOnceSealed) null else stickerOf(message, visibleAttachments, attachments.images),
+            videos = attachments.videos,
+            attachmentLayout = BubbleKindBuilder.layout(visibleAttachments.filterNot { it.isEndToEndBlob }),
+            protection = BubbleKindBuilder.protection(message),
+            isViewOnceSealed = viewOnceSealed,
+            callSummary = message.callSummary?.takeIf { message.isSystemMessage && !isDeleted },
         )
     }
 

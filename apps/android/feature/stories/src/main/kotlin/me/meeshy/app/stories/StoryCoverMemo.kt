@@ -33,18 +33,25 @@ class StoryCoverMemo @Inject constructor() {
         filledFor = null
     }
 
+    /** La couverture composite LOCALE (chemin de fichier) de la dernière story du groupe, mémoïsée ; `null` : aucune rendue. */
     @Synchronized
-    fun coverUrl(group: StoryGroup, accountId: String?, probe: (storyId: String) -> String?): String? {
+    fun localCover(group: StoryGroup, accountId: String?, probe: (storyId: String) -> String?): String? {
         if (filledFor != accountId) {
             resolved.clear()
             filledFor = accountId
         }
-        val last = group.stories.lastOrNull() ?: return group.avatarURL
-        val local = if (resolved.containsKey(last.id)) {
+        val last = group.stories.lastOrNull() ?: return null
+        return if (resolved.containsKey(last.id)) {
             resolved[last.id]
         } else {
             probe(last.id).also { resolved[last.id] = it }
         }
+    }
+
+    @Synchronized
+    fun coverUrl(group: StoryGroup, accountId: String?, probe: (storyId: String) -> String?): String? {
+        val local = localCover(group, accountId, probe)
+        val last = group.stories.lastOrNull() ?: return group.avatarURL
         val media = last.media.firstOrNull()
         return preferredCover(
             localCover = local,

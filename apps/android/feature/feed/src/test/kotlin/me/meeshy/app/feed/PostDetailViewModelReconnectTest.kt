@@ -56,9 +56,9 @@ class PostDetailViewModelReconnectTest {
         override fun nowMillis(): Long = 0L
     }
 
-    private fun opened(postId: String = "p1"): PostDetailViewModel {
+    private fun opened(postId: String = "p1", reader: MeeshyUser? = null): PostDetailViewModel {
         coEvery { repository.knownPost(any()) } returns null
-        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
+        every { session.currentUser } returns MutableStateFlow(reader)
         every { socialSocket.commentAdded } returns MutableSharedFlow()
         every { socialSocket.commentDeleted } returns MutableSharedFlow()
         every { socialSocket.postLiked } returns MutableSharedFlow()
@@ -135,7 +135,7 @@ class PostDetailViewModelReconnectTest {
         coEvery { repository.getPost("p1") } returns NetworkResult.Success(
             ApiPost(id = "p1", content = "Bonjour", originalLanguage = "fr"),
         )
-        val vm = opened()
+        val vm = opened(reader = MeeshyUser(id = "me", username = "me", systemLanguage = "fr", regionalLanguage = "en"))
 
         translationUpdated.tryEmit(
             SocketPostTranslationUpdatedData("p1", "en", ApiPostTranslationEntry(text = "Hello")),

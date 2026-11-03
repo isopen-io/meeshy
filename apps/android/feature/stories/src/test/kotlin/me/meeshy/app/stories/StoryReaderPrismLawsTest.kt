@@ -63,7 +63,7 @@ class StoryReaderPrismLawsTest {
             ),
         )
         assertThat(StoryContentResolver.resolve(item, prefs(system = "en")).content).isEmpty()
-        assertThat(StoryContentResolver.resolve(item.copy(content = "Ma légende"), prefs()).content)
+        assertThat(StoryContentResolver.resolve(item.copy(content = "Ma légende", translations = null), prefs()).content)
             .isEqualTo("Ma légende")
     }
 }

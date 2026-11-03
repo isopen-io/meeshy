@@ -117,13 +117,14 @@ class CallReliabilityMonitorTest {
         val media = FakeMedia()
         monitorFor(host, media)
 
-        // The first tick (t = 2 s) starts the ICE clock: restart at +12 s, failure at +25 s.
+        // The first tick (t = 2 s) starts the ICE clock: restart at +12 s (t = 14 s); the 25 s budget is first
+        // seen spent on the 2 s grid at t = 28 s (+26 s) — t = 27 s is no tick.
         advanceTimeBy(14_000)
         runCurrent()
         assertThat(media.restarts).isEqualTo(1)
         assertThat(host.callState).isEqualTo(CallState.Connecting)
 
-        advanceTimeBy(13_000)
+        advanceTimeBy(14_000)
         runCurrent()
 
         assertThat(media.restarts).isEqualTo(1)
