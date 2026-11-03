@@ -353,6 +353,10 @@ class OutboxRepository @Inject constructor(
     fun observeTopOfQueue(): Flow<List<OutboxEntity>> =
         outboxDao.observeTop(OutboxKindCatalog.syncIndicatorExcludedDiskValues, TOP_OF_QUEUE_LIMIT)
 
+    /** La tête de file projetée pour la pastille ([toUiItem]) : un genre inconnu d'un build plus récent est ignoré. */
+    fun observeUiItems(): Flow<List<me.meeshy.sdk.model.sync.OutboxUiItem>> =
+        observeTopOfQueue().map { rows -> rows.mapNotNull { it.toUiItem() } }.distinctUntilChanged()
+
     /**
      * Garbage-collects rows that gave up more than [olderThanMs] ago, but only the kinds whose
      * terminal rows are [disposable][OutboxKindMeta.terminalDisposable] — a failed send that still
