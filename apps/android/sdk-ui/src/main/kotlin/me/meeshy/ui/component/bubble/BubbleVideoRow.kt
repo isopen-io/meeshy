@@ -114,7 +114,7 @@ internal fun BubbleVideoRow(
 }
 
 @Composable
-private fun VideoPoster(video: BubbleVideo) {
+internal fun VideoPoster(video: BubbleVideo) {
     val local = video.isOnDevice && video.thumbnailUrl == null
     if (local) {
         val frame by produceState<ImageBitmap?>(null, video.url) {

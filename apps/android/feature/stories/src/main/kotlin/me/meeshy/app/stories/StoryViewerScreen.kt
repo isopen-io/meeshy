@@ -89,6 +89,7 @@ fun StoryViewerScreen(
         StoryRailFreezeInput(state.currentStoryId, liveRailPlan, slide?.hasSound == true, rememberStoryCommentsReconciled(commentThread)),
     )
     val composing = railPlan.pinsCommentComposer && storyCommentHolds(commentThread)
+    val groupIntro = rememberStoryGroupIntro(state, slide?.opening, viewModel)
     val cover = StoryViewerCover(
         sheet = chrome.sheetOpen || state.languageExplorer != null,
         railBar = rail.overlayActive,
@@ -96,6 +97,7 @@ fun StoryViewerScreen(
         dialog = chrome.dialogOpen || videoExport.busy,
         composing = composing,
         reading = chrome.captionExpanded || chrome.transcript.requested,
+        groupIntro = groupIntro.shown,
     )
     val actions = rememberStoryViewerActions(
         state = state,
@@ -123,6 +125,8 @@ fun StoryViewerScreen(
         playing = playback.playing,
         lap = playback.lap,
         waiting = playback.waiting,
+        awaitingStart = playback.awaitingStart,
+        scrubber = playback.scrubber,
         composing = cover.composing,
         railPlan = railPlan,
         commentThread = commentThread,
@@ -136,6 +140,7 @@ fun StoryViewerScreen(
         actions = actions,
         haptics = meeshyHaptics,
         viewModel = viewModel,
+        groupIntro = groupIntro,
     )
     }
     StoryViewerSheetsHost(

@@ -44,8 +44,8 @@ final class StoryViewerEngagement {
             mediaDurationMs: durMs, completed: completed, samples: drained.samples)
         Task {
             await EngagementTracker.shared.end(surface: .storyViewer)
-            if let new = newStory {
-                EngagementTracker.shared.begin(postId: new.id, contentType: .story, surface: .storyViewer)
+            if let postId = PendingStoryMarker.serverId(of: newStory?.id) {
+                EngagementTracker.shared.begin(postId: postId, contentType: .story, surface: .storyViewer)
             }
         }
     }

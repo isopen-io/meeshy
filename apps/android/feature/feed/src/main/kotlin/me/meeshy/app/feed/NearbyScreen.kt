@@ -1,10 +1,6 @@
 package me.meeshy.app.feed
 
 import me.meeshy.ui.icons.MeeshyIcons
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,9 +35,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,8 +50,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
@@ -62,6 +62,9 @@ import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
+import me.meeshy.ui.component.permission.PermissionFlowHost
+import me.meeshy.ui.component.permission.openAppSettings
+import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -93,39 +96,56 @@ fun NearbyScreen(
         state.errorMessage?.let { snackbar.showSnackbar(it) }
     }
 
-    fun captureAndLoad() {
-        scope.launch {
-            val fix = context.awaitFreshLocationFix()
-            if (fix != null) viewModel.loadNearby(fix.latitude, fix.longitude) else viewModel.onLocationUnavailable()
+    val permissions = rememberPermissionFlow()
+    val access = remember(permissions) {
+        NearbyLocationAccess(
+            stateOf = { nature -> permissions.stateOf(nature) },
+            ensure = { nature, announcesRefusal -> permissions.ensure(nature, announcesRefusal) },
+        )
+    }
+
+    suspend fun settle(outcome: NearbyAccess) {
+        when (outcome) {
+            NearbyAccess.Granted -> {
+                viewModel.onLocating()
+                val fix = context.awaitFreshLocationFix()
+                if (fix != null) viewModel.loadNearby(fix.latitude, fix.longitude) else viewModel.onLocationUnavailable()
+            }
+            NearbyAccess.NeedsGesture -> viewModel.onAwaitingAccess()
+            NearbyAccess.Denied -> viewModel.onPermissionDenied()
         }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions(),
-    ) { results ->
-        val granted = results[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-            results[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (granted) captureAndLoad() else viewModel.onPermissionDenied()
+    fun requestLocation() {
+        scope.launch { settle(access.onGesture()) }
     }
 
-    fun requestLocation() {
-        viewModel.onLocating()
-        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
-        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
-        if (fine || coarse) {
-            captureAndLoad()
-        } else {
-            permissionLauncher.launch(
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
-            )
+    fun onDeniedAction() {
+        scope.launch {
+            when (access.deniedAction()) {
+                NearbyDeniedAction.RequestAgain -> requestLocation()
+                NearbyDeniedAction.OpenSettings -> context.openAppSettings()
+            }
         }
     }
 
     LaunchedEffect(Unit) {
-        if (!state.hasLocation) requestLocation()
+        if (!state.hasLocation) settle(access.onOpen())
     }
+
+    val currentState by rememberUpdatedState(state)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, access) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && currentState.permissionDenied) {
+                scope.launch { access.onResumedWhileDenied().takeIf { it == NearbyAccess.Granted }?.let { settle(it) } }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    PermissionFlowHost(permissions)
 
     MeeshyBackground {
         Scaffold(
@@ -162,12 +182,19 @@ fun NearbyScreen(
             ) {
                 when {
                     state.isLocating -> NearbySkeleton()
-                    state.permissionDenied -> NearbyStatusCard(
-                        icon = Icons.Filled.LocationOff,
+                    state.awaitingAccess -> NearbyStatusCard(
+                        icon = Icons.Filled.NearMe,
                         title = stringResource(R.string.nearby_permission_title),
                         message = stringResource(R.string.nearby_permission_message),
                         actionLabel = stringResource(R.string.nearby_permission_action),
                         onRetry = ::requestLocation,
+                    )
+                    state.permissionDenied -> NearbyStatusCard(
+                        icon = Icons.Filled.LocationOff,
+                        title = stringResource(R.string.nearby_denied_title),
+                        message = stringResource(R.string.nearby_denied_detail),
+                        actionLabel = stringResource(R.string.nearby_denied_action),
+                        onRetry = ::onDeniedAction,
                     )
                     state.locationUnavailable -> NearbyStatusCard(
                         icon = Icons.Filled.LocationOff,

@@ -39,6 +39,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.meeshy.sdk.model.BubbleSecondaryPanel
 import me.meeshy.sdk.model.RetryBarState
 import me.meeshy.sdk.model.BubbleSkinLaw
 import me.meeshy.sdk.model.MessageEffects
@@ -242,6 +243,21 @@ private fun BubbleBody(
                     }
                     BubbleAttachmentSections(content, onColor, callbacks, audioPlayback, accent = options.accentColor)
                     BubbleTextBody(content, onColor, options.decor)
+                    if (!content.isDeleted) {
+                        BubbleSecondaryContent(
+                            panel = remember(content.openSecondaryCode, content.secondaryTexts, content.languageStrip) {
+                                BubbleSecondaryPanel.of(
+                                    content.openSecondaryCode,
+                                    content.languageStrip.firstOrNull { it.isActive }?.code,
+                                    content.secondaryTexts,
+                                )
+                            },
+                            onColor = onColor,
+                            tint = options.accentColor,
+                            decor = options.decor,
+                            linksActive = content.senderHasAccount,
+                        )
+                    }
                     if (!content.isDeleted) options.bodyAccessory?.invoke(onColor)
                 }
             },
@@ -252,6 +268,7 @@ private fun BubbleBody(
                     content = content,
                     onColor = onColor,
                     onFlagTap = callbacks.onFlagTap,
+                    onTranslate = callbacks.onTranslate,
                     onSenderTap = callbacks.onSenderTap,
                     onShowReadStatus = callbacks.onShowReadStatus,
                     modifier = Modifier.padding(

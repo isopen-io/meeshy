@@ -82,6 +82,7 @@
     <string name="bubble_contact_card_on_meeshy">Su Meeshy</string>
     <string name="bubble_contact_card_shared">Contatto condiviso</string>
     <string name="bubble_edited">modificato</string>
+    <string name="bubble_footer_translation_request">Richiedi la traduzione</string>
     <string name="bubble_forwarded">Inoltrato</string>
     <string name="bubble_forwarded_from">Inoltrato da %1$s</string>
     <string name="bubble_forwarded_from_person">Inoltr. da %1$s</string>
@@ -98,6 +99,10 @@
     <string name="bubble_joinNotice_rule_messages_denied">non può scrivere messaggi</string>
     <string name="bubble_location_open">Apri in Mappe</string>
     <string name="bubble_location_shared">Posizione condivisa</string>
+    <string name="bubble_media_a11y_masked">Media nascosto</string>
+    <string name="bubble_media_a11y_view_once">Contenuto a visualizzazione singola</string>
+    <string name="bubble_media_masked">Contenuto nascosto</string>
+    <string name="bubble_media_tap_to_view">Tocca per vedere</string>
     <string name="bubble_message_deleted">Messaggio eliminato</string>
     <string name="bubble_meta_pinned_a11y">Messaggio fissato</string>
     <string name="bubble_protection_after_read">Scompare dopo la lettura</string>

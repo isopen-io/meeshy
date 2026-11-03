@@ -368,6 +368,11 @@
     <string name="story_edit_error">Échec de la mise à jour de la story</string>
     <string name="story_edit_offline">Connexion requise pour modifier la story</string>
     <string name="story_edit_save">Enregistrer</string>
+    <string name="story_group_intro_away">Absent·e</string>
+    <string name="story_group_intro_idle">Inactif·ve</string>
+    <string name="story_group_intro_offline">Hors ligne</string>
+    <string name="story_group_intro_online">En ligne</string>
+    <string name="story_group_intro_skip_hint">Touchez pour passer à la story</string>
     <string name="story_language_close">Fermer</string>
     <string name="story_language_original">Original</string>
     <string name="story_language_original_hint">Chaque texte dans sa langue</string>
@@ -460,5 +465,7 @@
     <string name="story_tray_a11y_createStory">Créer une story</string>
     <string name="story_tray_menu_profile">Voir le profil</string>
     <string name="story_tray_menu_viewStories">Voir les stories</string>
+    <string name="story_viewer_a11y_percent">%1$d pourcent</string>
+    <string name="story_viewer_a11y_position">Story %1$d sur %2$d</string>
     <string name="story_viewer_transcript_title">Transcription</string>
 </resources>

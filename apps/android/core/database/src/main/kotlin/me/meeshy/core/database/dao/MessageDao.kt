@@ -244,6 +244,10 @@ public interface MessageDao {
     )
     public suspend fun newestSyncedCreatedAt(conversationId: String): Long?
 
+    /** The ids of the local send bubbles in [sendState] (`SENDING` / `FAILED`) — the boot reconciliation's input. */
+    @Query("SELECT id FROM messages WHERE sendState = :sendState")
+    public suspend fun idsInSendState(sendState: String): List<String>
+
     @Query("UPDATE messages SET sendState = :sendState, changeVersion = changeVersion + 1 WHERE id = :id")
     public suspend fun updateSendState(id: String, sendState: String?)
 

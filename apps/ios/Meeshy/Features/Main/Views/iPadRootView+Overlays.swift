@@ -15,7 +15,7 @@ extension iPadRootView {
             // Toasts de retour : hôte UNIQUE au niveau de `MeeshyApp` (`.feedbackToastOverlay()`), comme sur
             // iPhone. Les monter ici aussi les doublait, avec un tap qui ignorait leur action.
 
-            // Bandeaux « réglages en attente » et « stories en attente » — mêmes vues que l'iPhone.
+            // Bandeau « réglages en attente » — la même vue que l'iPhone.
             RootPendingBanners()
 
             RootNotificationToastOverlay(

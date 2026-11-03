@@ -75,7 +75,7 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
             backgroundAudioWindow = backgroundTrack?.window,
             foregroundAudioUrl = foregroundTrack?.url,
             foregroundAudioWindow = foregroundTrack?.window,
-            autoAdvanceMillis = StorySlideDuration.computeMillis(storyEffects),
+            autoAdvanceMillis = StorySlideDuration.computeMillis(storyEffects, background.videoSeconds),
             opening = storyEffects?.opening,
             closing = storyEffects?.closing,
             background = storyEffects?.background
@@ -107,6 +107,8 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
         /** L'affiche d'un fond VIDÉO : la vignette du serveur, son ThumbHash à défaut (la scène au repos n'a pas de lecteur). */
         val posterUrl: String? = null,
         val posterThumbHash: String? = null,
+        /** La durée servie du fond VIDÉO ; une slide dont les effets ne nomment aucun fond dure toute sa vidéo (#15225). */
+        val videoSeconds: Double? = null,
     )
 
     /**
@@ -165,6 +167,7 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
                 ),
                 posterUrl = piece?.thumbnailUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, apiBaseUrl) },
                 posterThumbHash = piece?.thumbHash,
+                videoSeconds = piece?.duration?.toDouble(),
             )
         }
         val imageUrl = resolvedUrl

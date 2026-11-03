@@ -1,6 +1,7 @@
 package me.meeshy.sdk.conversation
 
 import androidx.room.withTransaction
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -26,6 +27,8 @@ import me.meeshy.sdk.model.send.MessageRelation
 import me.meeshy.sdk.model.send.OutgoingAttachments
 import me.meeshy.sdk.model.send.OutgoingMessage
 import me.meeshy.sdk.model.send.SendAttemptContext
+import me.meeshy.sdk.model.socket.SendMessageAck
+import me.meeshy.sdk.model.socket.acknowledgedBy
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.outbox.OutboxEnqueueResult
@@ -53,7 +56,10 @@ internal class MessageSendCoordinator(
     private val adoption: MediaAdoption? = null,
     /** #15104 — l'aperçu local d'un média en attente part avec sa bulle : accusé, annulation, retrait. */
     private val previews: PendingMediaPreviewing? = null,
+    /** L'aperçu de la liste suit mon envoi : posé à l'envoi optimiste, recalculé quand la bulle est retirée. */
+    listPreviews: SendPreviewSink? = null,
 ) {
+    private val stager = OptimisticMessageStager(database, messageDao, listPreviews)
 
     /**
      * Optimistic send: the message appears instantly as a `SENDING` bubble backed by Room, and a
@@ -158,9 +164,7 @@ internal class MessageSendCoordinator(
             SendAttemptContext(cid, now, effects, originalLanguage, reusesExistingRow = clientMessageId != null),
             content = content,
         )
-        database.withTransaction {
-            messageDao.upsertAll(listOf(MessageEntityFactory.local(optimistic, now, LocalSendState.SENDING)))
-        }
+        stager.stage(optimistic, now)
         try {
             val queued = outboxRepository.tryEnqueue(
                 OutboxMutation(
@@ -175,8 +179,12 @@ internal class MessageSendCoordinator(
             )
             if (queued is OutboxEnqueueResult.QueueFull) markSendFailed(cid)
         } catch (closed: AccountClosedException) {
-            withContext(NonCancellable) { messageDao.deleteByIds(listOf(cid)) }
+            stager.withdraw(cid)
             throw closed
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            withContext(NonCancellable) { stager.failEnqueue(cid, failure) }
         }
         return cid
     }
@@ -198,10 +206,20 @@ internal class MessageSendCoordinator(
         previews?.release(optimisticAttachments)
     }
 
+    /**
+     * Accusé de la SOCKET (repli du REST) : il ne porte que `messageId` et `createdAt`, la bulle optimiste fournit le reste.
+     * Même réconciliation atomique que [reconcileSent] — la bulle devient le message serveur, sans doublon. Une bulle déjà
+     * remplacée (le `message:new` est arrivé le premier) n'a plus rien à réconcilier.
+     */
+    suspend fun reconcileAcknowledged(cmid: String, ack: SendMessageAck) {
+        val bubble = messageDao.find(cmid)?.let { runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(it.payload) }.getOrNull() } ?: return
+        reconcileSent(cmid, bubble.acknowledgedBy(ack))
+    }
+
     /** Retire la bulle optimiste [cmid] et, avec elle, les aperçus locaux de ses médias. */
     private suspend fun dropBubble(cmid: String) {
         val optimisticAttachments = previews?.let { optimisticAttachmentsOf(cmid) }.orEmpty()
-        messageDao.deleteByIds(listOf(cmid))
+        stager.withdraw(cmid)
         previews?.release(optimisticAttachments)
     }
 

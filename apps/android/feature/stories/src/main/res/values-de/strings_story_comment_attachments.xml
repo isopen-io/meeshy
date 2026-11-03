@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_comment_attach">Foto, Video oder Datei anhängen</string>
+    <string name="stories_comment_attach_remove">Anhang entfernen</string>
+    <string name="stories_comment_attach_uploading">Wird hochgeladen …</string>
+    <string name="stories_comment_attach_failed">Der Anhang konnte nicht hochgeladen werden</string>
+</resources>

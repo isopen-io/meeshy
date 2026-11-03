@@ -78,6 +78,12 @@ public interface VideoPlayerPort {
     public fun seekTo(positionMs: Long)
     public fun setSpeed(speed: Float)
     public fun setMuted(muted: Boolean)
+
+    /**
+     * Rallume ou éteint les PISTES audio du lecteur (`setTrackTypeDisabled`) : couper la sortie ne coupe pas
+     * le décodage. Sans effet par défaut (lecteurs de test).
+     */
+    public fun setAudioTracksEnabled(enabled: Boolean) {}
     public fun setLooping(looping: Boolean)
 
     /** Met en file UN successeur du même média ; `false` si la file n'en accepte pas. */

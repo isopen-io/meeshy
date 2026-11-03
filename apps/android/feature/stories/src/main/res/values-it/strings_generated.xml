@@ -368,6 +368,11 @@
     <string name="story_edit_error">Impossibile aggiornare la storia</string>
     <string name="story_edit_offline">Connessione necessaria per modificare la storia</string>
     <string name="story_edit_save">Salva</string>
+    <string name="story_group_intro_away">Assente</string>
+    <string name="story_group_intro_idle">Inattivo</string>
+    <string name="story_group_intro_offline">Non in linea</string>
+    <string name="story_group_intro_online">In linea</string>
+    <string name="story_group_intro_skip_hint">Tocca per passare alla storia</string>
     <string name="story_language_close">Chiudi</string>
     <string name="story_language_original">Originale</string>
     <string name="story_language_original_hint">Ogni testo nella sua lingua</string>
@@ -460,5 +465,7 @@
     <string name="story_tray_a11y_createStory">Crea una storia</string>
     <string name="story_tray_menu_profile">Vedi il profilo</string>
     <string name="story_tray_menu_viewStories">Vedi le storie</string>
+    <string name="story_viewer_a11y_percent">%1$d percento</string>
+    <string name="story_viewer_a11y_position">Storia %1$d di %2$d</string>
     <string name="story_viewer_transcript_title">Trascrizione</string>
 </resources>

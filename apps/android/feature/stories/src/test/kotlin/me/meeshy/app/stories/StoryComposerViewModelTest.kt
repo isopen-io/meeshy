@@ -1547,6 +1547,53 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `la saisie en place cede au doigt sans quitter le texte puis un toucher la reprend`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onTextChange("Salut")
+        val id = vm.state.value.selectedTextElement!!.id
+        val before = vm.state.value.selectedTextElement!!
+
+        vm.onInlineEditSuspended()
+
+        val suspended = vm.state.value
+        assertThat(suspended.isEditingTextElement).isFalse()
+        assertThat(suspended.selectedTextElement?.id).isEqualTo(id)
+        assertThat(suspended.selectedTextElement?.x).isEqualTo(before.x)
+        assertThat(suspended.selectedTextElement?.y).isEqualTo(before.y)
+
+        vm.onTapTextElement(id)
+
+        assertThat(vm.state.value.isEditingTextElement).isTrue()
+        assertThat(vm.state.value.selectedTextElement?.text).isEqualTo("Salut")
+    }
+
+    @Test
+    fun `ceder la saisie sans texte en cours est inerte`() = runTest {
+        val vm = viewModel()
+        val before = vm.state.value
+
+        vm.onInlineEditSuspended()
+
+        assertThat(vm.state.value.framedTextElementId).isEqualTo(before.framedTextElementId)
+        assertThat(vm.state.value.isEditingTextElement).isFalse()
+    }
+
+    @Test
+    fun `la frappe en direct reecrit le texte et la fin d'edition rend le champ a la legende`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextChange("Bon")
+        vm.onTextChange("Bonjour")
+        assertThat(vm.state.value.selectedTextElement?.text).isEqualTo("Bonjour")
+
+        vm.onDeselectTextElement()
+        assertThat(vm.state.value.isEditingTextElement).isFalse()
+        assertThat(vm.state.value.selectedSlideTextElements.single().text).isEqualTo("Bonjour")
+    }
+
+    @Test
     fun `an added but still-blank element does not make the story publishable`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()

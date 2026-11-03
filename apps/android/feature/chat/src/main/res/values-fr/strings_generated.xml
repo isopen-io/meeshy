@@ -344,6 +344,15 @@
     <string name="conversation_stats_type_text">Texte</string>
     <string name="conversation_stats_type_video">Vidéos</string>
     <string name="conversation_stats_words">Mots</string>
+    <string name="dashboard_health">Santé</string>
+    <string name="dashboard_period_all">Depuis le début</string>
+    <string name="dashboard_period_month">30 derniers jours</string>
+    <string name="dashboard_period_week">7 derniers jours</string>
+    <string name="dashboard_section_participant_activity">Activité par participant</string>
+    <string name="dashboard_section_statistics">Statistiques</string>
+    <string name="dashboard_stat_documents">Documents</string>
+    <string name="dashboard_stat_links">Liens</string>
+    <string name="dashboard_tone">Ton : %1$s</string>
     <string name="encryption_close">Fermer</string>
     <string name="encryption_detail_activate">Activer le chiffrement</string>
     <string name="encryption_detail_activation_footer_final">Le chiffrement de bout en bout ne se désactive jamais, le chiffrement sur nos serveurs non plus. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.</string>

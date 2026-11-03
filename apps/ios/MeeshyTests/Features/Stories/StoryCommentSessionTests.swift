@@ -106,6 +106,21 @@ final class StoryCommentSessionTests: XCTestCase {
         XCTAssertEqual(sut.reconciledCountPulse, 0, "a confirmed count never reopens the rail")
     }
 
+    /// #15198 — une story en attente n'a aucun commentaire à confirmer : son
+    /// id est local, aucune route ne le sert.
+    func test_begin_pendingStory_neverAsksTheNetwork() async {
+        let (sut, mock, fakes) = makeSUT()
+        let pendingId = "\(PendingStoryMarker.prefix)\(UUID().uuidString)#0"
+        fakes.viewed = pendingId
+        mock.getCommentsResult = .success(Self.page([("c1", 0)]))
+
+        sut.begin(storyId: pendingId, payloadCount: 0, viewing: { fakes.viewed })
+        await settle()
+
+        XCTAssertEqual(mock.getCommentsCallCount, 0)
+        XCTAssertEqual(sut.count, 0)
+    }
+
     func test_begin_staleZeroWithoutCache_confirmsAgainstTheNetworkAndPulses() async {
         let (sut, mock, fakes) = makeSUT()
         mock.getCommentsResult = .success(Self.page([("c1", 1), ("c2", 0)]))

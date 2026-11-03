@@ -23,6 +23,11 @@ public data class BubbleCallbacks(
     val onImageClick: ((Int) -> Unit)? = null,
     /** Long press on one image of the grid, with its index: that piece alone is previewed (#13461). */
     val onImageLongClick: ((Int) -> Unit)? = null,
+    /**
+     * Double tap sur une case de la grille de la rangée plate : réagir à CETTE pièce (son identifiant). Nul ⇒ le geste
+     * n'est pas monté et le tap simple n'attend aucune désambiguïsation ; une pièce seule ou protégée ne l'offre jamais.
+     */
+    val onReactToAttachment: ((attachmentId: String) -> Unit)? = null,
     /** Tap on a shared location that has coordinates. */
     val onLocationClick: ((BubbleLocation) -> Unit)? = null,
     /** Tap on a playable audio attachment. */
@@ -41,6 +46,8 @@ public data class BubbleCallbacks(
     val onStoryCitationClick: (() -> Unit)? = null,
     /** Tap on a language flag of the Prisme strip, with its language code. */
     val onFlagTap: ((String) -> Unit)? = null,
+    /** Tap sur le bouton traduire du pied (iOS `onTranslate`) : l'explorateur des langues du message. */
+    val onTranslate: (() -> Unit)? = null,
     /** Tap sur le smiley d'ajout du dernier message reçu : la réaction rapide. */
     val onAddReaction: (() -> Unit)? = null,
     /** Appui long de 0,4 s sur le smiley d'ajout : le sélecteur complet. */

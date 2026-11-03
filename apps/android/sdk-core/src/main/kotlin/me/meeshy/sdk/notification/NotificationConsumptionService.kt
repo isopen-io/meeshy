@@ -184,6 +184,16 @@ class NotificationConsumptionService @Inject constructor(
         repository.patchEverywhere { rows -> rows.filterNot { it.state.isRead } }
     }
 
+    /** Une notification née lue sur ce contenu : l'écho `notification:read` qui suit est le NÔTRE, il ne décrémente pas. */
+    fun declareSelfRead(notificationId: String) {
+        ledger.register(NotificationReadScope.Single(notificationId).ledgerKey, clock.nowMillis())
+    }
+
+    /** Le serveur a refusé : aucun écho ne viendra, celui d'un autre appareil doit de nouveau s'appliquer. */
+    fun retractSelfRead(notificationId: String) {
+        ledger.forget(NotificationReadScope.Single(notificationId).ledgerKey)
+    }
+
     override suspend fun clear() {
         ledger.clear()
         cadence.clear()

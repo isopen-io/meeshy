@@ -62,8 +62,10 @@ import me.meeshy.sdk.model.reading.focal.LongMessageExcerpt
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.R
 import me.meeshy.ui.component.focal.ExpandedGlassFrame
+import me.meeshy.ui.component.focal.FocalAttachmentBlock
 import me.meeshy.ui.component.focal.FocalIdentityHeader
 import me.meeshy.ui.component.focal.FocalLongMessage
+import me.meeshy.ui.component.focal.FocalProtectedContent
 import me.meeshy.ui.component.focal.LocalFlatRowExpansion
 import me.meeshy.ui.component.focal.FocalMetaColumn
 import me.meeshy.ui.component.focal.FocalQuotedReply
@@ -256,16 +258,11 @@ private fun FlatStandardBody(
                 val sections: @Composable () -> Unit = {
                     FlatContentSections(content, accentColor, ink, callbacks, audioPlayback, decor, bodyAccessory)
                 }
-                val spec = content.blurReveal
-                if (spec == null) {
-                    sections()
-                } else {
-                    BubbleBlurReveal(
-                        messageId = content.messageId,
-                        spec = spec,
-                        shape = RoundedCornerShape(MeeshyRadius.md),
-                    ) { sections() }
-                }
+                FocalProtectedContent(
+                    messageId = content.messageId,
+                    spec = content.blurReveal,
+                    shape = RoundedCornerShape(MeeshyRadius.md),
+                ) { sections() }
             }
             if (content.isOutgoing && content.deliveryStatus == DeliveryStatus.Failed) {
                 FlatFailedRetry(failure = BubbleFailure.of(content), onRetry = callbacks.onRetry)
@@ -358,15 +355,7 @@ private fun FlatContentSections(
             MessageStickerArtwork(sticker, side = FlatRowMetrics.stickerSide)
             return@Column
         }
-        if (content.hasRenderedAttachments) {
-            Column(
-                modifier = Modifier
-                    .widthIn(max = FlatRowMetrics.mediaMaxWidth)
-                    .clip(RoundedCornerShape(FlatRowMetrics.mediaRadius)),
-            ) {
-                BubbleAttachmentSections(content, ink, callbacks, audioPlayback)
-            }
-        }
+        if (content.hasRenderedAttachments) FocalAttachmentBlock(content, ink, callbacks, audioPlayback)
         FlatText(content, accentColor, ink, decor)
         if (!content.isEndToEndSealed) bodyAccessory?.invoke(ink)
     }

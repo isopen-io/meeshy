@@ -374,6 +374,11 @@
     <string name="story_edit_error">فشل تحديث القصة</string>
     <string name="story_edit_offline">الاتصال بالإنترنت مطلوب لتعديل القصة</string>
     <string name="story_edit_save">حفظ</string>
+    <string name="story_group_intro_away">بعيد</string>
+    <string name="story_group_intro_idle">غير نشط</string>
+    <string name="story_group_intro_offline">غير متصل</string>
+    <string name="story_group_intro_online">متصل</string>
+    <string name="story_group_intro_skip_hint">انقر للانتقال إلى القصة</string>
     <string name="story_language_close">إغلاق</string>
     <string name="story_language_original">الأصل</string>
     <string name="story_language_original_hint">كل نص بلغته</string>
@@ -478,5 +483,7 @@
     <string name="story_tray_a11y_createStory">إنشاء قصة</string>
     <string name="story_tray_menu_profile">عرض الملف الشخصي</string>
     <string name="story_tray_menu_viewStories">عرض القصص</string>
+    <string name="story_viewer_a11y_percent">%1$d بالمئة</string>
+    <string name="story_viewer_a11y_position">القصة %1$d من %2$d</string>
     <string name="story_viewer_transcript_title">النص المكتوب</string>
 </resources>

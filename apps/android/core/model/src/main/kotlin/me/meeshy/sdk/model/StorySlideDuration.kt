@@ -17,7 +17,8 @@ import kotlin.math.roundToInt
  *     bypassing this rule.
  *  Otherwise, content-derived:
  *  1. a background video/audio present → its duration, looped up to at least the
- *     target (a period shorter than the target extends to `ceil(target/period)*period`);
+ *     target (a period shorter than the target extends to `ceil(target/period)*period`) —
+ *     including the video the reader resolves for a slide whose effects name no background;
  *  2. long caption text (cumulative words `> 30`) → 6s plus 1s per 6 words past 30,
  *     giving the reader time to read;
  *  3. a plain static slide → 6s.
@@ -47,10 +48,10 @@ object StorySlideDuration {
      * duration is bounded to what the composer can write ([StoryDurationPin.MAX_SECONDS]); a content-derived
      * one to [MAX_CONTENT_SECONDS]; non-finite values never reach the countdown.
      */
-    fun computeSeconds(effects: StoryEffects?): Double {
-        if (effects == null) return DEFAULT_STATIC_SECONDS
-        val pinned = effects.timelineDuration
+    fun computeSeconds(effects: StoryEffects?, backgroundVideoSeconds: Double? = null): Double {
+        val pinned = effects?.timelineDuration
         if (pinned != null && pinned > 0.0) return pinned.coerceAtMost(StoryDurationPin.MAX_SECONDS)
+        val effects = withResolvedBackground(effects, backgroundVideoSeconds) ?: return DEFAULT_STATIC_SECONDS
         val derived = contentDerivedSeconds(
             mediaObjects = effects.mediaObjects,
             audioPlayerObjects = effects.audioPlayerObjects,
@@ -59,8 +60,24 @@ object StorySlideDuration {
         return if (derived.isNaN()) DEFAULT_STATIC_SECONDS else derived.coerceAtMost(MAX_CONTENT_SECONDS)
     }
 
+    /**
+     * [effects] carrying the background video the reader resolves on its own (#15225) — a slide whose effects name no
+     * background, published as a bare media story, still plays its video: iOS stands a carrier in for it
+     * (`StoryItem.legacyVideoCarrier`). [backgroundVideoSeconds] is that video's length; without a finite positive one, or
+     * when the effects already name a background, nothing changes.
+     */
+    private fun withResolvedBackground(effects: StoryEffects?, backgroundVideoSeconds: Double?): StoryEffects? {
+        val seconds = backgroundVideoSeconds?.takeIf { it.isFinite() && it > 0.0 } ?: return effects
+        if (effects?.mediaObjects.orEmpty().any { it.isBackground }) return effects
+        val carrier = StoryMediaObject(id = RESOLVED_BACKGROUND_ID, mediaType = "video", isBackground = true, loop = true, duration = seconds)
+        val base = effects ?: StoryEffects()
+        return base.copy(mediaObjects = base.mediaObjects.orEmpty() + carrier)
+    }
+
+    private const val RESOLVED_BACKGROUND_ID = "resolved-background-video"
+
     /** The effective duration in whole milliseconds, for the countdown tween. */
-    fun computeMillis(effects: StoryEffects?): Int = (computeSeconds(effects) * 1000.0).roundToInt()
+    fun computeMillis(effects: StoryEffects?, backgroundVideoSeconds: Double? = null): Int = (computeSeconds(effects, backgroundVideoSeconds) * 1000.0).roundToInt()
 
     /**
      * The content-derived duration (no author override) — the "longest data wins"

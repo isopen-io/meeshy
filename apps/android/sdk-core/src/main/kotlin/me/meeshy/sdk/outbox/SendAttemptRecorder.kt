@@ -5,6 +5,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.SendAttemptDao
@@ -69,15 +71,19 @@ internal class RoomSendAttemptRecorder(
         errorMessage: String?,
     ) {
         try {
-            withTimeoutOrNull(WRITE_BUDGET_MS) {
-                dao.append(
-                    localId = localId,
-                    transport = transport.wire,
-                    startedAt = startedAtMillis,
-                    finishedAt = finishedAtMillis,
-                    outcome = outcome.wire,
-                    errorMessage = errorMessage?.take(MAX_ERROR_LENGTH),
-                )
+            // Le budget se compte en temps RÉEL : hors du dispatcher de l'appelant, un test à horloge virtuelle
+            // (runTest) ne le voit pas expirer pendant que Room écrit sur son propre fil.
+            withContext(Dispatchers.IO) {
+                withTimeoutOrNull(WRITE_BUDGET_MS) {
+                    dao.append(
+                        localId = localId,
+                        transport = transport.wire,
+                        startedAt = startedAtMillis,
+                        finishedAt = finishedAtMillis,
+                        outcome = outcome.wire,
+                        errorMessage = errorMessage?.take(MAX_ERROR_LENGTH),
+                    )
+                }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled

@@ -6,15 +6,18 @@
   loading layout (no custom XML layout needed — Glance replaces it once composed).
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="180dp"
+    android:minWidth="250dp"
     android:minHeight="110dp"
-    android:targetCellWidth="3"
+    android:minResizeWidth="250dp"
+    android:minResizeHeight="110dp"
+    android:targetCellWidth="4"
     android:targetCellHeight="2"
-    android:maxResizeWidth="360dp"
-    android:maxResizeHeight="360dp"
+    android:maxResizeWidth="320dp"
+    android:maxResizeHeight="320dp"
     android:updatePeriodMillis="1800000"
     android:description="@string/widget_favorite_contacts_description"
     android:initialLayout="@layout/glance_default_loading_layout"
+    android:previewLayout="@layout/widget_preview_favorite_contacts"
     android:previewImage="@drawable/widget_preview_favorites"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen" />

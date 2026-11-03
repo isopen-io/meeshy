@@ -276,12 +276,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 if (exit != ConversationOptionsExit.BLOCKED) host.navigation.onBack()
             },
         )
-        // Les onglets d'iOS (#13785) : Membres, Médias, Stats (l'analyse en tête, comme le tableau de bord iOS), Options.
-        val analysisEntry = ConversationInfoEntry(
-            MeeshyIcons.Sparkles,
-            stringResource(R.string.conversation_analysis_title),
-            openFrom { sheets.analysis = true },
-        )
+        // Les onglets d'iOS (#13785) : Membres, Médias, Stats (le tableau de bord unifié, analyse comprise), Options.
         val tabs = ConversationInfoTabSlots(
             members = { modifier -> ConversationMembersContent(state.conversationId, accentColor, modifier) },
             media = { modifier ->
@@ -299,12 +294,11 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 )
             },
             stats = { modifier ->
-                ConversationStatsContent(
+                ConversationDashboardContent(
                     conversationId = state.conversationId,
                     accentColor = accentColor,
                     clientMessages = rememberClientStatMessages(state.messages),
                     modifier = modifier,
-                    header = { ConversationInfoEntryRow(analysisEntry, accentColor) },
                 )
             },
             options = { modifier ->
@@ -398,14 +392,6 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             },
             onOpenFile = openHubFile,
             onDismiss = { sheets.media = false },
-        )
-    }
-
-    if (sheets.analysis) {
-        ConversationAnalysisSheet(
-            conversationId = state.conversationId,
-            accentColor = accentColor,
-            onDismiss = { sheets.analysis = false },
         )
     }
 

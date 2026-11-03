@@ -4,7 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.ui.component.bubble.BubbleContent
 import org.junit.Test
 
-private fun bubble(id: String, outgoing: Boolean) = BubbleContent(
+private fun bubble(id: String, outgoing: Boolean, at: String? = null) = BubbleContent(
     messageId = id,
     text = "m",
     isOutgoing = outgoing,
@@ -14,67 +14,50 @@ private fun bubble(id: String, outgoing: Boolean) = BubbleContent(
     showSenderName = false,
     isEdited = false,
     isDeleted = false,
-    createdAtIso = null,
+    createdAtIso = at,
 )
+
+private fun cursor(
+    lastReadCreatedAt: Long? = null,
+    lastReadMessageId: String? = null,
+    server: Int = 0,
+) = UnreadCursor(lastReadMessageId, null, lastReadCreatedAt, null, server)
 
 class UnreadMarkerTest {
 
+    private val t1 = "2026-01-01T10:00:01.000Z"
+    private val t2 = "2026-01-01T10:00:02.000Z"
+    private val t3 = "2026-01-01T10:00:03.000Z"
+    private val at1 = 1767261601000L
+
     @Test
-    fun `no unread count yields no marker`() {
-        val bubbles = listOf(bubble("m1", outgoing = false), bubble("m2", outgoing = false))
-        assertThat(UnreadMarker.firstUnreadId(bubbles, unreadCount = 0)).isNull()
+    fun `no cursor and nothing unread on the server yields no marker`() {
+        val bubbles = listOf(bubble("m1", false, t1), bubble("m2", false, t2))
+        assertThat(UnreadMarker.firstUnreadId(bubbles, cursor(server = 0), "me")).isNull()
     }
 
     @Test
-    fun `a negative unread count yields no marker`() {
-        val bubbles = listOf(bubble("m1", outgoing = false))
-        assertThat(UnreadMarker.firstUnreadId(bubbles, unreadCount = -3)).isNull()
+    fun `without a cursor the server count places the marker on the last N incoming`() {
+        val bubbles = listOf(bubble("m1", false, t1), bubble("m2", false, t2), bubble("m3", false, t3))
+        assertThat(UnreadMarker.firstUnreadId(bubbles, cursor(server = 2), "me")).isEqualTo("m2")
     }
 
     @Test
-    fun `an empty list yields no marker`() {
-        assertThat(UnreadMarker.firstUnreadId(emptyList(), unreadCount = 2)).isNull()
+    fun `a cursor wins over a stale server count`() {
+        val bubbles = listOf(bubble("m1", false, t1), bubble("m2", false, t2), bubble("m3", false, t3))
+        assertThat(UnreadMarker.firstUnreadId(bubbles, cursor(lastReadCreatedAt = at1, server = 0), "me"))
+            .isEqualTo("m2")
     }
 
     @Test
-    fun `an unread count larger than the loaded window yields no marker`() {
-        val bubbles = listOf(bubble("m1", outgoing = false), bubble("m2", outgoing = false))
-        assertThat(UnreadMarker.firstUnreadId(bubbles, unreadCount = 3)).isNull()
+    fun `the marker never lands on the viewer own message`() {
+        val bubbles = listOf(bubble("m1", false, t1), bubble("m2", true, t2), bubble("m3", false, t3))
+        assertThat(UnreadMarker.firstUnreadId(bubbles, cursor(lastReadCreatedAt = at1), "me")).isEqualTo("m3")
     }
 
     @Test
-    fun `the marker sits count-from-the-end`() {
-        val bubbles = listOf(
-            bubble("m1", outgoing = false),
-            bubble("m2", outgoing = false),
-            bubble("m3", outgoing = false),
-            bubble("m4", outgoing = false),
-        )
-        // 2 unread → boundary is the message at index size-2 = m3.
-        assertThat(UnreadMarker.firstUnreadId(bubbles, unreadCount = 2)).isEqualTo("m3")
-    }
-
-    @Test
-    fun `an unread count equal to the window marks the first message`() {
-        val bubbles = listOf(bubble("m1", outgoing = false), bubble("m2", outgoing = false))
-        assertThat(UnreadMarker.firstUnreadId(bubbles, unreadCount = 2)).isEqualTo("m1")
-    }
-
-    @Test
-    fun `a single incoming unread message is its own marker`() {
-        val bubbles = listOf(bubble("only", outgoing = false))
-        assertThat(UnreadMarker.firstUnreadId(bubbles, unreadCount = 1)).isEqualTo("only")
-    }
-
-    @Test
-    fun `an own message at the boundary is never marked unread`() {
-        val bubbles = listOf(
-            bubble("m1", outgoing = false),
-            bubble("m2", outgoing = true),
-            bubble("m3", outgoing = false),
-        )
-        // boundary index size-2 = m2, which is outgoing → no marker (you never
-        // "unread" your own send, matching iOS's `!candidate.isMe` guard).
-        assertThat(UnreadMarker.firstUnreadId(bubbles, unreadCount = 2)).isNull()
+    fun `everything read gives no marker`() {
+        val bubbles = listOf(bubble("m1", false, t1))
+        assertThat(UnreadMarker.firstUnreadId(bubbles, cursor(lastReadCreatedAt = at1), "me")).isNull()
     }
 }

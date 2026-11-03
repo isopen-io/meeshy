@@ -1,6 +1,7 @@
 package me.meeshy.app.feed
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.pluralStringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -17,10 +18,12 @@ internal fun FeedCommentsSheetHost(
     serverCount: Int,
     onDismiss: () -> Unit,
     onCommentSent: (String) -> Unit,
+    replyToCommentId: String? = null,
 ) {
     if (postId == null) return
     val thread = rememberPostCommentsViewModel(postId)
     val state by thread.state.collectAsStateWithLifecycle()
+    LaunchedEffect(thread, replyToCommentId) { replyToCommentId?.let(thread::beginReply) }
     val count = CommentsTitleCount.of(serverCount, state.comments.size)
     PostCommentsThreadSheet(
         viewModel = thread,
