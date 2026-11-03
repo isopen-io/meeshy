@@ -66,10 +66,11 @@ nonisolated enum ComposerEditTools {
         !familyOpen && shownTools.isEmpty
     }
 
-    /// **Seul le recadrage réduit la prise** (#10930 : « seul le recadrage
-    /// réduit la vidéo pour coper avec les bords ») — et seulement quand le
-    /// chrome est montré. Tout le reste se pose PAR-DESSUS une prise qui garde
-    /// le viewport entier.
+    /// **Seul le recadrage pose la prise dans un cadre** — et seulement quand le
+    /// chrome est montré. Ce cadre FIXE garde le grand écran (#15193) : il prend
+    /// toute la place que le chrome laisse, l'image s'y place au pincement et au
+    /// glissé. Tout le reste se pose PAR-DESSUS une prise qui garde le viewport
+    /// entier (#10930).
     static func framesScene(active: Set<ComposerEditTool>, chromeShown: Bool) -> Bool {
         chromeShown && active.contains(.crop)
     }
@@ -101,8 +102,7 @@ nonisolated enum ComposerEditTools {
 
     /// L'ordre des panneaux sous la scène, de haut en bas : les proportions,
     /// le spectre, puis la coupe, au plus près des outils. Les proportions
-    /// retiennent leur bande SOUS la scène (porteur 2026-10-20 : « les rails
-    /// d'outils doivent être le moins coupés possible ») : aucun crochet ne
+    /// flottent sur le cadre sans retenir de place (#15193) : aucun crochet ne
     /// les coupe, et elles défilent jusqu'aux bords de l'écran.
     static let panelOrder: [ComposerEditTool] = [.crop, .sound, .trim]
 

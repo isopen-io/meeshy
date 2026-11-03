@@ -331,7 +331,7 @@ struct ComposerCaptureChrome: View {
         }
     }
 
-    /// **Les formats, PAR-DESSUS le cadre** (#10930), au bas de la scène.
+    /// **Les formats, PAR-DESSUS le cadre** (#15193), au-dessus de ses crochets du bas.
     @ViewBuilder
     private var cropPresets: some View {
         if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
