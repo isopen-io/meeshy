@@ -9,6 +9,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.app.R
 import me.meeshy.app.push.PushInteraction
+import me.meeshy.app.push.PushDisplayGate
 import me.meeshy.app.push.PushInteractionBus
 import me.meeshy.app.push.PushTapIntentFactory
 import me.meeshy.app.push.IncomingPush
@@ -50,6 +51,7 @@ class PushNotificationPipeline @Inject constructor(
     enrichers: Set<@JvmSuppressWildcards NotificationEnricher>,
     private val summaryNotifier: PushSummaryNotifier,
     private val interactions: PushInteractionBus = PushInteractionBus(),
+    private val displayGates: Set<@JvmSuppressWildcards PushDisplayGate> = emptySet(),
 ) {
     private val tapIntents = PushTapIntentFactory(context)
 
@@ -64,16 +66,18 @@ class PushNotificationPipeline @Inject constructor(
     }
 
     /** `true` when a notification was posted. */
-    suspend fun renderNow(push: IncomingPush): Boolean {
-        val payload = push.payload
-        val title = push.notificationTitle ?: payload.title
-        val body = push.notificationBody ?: payload.body
+    suspend fun renderNow(incoming: IncomingPush): Boolean {
+        val payload = incoming.payload
         // A data push with nothing to show is a silent sync : the observers handle it.
-        if (title == null && body == null) return false
+        if ((incoming.notificationTitle ?: payload.title) == null && (incoming.notificationBody ?: payload.body) == null) return false
+        if (displayGates.any { gate -> !runCatching { gate.allows(incoming) }.getOrDefault(true) }) return false
         if (!firstDelivery(payload.notificationId)) return false
 
         val deadline = environment.nowMillis() + DEADLINE_MILLIS
         val preferences = hydratedPreferences()
+        val push = PushBannerText.apply(context, incoming, preferences)
+        val title = push.notificationTitle ?: payload.title
+        val body = push.notificationBody ?: payload.body
         val decision = PushDeliveryGate.decide(
             payload,
             PushDeliveryContext(

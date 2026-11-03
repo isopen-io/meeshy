@@ -367,6 +367,11 @@ class FeedViewModel @Inject constructor(
         }
     }
 
+    /** Rend la carte à la résolution du Prisme : défait le choix manuel de langue (iOS `clearTranslationOverride`). */
+    fun clearLanguageOverride(postId: String) {
+        activeLanguageOverride.update { it - postId }
+    }
+
     /**
      * Pick in the post's language explorer sheet (iOS `PostTranslationSheet.onSelectLanguage`):
      * the chosen language becomes the card's text. Unlike a flag chip, picking the language already

@@ -84,6 +84,7 @@
     <string name="bubble_edited">modifié</string>
     <string name="bubble_forwarded">Transféré</string>
     <string name="bubble_forwarded_from">Transféré depuis %1$s</string>
+    <string name="bubble_forwarded_from_person">Transf. de %1$s</string>
     <string name="bubble_image_description">Image</string>
     <string name="bubble_joinNotice_joined">%1$s a rejoint la conversation</string>
     <string name="bubble_joinNotice_noAccount">sans compte</string>
@@ -98,6 +99,7 @@
     <string name="bubble_location_open">Ouvrir dans Plans</string>
     <string name="bubble_location_shared">Position partagée</string>
     <string name="bubble_message_deleted">Message supprimé</string>
+    <string name="bubble_meta_pinned_a11y">Message épinglé</string>
     <string name="bubble_protection_after_read">Disparaît après lecture</string>
     <string name="bubble_reply_photo">Photo</string>
     <string name="bubble_reply_story">Story</string>
@@ -422,4 +424,9 @@
     <string name="viewer_save">Enregistrer</string>
     <string name="viewer_saving">Enregistrement…</string>
     <string name="viewer_share_outside">Partager</string>
+    <string name="voiceProfile_recording_createProfile">Créer le profil vocal</string>
+    <string name="voiceProfile_recording_languagePicker">Langue d\'enregistrement</string>
+    <string name="voiceProfile_recording_min_duration">min %1$d s</string>
+    <string name="voiceProfile_recording_readAloud">Lisez ce texte à voix haute</string>
+    <string name="voiceProfile_recording_sample">Échantillon %1$d</string>
 </resources>

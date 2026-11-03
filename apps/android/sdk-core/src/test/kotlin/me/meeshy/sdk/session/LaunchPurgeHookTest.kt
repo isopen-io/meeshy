@@ -38,4 +38,14 @@ class LaunchPurgeHookTest {
 
         assertThat(teardown.wipes).isEqualTo(0)
     }
+
+    @Test
+    fun `une session restauree pendant la purge de lancement n'est pas videe`() = runTest {
+        val teardown = CountingTeardown()
+        val tokens = mockk<TokenStore> { every { isAuthenticated } returnsMany listOf(false, true) }
+
+        LaunchPurgeHook(tokens, teardown).onAppCreate()
+
+        assertThat(teardown.wipes).isEqualTo(0)
+    }
 }

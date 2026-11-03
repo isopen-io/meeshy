@@ -20,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -104,6 +105,7 @@ internal fun ComposerSlideRail(
     var dragPx by remember { mutableFloatStateOf(0f) }
     var lastTarget by remember { mutableIntStateOf(NO_DRAG) }
     val requestRemoval = rememberConfirmedSlideDeletion(onRemove)
+    SceneThumbnailLifecycle(deck)
     var menuFor by remember { mutableStateOf<String?>(null) }
     val target = if (dragFrom == NO_DRAG) NO_DRAG else SlideReorderResolver.targetIndex(dragFrom, dragPx * if (rtl) -1f else 1f, slotPx, deck.size)
     LaunchedEffect(target) {
@@ -153,6 +155,29 @@ internal fun ComposerSlideRail(
 }
 
 private const val NO_DRAG = -1
+
+/**
+ * The store's lifecycle (iOS `SceneThumbnailStore`): the system taking memory back empties it, and removing a scene drops the
+ * pictures it painted — the deck shrinking is the only moment a whole scene's tiles are certainly dead.
+ */
+@Composable
+private fun SceneThumbnailLifecycle(deck: StorySlideDeck) {
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        val callbacks = object : android.content.ComponentCallbacks2 {
+            override fun onTrimMemory(level: Int) { if (SceneThumbnailPressure.purges(level)) SlideThumbnailStore.shared.clear() }
+            override fun onConfigurationChanged(newConfig: android.content.res.Configuration) = Unit
+            override fun onLowMemory() = SlideThumbnailStore.shared.clear()
+        }
+        context.applicationContext.registerComponentCallbacks(callbacks)
+        onDispose { context.applicationContext.unregisterComponentCallbacks(callbacks) }
+    }
+    var lastCount by remember { mutableIntStateOf(deck.size) }
+    LaunchedEffect(deck.size) {
+        if (deck.size < lastCount) SlideThumbnailStore.shared.clear()
+        lastCount = deck.size
+    }
+}
 
 /** How far a tile steps aside while [dragFrom] is carried toward [target]: one slot, toward the gap the dragged tile leaves. */
 internal fun slotShift(index: Int, dragFrom: Int, target: Int, slotPx: Float, rtl: Boolean): Float {

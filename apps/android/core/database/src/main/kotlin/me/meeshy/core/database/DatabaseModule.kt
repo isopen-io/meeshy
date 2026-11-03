@@ -32,6 +32,7 @@ import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.core.database.dao.TusUploadCheckpointDao
 import me.meeshy.core.database.migration.MeeshyMigrations
 import me.meeshy.core.database.search.SearchIndexSchema
+import java.io.File
 import javax.inject.Singleton
 
 @Module
@@ -44,14 +45,24 @@ internal object DatabaseModule {
         @ApplicationContext context: Context,
         diagnostics: DatabaseInitDiagnostics,
         health: StorageHealth,
+        leftovers: DatabaseLeftovers,
     ): MeeshyDatabase =
         DatabaseOpener(
             context = context,
             diagnostics = diagnostics,
             health = health,
             primaryName = DATABASE_NAME,
+            secondaryFile = secondaryFile(context),
+            leftovers = leftovers,
             build = { ctx, location -> meeshyDatabaseBuilder(ctx, location).build() },
         ).open()
+
+    @Provides
+    @Singleton
+    fun providesDatabaseLeftovers(@ApplicationContext context: Context): DatabaseLeftovers =
+        DatabaseLeftovers(primary = context.getDatabasePath(DATABASE_NAME), secondary = secondaryFile(context))
+
+    private fun secondaryFile(context: Context): File = File(context.cacheDir, DatabaseOpener.SECONDARY_NAME)
 
     /** The production configuration, shared with the tests that open the database the way the app does. */
     fun meeshyDatabaseBuilder(context: Context, name: String = DATABASE_NAME): RoomDatabase.Builder<MeeshyDatabase> =

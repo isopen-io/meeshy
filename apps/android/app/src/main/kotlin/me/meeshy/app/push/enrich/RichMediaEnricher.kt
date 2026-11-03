@@ -36,8 +36,8 @@ class RichMediaEnricher @Inject constructor(
         when (val media = PushRichMedia.of(request.push.payload)) {
             PushRichMedia.None -> Unit
             is PushRichMedia.Voice -> labelVoice(builder, request, media)
-            is PushRichMedia.Picture -> showPicture(builder, request, media.url, media.mimeType)
-            is PushRichMedia.VideoThumbnail -> showPicture(builder, request, media.url, media.mimeType)
+            is PushRichMedia.Picture -> if (request.preferences.showPreview) showPicture(builder, request, media.url, media.mimeType)
+            is PushRichMedia.VideoThumbnail -> if (request.preferences.showPreview) showPicture(builder, request, media.url, media.mimeType)
         }
     }
 
@@ -64,6 +64,7 @@ class RichMediaEnricher @Inject constructor(
     }
 
     private suspend fun senderIcon(request: EnrichmentRequest): Bitmap? {
+        if (!request.preferences.showSenderName) return null
         val url = request.push.payload.senderAvatar ?: return null
         val budget = PushMediaBudget.avatarMillis(request.deadlineMillis - System.currentTimeMillis(), pictureWanted = false)
         if (budget <= 0) return null

@@ -130,8 +130,10 @@
     <string name="feed_translated">الترجمة متاحة</string>
     <string name="feed_translation_available">الترجمات المتاحة</string>
     <string name="feed_translation_close">إغلاق</string>
+    <string name="feed_translation_confidence_a11y">دقة الترجمة %1$s</string>
     <string name="feed_translation_original">الأصل</string>
     <string name="feed_translation_other_languages">لغات أخرى</string>
+    <string name="feed_translation_requested">مطلوبة</string>
     <string name="feed_translation_title">اللغات</string>
     <string name="feed_translation_translate">ترجمة</string>
     <string name="feed_translations_badge">الترجمات</string>

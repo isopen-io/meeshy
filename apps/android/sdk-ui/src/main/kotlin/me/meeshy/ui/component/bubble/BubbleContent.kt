@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.model.ForwardAttribution
 import me.meeshy.sdk.model.JoinNoticePresentation
 import me.meeshy.sdk.model.BubbleAttachmentLayout
 import me.meeshy.sdk.model.CallSummaryMetadata
@@ -96,12 +97,11 @@ public data class BubbleContent(
     val pinnedAtIso: String? = null,
     val isForwarded: Boolean = false,
     /**
-     * The SOURCE conversation's display name when the forward badge should name
-     * it (a group forward), else null — the badge then shows the generic
-     * "Forwarded" label. Resolved by `ForwardBadgePolicy`. Only meaningful when
-     * [isForwarded] is true.
+     * Who the forward badge may name, decided by `ForwardBadgePolicy` (three outcomes, no
+     * implicit fallback): the source group, the person of a one-to-one, or nobody. Only
+     * meaningful when [isForwarded] is true.
      */
-    val forwardedFromName: String? = null,
+    val forwardAttribution: ForwardAttribution = ForwardAttribution.Anonymous,
     val isStarred: Boolean = false,
     /** Le DERNIER message reçu du fil : lui seul porte le smiley d'ajout de réaction (iOS). */
     val isLastReceivedMessage: Boolean = false,

@@ -96,7 +96,7 @@ internal fun parseStoredBlock(json: Json, raw: String?): JsonElement? {
     return runCatching { json.parseToJsonElement(trimmed) }.getOrNull()
 }
 
-private fun <T> decodeTolerantBlock(
+internal fun <T> decodeTolerantBlock(
     serializer: KSerializer<T>,
     element: JsonElement?,
     retiredKeys: Set<String> = emptySet(),

@@ -304,3 +304,76 @@ class FocalCellsTest {
         assertThat(ConversationStartName.of(null, hasMoreOlder = false, isLoadingInitial = false)).isNull()
     }
 }
+
+class ChatListItemContentTypeTest {
+
+    private val zone = ZoneOffset.UTC
+
+    @Test
+    fun `chaque genre de rangee a son propre type de composition`() {
+        val items = buildChatListItems(
+            listOf(bubble("m1", "2026-06-11T08:00:00Z"), bubble("m2", "2026-06-11T09:00:00Z")),
+            zone,
+            firstUnreadId = "m2",
+            showEncryptionNotice = true,
+            conversationStartName = "Mégane",
+        )
+
+        val byKind = items.groupBy { it::class }.mapValues { (_, rows) -> rows.map { it.contentType }.toSet() }
+        assertThat(byKind.values.flatten()).containsNoDuplicates()
+        assertThat(byKind.keys).containsExactly(
+            ChatListItem.EncryptionNotice::class,
+            ChatListItem.ConversationStart::class,
+            ChatListItem.DayHeader::class,
+            ChatListItem.UnreadSeparator::class,
+            ChatListItem.Message::class,
+        )
+    }
+
+    @Test
+    fun `toutes les bulles partagent un type, donc un pool de composition`() {
+        val items = buildChatListItems(
+            listOf(bubble("m1", "2026-06-11T08:00:00Z"), bubble("m2", "2026-06-11T09:00:00Z")),
+            zone,
+        ).filterIsInstance<ChatListItem.Message>()
+
+        assertThat(items.map { it.contentType }.toSet()).containsExactly("bubble")
+    }
+
+    @Test
+    fun `le spinner d'historique n'emprunte le type d'aucune rangee du fil`() {
+        val items = buildChatListItems(
+            listOf(bubble("m1", "2026-06-11T08:00:00Z")),
+            zone,
+            showEncryptionNotice = true,
+            conversationStartName = "x",
+        )
+
+        assertThat(items.map { it.contentType }).doesNotContain(LOADING_OLDER_CONTENT_TYPE)
+    }
+
+    @Test
+    fun `la cle de mise en page d'une bulle optimiste survit a sa reconciliation serveur`() {
+        val optimistic = bubble("cid_7", "2026-06-11T08:00:00Z").copy(clientMessageId = "cid_7", isPending = true)
+        val reconciled = bubble("srv_42", "2026-06-11T08:00:00Z").copy(clientMessageId = "cid_7")
+
+        val before = layoutKeys(buildChatListItems(listOf(optimistic), zone))
+        val after = layoutKeys(buildChatListItems(listOf(reconciled), zone))
+
+        assertThat(after).isEqualTo(before)
+    }
+
+    @Test
+    fun `les cles des separateurs ne dependent pas des bulles voisines`() {
+        val keys = layoutKeys(
+            buildChatListItems(
+                listOf(bubble("m1", "2026-06-11T08:00:00Z"), bubble("m2", "2026-06-12T08:00:00Z")),
+                zone,
+                firstUnreadId = "m2",
+            ),
+        )
+
+        assertThat(keys).containsNoDuplicates()
+        assertThat(keys).contains("unread-separator")
+    }
+}

@@ -808,8 +808,8 @@ class PostRepository @Inject constructor(
      * sibling of [applyTranslationUpdate].
      *
      * Returns `true` only when the cache actually changed. Inert (`false`, nothing
-     * stored) when the post is not in the cache, [commentId] is non-null (comment-level
-     * media isn't modeled on Android yet), or the merge is a no-op (blank language,
+     * stored) when the post is not in the cache, [commentId] names a comment the row does not
+     * carry, or the merge is a no-op (blank language,
      * blank text, unknown [mediaId], or the identical entry already present).
      */
     suspend fun applyMediaCaptionTranslationUpdate(
