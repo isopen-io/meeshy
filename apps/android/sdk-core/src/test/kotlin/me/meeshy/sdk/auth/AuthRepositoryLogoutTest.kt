@@ -5,6 +5,8 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.MeeshyUser
@@ -205,7 +207,9 @@ class AuthRepositoryLogoutTest {
         repository.logout()
 
         assertThat(store.isAuthenticated).isFalse()
-        testScheduler.advanceUntilIdle()
+        // Les tâches du backgroundScope sont ignorées par advanceUntilIdle : on avance le temps virtuel (0 s, 1 s, 5 s).
+        advanceTimeBy(6_001)
+        runCurrent()
         coVerify(exactly = 3) { api.logout("Bearer jwt-a", "sess-a") }
         assertThat(handed).containsExactly("jwt-a" to "sess-a")
     }

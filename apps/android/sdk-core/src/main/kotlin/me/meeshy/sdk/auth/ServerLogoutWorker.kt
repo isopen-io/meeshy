@@ -44,7 +44,7 @@ class PendingServerLogoutTokens @Inject constructor(@SecretVault private val vau
     /** Les identifiants dont le coffre garde encore un jeton : la vérité de ce qui n'a pas été fermé côté serveur. */
     fun ids(): Set<String> = vault.keys(null)
         .filter { it.startsWith(PREFIX) }
-        .map { it.removePrefix(PREFIX).substringBeforeLast('.') }
+        .map { it.removePrefix(PREFIX).substringBeforeLast(PART_SEPARATOR) }
         .filter { it.isNotEmpty() }
         .toSet()
 
@@ -53,10 +53,13 @@ class PendingServerLogoutTokens @Inject constructor(@SecretVault private val vau
         vault.remove(key(id, SESSION))
     }
 
-    private fun key(id: String, part: String) = "$PREFIX$id.$part"
+    private fun key(id: String, part: String) = "$PREFIX$id$PART_SEPARATOR$part"
 
     private companion object {
-        const val PREFIX = "server_logout."
+        // Pas de point : le coffre lit toute clé pointée comme appartenant à un compte (SecureKeyNamespace),
+        // et keys(null) ne la rendrait jamais.
+        const val PREFIX = "server_logout_"
+        const val PART_SEPARATOR = '_'
         const val JWT = "jwt"
         const val SESSION = "session_token"
     }
