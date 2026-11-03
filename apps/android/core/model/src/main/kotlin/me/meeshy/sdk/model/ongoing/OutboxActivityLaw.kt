@@ -21,6 +21,9 @@ data class OutboxActivitySnapshot(
     val phase: OutboxActivityPhase,
     val remaining: Int,
     val label: String,
+    /** Envois terminés depuis l'ouverture de la notification, sur [total] suivis (0 = inconnu). */
+    val sent: Int = 0,
+    val total: Int = 0,
 )
 
 /**
@@ -79,6 +82,8 @@ object OutboxActivityLaw {
             phase = if (isOffline) OutboxActivityPhase.WaitingForNetwork else OutboxActivityPhase.Sending,
             remaining = active.count { row -> row.dependsOnIds.none { it in activeIds } },
             label = label(head, wording),
+            sent = (tracked + activeIds).size - activeIds.size,
+            total = (tracked + activeIds).size,
         )
         val next = Running(snapshot, tracked + activeIds, failed)
         if (running == null) return Step(next, Action.Start(snapshot))
