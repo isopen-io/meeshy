@@ -294,6 +294,8 @@
     <string name="story_canvas_action_edit">Modifier</string>
     <string name="story_canvas_action_leaveScene">Sortir de la scène</string>
     <string name="story_canvas_action_sendBackward">Mettre à l\'arrière</string>
+    <string name="story_caption_scroll_to_top">Revenir au début du texte</string>
+    <string name="story_caption_scroll_to_top_hint">Fait défiler la description jusqu\'à son premier mot</string>
     <string name="story_composer_cancel">Annuler</string>
     <string name="story_composer_edit_slide_background">Éditer le fond</string>
     <string name="story_composer_fab_badge">%1$d élément(s) actif(s)</string>
@@ -397,4 +399,5 @@
     <string name="story_tray_a11y_changeMood">Changer mon mood</string>
     <string name="story_tray_menu_profile">Voir le profil</string>
     <string name="story_tray_menu_viewStories">Voir les stories</string>
+    <string name="story_viewer_transcript_title">Transcription</string>
 </resources>
