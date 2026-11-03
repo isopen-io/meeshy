@@ -463,6 +463,8 @@ private class CountingConversationDao(private val delegate: ConversationDao) : C
         totalUnreadCountCalls++
         return delegate.totalUnreadCount()
     }
+
+    override fun unreadConversationCount(): Flow<Int> = delegate.unreadConversationCount()
 }
 
 @RunWith(RobolectricTestRunner::class)
