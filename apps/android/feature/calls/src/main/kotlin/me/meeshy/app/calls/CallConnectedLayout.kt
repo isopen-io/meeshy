@@ -39,6 +39,7 @@ import me.meeshy.sdk.model.call.CallCameraControlsPlacement
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallChromeVisibility
+import me.meeshy.sdk.model.call.CaptionsMode
 import me.meeshy.sdk.model.call.CallGroupStageSizing
 import me.meeshy.sdk.model.call.CallHeaderLaw
 import me.meeshy.sdk.model.call.CallScreenPanel
@@ -158,6 +159,7 @@ internal fun CallConnectedColumn(
     BoxWithConstraints(modifier) {
         // iOS `CallCameraRail.menuRows` : ma vignette ou le rail du haut portent les commandes de mon image, le (…)
         // ne les répète pas.
+        val audioPanel = groupStage == null && !videoStage && state.captions.mode != CaptionsMode.Off
         val rows = CallPillModel.rows(available, CallGroupStageSizing.isCompactHeight(maxHeight.value), cameraPlacement)
         Column(
             modifier = Modifier.matchParentSize().padding(MeeshySpacing.xl),
@@ -172,12 +174,14 @@ internal fun CallConnectedColumn(
                 // L'image est le pair : ni nom, ni chrono, ni barres au centre. Le temps et le signal
                 // vivent dans la puce de l'en-tête (CallHeaderBar) ; ne reste que ce que le pair fait SUBIR.
                 CallVideoPeerNotices(state = state, modifier = Modifier.weight(1f).fillMaxWidth())
+            } else if (audioPanel) {
+                CallCaptionsTranscriptPanel(state = state, peer = peer, modifier = Modifier.weight(1f))
             } else {
                 CallAudioStage(state = state, peer = peer)
             }
 
             state.captionText?.let { caption -> CallCaption(caption) }
-            CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Captions, overlayContext)
+            if (!audioPanel) CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Captions, overlayContext)
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.AboveControls, overlayContext)
 
             // La vignette à la une en plein écran (#13750) rend toute la place : la pilule sort de la mise en page.
