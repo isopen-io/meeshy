@@ -105,8 +105,10 @@ class RouteManifestRatchetTest {
          * 192 : moins douze routes du jeu et du décor (#14563 : la vitrine d'un autre membre, les archives de saison et de
          * semaine de ligue, le calendrier, les cadres d'atmosphère, les trois routes des moments photo et les quatre des
          * autocollants), que portent `GameApi.kt` et `ProfileDecorApi.kt`.
+         * 191 : moins `POST /relations/:userId/level` (#14910 : rétrograder un lien ou l'annuler depuis le profil), que
+         * porte `RelationsApi.lower`.
          */
-        const val TO_PORT_CEILING = 192
+        const val TO_PORT_CEILING = 190
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

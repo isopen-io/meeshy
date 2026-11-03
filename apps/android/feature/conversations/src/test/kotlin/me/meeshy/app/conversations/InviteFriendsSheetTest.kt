@@ -41,7 +41,7 @@ class InviteFriendsSheetTest {
     private fun render(state: InviteFriendsUiState) {
         compose.setContent {
             MeeshyTheme {
-                InviteFriendsContent(state, info, texts, MeeshyPalette.Indigo500) { events += it }
+                InviteFriendsContent(state, info, texts, MeeshyPalette.Indigo500, onEvent = { events += it })
             }
         }
     }

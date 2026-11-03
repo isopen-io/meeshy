@@ -3,10 +3,13 @@
  * et ce que `POST /relations/:userId/level` rend après avoir baissé.
  *
  * Servi : l'identifiant de l'AUTRE, le niveau effectif, ce que JE lui accorde, la date
- * d'entrée (jamais celle d'une baisse), la progression et l'éligibilité. Jamais servi :
- * un nom, une présence, un cool-down — l'état d'un refus ne fuit pas (RG-07), et
- * « il vous reste 29 jours » dirait à l'émetteur qu'on l'a refusé. Le cool-down se dit
- * UNE fois, au moment de redemander (`RELATION_COOLDOWN`).
+ * d'entrée (jamais celle d'une baisse), la progression et l'éligibilité. Jamais servi
+ * dans la LISTE : un nom, une présence, un cool-down.
+ *
+ * La lecture d'UN lien (`GET /relations/:userId`, #14910) sert en plus `canRaise` :
+ * le profil doit savoir s'il propose « Promouvoir ». Ni une baisse ni un refus n'y
+ * fuient : le cool-down n'est jamais servi (`raiseBlockedUntil` vaut `null`), et une
+ * demande refusée se lit « en attente » pour son émetteur (`raiseOutlookOf`).
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
@@ -17,10 +20,12 @@ import {
   type RelationLinkView,
   type RelationTransition,
 } from '@meeshy/shared/types/relation';
-import { amisAcceptes, niveauEffectif } from '../friendship';
+import { amisAcceptes, niveauEffectif, niveauEffectifUniforme } from '../friendship';
 import { getBlockRelatedUserIds, isBlockedBetween } from '../../utils/blocking';
 import { effectiveLevelOfRow, grantedByUser, type UserRelationRow } from './userRelationWriter';
-import { loadProgressByPartner, type RelationProgress, type RelationProgressTarget } from './relationProgress';
+import { loadProgressByPartner, loadRelationProgress, type RelationProgress, type RelationProgressTarget } from './relationProgress';
+import { hasStandingRequest, raiseOutlookOf } from './relationRequestGate';
+import type { RelationLinkDetail } from '@meeshy/shared/types/relation-level-response';
 
 export type { RelationLinkView };
 
@@ -94,6 +99,41 @@ export async function loadRelationLink(
   ).get(otherId);
 
   return viewOf({ otherId, level, granted: link ? grantedByUser(link, viewerId) : 'PUBLIC', row: link, progress });
+}
+
+/**
+ * UN lien, tel que le profil le gère (#14910) : la vue de `GET /relations`, `canRaise`
+ * et `raiseBlockedUntil`.
+ *
+ * Toutes les lectures partent, SANS condition l'une de l'autre : blocage, niveau
+ * (`niveauEffectifUniforme`), ligne, demande en suspens, puis la série. Sous
+ * Connaissance — bloqué, inconnu, aucun lien, lien quitté —, la réponse est la vue
+ * vide : ni le contenu ni le nombre de requêtes ne disent un blocage ou un cool-down.
+ */
+export async function loadRelationLinkDetail(
+  prisma: RelationLinksDb,
+  params: { viewerId: string; otherId: string; now: Date },
+): Promise<RelationLinkDetail> {
+  const { viewerId, otherId, now } = params;
+  const [blocked, level, row, standingRequest] = await Promise.all([
+    isBlockedBetween(prisma, viewerId, otherId),
+    niveauEffectifUniforme(prisma, viewerId, otherId),
+    prisma.userRelation.findUnique({ where: { userLowId_userHighId: relationPairKey(viewerId, otherId) }, select: LINK_SELECT }),
+    hasStandingRequest(prisma, { requesterId: viewerId, otherId }),
+  ]);
+  const link: LinkRow | null = row;
+  const progress = await loadRelationProgress(prisma, {
+    userA: viewerId, userB: otherId, level, levelSince: link?.levelSince ?? null, now,
+  });
+
+  if (blocked || relationLevelIfAtLeast(level, 'ACQUAINTANCE') === null) {
+    return { ...blockedView(otherId), effectiveLevel: blocked ? 'PUBLIC' : level, canRaise: false, raiseBlockedUntil: null };
+  }
+  const view = viewOf({ otherId, level, granted: link ? grantedByUser(link, viewerId) : 'FRIEND', row: link, progress });
+  return {
+    ...view,
+    ...raiseOutlookOf({ currentLevel: level, eligibleFor: view.eligibleFor, standingRequest, now }),
+  };
 }
 
 const otherOf = (row: UserRelationRow, viewerId: string): string => (row.userLowId === viewerId ? row.userHighId : row.userLowId);

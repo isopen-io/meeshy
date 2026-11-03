@@ -39,6 +39,14 @@ public object StorySlidePublishMatter {
         facts.realTextObjects > 0 || facts.mediaCount > 0 || facts.hasBackgroundMedia || facts.stickerCount > 0 ||
             facts.placeCount > 0 || facts.strokeCount > 0 || facts.soundCount > 0 || facts.hasChosenBackground
 
+    /**
+     * Un OBJET posé sur la slide (miroir de `carriesObject`, iOS) : texte réel, média, fond média, sticker, lieu, dessin ou son.
+     * Un fond de couleur nu n'en est pas un : il décore une page qui reste vide, et un post n'y dit rien à personne.
+     */
+    public fun carriesObject(facts: Facts): Boolean =
+        facts.realTextObjects > 0 || facts.mediaCount > 0 || facts.hasBackgroundMedia || facts.stickerCount > 0 ||
+            facts.placeCount > 0 || facts.strokeCount > 0 || facts.soundCount > 0
+
     /** Y a-t-il, dans tout le composer, de quoi publier ? */
     public fun anyDeservesAPost(slides: List<Facts>, countingCaption: Boolean = true): Boolean =
         slides.any { deservesAPost(it, countingCaption) }

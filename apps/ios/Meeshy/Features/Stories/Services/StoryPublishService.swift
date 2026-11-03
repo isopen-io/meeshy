@@ -118,6 +118,17 @@ final class StoryPublishService: ObservableObject {
         }
     }
 
+    /// Les dossiers médias encore VIVANTS : ceux de la file d'attente ET ceux
+    /// de l'historique d'échecs (#14879), que « Réessayer » et « Reprendre »
+    /// relisent. Un échec n'est pas un orphelin : son média reste jusqu'à
+    /// l'envoi ou l'abandon.
+    nonisolated static func liveTempStoryIds(
+        pending: [StoryPublishQueueItem],
+        failed: [StoryPublishQueueItem]
+    ) -> Set<String> {
+        Set((pending + failed).map(\.tempStoryId))
+    }
+
     /// E10 — balayage one-shot au boot, best-effort et hors chemin critique.
     private func sweepOrphanedQueueMediaDirectories() {
         Task.detached(priority: .utility) {
@@ -127,7 +138,8 @@ final class StoryPublishService: ObservableObject {
             guard let children = try? fm.contentsOfDirectory(
                 at: root, includingPropertiesForKeys: [.contentModificationDateKey]
             ) else { return }
-            let liveTempIds = Set(await StoryPublishQueue.shared.pendingItems.map(\.tempStoryId))
+            let queue = StoryPublishQueue.shared
+            let liveTempIds = Self.liveTempStoryIds(pending: await queue.pendingItems, failed: await queue.failedPendingItems)
             let orphans = Self.orphanedQueueDirectories(
                 children: children,
                 liveTempIds: liveTempIds,

@@ -22,7 +22,15 @@ import retrofit2.http.Path
 data class RelationLevelResponse(
     val userId: String,
     val effectiveLevel: String,
+    /** Élargissement #14910 : `false` quand je ne peux pas demander de monter maintenant. Absent ⇒ comportement d'avant. */
+    val canRaise: Boolean? = null,
+    /** Élargissement #14910 : l'échéance ISO du cool-down de remontée, ou `null`. */
+    val raiseBlockedUntil: String? = null,
 )
+
+/** Le corps de `POST /relations/:userId/level` (#14910) : le cran visé, strictement sous mon accord ; `PUBLIC` annule le lien. */
+@Serializable
+data class RelationLowerBody(val level: String)
 
 /** Les cercles — miroir de `RelationsEndpoint` d'iOS (`RelationsService.swift`, #13938). */
 interface RelationsApi {
@@ -37,6 +45,10 @@ interface RelationsApi {
     /** Les niveaux, leurs libellés des sept langues et leurs icônes. */
     @GET(ApiRoutesRelations.CONFIG)
     suspend fun config(): ApiResponse<RelationsConfig>
+
+    /** Baisser MON accord d'un lien (#14910) : rétrograder d'un cran, ou annuler le lien avec `PUBLIC`. Rend la vue du lien. */
+    @POST(ApiRoutesRelations.BY_USER_ID_LEVEL)
+    suspend fun lower(@Path("userId") userId: String, @Body body: RelationLowerBody): ApiResponse<RelationLinkWire>
 
     /** Le rituel du Sang : `start` ouvre ou rejoint, `hold` se rejoue tant qu'on tient l'écran, `confirm` scelle. */
     @POST(ApiRoutesRelations.BY_USER_ID_RITUAL)

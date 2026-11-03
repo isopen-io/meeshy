@@ -322,6 +322,18 @@ class StoryViewerViewModelTest {
     // `posts/{id}/view` endpoint the impression already uses, carrying `duration`. ---
 
     @Test
+    fun `clearing the viewer leaves the post room and closes the dwell`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        dwellClock.now = 1000
+
+        StoryViewerViewModel::class.java.getDeclaredMethod("onCleared").apply { isAccessible = true }.invoke(vm)
+
+        coVerify(exactly = 1) { socialSocket.leavePostRoom("a1") }
+        coVerify(exactly = 1) { postRepository.viewPost("a1", 1000) }
+    }
+
+    @Test
     fun `advancing past the dwell floor records the left slide's measured watch-time`() = runTest {
         dwellClock.now = 0
         val vm = viewModel(startUserId = "a", posts = twoAuthors()) // begins a1's dwell at 0
@@ -2012,7 +2024,7 @@ class StoryViewerViewModelTest {
 
         vm.removeCurrentStory("  ab ")
 
-        coVerify(exactly = 0) { storyRepository.delete(any(), any<String?>()) }
+        coVerify(exactly = 0) { storyRepository.delete(any(), any()) }
         assertThat(vm.state.value.slides).hasSize(2)
     }
 
