@@ -128,6 +128,16 @@ public object DatabaseRecovery {
             .filter { it.delete() }
     }
 
+    /**
+     * Garde au plus [keep] quarantaines, les plus récentes (horodatage du nom) ; supprime les plus anciennes avec leurs
+     * fichiers compagnons. Rend les fichiers effectivement retirés.
+     */
+    public fun pruneQuarantines(primary: File, keep: Int): List<File> {
+        val prefix = "${primary.name}.corrupted."
+        val byStamp = quarantined(primary).groupBy { it.name.removePrefix(prefix).takeWhile(Char::isDigit).toLongOrNull() ?: -1L }
+        return byStamp.keys.sortedDescending().drop(keep).flatMap(byStamp::getValue).filter { it.delete() }
+    }
+
     /** Supprime la base de repli et ses fichiers compagnons. */
     public fun deleteFallback(secondary: File): List<File> = fallbackFiles(secondary).filter { it.delete() }
 

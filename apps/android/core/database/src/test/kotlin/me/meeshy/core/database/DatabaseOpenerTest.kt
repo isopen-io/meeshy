@@ -80,6 +80,20 @@ class DatabaseOpenerTest {
     }
 
     @Test
+    fun `une nouvelle quarantaine ne garde que les plus recentes`() {
+        val file = context.getDatabasePath("repeated.db").also { it.parentFile?.mkdirs() }
+        listOf("1", "2", "3").forEach { File("${file.path}.corrupted.$it").writeText("old") }
+        file.writeBytes(ByteArray(8192) { (it * 13 + 5).toByte() })
+
+        opener("repeated.db", DatabaseInitDiagnostics(), StorageHealth()).open().close()
+
+        assertThat(corruptedCopies(file).filterNot { it.contains("-") }).containsExactly(
+            "repeated.db.corrupted.42",
+            "repeated.db.corrupted.3",
+        )
+    }
+
+    @Test
     fun `une installation neuve ouvre normalement sans diagnostic`() {
         val diagnostics = DatabaseInitDiagnostics()
         val health = StorageHealth()

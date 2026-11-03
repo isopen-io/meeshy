@@ -19,7 +19,8 @@ public sealed interface DatabaseLocation {
  * Ouvre la base sans JAMAIS lever pour cause de fichier abîmé ou de disque qui refuse (iOS `ResilientDatabaseQueue`), et
  * sans JAMAIS masquer un bug de code :
  * 1. fichier CORROMPU ([OpenFailureKind.CORRUPTION]) : outbox, clairs E2EE à effacer et identifiants en attente sauvés en
- *    lecture seule, fichiers mis en quarantaine (`.corrupted.<ts>`), base recréée, ce qui a été sauvé réinjecté ;
+ *    lecture seule, fichiers mis en quarantaine (`.corrupted.<ts>`, [MAX_QUARANTINES] au plus), base recréée, ce qui a
+ *    été sauvé réinjecté ;
  * 2. disque qui refuse ([OpenFailureKind.UNAVAILABLE]), ou recréation impossible : base de repli sur un chemin
  *    secondaire (cache de l'app), le fichier principal restant en place ;
  * 3. sinon base en mémoire, [StorageHealth] passe en éphémère.
@@ -114,6 +115,7 @@ public class DatabaseOpener(
         val salvaged = DatabaseRecovery.salvage(file)
         val moved = DatabaseRecovery.quarantine(file, clock())
         diagnostics.record(DatabaseInitStage.QUARANTINED, moved.joinToString(",") { it.name })
+        DatabaseRecovery.pruneQuarantines(file, keep = MAX_QUARANTINES)
         return salvaged
     }
 
@@ -213,5 +215,8 @@ public class DatabaseOpener(
 
     public companion object {
         public const val SECONDARY_NAME: String = "meeshy-fallback.db"
+
+        /** Les quarantaines gardées sur l'appareil : les plus récentes, pour le support ; les autres sont supprimées. */
+        public const val MAX_QUARANTINES: Int = 2
     }
 }
