@@ -5,10 +5,12 @@ import android.net.Uri
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.ContentMetadata
 import androidx.media3.datasource.cache.ContentMetadataMutations
 import androidx.media3.datasource.cache.SimpleCache
@@ -25,6 +27,8 @@ import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 import okhttp3.Call
 
 /**
@@ -67,7 +71,7 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
     }
 
     /** Source de données qui lit le cache d'abord et n'appelle le réseau que pour les tronçons manquants. */
-    public fun dataSourceFactory(category: MediaCacheCategory): DataSource.Factory =
+    public fun dataSourceFactory(category: MediaCacheCategory): CacheDataSource.Factory =
         CacheDataSource.Factory()
             .setCache(cacheFor(category))
             .setCacheKeyFactory(MeeshyMediaCacheKey)
@@ -93,6 +97,20 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
             DefaultMediaSourceFactory(dataSourceFactory(category))
         } else {
             DefaultMediaSourceFactory(appContext)
+        }
+    }
+
+    /**
+     * Met entière dans le cache de [category] la ressource de [url] (#14652) — par la MÊME source que le lecteur, si
+     * bien que la vidéo se rouvre ensuite sans réseau. Déjà là, rien ne part ; un échec ou une annulation n'annonce rien.
+     */
+    public suspend fun prefetch(category: MediaCacheCategory, url: String): Boolean = runInterruptible(Dispatchers.IO) {
+        if (isFullyCached(category, MeeshyMediaCacheKey.of(url))) return@runInterruptible true
+        try {
+            CacheWriter(dataSourceFactory(category).createDataSource(), DataSpec(Uri.parse(url)), null, null).cache()
+            true
+        } catch (_: IOException) {
+            false
         }
     }
 

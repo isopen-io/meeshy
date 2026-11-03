@@ -44,6 +44,7 @@ function forgetAccountLocally(userId: string): void {
   forgetAccountCaches({ userId });
   /* Ses envois en attente (contenu et fichiers dans IndexedDB) partent avec lui ; chargé au geste. */
   void import('../send/send-queue-instance').then(({ sendQueue }) => sendQueue.forget(userId)).catch(() => undefined);
+  void import('../send/outbox-durability-instance').then(({ outboxDurability }) => outboxDurability.forget(userId)).catch(() => undefined);
 }
 
 /**

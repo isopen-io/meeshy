@@ -36,28 +36,32 @@ class NotificationChannelInstaller @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
 
-    fun install() {
+    /**
+     * [strings] porte la langue des libelles : l'application au demarrage, un contexte localise
+     * quand la langue d'interface change (les canaux se renomment sans redemarrage).
+     */
+    fun install(strings: Context = context) {
         val manager = context.getSystemService<NotificationManager>() ?: return
 
         PlanGroup.entries.forEach { group ->
-            manager.createNotificationChannelGroup(AndroidChannelGroup(group.id, context.getString(groupName(group))))
+            manager.createNotificationChannelGroup(AndroidChannelGroup(group.id, strings.getString(groupName(group))))
         }
         NotificationChannelPlan.channels.forEach { spec ->
             val legacyId = LEGACY_PREDECESSORS[spec.id]
             val importance = legacyId
                 ?.let { carriedImportance(manager, spec.id, it, spec.importance.androidLevel) }
                 ?: spec.importance.androidLevel
-            manager.createNotificationChannel(channel(spec, importance))
+            manager.createNotificationChannel(channel(strings, spec, importance))
             legacyId?.let(manager::deleteNotificationChannel)
         }
         manager.deleteNotificationChannel(NotificationChannelIds.LEGACY_CHANNEL_CALLS)
         manager.createNotificationChannel(
             NotificationChannel(
                 NotificationChannelIds.CHANNEL_SILENT,
-                context.getString(R.string.push_channel_silent_name),
+                strings.getString(R.string.push_channel_silent_name),
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = context.getString(R.string.push_channel_silent_description)
+                description = strings.getString(R.string.push_channel_silent_description)
                 setSound(null, null)
                 enableVibration(false)
                 setShowBadge(true)
@@ -69,10 +73,10 @@ class NotificationChannelInstaller @Inject constructor(
         manager.deleteNotificationChannel(NotificationChannelIds.LEGACY_CHANNEL_MESSAGES)
     }
 
-    private fun channel(spec: NotificationChannelSpec, importance: Int): NotificationChannel {
+    private fun channel(strings: Context, spec: NotificationChannelSpec, importance: Int): NotificationChannel {
         val labels = labelsOf(spec.id)
-        return NotificationChannel(spec.id, context.getString(labels.first), importance).apply {
-            description = context.getString(labels.second)
+        return NotificationChannel(spec.id, strings.getString(labels.first), importance).apply {
+            description = strings.getString(labels.second)
             group = spec.group.id
             enableVibration(spec.vibrate)
             when (spec.sound) {

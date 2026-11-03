@@ -239,8 +239,18 @@ final class ConversationMenuCatalogTests: XCTestCase {
         XCTAssertFalse(menu.entries.contains(.obsolete), "un membre n'efface pas le contenu des autres")
     }
 
-    func test_make_direct_hasNoObsolete() {
+    func test_make_openDirect_member_departsLastByMakingObsolete() {
         let menu = catalog(makeInput(makeDirect()))
+        XCTAssertEqual(menu.departure.last, .obsolete, "l'un OU l'autre membre d'un tête-à-tête ouvert le rend obsolète (#14675)")
+    }
+
+    func test_make_closedDirect_hasNoObsolete() {
+        let menu = catalog(makeInput(makeConversation(type: .direct, currentUserRole: "member", participantUserId: "peer", isActive: false)))
+        XCTAssertFalse(menu.entries.contains(.obsolete))
+    }
+
+    func test_make_directForAnonymous_hasNoObsolete() {
+        let menu = catalog(makeInput(makeDirect(), user: makeUser(role: nil, isAnonymous: true)))
         XCTAssertFalse(menu.entries.contains(.obsolete))
     }
 
@@ -256,7 +266,7 @@ final class ConversationMenuCatalogTests: XCTestCase {
 
     func test_make_direct_departsByDeleting_andBlocks() {
         let menu = catalog(makeInput(makeDirect(), isPeerBlocked: false))
-        XCTAssertEqual(menu.departure, [.delete])
+        XCTAssertEqual(menu.departure, [.delete, .obsolete])
         XCTAssertTrue(menu.more.contains(.block))
     }
 

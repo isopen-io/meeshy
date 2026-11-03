@@ -39,7 +39,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.reels.R
 import me.meeshy.sdk.model.LanguageData
-import me.meeshy.sdk.model.MediaCaptionRule
 import me.meeshy.sdk.model.ReelCaption
 import me.meeshy.sdk.model.format.CompactCountFormat
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
@@ -52,6 +51,7 @@ import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.component.viewer.MediaCaptionOverlay
 import me.meeshy.ui.theme.MeeshySpacing
 import java.time.ZoneId
 import java.util.Locale
@@ -89,6 +89,7 @@ internal fun ReelInfo(
                     ?: reel.isCaptionTranslated,
                 expanded = expanded,
                 onToggle = { expanded = !expanded },
+                trackedLinks = reel.trackedLinks,
             )
         }
         ReelMetaRow(
@@ -161,9 +162,9 @@ private fun ReelAuthorMeta(username: String?, reel: ReelPresentation, isOwn: Boo
 }
 
 /**
- * Trois lignes repliée, quinze mots de tête au-delà de trente (la règle partagée
- * [MediaCaptionRule], la même que la story) ; dépliée, bornée en hauteur et défilante. Un toucher
- * bascule ; la taille s'anime.
+ * La légende : la loi partagée des 30 → 15 mots, le rendu riche (liens, mentions, hashtags) et l'ombre
+ * du [MediaCaptionOverlay] de `:sdk-ui`, la même que la story. En ligne dans la colonne du réel :
+ * dépliée, bornée en hauteur et défilante, un toucher du texte bascule.
  */
 @Composable
 private fun ReelCaptionText(
@@ -171,26 +172,18 @@ private fun ReelCaptionText(
     isTranslated: Boolean,
     expanded: Boolean,
     onToggle: () -> Unit,
+    trackedLinks: Map<String, String>?,
 ) {
-    val folded = remember(text) { MediaCaptionRule.collapse(text) }
-    val toggles = folded.isTruncated
-    val shown = if (toggles && !expanded) folded.head + "…" else text
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .animateContentSize()
-            .let { base -> if (toggles) base.clickable(role = Role.Button, onClick = onToggle) else base },
-    ) {
-        Text(
-            text = shown,
-            color = MeeshyPalette.White.copy(alpha = 0.92f),
-            maxLines = if (expanded) Int.MAX_VALUE else 3,
-            overflow = TextOverflow.Ellipsis,
-            modifier = if (expanded) {
-                Modifier.heightIn(max = EXPANDED_CAPTION_MAX_HEIGHT).verticalScroll(rememberScrollState())
-            } else {
-                Modifier
-            },
+    Column(Modifier.fillMaxWidth().animateContentSize()) {
+        MediaCaptionOverlay(
+            caption = text,
+            expanded = expanded,
+            onToggle = onToggle,
+            trackedLinks = trackedLinks,
+            startInset = 0.dp,
+            endInset = 0.dp,
+            maxExpandedHeight = EXPANDED_CAPTION_MAX_HEIGHT,
+            anchoredToParent = false,
         )
         if (isTranslated) {
             Icon(
