@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.voiceprofile
 
 import android.Manifest
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
@@ -9,6 +10,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import com.google.common.truth.Truth.assertThat
 import java.io.File
 import me.meeshy.sdk.model.voice.VoiceProfilePrompts
@@ -119,7 +121,7 @@ class VoiceRecordingViewTest {
             recordOneTake()
             compose.waitUntil(ASYNC_MS) { hasSample(n + 1) }
         }
-        compose.onNodeWithTag("voice_create_profile").assertIsEnabled().performClick()
+        compose.onNodeWithTag("voice_create_profile").assertIsEnabled().performSemanticsAction(SemanticsActions.OnClick)
 
         assertThat(delivered).hasSize(3)
         assertThat(delivered.map { it.durationSeconds }).containsExactly(12.0, 12.0, 12.0)
