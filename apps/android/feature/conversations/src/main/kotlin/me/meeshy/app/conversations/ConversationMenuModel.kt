@@ -128,7 +128,7 @@ internal data class ConversationMenuModel(
     companion object {
         fun make(input: ConversationMenuInput): ConversationMenuModel {
             val law = input.capabilities
-            val to = input.destinations
+            val dest = input.destinations
             return ConversationMenuModel(
                 header = listOf(
                     if (input.isPinned) ConversationMenuEntry.UNPIN else ConversationMenuEntry.PIN,
@@ -137,14 +137,14 @@ internal data class ConversationMenuModel(
                 ),
                 reach = offered(
                     ConversationMenuEntry.SEARCH to true,
-                    ConversationMenuEntry.CALL to (law.call && to.call),
+                    ConversationMenuEntry.CALL to (law.call && dest.call),
                 ),
                 organize = offered(
                     ConversationMenuEntry.READING_MODE to input.offersReadingModes,
-                    ConversationMenuEntry.DETAILS to to.details,
-                    ConversationMenuEntry.VIEW_PROFILE to to.profile,
+                    ConversationMenuEntry.DETAILS to dest.details,
+                    ConversationMenuEntry.VIEW_PROFILE to dest.profile,
                     ConversationMenuEntry.RENAME to law.rename,
-                    ConversationMenuEntry.MANAGE_MEMBERS to (to.manageMembers && law.offersManageMembers(input.isLocked)),
+                    ConversationMenuEntry.MANAGE_MEMBERS to (dest.manageMembers && law.offersManageMembers(input.isLocked)),
                     ConversationMenuEntry.FAVORITE to true,
                     ConversationMenuEntry.TAGS to true,
                     ConversationMenuEntry.MOVE to true,
@@ -159,7 +159,7 @@ internal data class ConversationMenuModel(
                     (if (input.isPeerBlocked == true) ConversationMenuEntry.UNBLOCK else ConversationMenuEntry.BLOCK) to
                         (input.isPeerBlocked != null),
                     ConversationMenuEntry.REPORT to law.report,
-                    ConversationMenuEntry.ADMIN_OPEN to (law.adminOpen && to.admin),
+                    ConversationMenuEntry.ADMIN_OPEN to (law.adminOpen && dest.admin),
                 ),
                 departure = offered(
                     ConversationMenuEntry.LEAVE to law.leave,
