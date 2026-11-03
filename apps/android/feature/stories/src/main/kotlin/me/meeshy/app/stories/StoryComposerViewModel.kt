@@ -17,6 +17,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.delay
+import me.meeshy.sdk.model.scene.CanvasFormat
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
@@ -105,6 +109,26 @@ class StoryComposerViewModel @Inject constructor(
     val state: StateFlow<StoryComposerUiState> = _state.asStateFlow()
 
     val mediaBaseUrl: String? get() = config.apiBaseUrl
+
+    private var bannerJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            _state.map { it.deck.selectedId to StoryComposerCanvasFormat.expected(it) }.distinctUntilChanged().collect {
+                _state.update(StoryComposerCanvasFormat::conformed)
+                if (_state.value.repositionedCount > 0) armRepositionedBanner()
+            }
+        }
+    }
+
+    /** La bannière « N élément(s) repositionné(s) » disparaît d'elle-même. */
+    private fun armRepositionedBanner() {
+        bannerJob?.cancel()
+        bannerJob = viewModelScope.launch {
+            delay(REPOSITIONED_BANNER_MILLIS)
+            _state.update(StoryComposerCanvasFormat::bannerDismissed)
+        }
+    }
 
     /** The author colour the reader paints a background-less slide with (#12314). */
     val lookPerson: ComposerLookPerson get() = sessionRepository.lookPerson()
@@ -468,9 +492,10 @@ class StoryComposerViewModel @Inject constructor(
      * Opens the composer as a **repost** of [sourceId]: the link rides onto every published
      * slide's wire request. Inert on a blank id; the author's own draft is untouched.
      */
-    fun onRepostSource(sourceId: String) {
+    fun onRepostSource(sourceId: String, sourceFormat: CanvasFormat = CanvasFormat.PORTRAIT) {
         if (sourceId.isBlank()) return
-        _state.update { it.copy(draft = it.draft.withRepostOf(sourceId)) }
+        _state.update { StoryComposerCanvasFormat.reposted(it.copy(draft = it.draft.withRepostOf(sourceId)), sourceFormat) }
+        if (_state.value.repositionedCount > 0) armRepositionedBanner()
     }
 
     /** Tap on a tool of the row: opens, switches to or closes its panel per [ComposerBandState.tapTool]. */
@@ -783,6 +808,7 @@ class StoryComposerViewModel @Inject constructor(
 
     internal companion object {
         const val MENTION_DISPLAY = "NOTE"
+        const val REPOSITIONED_BANNER_MILLIS = 4_000L
         /** Plafond de la passerelle (`mentions.max(50)`) : au-delà, toute la story serait refusée. */
         const val MAX_MENTIONS = 50
         const val MEDIA_FAILED = "Couldn't attach that media"

@@ -118,8 +118,12 @@ internal fun StoryComposerScene(
                     ?: armsCapture?.takeIf { scene -> scene.offer?.allowsVideo == true }?.let { scene -> { scene.arm(films = true) } },
                 stack = remember(state.deck.selectedSlide) { StorySceneStack.order(state.deck.selectedSlide) },
                 live = LocalComposerLive.current?.comparing(comparison.mediaId),
+                canvasFormat = state.deck.selectedSlide.canvasFormat,
                 pins = { ref, width, height -> ScenePin(state, viewModel, ref, width, height) },
             )
+            if (state.repositionedCount > 0) {
+                ComposerRepositionedBanner(state.repositionedCount, Modifier.align(Alignment.TopCenter).padding(top = WAITING_BADGE_TOP))
+            }
             state.selectedSlideBackdropPendingPhase?.let { phase ->
                 IncomingWaitingBadge(phase, Modifier.align(Alignment.TopCenter).padding(top = WAITING_BADGE_TOP))
             }

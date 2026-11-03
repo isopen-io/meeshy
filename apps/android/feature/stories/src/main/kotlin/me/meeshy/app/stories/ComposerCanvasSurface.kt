@@ -113,6 +113,7 @@ internal fun StoryCanvasSurface(
     stack: List<SceneObjectRef>,
     pins: @Composable (ref: SceneObjectRef, canvasWidthPx: Float, canvasHeightPx: Float) -> Unit = { _, _, _ -> },
     live: ComposerLiveStage? = null,
+    canvasFormat: me.meeshy.sdk.model.scene.CanvasFormat = me.meeshy.sdk.model.scene.CanvasFormat.PORTRAIT,
 ) {
     val canvasLabel = formatLabel(ComposerFormatLabel.CANVAS)
     val backgroundTap by rememberUpdatedState(onBackgroundTap)
@@ -132,8 +133,7 @@ internal fun StoryCanvasSurface(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxHeight()
-                .aspectRatio(9f / 16f)
+                .aspectRatio(canvasFormat.ratio.toFloat())
                 .clip(frameShape)
                 .background(sceneBrush)
                 .then(

@@ -337,6 +337,7 @@
     <string name="story_repost_error_forbidden">This story can\'t be reposted</string>
     <string name="story_repost_error_generic">Reposting failed</string>
     <string name="story_repost_error_unavailable">This story is no longer available</string>
+    <string name="story_repost_reprojected">%1$d item(s) repositioned for the new aspect ratio</string>
     <string name="story_send_caption_hint">Add a message…</string>
     <string name="story_send_loading">Loading conversations…</string>
     <plurals name="story_send_members">

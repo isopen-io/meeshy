@@ -339,6 +339,7 @@
     <string name="story_repost_error_forbidden">Cette story ne peut pas être repartagée</string>
     <string name="story_repost_error_generic">Échec de la republication</string>
     <string name="story_repost_error_unavailable">La story n\'est plus disponible</string>
+    <string name="story_repost_reprojected">%1$d élément(s) repositionné(s) pour le nouveau format</string>
     <string name="story_send_caption_hint">Ajouter un message…</string>
     <string name="story_send_loading">Chargement des conversations…</string>
     <plurals name="story_send_members">

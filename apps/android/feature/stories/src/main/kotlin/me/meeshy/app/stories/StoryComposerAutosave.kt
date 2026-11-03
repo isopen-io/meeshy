@@ -209,6 +209,7 @@ fun StorySlideDeck.toDraftSnapshot(
             videosDuckUnderSound = it.videosDuckUnderSound,
             mediaLooks = it.mediaLooks.filterKeys { id -> id in it.mediaIds },
             strokes = it.strokes,
+            canvasFormat = it.canvasFormat.wire,
         )
     },
     selectedId = selectedId,
@@ -264,6 +265,7 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 videosDuckUnderSound = it.videosDuckUnderSound,
                 mediaLooks = it.mediaLooks.filterKeys { id -> id in it.mediaIds },
                 strokes = it.strokes,
+                canvasFormat = me.meeshy.sdk.model.scene.CanvasFormat.fromWire(it.canvasFormat),
                 frame = SceneFrame(
                     fitMode = it.fitMode,
                     backdrop = it.backdrop,

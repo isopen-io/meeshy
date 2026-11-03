@@ -146,6 +146,8 @@ data class StoryComposerUiState(
     val restoredFormats: List<ComposerFormat>? = null,
     /** Les formats qu'un geste de publication n'a pas fait partir (#13919) : la scène dit lesquels. */
     val publishFailedFormats: List<ComposerFormat> = emptyList(),
+    /** Combien d'éléments le dernier changement de forme du cadre a repositionnés : la bannière discrète les annonce, 0 : rien. */
+    val repositionedCount: Int = 0,
 ) {
     internal val variant: ComposerFormatVariant get() = ComposerFormatVariant.of(format)
 
