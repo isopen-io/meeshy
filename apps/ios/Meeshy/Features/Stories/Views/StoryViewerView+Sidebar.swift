@@ -763,18 +763,18 @@ struct StoryActionSidebarView: View {
                 .mediaChromeGlyph()
             }
 
-            // Forward (send to someone) — label = count when > 0
-            // (user spec 2026-05-28: « Compteur des react et des commentaires,
-            // envoyer uniquement » pour le non-auteur).
-            StoryActionButton(
-                icon: "paperplane.fill",
-                label: storyShareCount > 0 ? "\(storyShareCount)" : String(localized: "story.viewer.action.send", defaultValue: "Envoyer", bundle: .main),
-                outlineTint: outlineTint(.forward)
-            ) {
-                HapticFeedback.light()
-                if let story = currentStory, let group = currentGroup {
-                    EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
-                    sharedContentWrapper = SharedContentWrapper(subject: .story(id: story.id, authorName: group.username, authorId: group.id, isPublic: story.isPublic))
+            // « Envoyer » : le compteur de partages quand il y en a, sinon le libellé.
+            if railPlan.showsForward {
+                StoryActionButton(
+                    icon: "paperplane.fill",
+                    label: storyShareCount > 0 ? "\(storyShareCount)" : String(localized: "story.viewer.action.send", defaultValue: "Envoyer", bundle: .main),
+                    outlineTint: outlineTint(.forward)
+                ) {
+                    HapticFeedback.light()
+                    if let story = currentStory, let group = currentGroup {
+                        EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
+                        sharedContentWrapper = SharedContentWrapper(subject: .story(id: story.id, authorName: group.username, authorId: group.id, isPublic: story.isPublic))
+                    }
                 }
             }
 
