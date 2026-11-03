@@ -104,6 +104,7 @@
     <string name="composer_slide_rail_delete">Supprimer la scène %1$d</string>
     <string name="composer_slide_rail_position">Scène %1$d sur %2$d</string>
     <string name="composer_socle_audience">Audience</string>
+    <string name="composer_socle_blocked_audience">Choisissez au moins une personne pour publier</string>
     <string name="composer_socle_publish">Publier</string>
     <string name="composer_sound_background_a11y">Son de fond</string>
     <string name="composer_text_frame_cloud">Nuage</string>
