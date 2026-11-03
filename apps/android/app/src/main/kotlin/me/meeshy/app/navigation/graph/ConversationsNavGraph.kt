@@ -95,6 +95,10 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 onManageMembers = { conversationId, accent -> membersTarget = conversationId to accent },
                 onViewProfile = openProfile,
                 onCreateShareLink = { id -> navController.navigate(Routes.createShareLink(id)) },
+                // #14897 : « Détails » ouvre la conversation (sa feuille d'infos est à un geste de l'en-tête) ;
+                // « Appeler » compose l'appel audio du pair sans passer par le chat.
+                onViewInfo = { id -> navController.navigate(Routes.chat(id)) },
+                onCall = { id, peerName -> navController.navigate(Routes.call(id, peerName, false)) },
             ),
             onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             onOpenMessage = { conversationId, messageId ->

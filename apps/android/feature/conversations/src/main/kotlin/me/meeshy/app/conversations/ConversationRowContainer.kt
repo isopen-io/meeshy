@@ -94,7 +94,6 @@ internal fun ConversationRowContainer(
     val capabilities = remember(conversation, model.currentUserPrefs) {
         ConversationRowMenuCapabilities.make(conversation, model.currentUserPrefs)
     }
-    val managesMembers = capabilities.offersManageMembers(isLocked = model.isLocked)
     val palette = remember(conversation) { conversation.accentColorPalette() }
     val accent = hexColor(palette.primary)
     val secondary = hexColor(palette.secondary)
@@ -178,53 +177,53 @@ internal fun ConversationRowContainer(
             }
         }
 
-        ConversationContextMenu(
-            expanded = menuExpanded,
-            onDismiss = { menuExpanded = false },
-            title = title,
-            isPinned = isPinned,
-            isMuted = isMuted,
-            mentionsOnly = prefs?.mentionsOnly == true,
-            isArchived = prefs?.isArchived == true,
-            hasUnread = conversation.unreadCount > 0,
-            hasDraft = model.draft?.isMeaningful == true,
-            categories = model.categories,
-            currentCategoryId = prefs?.categoryId,
-            previewMessages = model.previewMessages,
-            previewShowSender = conversation.type != "direct",
-            currentUserId = model.currentUserId,
-            currentUserPrefs = model.currentUserPrefs,
-            previewLabels = previewLabels,
-            isCreator = conversation.currentUserRole(model.currentUserId) == MemberRole.CREATOR,
-            onTogglePin = actions.onTogglePin,
-            onToggleMute = actions.onToggleMute,
-            onToggleMentionsOnly = actions.onToggleMentionsOnly,
-            onToggleArchive = actions.onToggleArchive,
-            onLeaveConversation = actions.onLeaveConversation,
-            onDeleteForMe = actions.onDeleteForMe,
-            onDeleteForAll = actions.onDeleteForAll,
-            onRename = actions.onRename,
-            currentCustomName = prefs?.customName,
-            onSetReaction = actions.onSetReaction,
-            currentReaction = prefs?.reaction,
-            onSetTags = actions.onSetTags,
-            currentTags = currentTags,
-            onMarkRead = actions.onMarkRead,
-            onMarkUnread = actions.onMarkUnread,
-            onDiscardDraft = actions.onDiscardDraft,
-            onAssignCategory = actions.onAssignCategory,
-            onCreateCategory = actions.onCreateCategory,
-            isLocked = model.isLocked,
-            onRemoveCategory = actions.onRemoveCategory,
-            onLockToggle = actions.onLockToggle,
-            onViewInfo = actions.onViewInfo,
-            onViewProfile = actions.onViewProfile,
-            onCreateShareLink = actions.onCreateShareLink,
-            onManageMembers = actions.onManageMembers
-                ?.takeIf { managesMembers }
-                ?.let { open -> { open(accent) } },
-            onMakeObsolete = actions.onMakeObsolete.takeIf { capabilities.obsolete },
-        )
+        if (menuExpanded) {
+            val peerBlocked = remember { actions.peerBlocked() }
+            val menuModel = ConversationMenuModel.make(
+                ConversationMenuInput(
+                    capabilities = capabilities,
+                    isPinned = isPinned,
+                    isMuted = isMuted,
+                    mentionsOnly = prefs?.mentionsOnly == true,
+                    hasUnread = conversation.unreadCount > 0,
+                    hasDraft = model.draft?.isMeaningful == true,
+                    isLocked = model.isLocked,
+                    isArchived = prefs?.isArchived == true,
+                    isPeerBlocked = peerBlocked,
+                    isCreator = conversation.currentUserRole(model.currentUserId) == MemberRole.CREATOR,
+                    destinations = ConversationMenuDestinations(
+                        details = actions.onViewInfo != null,
+                        profile = actions.onViewProfile != null,
+                        call = actions.onCall != null,
+                        manageMembers = actions.onManageMembers != null,
+                        admin = actions.adminReachable,
+                    ),
+                ),
+            )
+            ConversationContextMenu(
+                expanded = true,
+                onDismiss = { menuExpanded = false },
+                title = title,
+                isPinned = isPinned,
+                isMuted = isMuted,
+                model = menuModel,
+                panelState = ConversationMenuPanelState(
+                    currentReaction = prefs?.reaction,
+                    categories = model.categories,
+                    currentCategoryId = prefs?.categoryId,
+                ),
+                accent = accent,
+                previewMessages = model.previewMessages,
+                previewShowSender = conversation.type != "direct",
+                currentUserId = model.currentUserId,
+                currentUserPrefs = model.currentUserPrefs,
+                previewLabels = previewLabels,
+                isLocked = model.isLocked,
+                currentTags = currentTags,
+                actions = actions,
+                onManageMembers = actions.onManageMembers?.let { open -> { open(accent) } },
+            )
+        }
     }
 }
 
