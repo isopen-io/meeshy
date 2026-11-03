@@ -40,15 +40,41 @@ internal object DatabaseModule {
 
     @Provides
     @Singleton
-    fun providesDatabase(@ApplicationContext context: Context): MeeshyDatabase =
-        meeshyDatabaseBuilder(context).build()
+    fun providesDatabase(
+        @ApplicationContext context: Context,
+        diagnostics: DatabaseInitDiagnostics,
+        health: StorageHealth,
+    ): MeeshyDatabase =
+        DatabaseOpener(
+            context = context,
+            diagnostics = diagnostics,
+            health = health,
+            primaryName = DATABASE_NAME,
+            build = { ctx, location -> meeshyDatabaseBuilder(ctx, location).build() },
+        ).open()
 
     /** The production configuration, shared with the tests that open the database the way the app does. */
     fun meeshyDatabaseBuilder(context: Context, name: String = DATABASE_NAME): RoomDatabase.Builder<MeeshyDatabase> =
-        Room.databaseBuilder(context, MeeshyDatabase::class.java, name)
+        meeshyDatabaseBuilder(context, DatabaseLocation.Named(name))
+
+    /**
+     * Journal WAL explicite, exécuteur de requêtes dédié, réglages posés à chaque connexion. Seules les versions
+     * antérieures à la base exportée v16 sont purgées : une corruption n'est jamais masquée par une migration destructive,
+     * [DatabaseOpener] la met en quarantaine.
+     */
+    fun meeshyDatabaseBuilder(context: Context, location: DatabaseLocation): RoomDatabase.Builder<MeeshyDatabase> {
+        val builder = when (location) {
+            is DatabaseLocation.Named -> Room.databaseBuilder(context, MeeshyDatabase::class.java, location.name)
+            DatabaseLocation.Memory -> Room.inMemoryDatabaseBuilder(context, MeeshyDatabase::class.java)
+        }
+        return builder
             .addMigrations(*MeeshyMigrations.all)
             .addCallback(SearchIndexSchema.callback)
+            .addCallback(DatabasePragmas.callback)
+            .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+            .setQueryExecutor(DatabasePragmas.sharedQueryExecutor)
             .fallbackToDestructiveMigrationFrom(*PRE_BASELINE_VERSIONS)
+    }
 
     @Provides
     fun providesConversationDao(database: MeeshyDatabase): ConversationDao =

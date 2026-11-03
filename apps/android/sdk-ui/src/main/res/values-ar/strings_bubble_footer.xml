@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_footer_offline_pending">قيد الانتظار، غير متصل</string>
+    <string name="bubble_footer_slow">إرسال بطيء</string>
+    <string name="bubble_footer_edited_by_moderator">عدّله مشرف</string>
+    <string name="bubble_footer_saving_edit">جارٍ حفظ التعديل</string>
+    <string name="bubble_footer_resend">إعادة إرسال الرسالة</string>
+</resources>

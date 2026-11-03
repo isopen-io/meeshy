@@ -5,6 +5,9 @@ import java.util.Locale
 import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.DurationFormat
+import me.meeshy.sdk.model.EffectiveAudioTrack
+import me.meeshy.sdk.model.SocialAudioSurface
+import me.meeshy.sdk.model.SocialAudioTrack
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.MAX_POST_MEDIA
 import me.meeshy.sdk.model.MessageTranscription
@@ -56,6 +59,21 @@ data class FeedMediaItem(
      */
     val accessibilityDescription: String?
         get() = alt?.trim()?.takeIf { it.isNotEmpty() } ?: caption?.trim()?.takeIf { it.isNotEmpty() }
+
+    /** La piste audio servie sur [surface] : la loi du chat, projetée au social (langue de transcription d'abord). */
+    fun servedAudio(
+        surface: SocialAudioSurface,
+        carrierLanguage: String?,
+        preferredLanguages: List<String>,
+    ): EffectiveAudioTrack.Served = SocialAudioTrack.served(
+        surface = surface,
+        originalUrl = url,
+        originalDurationMs = durationSeconds?.let { it * 1000 },
+        transcription = transcription,
+        carrierLanguage = carrierLanguage,
+        preferredLanguages = preferredLanguages,
+        translatedAudios = translatedAudios,
+    )
 
     /** La hauteur de ce média pour une carte de [cardWidth], bornée par le ratio. */
     fun fittedHeight(cardWidth: Float): Float =

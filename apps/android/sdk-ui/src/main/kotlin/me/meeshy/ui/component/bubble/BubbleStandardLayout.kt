@@ -145,7 +145,7 @@ internal fun BubbleStandardLayout(
                     // La story citée reste au-dessus de l'emoji, hors de tout fond (iOS
                     // `detachedStoryCitation`) ; l'emoji flotte dessous.
                     Column(horizontalAlignment = if (content.isOutgoing) Alignment.End else Alignment.Start) {
-                        FreeEmojiBody(content = content, onLongPress = callbacks.onLongPress)
+                        FreeEmojiBody(content = content, callbacks = callbacks)
                     }
                 } else {
                     BubbleBlurRevealBoundary(messageId = content.messageId, spec = content.blurReveal) {
@@ -254,6 +254,7 @@ private fun BubbleBody(
                     onColor = onColor,
                     onFlagTap = callbacks.onFlagTap,
                     onSenderTap = callbacks.onSenderTap,
+                    onShowReadStatus = callbacks.onShowReadStatus,
                     modifier = Modifier.padding(
                         start = if (hasIdentity) MeeshySpacing.smPlus else MeeshySpacing.mdPlus,
                         end = if (hasIdentity) MeeshySpacing.smPlus else MeeshySpacing.mdPlus,
@@ -391,6 +392,9 @@ private fun VisualMediaBody(content: BubbleContent, callbacks: BubbleCallbacks) 
             content = content,
             metaColor = MeeshyMediaChromeColors.OnMedia,
             readTint = MeeshyPalette.Indigo400,
+            onShowReadStatus = callbacks.onShowReadStatus,
+            onRetry = callbacks.onRetry,
+            retryBandShown = false,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(MeeshySpacing.sm)
@@ -407,7 +411,8 @@ private fun VisualMediaBody(content: BubbleContent, callbacks: BubbleCallbacks) 
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FreeEmojiBody(content: BubbleContent, onLongPress: (() -> Unit)?) {
+private fun FreeEmojiBody(content: BubbleContent, callbacks: BubbleCallbacks) {
+    val onLongPress = callbacks.onLongPress
     val fontSize = EmojiDetector.fontSizeSp(content.emojiOnlyCount) ?: return
     Row(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
@@ -423,42 +428,11 @@ private fun FreeEmojiBody(content: BubbleContent, onLongPress: (() -> Unit)?) {
         BubbleMetaTrailing(
             content = content,
             metaColor = MeeshyTheme.tokens.textMuted,
+            onShowReadStatus = callbacks.onShowReadStatus,
+            onRetry = callbacks.onRetry,
+            retryBandShown = false,
             modifier = Modifier.alignByBaseline(),
         )
-    }
-}
-
-/**
- * Corps et pied empilés à 4 dp, port d'iOS `BubbleBodyFooterLayout` : la bulle épouse son contenu
- * (jamais étirée à sa largeur maximale) et le pied prend exactement la largeur retenue — celle du
- * corps, ou la sienne propre si elle est plus large — si bien que l'heure tombe au bord droit.
- */
-@Composable
-private fun BubbleBodyFooterLayout(
-    body: @Composable () -> Unit,
-    footer: @Composable () -> Unit,
-) {
-    Layout(
-        content = {
-            Box { body() }
-            Box { footer() }
-        },
-    ) { measurables, constraints ->
-        val gap = MeeshySpacing.xs.roundToPx()
-        val loose = constraints.copy(minWidth = 0, minHeight = 0)
-        val bodyPlaceable = measurables[0].measure(loose)
-        val footerNatural = measurables[1].maxIntrinsicWidth(Constraints.Infinity)
-        val width = maxOf(bodyPlaceable.width, footerNatural, constraints.minWidth)
-            .coerceAtMost(constraints.maxWidth)
-        val footerPlaceable = measurables[1].measure(
-            Constraints(minWidth = width, maxWidth = width, minHeight = 0, maxHeight = constraints.maxHeight),
-        )
-        val bodyGap = if (bodyPlaceable.height > 0) gap else 0
-        val height = bodyPlaceable.height + bodyGap + footerPlaceable.height
-        layout(width, height) {
-            bodyPlaceable.place(0, 0)
-            footerPlaceable.place(0, bodyPlaceable.height + bodyGap)
-        }
     }
 }
 

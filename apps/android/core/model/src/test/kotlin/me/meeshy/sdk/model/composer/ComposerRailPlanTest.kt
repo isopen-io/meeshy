@@ -41,10 +41,11 @@ class ComposerRailPlanTest {
     }
 
     @Test
-    fun `the post body door exists in a post only`() {
-        listOf(ComposerFormat.STORY, ComposerFormat.REEL, ComposerFormat.STATUS).forEach { format ->
+    fun `the post body door exists in a post or a reel only`() {
+        listOf(ComposerFormat.STORY, ComposerFormat.STATUS).forEach { format ->
             assertThat(ComposerRailPlan.of(format, everything).servesPostText).isFalse()
         }
+        assertThat(ComposerRailPlan.of(ComposerFormat.REEL, everything).servesPostText).isTrue()
     }
 
     @Test

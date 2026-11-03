@@ -158,6 +158,21 @@ final class FeedViewModelPendingPublicationTests: XCTestCase {
         XCTAssertEqual(api.requestCount, 1)
     }
 
+    func test_prefetchComments_onPendingPublication_asksNothing() async throws {
+        let (sut, queue, postService) = makeSUT()
+        let cmid = try await queuedPostId(sut, queue)
+
+        sut.prefetchComments(cmid)
+        sut.prefetchComments("665f1c2e9b1d4a0012345678")
+        for _ in 0..<100 where postService.getCommentsCallCount == 0 {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(postService.getCommentsCallCount, 1,
+                       "seul le post en ligne précharge ses commentaires ; un cmid n'a rien à demander")
+    }
+
     func test_rowActions_onPendingPublication_areInert() {
         let calls = RowActionCalls()
         let pending = FeedPost(id: ClientMutationId.generate(), author: "Moi", content: "En attente")

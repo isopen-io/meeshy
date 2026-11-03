@@ -10,6 +10,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
+import me.meeshy.ui.story.canvas.edit.sceneObjectHoverCursor
 
 /**
  * La phase d'un toucher sur un objet de la scène (#14207) : trois gestes qui ne se chevauchent jamais.
@@ -46,7 +47,7 @@ internal fun Modifier.sceneObjectGestures(
     onLongPress: (() -> Unit)?,
     onMove: (pan: Offset, zoom: Float, rotationDeg: Float) -> Unit,
     onEnd: () -> Unit,
-): Modifier = pointerInput(key) {
+): Modifier = sceneObjectHoverCursor().pointerInput(key) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         down.consume()

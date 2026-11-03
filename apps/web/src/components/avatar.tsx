@@ -224,6 +224,8 @@ type AvatarProps = {
    * Le contour équipé (#10713) : une COUCHE autour de l'avatar, dans la MÊME empreinte `size`. L'avatar rétrécit pour tenir dans le cercle du contour ; un anneau de story reste CONCENTRIQUE, juste à l'intérieur (#10714, décision porteur du 2026-10-15).
    */
   ring?: AvatarRingDesign | null;
+  /** La place libre (px) que l'hôte réserve autour de l'empreinte : le cadre illustré s'y montre sans réduire l'avatar (#15157). */
+  ringRoom?: number;
 };
 
 /**
@@ -257,10 +259,10 @@ export const avatarPhotoEvents = {
 } as const;
 
 export function Avatar(props: AvatarProps) {
-  const { ring, ...bare } = props;
+  const { ring, ringRoom, ...bare } = props;
   if (ring !== undefined && ring !== null) {
     return (
-      <AvatarRingFrame ring={ring} size={props.size}>
+      <AvatarRingFrame ring={ring} size={props.size} room={ringRoom ?? 0}>
         {renderAvatar({ ...bare, size: ringedAvatarSize(props.size, props.storyRing !== undefined) }, true)}
       </AvatarRingFrame>
     );

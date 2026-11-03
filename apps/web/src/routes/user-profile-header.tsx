@@ -1,7 +1,7 @@
 import { memo, useMemo, type ReactNode } from 'react';
 
 import { Avatar, MoodPeekTarget } from '@/components/avatar';
-import { AvatarRing, ringBoxSize } from '@/components/avatar-ring';
+import { AvatarRing, ringBoxSize, ringDecorSpill } from '@/components/avatar-ring';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import {   SECTION_CARD_STYLE } from '@/components/grouped-section';
 import { DISCOVER_GLYPHS } from '@/components/glyphs-discover';
@@ -74,6 +74,8 @@ export const ProfileHero = memo(function ProfileHero({
   const designs = useDecorDesigns(profile.decor);
   const scheme = useScheme();
   const ringExtra = designs.ring === null ? 0 : (ringBoxSize(90) - 90) / 2;
+  /* Le film d'un cadre illustré déborde au-dessus sur la bannière, et le nom passe dessous (#15157). */
+  const decorSpill = ringDecorSpill(designs.ring, ringBoxSize(90));
   const avatar = (
     <Avatar
       initials={initialsOf(name)}
@@ -105,8 +107,8 @@ export const ProfileHero = memo(function ProfileHero({
         <ProfileBannerFrame frame={designs.bannerFrame} />
         {game}
       </div>
-      <span className="relative block rounded-chip" style={{ marginTop: -45 - ringExtra, padding: 4, backgroundColor: 'var(--color-ios-surface)' }}>
-        <AvatarRing ring={designs.ring} size={90}>
+      <span className="relative block rounded-chip" style={{ marginTop: -45 - ringExtra, marginBottom: decorSpill, padding: 4, backgroundColor: 'var(--color-ios-surface)' }}>
+        <AvatarRing ring={designs.ring} size={90} room={decorSpill}>
           {profile.avatar === null ? (
             avatar
           ) : (
