@@ -871,8 +871,9 @@ struct ThemedFeedOverlay: View {
 // MARK: - Composer placeholder
 
 extension ThemedFeedOverlay {
-    /// La porte du composeur — et, juste dessous, les publications encore sur
-    /// l'appareil (#13415). Sortie de `body` pour qu'il reste lisible.
+    /// La porte du composeur. Sortie de `body` pour qu'il reste lisible. Une
+    /// publication en attente ne se signale que par l'horloge de sa carte
+    /// (décision du porteur, #14879).
     var composerPlaceholder: some View {
         Group {
             // Composer placeholder — tap to open full composer
@@ -912,9 +913,6 @@ extension ThemedFeedOverlay {
             .buttonStyle(.plain)
             .padding(.horizontal, MeeshySpacing.lg)
             .accessibilityIdentifier("feed.composer.placeholder")
-
-            // #13415 — les publications encore sur l'appareil, et leur reprise.
-            UnsentPublicationsEntry(openComposer: { showFullComposer = true })
         }
     }
 }

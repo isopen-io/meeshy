@@ -44,6 +44,10 @@ export type RelationLink = {
   readonly since: string | null;
   readonly progress: RelationProgress;
   readonly eligibleFor: RelationEligibility | null;
+  /** Jusqu'à quand je ne peux pas redemander de monter (#14910), servi par `GET /relations/:userId` ; absent, la loi habituelle. */
+  readonly raiseBlockedUntil?: string;
+  /** La loi SERVEUR de montée (demande en suspens, éligibilité), servie par `GET /relations/:userId` ; absente, la loi locale décide. */
+  readonly canRaise?: boolean;
 };
 
 export { RELATION_LINKS_QUERY_KEY } from './friends-keys';
@@ -67,6 +71,8 @@ const eligibilityOf = (value: unknown): RelationEligibility | null => (value ===
 
 const countOf = (value: unknown): number | null => (typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null);
 
+const flagOf = (value: unknown): boolean | null => (typeof value === 'boolean' ? value : null);
+
 const textOf = (value: unknown): string | null => (typeof value === 'string' && value !== '' ? value : null);
 
 function decodeProgress(raw: unknown): RelationProgress {
@@ -79,6 +85,8 @@ export function decodeRelationLink(raw: unknown): RelationLink | null {
   const wire = objectOf(raw);
   const userId = textOf(wire?.userId);
   if (wire === null || userId === null) return null;
+  const raiseBlockedUntil = textOf(wire.raiseBlockedUntil);
+  const canRaise = flagOf(wire.canRaise);
   return {
     userId,
     effectiveLevel: levelOf(wire.effectiveLevel),
@@ -86,6 +94,8 @@ export function decodeRelationLink(raw: unknown): RelationLink | null {
     since: textOf(wire.since),
     progress: decodeProgress(wire.progress),
     eligibleFor: eligibilityOf(wire.eligibleFor),
+    ...(raiseBlockedUntil === null ? {} : { raiseBlockedUntil }),
+    ...(canRaise === null ? {} : { canRaise }),
   };
 }
 
@@ -108,6 +118,46 @@ export function relationLinksQueryOptions(deps: RelationDeps) {
 }
 
 /**
+ * **LA PORTE DE MONTÉE** (#14910) — `GET /relations/:userId` sert `canRaise` (la
+ * loi serveur : demande en suspens, éligibilité) et `raiseBlockedUntil` (toujours
+ * `null` aujourd'hui : le cool-down ne se dit qu'au refus, RG-07). Une passerelle
+ * d'avant ne sert ni l'un ni l'autre : `null` laisse la loi locale décider.
+ */
+export type RaiseGate = { readonly canRaise: boolean | null; readonly raiseBlockedUntil: string | null };
+
+export const relationRaiseGateQueryKey = (userId: string) => [...RELATION_LINKS_QUERY_KEY, 'raise-gate', userId] as const;
+
+export async function loadRelationRaiseGate(deps: RelationDeps & { readonly signal?: AbortSignal }, userId: string): Promise<ApiResult<RaiseGate>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: { canRaise: null, raiseBlockedUntil: null } };
+  const result = await deps.transport.request<unknown>({ method: 'GET', path: relationsEndpoints.byUserId(userId), ...withSignal(deps.signal) });
+  if (!result.ok) return result;
+  const wire = objectOf(result.data);
+  return { ok: true, data: { canRaise: flagOf(wire?.canRaise), raiseBlockedUntil: textOf(wire?.raiseBlockedUntil) } };
+}
+
+export function relationRaiseGateQueryOptions(deps: RelationDeps, userId: string) {
+  return {
+    queryKey: relationRaiseGateQueryKey(userId),
+    staleTime: RELATION_LINKS_STALE_TIME,
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }) => unwrap(await loadRelationRaiseGate({ ...deps, ...withSignal(signal) }, userId)),
+  };
+}
+
+/**
+ * **BAISSER MON ACCORD, OU ANNULER LE LIEN** (#14910) — `POST /relations/:userId/level`.
+ * `PUBLIC` annule le lien. Silencieux côté passerelle : l'autre n'est pas prévenu.
+ * Rend la vue du lien servie (`null` si illisible).
+ */
+export async function lowerRelation(
+  deps: RelationDeps,
+  request: { readonly userId: string; readonly level: RelationLevel },
+): Promise<ApiResult<RelationLink | null>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: false, status: 0, error: 'Indisponible en démonstration' };
+  const result = await deps.transport.request<unknown>({ method: 'POST', path: relationsEndpoints.byUserIdLevel(request.userId), body: { level: request.level } });
+  return result.ok ? { ok: true, data: decodeRelationLink(result.data) } : result;
+}
+
+/**
  * Ce que rend une phase du rituel : `start` {token, holdWindowMs}, `hold`
  * {held, holdWindowMs}, `confirm` {completed}. Chaque phase n'en sert qu'une
  * partie ; un champ illisible se lit `null`, jamais une valeur inventée.
@@ -118,8 +168,6 @@ export type RitualStep = {
   readonly held: boolean | null;
   readonly completed: boolean | null;
 };
-
-const flagOf = (value: unknown): boolean | null => (typeof value === 'boolean' ? value : null);
 
 export function decodeRitualStep(raw: unknown): RitualStep {
   const wire = objectOf(raw);
