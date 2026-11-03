@@ -27,4 +27,20 @@ public object ServerTranslationAdmission {
     public fun admitsOutsideConversation(message: ApiMessage): Boolean =
         admits(message, conversationEncryptionMode = null) &&
             message.attachments.none { it.isEncrypted == true }
+
+    /**
+     * Le verdict d'une demande : `null` quand le serveur peut lire le message, sinon l'échec à
+     * publier sur la ligne de la langue. [conversationShownSealed] (le fil MONTRE un message scellé,
+     * même servi sans mode) est exigé sans défaut : un défaut l'aurait ouvert.
+     */
+    public fun refusalOrNull(
+        message: ApiMessage?,
+        conversationEncryptionMode: String?,
+        conversationShownSealed: Boolean,
+        language: String,
+        kind: TranslationRequestFailure.Kind,
+    ): TranslationRequestFailure? {
+        if (!conversationShownSealed && admits(message, conversationEncryptionMode)) return null
+        return TranslationRequestFailure.serverRefused(message?.id.orEmpty(), language, kind)
+    }
 }

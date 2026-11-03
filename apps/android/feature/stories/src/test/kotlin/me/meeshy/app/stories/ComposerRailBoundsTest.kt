@@ -265,4 +265,47 @@ class ComposerRailBoundsTest {
         options.forEach { assertThat(it.height).isAtLeast(48f) }
         assertThat(options.zipWithNext { a, b -> b.top - a.bottom }.distinct()).containsExactly(0f)
     }
+
+    /** La scène telle qu'elle est PEINTE, échelle et décalage du `graphicsLayer` compris. */
+    private fun drawnScene(): Rect = compose.onAllNodes(canvases.map { hasContentDescription(it) }.reduce { a, b -> a or b })
+        .fetchSemanticsNodes().first().boundsInRoot
+
+    private fun boundsOf(id: Int): Rect = compose.onAllNodes(hasContentDescription(string(id))).fetchSemanticsNodes().single().boundsInRoot
+
+    private fun Rect.isInside(outer: Rect): Boolean =
+        left >= outer.left - 0.5f && top >= outer.top - 0.5f && right <= outer.right + 0.5f && bottom <= outer.bottom + 0.5f
+
+    /** ✕, ↶ ↷ et chaque bouton visible de la colonne, dans la scène dessinée ; ✕ et ↶ sous son bord haut. */
+    private fun assertChromeOnTheDrawnScene() {
+        val scene = drawnScene()
+        val close = boundsOf(R.string.composer_scene_close)
+        val undo = boundsOf(R.string.story_composer_undo)
+        val outside = (listOf("✕" to close, "↶" to undo) + rail()).filterNot { it.second.isInside(scene) }.map { it.first }
+        assertThat(scene.width).isLessThan(359f)
+        assertThat(outside).isEmpty()
+        assertThat(close.top).isAtLeast(scene.top)
+        assertThat(undo.top).isAtLeast(scene.top)
+    }
+
+    @Test
+    fun `on a short screen the story scene is narrower than the window, and the cross, undo and the column sit on it`() {
+        val vm = composer(ComposerFormat.STORY)
+        vm.onAddSlide()
+        show(vm, 360.dp, 545.dp)
+
+        assertChromeOnTheDrawnScene()
+        assertNoOverlap()
+    }
+
+    @Test
+    fun `on a short screen the post scene keeps the cross, undo and the column on it, and publish clear of the more button`() {
+        val vm = composer(ComposerFormat.POST)
+        vm.onAddSlide()
+        show(vm, 360.dp, 545.dp)
+
+        assertChromeOnTheDrawnScene()
+        val more = rail().single { it.first == string(R.string.stories_scene_overflow_menu) }.second
+        val publish = controls().filter { it.second.top > more.top }.minOf { it.second.top }
+        assertThat(more.bottom).isAtMost(publish)
+    }
 }

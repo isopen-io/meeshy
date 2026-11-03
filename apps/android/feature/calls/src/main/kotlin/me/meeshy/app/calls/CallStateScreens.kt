@@ -2,13 +2,11 @@ package me.meeshy.app.calls
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -18,8 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -27,7 +23,7 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallEndMotive
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallStatusLabelLaw
-import me.meeshy.sdk.model.call.ConnectionQuality
+import me.meeshy.sdk.model.call.CallHeaderLaw
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -52,7 +48,7 @@ internal fun CallPeerBlock(state: CallUiState, accent: Color, videoStage: Boolea
         CallStatusText(state)
         state.connectionQuality?.let { quality ->
             Spacer(Modifier.height(MeeshySpacing.sm))
-            ConnectionQualityBars(quality = quality, accent = accent)
+            CallSignalGlyph(CallHeaderLaw.signalStrength(quality), size = 18.dp)
         }
         if (state.isPeerQualityDegraded) {
             PeerNotice(stringResource(R.string.call_peer_quality_degraded, state.peerName), MeeshyTheme.tokens.warning)
@@ -145,41 +141,4 @@ internal fun endedLabel(reason: CallEndReason?): String = when (CallStatusLabelL
     CallEndMotive.Missed -> stringResource(R.string.call_ended_missed)
     CallEndMotive.ConnectionLost -> stringResource(R.string.call_ended_connection_lost)
     CallEndMotive.Failed -> stringResource(R.string.call_ended_failed)
-}
-
-/**
- * A subtle 4-bar signal indicator for the live [ConnectionQuality] — bars fill
- * up to [ConnectionQuality.bars], tinted the peer accent, or the error hue on a
- * weak link. A single VoiceOver label describes the tier (the bars themselves
- * are decorative). Accent-coherent per the conversation colour rule.
- */
-@Composable
-private fun ConnectionQualityBars(quality: ConnectionQuality, accent: Color) {
-    val filledColor = if (quality.isWeak) MaterialTheme.colorScheme.error else accent
-    val emptyColor = MeeshyTheme.tokens.textSecondary.copy(alpha = 0.3f)
-    val description = qualityDescription(quality)
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.Bottom,
-        modifier = Modifier.semantics { contentDescription = description },
-    ) {
-        val heights = listOf(6.dp, 10.dp, 14.dp, 18.dp)
-        heights.forEachIndexed { index, barHeight ->
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(barHeight)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(if (index < quality.bars) filledColor else emptyColor),
-            )
-        }
-    }
-}
-
-@Composable
-private fun qualityDescription(quality: ConnectionQuality): String = when (quality) {
-    ConnectionQuality.EXCELLENT -> stringResource(R.string.call_quality_excellent)
-    ConnectionQuality.GOOD -> stringResource(R.string.call_quality_good)
-    ConnectionQuality.FAIR -> stringResource(R.string.call_quality_fair)
-    ConnectionQuality.POOR -> stringResource(R.string.call_quality_poor)
 }

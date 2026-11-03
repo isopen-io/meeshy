@@ -30,6 +30,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -43,6 +45,8 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.scene.StoryDrawingCanvasSpace
+import me.meeshy.ui.story.canvas.drawing.StrokeGeometryCache
+import me.meeshy.ui.story.canvas.drawing.StrokeRibbonRenderer
 import me.meeshy.ui.theme.hexColor
 
 /**
@@ -54,10 +58,9 @@ import me.meeshy.ui.theme.hexColor
  * capturing the surface is purely decorative (no `pointerInput`), so it never
  * steals touches from the canvas' pan/zoom/element gestures underneath.
  *
- * Rendering is intentionally the minimal "raw" polyline (straight segments through
- * every captured point) regardless of a stroke's [me.meeshy.sdk.model.StrokeSmoothing] —
- * the model already carries `curve`/`line` for a future renderer, but interpolating
- * them is out of this lot's scope.
+ * Committed strokes render through [StrokeRibbonRenderer] (variable-width filled
+ * ribbon, smoothing, 45 % marker) — the same geometry as the reader and the export;
+ * only the in-progress stroke stays a plain polyline until release.
  */
 @Composable
 fun StoryDrawingLayer(
@@ -77,6 +80,8 @@ fun StoryDrawingLayer(
     var liveVersion by remember { mutableIntStateOf(0) }
     val livePath = remember { Path() }
     val liveDesignPoints = remember { mutableListOf<StoryDrawingStrokePoint>() }
+    val geometryCache = remember { StrokeGeometryCache() }
+    val committedOps = remember(strokes) { StrokeRibbonRenderer.plan(strokes, cache = geometryCache) }
 
     Canvas(
         modifier = modifier
@@ -117,23 +122,12 @@ fun StoryDrawingLayer(
                 },
             ),
     ) {
-        strokes.forEach { stroke ->
-            if (stroke.points.size < 2) return@forEach
-            val path = Path()
-            stroke.points.forEachIndexed { index, point ->
-                val x = StoryDrawingCanvasSpace.toScreenX(point.x, canvasWidthPx)
-                val y = StoryDrawingCanvasSpace.toScreenY(point.y, canvasHeightPx)
-                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-            }
-            drawPath(
-                path = path,
-                color = hexColor(stroke.colorHex),
-                style = Stroke(
-                    width = StoryDrawingCanvasSpace.toScreenWidth(stroke.width, canvasWidthPx),
-                    cap = StrokeCap.Round,
-                    join = StrokeJoin.Round,
-                ),
-            )
+        drawIntoCanvas { canvas ->
+            val native = canvas.nativeCanvas
+            native.save()
+            native.scale(size.width / StoryDrawingCanvasSpace.DESIGN_WIDTH, size.height / StoryDrawingCanvasSpace.DESIGN_HEIGHT)
+            StrokeRibbonRenderer.draw(native, committedOps)
+            native.restore()
         }
         // Reading the version here subscribes this draw pass to every capture sample,
         // so the in-progress path redraws live without the point buffer itself being State.

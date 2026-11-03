@@ -346,6 +346,8 @@ fun CallScreen(
 
             // En-tête (miroir de iOS `topChrome`) : Réduire · Conversation à gauche, puce durée · signal à
             // droite en vidéo établie. Il s'efface avec la pilule d'un toucher sur la scène.
+            var qualityDetailOpen by remember { mutableStateOf(false) }
+            if (qualityDetailOpen) CallQualitySheet(onDismiss = { qualityDetailOpen = false })
             if (CallPillPresenter.isMinimizable(state.status)) {
                 CallChromeFade(
                     isVisible = chromeVisibility.isVisible(CallChromeElement.Header) && !inPip,
@@ -359,6 +361,7 @@ fun CallScreen(
                         onMinimize = onMinimize,
                         modifier = Modifier.padding(top = MeeshySpacing.xs),
                         isVideoStage = videoStage,
+                        onOpenQualityDetail = { qualityDetailOpen = true },
                     )
                 }
             }

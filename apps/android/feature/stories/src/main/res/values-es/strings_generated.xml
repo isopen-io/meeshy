@@ -297,6 +297,8 @@
     <string name="story_composer_grabber">Asa de la barra de herramientas</string>
     <string name="story_composer_grabber_hint_dismiss">Arrastra hacia abajo para reducir o cerrar.</string>
     <string name="story_composer_grabber_hint_resize">Arrastra hacia arriba para ampliar, hacia abajo para reducir o cerrar.</string>
+    <string name="story_composer_loadingImage">Cargando imagen…</string>
+    <string name="story_composer_loadingVideo">Cargando vídeo…</string>
     <string name="story_composer_redo">Rehacer</string>
     <string name="story_composer_soundLibrary">Biblioteca</string>
     <string name="story_composer_undo">Deshacer</string>
@@ -319,6 +321,7 @@
     <string name="story_media_soundExtraction_a11yHint">Otras personas podrán reutilizar la banda sonora de los vídeos de esta publicación en sus propias publicaciones.</string>
     <string name="story_media_soundExtraction_caption">Otras personas podrán reutilizar la banda sonora de los vídeos de esta publicación.</string>
     <string name="story_media_soundExtraction_label">Permitir la reutilización del sonido</string>
+    <string name="story_reader_buffering">Cargando la story</string>
     <string name="story_repost_error_forbidden">Esta historia no se puede volver a compartir</string>
     <string name="story_repost_error_generic">Error al republicar</string>
     <string name="story_repost_error_unavailable">Esta historia ya no está disponible</string>
