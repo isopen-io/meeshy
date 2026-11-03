@@ -367,7 +367,7 @@ internal fun CenteredHint(text: String) {
 }
 
 @Composable
-internal fun SectionLabel(text: String) {
+internal fun DashboardSectionLabel(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.labelMedium,
@@ -407,4 +407,3 @@ private fun periodLabel(period: ActivityPeriod): String = stringResource(
     },
 )
 
-private const val LANGUAGE_ROW_LIMIT = 6

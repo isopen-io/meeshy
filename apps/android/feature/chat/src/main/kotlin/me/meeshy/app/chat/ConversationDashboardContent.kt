@@ -138,7 +138,7 @@ private fun DashboardSections(
     }
 
     if (analysis.profiles.isNotEmpty()) {
-        SectionLabel(stringResource(R.string.conversation_analysis_personas))
+        DashboardSectionLabel(stringResource(R.string.conversation_analysis_personas))
         analysis.profiles.forEach { ParticipantPersonaCard(it, accentColor) }
     }
 
