@@ -70,4 +70,25 @@ class StickerLibraryStoreTest {
         library.save(ByteArray(3))!!.file.parentFile!!.resolve(StickerLibraryStore.INDEX_FILE).writeText("{oops")
         assertThat(store(dir).apply { adopt("u1") }.items.value).isEmpty()
     }
+
+    @Test
+    fun `un sticker reçu garde son id stable et se reconnait`() = runTest {
+        val library = store(root()).apply { adopt("u1") }
+        assertThat(library.contains("received-m1")).isFalse()
+        val saved = library.save(byteArrayOf(9), "received-m1")!!
+        assertThat(saved.id).isEqualTo("received-m1")
+        assertThat(library.contains("received-m1")).isTrue()
+        library.save(byteArrayOf(8, 8), "received-m1")
+        assertThat(library.items.value.map { it.id }).containsExactly("received-m1")
+        assertThat(library.file("received-m1")!!.readBytes()).isEqualTo(byteArrayOf(8, 8))
+    }
+
+    @Test
+    fun `un id impropre a un nom de fichier n'ecrit rien`() = runTest {
+        val dir = root()
+        val library = store(dir).apply { adopt("u1") }
+        assertThat(library.save(byteArrayOf(1), "../evil")).isNull()
+        assertThat(library.items.value).isEmpty()
+        assertThat(File(dir, "evil").exists()).isFalse()
+    }
 }
