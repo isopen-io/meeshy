@@ -53,7 +53,7 @@ const link = (overrides: Partial<RelationLink> = {}): RelationLink => ({
 
 const view = (props: { readonly link: RelationLink | null; readonly pending?: FriendRequestRecord['targetLevel'] | 'FRIEND' | null; readonly raisable?: boolean }) =>
   renderToStaticMarkup(
-    <ProfileCircleRowView language="fr" name="Ada" link={props.link} pendingLevel={props.pending ?? null} raisable={props.raisable ?? true} now={NOW} onRaise={noop} />,
+    <ProfileCircleRowView language="fr" name="Ada" link={props.link} pendingLevel={props.pending ?? null} raisable={props.raisable ?? true} now={NOW} onRaise={noop} onLower={noop} />,
   );
 
 describe('la ligne du cercle', () => {
@@ -70,9 +70,10 @@ describe('la ligne du cercle', () => {
     expect(view({ link: link({ effectiveLevel: 'COMMUNITY' }) })).toBe('');
   });
 
-  test('« Demander Proche » quand la série est servie comme atteinte, nommé pour la personne', () => {
+  test('« Promouvoir en Proche » quand la série est servie comme atteinte, nommé pour la personne', () => {
     const html = view({ link: link({ eligibleFor: 'CLOSE' }) });
     expect(html).toContain('data-profile-circle-raise="CLOSE"');
+    expect(html).toContain('Promouvoir en Proche');
     expect(html).toContain('aria-label="Demander le niveau Proche à Ada"');
   });
 
@@ -104,14 +105,110 @@ describe('câblée sur les caches', () => {
         viewerId="u-me"
         now={NOW}
         onOutcome={noop}
+        onNotice={noop}
         deps={{ source: 'gateway', transport }}
       />,
     );
     expect(host.querySelector('[data-profile-circle]')?.getAttribute('data-profile-circle')).toBe('FRIEND');
     await click(host.querySelector<HTMLButtonElement>('[data-profile-circle-raise="CLOSE"]'));
     const sent = appQueryClient.getQueryData<FriendRequestsData>(friendRequestsQueryKey('sent'));
-    expect(requests.map((r) => r.body)).toEqual([{ receiverId: 'u-ada', targetLevel: 'CLOSE' }]);
+    expect(requests.filter((r) => r.method === 'POST').map((r) => r.body)).toEqual([{ receiverId: 'u-ada', targetLevel: 'CLOSE' }]);
     expect(sent?.pages[0]?.requests.map((r) => [r.id, r.receiverId, r.targetLevel])).toEqual([['f-1', 'u-ada', 'CLOSE']]);
     expect(host.textContent).toContain('Demande envoyée · Proche');
+  });
+});
+
+describe('gérer le lien (#14910) — promouvoir si possible, rétrograder d’un cran, annuler à Connaissance', () => {
+  test('« Rétrograder en Ami » sous un Proche, « Annuler le lien » sous une Connaissance', () => {
+    const close = view({ link: link({ effectiveLevel: 'CLOSE', grantedByMe: 'CLOSE' }) });
+    expect(close).toContain('data-profile-circle-lower="demote"');
+    expect(close).toContain('Rétrograder en Ami');
+    const acquaintance = view({ link: link({ effectiveLevel: 'ACQUAINTANCE', grantedByMe: 'ACQUAINTANCE' }), raisable: false });
+    expect(acquaintance).toContain('data-profile-circle="ACQUAINTANCE"');
+    expect(acquaintance).toContain('data-profile-circle-lower="unlink"');
+    expect(acquaintance).toContain('Annuler le lien');
+  });
+
+  test('Promouvoir est MASQUÉ tant que la passerelle sert un délai', () => {
+    const html = view({ link: link({ eligibleFor: 'CLOSE', raiseBlockedUntil: '2026-12-01T00:00:00.000Z' }) });
+    expect(html).not.toContain('data-profile-circle-raise');
+    expect(html).toContain('data-profile-circle-lower="demote"');
+  });
+
+  const transportFor = (lowerResult: unknown, requests: HttpRequest[]): HttpTransport => {
+    const transport = (async () => ({ ok: true, data: null })) as unknown as HttpTransport;
+    transport.request = (async (req: HttpRequest) => {
+      requests.push(req);
+      if (req.method === 'POST') return lowerResult;
+      if (req.path === '/api/v1/relations') return { ok: true, data: appQueryClient.getQueryData(RELATION_LINKS_QUERY_KEY) ?? [] };
+      return { ok: true, data: null };
+    }) as HttpTransport['request'];
+    return transport;
+  };
+
+  const mountRow = (transport: HttpTransport, notices: string[] = []) =>
+    mount(
+      <ProfileCircleRow
+        language="fr"
+        person={{ id: 'u-ada', username: 'ada', displayName: 'Ada', avatar: null }}
+        raisable
+        viewerId="u-me"
+        now={NOW}
+        onOutcome={noop}
+        onNotice={(message) => notices.push(message)}
+        deps={{ source: 'gateway', transport }}
+      />,
+    );
+
+  const seed = (over: Partial<RelationLink>) => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link(over)]);
+    appQueryClient.setQueryData(friendRequestsQueryKey('sent'), { pages: [{ requests: [], nextCursor: null }], pageParams: [null] } satisfies FriendRequestsData);
+  };
+
+  test('rétrograder passe par une confirmation qui dit départ, arrivée, silence et 30 jours ; « Annuler » ne touche à rien', async () => {
+    seed({ effectiveLevel: 'CLOSE', grantedByMe: 'CLOSE' });
+    const requests: HttpRequest[] = [];
+    const host = await mountRow(transportFor({ ok: true, data: null }, requests));
+    await click(host.querySelector<HTMLButtonElement>('[data-profile-circle-lower="demote"]'));
+    const dialog = document.querySelector('[data-confirm-dialog="circle-demote"]');
+    expect(dialog?.textContent).toContain('Rétrograder Ada en Ami ?');
+    expect(dialog?.textContent).toContain('Ada passera de Proche à Ami.');
+    expect(dialog?.textContent).toContain('ne pourra pas vous redemander de remonter avant 30 jours');
+    await click(document.querySelector<HTMLButtonElement>('[data-confirm-dialog="circle-demote"] [data-confirm="cancel"]'));
+    expect(document.querySelector('[data-confirm-dialog]')).toBeNull();
+    expect(requests.filter((r) => r.method === 'POST')).toEqual([]);
+    expect(host.querySelector('[data-profile-circle]')?.getAttribute('data-profile-circle')).toBe('CLOSE');
+  });
+
+  test('confirmé : le niveau change AU GESTE, la passerelle reçoit le cran inférieur', async () => {
+    seed({ effectiveLevel: 'CLOSE', grantedByMe: 'CLOSE' });
+    const requests: HttpRequest[] = [];
+    let settle: (value: unknown) => void = noop;
+    const pending = new Promise((resolve) => {
+      settle = resolve;
+    });
+    const transport = transportFor(null, requests);
+    const inner = transport.request;
+    transport.request = (async (req: HttpRequest) => (req.method === 'POST' ? (requests.push(req), pending) : inner(req))) as HttpTransport['request'];
+    const host = await mountRow(transport);
+    await click(host.querySelector<HTMLButtonElement>('[data-profile-circle-lower="demote"]'));
+    await click(document.querySelector<HTMLButtonElement>('[data-confirm-dialog="circle-demote"] [data-confirm="confirm"]'));
+    expect(requests.filter((r) => r.method === 'POST').map((r) => [r.path, r.body])).toEqual([['/api/v1/relations/u-ada/level', { level: 'FRIEND' }]]);
+    expect(host.querySelector('[data-profile-circle]')?.getAttribute('data-profile-circle')).toBe('FRIEND');
+    settle({ ok: true, data: { ...link({ effectiveLevel: 'FRIEND', grantedByMe: 'FRIEND' }) } });
+  });
+
+  test('un refus rend le niveau d’avant et le dit', async () => {
+    seed({ effectiveLevel: 'ACQUAINTANCE', grantedByMe: 'ACQUAINTANCE' });
+    const requests: HttpRequest[] = [];
+    const notices: string[] = [];
+    const host = await mountRow(transportFor({ ok: false, status: 500, error: 'x' }, requests), notices);
+    await click(host.querySelector<HTMLButtonElement>('[data-profile-circle-lower="unlink"]'));
+    expect(document.querySelector('[data-confirm-dialog="circle-unlink"]')?.textContent).toContain('Annuler le lien avec Ada ?');
+    await click(document.querySelector<HTMLButtonElement>('[data-confirm-dialog="circle-unlink"] [data-confirm="confirm"]'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(requests.filter((r) => r.method === 'POST').map((r) => r.body)).toEqual([{ level: 'PUBLIC' }]);
+    expect(appQueryClient.getQueryData<readonly RelationLink[]>(RELATION_LINKS_QUERY_KEY)?.[0]?.effectiveLevel).toBe('ACQUAINTANCE');
+    expect(notices).toEqual(['La modification n’a pas pu être enregistrée.']);
   });
 });

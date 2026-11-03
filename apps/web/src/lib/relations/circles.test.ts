@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import type { FriendRequestRecord } from '@/lib/api/friend-requests';
 import type { RelationLink } from '@/lib/api/relations';
 
-import { circleSections, listedLinks, pendingRaiseOf, progressSummary, raiseOffer, raiseRequests, requestedLevelOf } from './circles';
+import { circleSections, demotionOf, listedLinks, pendingRaiseOf, progressSummary, raiseOffer, raiseRequests, requestedLevelOf } from './circles';
 
 /**
  * « MES CERCLES », LES RÈGLES PURES (#13938) — miroir de `CirclesViewModel`
@@ -142,5 +142,37 @@ describe('les demandes de montée — une projection des paniers, aucun second c
     expect(pendingRaiseOf(sent, 'u-ada')).toBe('CLOSE');
     expect(pendingRaiseOf(sent, 'u-bob')).toBeNull();
     expect(pendingRaiseOf([request({ senderId: 'u-me', receiverId: 'u-ada', status: 'accepted' })], 'u-ada')).toBeNull();
+  });
+});
+
+describe('rétrograder ou annuler le lien (#14910) — un cran à la fois, jamais sous Connaissance par ce geste', () => {
+  test('Sang → Proche → Ami → Connaissance : un cran sous le niveau EFFECTIF', () => {
+    expect(demotionOf(link({ effectiveLevel: 'BLOOD', grantedByMe: 'BLOOD' }))).toEqual({ kind: 'demote', from: 'BLOOD', to: 'CLOSE' });
+    expect(demotionOf(link({ effectiveLevel: 'CLOSE', grantedByMe: 'CLOSE' }))).toEqual({ kind: 'demote', from: 'CLOSE', to: 'FRIEND' });
+    expect(demotionOf(link({ effectiveLevel: 'FRIEND', grantedByMe: 'FRIEND' }))).toEqual({ kind: 'demote', from: 'FRIEND', to: 'ACQUAINTANCE' });
+  });
+
+  test('sous l’accord quand j’accorde plus haut que l’effectif', () => {
+    expect(demotionOf(link({ effectiveLevel: 'FRIEND', grantedByMe: 'BLOOD' }))).toEqual({ kind: 'demote', from: 'FRIEND', to: 'ACQUAINTANCE' });
+  });
+
+  test('à Connaissance, le geste devient « Annuler le lien » (PUBLIC)', () => {
+    expect(demotionOf(link({ effectiveLevel: 'ACQUAINTANCE', grantedByMe: 'ACQUAINTANCE' }))).toEqual({ kind: 'unlink', from: 'ACQUAINTANCE', to: 'PUBLIC' });
+  });
+
+  test('sans lien, ou quand mon accord est déjà au plus bas, rien', () => {
+    expect(demotionOf(link({ effectiveLevel: 'COMMUNITY' }))).toBeNull();
+    expect(demotionOf(link({ effectiveLevel: 'PUBLIC' }))).toBeNull();
+    expect(demotionOf(link({ effectiveLevel: 'ACQUAINTANCE', grantedByMe: 'PUBLIC' }))).toBeNull();
+  });
+});
+
+describe('la montée masquée tant que la passerelle sert un délai (#14910)', () => {
+  test('raiseBlockedUntil dans le futur verrouille ; passé ou absent, la loi habituelle', () => {
+    const eligible = link({ effectiveLevel: 'FRIEND', eligibleFor: 'CLOSE' });
+    expect(raiseOffer({ ...eligible, raiseBlockedUntil: '2026-12-01T00:00:00.000Z' }, NOW)).toEqual({ kind: 'locked', target: 'CLOSE' });
+    expect(raiseOffer({ ...eligible, raiseBlockedUntil: '2020-01-01T00:00:00.000Z' }, NOW)).toEqual({ kind: 'available', target: 'CLOSE' });
+    expect(raiseOffer({ ...eligible, raiseBlockedUntil: 'pas une date' }, NOW)).toEqual({ kind: 'available', target: 'CLOSE' });
+    expect(raiseOffer(eligible, NOW)).toEqual({ kind: 'available', target: 'CLOSE' });
   });
 });

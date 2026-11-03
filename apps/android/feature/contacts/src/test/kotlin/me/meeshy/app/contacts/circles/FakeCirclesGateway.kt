@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.relation.CirclePerson
 import me.meeshy.sdk.model.relation.RelationLevel
 import me.meeshy.sdk.model.relation.RelationLink
 import me.meeshy.sdk.model.relation.RelationProgress
+import me.meeshy.sdk.model.relation.RelationRaiseGate
 import me.meeshy.sdk.model.relation.RelationRitualConsents
 import me.meeshy.sdk.model.relation.RelationRitualPhase
 import me.meeshy.sdk.model.relation.RelationRitualStep
@@ -70,6 +71,11 @@ internal class FakeCirclesGateway(
     }
 
     override suspend fun people(ids: List<String>): Map<String, CirclePerson> = known.filterKeys { it in ids }
+
+    override suspend fun lower(userId: String, level: RelationLevel): NetworkResult<RelationLink> =
+        NetworkResult.Success(link(userId, level))
+
+    override suspend fun raiseGate(userId: String): RelationRaiseGate? = null
 }
 
 internal fun link(

@@ -170,7 +170,7 @@ class PostDetailViewModel: ObservableObject {
     /// porte qui l'a amenée : tap d'un listing, notification, lien) donne la
     /// source de l'impression et la provenance de la vue ; sans marque, `direct`.
     func registerDetailOpen(_ postId: String) async {
-        guard countedOpenPostIds.insert(postId).inserted else { return }
+        guard !ClientMutationId.isValid(postId), countedOpenPostIds.insert(postId).inserted else { return }
         if post != nil {
             post?.impressionCount += 1
             post?.postOpenCount += 1
@@ -212,6 +212,7 @@ class PostDetailViewModel: ObservableObject {
     }
 
     func loadComments(_ postId: String) async {
+        guard !ClientMutationId.isValid(postId) else { return }
         let outcome = await onThread(postId).loadRoots()
         guard outcome != .skipped else { return }
         if outcome == .failed { warnIfNoComments() }

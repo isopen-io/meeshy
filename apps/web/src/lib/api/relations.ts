@@ -44,6 +44,8 @@ export type RelationLink = {
   readonly since: string | null;
   readonly progress: RelationProgress;
   readonly eligibleFor: RelationEligibility | null;
+  /** Jusqu'à quand je ne peux pas redemander de monter (#14910), servi par `GET /relations/:userId` ; absent, la loi habituelle. */
+  readonly raiseBlockedUntil?: string;
 };
 
 export { RELATION_LINKS_QUERY_KEY } from './friends-keys';
@@ -79,6 +81,7 @@ export function decodeRelationLink(raw: unknown): RelationLink | null {
   const wire = objectOf(raw);
   const userId = textOf(wire?.userId);
   if (wire === null || userId === null) return null;
+  const raiseBlockedUntil = textOf(wire.raiseBlockedUntil);
   return {
     userId,
     effectiveLevel: levelOf(wire.effectiveLevel),
@@ -86,6 +89,7 @@ export function decodeRelationLink(raw: unknown): RelationLink | null {
     since: textOf(wire.since),
     progress: decodeProgress(wire.progress),
     eligibleFor: eligibilityOf(wire.eligibleFor),
+    ...(raiseBlockedUntil === null ? {} : { raiseBlockedUntil }),
   };
 }
 
@@ -105,6 +109,41 @@ export function relationLinksQueryOptions(deps: RelationDeps) {
     staleTime: RELATION_LINKS_STALE_TIME,
     queryFn: async ({ signal }: { readonly signal?: AbortSignal }) => unwrap(await loadRelationLinks({ ...deps, ...withSignal(signal) })),
   };
+}
+
+/**
+ * **LE DÉLAI AVANT DE REDEMANDER** (#14910) — `GET /relations/:userId` sert
+ * `raiseBlockedUntil` (ISO) depuis le lot passerelle de #14910 ; une passerelle
+ * d'avant ne le sert pas, et `null` laisse la loi de demande décider seule.
+ */
+export const relationRaiseBlockQueryKey = (userId: string) => [...RELATION_LINKS_QUERY_KEY, 'raise-block', userId] as const;
+
+export async function loadRelationRaiseBlock(deps: RelationDeps & { readonly signal?: AbortSignal }, userId: string): Promise<ApiResult<string | null>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: null };
+  const result = await deps.transport.request<unknown>({ method: 'GET', path: relationsEndpoints.byUserId(userId), ...withSignal(deps.signal) });
+  return result.ok ? { ok: true, data: textOf(objectOf(result.data)?.raiseBlockedUntil) } : result;
+}
+
+export function relationRaiseBlockQueryOptions(deps: RelationDeps, userId: string) {
+  return {
+    queryKey: relationRaiseBlockQueryKey(userId),
+    staleTime: RELATION_LINKS_STALE_TIME,
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }) => unwrap(await loadRelationRaiseBlock({ ...deps, ...withSignal(signal) }, userId)),
+  };
+}
+
+/**
+ * **BAISSER MON ACCORD, OU ANNULER LE LIEN** (#14910) — `POST /relations/:userId/level`.
+ * `PUBLIC` annule le lien. Silencieux côté passerelle : l'autre n'est pas prévenu.
+ * Rend la vue du lien servie (`null` si illisible).
+ */
+export async function lowerRelation(
+  deps: RelationDeps,
+  request: { readonly userId: string; readonly level: RelationLevel },
+): Promise<ApiResult<RelationLink | null>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: false, status: 0, error: 'Indisponible en démonstration' };
+  const result = await deps.transport.request<unknown>({ method: 'POST', path: relationsEndpoints.byUserIdLevel(request.userId), body: { level: request.level } });
+  return result.ok ? { ok: true, data: decodeRelationLink(result.data) } : result;
 }
 
 /**

@@ -91,6 +91,13 @@ public object OutboxLanes {
      * message se tient par son `dependsOn`, jamais par la lane média), donc une pièce qui attend ne retient pas les suivantes.
      */
     public fun isIndependent(lane: String): Boolean = lane == MEDIA
+
+    /**
+     * #14697 — une lane de messages ne retient pas ses messages derrière une pièce qui se téléverse encore : le message qui
+     * l'attend attend SEUL (son ordre se tient par son `dependsOn`), ceux composés après lui partent dans leur ordre. Un échec
+     * transitoire ou une ligne pas encore due, eux, tiennent toujours la lane (FIFO).
+     */
+    public fun passesOverWaitingMedia(lane: String): Boolean = lane.startsWith(forMessage(""))
 }
 
 /**
