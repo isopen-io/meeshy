@@ -114,17 +114,15 @@ fun ReelsScreen(
     }
     // Fermer = tout couper (vidéo + audio), une haptique légère, le disque se referme (0,3 s ease-in) pendant que
     // la navigation retire l'écran sans le démonter avant la fin de la transition (voir `StackTransitions`).
-    val requestClose = remember(viewModel, haptics, scope) {
-        {
-            if (!closing) {
-                closing = true
-                viewModel.stopAllMedia()
-                haptics.light()
-                scope.launch {
-                    launch { closeNow() }
-                    reveal.animateTo(0f, tween(RevealGeometry.durationMillis(opening = false, reduceMotion = reduceMotion), easing = EaseIn))
-                }
-                Unit
+    val requestClose: () -> Unit = remember(viewModel, haptics, scope, reduceMotion) {
+        fun() {
+            if (closing) return
+            closing = true
+            viewModel.stopAllMedia()
+            haptics.light()
+            scope.launch {
+                launch { closeNow() }
+                reveal.animateTo(0f, tween(RevealGeometry.durationMillis(opening = false, reduceMotion = reduceMotion), easing = EaseIn))
             }
         }
     }
