@@ -20,9 +20,9 @@ import me.meeshy.sdk.model.ParticipantLeftEvent
 import me.meeshy.sdk.model.ParticipantUnbannedEvent
 import me.meeshy.sdk.model.conversationlist.ConversationLivePatch
 import me.meeshy.sdk.model.conversationlist.LastMessageFacet
-import me.meeshy.sdk.model.conversationlist.admitsLastMessage
 import me.meeshy.sdk.model.conversationlist.applyingLastMessage
 import me.meeshy.sdk.model.conversationlist.revertingDeletion
+import me.meeshy.sdk.model.sync.ConversationPatch
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.ConversationApi
@@ -51,6 +51,7 @@ class ConversationLivePatcher @Inject constructor(
     private val conversationApi: ConversationApi,
     private val session: SessionRepository,
     private val readerLabel: ReaderLabelProvider,
+    private val openConversations: OpenConversationLookup = OpenConversationLookup.None,
 ) {
     private val discoveries: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
@@ -63,8 +64,11 @@ class ConversationLivePatcher @Inject constructor(
             viewerLanguages = viewerLanguages(),
         )
         val alias = message.clientMessageId?.let(::listOf).orEmpty()
+        val me = readerId()
+        val mine = !me.isNullOrBlank() && (message.senderId == me || message.sender?.resolvedUserId == me)
+        val countsAsUnread = !mine && !openConversations.isOpen(message.conversationId)
         val known = mutate(message.conversationId) { row ->
-            if (!row.admitsLastMessage(facet.id, facet.createdAtMillis, alias)) row else row.applyingLastMessage(facet)
+            ConversationPatch.receivingMessage(row, facet, alias, countsAsUnread)
         }
         if (known == Known.ABSENT) discover(message.conversationId)
         return known != Known.ABSENT
