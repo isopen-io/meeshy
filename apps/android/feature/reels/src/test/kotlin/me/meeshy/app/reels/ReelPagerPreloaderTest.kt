@@ -68,17 +68,18 @@ class ReelPagerPreloaderTest {
     }
 
     @Test
-    fun `avancer retire ce qui sort de la fenetre et ne reprepare pas ce qui reste`() {
+    fun `avancer retire ce qui sort de la fenetre et re-etage ce qui reste`() {
         val pool = FakePool()
         val preloader = preloader(pool)
         preloader.enter(5, targets(20), nowMs = 0)
         pool.prepared.clear()
 
-        preloader.enter(6, targets(20), nowMs = 4_000)
+        preloader.enter(6, targets(20), nowMs = 12_000)
 
-        assertThat(pool.retired).containsExactly("r3")
-        assertThat(pool.prepared.map { it.target.id }).containsExactly("r8", "r5")
+        assertThat(pool.retired).containsExactly("r6", "r3")
+        assertThat(pool.prepared.map { it.target.id }).containsExactly("r7", "r5", "r8", "r4")
         assertThat(pool.prepared.first { it.target.id == "r5" }.tier).isEqualTo(Tier.DECODE)
+        assertThat(pool.prepared.first { it.target.id == "r4" }.tier).isEqualTo(Tier.MOUNT)
     }
 
     @Test
