@@ -58,14 +58,15 @@ class RichMediaEnricher @Inject constructor(
         val pictureBudget = remaining - PushMediaBudget.avatarMillis(remaining, pictureWanted = true)
         val picture = download(url, mimeType, request, pictureBudget) ?: return
         val style = NotificationCompat.BigPictureStyle().bigPicture(picture)
-        (request.push.notificationBody ?: request.push.payload.body)?.let(style::setSummaryText)
+        (request.push.notificationBody ?: request.push.payload.body)?.let { style.setSummaryText(it) }
         builder.setStyle(style)
-        senderIcon(request)?.let(builder::setLargeIcon)
+        senderIcon(request)?.let { builder.setLargeIcon(it) }
     }
 
     private suspend fun senderIcon(request: EnrichmentRequest): Bitmap? {
         val url = request.push.payload.senderAvatar ?: return null
         val budget = PushMediaBudget.avatarMillis(request.deadlineMillis - System.currentTimeMillis(), pictureWanted = false)
+        if (budget <= 0) return null
         val file = fetcher.fetch(url = url, mimeType = AVATAR_MIME, declaredSize = null, data = emptyMap(), budgetMillis = budget) ?: return null
         return try {
             CircularAvatar.decode(file)
