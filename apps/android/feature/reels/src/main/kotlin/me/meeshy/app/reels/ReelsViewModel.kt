@@ -45,6 +45,7 @@ import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.chrome.InMemoryFloatingButtonPositionStore
 import me.meeshy.sdk.playback.PlaybackCoordinator
 import javax.inject.Inject
+import me.meeshy.sdk.call.CallActivityGate
 
 data class ReelsUiState(
     val reels: List<ReelPresentation> = emptyList(),
@@ -74,7 +75,11 @@ class ReelsViewModel @Inject constructor(
     private val emojiUsageStore: EmojiUsageStore = InMemoryEmojiUsageStore(),
     private val playbackCoordinator: PlaybackCoordinator = PlaybackCoordinator(),
     floatingButtonPositions: FloatingButtonPositionStore = InMemoryFloatingButtonPositionStore(),
+    callGate: CallActivityGate = CallActivityGate(),
 ) : ViewModel() {
+
+    /** Un appel est en cours : aucun réel ne démarre sous la voix, et la lecture reprend à sa fin. */
+    val isCallActive: StateFlow<Boolean> = callGate.isActiveFlow
 
     /** Où le bouton Flux est rangé : le dévoilement des réels naît à son centre exact (iOS `feedButtonPosition`). */
     val feedButtonStorage: StateFlow<String> = floatingButtonPositions.leftStorage
