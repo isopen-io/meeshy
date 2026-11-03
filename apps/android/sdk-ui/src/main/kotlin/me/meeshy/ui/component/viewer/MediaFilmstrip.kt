@@ -13,9 +13,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,6 +33,7 @@ import coil.compose.AsyncImage
 import me.meeshy.sdk.model.GalleryPage
 import me.meeshy.sdk.model.GalleryPageKind
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -100,8 +98,8 @@ private fun FilmstripTile(
             modifier = Modifier.size(TILE),
         )
         when (page.kind) {
-            GalleryPageKind.VIDEO -> Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(BADGE))
-            GalleryPageKind.SCENE -> Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(BADGE))
+            GalleryPageKind.VIDEO -> Icon(MeeshyIcons.Play, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(BADGE))
+            GalleryPageKind.SCENE -> Icon(MeeshyIcons.Sparkles, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(BADGE))
             GalleryPageKind.IMAGE -> Unit
         }
         if (isCurrent) {

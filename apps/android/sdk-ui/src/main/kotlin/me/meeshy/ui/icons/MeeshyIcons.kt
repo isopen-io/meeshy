@@ -228,6 +228,7 @@ import androidx.compose.material.icons.outlined.BookmarkBorder as OuBookmarkBord
 import androidx.compose.material.icons.outlined.Cancel as OuCancel
 import androidx.compose.material.icons.outlined.CheckCircle as OuCheckCircle
 import androidx.compose.material.icons.outlined.Cloud as OuCloud
+import androidx.compose.material.icons.outlined.ContentCopy as OuContentCopy
 import androidx.compose.material.icons.outlined.Delete as OuDelete
 import androidx.compose.material.icons.outlined.Diamond as OuDiamond
 import androidx.compose.material.icons.outlined.Edit as OuEdit
@@ -394,6 +395,7 @@ public object MeeshyIcons {
     public val Code: ImageVector get() = Icons.Filled.FiCode
     public val ComposeNew: ImageVector get() = Icons.Outlined.OuEditNote
     public val Copy: ImageVector get() = Icons.Filled.FiContentCopy
+    public val CopyOutlined: ImageVector get() = Icons.Outlined.OuContentCopy
     public val Crop: ImageVector get() = Icons.Filled.FiCrop
     public val Cut: ImageVector get() = Icons.Filled.FiContentCut
     public val Dangerous: ImageVector get() = Icons.Filled.FiDangerous

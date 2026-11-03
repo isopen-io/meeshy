@@ -19,8 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -47,6 +45,7 @@ import me.meeshy.sdk.model.InviteLandingState
 import me.meeshy.sdk.model.ShareLinkInfo
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.formColumnWidth
@@ -169,7 +168,7 @@ private fun InviteLandingHeader(isDark: Boolean, onClose: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Filled.Close,
+                MeeshyIcons.Close,
                 contentDescription = stringResource(R.string.join_flow_close_accessibility_label),
                 tint = if (isDark) MeeshyPalette.Indigo200 else MeeshyPalette.Indigo600,
             )

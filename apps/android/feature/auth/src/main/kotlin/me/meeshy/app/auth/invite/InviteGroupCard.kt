@@ -12,11 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -58,6 +53,7 @@ import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.avatarInitials
 import me.meeshy.ui.component.media.MeeshyAsyncImage
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -181,7 +177,7 @@ private fun LinkRow(display: String, isDark: Boolean) {
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.Link, contentDescription = null, tint = InviteInk.accent(isDark), modifier = Modifier.size(20.dp))
+        Icon(MeeshyIcons.Link, contentDescription = null, tint = InviteInk.accent(isDark), modifier = Modifier.size(20.dp))
         Text(
             text = display,
             style = MaterialTheme.typography.bodyMedium,
@@ -210,7 +206,7 @@ private fun LinkActions(absolute: String, isDark: Boolean) {
     Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus)) {
         ActionButton(
             text = stringResource(if (copied) R.string.invite_landing_group_copied else R.string.invite_landing_group_copy),
-            icon = if (copied) Icons.Filled.Check else Icons.Outlined.ContentCopy,
+            icon = if (copied) MeeshyIcons.Check else MeeshyIcons.CopyOutlined,
             isDark = isDark,
             modifier = Modifier.weight(1f),
         ) {
@@ -221,7 +217,7 @@ private fun LinkActions(absolute: String, isDark: Boolean) {
         }
         ActionButton(
             text = stringResource(R.string.invite_landing_group_reshare),
-            icon = Icons.Filled.Share,
+            icon = MeeshyIcons.ShareFilled,
             isDark = isDark,
             modifier = Modifier.weight(1f),
         ) {

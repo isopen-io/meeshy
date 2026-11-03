@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "audio_recorder_accept",
+          "status": "android-only"
+        },
+        {
+          "androidName": "audio_recorder_cancel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "audio_recorder_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "audio_recorder_edit",
+          "status": "android-only"
+        },
+        {
+          "androidName": "audio_recorder_preview_pause",
+          "status": "android-only"
+        },
+        {
+          "androidName": "audio_recorder_preview_play",
+          "status": "android-only"
+        },
+        {
+          "androidName": "audio_recorder_redo",
+          "status": "android-only"
+        },
+        {
+          "androidName": "audio_recorder_spoken_language",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

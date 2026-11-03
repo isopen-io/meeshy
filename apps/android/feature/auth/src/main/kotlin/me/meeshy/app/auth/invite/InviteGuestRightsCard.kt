@@ -8,9 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,6 +28,7 @@ import me.meeshy.sdk.model.InviteRightRow
 import me.meeshy.sdk.model.InviteValidity
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.ShareLinkInvitationTerms
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -99,7 +97,7 @@ private fun RightRow(row: InviteRightRow, isDark: Boolean) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = if (row.allowed) Icons.Filled.Check else Icons.Filled.Close,
+            imageVector = if (row.allowed) MeeshyIcons.Check else MeeshyIcons.Close,
             contentDescription = null,
             tint = if (row.allowed) MeeshyPalette.SuccessDeep else MeeshyPalette.ErrorStrong,
             modifier = Modifier.size(20.dp),
