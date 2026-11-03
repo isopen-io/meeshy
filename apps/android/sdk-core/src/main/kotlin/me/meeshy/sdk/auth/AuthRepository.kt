@@ -56,6 +56,7 @@ class AuthRepository @Inject constructor(
     private val accountShelf: AccountShelf = NoAccountShelf,
     private val sessionClosing: me.meeshy.sdk.session.SessionClosing? = null,
     private val serverLogout: ServerLogout? = null,
+    private val linkDevice: LinkDeviceBindingProviding = NoLinkDeviceBinding,
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
 
@@ -163,7 +164,7 @@ class AuthRepository @Inject constructor(
             }
         ) {
             is NetworkResult.Failure -> result
-            is NetworkResult.Success -> result.data.asOutcome().also(::forgetLinkSecretIfSettled)
+            is NetworkResult.Success -> result.data.asOutcome().also { forgetLinkSecretIfSettled(it) }
         }
 
     /**
@@ -312,7 +313,7 @@ class AuthRepository @Inject constructor(
             }
         ) {
             is NetworkResult.Failure -> result
-            is NetworkResult.Success -> result.data.openIfAuthenticated().also(::forgetLinkSecretIfSettled)
+            is NetworkResult.Success -> result.data.openIfAuthenticated().also { forgetLinkSecretIfSettled(it) }
         }
 
     /** Renvoie le code / lien de vérification ; la passerelle répond succès même sans compte (anti-énumération). */
