@@ -73,6 +73,7 @@ class ConversationRoomRegistryTest {
     fun `hors connexion l'ensemble est memorise et rejoue au connect, active d'abord`() = runTest {
         val h = Harness(testScheduler, connectedNow = false)
         h.registry.attach()
+        testScheduler.runCurrent()
         h.opens.open("b")
         h.opens.open("a")
         h.registry.join("z")

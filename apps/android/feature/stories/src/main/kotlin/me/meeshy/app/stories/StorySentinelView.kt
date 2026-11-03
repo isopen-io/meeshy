@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,8 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Diamond
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -50,7 +49,7 @@ internal fun StorySentinelView(onUpdate: () -> Unit, onSkip: () -> Unit, modifie
                 .clip(RoundedCornerShape(24.dp))
                 .border(BorderStroke(2.dp, MeeshyPalette.Indigo400.copy(alpha = 0.7f)), RoundedCornerShape(24.dp)),
         ) {
-            Icon(Icons.Outlined.Diamond, contentDescription = null, tint = MeeshyPalette.Indigo400, modifier = Modifier.size(30.dp))
+            Icon(MeeshyIcons.Diamond, contentDescription = null, tint = MeeshyPalette.Indigo400, modifier = Modifier.size(30.dp))
         }
         Text(
             text = stringResource(R.string.story_sentinel_title),

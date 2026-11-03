@@ -124,6 +124,7 @@ class SocketManagerReconnectTest {
         advanceTimeBy(1)
 
         assertThat(reconnects).isEqualTo(1)
+        rig.manager.disconnect()
     }
 
     @Test
@@ -201,6 +202,7 @@ class SocketManagerReconnectTest {
             JSONObject().put("serverTime", "2026-11-03T10:00:00.000Z").put("latencyHintMs", 25.0),
         )
         assertThat(rig.manager.connectionRTT.value).isEqualTo(50.0)
+        rig.manager.disconnect()
     }
 
     @Test

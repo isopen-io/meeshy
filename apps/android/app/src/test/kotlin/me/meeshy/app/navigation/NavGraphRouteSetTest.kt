@@ -14,8 +14,9 @@ class NavGraphRouteSetTest {
     private val navigationDir = File("src/main/kotlin/me/meeshy/app/navigation")
     private val graphDir = File(navigationDir, "graph")
 
-    private val registered: List<String> = graphDir.listFiles { file -> file.name.endsWith("NavGraph.kt") }
-        .orEmpty()
+    private val registered: List<String> = (
+        graphDir.listFiles { file -> file.name.endsWith("NavGraph.kt") }.orEmpty() + File(navigationDir, "ChatDestination.kt")
+        )
         .flatMap { file ->
             Regex("""[cC]omposable\(\s*(?:route = )?(?:"\$\{)?Routes\.([A-Z_]+)""").findAll(file.readText()).map { it.groupValues[1] }.toList()
         }
@@ -42,7 +43,7 @@ class NavGraphRouteSetTest {
 
     @Test
     fun `deep links stay declared in the graphs`() {
-        val deepLinks = graphDir.listFiles().orEmpty()
+        val deepLinks = (graphDir.listFiles().orEmpty() + File(navigationDir, "ChatDestination.kt"))
             .flatMap { Regex("""uriPattern = (Routes\.[A-Z_]+)""").findAll(it.readText()).map { m -> m.groupValues[1] }.toList() }
         assertThat(deepLinks).containsExactly(
             "Routes.GUEST_JOIN_DEEP_LINK", "Routes.GUEST_JOIN_WEB_DEEP_LINK", "Routes.GUEST_JOIN_CHAT_WEB_DEEP_LINK",
