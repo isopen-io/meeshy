@@ -36,7 +36,7 @@ object SocketSendPayloads {
             put("originalLanguage", request.originalLanguage)
             put("messageType", request.messageType)
             if (withAttachments) {
-                put("attachmentIds", JsonArray(attachmentIds.map(::JsonPrimitive)))
+                put("attachmentIds", JsonArray(attachmentIds.map { id -> JsonPrimitive(id) }))
                 put("isEncrypted", encrypted)
             }
             request.encryptionMode?.takeIf { withAttachments }?.let { put("encryptionMode", it) }
@@ -44,7 +44,7 @@ object SocketSendPayloads {
             request.storyReplyToId?.let { put("storyReplyToId", it) }
             request.forwardedFromId?.let { put("forwardedFromId", it) }
             request.forwardedFromConversationId?.let { put("forwardedFromConversationId", it) }
-            request.forwardedAttachmentIds?.let { put("forwardedAttachmentIds", JsonArray(it.map(::JsonPrimitive))) }
+            request.forwardedAttachmentIds?.let { put("forwardedAttachmentIds", JsonArray(it.map { id -> JsonPrimitive(id) })) }
             request.copyAttachmentsFromMessageId?.let { put("copyAttachmentsFromMessageId", it) }
             request.isBlurred?.let { put("isBlurred", it) }
             request.expiresAt?.let { put("expiresAt", it) }
