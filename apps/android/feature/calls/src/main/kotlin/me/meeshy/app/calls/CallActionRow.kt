@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -51,6 +52,7 @@ internal fun CallActionRow(
     items: List<CallPillItem>,
     onAction: (CallAction) -> Unit,
     modifier: Modifier = Modifier,
+    dimmed: Set<CallAction> = emptySet(),
 ) {
     val scroll = rememberScrollState()
     val report = LocalCallChromeInteraction.current
@@ -91,7 +93,8 @@ internal fun CallActionRow(
                         toggleState = if (item.isToggle) item.kind != CallPillKind.Normal else null,
                         diameter = CALL_ROW_GLYPH_DIAMETER,
                         onClick = { onAction(item.action) },
-                        modifier = Modifier.width(CALL_ROW_CELL_WIDTH),
+                        modifier = Modifier.width(CALL_ROW_CELL_WIDTH)
+                            .alpha(if (item.action in dimmed) HOLD_DIMMED_ALPHA else 1f),
                     )
                 }
             }

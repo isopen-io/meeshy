@@ -180,6 +180,8 @@ data class CallUiState(
     val durationSeconds: Long = 0,
     /** La caméra avant capte : seul son aperçu local se rend en miroir (l'arrière filme le monde à l'endroit). */
     val isFrontCamera: Boolean = true,
+    /** L'appel est en attente (appel GSM, alarme) : la surcouche « En attente » s'affiche, micro et caméra s'atténuent. */
+    val isOnHold: Boolean = false,
 ) {
     /** Le chrono tourne : connecté, ou en reconnexion avec un média déjà établi. */
     val hasLiveClock: Boolean
