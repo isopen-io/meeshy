@@ -4,14 +4,14 @@ package me.meeshy.sdk.model.scene
  * La bande verticale (repère canvas, pixels) dans laquelle vit le texte en cours de saisie : entre le bas du bouton
  * « Terminé » et le haut des outils ou du clavier — miroir de `StoryInlineEditZone` (iOS).
  */
-public data class InlineEditZone(val top: Float, val bottom: Float) {
+public data class InlineEditZone(public val top: Float, public val bottom: Float) {
     /** Jamais négative : des bornes croisées ne donnent pas une hauteur absurde. */
-    val height: Float get() = maxOf(0f, bottom - top)
-    val midY: Float get() = (top + bottom) / 2f
+    public val height: Float get() = maxOf(0f, bottom - top)
+    public val midY: Float get() = (top + bottom) / 2f
 }
 
 /** Où se pose le bloc édité : son centre (repère canvas) et la hauteur qui en reste visible. */
-public data class InlineEditPlacement(val centerX: Float, val centerY: Float, val visibleHeight: Float)
+public data class InlineEditPlacement(public val centerX: Float, public val centerY: Float, public val visibleHeight: Float)
 
 /**
  * Pose le texte édité dans la bande libre, SANS jamais muter x, y ni rotation du modèle : c'est une projection d'affichage,
