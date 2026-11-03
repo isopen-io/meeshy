@@ -103,6 +103,10 @@
     <string name="location_fullscreen_mapStyle">نمط الخريطة</string>
     <string name="location_fullscreen_sharedPosition">موقع مشارَك</string>
     <string name="media_audio_transcribe">نسخ نصي</string>
+    <string name="media_caption_see_less">عرض أقل</string>
+    <string name="media_caption_see_less_hint">يطوي الشرح</string>
+    <string name="media_caption_see_more">عرض المزيد</string>
+    <string name="media_caption_see_more_hint">يعرض الشرح كاملاً</string>
     <string name="media_crop_a11y_handle_bottom">الحافة السفلية</string>
     <string name="media_crop_a11y_handle_bottomLeft">الزاوية السفلية اليسرى</string>
     <string name="media_crop_a11y_handle_bottomRight">الزاوية السفلية اليمنى</string>

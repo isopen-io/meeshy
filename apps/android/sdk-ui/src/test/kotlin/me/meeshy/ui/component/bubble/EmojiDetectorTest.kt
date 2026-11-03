@@ -61,4 +61,21 @@ class EmojiDetectorTest {
     fun `a variation-selector heart is one cluster`() {
         assertThat(EmojiDetector.emojiOnlyCount("❤️")).isEqualTo(1)
     }
+
+    @Test
+    fun `quatre emoji en sequence ZWJ et drapeaux comptent quatre et se rendent en x2`() {
+        val family = "👨‍👩‍👧"
+        val count = EmojiDetector.emojiOnlyCount("$family🇫🇷👍🏽😂")
+        assertThat(count).isEqualTo(4)
+        assertThat(EmojiDetector.fontSizeSp(count)).isEqualTo(34)
+    }
+
+    @Test
+    fun `les multiplicateurs decroissent avec le nombre d emoji`() {
+        val sizes = (1..4).map { EmojiDetector.fontSizeSp(it)!! }
+        assertThat(sizes).isInOrder(Comparator.reverseOrder<Int>())
+        assertThat(sizes.first()).isEqualTo(4 * 17)
+        assertThat(sizes[2]).isEqualTo(3 * 17)
+        assertThat(sizes.last()).isEqualTo(2 * 17)
+    }
 }
