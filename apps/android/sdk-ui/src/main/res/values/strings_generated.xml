@@ -2,6 +2,8 @@
 <resources>
     <string name="a11y_feed_video_sound_mute">Mute the video</string>
     <string name="a11y_feed_video_sound_unmute">Unmute the video</string>
+    <string name="a11y_media_download_action">Download</string>
+    <string name="a11y_media_download_cancel">Cancel download</string>
     <string name="audio_editor_a11y_playhead">Playback position</string>
     <string name="audio_editor_apply">Apply changes</string>
     <string name="audio_editor_close">Close</string>

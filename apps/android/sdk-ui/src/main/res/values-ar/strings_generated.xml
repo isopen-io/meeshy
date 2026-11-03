@@ -2,6 +2,8 @@
 <resources>
     <string name="a11y_feed_video_sound_mute">كتم صوت الفيديو</string>
     <string name="a11y_feed_video_sound_unmute">تفعيل صوت الفيديو</string>
+    <string name="a11y_media_download_action">تنزيل</string>
+    <string name="a11y_media_download_cancel">إلغاء التنزيل</string>
     <string name="audio_editor_a11y_playhead">موضع التشغيل</string>
     <string name="audio_editor_apply">تطبيق التعديلات</string>
     <string name="audio_editor_close">إغلاق</string>

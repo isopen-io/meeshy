@@ -2,6 +2,8 @@
 <resources>
     <string name="a11y_feed_video_sound_mute">Silenciar som do vídeo</string>
     <string name="a11y_feed_video_sound_unmute">Ativar som do vídeo</string>
+    <string name="a11y_media_download_action">Baixar</string>
+    <string name="a11y_media_download_cancel">Cancelar download</string>
     <string name="audio_editor_a11y_playhead">Posição de reprodução</string>
     <string name="audio_editor_apply">Aplicar as alterações</string>
     <string name="audio_editor_close">Fechar</string>

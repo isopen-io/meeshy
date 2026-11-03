@@ -2,6 +2,8 @@
 <resources>
     <string name="a11y_feed_video_sound_mute">Videoton stummschalten</string>
     <string name="a11y_feed_video_sound_unmute">Videoton aktivieren</string>
+    <string name="a11y_media_download_action">Herunterladen</string>
+    <string name="a11y_media_download_cancel">Download abbrechen</string>
     <string name="audio_editor_a11y_playhead">Wiedergabeposition</string>
     <string name="audio_editor_apply">Änderungen anwenden</string>
     <string name="audio_editor_close">Schließen</string>

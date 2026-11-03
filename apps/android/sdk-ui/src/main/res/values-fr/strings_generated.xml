@@ -2,6 +2,8 @@
 <resources>
     <string name="a11y_feed_video_sound_mute">Couper le son de la vidéo</string>
     <string name="a11y_feed_video_sound_unmute">Activer le son de la vidéo</string>
+    <string name="a11y_media_download_action">Télécharger</string>
+    <string name="a11y_media_download_cancel">Annuler le téléchargement</string>
     <string name="audio_editor_a11y_playhead">Position de lecture</string>
     <string name="audio_editor_apply">Appliquer les modifications</string>
     <string name="audio_editor_close">Fermer</string>

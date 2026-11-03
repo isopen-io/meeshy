@@ -37,13 +37,13 @@ extension FeedViewModel {
 
             switch cacheResult {
             case .fresh(let cachedPosts, _):
-                posts = cachedPosts
+                posts = PendingPublicationCancel.excludingWithdrawn(cachedPosts)
                 hasLoaded = true
                 prefetchMedia(around: 0)
                 return
 
             case .stale(let cachedPosts, _):
-                posts = cachedPosts
+                posts = PendingPublicationCancel.excludingWithdrawn(cachedPosts)
                 hasLoaded = true
                 prefetchMedia(around: 0)
                 Task {

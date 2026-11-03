@@ -34,6 +34,7 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.lock.ConversationUnlockSessionStore
 import me.meeshy.sdk.lock.InMemoryConversationLockStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
@@ -194,7 +195,7 @@ class ConversationListViewModelTest {
         loadingDeps: ConversationListLoadingDeps = ConversationListLoadingDeps.detached(),
     ) = ConversationListViewModel(
         repo, messageRepo, socket, workManager, draftStore, starredStore,
-        categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore,
+        categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore, ConversationUnlockSessionStore(),
         storyRepository, statusBarCache, io.mockk.mockk(relaxed = true),
         me.meeshy.sdk.network.InMemoryNetworkMonitor(),
         io.mockk.mockk(relaxed = true),

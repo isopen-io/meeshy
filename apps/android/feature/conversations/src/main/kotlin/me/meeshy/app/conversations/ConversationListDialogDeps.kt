@@ -3,7 +3,9 @@ package me.meeshy.app.conversations
 import me.meeshy.sdk.conversation.ConversationObsoleting
 import me.meeshy.sdk.friend.BlockActionCoordinator
 import me.meeshy.sdk.friend.BlockCache
+import me.meeshy.sdk.model.auth.ServerEnvironmentResolver
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.report.ReportRepository
 import javax.inject.Inject
@@ -16,6 +18,9 @@ import javax.inject.Inject
 interface ConversationPeerBlocker {
     suspend fun block(userId: String): Boolean
     suspend fun unblock(userId: String): Boolean
+
+    /** Le pair est-il déjà bloqué ? Le menu propose « Débloquer » plutôt que « Bloquer ». */
+    fun isBlocked(userId: String): Boolean = false
 }
 
 /** Signalement d'une conversation : `null` = inerte (pas de session, pas d'id). */
@@ -37,6 +42,8 @@ internal class CoordinatedPeerBlocker(
         coordinator.unblock(userId)
         return !cache.isBlocked(userId)
     }
+
+    override fun isBlocked(userId: String): Boolean = cache.isBlocked(userId)
 }
 
 /**
@@ -48,6 +55,8 @@ class ConversationListDialogDeps(
     val reporter: ConversationReporter,
     /** « Rendre obsolète » (#14645) ; [detached] le laisse inerte. */
     val obsoleter: ConversationObsoleting = ConversationObsoleting.Unavailable,
+    /** L'origine web publique (`https://meeshy.me`) de « Ouvrir dans l'administration » ; vide = entrée absente. */
+    val webOrigin: String = "",
 ) {
     @Inject
     constructor(
@@ -55,10 +64,12 @@ class ConversationListDialogDeps(
         cache: BlockCache,
         reports: ReportRepository,
         obsoleter: ConversationObsoleting,
+        config: MeeshyConfig,
     ) : this(
         blocker = CoordinatedPeerBlocker(coordinator, cache),
         reporter = ConversationReporter { id, reason, details -> reports.reportConversation(id, reason, details) },
         obsoleter = obsoleter,
+        webOrigin = ServerEnvironmentResolver.webOrigin(ServerEnvironmentResolver.serverOrigin(config.apiBaseUrl)),
     )
 
     companion object {
