@@ -109,7 +109,7 @@ public fun FocalQuotedReplyView(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .defaultMinSize(minHeight = 1.dp)
-                        .clickable(enabled = onAuthorTap != null, onClickLabel = authorHint, onClick = { onAuthorTap?.invoke() }),
+                        .then(if (onAuthorTap == null) Modifier else Modifier.clickable(onClickLabel = authorHint, onClick = onAuthorTap)),
                 )
             }
             RichMessageText(

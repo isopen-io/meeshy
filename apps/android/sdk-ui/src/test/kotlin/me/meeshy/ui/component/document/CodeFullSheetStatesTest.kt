@@ -4,11 +4,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.AnnotatedString
 import com.google.common.truth.Truth.assertThat
 import io.mockk.every
@@ -55,7 +56,7 @@ class CodeFullSheetStatesTest {
         every { clipboard.setText(capture(copied)) } returns Unit
         var copiedCalls = 0
         sheet(CodeContent.Ready("val a = 1\nval b = 2"), clipboard = clipboard) { copiedCalls++ }
-        compose.onNodeWithTag("Copy code").performClick()
+        compose.onNodeWithTag("Copy code").performSemanticsAction(SemanticsActions.OnClick)
         assertThat(copied.captured.text).isEqualTo("val a = 1\nval b = 2")
         assertThat(copiedCalls).isEqualTo(1)
     }

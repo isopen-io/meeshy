@@ -30,16 +30,16 @@ class CodeViewerCardTest {
     @Test
     fun `la carte montre dix lignes numerotees et le reste en une ligne`() {
         card(CodeContent.Ready(source(25)))
-        compose.onNodeWithTag("code-card-line-9").assertIsDisplayed()
-        compose.onNodeWithTag("code-card-line-10").assertDoesNotExist()
+        compose.onNodeWithTag("code-card-line-9", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("code-card-line-10", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithText("15 more lines").assertIsDisplayed()
     }
 
     @Test
     fun `un fichier de dix lignes ou moins n'annonce rien de plus`() {
         card(CodeContent.Ready(source(10)))
-        compose.onNodeWithTag("code-card-line-9").assertIsDisplayed()
-        compose.onNodeWithTag("code-card-more").assertDoesNotExist()
+        compose.onNodeWithTag("code-card-line-9", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("code-card-more", useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test
