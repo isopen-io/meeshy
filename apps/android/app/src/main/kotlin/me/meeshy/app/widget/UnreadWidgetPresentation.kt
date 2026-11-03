@@ -12,6 +12,9 @@ internal data class UnreadWidgetPresentation(
     val hasUnread: Boolean,
 ) {
     companion object {
+        /** Sans session : jamais le total du compte sortant. */
+        fun signedOut(): UnreadWidgetPresentation = UnreadWidgetPresentation(count = 0, hasUnread = false)
+
         fun from(totalUnread: Int): UnreadWidgetPresentation {
             val clamped = totalUnread.coerceAtLeast(0)
             return UnreadWidgetPresentation(count = clamped, hasUnread = clamped > 0)
