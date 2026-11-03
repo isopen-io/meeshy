@@ -91,4 +91,34 @@ class RelationsApiRoutesTest {
             """{"phase":"confirm","token":"t","consents":{"listeningTitle":true,"locationLive":false,"locationHistory":false,"locationProximity":false}}""",
         )
     }
+
+    @Test
+    fun `retrograder poste le niveau vise sur relations userId level et lit la vue du lien`() = runTest {
+        val http = RecordingHttp(
+            responseBody = """{"success":true,"data":{"userId":"u","effectiveLevel":"FRIEND","grantedByMe":"FRIEND",
+                "since":null,"progress":{"activeWeeks":0,"needed":4,"missing":[]},"eligibleFor":null}}""",
+        )
+
+        val served = http.serve(RelationsApi::class.java).lower("u", RelationLowerBody(level = RelationLevel.FRIEND.wire)).data!!
+
+        assertThat(http.only.method).isEqualTo("POST")
+        assertThat(http.only.path).isEqualTo("/api/v1/relations/u/level")
+        assertThat(http.only.body).isEqualTo("""{"level":"FRIEND"}""")
+        assertThat(served.toLink().effectiveLevel).isEqualTo(RelationLevel.FRIEND)
+    }
+
+    @Test
+    fun `le verrou de remontee servi par relations userId se lit, et son absence ne casse rien`() = runTest {
+        val http = RecordingHttp(
+            responseBody = """{"success":true,"data":{"userId":"u","effectiveLevel":"FRIEND","canRaise":false,
+                "raiseBlockedUntil":"2026-12-01T00:00:00.000Z"}}""",
+        )
+
+        val served = http.serve(RelationsApi::class.java).byUserId("u").data!!
+
+        assertThat(served.canRaise).isFalse()
+        assertThat(served.raiseBlockedUntil).isEqualTo("2026-12-01T00:00:00.000Z")
+        val legacy = RecordingHttp(responseBody = """{"success":true,"data":{"userId":"u","effectiveLevel":"FRIEND"}}""")
+        assertThat(legacy.serve(RelationsApi::class.java).byUserId("u").data!!.raiseBlockedUntil).isNull()
+    }
 }

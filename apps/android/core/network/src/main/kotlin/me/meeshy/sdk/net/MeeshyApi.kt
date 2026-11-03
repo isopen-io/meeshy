@@ -114,7 +114,7 @@ class MeeshyApi private constructor(private val retrofit: Retrofit) {
         fun buildRetrofit(config: MeeshyConfig, client: OkHttpClient): Retrofit =
             Retrofit.Builder()
                 .baseUrl(config.apiBaseUrl)
-                .client(client)
+                .callFactory(MutationIdCallFactory(client))
                 .addConverterFactory(JsonConverterFactory(json, "application/json".toMediaType()))
                 .build()
 

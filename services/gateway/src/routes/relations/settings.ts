@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   RELATION_RITUAL_SHARES,
-  RELATION_RITUAL_SHARE_WITHDRAWN_AT,
   relationPersonSettingsUpdateSchema,
   type RelationPersonSettings,
   type RelationRitualShare,
 } from '@meeshy/shared/types/relation-person-settings';
 import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
+import { ritualShareWithdrawalOf } from '../../services/relations/ritualShareWithdrawal';
 import { stopBringsOnBlock } from '../../services/bring/bringService';
 import { cutTalkiesOnBlock, talkieCutDepsOf } from '../../services/talkie/talkieCut';
 import { logError } from '../../utils/logger';
@@ -74,17 +74,6 @@ const servedSettings = (userId: string, row: SettingsRow | null): RelationPerson
   talkieBlocked: Boolean(row?.talkieBlockedAt),
   ...(Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, row?.[share] === true])) as Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>),
 });
-
-/**
- * Ce qu'un retrait écrit (audit #14535 constat 3) : chaque partage ENCORE allumé passe à
- * `false` avec sa date de retrait ; un partage déjà éteint garde la sienne.
- */
-const withdrawalOf = (current: SettingsRow | null, shares: readonly RelationRitualShare[], at: Date): Record<string, boolean | Date> =>
-  Object.fromEntries(
-    shares
-      .filter((share) => current?.[share] === true)
-      .flatMap((share) => [[share, false], [RELATION_RITUAL_SHARE_WITHDRAWN_AT[share], at]]),
-  );
 
 const readSettings = (prisma: FastifyInstance['prisma'], ownerId: string, otherId: string): Promise<SettingsRow | null> =>
   prisma.relationFeatureSetting.findUnique({ where: { ownerId_otherId: { ownerId, otherId } }, select: SETTINGS_SELECT });
@@ -161,7 +150,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       const blocking = bringBlocked === true || talkieBlocked === true;
       const linked = blocking ? await linkedPerson(fastify.prisma, ownerId, userId) : false;
       const data = {
-        ...withdrawalOf(current, Object.keys(requested) as RelationRitualShare[], now),
+        ...ritualShareWithdrawalOf(current, Object.keys(requested) as RelationRitualShare[], now),
         ...(bringBlocked === false ? { bringBlockedAt: null } : {}),
         ...(talkieBlocked === false ? { talkieBlockedAt: null } : {}),
         ...(bringBlocked === true && linked ? { bringBlockedAt: now } : {}),

@@ -17,7 +17,20 @@ final class MockRelationsService: RelationsProviding, @unchecked Sendable {
     /// Une réponse par phase ; une phase non posée échoue, ce qui force le témoin à dire ce qu'il attend.
     var ritualResults: [RelationRitualPhase: Result<RelationRitualStep, Error>] = [:]
 
+    /// `GET /relations/:userId` : échoue par défaut — la fiche garde alors sa proposition d'avant.
+    var linkResult: Result<RelationLink, Error> = .failure(NSError(domain: "MockRelationsService", code: 404))
+    var lowerResult: Result<RelationLink, Error>?
+    /// Joué PENDANT l'appel de baisse, avant la réponse : le témoin y lit l'état optimiste.
+    var lowerHook: (@Sendable () async -> Void)?
+
+    struct LowerCall: Equatable {
+        let userId: String
+        let level: RelationLevel
+    }
+
     var linksCallCount = 0
+    var linkCallCount = 0
+    var lowerCalls: [LowerCall] = []
     var configCallCount = 0
     var ritualCalls: [RitualCall] = []
 
@@ -28,6 +41,20 @@ final class MockRelationsService: RelationsProviding, @unchecked Sendable {
     func links() async throws -> [RelationLink] {
         linksCallCount += 1
         return try linksResult.get()
+    }
+
+    func link(userId: String) async throws -> RelationLink {
+        linkCallCount += 1
+        return try linkResult.get()
+    }
+
+    func lower(userId: String, to level: RelationLevel) async throws -> RelationLink {
+        lowerCalls.append(LowerCall(userId: userId, level: level))
+        await lowerHook?()
+        guard let lowerResult else {
+            return RelationLink(userId: userId, effectiveLevel: level, grantedByMe: level)
+        }
+        return try lowerResult.get()
     }
 
     func config() async throws -> RelationsConfig {

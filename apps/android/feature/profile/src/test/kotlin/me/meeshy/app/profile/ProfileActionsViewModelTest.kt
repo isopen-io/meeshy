@@ -6,6 +6,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -30,6 +31,7 @@ import me.meeshy.sdk.model.FriendRequestDirection
 import me.meeshy.sdk.model.relation.CirclePerson
 import me.meeshy.sdk.model.relation.RelationLevel
 import me.meeshy.sdk.model.relation.RelationLink
+import me.meeshy.sdk.model.relation.RelationRaiseGate
 import me.meeshy.sdk.model.relation.RelationRitualConsents
 import me.meeshy.sdk.model.relation.RelationRitualPhase
 import me.meeshy.sdk.model.relation.RelationRitualStep
@@ -388,6 +390,62 @@ class ProfileActionsViewModelTest {
 
         assertThat(circles.raises).isEmpty()
     }
+
+    // --- rétrograder ou annuler le lien (#14910) ----------------------------------------------------------------------
+
+    @Test
+    fun `retrograder un Proche l'affiche Ami avant le reseau, puis garde la vue servie`() = runTest {
+        val circles = ProfileCirclesFake(served = NetworkResult.Success(listOf(circleLink("u2", RelationLevel.CLOSE))))
+        val reply = CompletableDeferred<NetworkResult<RelationLink>>()
+        circles.lowerReply = reply
+        val vm = viewModel(circles = circles)
+        vm.bind("u2", isAnonymous = false)
+
+        vm.lowerCircle()
+
+        assertThat(vm.state.value.circle?.level).isEqualTo(RelationLevel.FRIEND)
+        assertThat(circles.lowers).containsExactly("u2" to RelationLevel.FRIEND)
+        reply.complete(NetworkResult.Success(circleLink("u2", RelationLevel.FRIEND)))
+        assertThat(vm.state.value.circle?.level).isEqualTo(RelationLevel.FRIEND)
+    }
+
+    @Test
+    fun `a Connaissance le bouton annule le lien et le cercle quitte la fiche`() = runTest {
+        val circles = ProfileCirclesFake(served = NetworkResult.Success(listOf(circleLink("u2", RelationLevel.ACQUAINTANCE))))
+        val vm = viewModel(circles = circles)
+        vm.bind("u2", isAnonymous = false)
+
+        vm.lowerCircle()
+
+        assertThat(circles.lowers).containsExactly("u2" to RelationLevel.PUBLIC)
+        assertThat(vm.state.value.circle).isNull()
+    }
+
+    @Test
+    fun `une retrogradation refusee rend le niveau d'avant et le dit`() = runTest {
+        val circles = ProfileCirclesFake(served = NetworkResult.Success(listOf(circleLink("u2", RelationLevel.CLOSE))))
+        circles.lowerReply = CompletableDeferred(NetworkResult.Failure(ApiError("refused", code = "RELATION_NOT_A_DROP")))
+        val vm = viewModel(circles = circles)
+        val seen = events(vm)
+        vm.bind("u2", isAnonymous = false)
+
+        vm.lowerCircle()
+
+        assertThat(vm.state.value.circle?.level).isEqualTo(RelationLevel.CLOSE)
+        assertThat(seen).contains(ProfileActionEvent.Toast(ProfileActionFeedback.LowerFailed))
+    }
+
+    @Test
+    fun `un cool-down servi masque Promouvoir`() = runTest {
+        val circles = ProfileCirclesFake(served = NetworkResult.Success(listOf(circleLink("u2", RelationLevel.FRIEND, RelationLevel.CLOSE))))
+        circles.gate = RelationRaiseGate(raiseBlockedUntil = "2999-01-01T00:00:00Z")
+        val vm = viewModel(circles = circles)
+        vm.bind("u2", isAnonymous = false)
+
+        assertThat(vm.state.value.circle?.offeredRaise).isNull()
+        vm.requestRaise()
+        assertThat(circles.raises).isEmpty()
+    }
 }
 
 /** Le port des cercles, réglé par test. */
@@ -416,4 +474,13 @@ internal class ProfileCirclesFake(
         consents: RelationRitualConsents?,
     ): NetworkResult<RelationRitualStep> = NetworkResult.Failure(ApiError("unused"))
     override suspend fun people(ids: List<String>): Map<String, CirclePerson> = emptyMap()
+
+    val lowers = mutableListOf<Pair<String, RelationLevel>>()
+    var lowerReply: CompletableDeferred<NetworkResult<RelationLink>>? = null
+    var gate: RelationRaiseGate? = null
+    override suspend fun lower(userId: String, level: RelationLevel): NetworkResult<RelationLink> {
+        lowers += userId to level
+        return lowerReply?.await() ?: NetworkResult.Success(RelationLink(userId, level, level))
+    }
+    override suspend fun raiseGate(userId: String): RelationRaiseGate? = gate
 }

@@ -29,7 +29,7 @@ class ConversationSendersTest {
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
 
         coEvery { conversationApi.markRead("c1") } throws IOException("offline")
-        assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
+        assertThat(handler.send(row)).isEqualTo(SendResult.TransportFailure)
     }
 
     @Test

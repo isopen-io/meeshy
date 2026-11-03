@@ -147,6 +147,7 @@ internal fun ChatComposer(
     )
     val openPhotos: () -> Unit = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
     val voice = rememberComposerVoice(onStageVoiceFile, onPickFile)
+    me.meeshy.ui.component.permission.PermissionFlowHost(voice.permissions, accent = accentColor)
     var minimized by rememberSaveable { mutableStateOf(false) }
     var fieldFocused by remember { mutableStateOf(false) }
     val isComposing = ConversationComposerFold.isComposing(isFocused = fieldFocused, isRecording = voice.isRecording)
