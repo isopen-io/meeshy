@@ -58,6 +58,18 @@ class StoryVideoLookTest {
     }
 
     @Test
+    fun `une video lue image par image recoit un cadre peint a la taille de ses images decodees`() {
+        val still = Bitmap.createBitmap(90, 160, Bitmap.Config.ARGB_8888).also { it.eraseColor(Color.GREEN) }
+
+        val painted = StoryVideoLook.painted(StoryMediaLook(frameId = "classic:polaroid"), author, 900, 1600, still, maxLongSide = 160)!!
+
+        assertThat(painted.look.frame!!.width).isEqualTo(90)
+        assertThat(painted.look.frame!!.height).isEqualTo(160)
+        assertThat(StoryVideoLook.painted(StoryMediaLook(frameId = "classic:polaroid"), author, 90, 160, still, maxLongSide = 1_080)!!.look.frame!!.height)
+            .isEqualTo(160)
+    }
+
+    @Test
     fun `un effet de visage seul, ou aucun look, ne pose rien`() {
         assertThat(StoryVideoLook.painted(StoryMediaLook(faceEffect = "angel"), author, 90, 160, still = null)).isNull()
         assertThat(StoryVideoLook.effects(null, author, 90, 160, still = null)).isNull()

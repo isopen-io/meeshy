@@ -1,13 +1,11 @@
 package me.meeshy.app.stories
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.media.MediaMetadataRetriever
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -38,7 +36,6 @@ import me.meeshy.ui.component.retouch.StoryVideoLook
  */
 @HiltViewModel
 class StoryVideoExportViewModel @Inject constructor(
-    @ApplicationContext context: Context,
     factory: SceneExportCoordinatorFactory,
     private val config: MeeshyConfig,
     private val statusRepository: StatusRepository,
@@ -60,7 +57,7 @@ class StoryVideoExportViewModel @Inject constructor(
         decideImager = stages::askImager,
         paint = stages::askPaint,
         paintBrand = ::paintBrand,
-        bakeLook = { source, look, author, output -> StoryVideoLook.bake(context, source, look, author, output) },
+        exportLook = StoryVideoLook::exportLook,
     )
 
     /** Le mood de l'auteur et le niveau de son lien sont lus à l'export, bornés : ce qui n'arrive pas à temps manque. */

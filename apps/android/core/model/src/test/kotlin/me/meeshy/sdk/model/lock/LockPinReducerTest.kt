@@ -1,4 +1,4 @@
-package me.meeshy.app.conversations
+package me.meeshy.sdk.model.lock
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test

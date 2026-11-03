@@ -90,7 +90,7 @@ public class UploadMediaHandler @Inject constructor(
 
     private fun SendResult.dropsBytes(context: TusUploadContext?): Boolean = when (this) {
         is SendResult.Success, is SendResult.SuccessWithId -> true
-        is SendResult.TransientFailure, is SendResult.Deferred -> false
+        is SendResult.TransientFailure, is SendResult.TransportFailure, is SendResult.Deferred -> false
         is SendResult.PermanentFailure -> context !in PUBLICATION_CONTEXTS
     }
 

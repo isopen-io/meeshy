@@ -26,30 +26,46 @@ class EncryptedConversationLockStore(private val store: SecureStore) : Conversat
     override val lockedConversationIdsFlow: StateFlow<Set<String>>
         get() = _lockedConversationIdsFlow.asStateFlow()
 
+    private val _masterPinConfigured: MutableStateFlow<Boolean> by lazy { MutableStateFlow(hasMasterPin()) }
+    override val masterPinConfigured: StateFlow<Boolean>
+        get() = _masterPinConfigured.asStateFlow()
+
+    private val _lockCount: MutableStateFlow<Int> by lazy { MutableStateFlow(computeLockedConversationIds().size) }
+    override val lockCount: StateFlow<Int>
+        get() = _lockCount.asStateFlow()
+
     private fun computeLockedConversationIds(): Set<String> = store.keys()
         .filter { it.startsWith(LOCK_KEY_PREFIX) }
         .map { it.removePrefix(LOCK_KEY_PREFIX) }
         .toSet()
 
     private fun publish() {
-        _lockedConversationIdsFlow.value = computeLockedConversationIds()
+        val ids = computeLockedConversationIds()
+        _lockedConversationIdsFlow.value = ids
+        _lockCount.value = ids.size
+    }
+
+    private fun publishMasterPin() {
+        _masterPinConfigured.value = hasMasterPin()
     }
 
     override fun hasMasterPin(): Boolean = store.get(MASTER_PIN_KEY) != null
 
     override fun setMasterPin(pin: String) {
         store.put(MASTER_PIN_KEY, PinHasher.hash(pin))
+        publishMasterPin()
     }
 
     override fun verifyMasterPin(pin: String): Boolean =
         store.get(MASTER_PIN_KEY) == PinHasher.hash(pin)
 
     override fun removeMasterPin() {
-        if (lockedConversationIds.isEmpty()) store.remove(MASTER_PIN_KEY)
+        if (lockedConversationIds.isEmpty()) forceRemoveMasterPin()
     }
 
     override fun forceRemoveMasterPin() {
         store.remove(MASTER_PIN_KEY)
+        publishMasterPin()
     }
 
     override fun isLocked(conversationId: String): Boolean = store.get(lockKey(conversationId)) != null

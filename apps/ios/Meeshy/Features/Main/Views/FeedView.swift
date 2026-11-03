@@ -551,13 +551,11 @@ struct FeedView: View {
         HapticFeedback.light()
     }
 
-    /// La porte du composeur, puis les publications encore sur l'appareil (#13415).
+    /// La porte du composeur. Une publication en attente ne se signale que par
+    /// l'horloge de sa carte (décision du porteur, #14879).
     private var composerPlaceholder: some View {
-        Group {
-            FeedComposerPlaceholder(onCompose: openComposer, onRecordAudio: openAudioComposer)
-                .padding(.bottom, MeeshySpacing.sm)
-            UnsentPublicationsEntry(openComposer: openComposer)
-        }
+        FeedComposerPlaceholder(onCompose: openComposer, onRecordAudio: openAudioComposer)
+            .padding(.bottom, MeeshySpacing.sm)
     }
 
     private func openAudioComposer() {
