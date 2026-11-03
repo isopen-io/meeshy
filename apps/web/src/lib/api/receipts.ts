@@ -17,7 +17,7 @@ import type { Conversation } from './types';
 
 /**
  * LA FRONTIÈRE DE LECTURE, ÉCRITE SANS GESTE (#7201, W1) — miroir de
- * `pushRead` (`preferences.ts:94-101`), SANS le remplacer : `pushRead` sert
+ * `pushRead` (`preference-ports.ts`), SANS le remplacer : `pushRead` sert
  * le geste MANUEL de la Lentille (« marquer tout lu », aucune frontière) ;
  * `pushReadReceipt` porte `caughtUpToMessageId`, la borne que l'ouverture
  * d'un fil, son défilement et son retour au premier plan avancent seuls.

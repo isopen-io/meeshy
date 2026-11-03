@@ -34,7 +34,7 @@ struct ComposerSelectionColumn: View {
     var body: some View {
         ViewThatFits(in: .vertical) {
             entries
-            ScrollView(.vertical, showsIndicators: false) { entries }
+            entries.modifier(ComposerScrollEdgeCue())
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(ComposerEditRailCopy.railLabel(level)))

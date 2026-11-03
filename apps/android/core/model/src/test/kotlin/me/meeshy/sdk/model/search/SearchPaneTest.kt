@@ -16,13 +16,13 @@ class SearchPaneTest {
     }
 
     @Test
-    fun `failures are reported in priority order conversations then people then messages`() {
+    fun `failures are reported in priority order posts then people then messages`() {
         val all = SearchPanes.firstFailure(
-            conversations = SearchPane<String>(failure = SearchPaneFailure.Unreachable),
+            posts = SearchPane<String>(failure = SearchPaneFailure.Unreachable),
             people = SearchPane<String>(failure = SearchPaneFailure.Unreachable),
             messages = SearchPane<String>(failure = SearchPaneFailure.Unreachable),
         )
-        assertThat(all).isEqualTo(SearchPaneKind.CONVERSATIONS)
+        assertThat(all).isEqualTo(SearchPaneKind.POSTS)
 
         val peopleAndMessages = SearchPanes.firstFailure(served("c"), down, down)
         assertThat(peopleAndMessages).isEqualTo(SearchPaneKind.PEOPLE)

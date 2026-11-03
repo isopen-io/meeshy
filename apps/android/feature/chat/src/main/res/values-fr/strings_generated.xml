@@ -101,6 +101,7 @@
     <string name="conversation_appearance_section_solid">Couleur unie</string>
     <string name="conversation_appearance_sheet_title">Fond et accent</string>
     <string name="conversation_appearance_signature">Signature</string>
+    <string name="conversation_encryption_switched_enabled">Chiffrement de bout en bout activé : les nouveaux messages sont chiffrés sur vos appareils.</string>
     <string name="conversation_info_pinned_see_all">Voir les %1$d messages épinglés</string>
     <string name="conversation_info_tab_media">Médias</string>
     <string name="conversation_info_tab_members">Membres</string>
@@ -178,7 +179,7 @@
     <string name="encryption_fact_end_to_end_never_turned_off_direct">Le chiffrement de bout en bout ne se désactive jamais : ce tête-à-tête le reste. Vous pourrez toujours ouvrir à côté une autre conversation, sans chiffrement de bout en bout, avec cette personne : les deux sont dans la liste, celle-ci marquée d’un cadenas.</string>
     <string name="encryption_fact_every_server_feature">Toutes les fonctions sont disponibles : traduction automatique, transcription des vocaux, aperçu des notifications, recherche.</string>
     <string name="encryption_fact_group_sending_unavailable">Dans ce groupe, l’application ne peut pas encore envoyer de message chiffré.</string>
-    <string name="encryption_fact_hybrid_is_server_today">Le mode hybride chiffre aujourd’hui comme Serveur. Le double chiffrement par vos appareils arrive bientôt.</string>
+    <string name="encryption_fact_hybrid_is_server_today">Le mode hybride chiffre vos messages sur nos serveurs, qui peuvent les lire pour la traduction et la recherche : ce n’est pas le chiffrement de bout en bout. Entre deux appareils compatibles, une seconde couche permet en plus de vérifier qu’un message texte n’a pas été modifié en chemin ; quand elle manque, rien n’est présenté comme vérifié.</string>
     <string name="encryption_fact_no_edit">Un message envoyé ne peut pas être modifié.</string>
     <string name="encryption_fact_no_forward">Un message ne peut pas être transféré.</string>
     <string name="encryption_fact_no_notification_preview">Les notifications n’affichent pas le texte du message : le serveur ne le connaît pas.</string>
@@ -203,12 +204,12 @@
     <string name="encryption_legacy_title">Chiffrement de bout en bout</string>
     <string name="encryption_mode_e2ee_description">Seuls vos appareils et ceux des participants lisent les messages. La traduction se fait sur votre appareil.</string>
     <string name="encryption_mode_e2ee_label">Bout en bout</string>
-    <string name="encryption_mode_hybrid_description">Chiffré sur nos serveurs, comme Serveur. Le double chiffrement par vos appareils arrive bientôt.</string>
+    <string name="encryption_mode_hybrid_description">Chiffré sur nos serveurs ; entre appareils compatibles, une seconde couche permet de vérifier qu’un message texte n’a pas été modifié en chemin.</string>
     <string name="encryption_mode_hybrid_label">Hybride</string>
     <string name="encryption_mode_server_description">Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.</string>
     <string name="encryption_mode_server_label">Serveur</string>
     <string name="encryption_summary_end_to_end">Chiffrée de bout en bout : seuls les appareils des participants lisent les messages</string>
-    <string name="encryption_summary_hybrid">Chiffrée sur nos serveurs (mode hybride)</string>
+    <string name="encryption_summary_hybrid">Chiffrée sur nos serveurs, avec vérification entre appareils compatibles</string>
     <string name="encryption_summary_none">Conversation créée avant le chiffrement systématique : ses messages ne sont pas chiffrés</string>
     <string name="encryption_summary_server">Chiffrée sur nos serveurs</string>
     <string name="encryption_topic_absent">Absent dans ce mode</string>

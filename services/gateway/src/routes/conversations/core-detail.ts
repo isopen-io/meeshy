@@ -24,6 +24,7 @@ import { conversationDetailWithEngagementResponseSchema, loadViewerEngagementsOr
 import { conversationDetailInclude, conversationUserPreferencesSelect } from './core-selects';
 import { loadReadCursorBoundaries } from './read-cursor-projection';
 import { loadViewerBirthDate } from './viewerWriteRestriction';
+import { servedMessageRequest, type ServedMessageRequest } from '../../services/messaging/messageRequests';
 import { memberCountServedToViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
@@ -210,6 +211,8 @@ export const CONVERSATION_DETAIL_SERVED_FIELDS = [
   // Ce que le lecteur n'a pas le droit d'écrire ici (#9927) — composé depuis
   // le type de la conversation et sa date de naissance déclarée.
   'viewerWriteRestriction',
+  // La demande de message en attente du lecteur (#14107) — composée, aucune colonne.
+  'messageRequest',
   // Le fond et l'accent PERSONNELS du lecteur (#10736) — un fil ouvert par son
   // adresse (`/c/:id`) n'a que cette route : sans eux il se peint en Signature.
   'userPreferences',
@@ -246,6 +249,7 @@ export const conversationDetailPlan: ColumnPlan<typeof conversationDetailColumns
     lastReadMessageCreatedAt: [],
     viewerEngagement: [],
     viewerWriteRestriction: ['type'],
+    messageRequest: [],
     userPreferences: [],
   },
 };
@@ -452,13 +456,16 @@ export function registerConversationDetailRoute(
        * et « non calculé » sont deux propriétés distinctes, et seule la seconde
        * économise quelque chose en amont.
        */
-      const veutParticipantAppelant = sertRang || sertEffectif || sertNonLus || sertFrontiereLecture || sertCurrentUserJoinedAt;
+      const sertDemande = isFieldServed(champs, 'messageRequest');
+      let messageRequest: ServedMessageRequest | null = null;
+      const veutParticipantAppelant = sertRang || sertEffectif || sertNonLus || sertFrontiereLecture || sertCurrentUserJoinedAt || sertDemande;
       try {
         const participant = veutParticipantAppelant
           ? await resolveCallerParticipant(prisma, authRequest.authContext, conversationId)
           : null;
         if (participant) {
           callerConversationRole = participant.role;
+          messageRequest = authRequest.authContext.isAnonymous ? null : servedMessageRequest(participant);
           if (sertCurrentUserJoinedAt) {
             currentUserJoinedAt = participant.joinedAt ?? null;
           }
@@ -608,6 +615,9 @@ export function registerConversationDetailRoute(
           now: new Date()
         });
       }
+
+      // #14107 — la demande de message en attente du lecteur, lue sur SA ligne ; `null` hors demande.
+      if (sertDemande) charge.messageRequest = messageRequest;
 
       return sendSuccess(reply, restrictFields(charge, champs, CONVERSATION_DETAIL_PINNED));
 

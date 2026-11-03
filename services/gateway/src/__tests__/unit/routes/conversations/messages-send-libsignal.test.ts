@@ -117,3 +117,57 @@ describe('POST /conversations/:id/messages — envoi libsignal (#3706)', () => {
     expect(res.json()).toMatchObject({ code: E2EE_ERROR_CODES.DEVICE_NOT_BOUND });
   });
 });
+
+describe('POST /conversations/:id/messages — envoi HYBRIDE à deux couches (#14369)', () => {
+  let app: FastifyInstance | undefined;
+
+  afterEach(async () => {
+    await app?.close();
+    app = undefined;
+  });
+
+  const hybridBody = {
+    content: 'Rendez-vous à 18 h',
+    encryptionMode: 'hybrid',
+    encryptionProtocol: 'libsignal-v1',
+    encryptionMetadata: { protocol: 'libsignal-v1', senderDeviceId: 1, regimeEpoch: 3 },
+    envelopes: [{ userId: BOB, deviceId: 1, registrationId: 42, type: 3, body: 'Y2lwaGVy' }],
+  };
+
+  const accepted = () =>
+    jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({ success: true, data: { id: 'm1', conversationId: CONV_ID } });
+
+  it('remet au service le clair ET la couche appareil, avec la session et l’époque', async () => {
+    const handleMessage = accepted();
+    app = await buildApp(handleMessage);
+
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/messages`, payload: hybridBody });
+
+    expect(res.statusCode).toBeLessThan(300);
+    const request = handleMessage.mock.calls[0][0] as { content: string; encryptedPayload?: unknown; deviceLayer?: { relay: Record<string, unknown>; regimeEpoch?: number } };
+    expect(request.content).toBe('Rendez-vous à 18 h');
+    expect(request.encryptedPayload).toBeUndefined();
+    expect(request.deviceLayer?.relay).toMatchObject({ senderDeviceId: 1, sessionId: SESSION_ID, envelopes: hybridBody.envelopes });
+    expect(request.deviceLayer?.regimeEpoch).toBe(3);
+  });
+
+  it('un envoi hybride sans enveloppe ne porte aucune couche appareil', async () => {
+    const handleMessage = accepted();
+    app = await buildApp(handleMessage);
+
+    await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/messages`, payload: { content: 'Bonjour', encryptionMode: 'hybrid' } });
+
+    const request = handleMessage.mock.calls[0][0] as { deviceLayer?: unknown };
+    expect(request.deviceLayer).toBeUndefined();
+  });
+
+  it('un envoi libsignal à chiffré ne devient jamais une couche appareil', async () => {
+    const handleMessage = accepted();
+    app = await buildApp(handleMessage);
+
+    await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/messages`, payload: libsignalBody });
+
+    const request = handleMessage.mock.calls[0][0] as { deviceLayer?: unknown };
+    expect(request.deviceLayer).toBeUndefined();
+  });
+});

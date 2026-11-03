@@ -133,6 +133,7 @@ internal object BubbleAttachmentBuilder {
                     height = attachment.height,
                     alt = attachment.alt?.trim()?.ifBlank { null },
                     reactionLabel = if (lighterPreviewsAllowed && attachment.showsItsContent()) tileReactionLabel(attachment.reactionSummary) else null,
+                    sizeBytes = attachment.fileSize?.toLong(),
                 )
             }
     }

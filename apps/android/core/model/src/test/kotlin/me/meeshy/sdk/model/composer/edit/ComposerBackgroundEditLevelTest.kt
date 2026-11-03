@@ -2,6 +2,7 @@ package me.meeshy.sdk.model.composer.edit
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.composer.edit.ComposerBackgroundTool.ADJUST
+import me.meeshy.sdk.model.composer.edit.ComposerBackgroundTool.CROP
 import me.meeshy.sdk.model.composer.edit.ComposerBackgroundTool.DESCRIPTION
 import me.meeshy.sdk.model.composer.edit.ComposerBackgroundTool.EFFECTS
 import me.meeshy.sdk.model.composer.edit.ComposerBackgroundTool.FILTERS
@@ -15,9 +16,9 @@ import org.junit.Test
 
 /**
  * Les outils du fond média, à plat dans son rail (spec 2026-10-31, #13973, #14047), lus dans l'arbre partagé : une image offre
- * Cadrage · Filtres · Cadres · Réglages · Effets · Pivoter · Description, une vidéo Cadrage · Couper · Filtres · Réglages ·
- * Son · Boucle · Pivoter · Description (#14083) — dans l'ordre de l'arbre, chacune ouvrant ce que l'arbre dit. Recadrer reste
- * dans l'arbre (cible commune avec iOS, une image seulement) sans être servi ici tant que son effet n'est pas câblé.
+ * Cadrage · Recadrer · Filtres · Cadres · Réglages · Effets · Pivoter · Description, une vidéo Cadrage · Couper · Filtres ·
+ * Réglages · Son · Boucle · Pivoter · Description (#14083) — dans l'ordre de l'arbre, chacune ouvrant ce que l'arbre dit.
+ * Recadrer, servi par iOS, l'est aussi ici : l'arbre n'a plus d'entrée que cette application ne câble pas.
  */
 class ComposerBackgroundEditLevelTest {
 
@@ -25,13 +26,13 @@ class ComposerBackgroundEditLevelTest {
     private val clip = ComposerBackgroundEditLevel.Media(video = true, trimmable = true, look = false)
 
     @Test
-    fun `a background photo is framed, filtered, framed with a frame, adjusted, given effects, turned and described, in that order`() {
-        assertThat(ComposerBackgroundEditLevel.tools(photo)).containsExactly(FRAMING, FILTERS, FRAMES, ADJUST, EFFECTS, ROTATE, DESCRIPTION).inOrder()
+    fun `a background photo is framed, cropped, filtered, framed with a frame, adjusted, given effects, turned and described, in that order`() {
+        assertThat(ComposerBackgroundEditLevel.tools(photo)).containsExactly(FRAMING, CROP, FILTERS, FRAMES, ADJUST, EFFECTS, ROTATE, DESCRIPTION).inOrder()
     }
 
     @Test
     fun `a photo without the looks of the call has no Frames`() {
-        assertThat(ComposerBackgroundEditLevel.tools(photo.copy(look = false))).containsExactly(FRAMING, FILTERS, ADJUST, EFFECTS, ROTATE, DESCRIPTION).inOrder()
+        assertThat(ComposerBackgroundEditLevel.tools(photo.copy(look = false))).containsExactly(FRAMING, CROP, FILTERS, ADJUST, EFFECTS, ROTATE, DESCRIPTION).inOrder()
     }
 
     @Test
@@ -47,7 +48,7 @@ class ComposerBackgroundEditLevelTest {
     @Test
     fun `each tool opens what the tree says, the settings in a band, Loop in the rail, Description in a sheet`() {
         val opens = ComposerBackgroundTool.entries.associateWith { ComposerBackgroundEditLevel.entryOf(it).opens }
-        assertThat(opens.filterValues { it == ComposerEditTree.Opens.BAND }.keys).containsExactly(FRAMING, TRIM, FILTERS, FRAMES, ADJUST, EFFECTS)
+        assertThat(opens.filterValues { it == ComposerEditTree.Opens.BAND }.keys).containsExactly(FRAMING, CROP, TRIM, FILTERS, FRAMES, ADJUST, EFFECTS)
         assertThat(opens[SOUND]).isEqualTo(ComposerEditTree.Opens.LEVEL)
         assertThat(opens[ROTATE]).isEqualTo(ComposerEditTree.Opens.ACTION)
         assertThat(opens[LOOP]).isEqualTo(ComposerEditTree.Opens.TOGGLE)
@@ -55,11 +56,11 @@ class ComposerBackgroundEditLevelTest {
     }
 
     @Test
-    fun `the tree keeps Crop for both platforms, Android serves Sound and Rotate but not Crop yet`() {
+    fun `the tree keeps Crop for both platforms, and Android serves every one of them`() {
         val tree = ComposerEditTree.shared.level(ComposerEditTree.BACKGROUND_MEDIA_EDIT)!!.entries.map { it.id }
         assertThat(tree).containsExactly(
             "framing", "crop", "trim", "filters", "frames", "adjust", "effects", "sound", "loop", "rotate", "description",
         ).inOrder()
-        assertThat(ComposerBackgroundEditLevel.unserved()).containsExactly("crop")
+        assertThat(ComposerBackgroundEditLevel.unserved()).isEmpty()
     }
 }

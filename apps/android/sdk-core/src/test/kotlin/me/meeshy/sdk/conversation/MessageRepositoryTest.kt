@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.model.search.GlobalMessageSearchHit
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
@@ -91,6 +92,9 @@ private class FakeMessageApi(
         languages: String?,
     ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
 
+    override suspend fun listWindowAround(conversationId: String, messageId: String, limit: Int) =
+        me.meeshy.sdk.model.MessagesApiResponse(success = false)
+
     override suspend fun listAround(conversationId: String, messageId: String, limit: Int): ApiResponse<List<ApiMessage>> {
         aroundCalls += Triple(conversationId, messageId, limit)
         return aroundResponse
@@ -105,6 +109,8 @@ private class FakeMessageApi(
         ApiResponse<ApiMessage>(success = false)
     override suspend fun delete(messageId: String) = ApiResponse<Unit>(success = false)
     override suspend fun readStatus(messageId: String) = ApiResponse<me.meeshy.sdk.model.ReadStatusData>(success = false)
+    override suspend fun searchAll(query: String, limit: Int?, cursor: String?) =
+        ApiResponse<List<GlobalMessageSearchHit>>(success = false)
     override suspend fun search(conversationId: String, query: String, limit: Int?, cursor: String?) =
         ApiResponse<List<ApiMessage>>(success = false)
     override suspend fun pin(conversationId: String, messageId: String) =
@@ -168,6 +174,9 @@ private class EtagAwareMessageApi(
         languages: String?,
     ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
 
+    override suspend fun listWindowAround(conversationId: String, messageId: String, limit: Int) =
+        me.meeshy.sdk.model.MessagesApiResponse(success = false)
+
     override suspend fun listAround(conversationId: String, messageId: String, limit: Int) =
         ApiResponse<List<ApiMessage>>(success = false)
 
@@ -180,6 +189,8 @@ private class EtagAwareMessageApi(
         ApiResponse<ApiMessage>(success = false)
     override suspend fun delete(messageId: String) = ApiResponse<Unit>(success = false)
     override suspend fun readStatus(messageId: String) = ApiResponse<me.meeshy.sdk.model.ReadStatusData>(success = false)
+    override suspend fun searchAll(query: String, limit: Int?, cursor: String?) =
+        ApiResponse<List<GlobalMessageSearchHit>>(success = false)
     override suspend fun search(conversationId: String, query: String, limit: Int?, cursor: String?) =
         ApiResponse<List<ApiMessage>>(success = false)
     override suspend fun pin(conversationId: String, messageId: String) =
@@ -247,6 +258,9 @@ private class GapAwareMessageApi(
         languages: String?,
     ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
 
+    override suspend fun listWindowAround(conversationId: String, messageId: String, limit: Int) =
+        me.meeshy.sdk.model.MessagesApiResponse(success = false)
+
     override suspend fun listAround(conversationId: String, messageId: String, limit: Int) =
         ApiResponse<List<ApiMessage>>(success = false)
 
@@ -275,6 +289,8 @@ private class GapAwareMessageApi(
         ApiResponse<ApiMessage>(success = false)
     override suspend fun delete(messageId: String) = ApiResponse<Unit>(success = false)
     override suspend fun readStatus(messageId: String) = ApiResponse<me.meeshy.sdk.model.ReadStatusData>(success = false)
+    override suspend fun searchAll(query: String, limit: Int?, cursor: String?) =
+        ApiResponse<List<GlobalMessageSearchHit>>(success = false)
     override suspend fun search(conversationId: String, query: String, limit: Int?, cursor: String?) =
         ApiResponse<List<ApiMessage>>(success = false)
     override suspend fun pin(conversationId: String, messageId: String) =

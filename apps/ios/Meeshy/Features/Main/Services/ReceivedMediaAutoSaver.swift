@@ -9,7 +9,8 @@ private let autoSaveLog = MeeshyLog.logger(.mediaAutosave)
 // MARK: - La règle : quelles pièces reçues rejoignent l'album
 
 /// **Les images et vidéos REÇUES s'enregistrent seules dans l'album « Meeshy »**
-/// (#8307, directive porteur 2026-09-27) — une seule fois par pièce, jamais une
+/// (#8307, directive porteur 2026-09-27) quand l'utilisateur l'a voulu — le
+/// réglage est coupé par défaut (#14640) — une seule fois par pièce, jamais une
 /// pièce protégée.
 ///
 /// Un enregistrement automatique est une SORTIE : la loi de sortie décide
@@ -47,26 +48,83 @@ enum ReceivedMediaAutoSavePolicy {
 
 // MARK: - Seams
 
-/// L'interrupteur « Enregistrer dans Photos » de Réglages › Médias — actif par défaut.
+/// L'interrupteur « Enregistrer dans Photos » — **coupé par défaut** (#14640,
+/// directive porteur). Sa seule source de vérité est la préférence
+/// SERVEUR `privacy.saveMediaToGallery` : Réglages › Médias et Réglages ›
+/// Confidentialité l'écrivent, l'enregistrement automatique la lit.
+@MainActor
 protocol ReceivedMediaAutoSaveSetting: AnyObject {
     var isEnabled: Bool { get }
 }
 
+@MainActor
 final class ReceivedMediaAutoSaveUserSetting: ReceivedMediaAutoSaveSetting {
     // SE-0466 — garde : MainActorDeinitSourceGuardTests.
     nonisolated deinit {}
 
     static let shared = ReceivedMediaAutoSaveUserSetting()
-    static let key = "meeshy.media.autoSaveReceivedToAlbum"
 
-    private let defaults: UserDefaults
+    private let privacy: @MainActor () -> PrivacyPreferences
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(privacy: @escaping @MainActor () -> PrivacyPreferences = { UserPreferencesManager.shared.privacy }) {
+        self.privacy = privacy
     }
 
-    var isEnabled: Bool {
-        defaults.object(forKey: Self.key) as? Bool ?? true
+    var isEnabled: Bool { privacy().saveMediaToGallery }
+}
+
+/// Ce que la migration demande à la synchronisation des préférences.
+@MainActor
+protocol GallerySavePreferenceSyncing: AnyObject {
+    /// `true` si les préférences viennent d'être relues du serveur.
+    func refreshFromServer() async -> Bool
+    func enableSaveToGallery()
+}
+
+@MainActor
+final class UserPreferencesGallerySync: GallerySavePreferenceSyncing {
+    // SE-0466 — garde : MainActorDeinitSourceGuardTests.
+    nonisolated deinit {}
+
+    private let manager: UserPreferencesManager
+
+    init(manager: UserPreferencesManager = .shared) {
+        self.manager = manager
+    }
+
+    func refreshFromServer() async -> Bool {
+        let before = manager.lastSyncDate
+        await manager.fetchFromBackend()
+        guard let after = manager.lastSyncDate else { return false }
+        return after != before
+    }
+
+    func enableSaveToGallery() {
+        manager.updatePrivacy { $0.saveMediaToGallery = true }
+    }
+}
+
+/// **L'ancienne clé locale rejoint la préférence serveur, une fois** (#14640).
+///
+/// L'interrupteur vivait dans `UserDefaults`, vrai par défaut et jamais écrit
+/// tant que l'utilisateur n'y touchait pas : une clé PRÉSENTE est donc un choix.
+/// Vraie, elle pousse vrai au serveur ; fausse, elle s'oublie (le serveur est
+/// déjà coupé par défaut). La catégorie part ENTIÈRE au serveur : la poussée
+/// attend une relecture fraîche, sinon la clé reste pour la session suivante.
+enum ReceivedMediaAutoSaveLegacyMigration {
+    static let key = "meeshy.media.autoSaveReceivedToAlbum"
+
+    @MainActor
+    static func run(defaults: UserDefaults = .standard,
+                    sync: GallerySavePreferenceSyncing = UserPreferencesGallerySync()) async {
+        guard let chosen = defaults.object(forKey: key) as? Bool else { return }
+        guard chosen else {
+            defaults.removeObject(forKey: key)
+            return
+        }
+        guard await sync.refreshFromServer() else { return }
+        sync.enableSaveToGallery()
+        defaults.removeObject(forKey: key)
     }
 }
 
@@ -178,7 +236,7 @@ final class ReceivedMediaAutoSaver: ReceivedMediaAutoSaving {
     private let setting: ReceivedMediaAutoSaveSetting
     private let registry: AutoSavedAttachmentRegistering
     private let writer: ReceivedMediaAlbumWriting
-    private let downloadAllowed: @MainActor (AttachmentKind) -> Bool
+    private let downloadAllowed: @MainActor (MessageAttachment) -> Bool
     private let installation: AppInstallationDateProviding
     private var socketSubscription: AnyCancellable?
     /// Armé avec la SESSION (`RealtimeRelays.arm`) : hors session — un témoin,
@@ -189,7 +247,7 @@ final class ReceivedMediaAutoSaver: ReceivedMediaAutoSaving {
          setting: ReceivedMediaAutoSaveSetting = ReceivedMediaAutoSaveUserSetting.shared,
          registry: AutoSavedAttachmentRegistering = AutoSavedAttachmentRegistry.shared,
          writer: ReceivedMediaAlbumWriting = PhotoAlbumReceivedMediaWriter(),
-         downloadAllowed: @escaping @MainActor (AttachmentKind) -> Bool = ReceivedMediaAutoSaver.networkPolicyAllows,
+         downloadAllowed: @escaping @MainActor (MessageAttachment) -> Bool = ReceivedMediaAutoSaver.networkPolicyAllows,
          installation: AppInstallationDateProviding = AppInstallationClock.shared) {
         self.isActive = isActive
         self.setting = setting
@@ -221,7 +279,7 @@ final class ReceivedMediaAutoSaver: ReceivedMediaAutoSaving {
         let since = installation.installationStartedAt
         let eligible = messages.flatMap { ReceivedMediaAutoSavePolicy.eligibleMedia(in: $0, receivedSince: since) }
         for attachment in eligible {
-            guard downloadAllowed(ReceivedMediaAutoSavePolicy.kind(of: attachment)),
+            guard downloadAllowed(attachment),
                   registry.claim(attachment.id) else { continue }
             let writer = writer
             Task { @MainActor [weak self] in
@@ -233,12 +291,13 @@ final class ReceivedMediaAutoSaver: ReceivedMediaAutoSaving {
     }
 
     /// La politique réseau existante (Réglages › Médias) : une vidéo sur réseau
-    /// cellulaire attend le Wi-Fi si l'utilisateur l'a demandé.
-    static func networkPolicyAllows(_ kind: AttachmentKind) -> Bool {
+    /// cellulaire attend le Wi-Fi si l'utilisateur l'a demandé — sauf sous 100 Ko (#14639).
+    static func networkPolicyAllows(_ attachment: MessageAttachment) -> Bool {
         MediaDownloadPolicyEngine.shouldAutoDownload(
-            kind: kind == .video ? .video : .image,
+            kind: attachment.type == .video ? .video : .image,
             condition: NetworkConditionMonitor.shared.condition,
-            prefs: MediaDownloadPreferencesStore.shared.preferences
+            prefs: MediaDownloadPreferencesStore.shared.preferences,
+            byteSize: attachment.fileSize
         )
     }
 }

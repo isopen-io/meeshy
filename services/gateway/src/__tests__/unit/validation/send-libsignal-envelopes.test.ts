@@ -6,7 +6,7 @@
  */
 import { SendMessageBodySchema } from '../../../routes/conversations/messages-send';
 import { SocketMessageSendSchema } from '../../../validation/socket-event-schemas';
-import { toEncryptedPayload } from '../../../validation/encryption-envelope';
+import { toDeviceLayer, toEncryptedPayload } from '../../../validation/encryption-envelope';
 
 const BOB = 'b2'.repeat(12);
 
@@ -108,5 +108,38 @@ describe('la charge recomposée pour la passerelle', () => {
     const payload = toEncryptedPayload(parsed, { sessionId: 'c3'.repeat(12) }) as unknown as Record<string, unknown>;
 
     expect((payload.relay as { sessionId?: string }).sessionId).toBe('c3'.repeat(12));
+  });
+});
+
+describe('la couche appareil d’un envoi hybride (#14369)', () => {
+  const hybridSend = (overrides: Record<string, unknown> = {}) =>
+    libsignalSend({ content: 'Rendez-vous à 18 h', encryptionMode: 'hybrid', encryptedContent: undefined, ...overrides });
+
+  it.each(transports)('%s accepte le clair et les enveloppes, sans chiffré', (_name, schema) => {
+    expect(schema.safeParse(hybridSend()).success).toBe(true);
+  });
+
+  it('recompose le relais, la session de l’appelant et l’époque déclarée', () => {
+    const layer = toDeviceLayer(hybridSend({ encryptionMetadata: { protocol: 'libsignal-v1', senderDeviceId: 1, regimeEpoch: 5 } }) as never, { sessionId: 'sid-1' });
+    expect(layer?.relay).toMatchObject({ protocol: 'libsignal-v1', senderDeviceId: 1, sessionId: 'sid-1', unapprovedOwnDevices: [] });
+    expect(layer?.regimeEpoch).toBe(5);
+  });
+
+  it('n’existe jamais à côté d’un chiffré : un envoi libsignal reste un envoi e2ee', () => {
+    expect(toDeviceLayer(libsignalSend() as never, { sessionId: 'sid-1' })).toBeUndefined();
+  });
+
+  it('n’existe pas sans enveloppes', () => {
+    expect(toDeviceLayer({ encryptionMode: 'hybrid' } as never)).toBeUndefined();
+  });
+
+  it('ignore une époque qui n’est pas un entier', () => {
+    const layer = toDeviceLayer(hybridSend({ encryptionMetadata: { protocol: 'libsignal-v1', senderDeviceId: 1, regimeEpoch: '5' } }) as never);
+    expect(layer).toBeDefined();
+    expect(layer?.regimeEpoch).toBeUndefined();
+  });
+
+  it('ne fabrique aucun chiffré : toEncryptedPayload reste vide pour un envoi hybride', () => {
+    expect(toEncryptedPayload(hybridSend() as never)).toBeUndefined();
   });
 });

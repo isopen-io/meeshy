@@ -28,13 +28,15 @@ export type BringAppOptions = {
   readonly liens?: ReadonlyArray<Record<string, unknown>>;
   readonly demandes?: ReadonlyArray<Record<string, unknown>>;
   readonly personnes?: Readonly<Record<string, Personne>>;
-  readonly reglages?: ReadonlyArray<{ ownerId: string; otherId: string; bringBlockedAt: Date | null }>;
+  readonly reglages?: ReadonlyArray<{ ownerId: string; otherId: string; bringBlockedAt: Date | null } & Record<string, unknown>>;
 };
 
 export type BringTestApp = {
   readonly store: RelationStore;
   readonly emissions: Emission[];
   readonly reglages: Map<string, Record<string, unknown>>;
+  /** Le double Prisma lui-même, pour compter les écritures. */
+  readonly prisma: any;
   readonly users: Map<string, Record<string, unknown>>;
   readonly call: (
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
@@ -112,6 +114,13 @@ export async function buildBringApp(
         reglages.set(key, next);
         return next;
       }),
+      updateMany: jest.fn(async (args: { where: { ownerId: string; otherId: string }; data: Record<string, unknown> }) => {
+        const key = cleDe(args.where.ownerId, args.where.otherId);
+        const row = reglages.get(key);
+        if (!row) return { count: 0 };
+        reglages.set(key, { ...row, ...args.data });
+        return { count: 1 };
+      }),
     },
     userPreferences: {
       findUnique: jest.fn(async (args: { where: { userId: string } }) => {
@@ -145,7 +154,7 @@ export async function buildBringApp(
   await app.ready();
 
   return {
-    store, emissions, reglages, users,
+    store, emissions, reglages, users, prisma,
     call: async (method, url, body, as) => {
       acting = as ?? MOI;
       const res = await app.inject({
