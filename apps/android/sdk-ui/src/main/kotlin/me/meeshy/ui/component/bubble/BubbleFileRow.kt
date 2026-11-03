@@ -103,32 +103,8 @@ public fun BubbleFileRow(
             .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs)
             .animateContentSize(MeeshyMotion.springDefault()),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        Icon(
-            imageVector = MeeshyIcons.AttachFile,
-            contentDescription = null,
-            tint = onColor.copy(alpha = 0.8f),
-            modifier = Modifier.size(16.dp),
-        )
-        Column(modifier = Modifier.weight(1f, fill = false)) {
-            Text(
-                text = file.name ?: stringResource(R.string.bubble_attachment_file_fallback),
-                style = MaterialTheme.typography.bodySmall,
-                color = onColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            val size = file.sizeBytes?.let { formatFileSize(it) }
-            if (size != null) {
-                Text(
-                    text = size,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = onColor.copy(alpha = 0.7f),
-                )
-            }
-        }
-        FileBadgeView(badge = badge, onColor = onColor)
+        DocumentFileCard(file = file, onColor = onColor, trailing = { FileBadgeView(badge = badge, onColor = onColor) })
     }
 }
 

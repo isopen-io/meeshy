@@ -75,6 +75,8 @@ internal object BubbleAttachmentBuilder {
                     thumbnailUrl = if (sealed) null else attachment.thumbnailUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
                     width = if (sealed) null else attachment.width,
                     height = if (sealed) null else attachment.height,
+                    mimeType = if (sealed) null else attachment.mimeType,
+                    pageCount = if (sealed) null else attachment.pageCount,
                 )
             }
         return BubbleAttachments(

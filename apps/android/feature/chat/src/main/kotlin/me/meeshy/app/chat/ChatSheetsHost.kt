@@ -222,7 +222,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     FileViewerHost(fileViewer, accentColor, host.navigation.onOpenConversation) { fileViewer = null }
     FileAttachmentDownloadOverlay(
         download = state.fileDownload,
-        onOpenInApp = { fileViewer = it.copy(contactScope = state.messages.contactScopeOf(it.attachmentId, contactGate, hubContactSeeds)) },
+        onOpenInApp = { fileViewer = it.copy(contactScope = state.messages.contactScopeOf(it.attachmentId, contactGate, hubContactSeeds)).guardedBy(state.messages) },
         onDismiss = actions.dismissFileDownload,
         onRetry = { actions.retryFileDownload() },
     )
