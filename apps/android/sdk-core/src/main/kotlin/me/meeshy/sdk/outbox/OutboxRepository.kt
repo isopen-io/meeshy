@@ -1,6 +1,7 @@
 package me.meeshy.sdk.outbox
 
 import androidx.room.withTransaction
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -35,6 +36,11 @@ class OutboxRepository @Inject constructor(
     /** Per-`cmid` delivery outcomes — drives optimistic rollback in the UI. */
     val outcomes: SharedFlow<OutboxOutcome> = _outcomes.asSharedFlow()
 
+    private val _enqueued = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** Ticks on every [enqueue] — the trigger that wakes the flusher (debounced by `OutboxDrainTriggers`). */
+    val enqueued: SharedFlow<Unit> = _enqueued.asSharedFlow()
+
     /** Observes the whole queue (oldest first) — for a failed-message / pending UI. */
     fun observeAll(): Flow<List<OutboxEntity>> = outboxDao.observeAll()
 
@@ -54,6 +60,7 @@ class OutboxRepository @Inject constructor(
             val owner = ticket ?: fence.currentTicket()
             fence.commit(owner) { write(mutation.toEntity(now(), owner.ownerId)) } ?: throw AccountClosedException()
         }
+        _enqueued.tryEmit(Unit)
         return when (decision) {
             is CoalesceDecision.Enqueue -> decision.row.cmid
             is CoalesceDecision.Replace -> {
@@ -144,6 +151,22 @@ class OutboxRepository @Inject constructor(
      */
     suspend fun stateOf(cmid: String): OutboxState? = outboxDao.find(cmid)?.stateEnum
 
+    private val liveSends: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /**
+     * #14697 — [send] runs with [cmid] `INFLIGHT` and held LIVE in this process: a concurrent flush pass's
+     * [recoverInflight] leaves it alone, so sending another message during a long upload never restarts that upload.
+     */
+    suspend fun <T> sendingLive(cmid: String, send: suspend () -> T): T {
+        liveSends += cmid
+        try {
+            markInflight(cmid)
+            return send()
+        } finally {
+            liveSends -= cmid
+        }
+    }
+
     suspend fun markInflight(cmid: String) {
         val row = outboxDao.find(cmid) ?: return
         outboxDao.updateState(cmid, OutboxState.INFLIGHT.name, row.attempts, now())
@@ -159,7 +182,7 @@ class OutboxRepository @Inject constructor(
      * Records a failed attempt: back to `PENDING` for another try, or `EXHAUSTED`
      * (with an [OutboxOutcome.Exhausted] signal) once [MAX_ATTEMPTS] is reached.
      */
-    suspend fun markFailed(cmid: String, reason: String? = null): OutboxState {
+    suspend fun markFailed(cmid: String, reason: String? = null, backoffMs: Long = 0L): OutboxState {
         val row = outboxDao.find(cmid) ?: return OutboxState.PENDING
         val attempts = row.attempts + 1
         return if (attempts >= MAX_ATTEMPTS) {
@@ -169,9 +192,28 @@ class OutboxRepository @Inject constructor(
         } else {
             outboxDao.updateState(cmid, OutboxState.PENDING.name, attempts, now())
             reason?.let { outboxDao.recordError(cmid, it, now()) }
+            if (backoffMs > 0L) outboxDao.scheduleNext(cmid, now() + backoffMs, now())
             OutboxState.PENDING
         }
     }
+
+    /**
+     * The transport failed (connection, DNS, timeout): back to `PENDING` WITHOUT charging an attempt, held back for
+     * [backoffMs] on its own row — a network outage of a few minutes exhausts nothing.
+     */
+    suspend fun markTransportFailed(cmid: String, reason: String, backoffMs: Long) {
+        val row = outboxDao.find(cmid) ?: return
+        val at = now()
+        outboxDao.updateState(cmid, OutboxState.PENDING.name, row.attempts, at)
+        outboxDao.recordError(cmid, reason, at)
+        outboxDao.scheduleNext(cmid, at + backoffMs, at)
+    }
+
+    /** The earliest `nextAttemptAt` of a `PENDING` row, or `null` when no row is held back. */
+    suspend fun earliestScheduledAttempt(): Long? = outboxDao.earliestScheduledAttempt()
+
+    /** Whether any row still waits for delivery (`PENDING` or `INFLIGHT`) — the network gate's « is there work ». */
+    suspend fun hasWork(): Boolean = outboxDao.hasWork()
 
     /** A permanent (non-retryable) failure — exhaust immediately, ignoring the attempt count. */
     suspend fun markExhausted(cmid: String, reason: String) {
@@ -352,8 +394,11 @@ class OutboxRepository @Inject constructor(
         return changed
     }
 
-    /** Crash-safe boot recovery (ARCHITECTURE.md §5) — any orphaned `INFLIGHT` row becomes `PENDING`. */
-    suspend fun recoverInflight(): Int = outboxDao.resetInflight(now())
+    /**
+     * Crash-safe recovery (ARCHITECTURE.md §5) — any orphaned `INFLIGHT` row becomes `PENDING`; a row a live pass of this
+     * process is still sending ([sendingLive]) is not orphaned (#14697).
+     */
+    suspend fun recoverInflight(): Int = outboxDao.resetInflightExcept(liveSends.toList(), now())
 
     /**
      * The account a write beginning NOW belongs to (#13555) — taken by a caller when the user ACTS, before any work that

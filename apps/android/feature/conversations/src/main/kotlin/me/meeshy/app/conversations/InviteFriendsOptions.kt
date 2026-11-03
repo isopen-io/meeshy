@@ -44,6 +44,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.CreateShareLinkForm
 import me.meeshy.sdk.model.InviteLinkDraft

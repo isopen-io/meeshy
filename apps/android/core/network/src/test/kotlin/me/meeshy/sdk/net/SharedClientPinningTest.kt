@@ -16,7 +16,7 @@ class SharedClientPinningTest {
     fun `Retrofit utilise le client epingle`() {
         val client = pinned()
         val retrofit = MeeshyApi.buildRetrofit(MeeshyConfig(), client)
-        assertThat(retrofit.callFactory()).isSameInstanceAs(client)
+        assertThat((retrofit.callFactory() as MutationIdCallFactory).delegate).isSameInstanceAs(client)
         assertThat(client.networkInterceptors.any { it is CertificatePinInterceptor }).isTrue()
     }
 

@@ -93,7 +93,7 @@ class MediaConsumptionReporterTest {
         val result = ReportAttachmentStatusHandler(api, json)
             .send(row(json.encodeToString(AttachmentStatusBody.serializer(), body)))
 
-        assertThat(result).isEqualTo(SendResult.TransientFailure)
+        assertThat(result).isEqualTo(SendResult.TransportFailure)
     }
 
     @Test fun `en ligne le rapport est livre vers la bonne piece jointe`() = runTest {

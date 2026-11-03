@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.lang.ReaderPrism
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -34,7 +35,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
-import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.model.currentUserRole
@@ -86,7 +86,7 @@ internal fun ConversationRowContainer(
             // Prisme Linguistique: la rangée sert la même traduction que l'aperçu appui long;
             // des préférences absentes (session non hydratée) donnent le prisme vide, donc l'original.
             resolvedContent = conversation.resolvedLastMessagePreview(
-                model.currentUserPrefs?.let(LanguageResolver::preferredContentLanguages).orEmpty(),
+                model.currentUserPrefs?.let { ReaderPrism.resolve(it, java.util.Locale.getDefault()) }.orEmpty(),
             ),
         ),
     )
@@ -94,7 +94,6 @@ internal fun ConversationRowContainer(
     val capabilities = remember(conversation, model.currentUserPrefs) {
         ConversationRowMenuCapabilities.make(conversation, model.currentUserPrefs)
     }
-    val managesMembers = capabilities.offersManageMembers(isLocked = model.isLocked)
     val palette = remember(conversation) { conversation.accentColorPalette() }
     val accent = hexColor(palette.primary)
     val secondary = hexColor(palette.secondary)
@@ -178,53 +177,53 @@ internal fun ConversationRowContainer(
             }
         }
 
-        ConversationContextMenu(
-            expanded = menuExpanded,
-            onDismiss = { menuExpanded = false },
-            title = title,
-            isPinned = isPinned,
-            isMuted = isMuted,
-            mentionsOnly = prefs?.mentionsOnly == true,
-            isArchived = prefs?.isArchived == true,
-            hasUnread = conversation.unreadCount > 0,
-            hasDraft = model.draft?.isMeaningful == true,
-            categories = model.categories,
-            currentCategoryId = prefs?.categoryId,
-            previewMessages = model.previewMessages,
-            previewShowSender = conversation.type != "direct",
-            currentUserId = model.currentUserId,
-            currentUserPrefs = model.currentUserPrefs,
-            previewLabels = previewLabels,
-            isCreator = conversation.currentUserRole(model.currentUserId) == MemberRole.CREATOR,
-            onTogglePin = actions.onTogglePin,
-            onToggleMute = actions.onToggleMute,
-            onToggleMentionsOnly = actions.onToggleMentionsOnly,
-            onToggleArchive = actions.onToggleArchive,
-            onLeaveConversation = actions.onLeaveConversation,
-            onDeleteForMe = actions.onDeleteForMe,
-            onDeleteForAll = actions.onDeleteForAll,
-            onRename = actions.onRename,
-            currentCustomName = prefs?.customName,
-            onSetReaction = actions.onSetReaction,
-            currentReaction = prefs?.reaction,
-            onSetTags = actions.onSetTags,
-            currentTags = currentTags,
-            onMarkRead = actions.onMarkRead,
-            onMarkUnread = actions.onMarkUnread,
-            onDiscardDraft = actions.onDiscardDraft,
-            onAssignCategory = actions.onAssignCategory,
-            onCreateCategory = actions.onCreateCategory,
-            isLocked = model.isLocked,
-            onRemoveCategory = actions.onRemoveCategory,
-            onLockToggle = actions.onLockToggle,
-            onViewInfo = actions.onViewInfo,
-            onViewProfile = actions.onViewProfile,
-            onCreateShareLink = actions.onCreateShareLink,
-            onManageMembers = actions.onManageMembers
-                ?.takeIf { managesMembers }
-                ?.let { open -> { open(accent) } },
-            onMakeObsolete = actions.onMakeObsolete.takeIf { capabilities.obsolete },
-        )
+        if (menuExpanded) {
+            val peerBlocked = remember { actions.peerBlocked() }
+            val menuModel = ConversationMenuModel.make(
+                ConversationMenuInput(
+                    capabilities = capabilities,
+                    isPinned = isPinned,
+                    isMuted = isMuted,
+                    mentionsOnly = prefs?.mentionsOnly == true,
+                    hasUnread = conversation.unreadCount > 0,
+                    hasDraft = model.draft?.isMeaningful == true,
+                    isLocked = model.isLocked,
+                    isArchived = prefs?.isArchived == true,
+                    isPeerBlocked = peerBlocked,
+                    isCreator = conversation.currentUserRole(model.currentUserId) == MemberRole.CREATOR,
+                    destinations = ConversationMenuDestinations(
+                        details = actions.onViewInfo != null,
+                        profile = actions.onViewProfile != null,
+                        call = actions.onCall != null,
+                        manageMembers = actions.onManageMembers != null,
+                        admin = actions.adminReachable,
+                    ),
+                ),
+            )
+            ConversationContextMenu(
+                expanded = true,
+                onDismiss = { menuExpanded = false },
+                title = title,
+                isPinned = isPinned,
+                isMuted = isMuted,
+                model = menuModel,
+                panelState = ConversationMenuPanelState(
+                    currentReaction = prefs?.reaction,
+                    categories = model.categories,
+                    currentCategoryId = prefs?.categoryId,
+                ),
+                accent = accent,
+                previewMessages = model.previewMessages,
+                previewShowSender = conversation.type != "direct",
+                currentUserId = model.currentUserId,
+                currentUserPrefs = model.currentUserPrefs,
+                previewLabels = previewLabels,
+                isLocked = model.isLocked,
+                currentTags = currentTags,
+                actions = actions,
+                onManageMembers = actions.onManageMembers?.let { open -> { open(accent) } },
+            )
+        }
     }
 }
 

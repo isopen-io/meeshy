@@ -220,6 +220,39 @@ public struct StoryMediaReference: Codable, Sendable {
         self.localFilePath = localFilePath
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case elementId, mediaType, localFilePath
+    }
+
+    /// **Le chemin relu suit le conteneur de l'app** (#14879). Le dossier
+    /// `…/Data/Application/<UUID>/` change d'un lancement à l'autre (mise à
+    /// jour, réinstallation, simulateur) : un chemin absolu persisté visait
+    /// l'ANCIEN conteneur, et le fichier, bien présent, était déclaré
+    /// introuvable — la story partait en échec « média local introuvable ».
+    /// Le format écrit ne change pas : seul le décodage rebase.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        elementId = try container.decode(String.self, forKey: .elementId)
+        mediaType = try container.decode(String.self, forKey: .mediaType)
+        localFilePath = Self.rebasing(
+            try container.decode(String.self, forKey: .localFilePath),
+            ontoHome: NSHomeDirectory()
+        )
+    }
+
+    /// Réécrit `path` sous `home` quand il vise un AUTRE conteneur d'app ; tout
+    /// autre chemin (déjà sous `home`, hors conteneur, `home` hors conteneur)
+    /// reste tel quel.
+    public static func rebasing(_ path: String, ontoHome home: String) -> String {
+        let marker = "/Data/Application/"
+        guard !path.hasPrefix(home + "/"),
+              home.contains(marker),
+              let markerRange = path.range(of: marker) else { return path }
+        let afterMarker = path[markerRange.upperBound...]
+        guard let containerEnd = afterMarker.firstIndex(of: "/") else { return path }
+        return home + afterMarker[containerEnd...]
+    }
+
     /// File extensions (case-insensitive) treated as video containers.
     private static let videoFileExtensions: Set<String> = ["mp4", "mov", "m4v"]
 
@@ -308,6 +341,11 @@ public struct StoryPublishFailure: Sendable {
 /// to the rest of the app via Combine publishers.
 public actor StoryPublishQueue {
     public static let shared = StoryPublishQueue()
+
+    /// La trace qu'un échec `.missingLocalMedia` laisse dans `lastError`.
+    /// Persistée telle quelle depuis toujours : l'app la reconnaît pour la
+    /// dire dans la langue de l'interface, jamais en l'affichant brute.
+    public static let missingLocalMediaError = "Un média local est introuvable"
 
     /// Emitted when a pending publication reaches the server and is assigned
     /// a real post id. ViewModels listen to swap their optimistic
@@ -714,7 +752,7 @@ public actor StoryPublishQueue {
             var item = items.remove(at: idx)
             switch failurePayloads.first(where: { $0.queueId == id })?.reason {
             case .missingLocalMedia:
-                item.lastError = "Un média local est introuvable"
+                item.lastError = Self.missingLocalMediaError
             case .unrecoverable(let message):
                 item.lastError = message
             case .maxRetriesReached, .none:

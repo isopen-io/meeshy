@@ -41,6 +41,14 @@ data class ConversationRowMenuCapabilities(
      * et actifs (`hide`) ; jamais Global.
      */
     val obsolete: Boolean = false,
+    /**
+     * « Appeler » : l'appel du menu compose UN pair, donc jamais un groupe ni soi-même
+     * (`CallPermission.canStartCall`, miroir de `ConversationRowMenuCapabilities.call` d'iOS).
+     */
+    val call: Boolean = false,
+    val videoCall: Boolean = false,
+    /** « Supprimer pour tous » : la porte de la loi (administrateur et plus d'un type à autorité, ouvert). */
+    val deleteForAll: Boolean = false,
 ) {
 
     /**
@@ -75,6 +83,8 @@ data class ConversationRowMenuCapabilities(
             val direct = conversation.isDirect
             val talksToSelf = direct && currentUser != null && conversation.participants.isNotEmpty() &&
                 conversation.participants.all { it.userId == currentUser.id }
+            val talksToPeer = direct && !talksToSelf && currentUser != null &&
+                conversation.participants.any { it.userId != currentUser.id }
             return ConversationRowMenuCapabilities(
                 rename = actions.rename,
                 invite = actions.invite,
@@ -86,6 +96,9 @@ data class ConversationRowMenuCapabilities(
                 manageMembers = actions.manageMembers,
                 obsolete = actions.deleteForAll ||
                     (direct && !conversation.actionPolicyConversation.isClosed && actions.hide),
+                deleteForAll = actions.deleteForAll,
+                call = actions.call && talksToPeer,
+                videoCall = actions.videoCall && talksToPeer,
             )
         }
 

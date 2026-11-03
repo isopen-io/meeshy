@@ -200,42 +200,13 @@ extension FeedPostCard {
                 } label: {
                     Label(String(localized: "feed.post.copy_text", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
                 }
-                Button {
-                    onShare?(post.id)
-                    HapticFeedback.light()
-                } label: {
-                    Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
-                }
-                PostSaveMenuItems(
-                    title: canSaveMedia
-                        ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
-                        : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
-                    systemImage: canSaveMedia ? "arrow.down.to.line" : "bookmark",
-                    save: {
-                        guard !canSaveMedia else { return requestSaveMedia() }
-                        onBookmark?(post.id)
-                        HapticFeedback.light()
-                    },
-                    imager: imagerAction
-                )
-                if canListViewers {
-                    PublicationViewersMenuButton { showViewersSheet = true }
-                }
-                if onPin != nil {
-                    Button {
-                        onPin?(post.id)
-                        HapticFeedback.light()
-                    } label: {
-                        Label(String(localized: "feed.post.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin")
-                    }
-                }
-                if onEdit != nil {
-                    Button {
-                        onEdit?(post)
-                        HapticFeedback.light()
-                    } label: {
-                        Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
-                    }
+                if !PendingPublicationMarker.isPending(postId: post.id) {
+                    FeedPostOnlineMenuItems(
+                        post: post, canSaveMedia: canSaveMedia, canListViewers: canListViewers,
+                        imagerAction: imagerAction, requestSaveMedia: requestSaveMedia,
+                        showViewers: { showViewersSheet = true },
+                        onShare: onShare, onBookmark: onBookmark, onPin: onPin, onEdit: onEdit
+                    )
                 }
                 PublicationDestructiveMenuItems(postId: post.id, onDelete: onDelete, onRemove: onRemove)
                 if onReport != nil {
@@ -262,6 +233,63 @@ extension FeedPostCard {
     }
 }
 
+/// Ce que le menu offre d'une publication EN LIGNE — partager, enregistrer,
+/// épingler, modifier. Une carte encore dans la file n'a rien de tout cela
+/// côté serveur : son menu n'offre qu'ouvrir, copier et annuler l'envoi
+/// (#14879).
+struct FeedPostOnlineMenuItems: View {
+    let post: FeedPost
+    let canSaveMedia: Bool
+    let canListViewers: Bool
+    let imagerAction: (() -> Void)?
+    let requestSaveMedia: () -> Void
+    let showViewers: () -> Void
+    var onShare: ((String) -> Void)?
+    var onBookmark: ((String) -> Void)?
+    var onPin: ((String) -> Void)?
+    var onEdit: ((FeedPost) -> Void)?
+
+    var body: some View {
+        Button {
+            onShare?(post.id)
+            HapticFeedback.light()
+        } label: {
+            Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
+        }
+        PostSaveMenuItems(
+            title: canSaveMedia
+                ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
+                : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
+            systemImage: canSaveMedia ? "arrow.down.to.line" : "bookmark",
+            save: {
+                guard !canSaveMedia else { return requestSaveMedia() }
+                onBookmark?(post.id)
+                HapticFeedback.light()
+            },
+            imager: imagerAction
+        )
+        if canListViewers {
+            PublicationViewersMenuButton(action: showViewers)
+        }
+        if onPin != nil {
+            Button {
+                onPin?(post.id)
+                HapticFeedback.light()
+            } label: {
+                Label(String(localized: "feed.post.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin")
+            }
+        }
+        if onEdit != nil {
+            Button {
+                onEdit?(post)
+                HapticFeedback.light()
+            } label: {
+                Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+            }
+        }
+    }
+}
+
 // MARK: - Ce que le post a rapporté au lecteur « · ✦+99 » (#9571)
 
 /// La date d'un post, suivie — très discrètement — des points que ce post a
@@ -274,24 +302,15 @@ extension FeedPostCard {
 /// toujours là, donc la note part même quand la marque se tait — et
 /// `engagement:post-updated` fait rouler le nombre (`PostViewerPointsStore`).
 /// L'heure de la carte, suivie de ses points — ou, pour une carte encore dans
-/// la file d'envoi, « En attente d'envoi » à sa place (#10331) : elle n'a pas
-/// de date de publication.
+/// la file d'envoi, l'horloge d'un message en cours d'envoi à sa place
+/// (#10331) : elle n'a pas de date de publication.
 struct FeedPostCardTimestamp: View {
     let post: FeedPost
     let color: Color
 
     var body: some View {
-        if let attente = PendingPublicationMarker.label(postId: post.id) {
-            Label(attente, systemImage: "clock.arrow.circlepath")
-                .labelStyle(.titleAndIcon)
-                .font(.caption)
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .accessibilityIdentifier("feed.post.pendingSend")
-        } else {
-            PostDateWithPoints(postId: post.id, seed: post.viewerPoints, color: color) {
-                Text(RelativeTimeFormatter.shortString(for: post.timestamp))
-            }
+        PostDateWithPoints(postId: post.id, seed: post.viewerPoints, color: color) {
+            Text(RelativeTimeFormatter.shortString(for: post.timestamp))
         }
     }
 }
@@ -300,9 +319,23 @@ struct FeedPostCardTimestamp: View {
 /// La carte optimiste porte le cmid de sa ligne `.createPost` comme id : tant
 /// qu'il n'a pas été remplacé par l'id serveur, rien n'est publié.
 nonisolated enum PendingPublicationMarker {
-    static func label(postId: String) -> String? {
-        guard ClientMutationId.isValid(postId) else { return nil }
-        return String(localized: "feed.unsent.waiting", defaultValue: "En attente d'envoi", bundle: .main)
+    static func isPending(postId: String) -> Bool {
+        ClientMutationId.isValid(postId)
+    }
+}
+
+/// **L'horloge d'une publication en attente** — le glyphe d'un message en
+/// cours d'envoi, même symbole et même teinte (`BubbleDeliveryCheck`), à la
+/// place de l'heure. Décision du porteur (#14879) : ni libellé ni rangée
+/// « en attente » dans le fil, l'horloge seule.
+struct PendingSendClock: View {
+    let color: Color
+
+    var body: some View {
+        BubbleDeliveryCheck(status: .sending, isOffline: false, tint: color, readTint: color)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(UnsentPublicationsCopy.waiting)
+            .accessibilityIdentifier("feed.post.pendingSend")
     }
 }
 
@@ -323,16 +356,20 @@ struct PostDateWithPoints<DateLabel: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: MeeshySpacing.xxs) {
-            date()
-                .font(.caption)
-                .foregroundColor(color)
-            if let points = PostViewerPoints.shown(store.displayed(postId: postId, seed: seed)) {
-                PostPointsMark(points: points, color: color)
-                    .equatable()
+        if PendingPublicationMarker.isPending(postId: postId) {
+            PendingSendClock(color: color)
+        } else {
+            HStack(spacing: MeeshySpacing.xxs) {
+                date()
+                    .font(.caption)
+                    .foregroundColor(color)
+                if let points = PostViewerPoints.shown(store.displayed(postId: postId, seed: seed)) {
+                    PostPointsMark(points: points, color: color)
+                        .equatable()
+                }
             }
+            .task(id: seed) { store.noteRead(postId: postId, viewerPoints: seed) }
         }
-        .task(id: seed) { store.noteRead(postId: postId, viewerPoints: seed) }
     }
 }
 
