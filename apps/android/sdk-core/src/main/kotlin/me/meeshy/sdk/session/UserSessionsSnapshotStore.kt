@@ -19,9 +19,12 @@ import me.meeshy.sdk.model.session.UserSessionsPayload
  * Le magasin est lié au compte : [clear] le vide à la déconnexion, un second compte n'en hérite jamais.
  */
 public interface UserSessionsSnapshotStore : PerAccountCache {
-    public fun observe(): Flow<UserSessionsPayload?>
+    /** Le relevé ET son instant lus ENSEMBLE : jamais une liste neuve appariée à l'ancien instant. */
+    public fun snapshot(): Flow<Pair<UserSessionsPayload?, Long?>>
 
-    public fun lastSyncedAt(): Flow<Long?>
+    public fun observe(): Flow<UserSessionsPayload?> = snapshot().map { it.first }
+
+    public fun lastSyncedAt(): Flow<Long?> = snapshot().map { it.second }
 
     public suspend fun save(payload: UserSessionsPayload, syncedAtMillis: Long)
 }
@@ -30,9 +33,8 @@ public interface UserSessionsSnapshotStore : PerAccountCache {
 public class InMemoryUserSessionsSnapshotStore : UserSessionsSnapshotStore {
     private val entry = MutableStateFlow<Pair<UserSessionsPayload, Long>?>(null)
 
-    override fun observe(): Flow<UserSessionsPayload?> = entry.asStateFlow().map { it?.first }
-
-    override fun lastSyncedAt(): Flow<Long?> = entry.asStateFlow().map { it?.second }
+    override fun snapshot(): Flow<Pair<UserSessionsPayload?, Long?>> =
+        entry.asStateFlow().map { it?.first to it?.second }
 
     override suspend fun save(payload: UserSessionsPayload, syncedAtMillis: Long) {
         entry.update { payload to syncedAtMillis }
@@ -49,14 +51,13 @@ public class DataStoreUserSessionsSnapshotStore(
     private val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = false },
 ) : UserSessionsSnapshotStore {
 
-    override fun observe(): Flow<UserSessionsPayload?> =
+    override fun snapshot(): Flow<Pair<UserSessionsPayload?, Long?>> =
         dataStore.data.map { prefs ->
-            prefs[PAYLOAD]?.let { raw ->
+            val payload = prefs[PAYLOAD]?.let { raw ->
                 runCatching { json.decodeFromString(UserSessionsPayload.serializer(), raw) }.getOrNull()
             }
+            payload to prefs[SYNCED]
         }
-
-    override fun lastSyncedAt(): Flow<Long?> = dataStore.data.map { it[SYNCED] }
 
     override suspend fun save(payload: UserSessionsPayload, syncedAtMillis: Long) {
         val raw = json.encodeToString(UserSessionsPayload.serializer(), payload)

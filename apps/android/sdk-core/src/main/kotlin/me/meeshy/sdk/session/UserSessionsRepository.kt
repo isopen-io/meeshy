@@ -10,7 +10,7 @@ import kotlinx.coroutines.sync.withLock
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
-import me.meeshy.sdk.cache.cacheFirstFlow
+import me.meeshy.sdk.cache.cacheFirstFlowOf
 import me.meeshy.sdk.model.session.SessionsListReducer
 import me.meeshy.sdk.model.session.UserSessionsPayload
 import me.meeshy.sdk.net.ApiError
@@ -42,9 +42,10 @@ public class UserSessionsRepository @Inject constructor(
     public val syncFailure: StateFlow<String?> = failure.asStateFlow()
 
     public fun stream(policy: CachePolicy = CachePolicy.Sessions): Flow<CacheResult<UserSessionsPayload>> =
-        cacheFirstFlow(
+        cacheFirstFlowOf(
             policy = policy,
-            source = source(),
+            snapshots = store.snapshot(),
+            revalidate = source()::revalidate,
             clock = clock,
             onRevalidateError = { failure.value = it.message ?: "sync failed" },
         )
