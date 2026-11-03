@@ -435,8 +435,9 @@ class CallViewModel @Inject constructor(
 
     /** Local user hangs up an active call — end the FSM and the call on the wire. */
     fun hangUp() {
-        dispatch(CallEvent.LocalHangUp)
+        // Le bye in-band part AVANT la bascule en Ended : l'arête déclenche le démontage, qui ferme le canal.
         coordinator.sendHangupBye()
+        dispatch(CallEvent.LocalHangUp)
         emitIfIdentified { endReconciler.end(it) }
         releaseMedia()
     }
