@@ -25,12 +25,12 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * The notification-preference wiring in [SettingsViewModel]: the persisted block is
+ * The notification-preference wiring in [NotificationSettingsViewModel]: the persisted block is
  * mirrored into the UI state and each per-toggle intent drives the durable
  * [NotificationPreferencesStore] without clobbering the other toggles.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class SettingsViewModelNotificationTest {
+class NotificationSettingsViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
 
@@ -46,15 +46,8 @@ class SettingsViewModelNotificationTest {
 
     private fun vm(
         notificationStore: NotificationPreferencesStore = InMemoryNotificationPreferencesStore(),
-        user: MeeshyUser? = null,
-    ): SettingsViewModel {
-        val session = mockk<SessionRepository>()
-        every { session.currentUser } returns MutableStateFlow(user)
-        return SettingsViewModel(
-            sessionRepository = session,
-            userRepository = mockk<UserRepository>(relaxed = true),
-            themeStore = InMemoryThemeStore(),
-            interfaceLanguageStore = InMemoryInterfaceLanguageStore(),
+    ): NotificationSettingsViewModel {
+        return NotificationSettingsViewModel(
             notificationPreferencesStore = notificationStore,
             notificationPreferencesSyncRepository = mockk(relaxed = true),
             workManager = mockk(relaxed = true),

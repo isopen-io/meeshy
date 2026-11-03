@@ -24,12 +24,12 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * The per-event notification-type wiring in [SettingsViewModel]: each type toggle drives the
+ * The per-event notification-type wiring in [NotificationSettingsViewModel]: each type toggle drives the
  * durable [NotificationPreferencesStore] through the pure `NotificationTypeCatalog` lens without
  * clobbering the other toggles, and the search query is held in the UI state.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class SettingsViewModelNotificationTypesTest {
+class NotificationSettingsViewModelTypesTest {
 
     private val dispatcher = StandardTestDispatcher()
 
@@ -45,15 +45,8 @@ class SettingsViewModelNotificationTypesTest {
 
     private fun vm(
         notificationStore: NotificationPreferencesStore = InMemoryNotificationPreferencesStore(),
-        user: MeeshyUser? = null,
-    ): SettingsViewModel {
-        val session = mockk<SessionRepository>()
-        every { session.currentUser } returns MutableStateFlow(user)
-        return SettingsViewModel(
-            sessionRepository = session,
-            userRepository = mockk<UserRepository>(relaxed = true),
-            themeStore = InMemoryThemeStore(),
-            interfaceLanguageStore = InMemoryInterfaceLanguageStore(),
+    ): NotificationSettingsViewModel {
+        return NotificationSettingsViewModel(
             notificationPreferencesStore = notificationStore,
             notificationPreferencesSyncRepository = mockk(relaxed = true),
             workManager = mockk(relaxed = true),

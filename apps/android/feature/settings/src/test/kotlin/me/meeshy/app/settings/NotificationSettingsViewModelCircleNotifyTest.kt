@@ -27,7 +27,7 @@ import org.junit.Test
 
 /** « Qui est prévenu » (#14064) : un cran choisi se peint aussitôt et part en file vers la passerelle, hors ligne compris. */
 @OptIn(ExperimentalCoroutinesApi::class)
-class SettingsViewModelCircleNotifyTest {
+class NotificationSettingsViewModelCircleNotifyTest {
 
     private val dispatcher = StandardTestDispatcher()
 
@@ -44,11 +44,7 @@ class SettingsViewModelCircleNotifyTest {
     private class Fixture(seed: UserNotificationPreferences = UserNotificationPreferences()) {
         val store = InMemoryNotificationPreferencesStore(seed)
         val sync = mockk<NotificationPreferencesSyncRepository>().also { coEvery { it.enqueueSync(any()) } returns null }
-        val vm = SettingsViewModel(
-            sessionRepository = mockk<SessionRepository>().also { every { it.currentUser } returns MutableStateFlow(null) },
-            userRepository = mockk<UserRepository>(relaxed = true),
-            themeStore = InMemoryThemeStore(),
-            interfaceLanguageStore = InMemoryInterfaceLanguageStore(),
+        val vm = NotificationSettingsViewModel(
             notificationPreferencesStore = store,
             notificationPreferencesSyncRepository = sync,
             workManager = mockk(relaxed = true),

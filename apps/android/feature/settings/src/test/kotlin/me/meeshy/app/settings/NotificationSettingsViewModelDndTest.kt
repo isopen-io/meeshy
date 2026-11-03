@@ -25,12 +25,12 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * The Do-Not-Disturb schedule wiring in [SettingsViewModel]: enable, start/end time and
+ * The Do-Not-Disturb schedule wiring in [NotificationSettingsViewModel]: enable, start/end time and
  * per-day intents all drive the durable [NotificationPreferencesStore] through the pure
  * `DndWindow` helpers without clobbering the other notification toggles.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class SettingsViewModelDndTest {
+class NotificationSettingsViewModelDndTest {
 
     private val dispatcher = StandardTestDispatcher()
 
@@ -46,15 +46,8 @@ class SettingsViewModelDndTest {
 
     private fun vm(
         notificationStore: NotificationPreferencesStore = InMemoryNotificationPreferencesStore(),
-        user: MeeshyUser? = null,
-    ): SettingsViewModel {
-        val session = mockk<SessionRepository>()
-        every { session.currentUser } returns MutableStateFlow(user)
-        return SettingsViewModel(
-            sessionRepository = session,
-            userRepository = mockk<UserRepository>(relaxed = true),
-            themeStore = InMemoryThemeStore(),
-            interfaceLanguageStore = InMemoryInterfaceLanguageStore(),
+    ): NotificationSettingsViewModel {
+        return NotificationSettingsViewModel(
             notificationPreferencesStore = notificationStore,
             notificationPreferencesSyncRepository = mockk(relaxed = true),
             workManager = mockk(relaxed = true),

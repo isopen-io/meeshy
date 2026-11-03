@@ -26,7 +26,7 @@ import java.time.OffsetDateTime
 
 /** A quiet-hours edit records the device's UTC offset so the gateway reads the window in LOCAL time. */
 @OptIn(ExperimentalCoroutinesApi::class)
-class SettingsViewModelDndOffsetTest {
+class NotificationSettingsViewModelDndOffsetTest {
 
     private val dispatcher = StandardTestDispatcher()
 
@@ -40,14 +40,8 @@ class SettingsViewModelDndOffsetTest {
         Dispatchers.resetMain()
     }
 
-    private fun vm(store: InMemoryNotificationPreferencesStore): SettingsViewModel {
-        val session = mockk<SessionRepository>()
-        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
-        return SettingsViewModel(
-            sessionRepository = session,
-            userRepository = mockk<UserRepository>(relaxed = true),
-            themeStore = InMemoryThemeStore(),
-            interfaceLanguageStore = InMemoryInterfaceLanguageStore(),
+    private fun vm(store: InMemoryNotificationPreferencesStore): NotificationSettingsViewModel {
+        return NotificationSettingsViewModel(
             notificationPreferencesStore = store,
             notificationPreferencesSyncRepository = mockk(relaxed = true),
             workManager = mockk(relaxed = true),
