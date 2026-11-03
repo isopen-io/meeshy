@@ -1,10 +1,13 @@
 package me.meeshy.core.database
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
+import android.database.sqlite.SQLiteFullException
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import java.io.File
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -22,15 +25,35 @@ class DatabaseOpenerTest {
         diagnostics: DatabaseInitDiagnostics,
         health: StorageHealth,
         build: (Context, DatabaseLocation) -> MeeshyDatabase = ::realBuild,
+        leftovers: DatabaseLeftovers? = null,
     ) = DatabaseOpener(
         context = context,
         diagnostics = diagnostics,
         health = health,
         primaryName = name,
         clock = { 42L },
-        secondaryFile = File(context.cacheDir, "secondary-$name"),
+        secondaryFile = secondary(name),
+        leftovers = leftovers,
         build = build,
     )
+
+    private fun secondary(name: String) = File(context.cacheDir, "secondary-$name")
+
+    private fun existing(name: String): File {
+        realBuild(context, DatabaseLocation.Named(name)).apply {
+            openHelper.writableDatabase
+            close()
+        }
+        return context.getDatabasePath(name)
+    }
+
+    private fun corruptedCopies(file: File): List<String> =
+        file.parentFile?.listFiles().orEmpty().map { it.name }.filter { it.startsWith("${file.name}.corrupted.") }
+
+    private fun failingPrimary(name: String, failure: () -> Throwable) = { ctx: Context, location: DatabaseLocation ->
+        if (location == DatabaseLocation.Named(name)) throw failure()
+        realBuild(ctx, location)
+    }
 
     @Test
     fun `un fichier illisible est mis en quarantaine puis la base est recreee`() {
@@ -69,7 +92,7 @@ class DatabaseOpenerTest {
         val health = StorageHealth()
         val build = { ctx: Context, location: DatabaseLocation ->
             if (location is DatabaseLocation.Named && !location.name.contains("secondary")) {
-                throw SQLiteException("disk full")
+                throw SQLiteFullException("disk full")
             }
             realBuild(ctx, location)
         }
@@ -87,7 +110,7 @@ class DatabaseOpenerTest {
         val diagnostics = DatabaseInitDiagnostics()
         val health = StorageHealth()
         val build = { ctx: Context, location: DatabaseLocation ->
-            if (location is DatabaseLocation.Named) throw SQLiteException("SQLITE_FULL")
+            if (location is DatabaseLocation.Named) throw SQLiteFullException("SQLITE_FULL")
             realBuild(ctx, location)
         }
 
@@ -110,5 +133,103 @@ class DatabaseOpenerTest {
         assertThat(attributes["db.init.stages"]).isEqualTo("FIRST_FAILURE,QUARANTINED")
         assertThat(attributes["db.init.first_failure"]).contains("boom")
         assertThat(DatabaseInitDiagnostics().crashReportAttributes()).isEmpty()
+    }
+
+    @Test
+    fun `une migration absente remonte sans deplacer ni vider la base`() {
+        val file = existing("migration-missing.db")
+        val diagnostics = DatabaseInitDiagnostics()
+        val build = failingPrimary("migration-missing.db") {
+            IllegalStateException("A migration from 15 to 16 was required but not found.")
+        }
+
+        assertThrows(IllegalStateException::class.java) { opener("migration-missing.db", diagnostics, StorageHealth(), build).open() }
+
+        assertThat(file.exists()).isTrue()
+        assertThat(corruptedCopies(file)).isEmpty()
+        assertThat(diagnostics.events.value.map { it.stage }).doesNotContain(DatabaseInitStage.QUARANTINED)
+    }
+
+    @Test
+    fun `une migration dont le SQL echoue remonte sans deplacer la base`() {
+        val file = existing("migration-sql.db")
+        val build = failingPrimary("migration-sql.db") { SQLiteException("no such column: legacyField") }
+
+        assertThrows(SQLiteException::class.java) {
+            opener("migration-sql.db", DatabaseInitDiagnostics(), StorageHealth(), build).open()
+        }
+
+        assertThat(file.exists()).isTrue()
+        assertThat(corruptedCopies(file)).isEmpty()
+    }
+
+    @Test
+    fun `un schema incoherent remonte au lieu d'etre pris pour une corruption`() {
+        val file = existing("tampered.db")
+        SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READWRITE).use {
+            it.execSQL("UPDATE room_master_table SET identity_hash = 'tampered'")
+        }
+
+        assertThrows(IllegalStateException::class.java) {
+            opener("tampered.db", DatabaseInitDiagnostics(), StorageHealth()).open()
+        }
+
+        assertThat(file.exists()).isTrue()
+        assertThat(corruptedCopies(file)).isEmpty()
+    }
+
+    @Test
+    fun `un disque plein laisse la base principale en place et se replie`() {
+        val file = existing("full.db")
+        val health = StorageHealth()
+        val build = failingPrimary("full.db") { SQLiteFullException("database or disk is full") }
+
+        opener("full.db", DatabaseInitDiagnostics(), health, build).open().close()
+
+        assertThat(file.exists()).isTrue()
+        assertThat(corruptedCopies(file)).isEmpty()
+        assertThat(health.current.value).isEqualTo(StorageState.Degraded("secondary"))
+    }
+
+    @Test
+    fun `une ouverture nominale reprend les envois de la base de repli puis la supprime`() = kotlinx.coroutines.runBlocking {
+        val name = "adopts-fallback.db"
+        realBuild(context, DatabaseLocation.Named(secondary(name).absolutePath)).apply {
+            outboxDao().upsert(
+                me.meeshy.core.database.entity.OutboxEntity(
+                    cmid = "c-9", lane = "message:conv", kind = "SEND", targetId = "t", payload = "{}", dependsOn = null,
+                    attempts = 0, state = "PENDING", createdAt = 1L, updatedAt = 1L, ownerId = "u1",
+                ),
+            )
+            close()
+        }
+
+        val database = opener(name, DatabaseInitDiagnostics(), StorageHealth()).open()
+
+        assertThat(database.outboxDao().pendingCount()).isEqualTo(1)
+        assertThat(secondary(name).exists()).isFalse()
+        database.close()
+    }
+
+    @Test
+    fun `les copies de reprise sont purgees, sauf la base ouverte`() {
+        val name = "leftovers.db"
+        val primary = context.getDatabasePath(name).also { it.parentFile?.mkdirs() }
+        File(primary.path + ".corrupted.1").writeText("old")
+        File(primary.path + ".corrupted.1-wal").writeText("old")
+        val secondary = secondary(name).also { it.parentFile?.mkdirs() }
+        secondary.writeText("fallback")
+        val leftovers = DatabaseLeftovers(primary, secondary)
+
+        leftovers.markInUse(secondary)
+        leftovers.purge()
+
+        assertThat(corruptedCopies(primary)).isEmpty()
+        assertThat(secondary.exists()).isTrue()
+
+        leftovers.markInUse(primary)
+        leftovers.purge()
+
+        assertThat(secondary.exists()).isFalse()
     }
 }
