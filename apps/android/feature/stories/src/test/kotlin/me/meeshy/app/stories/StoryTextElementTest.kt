@@ -280,7 +280,11 @@ class StoryTextElementTest {
     @Test
     fun `every style and align exposes a distinct lowercase wire token`() {
         assertThat(StoryTextStyle.entries.map { it.wire })
-            .containsExactly("bold", "neon", "typewriter", "handwriting", "classic")
+            .containsExactly(
+                "bold", "neon", "typewriter", "handwriting", "classic",
+                "calligraphy", "cartoon", "futuristic", "fantasy", "curve", "tag",
+                "italic", "retro", "elegant", "poster", "bubble", "note", "brush",
+            )
         assertThat(StoryTextAlign.entries.map { it.wire })
             .containsExactly("left", "center", "right")
     }
