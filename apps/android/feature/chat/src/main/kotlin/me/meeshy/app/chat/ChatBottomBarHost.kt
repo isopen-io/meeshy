@@ -188,7 +188,7 @@ private fun ChatComposerDock(host: ChatHostContext) {
             onDraftChange = actions.onDraftChange,
             onPickLanguage = actions.onComposerLanguagePicked,
             onSend = actions.send,
-            onClearEffects = actions.clearEffects,
+            onClearEffects = actions.clearPanelEffects,
             onCancelEdit = actions.cancelEdit,
             onCancelReply = actions.cancelReply,
             onRemoveClipboard = actions.removeClipboardContent,

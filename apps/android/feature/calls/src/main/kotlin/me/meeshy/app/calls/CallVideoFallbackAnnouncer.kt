@@ -40,11 +40,16 @@ class AndroidCallVideoFallbackAnnouncer @Inject constructor(
         haptics.play(CallHapticKind.Warning)
         toasts.post(
             CallToast(
-                message = context.getString(R.string.call_video_permission_denied),
+                message = context.getString(messageOf(fallback)),
                 kind = FeedbackKind.Error,
-                onTap = ::openAppSettings,
+                onTap = ::openAppSettings.takeIf { fallback == CallVideoFallback.CameraPermissionDenied },
             ),
         )
+    }
+
+    private fun messageOf(fallback: CallVideoFallback): Int = when (fallback) {
+        CallVideoFallback.DeviceTooHot -> R.string.call_video_thermal_audio_only
+        else -> R.string.call_video_permission_denied
     }
 
     private fun openAppSettings() {

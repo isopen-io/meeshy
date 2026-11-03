@@ -33,6 +33,7 @@ import me.meeshy.app.game.banner.gameProfileSlot
 import me.meeshy.app.navigation.InboundIntentGate
 import me.meeshy.app.navigation.LaunchExtras
 import me.meeshy.app.navigation.LaunchRouter
+import me.meeshy.app.navigation.LaunchShortcut
 import me.meeshy.app.navigation.MeeshyApp
 import me.meeshy.app.navigation.ProvideRootSplash
 import me.meeshy.app.navigation.DeepLinkDispatcher
@@ -372,6 +373,7 @@ internal fun Intent.launchExtras(): LaunchExtras {
         tap = tap,
         routeHint = routeHint,
         composerSeed = getStringExtra(ComposerSeedLaunch.EXTRA_SEED),
+        shortcut = getStringExtra(LaunchShortcut.EXTRA),
     )
 }
 

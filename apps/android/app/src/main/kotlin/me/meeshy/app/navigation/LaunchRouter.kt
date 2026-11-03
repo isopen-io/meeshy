@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.sdk.model.link.EmailLinkSecret
 import me.meeshy.sdk.model.push.PushPayload
 import me.meeshy.sdk.model.push.PushTapDestination
+import me.meeshy.sdk.model.story.StoryNotificationContext
 import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.StoryRoutes
 
@@ -32,7 +33,15 @@ data class LaunchExtras(
     val routeHint: String? = null,
     /** Le jeton d'une graine que le partage entrant a déposée (#13527) : l'hôte du composeur la reprend. */
     val composerSeed: String? = null,
+    /** Le raccourci d'application touché ([LaunchShortcut]) : « Publier un post » ouvre le composeur du fil. */
+    val shortcut: String? = null,
 )
+
+/** Les raccourcis d'application que le lanceur dépose dans l'intent de lancement. */
+object LaunchShortcut {
+    const val EXTRA: String = "me.meeshy.app.extra.LAUNCH_SHORTCUT"
+    const val COMPOSE_POST: String = "compose_post"
+}
 
 /**
  * Pure single source of truth translating an app-launch's notification extras into
@@ -60,12 +69,16 @@ object LaunchRouter {
             autoAnswer = extras.autoAnswer,
             callerId = extras.callerId.orEmpty(),
         )
-        else -> tapRoute(extras, signedInUserId) ?: sharedMediaRoute(extras)
+        else -> tapRoute(extras, signedInUserId) ?: sharedMediaRoute(extras) ?: shortcutRoute(extras)
     }
 
     /** Une bannière posée pour un autre compte que celui connecté n'ouvre rien : pas de navigation fantôme. */
     private fun isForAnotherAccount(recipientUserId: String?, signedInUserId: String?): Boolean =
         recipientUserId != null && signedInUserId != null && recipientUserId != signedInUserId
+
+    /** « Publier un post » : la porte du composeur du fil, celle du placeholder. Un raccourci inconnu n'ouvre rien. */
+    private fun shortcutRoute(extras: LaunchExtras): String? =
+        if (extras.shortcut == LaunchShortcut.COMPOSE_POST) Routes.composer(ComposerOrigin.FeedComposer) else null
 
     /** Un média partagé par une autre app s'ouvre dans l'hôte du composeur ; un jeton sans la forme de ceux du store n'ouvre rien. */
     private fun sharedMediaRoute(extras: LaunchExtras): String? =
@@ -85,7 +98,13 @@ object LaunchRouter {
             is PushTapDestination.Reel -> Routes.reels(destination.postId)
             is PushTapDestination.Story -> Routes.story(destination.userId)
             is PushTapDestination.StoryContent ->
-                StoryRoutes.storyPost(destination.postId, destination.action, destination.commentId, destination.parentCommentId)
+                StoryRoutes.storyTarget(
+                    destination.postId,
+                    destination.action,
+                    destination.commentId,
+                    destination.parentCommentId,
+                    StoryNotificationContext.from(payload, System.currentTimeMillis()),
+                )
             is PushTapDestination.Mood -> Routes.moodSpotlight(destination.statusId)
             is PushTapDestination.Profile -> Routes.profile(destination.userId)
             PushTapDestination.Notifications -> Routes.NOTIFICATIONS
@@ -185,7 +204,10 @@ object LaunchRouter {
      * montre déjà son écran.
      */
     fun onCreateRoute(route: String?, restored: Boolean): String? =
-        route.takeUnless { restored && (opensWithoutSession(it) || CallRoute.isCallRoute(it) || isSharedMediaRoute(it)) }
+        route.takeUnless { restored && (opensWithoutSession(it) || CallRoute.isCallRoute(it) || isSharedMediaRoute(it) || isFeedComposerRoute(it)) }
+
+    /** Le raccourci « Publier un post » est à usage unique : une activité recréée ne rouvre pas un composeur déjà présenté. */
+    private fun isFeedComposerRoute(route: String?): Boolean = route == Routes.composer(ComposerOrigin.FeedComposer)
 
     /** La graine d'un partage est à usage unique : une activité recréée ne rouvre pas un composeur sur un média déjà repris (#13527). */
     private fun isSharedMediaRoute(route: String?): Boolean = route?.startsWith("composer?origin=share") == true
