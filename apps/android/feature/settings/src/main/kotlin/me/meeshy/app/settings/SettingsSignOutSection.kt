@@ -2,7 +2,11 @@ package me.meeshy.app.settings
 
 import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,15 +32,18 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 
 @Composable
-internal fun SettingsSignOutButton(onClick: () -> Unit) {
+internal fun SettingsSignOutButton(enabled: Boolean, onClick: () -> Unit) {
     val error = MeeshyPalette.Error
-    val shape = RoundedCornerShape(MeeshyRadius.xxl)
+    val hint = stringResource(R.string.settings_logout_hint)
+    val shape = RoundedCornerShape(MeeshyRadius.lg)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .clickable(role = Role.Button, onClick = onClick)
-            .background(error.copy(alpha = 0.1f))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .background(error.copy(alpha = 0.08f))
+            .border(1.dp, error.copy(alpha = 0.25f), shape)
+            .semantics { stateDescription = hint }
             .padding(vertical = MeeshySpacing.md),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
