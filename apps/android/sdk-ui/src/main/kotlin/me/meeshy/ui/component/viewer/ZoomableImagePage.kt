@@ -39,6 +39,7 @@ import coil.request.ImageRequest
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import me.meeshy.sdk.model.fullscreen.FullscreenVideoGestures
 import me.meeshy.sdk.model.fullscreen.ImageViewerDismissLaw
 import me.meeshy.sdk.model.fullscreen.ImageViewerDismissOutcome
