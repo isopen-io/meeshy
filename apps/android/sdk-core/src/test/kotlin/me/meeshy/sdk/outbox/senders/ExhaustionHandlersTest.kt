@@ -2,6 +2,7 @@ package me.meeshy.sdk.outbox.senders
 
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.confirmVerified
 import io.mockk.mockk
 import io.mockk.verify
@@ -108,11 +109,15 @@ class ExhaustionHandlersTest {
     }
 
     @Test
-    fun `an exhausted delete for everyone refreshes the conversation of its lane, so the message comes back`() = runTest {
+    fun `an exhausted delete for everyone lifts its tombstone then refreshes the conversation, so the message comes back`() = runTest {
         DeleteMessageHandler(mockk<MessageApi>(), messageRepository)
             .onExhausted(outboxRow(OutboxKind.DELETE_MESSAGE, targetId = "m1", lane = OutboxLanes.forMessage("c1")))
 
-        coVerify(exactly = 1) { messageRepository.refresh("c1") }
+        coVerifyOrder {
+            messageRepository.markUndeleted("m1", null)
+            messageRepository.refresh("c1")
+        }
+        coVerify(exactly = 0) { messageRepository.confirmDeletion(any()) }
     }
 
     @Test
@@ -154,7 +159,7 @@ class ExhaustionHandlersTest {
             OutboxKind.EDIT_MESSAGE to EditMessageHandler(messageApi, senderJson),
             OutboxKind.READ_RECEIPT to ReadReceiptHandler(conversationApi),
             OutboxKind.MARK_UNREAD to MarkUnreadHandler(conversationApi),
-            OutboxKind.UPDATE_CONVERSATION_PREFS to UpdateConversationPrefsHandler(conversationApi, senderJson),
+            OutboxKind.UPDATE_CONVERSATION_PREFS to UpdateConversationPrefsHandler(conversationApi, senderJson, io.mockk.mockk(relaxed = true), io.mockk.mockk(relaxed = true), me.meeshy.sdk.outbox.UserStateRollbackEvents()),
             OutboxKind.PUBLISH_STORY to PublishStoryHandler(postApi, outboxRepository, senderJson, mockk(relaxed = true), mockk(relaxed = true)),
         )
 

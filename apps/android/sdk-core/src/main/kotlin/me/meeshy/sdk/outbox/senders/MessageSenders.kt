@@ -95,9 +95,10 @@ internal object PlaintextRefusal {
 }
 
 /**
- * `DELETE_MESSAGE`: deletes the message for everyone. An exhausted deletion (refused in clear for an end-to-end
- * conversation, #13790, or retries spent) refreshes the conversation of its lane, so the tombstone gives way to the
- * server's message.
+ * `DELETE_MESSAGE`: deletes the message for everyone. Only an ACCEPTED deletion lets the end-to-end plaintext leave the
+ * vault (#14656, iOS `confirmDeletion`). An exhausted deletion (refused in clear for an end-to-end conversation, #13790,
+ * or retries spent) lifts its optimistic tombstone — the plaintext, never erased, reads again — then refreshes the
+ * conversation of its lane, so the bubble gives way to the server's message.
  */
 public class DeleteMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
@@ -105,10 +106,14 @@ public class DeleteMessageHandler @Inject constructor(
     private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ) : OutboxKindHandler {
 
-    override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { messageApi.delete(row.targetId) }.toSendResult(PlaintextRefusal.laneConversation(row.lane), ledger)
+    override suspend fun send(row: OutboxEntity): SendResult {
+        val result = apiCall { messageApi.delete(row.targetId) }.toSendResult(PlaintextRefusal.laneConversation(row.lane), ledger)
+        if (result == SendResult.Success) messageRepository.confirmDeletion(row.targetId)
+        return result
+    }
 
     override suspend fun onExhausted(row: OutboxEntity) {
+        messageRepository.markUndeleted(row.targetId)
         PlaintextRefusal.laneConversation(row.lane)?.let { messageRepository.refresh(it) }
     }
 }

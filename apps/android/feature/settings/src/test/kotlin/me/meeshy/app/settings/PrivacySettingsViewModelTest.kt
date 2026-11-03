@@ -272,7 +272,7 @@ class PrivacySettingsViewModelTest {
         advanceUntilIdle()
 
         listOf(
-            PrivacyToggle.BLOCK_SCREENSHOTS, PrivacyToggle.SAVE_MEDIA_TO_GALLERY,
+            PrivacyToggle.BLOCK_SCREENSHOTS,
             PrivacyToggle.SHARE_USAGE_DATA, PrivacyToggle.ALLOW_CONTACT_REQUESTS,
             PrivacyToggle.ALLOW_GROUP_INVITES,
         ).forEach { vm.setToggle(it, !PrivacyCatalog.isEnabled(store.preferences.value, it)) }

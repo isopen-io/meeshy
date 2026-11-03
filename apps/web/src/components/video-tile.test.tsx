@@ -78,9 +78,37 @@ function mount(attachment: Attachment, solo: boolean, onExpand: () => void): HTM
   return container;
 }
 
+describe('VideoTile — une vidéo de moins de 100 Ko arrive avec la bulle (#14639)', () => {
+  const setOnline = (online: boolean): void => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => online });
+  };
+
+  afterEach(() => {
+    setOnline(true);
+  });
+
+  test('99 999 octets en ligne : preload="auto"', () => {
+    setOnline(true);
+    const el = mount({ ...video, fileSize: 99_999 }, true, () => {});
+    expect(el.querySelector('video')?.getAttribute('preload')).toBe('auto');
+  });
+
+  test('102 400 octets : preload="none", le fichier attend le premier ▶︎', () => {
+    setOnline(true);
+    const el = mount({ ...video, fileSize: 102_400 }, true, () => {});
+    expect(el.querySelector('video')?.getAttribute('preload')).toBe('none');
+  });
+
+  test('hors ligne, même légère : preload="none"', () => {
+    setOnline(false);
+    const el = mount({ ...video, fileSize: 5_000 }, true, () => {});
+    expect(el.querySelector('video')?.getAttribute('preload')).toBe('none');
+  });
+});
+
 describe('VideoTile — la vignette et la lecture inline (#6221)', () => {
   test('<video preload="none" playsinline> avec le poster et la source servis', () => {
-    const el = mount(video, true, () => {});
+    const el = mount({ ...video, fileSize: 2_000_000 }, true, () => {});
     const videoEl = el.querySelector('video')!;
     expect(videoEl.getAttribute('preload')).toBe('none');
     expect(videoEl.hasAttribute('playsinline') || (videoEl as unknown as { playsInline: boolean }).playsInline).toBeTruthy();

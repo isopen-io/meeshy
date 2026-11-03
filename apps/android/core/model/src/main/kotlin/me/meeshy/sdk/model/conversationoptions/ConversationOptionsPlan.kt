@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.isDirect
  *   soi et n'est pas déjà bloqué.
  * - [toggleArchive] : absent quand la passerelle IMPOSE l'archive.
  * - [deleteForMe] : « Supprimer pour moi » — une participation active d'un compte.
+ * - [obsolete] : « Rendre obsolète » (#14645) — la loi `obsolete` de la rangée, administrateur seulement.
  */
 data class ConversationOptionsPlan(
     val share: Boolean,
@@ -26,6 +27,7 @@ data class ConversationOptionsPlan(
     val blockUserId: String?,
     val toggleArchive: Boolean,
     val deleteForMe: Boolean,
+    val obsolete: Boolean = false,
 ) {
     companion object {
         private const val CREATOR_ROLE = "creator"
@@ -49,6 +51,7 @@ data class ConversationOptionsPlan(
                 blockUserId = peerUserId.takeIf { blockable },
                 toggleArchive = capabilities.canToggleArchive,
                 deleteForMe = capabilities.removal != null,
+                obsolete = capabilities.obsolete,
             )
         }
     }

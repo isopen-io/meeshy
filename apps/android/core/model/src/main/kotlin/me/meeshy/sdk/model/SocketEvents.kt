@@ -185,8 +185,8 @@ data class AttachmentUpdatedEvent(
 
 /**
  * `conversation:encryption-changed` (#12522) — la bascule du régime d'une conversation. Aucun
- * contenu n'y voyage. L'Android natif n'en retient que l'ACTIVATION du bout en bout (#12956) : une
- * rétrogradation annoncée est ignorée (#12949).
+ * contenu n'y voyage. Tous les modes repeignent la conversation en cache (#13794) ; l'activation du bout en
+ * bout scelle en plus le registre (#12956), et une rétrogradation annoncée est ignorée (#12949).
  */
 @Serializable
 data class ConversationEncryptionChangedSocketEvent(
@@ -428,6 +428,27 @@ data class ConversationClosedSocketEvent(
     val conversationId: String,
     val closedBy: String,
     val closedAt: String? = null,
+)
+
+/**
+ * `conversation:obsoleted` (#14645) — la conversation a été rendue OBSOLÈTE : son contenu n'est plus
+ * lisible et ses données partent après [purgeAfter]. Toujours précédé de [ConversationClosedSocketEvent]
+ * (les anciens clients la retirent par celui-là) ; les deux retirent la ligne et ferment le fil.
+ */
+@Serializable
+data class ConversationObsoletedSocketEvent(
+    val conversationId: String,
+    val obsoletedBy: String? = null,
+    val obsoletedAt: String? = null,
+    val purgeAfter: String? = null,
+)
+
+/** La réponse de `DELETE /conversations/:id/obsolete` (#14645), idempotente : un second appel rend les mêmes dates. */
+@Serializable
+data class ConversationObsoleted(
+    val conversationId: String,
+    val obsoletedAt: String? = null,
+    val purgeAfter: String? = null,
 )
 
 @Serializable

@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.category.CategoryRepository
+import me.meeshy.sdk.conversation.ConversationObsoleting
 import me.meeshy.sdk.conversation.ConversationPreferenceActions
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.PreferenceWrite
@@ -25,6 +26,7 @@ import me.meeshy.sdk.friend.BlockActionCoordinator
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
+import me.meeshy.sdk.model.ConversationObsoleted
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
@@ -53,12 +55,16 @@ class ConversationOptionsViewModelTest {
         val conversations: ConversationRepository,
         val preferences: ConversationPreferenceActions,
         val blocker: BlockActionCoordinator,
+        val obsoleted: MutableList<String>,
     )
 
     private fun conversation(type: String = "group", prefs: ApiConversationPreferences = ApiConversationPreferences()) =
         ApiConversation(id = "c1", identifier = "c1", type = type, isActive = true, currentUserRole = "member", preferences = prefs)
 
-    private fun fixture(conversation: ApiConversation = conversation()): Fixture {
+    private fun fixture(
+        conversation: ApiConversation = conversation(),
+        obsoleteAnswer: NetworkResult<ConversationObsoleted> = NetworkResult.Success(ConversationObsoleted("c1")),
+    ): Fixture {
         val stream = MutableStateFlow<ApiConversation?>(conversation)
         val conversations = mockk<ConversationRepository>(relaxed = true)
         every { conversations.conversationStream("c1") } returns stream
@@ -75,8 +81,10 @@ class ConversationOptionsViewModelTest {
         every { session.currentUser } returns MutableStateFlow(
             MeeshyUser(id = "me", username = "me", displayName = "Me", role = "USER", isAnonymous = false),
         )
-        val vm = ConversationOptionsViewModel(conversations, categories, preferences, blocker, BlockCache(), session)
-        return Fixture(vm, stream, conversations, preferences, blocker)
+        val obsoleted = mutableListOf<String>()
+        val obsoleter = ConversationObsoleting { id -> obsoleted += id; obsoleteAnswer }
+        val vm = ConversationOptionsViewModel(conversations, categories, preferences, blocker, BlockCache(), session, obsoleter)
+        return Fixture(vm, stream, conversations, preferences, blocker, obsoleted)
     }
 
     @Test
@@ -268,5 +276,32 @@ class ConversationOptionsViewModelTest {
 
         coVerify { f.blocker.block("peer") }
         assertThat(f.vm.state.value.exit).isEqualTo(ConversationOptionsExit.BLOCKED)
+    }
+
+    @Test
+    fun `making the conversation obsolete closes the info once the gateway agreed`() = runTest(dispatcher) {
+        val f = fixture(conversation().copy(currentUserRole = "creator"))
+        f.vm.start("c1", null)
+        advanceUntilIdle()
+        assertThat(f.vm.state.value.plan?.obsolete).isTrue()
+
+        f.vm.makeObsolete()
+        advanceUntilIdle()
+
+        assertThat(f.obsoleted).containsExactly("c1")
+        assertThat(f.vm.state.value.exit).isEqualTo(ConversationOptionsExit.OBSOLETED)
+    }
+
+    @Test
+    fun `a refused obsolescence keeps the info open and says so`() = runTest(dispatcher) {
+        val f = fixture(obsoleteAnswer = NetworkResult.Failure(ApiError(message = "Admin role required")))
+        f.vm.start("c1", null)
+        advanceUntilIdle()
+
+        f.vm.makeObsolete()
+        advanceUntilIdle()
+
+        assertThat(f.vm.state.value.exit).isNull()
+        assertThat(f.vm.state.value.error).isEqualTo(ConversationOptionsError.OBSOLETE)
     }
 }

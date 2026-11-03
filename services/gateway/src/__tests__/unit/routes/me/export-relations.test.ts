@@ -26,6 +26,7 @@ const BORN = new Date('2026-08-01T00:00:00.000Z');
 const ROSE = new Date('2026-09-01T00:00:00.000Z');
 const OTHER_DROP = new Date('2026-10-01T00:00:00.000Z');
 const DAY = new Date('2026-10-20T00:00:00.000Z');
+const WITHDRAWN = new Date('2026-10-15T00:00:00.000Z');
 
 const zeroCounts = (side: 'Low' | 'High') =>
   Object.fromEntries(['Message', 'Reaction', 'PostView', 'Comment', 'Share', 'StoryReply', 'Mention', 'Call', 'Audio'].map((kind) => [`by${side}${kind}`, 0]));
@@ -68,7 +69,7 @@ function relationTables() {
       interactionDay({ userLowId: THIRD, userHighId: STRANGER, low: { byLowMessage: 555 } }),
     ]),
     relationFeatureSetting: table([
-      { ownerId: ME, otherId: OTHER, listeningTitleShared: true, locationShared: false, locationHistoryShared: false, proximityShared: true, consentedAt: ROSE },
+      { ownerId: ME, otherId: OTHER, listeningTitleShared: true, locationShared: false, locationHistoryShared: false, proximityShared: true, consentedAt: ROSE, locationWithdrawnAt: WITHDRAWN },
       { ownerId: OTHER, otherId: ME, listeningTitleShared: false, locationShared: true, locationHistoryShared: true, proximityShared: false, consentedAt: OTHER_DROP },
     ]),
   };
@@ -124,6 +125,7 @@ describe('GET /export?types=relations', () => {
       {
         userId: OTHER, listeningTitleShared: true, locationShared: false, locationHistoryShared: false, proximityShared: true,
         consentedAt: ROSE.toISOString(),
+        withdrawnAt: { listeningTitleShared: null, locationShared: WITHDRAWN.toISOString(), locationHistoryShared: null, proximityShared: null },
       },
     ]);
     expect(relations.hasMore).toEqual({ links: false, interactionDays: false, consents: false });

@@ -9,6 +9,7 @@ import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import type { Conversation } from '@/lib/api/types';
 import { departureStore, requestDeparture } from '@/lib/conversation-departure';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadConversationManageCatalog } from '@/lib/i18n-conversation-manage-catalog';
 import { setInterfaceLanguage } from '@/lib/interface-language';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -72,6 +73,7 @@ beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadInterfaceCatalog('fr');
+  await loadConversationManageCatalog('fr');
 });
 afterAll(async () => {
   await act(async () => {});
@@ -235,5 +237,31 @@ describe('les sept langues', () => {
     await settle();
     expect(document.querySelector('[data-departure-failure]')?.textContent).toContain("Couldn't leave the conversation.");
     await setInterfaceLanguage('fr');
+  });
+});
+
+describe('rendre une conversation obsolète (#14645)', () => {
+  test('la confirmation dit que tous la perdent et que le contenu sera effacé', () => {
+    const queryClient = clientWith(['a', 'b']);
+    mount({ queryClient, reply: { ok: true, data: {} } });
+    act(() => requestDeparture({ conversationId: 'b', kind: 'obsolete', returnToList: false }));
+
+    expect(dialog()?.querySelector('h2')?.textContent).toBe('Rendre la conversation obsolète ?');
+    expect(dialog()?.textContent).toContain('Conversation b — Elle disparaîtra pour tous les participants.');
+    expect(dialog()?.querySelector('[data-confirm="confirm"]')?.textContent).toBe('Rendre obsolète');
+  });
+
+  test('confirmer retire la rangée et appelle DELETE …/obsolete ; un refus la ramène et le dit', async () => {
+    const queryClient = clientWith(['a', 'b']);
+    const { calls } = mount({ queryClient, reply: { ok: false, status: 403, error: 'forbidden' } });
+    act(() => requestDeparture({ conversationId: 'b', kind: 'obsolete', returnToList: false }));
+
+    click('[data-confirm="confirm"]');
+    expect(listed(queryClient)).toEqual(['a']);
+    await settle();
+
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(['DELETE /api/v1/conversations/b/obsolete']);
+    expect(listed(queryClient)).toEqual(['a', 'b']);
+    expect(document.querySelector('[data-departure-failure]')?.textContent).toContain('Impossible de rendre la conversation obsolète.');
   });
 });

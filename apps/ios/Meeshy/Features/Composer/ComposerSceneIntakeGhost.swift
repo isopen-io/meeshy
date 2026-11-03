@@ -7,8 +7,8 @@ import MeeshyUI
 ///
 /// Posé sur la CARTE par `ComposerSceneSurface` : il la couvre quand le média
 /// en fondera le fond, sinon il se centre là où le prochain objet se posera.
-/// La vignette d'une photo dès qu'elle est lisible (#13906), sinon une forme
-/// neutre — toujours pour une vidéo, comme Android —, son anneau, ce qu'il dit,
+/// La vignette d'une photo ou d'une vidéo dès qu'elle est lisible (#13906),
+/// sinon une forme neutre — toujours pour un sticker —, son anneau, ce qu'il dit,
 /// et ✕ dessous pour annuler. Un échec ne garde de lui qu'une ligne discrète au bas de
 /// la carte, avec « Réessayer ».
 struct ComposerSceneIntakeGhost: View {

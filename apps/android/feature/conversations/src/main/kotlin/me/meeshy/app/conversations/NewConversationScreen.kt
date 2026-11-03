@@ -57,8 +57,6 @@ import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
-import me.meeshy.ui.component.chrome.leadingNavigationIcon
-import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,10 +80,7 @@ fun NewConversationScreen(
                 title = { Text(stringResource(R.string.new_conversation_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(
-                            leadingNavigationIcon(),
-                            contentDescription = leadingNavigationLabel(stringResource(R.string.new_conversation_back)),
-                        )
+                        Icon(MeeshyIcons.Close, contentDescription = stringResource(R.string.new_conversation_close))
                     }
                 },
                 actions = {
@@ -101,19 +96,12 @@ fun NewConversationScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            if (state.selected.isNotEmpty()) {
-                SelectedChips(
-                    selected = state.selected,
-                    onRemove = viewModel::toggleSelection,
-                )
-            }
-
             if (state.isGroup) {
                 OutlinedTextField(
                     value = state.groupTitle,
                     onValueChange = viewModel::onGroupTitleChange,
                     singleLine = true,
-                    label = { Text(stringResource(R.string.new_conversation_group_title)) },
+                    placeholder = { Text(stringResource(R.string.new_conversation_group_title)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
@@ -121,6 +109,13 @@ fun NewConversationScreen(
             }
 
             if (state.selected.isNotEmpty()) {
+                SelectedChips(
+                    selected = state.selected,
+                    onRemove = viewModel::toggleSelection,
+                )
+            }
+
+            if (state.showsEncryption) {
                 NewConversationEncryptionSection(
                     offer = state.encryptionOffer,
                     checked = state.encryptionMode,
@@ -133,7 +128,7 @@ fun NewConversationScreen(
                 value = state.query,
                 onValueChange = viewModel::onQueryChange,
                 singleLine = true,
-                label = { Text(stringResource(R.string.new_conversation_search_hint)) },
+                placeholder = { Text(stringResource(R.string.new_conversation_search_hint)) },
                 trailingIcon = {
                     if (state.query.isNotEmpty()) {
                         IconButton(onClick = { viewModel.onQueryChange("") }) {

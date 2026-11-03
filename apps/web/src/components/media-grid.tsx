@@ -3,7 +3,9 @@ import { memo, useContext, useState } from 'react';
 
 import type { Attachment } from '@/lib/api/types';
 import { attachmentPictureSrcSets, attachmentSrc, sizesFor } from '@/lib/api/media-url';
+import { feedImageLoading } from '@/lib/media/feed-media-preload';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
+import { useOnline } from '@/lib/net/online';
 import { electDescription } from '@/lib/view/media';
 import { kindOf } from '@/lib/view/message';
 import {
@@ -69,6 +71,7 @@ export function ImageTile({
   const srcSet = sources.webp;
   const sizes = sizesFor(MEDIA_GRID_MAX_WIDTH);
   const placeholder = thumbHashPlaceholder(attachment.thumbHash);
+  const loading = feedImageLoading({ sizeBytes: attachment.fileSize, online: useOnline() });
 
   const img = attachment.fileUrl === '' ? null : (
     <ServedPicture avifSrcSet={sources.avif} sizes={sizes}>
@@ -81,7 +84,7 @@ export function ImageTile({
         {...(lang !== undefined ? { lang } : {})}
         {...(attachment.width !== undefined ? { width: attachment.width } : {})}
         {...(attachment.height !== undefined ? { height: attachment.height } : {})}
-        loading="lazy"
+        loading={loading}
         decoding="async"
         className="absolute inset-0 size-full object-cover"
         onError={() => setFailed(true)}
@@ -391,6 +394,7 @@ function GridCellImage({
   const sources = attachmentPictureSrcSets(attachment);
   const srcSet = sources.webp;
   const placeholder = thumbHashPlaceholder(attachment.thumbHash);
+  const loading = feedImageLoading({ sizeBytes: attachment.fileSize, online: useOnline() });
 
   return (
     <button
@@ -415,7 +419,7 @@ function GridCellImage({
             alt={described.text}
             hidden={failed}
             {...(lang !== undefined ? { lang } : {})}
-            loading="lazy"
+            loading={loading}
             decoding="async"
             className="absolute inset-0 size-full object-cover"
             onError={() => setFailed(true)}

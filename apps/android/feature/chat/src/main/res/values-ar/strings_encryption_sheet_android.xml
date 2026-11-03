@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="encryption_e2ee_unavailable_here">لا يمكن بعد تفعيل التشفير التام بين الطرفين من هذا الهاتف: فهو لا يقرأ ولا يكتب الرسائل المشفّرة تشفيرًا تامًا، ولن تتمكن من الكتابة هنا.</string>
+    <string name="encryption_e2ee_direct_only_here">على هذا الهاتف، لا يتوفر التشفير من طرف إلى طرف إلا للمحادثات الثنائية: لا يمكن بعد تشفير مجموعة من طرف إلى طرف من هنا.</string>
     <string name="encryption_irreversible_refused">لا يمكن إيقاف التشفير التام بين الطرفين. للتحدث بدونه، ابدأ محادثة جديدة.</string>
     <string name="encryption_action_failed">تعذّر إجراء التغيير. حاول مرة أخرى.</string>
     <string name="encryption_offline">أنت غير متصل: أعد الاتصال لقراءة التشفير أو تغييره.</string>

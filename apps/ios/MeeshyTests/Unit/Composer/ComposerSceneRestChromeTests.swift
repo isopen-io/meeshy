@@ -64,8 +64,10 @@ final class ComposerSceneRestChromeTests: XCTestCase {
     func test_column_scrollsWhenItOverflows() throws {
         let chrome = try ComposerSceneArrangementTests.source("ComposerSceneOverlayChrome.swift")
         XCTAssertTrue(chrome.contains("ViewThatFits(in: .vertical)"), "la colonne se mesure à la hauteur libre")
-        XCTAssertTrue(chrome.contains("ScrollView(.vertical, showsIndicators: false) { toolButtons }"),
-                      "au-delà, elle défile")
+        XCTAssertTrue(chrome.contains("bodyButtons.modifier(ComposerScrollEdgeCue())"),
+                      "au-delà, ses outils défilent, le pied restant posé (#14622)")
+        let defilement = try ComposerSceneArrangementTests.source("ComposerScrollEdgeCue.swift")
+        XCTAssertTrue(defilement.contains("ScrollView(.vertical, showsIndicators: false)"), "le défilement est vertical")
     }
 
     func test_tools_chaqueBoutonAUnLibelleNonVide() {

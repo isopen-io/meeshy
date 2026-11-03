@@ -147,6 +147,7 @@ internal fun StoryForegroundLayer(
     rewindWhenInactive: Boolean = false,
     onAudioFocusLost: () -> Unit = {},
     players: Boolean = true,
+    holdsAudioFocus: Boolean = true,
 ) {
     if (media.isVideo && !players && restingPosterKind(media.posterUrl, media.thumbHash) == RestingPosterKind.NONE) return
     val animated = media.animated(playheadSeconds)
@@ -189,6 +190,8 @@ internal fun StoryForegroundLayer(
                 sourceStartMs = media.sourceWindow?.startMs,
                 sourceEndMs = media.sourceWindow?.endMs,
                 onAudioFocusLost = onAudioFocusLost,
+                holdsAudioFocus = holdsAudioFocus,
+                textured = true,
             )
         } else {
             Box(layerModifier) {

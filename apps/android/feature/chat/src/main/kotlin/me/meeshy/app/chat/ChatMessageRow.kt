@@ -126,7 +126,7 @@ internal fun ChatMessageRow(
     val reacts = PlainSignalAdmission.offers(LocalChatSignalClearance.current)
     val replyLabel = stringResource(R.string.chat_action_reply)
     val forwardLabel = stringResource(R.string.chat_action_forward)
-    val callbacks = remember(bubble, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel, reacts) {
+    val callbacks = remember(bubble, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel, reacts, canWrite) {
         BubbleCallbacks(
             onLongPress = { actions.onLongPress(messageId) },
             onReactionClick = { emoji: String -> actions.onReactionClick(messageId, emoji) }.takeIf { reacts },
@@ -145,6 +145,7 @@ internal fun ChatMessageRow(
                 ?.let { postId -> { actions.onStoryCitationOpen(postId) } },
             onFlagTap = { code -> actions.onFlagTap(messageId, code) },
             onRetry = { actions.onRetry(messageId) },
+            onSayHi = { actions.onReply(messageId) }.takeIf { canWrite && bubble.isArrivalsNotice },
             onAddReaction = { actions.onAddReaction(messageId) }.takeIf { reacts },
             onSenderTap = if (bubble.senderProfile != null) {
                 { actions.onSenderTap(bubble) }

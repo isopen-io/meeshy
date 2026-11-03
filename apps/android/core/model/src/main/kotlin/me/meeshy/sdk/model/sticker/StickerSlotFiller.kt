@@ -20,6 +20,10 @@ object StickerSlotFiller {
     const val DATE: String = "date"
     /** Les mots de l'auteur : le seul emplacement de PROSE. */
     const val TEXT: String = "text"
+    /** Le nom du lieu — ou, à défaut, son adresse. */
+    const val PLACE_NAME: String = "placeName"
+    /** Le détail sous le nom ; vide quand le nom a déjà pris l'adresse. */
+    const val PLACE_DETAIL: String = "placeDetail"
 
     fun timeSlots(instant: Instant, zone: ZoneId, locale: Locale): Map<String, String> {
         val local = instant.atZone(zone)

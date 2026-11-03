@@ -46,7 +46,7 @@ class ConversationSendersTest {
 
     @Test
     fun `conversation prefs sends the whole snapshot field by field`() = runTest {
-        val handler = UpdateConversationPrefsHandler(conversationApi, senderJson)
+        val handler = UpdateConversationPrefsHandler(conversationApi, senderJson, io.mockk.mockk(relaxed = true), io.mockk.mockk(relaxed = true), me.meeshy.sdk.outbox.UserStateRollbackEvents())
         val snapshot = ConversationPrefsPayload(
             isPinned = true,
             isMuted = false,
@@ -79,7 +79,7 @@ class ConversationSendersTest {
 
     @Test
     fun `conversation prefs leaves the untouched optional fields unset`() = runTest {
-        val handler = UpdateConversationPrefsHandler(conversationApi, senderJson)
+        val handler = UpdateConversationPrefsHandler(conversationApi, senderJson, io.mockk.mockk(relaxed = true), io.mockk.mockk(relaxed = true), me.meeshy.sdk.outbox.UserStateRollbackEvents())
         val snapshot = ConversationPrefsPayload(
             isPinned = false,
             isMuted = true,
@@ -103,7 +103,7 @@ class ConversationSendersTest {
 
     @Test
     fun `conversation prefs that remove the category send an explicit null on the wire`() = runTest {
-        val handler = UpdateConversationPrefsHandler(conversationApi, senderJson)
+        val handler = UpdateConversationPrefsHandler(conversationApi, senderJson, io.mockk.mockk(relaxed = true), io.mockk.mockk(relaxed = true), me.meeshy.sdk.outbox.UserStateRollbackEvents())
         val snapshot = ConversationPrefsPayload(
             isPinned = false,
             isMuted = false,
@@ -122,7 +122,7 @@ class ConversationSendersTest {
 
     @Test
     fun `conversation prefs that keep the category untouched omit it on the wire`() = runTest {
-        val handler = UpdateConversationPrefsHandler(conversationApi, senderJson)
+        val handler = UpdateConversationPrefsHandler(conversationApi, senderJson, io.mockk.mockk(relaxed = true), io.mockk.mockk(relaxed = true), me.meeshy.sdk.outbox.UserStateRollbackEvents())
         val snapshot = ConversationPrefsPayload(isPinned = true, isMuted = false, isArchived = false, mentionsOnly = false)
         val sent = io.mockk.slot<ConversationPreferencesUpdate>()
         coEvery { conversationApi.updatePreferences("c1", capture(sent)) } returns accepted(Unit)
@@ -135,7 +135,7 @@ class ConversationSendersTest {
 
     @Test
     fun `conversation prefs with an undecodable payload fails permanently`() = runTest {
-        val handler = UpdateConversationPrefsHandler(conversationApi, senderJson)
+        val handler = UpdateConversationPrefsHandler(conversationApi, senderJson, io.mockk.mockk(relaxed = true), io.mockk.mockk(relaxed = true), me.meeshy.sdk.outbox.UserStateRollbackEvents())
 
         val result = handler.send(outboxRow(OutboxKind.UPDATE_CONVERSATION_PREFS, payload = "{}"))
 

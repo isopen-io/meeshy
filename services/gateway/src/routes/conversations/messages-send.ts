@@ -35,6 +35,7 @@ import {
   libsignalSendComplete,
   LIBSIGNAL_SEND_ISSUE,
   toEncryptedPayload,
+  toDeviceLayer,
 } from '../../validation/encryption-envelope.js';
 import { MENTIONED_USER_IDS_SHAPE } from '../../validation/mention-list.js';
 import { EPHEMERAL_DURATION_SHAPE } from '../../validation/ephemeral-duration.js';
@@ -452,6 +453,8 @@ export function registerSendMessageRoute(
         // faisait mentir le `!` puis écrivait le message EN CLAIR. Le schéma
         // refuse désormais le second cas ; ici on sert le premier.
         encryptedPayload: toEncryptedPayload(bodyResult.data, { sessionId: authRequest.authContext.sessionId ?? null }),
+        // #14369 — la couche appareil d'un envoi hybride, à côté du clair.
+        deviceLayer: toDeviceLayer(bodyResult.data, { sessionId: authRequest.authContext.sessionId ?? null }),
         metadata: {
           source: 'rest' as const,
           requestId: request.id

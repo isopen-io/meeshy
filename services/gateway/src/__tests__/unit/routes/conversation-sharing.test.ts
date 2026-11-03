@@ -5,7 +5,6 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 const mockResolveConversationId = jest.fn<any>();
 const mockGenerateUniqueShareLinkId = jest.fn<any>().mockResolvedValue('mshy_TestLnk1');
 const mockEnsureUniqueShareLinkIdentifier = jest.fn<any>().mockResolvedValue('mshy_unique');
-
 const mockSendSuccess = jest.fn<any>((reply: any, data: any) => {
   reply._body = { success: true, data };
   return reply;
@@ -39,6 +38,7 @@ const mockSendError = jest.fn<any>((reply: any, status: any, msg: any) => {
   return reply;
 });
 
+jest.mock('../../../services/messaging/messageRequests', () => ({ ...jest.requireActual<object>('../../../services/messaging/messageRequests'), decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })) }));
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));

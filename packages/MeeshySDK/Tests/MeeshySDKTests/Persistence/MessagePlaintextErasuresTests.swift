@@ -167,12 +167,11 @@ final class MessagePlaintextErasuresTests: XCTestCase {
 
     func test_theMigration_recordsTheTombstonesAlreadyStored() throws {
         let queue = try DatabaseQueue()
-        var migrator = DatabaseMigrator()
-        migrator.register(Array(MessageDatabaseMigrations.all.dropLast(2)))
-        try migrator.migrate(queue)
+        try MessageDatabaseMigrations.migrate(queue, upTo: "messages_e2ee_plaintext_erasures_v2")
         var tombstone = sealedRow(localId: "srv_19", serverId: "srv_19")
         tombstone.deletedAt = Date()
-        try insert(tombstone, into: queue)
+        let stored = tombstone
+        try queue.write { db in try stored.insertAsOfStoredSchema(db) }
 
         try MessageDatabaseMigrations.runAll(on: queue)
 

@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.model.JoinNoticePresentation
 import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.BubbleStickerSpec
 import me.meeshy.sdk.model.MessageEffects
@@ -117,6 +118,14 @@ public data class BubbleContent(
      * `ApiMessage.isSystemMessage` (`messageSource == "system"`).
      */
     val isSystem: Boolean = false,
+    /**
+     * Pour un avis d'arrivée (`metadata.kind == "member-joined"`) : la présentation décidée par
+     * [JoinNoticePresentation] (nom, @handle, badge « sans compte », règles du lien). Null pour
+     * tout autre message ; [text] reste alors le repli à rendre.
+     */
+    val joinNotice: JoinNoticePresentation? = null,
+    /** Vrai pour la ligne d'arrivées groupées : elle propose « dis-leur salut » ([BubbleCallbacks.onSayHi]). */
+    val isArrivalsNotice: Boolean = false,
     /** Number of video attachments (read separately from images by the accessibility label). */
     val videoCount: Int = 0,
     val contactCards: List<BubbleContactCard> = emptyList(),
@@ -137,6 +146,11 @@ public data class BubbleContent(
      * where it reads — never the gateway's `[Encrypted]` literal, never a piece.
      */
     val isEndToEndSealed: Boolean = false,
+    /**
+     * End-to-end encrypted and opened on THIS device (#14591): its text shows, read from the device's vault, but it never
+     * leaves as clear — no forward, as on iOS (the server has no plaintext of it).
+     */
+    val isEndToEndOpened: Boolean = false,
     /**
      * The server already reads this row — written in clear (or server-encrypted) before end-to-end was turned on (#13804):
      * deleting it for everyone keeps its clear route, as the gateway judges the erasure on the row. Closed by default.

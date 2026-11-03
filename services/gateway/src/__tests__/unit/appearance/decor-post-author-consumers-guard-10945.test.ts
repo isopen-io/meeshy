@@ -30,6 +30,8 @@ const REVIEWED = [
   'services/attachments/media-processing/ready-listener.ts',
   'services/posts/PostAudioService.ts',
   'services/posts/postIncludes.ts',
+  // #14620 — la recherche de posts lit par `postInclude` et sert chaque ligne par `withMentions(…, reader)`.
+  'services/search/globalPostSearch.ts',
 ];
 
 const sources = (dir: string): string[] =>

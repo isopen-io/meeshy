@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import me.meeshy.app.chat.AppShareSheetHost
 import me.meeshy.app.chat.UniversalComposerHost
+import me.meeshy.app.settings.LocationSharingSettingsSheet
 import me.meeshy.app.chat.export.CommentCardExportSheet
 import me.meeshy.app.feed.CommentCardExporter
 import me.meeshy.app.feed.LocalCommentCardExporter
@@ -77,7 +78,7 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
     // « Imager » un commentaire peint sa carte par l'atelier des conversations, que le fil ne connaît pas (#13922).
     val commentCardExport: CommentCardExporter = remember { { key, card, onDismiss -> CommentCardExportSheet(key, card, onDismiss) } }
     // Les commentaires s'écrivent dans le composeur des conversations, réglé pour un commentaire (#14265).
-    val universalComposer: UniversalComposer = remember { { spec, modifier -> UniversalComposerHost(spec, modifier) } }
+    val universalComposer: UniversalComposer = remember { { spec, modifier -> UniversalComposerHost(spec, modifier, locationSettingsSheet = { accent, onDismiss -> LocationSharingSettingsSheet(accent = accent, onDismiss = onDismiss) }) } }
     // Sa porte sticker ouvre la feuille de la scène des stories, que la conversation ne connaît pas (#14320).
     val composerStickerSheet: ComposerStickerSheet = remember { { onPick, onDismiss -> ConversationStickerSheet(onPick, onDismiss) } }
     // Toucher une story republiée l'ouvre en plein écran, comme iOS : le lecteur de stories de son auteur, pas la fiche du post.

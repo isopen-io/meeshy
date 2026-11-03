@@ -122,6 +122,7 @@ describe('LensRow — le favori et les entrées d’iOS', () => {
       'Archiver',
       'Quitter',
       'Supprimer',
+      'Rendre obsolète',
     ]);
     act(() => entry('Détails')?.click());
     openMenu();

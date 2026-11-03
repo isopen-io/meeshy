@@ -78,7 +78,8 @@ extension MeeshyComposerHost {
             sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
             format: selectedFormat,
             stage: sceneCameraStage,
-            toolIsOpen: sceneToolOwnsScreen) else { return nil }
+            toolIsOpen: sceneToolOwnsScreen,
+            mediaIsEntering: sceneIntake?.isPreparing == true) else { return nil }
         return ComposerSceneQuickCapture.hint(format: selectedFormat)
     }
 }

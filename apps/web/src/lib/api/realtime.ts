@@ -6,6 +6,7 @@ import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 import { createSocketIOClient } from '@/lib/net/socket-io-factory';
 import { bridgeBannerRevocations } from '@/lib/notifications/banner-revocation';
 import { navigate } from '@/lib/router';
+import { href } from '@/routes/route-table';
 import { outboxStore } from '@/lib/send/outbox-store';
 
 import { endRevokedSession } from './account-caches';
@@ -29,6 +30,7 @@ import { createLiveSocketWatchers } from './live-socket-watchers';
 import { sendAttachmentReaction } from './attachment-reaction-socket';
 import { setTypingEmitter } from './typing-emit';
 import { keepRealtimeConnection } from './realtime-identity';
+import { leaveThreadOfGoneConversation } from './realtime-conversation-gone';
 import { relaunchConversationList } from './realtime-thread-catch-up';
 import { sessionStore } from './session';
 import { createRealtimeConnection, type RealtimeConnection } from './socket';
@@ -163,6 +165,13 @@ const liveConnection = keepRealtimeConnection<RealtimeConnection>({
       onAccountDeleted: retireDeletedAccountLater,
       account,
       onGuestAccessEnded: (reason) => endGuestAccess({ reason, store: sessionStore, end: endRevokedSession, navigate }),
+      onConversationGone: (conversationId) =>
+        leaveThreadOfGoneConversation(conversationId, {
+          pathname: window.location.pathname,
+          threadPath: (id) => href('thread', { conversation: id }),
+          listPath: href('list'),
+          go: (path) => navigate(path, true),
+        }),
     }),
   onChange: (next) => {
     connection = next;

@@ -167,7 +167,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
         XCTAssertEqual(sut.searchText, "")
         XCTAssertEqual(sut.selectedTab, .messages)
         XCTAssertTrue(sut.messageResults.isEmpty)
-        XCTAssertTrue(sut.conversationResults.isEmpty)
+        XCTAssertTrue(sut.postResults.isEmpty)
         XCTAssertTrue(sut.userResults.isEmpty)
         XCTAssertFalse(sut.isSearching)
         XCTAssertFalse(sut.hasSearched)
@@ -228,7 +228,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
         await sut.performSearch(query: "fail")
 
         XCTAssertTrue(sut.messageResults.isEmpty)
-        XCTAssertTrue(sut.conversationResults.isEmpty)
+        XCTAssertTrue(sut.postResults.isEmpty)
         XCTAssertTrue(sut.userResults.isEmpty)
         XCTAssertTrue(sut.hasSearched)
     }
@@ -415,7 +415,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.userCount, 3)
         XCTAssertEqual(sut.messageCount, 0)
-        XCTAssertEqual(sut.conversationCount, 0)
+        XCTAssertEqual(sut.postCount, 0)
         XCTAssertEqual(sut.totalResultCount, 3)
     }
 
@@ -633,128 +633,15 @@ final class GlobalSearchViewModelTests: XCTestCase {
 
     // MARK: - Helpers
 
-    // MARK: - Prisme Linguistique de la ligne de resultat
-
-    /// `GET /conversations/search` sert `lastMessageTranslations` /
-    /// `lastMessageOriginalLanguage` au meme titre que `GET /conversations`.
-    /// La ligne de resultat de recherche EST une ligne de conversation : elle
-    /// doit rendre le meme texte que `ThemedConversationRow`, qui resout via
-    /// `resolvedLastMessagePreview`. Avant ce correctif elle rendait
-    /// `lastMessagePreview` brut — donc la langue de l'expediteur.
-    private func stubConversationSearch(
-        on mockAPI: MockAPIClientForApp,
-        translations: String,
-        originalLanguage: String
-    ) {
-        let response: APIResponse<[APIConversation]> = JSONStub.decode("""
-        {"success":true,"data":[{
-          "id":"conv-prisme-1","type":"group","title":"Prisme","createdAt":"2026-01-01T00:00:00Z",
-          "lastMessage":{"id":"msg-1","content":"Hello everyone","createdAt":"2026-01-01T00:00:00Z"},
-          "lastMessageTranslations":\(translations),
-          "lastMessageOriginalLanguage":"\(originalLanguage)"
-        }]}
-        """)
-        mockAPI.stub("/conversations/search", result: response)
-    }
-
-    func test_searchConversations_appliesPrismeToRemoteResultPreview() async throws {
-        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
-        mockAuthManager.simulateLoggedIn(
-            user: MeeshyUser(id: "user-001", username: "testuser", systemLanguage: "fr")
-        )
-        mockUserService.searchUsersResult = .success([])
-        stubConversationSearch(
-            on: mockAPI,
-            translations: #"{"fr":"Bonjour tout le monde"}"#,
-            originalLanguage: "en"
-        )
-
-        await sut.performSearch(query: "prisme")
-
-        XCTAssertEqual(
-            sut.conversationResults.first?.lastMessagePreview, "Bonjour tout le monde",
-            "la ligne de resultat doit rendre la langue primaire du lecteur, pas l'original"
-        )
-    }
-
-    func test_searchConversations_keepsOriginalPreviewWhenNoPreferredTranslation() async throws {
-        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
-        mockAuthManager.simulateLoggedIn(
-            user: MeeshyUser(id: "user-001", username: "testuser", systemLanguage: "fr")
-        )
-        mockUserService.searchUsersResult = .success([])
-        // `es` existe mais n'appartient pas au prisme du lecteur : regle #1 du
-        // Prisme — ne JAMAIS retomber sur une traduction quelconque.
-        stubConversationSearch(
-            on: mockAPI,
-            translations: #"{"es":"Hola a todos"}"#,
-            originalLanguage: "en"
-        )
-
-        await sut.performSearch(query: "prisme")
-
-        XCTAssertEqual(
-            sut.conversationResults.first?.lastMessagePreview, "Hello everyone",
-            "aucune traduction du prisme servie => l'original, jamais une langue tierce"
-        )
-    }
-
-    func test_searchConversations_originalLanguageCompetesAtItsOwnRank() async throws {
-        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
-        // Prisme ["fr", "en"] : la langue d'origine (en) occupe le RANG 2. Elle
-        // ne doit jamais court-circuiter la langue primaire (regle #3, cycle 62).
-        mockAuthManager.simulateLoggedIn(
-            user: MeeshyUser(
-                id: "user-001", username: "testuser",
-                systemLanguage: "fr", regionalLanguage: "en"
-            )
-        )
-        mockUserService.searchUsersResult = .success([])
-        stubConversationSearch(
-            on: mockAPI,
-            translations: #"{"fr":"Bonjour tout le monde"}"#,
-            originalLanguage: "en"
-        )
-
-        await sut.performSearch(query: "prisme")
-
-        XCTAssertEqual(
-            sut.conversationResults.first?.lastMessagePreview, "Bonjour tout le monde",
-            "la langue d'origine au rang 2 ne retrograde pas la langue primaire"
-        )
-    }
-
-    /// #9622 — la ligne de résultat de conversation est un aperçu publié HORS
-    /// du fil : le texte d'une flamme à durée, que le serveur sert, n'y paraît
-    /// pas ; seul son libellé de protection.
-    func test_searchConversations_timedFlameLastMessage_showsItsProtectionLabel_neverItsText() async throws {
-        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
-        mockAuthManager.simulateLoggedIn(
-            user: MeeshyUser(id: "user-001", username: "testuser", systemLanguage: "fr")
-        )
-        mockUserService.searchUsersResult = .success([])
-        let response: APIResponse<[APIConversation]> = JSONStub.decode("""
-        {"success":true,"data":[{
-          "id":"conv-flame-1","type":"group","title":"Flamme","createdAt":"2026-01-01T00:00:00Z",
-          "lastMessage":{"id":"msg-1","content":"Rendez-vous secret","effectFlags":1,"ephemeralDuration":30,"createdAt":"2026-01-01T00:00:00Z"}
-        }]}
-        """)
-        mockAPI.stub("/conversations/search", result: response)
-
-        await sut.performSearch(query: "flamme")
-
-        XCTAssertEqual(
-            sut.conversationResults.first?.lastMessagePreview,
-            OutsidePreview.protectionLabel(for: .timedFlame),
-            "le texte d'une flamme à durée ne sort pas par un résultat de recherche"
-        )
-    }
-
     private func stubEmptyConversationSearch(on mockAPI: MockAPIClientForApp) {
         let emptyResponse: APIResponse<[APIConversation]> = JSONStub.decode("""
         {"success":true,"data":[]}
         """)
         mockAPI.stub("/conversations/search", result: emptyResponse)
+        let noPosts: PaginatedAPIResponse<[APIPost]> = JSONStub.decode("""
+        {"success":true,"data":[],"pagination":{"limit":30,"hasMore":false,"nextCursor":null}}
+        """)
+        mockAPI.stub("/posts/search", result: noPosts)
     }
 
     private func stubEmptySearchResults(
@@ -786,7 +673,7 @@ extension UserSearchResult {
 
 // MARK: - MessageRecord Test Factory (local to this test file)
 
-private enum SearchTestMessageRecordFactory {
+enum SearchTestMessageRecordFactory {
     static func make(
         localId: String = "temp_\(UUID().uuidString)",
         conversationId: String = "conv_default",

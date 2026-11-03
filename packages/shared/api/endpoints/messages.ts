@@ -32,3 +32,6 @@ export const byMessageIdStatusDetails = (messageId: string): string => `/api/v1/
 
 /** GET /api/v1/messages/:messageId/translations */
 export const byMessageIdTranslations = (messageId: string): string => `/api/v1/messages/${encodeURIComponent(messageId)}/translations`;
+
+/** GET /api/v1/messages/search */
+export const search = '/api/v1/messages/search';

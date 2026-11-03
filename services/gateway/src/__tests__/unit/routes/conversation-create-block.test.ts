@@ -17,6 +17,14 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 const CREATOR_ID = '507f1f77bcf86cd799439001';
 const OTHER_ID = '507f1f77bcf86cd799439002';
 
+// #14107 — la boîte de demandes a ses propres témoins (`messageRequests.test.ts`) :
+// ici, un tête-à-tête s'ouvre direct, comme avant le lot.
+jest.mock('../../../services/messaging/messageRequests', () => ({
+  ...jest.requireActual<typeof import('../../../services/messaging/messageRequests')>('../../../services/messaging/messageRequests'),
+  decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })),
+  decideOpenings: jest.fn(async () => new Map()),
+}));
+
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
     child: jest.fn(() => ({
