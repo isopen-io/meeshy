@@ -37,10 +37,8 @@ import java.time.LocalDateTime
  * The live in-app banner orchestrator (feature-parity §M). Its dedup is now the SHARED pure
  * [me.meeshy.sdk.model.ToastDedupWindow] (tested exhaustively in `ToastDedupWindowTest`) instead
  * of a private re-implementation, and its clock is the injected [NotificationToastClock] seam —
- * so this proves the STATEFUL wiring: the 2 s dedup window, the active-screen suppression, the
- * push/DND gate, the navigation payload, and the auto-dismiss + its cancellation. Mirrors the
- * `NotificationToastViewModelTest` harness (same socket + clock seams) — the two orchestrators
- * are now consistent by construction.
+ * so this proves the STATEFUL wiring: the 2 s dedup window, the open-conversation suppression, the
+ * per-type gate (push and DND no longer apply to the banner), the navigation payload, and the auto-dismiss + its cancellation. 
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NotificationBannerViewModelTest {
@@ -210,7 +208,7 @@ class NotificationBannerViewModelTest {
     }
 
     @Test
-    fun aNotificationForTheOpenPostIsSuppressed() = runTest(dispatcher.scheduler) {
+    fun aNotificationForTheOpenPostStillSurfaces() = runTest(dispatcher.scheduler) {
         val vm = viewModel()
         runCurrent()
         vm.setActiveContext(conversationId = null, postId = "p1")
@@ -218,18 +216,68 @@ class NotificationBannerViewModelTest {
         received.emit(notification(id = "n1", conversationId = null, postId = "p1"))
         runCurrent()
 
-        assertThat(vm.banner.value).isNull()
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
     }
 
     @Test
-    fun pushDisabledSuppressesTheBanner() = runTest(dispatcher.scheduler) {
+    fun pushDisabledStillShowsTheBanner() = runTest(dispatcher.scheduler) {
         val vm = viewModel(UserNotificationPreferences(pushEnabled = false))
         runCurrent()
 
         received.emit(notification(id = "n1"))
         runCurrent()
 
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
+    }
+
+    @Test
+    fun theDoNotDisturbWindowStillShowsTheBanner() = runTest(dispatcher.scheduler) {
+        val vm = viewModel(
+            UserNotificationPreferences(dndEnabled = true, dndStartTime = "00:00", dndEndTime = "23:59"),
+        )
+        runCurrent()
+
+        received.emit(notification(id = "n1"))
+        runCurrent()
+
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
+    }
+
+    @Test
+    fun aDisabledTypeStaysMute() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(notification(id = "n1", type = "member_left"))
+        runCurrent()
+
         assertThat(vm.banner.value).isNull()
+    }
+
+    @Test
+    fun aConversationOpenInAnotherWindowIsSuppressedToo() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+        vm.setActiveContext(conversationId = "c2", postId = null)
+        vm.setOpenConversations(setOf("c1", "c2"))
+
+        received.emit(notification(id = "n1", conversationId = "c1"))
+        runCurrent()
+
+        assertThat(vm.banner.value).isNull()
+    }
+
+    @Test
+    fun closingTheOtherWindowRestoresTheBanner() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+        vm.setOpenConversations(setOf("c1"))
+        vm.setOpenConversations(emptySet())
+
+        received.emit(notification(id = "n1", conversationId = "c1"))
+        runCurrent()
+
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
     }
 
     @Test
@@ -318,7 +366,7 @@ class NotificationBannerViewModelTest {
     }
 
     @Test
-    fun openingTheShownBannersPostDismissesIt() = runTest(dispatcher.scheduler) {
+    fun openingTheShownBannersPostLeavesIt() = runTest(dispatcher.scheduler) {
         val vm = viewModel()
         runCurrent()
 
@@ -328,7 +376,7 @@ class NotificationBannerViewModelTest {
 
         vm.setActiveContext(conversationId = null, postId = "p1")
 
-        assertThat(vm.banner.value).isNull()
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
     }
 
     @Test

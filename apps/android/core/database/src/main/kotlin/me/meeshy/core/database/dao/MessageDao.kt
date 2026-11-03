@@ -49,6 +49,16 @@ public interface MessageDao {
     )
     public suspend fun endToEndCandidates(conversationId: String, window: Int): List<MessageEntity>
 
+    /**
+     * Le dernier message ACQUITTÉ du fil : celui qu'un résumé de lecture non nommé (passerelle d'avant #7433)
+     * décrit. Un envoi en vol (`sendState` posé, pas d'id serveur) ou supprimé n'est jamais ce message-là.
+     */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId AND sendState IS NULL " +
+            "AND serverId IS NOT NULL AND deletedAt IS NULL ORDER BY createdAt DESC LIMIT 1",
+    )
+    public suspend fun latestAcknowledged(conversationId: String): MessageEntity?
+
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId")
     public suspend fun listForConversation(conversationId: String): List<MessageEntity>
 

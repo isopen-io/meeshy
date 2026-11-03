@@ -266,6 +266,7 @@ public object BubbleContentBuilder {
             exitOffer = message.exitOffer(),
             replyToIsMe = !replyToDeleted && currentUserId != null &&
                 message.replyTo?.senderId == currentUserId,
+            replyToAuthor = quotedAuthorProfile(message.replyTo, quoted?.senderName, currentUserId),
             isSlowSend = isOutgoing && isSlowSend,
             sticker = if (isDeleted || isEndToEndSealed || viewOnceSealed) null else stickerOf(message, visibleAttachments, attachments.images),
             videos = attachments.videos,
@@ -323,7 +324,8 @@ public object BubbleContentBuilder {
                 DeliveryStatusResolver.resolve(
                     deliveredCount = message.deliveredCount,
                     readCount = message.readCount,
-                    recipientCount = recipientCount,
+                    recipientCount = message.recipientCount?.takeIf { it > 0 } ?: recipientCount,
+                    deliveredToAllAt = message.deliveredToAllAt,
                     readByAllAt = message.readByAllAt,
                     showReadReceipts = showReadReceipts,
                 )

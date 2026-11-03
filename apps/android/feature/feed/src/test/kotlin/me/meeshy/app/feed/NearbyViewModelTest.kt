@@ -250,6 +250,39 @@ class NearbyViewModelTest {
     }
 
     @Test
+    fun `onAwaitingAccess waits for the gesture without a denied state or a spinner`() = runTest {
+        val vm = viewModel()
+        vm.onAwaitingAccess()
+
+        val s = vm.state.value
+        assertThat(s.awaitingAccess).isTrue()
+        assertThat(s.permissionDenied).isFalse()
+        assertThat(s.isLocating).isFalse()
+    }
+
+    @Test
+    fun `the gesture leaves the waiting state and a refusal draws the denied state`() = runTest {
+        val vm = viewModel()
+        vm.onAwaitingAccess()
+        vm.onLocating()
+        assertThat(vm.state.value.awaitingAccess).isFalse()
+
+        vm.onPermissionDenied()
+
+        assertThat(vm.state.value.permissionDenied).isTrue()
+        assertThat(vm.state.value.awaitingAccess).isFalse()
+    }
+
+    @Test
+    fun `a new attempt after a refusal clears the denied state`() = runTest {
+        val vm = viewModel()
+        vm.onPermissionDenied()
+        vm.onLocating()
+
+        assertThat(vm.state.value.permissionDenied).isFalse()
+    }
+
+    @Test
     fun `onPermissionDenied sets permissionDenied and clears loading`() = runTest {
         val vm = viewModel()
         vm.onPermissionDenied()

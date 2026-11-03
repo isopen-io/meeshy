@@ -2,6 +2,7 @@ package me.meeshy.sdk.model.auth
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
+import java.util.Locale
 
 /**
  * Behavioural spec for [MagicLinkCountdown] and [MagicLinkEmail], the pure
@@ -189,5 +190,44 @@ class MagicLinkCountdownTest {
     @Test
     fun canResend_blockedWhileLoadingEvenWhenExhausted() {
         assertThat(MagicLinkCountdown(remaining = 0, expired = true).canResend(isLoading = true)).isFalse()
+    }
+
+    // --- spoken duration (accessibility) ---
+
+    @Test
+    fun spoken_readsMinutesAndSecondsNotAClock() {
+        assertThat(MagicLinkCountdown(remaining = 272, expired = false).spoken(Locale.ENGLISH))
+            .isEqualTo("4 minutes 32 seconds")
+        assertThat(MagicLinkCountdown(remaining = 272, expired = false).spoken(Locale.FRENCH))
+            .isEqualTo("4 minutes 32 secondes")
+    }
+
+    @Test
+    fun spoken_singularAndWholeMinutes() {
+        assertThat(MagicLinkCountdown(remaining = 61, expired = false).spoken(Locale.ENGLISH))
+            .isEqualTo("1 minute 1 second")
+        assertThat(MagicLinkCountdown(remaining = 300, expired = false).spoken(Locale.ENGLISH))
+            .isEqualTo("5 minutes")
+    }
+
+    // --- resend unlocked as the countdown drains ---
+
+    @Test
+    fun resend_staysBlockedUntilTheLastTickThenUnlocks() {
+        var state = MagicLinkCountdown.start(2)
+        assertThat(state.canResend(isLoading = false)).isFalse()
+        state = state.tick()
+        assertThat(state.canResend(isLoading = false)).isFalse()
+        state = state.tick()
+        assertThat(state.canResend(isLoading = false)).isTrue()
+        assertThat(state.showExpiredWarning).isTrue()
+        assertThat(state.showCountdown).isFalse()
+    }
+
+    @Test
+    fun resend_restartClearsTheExpiredWarningAndBlocksAgain() {
+        val resent = MagicLinkCountdown(remaining = 0, expired = true).let { MagicLinkCountdown.start(300) }
+        assertThat(resent.showExpiredWarning).isFalse()
+        assertThat(resent.canResend(isLoading = false)).isFalse()
     }
 }

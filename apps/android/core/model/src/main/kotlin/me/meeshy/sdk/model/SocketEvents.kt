@@ -467,6 +467,10 @@ data class ReadStatusSummary(
     val totalMembers: Int = 0,
     val deliveredCount: Int = 0,
     val readCount: Int = 0,
+    /** Le message que ce résumé décrit ; `null` d'une passerelle d'avant #7433 (résumé non nommé). */
+    val messageId: String? = null,
+    /** L'instant où le dernier destinataire actif a lu le message ; `null` tant qu'il en manque un. */
+    val readByAllAt: String? = null,
 )
 
 @Serializable

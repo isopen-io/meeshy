@@ -101,8 +101,13 @@
     <string name="bubble_message_deleted">Mensagem excluída</string>
     <string name="bubble_meta_pinned_a11y">Mensagem fixada</string>
     <string name="bubble_protection_after_read">Desaparece após a leitura</string>
+    <string name="bubble_reply_author_hint">Mostra o perfil do autor citado</string>
+    <string name="bubble_reply_media">Mídia</string>
+    <string name="bubble_reply_mood">Humor</string>
+    <string name="bubble_reply_open_media">Abrir a mídia citada</string>
     <string name="bubble_reply_photo">Foto</string>
     <string name="bubble_reply_story">Story</string>
+    <string name="bubble_reply_you">Você</string>
     <string name="bubble_status_delivered">Entregue</string>
     <string name="bubble_status_failed">Falhou</string>
     <string name="bubble_status_pending">Pendente</string>
@@ -114,6 +119,10 @@
     <string name="bubble_story_citation_unavailable">Story indisponível</string>
     <string name="bubble_translated">Traduzido</string>
     <string name="capture_microphone_denied">Microfone negado — o vídeo ficará mudo. Toque para abrir os Ajustes</string>
+    <string name="code_viewer_load_error">Não foi possível carregar o arquivo</string>
+    <string name="code_viewer_loading">Carregando...</string>
+    <string name="code_viewer_loading_file">Carregando arquivo...</string>
+    <string name="code_viewer_more_lines">mais %1$d linhas</string>
     <string name="common_cancel">Cancelar</string>
     <string name="common_clearSearch">Limpar pesquisa</string>
     <string name="common_close">Fechar</string>

@@ -243,6 +243,8 @@
     <string name="conversation_appearance_sheet_title">Fondo y acento</string>
     <string name="conversation_appearance_signature">Signature</string>
     <string name="conversation_encryption_switched_enabled">Cifrado de extremo a extremo activado: los nuevos mensajes se cifran en tus dispositivos.</string>
+    <string name="conversation_info_created_on">Creado el %1$s</string>
+    <string name="conversation_info_muted">Notificaciones desactivadas</string>
     <string name="conversation_info_pinned_see_all">Ver los %1$d mensajes fijados</string>
     <string name="conversation_info_tab_media">Multimedia</string>
     <string name="conversation_info_tab_members">Miembros</string>

@@ -243,6 +243,8 @@
     <string name="conversation_appearance_sheet_title">Fundo e destaque</string>
     <string name="conversation_appearance_signature">Signature</string>
     <string name="conversation_encryption_switched_enabled">Criptografia de ponta a ponta ativada: as novas mensagens são criptografadas nos seus aparelhos.</string>
+    <string name="conversation_info_created_on">Criado em %1$s</string>
+    <string name="conversation_info_muted">Notificações desativadas</string>
     <string name="conversation_info_pinned_see_all">Ver as %1$d mensagens fixadas</string>
     <string name="conversation_info_tab_media">Mídias</string>
     <string name="conversation_info_tab_members">Membros</string>

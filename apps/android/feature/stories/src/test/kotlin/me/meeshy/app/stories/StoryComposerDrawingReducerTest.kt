@@ -2,6 +2,9 @@ package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
+import me.meeshy.sdk.model.StrokeSmoothing
+import me.meeshy.sdk.model.StrokeTool
+import me.meeshy.sdk.model.scene.StrokePoint
 import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.composer.StoryToolMode
 import org.junit.Test
@@ -58,12 +61,107 @@ class StoryComposerDrawingReducerTest {
     }
 
     @Test
-    fun `a tap with fewer than two points is dropped`() {
+    fun `a tap commits a single point disc and no capture at all commits nothing`() {
         val base = StoryComposerUiState()
 
-        val after = StoryComposerDrawingReducer.captured(base, drag.take(1), "k1", 1.0)
+        val tapped = StoryComposerDrawingReducer.captured(base, drag.take(1), "k1", 1.0)
 
-        assertThat(after).isSameInstanceAs(base)
+        assertThat(tapped.deck.selectedSlide.strokes.single().points).hasSize(1)
+        assertThat(StoryComposerDrawingReducer.captured(base, emptyList(), "k2", 1.0)).isSameInstanceAs(base)
+    }
+
+    @Test
+    fun `a captured stroke carries the brush, the smoothing and capture version 1`() {
+        val brush = StoryComposerDrawingReducer.smoothingSelected(
+            StoryComposerDrawingReducer.brushSelected(StoryComposerUiState(), StrokeTool.MARKER),
+            StrokeSmoothing.LINE,
+        )
+
+        val stroke = StoryComposerDrawingReducer.captured(brush, drag, "k1", 1.0).deck.selectedSlide.strokes.single()
+
+        assertThat(stroke.tool).isEqualTo(StrokeTool.MARKER)
+        assertThat(stroke.smoothing).isEqualTo(StrokeSmoothing.LINE)
+        assertThat(stroke.captureVersion).isEqualTo(1)
+    }
+
+    @Test
+    fun `the eraser brush never commits a stroke`() {
+        val eraser = StoryComposerDrawingReducer.brushSelected(StoryComposerUiState(), StrokeTool.ERASER)
+
+        assertThat(StoryComposerDrawingReducer.captured(eraser, drag, "k1", 1.0)).isSameInstanceAs(eraser)
+    }
+
+    @Test
+    fun `erasing removes the grazed stroke and a miss changes nothing`() {
+        val drawn = StoryComposerDrawingReducer.captured(StoryComposerUiState(), drag, "k1", 1.0)
+
+        val missed = StoryComposerDrawingReducer.erased(drawn, listOf(StrokePoint(900.0, 1800.0)))
+        val erased = StoryComposerDrawingReducer.erased(drawn, listOf(StrokePoint(15.0, 20.0)))
+
+        assertThat(missed).isSameInstanceAs(drawn)
+        assertThat(erased.deck.selectedSlide.strokes).isEmpty()
+    }
+
+    @Test
+    fun `redo brings back the undone stroke and a new stroke empties the redo stack`() {
+        val drawn = StoryComposerDrawingReducer.captured(StoryComposerUiState(), drag, "k1", 1.0)
+        val undone = StoryComposerDrawingReducer.undone(drawn)
+
+        assertThat(StoryComposerDrawingReducer.redone(undone).deck.selectedSlide.strokes.map { it.id }).containsExactly("k1")
+        val fresh = StoryComposerDrawingReducer.captured(undone, drag, "k2", 2.0)
+        assertThat(fresh.drawingBoard.canRedo).isFalse()
+    }
+
+    @Test
+    fun `with a stroke selected colour, width and smoothing edit THE STROKE not the brush`() {
+        val drawn = StoryComposerDrawingReducer.captured(StoryComposerUiState(), drag, "k1", 1.0)
+        val selected = StoryComposerDrawingReducer.strokeToolToggled(drawn, "k1", DrawingEditTool.COLOR)
+
+        val edited = StoryComposerDrawingReducer.smoothingSelected(
+            StoryComposerDrawingReducer.widthSelected(StoryComposerDrawingReducer.colorSelected(selected, "FF2E63"), 22.0),
+            StrokeSmoothing.LINE,
+        )
+
+        val stroke = edited.deck.selectedSlide.strokes.single()
+        assertThat(stroke.colorHex).isEqualTo("FF2E63")
+        assertThat(stroke.width).isEqualTo(22.0)
+        assertThat(stroke.smoothing).isEqualTo(StrokeSmoothing.LINE)
+        assertThat(edited.drawColorHex).isEqualTo(StoryDrawingPalette.DEFAULT_COLOR)
+        assertThat(edited.drawWidthDesign).isEqualTo(StoryDrawingPalette.DEFAULT_WIDTH)
+    }
+
+    @Test
+    fun `picking a brush leaves stroke editing and a width is clamped to 1 to 30`() {
+        val drawn = StoryComposerDrawingReducer.captured(StoryComposerUiState(), drag, "k1", 1.0)
+        val selected = StoryComposerDrawingReducer.strokeToolToggled(drawn, "k1", DrawingEditTool.THICKNESS)
+
+        val branched = StoryComposerDrawingReducer.widthSelected(StoryComposerDrawingReducer.brushSelected(selected, StrokeTool.PEN), 80.0)
+
+        assertThat(branched.drawingBoard.selectedStrokeId).isNull()
+        assertThat(branched.drawWidthDesign).isEqualTo(30.0)
+    }
+
+    @Test
+    fun `tapping a stroke tool twice folds the panel and deleting a stroke removes it`() {
+        val drawn = StoryComposerDrawingReducer.captured(StoryComposerUiState(), drag, "k1", 1.0)
+        val open = StoryComposerDrawingReducer.strokeToolToggled(drawn, "k1", DrawingEditTool.SMOOTHING)
+        val folded = StoryComposerDrawingReducer.strokeToolToggled(open, "k1", DrawingEditTool.SMOOTHING)
+
+        assertThat(open.drawingExpandedTool).isEqualTo(DrawingEditTool.SMOOTHING)
+        assertThat(folded.drawingExpandedTool).isNull()
+        assertThat(StoryComposerDrawingReducer.strokeDeleted(folded, "k1").deck.selectedSlide.strokes).isEmpty()
+    }
+
+    @Test
+    fun `finishing frees the tool and lifts the stroke selection and panel`() {
+        val drawn = StoryComposerDrawingReducer.captured(StoryComposerDrawingReducer.entered(StoryComposerUiState()), drag, "k1", 1.0)
+        val editing = StoryComposerDrawingReducer.strokeToolToggled(drawn, "k1", DrawingEditTool.COLOR)
+
+        val done = StoryComposerDrawingReducer.exited(editing)
+
+        assertThat(done.isDrawingActive).isFalse()
+        assertThat(done.drawingBoard.selectedStrokeId).isNull()
+        assertThat(done.drawingExpandedTool).isNull()
     }
 
     @Test
@@ -73,5 +171,29 @@ class StoryComposerDrawingReducerTest {
         val after = StoryComposerDrawingReducer.undone(drawn)
 
         assertThat(after.deck.selectedSlide.strokes).isEmpty()
+    }
+
+    @Test
+    fun `a bubble opens the brush panel, a second tap folds it, and it leaves stroke editing`() {
+        val drawn = StoryComposerDrawingReducer.captured(StoryComposerUiState(), drag, "k1", 1.0)
+        val editing = StoryComposerDrawingReducer.strokeToolToggled(drawn, "k1", DrawingEditTool.COLOR)
+
+        val opened = StoryComposerDrawingReducer.toolToggled(editing, DrawingEditTool.THICKNESS)
+        val folded = StoryComposerDrawingReducer.toolToggled(opened, DrawingEditTool.THICKNESS)
+
+        assertThat(opened.drawingBoard.selectedStrokeId).isNull()
+        assertThat(opened.drawingExpandedTool).isEqualTo(DrawingEditTool.THICKNESS)
+        assertThat(folded.drawingExpandedTool).isNull()
+    }
+
+    @Test
+    fun `drawing a new stroke while one is selected leaves stroke editing`() {
+        val drawn = StoryComposerDrawingReducer.captured(StoryComposerUiState(), drag, "k1", 1.0)
+        val editing = StoryComposerDrawingReducer.strokeToolToggled(drawn, "k1", DrawingEditTool.COLOR)
+
+        val next = StoryComposerDrawingReducer.captured(editing, drag, "k2", 2.0)
+
+        assertThat(next.drawingBoard.selectedStrokeId).isNull()
+        assertThat(next.deck.selectedSlide.strokes.map { it.id }).containsExactly("k1", "k2").inOrder()
     }
 }

@@ -15,6 +15,8 @@
     <string name="auth_login_two_factor_label">Codice di verifica a due fattori</string>
     <string name="auth_login_two_factor_placeholder">Codice di verifica</string>
     <string name="auth_login_two_factor_title">Due fattori</string>
+    <string name="auth_magic_cancel">Annulla</string>
+    <string name="auth_magic_countdown_a11y">Il link scade tra</string>
     <string name="auth_magic_expired">Link scaduto, inviane uno nuovo</string>
     <string name="auth_magic_header">Il tuo indirizzo email</string>
     <string name="auth_magic_how_label">Come funziona</string>
@@ -22,7 +24,9 @@
     <string name="auth_magic_nothing_label">Non hai ricevuto nulla?</string>
     <string name="auth_magic_nothing_text">Controlla la cartella spam: il messaggio potrebbe essere finito lì.</string>
     <string name="auth_magic_resend">Invia di nuovo il link</string>
+    <string name="auth_magic_resend_short">Invia di nuovo</string>
     <string name="auth_magic_send">Ricevi il link</string>
+    <string name="auth_magic_sent_code_and_link">Codice e link inviati a</string>
     <string name="auth_magic_sent_title">Email inviata</string>
     <string name="auth_magic_subtitle">Nessuna password da ricordare: ti inviamo un link via email. Aprilo e hai già effettuato l’accesso.</string>
     <string name="auth_magic_success">Accesso riuscito!</string>
@@ -321,7 +325,10 @@
     <string name="share_link_join_anonymously">Unisciti in anonimo</string>
     <string name="share_link_resume_anonymously">Riprendi in forma anonima</string>
     <string name="signup_back">Indietro</string>
+    <string name="signup_card_code_lead">Inserisci il codice a 6 cifre inviato a %1$s o apri il link ricevuto.</string>
     <string name="signup_card_title">Il tuo account</string>
+    <string name="signup_card_verified">Account convalidato!</string>
+    <string name="signup_card_verified_lead">Tutto pronto: i tuoi contatti ti leggono nella loro lingua.</string>
     <string name="signup_close">Chiudi</string>
     <string name="signup_country_search_hint">Cerca un paese</string>
     <string name="signup_display_name_label">Come dobbiamo chiamarti?</string>
@@ -359,9 +366,11 @@
     <string name="signup_sign_in">Accedi</string>
     <string name="signup_submit_in_progress">Creazione in corso</string>
     <string name="signup_subtitle">Leggerai tutti nella tua lingua.</string>
+    <string name="signup_talk">Parla con gli altri</string>
     <string name="signup_title">Crea il tuo account</string>
     <string name="signup_username_invalid_characters">Solo lettere senza accento, cifre, - e _ — niente spazi.</string>
     <string name="signup_username_too_long">Al massimo %1$d caratteri.</string>
+    <string name="signup_validate_now">Convalida il mio account ora</string>
     <string name="visitor_body">Crea il tuo account o accedi per reagire, commentare e leggere tutto nella tua lingua.</string>
     <string name="visitor_close">Chiudi</string>
     <string name="visitor_failed_body">Impossibile caricare questo contenuto. Controlla la connessione e riprova.</string>

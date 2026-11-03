@@ -125,6 +125,7 @@ class ChatViewModel @Inject constructor(
     private val endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
     private val openConversations: OpenConversationRegistry,
     reactionRows: me.meeshy.sdk.reaction.ReactionRowStore? = null,
+    pendingPreviews: me.meeshy.sdk.media.PendingMediaPreviewing = me.meeshy.sdk.media.PendingMediaPreviewing.None,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -203,6 +204,7 @@ class ChatViewModel @Inject constructor(
      * first conversation emission has been read.
      */
     private val initialUnreadCount = MutableStateFlow<Int?>(null)
+    private var openingCursor = UnreadCursor.of(null, null)
 
     private val screenState = ChatStateAccess(_state)
 
@@ -226,6 +228,7 @@ class ChatViewModel @Inject constructor(
         languageIdentifier = languageIdentifier,
         mentionContacts = mentionContacts,
         endToEnd = endToEnd,
+        pendingPreviews = pendingPreviews,
     )
 
     private val reactions = ChatReactionController(
@@ -285,7 +288,9 @@ class ChatViewModel @Inject constructor(
         // read (which zeroes it), then mark read. The first Room emission carries
         // the current cached value, so this never blocks beyond it.
         viewModelScope.launch {
-            val unread = conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
+            val opening = conversationRepository.conversationStream(conversationId).first()
+            openingCursor = UnreadCursor.of(opening, sessionRepository.currentUser.value?.id)
+            val unread = openingCursor.serverUnreadCount
             initialUnreadCount.value = unread
             if (unread > 0) {
                 withTimeoutOrNull(ReadAcknowledgement.WINDOW_WAIT_MILLIS) { windowAnswered.first { it } }
@@ -299,9 +304,9 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             val count = initialUnreadCount.filterNotNull().first()
             val bubbles = _state.map { it.messages }.first { it.isNotEmpty() }
-            val firstUnread = UnreadMarker.firstUnreadId(bubbles, count)
+            val firstUnread = UnreadMarker.firstUnreadId(bubbles, openingCursor, sessionRepository.currentUser.value?.id)
             _state.update {
-                it.copy(firstUnreadMessageId = firstUnread, unreadBoundaryResolved = true)
+                it.copy(firstUnreadMessageId = firstUnread, unreadAtOpening = count, unreadBoundaryResolved = true)
             }
         }
 
@@ -497,13 +502,7 @@ class ChatViewModel @Inject constructor(
                 messageSocketManager.readStatusUpdated.collectArrived { event ->
                     if (event.conversationId != conversationId) return@collectArrived
                     val ownId = sessionRepository.currentUser.value?.id ?: return@collectArrived
-                    messageRepository.applyReadReceipt(
-                        conversationId = conversationId,
-                        ownSenderId = ownId,
-                        deliveredCount = event.summary.deliveredCount,
-                        readCount = event.summary.readCount,
-                        frontierIso = event.updatedAt,
-                    )
+                    messageRepository.applyReadStatusSummary(conversationId, event.summary, ownId)
                 }
             }
         }

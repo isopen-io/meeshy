@@ -148,6 +148,8 @@ public data class BubbleContent(
     val isBlurred: Boolean = false,
     /** True when the quoted message was written by the current user. */
     val replyToIsMe: Boolean = false,
+    /** La fiche de l'auteur cité (tap sur son nom dans la citation) ; `null` : soi, supprimé ou sans compte. */
+    val replyToAuthor: me.meeshy.sdk.model.profile.ProfileSheetUser? = null,
     /** True when an outgoing message has been in flight long enough to be called slow. */
     val isSlowSend: Boolean = false,
     /** True when a failed send was refused because a file's location cannot be removed (#13550): told, and removed on tap. */

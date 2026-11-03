@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
@@ -92,7 +92,7 @@ class UserSessionsRepositoryTest {
 
         val seen = mutableListOf<CacheResult<UserSessionsPayload>>()
         backgroundScope.launch { rig.repository.stream().collect { seen += it } }
-        advanceUntilIdle()
+        runCurrent()
 
         assertThat((seen.single() as CacheResult.Stale).value).isEqualTo(served)
         assertThat(rig.store.observe().first()).isEqualTo(served)

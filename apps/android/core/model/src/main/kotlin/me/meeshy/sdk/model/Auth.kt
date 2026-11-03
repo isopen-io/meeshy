@@ -112,6 +112,8 @@ data class RegisterResponse(
     val sessionToken: String? = null,
     val expiresIn: Int? = null,
     val phoneOwnershipConflict: Boolean = false,
+    /** Le jeton d'attente (#8083) : il apprend à la carte d'inscription que le lien a été ouvert ailleurs. */
+    val pendingSessionToken: String? = null,
 ) {
     /** La session créée, ou `null` quand la réponse ne porte pas d'identité. */
     fun asSession(): AuthSession? {

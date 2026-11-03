@@ -5,6 +5,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import me.meeshy.sdk.game.OnboardingPresence
 import me.meeshy.sdk.model.auth.EmailProofRules
 import me.meeshy.sdk.net.EmailGateReason
 import me.meeshy.sdk.net.EmailVerificationGateRegistry
@@ -23,6 +24,7 @@ data class EmailGateRequest(val reason: EmailGateReason, val email: String)
  * - « Connue non prouvée » se lit sur l'utilisateur COURANT, sans aller-retour ([EmailProofRules]).
  * - La validation se présente PAR-DESSUS tout : l'écran qui attend sa réponse reste là, son brouillon avec lui.
  * - Toutes les demandes en cours partagent UNE présentation et UN verdict ([settle]).
+ * - L'onboarding garde sa propre carte (#7907) : pendant qu'il est présenté, la demande est refusée sans rien présenter.
  * - Une demande annulée (l'appel a été abandonné) se retire ; la dernière retirée referme la feuille.
  * - Un « validé » ne vaut que pour le compte qui a posé la demande : après un changement de compte, l'action
  *   de l'ancien compte reçoit son refus — rejouée, elle partirait sous les jetons du nouveau.
@@ -31,6 +33,7 @@ data class EmailGateRequest(val reason: EmailGateReason, val email: String)
 class EmailVerificationGateController @Inject constructor(
     private val sessions: SessionRepository,
     registry: EmailVerificationGateRegistry,
+    private val onboarding: OnboardingPresence,
 ) : EmailVerificationGating {
 
     private val lock = Any()
@@ -50,6 +53,7 @@ class EmailVerificationGateController @Inject constructor(
         EmailProofRules.knownUnproven(sessions.currentUser.value, provenUserId)
 
     override suspend fun verifyEmail(reason: EmailGateReason): Boolean {
+        if (onboarding.isPresented.value) return false
         val owner = sessions.currentUser.value
         val email = EmailProofRules.address(owner) ?: return false
         val waiter = Waiter(ownerId = owner?.id, verdict = CompletableDeferred())

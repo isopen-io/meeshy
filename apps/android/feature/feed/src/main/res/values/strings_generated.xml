@@ -140,6 +140,9 @@
     <string name="mood_spotlight_reply_sent">Reply sent</string>
     <string name="mood_spotlight_unavailable">This mood is no longer available</string>
     <string name="nearby_back">Back</string>
+    <string name="nearby_denied_action">Open Settings</string>
+    <string name="nearby_denied_detail">Meeshy has no access to your location. Allow it in Settings, or move the map by hand.</string>
+    <string name="nearby_denied_title">Location not allowed</string>
     <string name="nearby_retry">Try again</string>
     <string name="nearby_title">Nearby</string>
     <string name="post_bookmark_removed">Removed from bookmarks</string>
@@ -178,6 +181,10 @@
         <item quantity="other">View %1$d replies</item>
     </plurals>
     <string name="post_detail_back">Back</string>
+    <string name="post_detail_media_image">Shared image</string>
+    <string name="post_detail_media_more">View all %1$d media</string>
+    <string name="post_detail_media_open_hint">Open full screen</string>
+    <string name="post_detail_media_video">Shared video</string>
     <string name="post_detail_title">Post</string>
     <string name="post_detail_viewers">Views</string>
     <string name="status_bubble_republish">Repost</string>

@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.auth.EmailVerificationGateController
+import me.meeshy.sdk.game.OnboardingPresence
 import me.meeshy.sdk.model.AuthSession
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.auth.LoginOutcome
@@ -43,7 +44,7 @@ class EmailVerificationGateViewModelTest {
     private fun controller(): EmailVerificationGateController {
         val sessions = mockk<SessionRepository>()
         every { sessions.currentUser } returns MutableStateFlow(alice)
-        return EmailVerificationGateController(sessions, EmailVerificationGateRegistry())
+        return EmailVerificationGateController(sessions, EmailVerificationGateRegistry(), OnboardingPresence())
     }
 
     @Test

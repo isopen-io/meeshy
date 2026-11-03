@@ -66,7 +66,10 @@ import me.meeshy.ui.component.focal.FocalIdentityHeader
 import me.meeshy.ui.component.focal.FocalLongMessage
 import me.meeshy.ui.component.focal.LocalFlatRowExpansion
 import me.meeshy.ui.component.focal.FocalMetaColumn
+import me.meeshy.ui.component.focal.FocalQuotedReply
+import me.meeshy.ui.component.focal.FocalQuotedReplyView
 import me.meeshy.ui.component.focal.FocalRowInput
+import me.meeshy.ui.component.focal.FocalStoryCitationQuote
 import me.meeshy.ui.sticker.MessageStickerArtwork
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -336,12 +339,17 @@ private fun FlatContentSections(
             appearanceSeed = content.messageId.hashCode().toLong(),
         ),
     ) {
-        FlatQuote(content, accentColor, callbacks.onReplyPreviewClick)
+        FlatQuote(content, accentColor, callbacks, decor.mentionDisplayNames)
         content.storyReply?.let { story ->
             if (story.isMood) {
                 StoryReplyPreview(story = story, accentColor = accentColor)
             } else {
-                StoryCitationCard(story = story, accentColor = accentColor, onOpen = callbacks.onStoryCitationClick)
+                FocalStoryCitationQuote(
+                    story = story,
+                    railColor = accentColor,
+                    accentColor = accentColor,
+                    onOpen = callbacks.onStoryCitationClick,
+                )
             }
         }
         val sticker = content.drawnSticker
@@ -364,60 +372,36 @@ private fun FlatContentSections(
     }
 }
 
-/** La citation plate : un rail de 2,5 à la couleur de l'auteur cité (l'accent si c'est moi). */
+/** La citation plate : le filet, le nom, le texte cité sur deux lignes, la miniature (iOS `FocalQuotedReplyView`). */
 @Composable
-private fun FlatQuote(content: BubbleContent, accentColor: Color, onClick: (() -> Unit)?) {
+private fun FlatQuote(content: BubbleContent, accentColor: Color, callbacks: BubbleCallbacks, mentionDisplayNames: Map<String, String>?) {
     if (content.replyToText == null && !content.replyToDeleted) return
     val mediaLabel = when (content.replyToMediaKind) {
         ReplyMediaKind.Image -> stringResource(R.string.bubble_reply_photo)
         ReplyMediaKind.File -> stringResource(R.string.bubble_reply_attachment)
         ReplyMediaKind.None -> null
     }
-    val text = content.replyToText?.takeIf { it.isNotBlank() && !content.replyToDeleted }
-        ?: mediaLabel
-        ?: stringResource(R.string.bubble_message_deleted)
-    val railColor = remember(content.replyToIsMe, content.replyToSenderName, accentColor) {
-        if (content.replyToIsMe) {
-            accentColor
-        } else {
-            content.replyToSenderName?.let { hexColor(DynamicColorGenerator.colorForName(it), accentColor) } ?: accentColor
-        }
-    }
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier
-            .height(IntrinsicSize.Min)
-            .let { base ->
-                if (onClick == null || content.replyToId == null) base else base.clickable(onClick = onClick)
-            },
-    ) {
-        Box(
-            modifier = Modifier
-                .width(FlatRowMetrics.quoteRail)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(FlatRowMetrics.quoteRail / 2))
-                .background(railColor),
+    val deletedLabel = stringResource(R.string.bubble_message_deleted)
+    val reply = remember(content.replyToText, content.replyToDeleted, content.replyToSenderName, content.replyToIsMe, content.replyToThumbnailUrl, mediaLabel, deletedLabel) {
+        FocalQuotedReply(
+            authorName = content.replyToSenderName,
+            isMe = content.replyToIsMe,
+            isMood = false,
+            previewText = content.replyToText?.takeIf { it.isNotBlank() && !content.replyToDeleted }
+                ?: if (content.replyToDeleted) deletedLabel else "",
+            mediaLabel = mediaLabel,
+            thumbnailUrl = content.replyToThumbnailUrl.takeUnless { content.replyToDeleted },
         )
-        Column(modifier = Modifier.padding(vertical = 1.dp)) {
-            content.replyToSenderName?.let { name ->
-                Text(
-                    text = name,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = railColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Text(
-                text = text,
-                fontSize = 13.sp,
-                color = MeeshyTheme.tokens.textSecondary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
     }
+    val jump = callbacks.onReplyPreviewClick.takeIf { content.replyToId != null }
+    FocalQuotedReplyView(
+        reply = reply,
+        accentColor = accentColor,
+        mentionDisplayNames = mentionDisplayNames,
+        onJump = jump,
+        onAuthorTap = callbacks.onQuotedAuthorTap.takeIf { content.replyToAuthor != null },
+        onMediaTap = callbacks.onQuotedMediaTap ?: jump,
+    )
 }
 
 /** Texte 15 / 1,42, emoji seul agrandi, ou mention de chiffrement ; un message long s'ouvre sur un extrait. */

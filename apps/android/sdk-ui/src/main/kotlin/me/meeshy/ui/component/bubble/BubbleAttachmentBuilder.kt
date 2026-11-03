@@ -107,7 +107,7 @@ internal object BubbleAttachmentBuilder {
                         durationSeconds = attachment.duration?.let { it / 1000 },
                         sizeBytes = attachment.fileSize,
                         isProtected = attachment.isProtected,
-                        isOnDevice = attachment.fileUrl.isLocalUri(),
+                        isOnDevice = attachment.fileUrl.isLocalUri() || attachment.awaitsUpload,
                         servedConsumption = attachment.currentUserConsumption,
                     )
                 },
@@ -129,7 +129,7 @@ internal object BubbleAttachmentBuilder {
         mediaBaseUrl: String?,
         displayDensity: Float,
     ): List<BubbleImage> {
-        val imageAttachments = visibleAttachments.filter { it.isImage && it.fileUrl != null }
+        val imageAttachments = visibleAttachments.filter { it.isImage && it.paintableUrl != null }
         // La vignette d'une bulle est la plus petite variante qui COUVRE la case, jamais
         // l'original multi-Mo. Un message flouté ou à vue unique garde ses URL d'avant :
         // aucune URL de plus ne part pour un contenu protégé.
@@ -141,11 +141,12 @@ internal object BubbleAttachmentBuilder {
             !effects.has(MessageEffectFlags.BLURRED) &&
             !effects.has(MessageEffectFlags.VIEW_ONCE)
         return imageAttachments
-            .map { attachment ->
+            .mapNotNull { attachment ->
+                val paintable = attachment.paintableUrl ?: return@mapNotNull null
                 val lighterPreview = if (lighterPreviewsAllowed) attachment.lighterPreviewUrl(previewWidthPx) else null
                 BubbleImage(
                     attachmentId = attachment.id,
-                    url = resolveMediaUrl(attachment.fileUrl!!, mediaBaseUrl),
+                    url = resolveMediaUrl(paintable, mediaBaseUrl),
                     thumbnailUrl = (lighterPreview ?: attachment.thumbnailUrl)
                         ?.let { resolveMediaUrl(it, mediaBaseUrl) },
                     width = attachment.width,
@@ -264,6 +265,14 @@ internal object BubbleAttachmentBuilder {
         if (isEncrypted == true || isProtected) return null
         return ImageVariantPicker.lighterPreviewUrl(imageVariants, fileUrl.orEmpty(), width, targetWidthPx)
     }
+
+    /** Le fichier de l'image ; en attente d'envoi, ses octets scellés, l'aperçu local qui le remplace (#15104). */
+    private val ApiMessageAttachment.paintableUrl: String?
+        get() = fileUrl ?: thumbnailUrl?.takeIf { it.isLocalUri() }
+
+    /** En attente d'envoi : ses octets sont scellés sur l'appareil, seul son aperçu local se lit (#15104). */
+    private val ApiMessageAttachment.awaitsUpload: Boolean
+        get() = fileUrl == null && thumbnailUrl.isLocalUri()
 
     private fun String?.isLocalUri(): Boolean = this != null && (startsWith("file://") || startsWith("content://"))
 
