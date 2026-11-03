@@ -29,17 +29,19 @@ public fun SceneCanvas(
     strokes: List<StoryDrawingStroke> = emptyList(),
     events: SceneCanvasEvents = SceneCanvasEvents.None,
     mediaEnvironment: SceneMediaEnvironment = SceneMediaEnvironment.Default,
+    drawingBelowObjects: Boolean = false,
     background: @Composable () -> Unit = {},
 ) {
     Box(modifier.fillMaxSize()) {
         SceneBackdropHost(content = background)
+        if (drawingBelowObjects) SceneDrawingLayer(strokes)
         items.forEach { item ->
             key(item.kind, item.id) {
                 val url = remember(item.signature, mediaEnvironment.isReader) { item.resolvedUrl(mediaUrlOf, mediaEnvironment.isReader) }
                 SceneItemRenderer(remember(item.signature, url) { SceneNode(item, url) }, events, mediaEnvironment)
             }
         }
-        SceneDrawingLayer(strokes)
+        if (!drawingBelowObjects) SceneDrawingLayer(strokes)
     }
 }
 

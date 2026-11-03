@@ -22,7 +22,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
-import me.meeshy.sdk.model.MediaCaptionRule
+import me.meeshy.sdk.model.caption.MediaCaptionLaw
+import me.meeshy.ui.component.viewer.MediaCaptionOverlay
+import androidx.compose.ui.unit.Dp
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -32,36 +34,30 @@ private val RAIL_CLEARANCE = 72.dp
 private val CAPTION_SHADOW = Shadow(color = Color.Black.copy(alpha = 0.65f), offset = Offset(0f, 1f), blurRadius = 6f)
 
 /**
- * La légende d'une story, posée en bas à gauche — iOS `MediaCaptionOverlay` : ombrée
- * plutôt qu'encadrée pour ne pas masquer la composition qu'elle commente, repliée à 15
- * mots au-delà de 30 ([MediaCaptionRule]), dépliée et repliée par « voir plus » /
- * « voir moins ». Elle laisse la bande du rail libre : le bouton de réaction ne la
- * recouvre plus. Chaque story repart repliée.
+ * La légende d'une story, posée en bas à gauche — le [MediaCaptionOverlay] partagé avec les réels :
+ * ombrée plutôt qu'encadrée, repliée à 15 mots au-delà de 30, dépliée dans une fenêtre défilante dont
+ * le tap hors du texte referme sans changer de story. Elle laisse la bande du rail libre et se pose
+ * au-dessus du compositeur épinglé ([bottomInset]). Chaque story repart repliée.
  */
 @Composable
-internal fun StoryCaptionOverlay(text: String, storyId: String, modifier: Modifier = Modifier) {
+internal fun StoryCaptionOverlay(
+    text: String,
+    storyId: String,
+    modifier: Modifier = Modifier,
+    trackedLinks: Map<String, String>? = null,
+    bottomInset: Dp = 0.dp,
+) {
     var expanded by rememberSaveable(storyId) { mutableStateOf(false) }
-    val folded = remember(text) { MediaCaptionRule.collapse(text) }
-    val shown = if (expanded || !folded.isTruncated) text else folded.head + "…"
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(start = MeeshySpacing.lg, end = RAIL_CLEARANCE, bottom = MeeshySpacing.xl),
-    ) {
-        StoryCaptionText(shown)
-        if (folded.isTruncated) {
-            Text(
-                text = stringResource(if (expanded) R.string.stories_caption_see_less else R.string.stories_caption_see_more),
-                color = MeeshyPalette.White,
-                fontWeight = FontWeight.SemiBold,
-                style = MaterialTheme.typography.bodyMedium.copy(shadow = CAPTION_SHADOW),
-                modifier = Modifier
-                    .clickable { expanded = !expanded }
-                    .padding(vertical = MeeshySpacing.sm),
-            )
-        }
-    }
+    MediaCaptionOverlay(
+        caption = text,
+        expanded = expanded,
+        onToggle = { expanded = !expanded },
+        modifier = modifier,
+        trackedLinks = trackedLinks,
+        endInset = RAIL_CLEARANCE,
+        bottomInset = bottomInset,
+        dimsBackgroundWhenExpanded = false,
+    )
 }
 
 /**
@@ -71,7 +67,7 @@ internal fun StoryCaptionOverlay(text: String, storyId: String, modifier: Modifi
  */
 @Composable
 internal fun StoryExportCaption(text: String, modifier: Modifier = Modifier) {
-    val folded = remember(text) { MediaCaptionRule.collapse(text) }
+    val folded = remember(text) { MediaCaptionLaw.collapse(text) }
     StoryCaptionText(
         text = if (folded.isTruncated) folded.head + "…" else text,
         modifier = modifier

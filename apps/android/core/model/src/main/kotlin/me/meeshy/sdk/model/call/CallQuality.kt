@@ -145,6 +145,12 @@ object CallQualityThresholds {
      * watchdog window. Parity with iOS `QualityThresholds.reconnectAttemptBudgetSeconds`.
      */
     const val RECONNECT_ATTEMPT_BUDGET_SECONDS: Double = 10.0
+
+    /**
+     * Cadence (secondes) du moniteur de fiabilité périodique : half-open en `Connected`, chien de garde
+     * ICE/DTLS en `Connecting`. Parité iOS `QualityThresholds.rtpGatePollIntervalSeconds`.
+     */
+    const val RTP_GATE_POLL_INTERVAL_SECONDS: Double = 2.0
 }
 
 /**

@@ -338,14 +338,18 @@ private fun FlatIdentityHeader(content: BubbleContent, onSenderTap: (() -> Unit)
                 else base.clip(RoundedCornerShape(MeeshyRadius.sm)).clickable(onClickLabel = profileLabel, onClick = onSenderTap)
             },
     ) {
-        MeeshyAvatar(
-            name = senderName ?: you,
-            size = FlatRowMetrics.avatar,
-            containerColor = senderColor,
-            imageUrl = content.senderAvatarUrl,
-            presence = rememberPresence(content.senderProfile?.userId),
-            here = rememberConversationHere(content.senderProfile?.userId, content.viewingConversationId),
-        )
+        if (content.senderIsAnonymous) {
+            BubbleSenderGhost(size = FlatRowMetrics.avatar, color = senderColor)
+        } else {
+            MeeshyAvatar(
+                name = senderName ?: you,
+                size = FlatRowMetrics.avatar,
+                containerColor = senderColor,
+                imageUrl = content.senderAvatarUrl,
+                presence = rememberPresence(content.senderProfile?.userId),
+                here = rememberConversationHere(content.senderProfile?.userId, content.viewingConversationId),
+            )
+        }
         Text(
             text = displayName,
             fontSize = 13.sp,

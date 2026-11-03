@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
+import me.meeshy.ui.component.skeleton.skeletonShimmer
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -20,5 +21,5 @@ public fun MeeshySkeletonBox(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(MeeshyRadius.sm),
 ) {
-    Box(modifier = modifier.clip(shape).background(MeeshyTheme.tokens.backgroundTertiary))
+    Box(modifier = modifier.clip(shape).background(MeeshyTheme.tokens.backgroundTertiary).skeletonShimmer())
 }
