@@ -183,6 +183,9 @@ class ChatViewModel @Inject constructor(
      */
     private val bubbleMemo = BubbleMemoCache()
 
+    /** Ce qui retient l'application des enrichissements de la liste : geste en cours, liste endormie. */
+    internal val listGate = ChatListUpdateGate()
+
     /**
      * The cached message window behind the bubbles, mirrored from the cache stream — read
      * by the controllers and the language-explorer projection, which rebuilds live off it
@@ -400,7 +403,7 @@ class ChatViewModel @Inject constructor(
                             }
                         },
                     ),
-                ),
+                ).coalesced(listGate, enriched = ChatUpdateCoalescer::enrichedIds),
                 sessionRepository.currentUser,
                 reactions.ownReactions,
                 translation.showingOriginal,

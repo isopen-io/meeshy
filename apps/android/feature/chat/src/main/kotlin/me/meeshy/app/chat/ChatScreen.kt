@@ -155,6 +155,7 @@ fun ChatScreen(
         landing = landingState,
         composerClosure = composerClosure,
         capabilities = capabilities,
+        listGate = viewModel.listGate,
     )
 
     val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()
