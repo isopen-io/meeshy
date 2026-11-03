@@ -1,6 +1,8 @@
 package me.meeshy.sdk.model.scene
 
 import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.location.PlaceLabels
+import me.meeshy.sdk.model.sticker.StickerSlotFiller
 import me.meeshy.sdk.model.sticker.StickerTemplateCatalog
 import me.meeshy.sdk.model.sticker.StickerTemplateFamily
 
@@ -27,7 +29,7 @@ public object SceneLocationPillMetrics {
         val gap: Double,
     ) {
         /** L'épingle occupe un carré du côté du corps. */
-        val pinSide: Double get() = fontSize
+        public val pinSide: Double get() = fontSize
     }
 
     public data class PillSize(val width: Double, val height: Double)
@@ -60,4 +62,10 @@ public object SceneLocationPillMetrics {
     /** Le gabarit de la famille LIEU que désigne [styleId] ; un autre, ou un inconnu, rend `null` (capsule native). */
     public fun templateId(styleId: String?): String? =
         styleId?.let(StickerTemplateCatalog::template)?.takeIf { it.family == StickerTemplateFamily.LOCATION }?.id
+
+    /** Les emplacements d'un gabarit de lieu : le nom (ou l'adresse, ou [here]) et le détail sous lui, vide s'il n'y en a pas. */
+    public fun slots(place: SharedPlace, here: String): Map<String, String> {
+        val (first, second) = PlaceLabels.infoLines(place.name, place.address)
+        return mapOf(StickerSlotFiller.PLACE_NAME to (first ?: here), StickerSlotFiller.PLACE_DETAIL to second.orEmpty())
+    }
 }

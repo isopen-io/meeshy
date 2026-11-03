@@ -4,8 +4,8 @@ import me.meeshy.sdk.model.StoryLocationObject
 
 /** Un cadre dans l'espace du canevas, en pixels (rotation ignorée : boîte englobante de la cible). */
 public data class SceneTapFrame(val left: Double, val top: Double, val width: Double, val height: Double) {
-    val centerX: Double get() = left + width / 2
-    val centerY: Double get() = top + height / 2
+    public val centerX: Double get() = left + width / 2
+    public val centerY: Double get() = top + height / 2
 }
 
 /**
@@ -25,6 +25,19 @@ public object StoryLocationTapFrame {
     ): SceneTapFrame {
         val measures = SceneLocationPillMetrics.measures(canvasWidth, location.scale)
         val size = SceneLocationPillMetrics.pillSize(measures, textWidth, textHeight, canvasWidth)
+        return ofSize(location, canvasWidth, canvasHeight, size.width, size.height, minimumSide)
+    }
+
+    /** Le cadre d'un badge dont la taille est déjà connue (un gabarit du registre, mesuré par son dessinateur). */
+    public fun ofSize(
+        location: StoryLocationObject,
+        canvasWidth: Double,
+        canvasHeight: Double,
+        badgeWidth: Double,
+        badgeHeight: Double,
+        minimumSide: Double,
+    ): SceneTapFrame {
+        val size = SceneLocationPillMetrics.PillSize(badgeWidth, badgeHeight)
         val centerX = location.x * canvasWidth
         val centerY = location.y * canvasHeight
         val badgeCenterX = centerX - size.width * location.anchor.x + size.width / 2

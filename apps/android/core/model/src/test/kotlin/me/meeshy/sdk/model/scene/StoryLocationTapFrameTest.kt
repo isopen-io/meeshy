@@ -45,4 +45,12 @@ class StoryLocationTapFrameTest {
         assertThat(frame.width).isGreaterThan(400.0)
         assertThat(frame.height).isEqualTo(Math.ceil(28.0 + 50.0))
     }
+
+    @Test
+    fun `la taille d un gabarit deja mesure sert de cadre`() {
+        val frame = StoryLocationTapFrame.ofSize(location(), 1080.0, 1920.0, badgeWidth = 300.0, badgeHeight = 120.0, minimumSide = 48.0)
+        assertThat(frame.width).isEqualTo(300.0)
+        assertThat(frame.height).isEqualTo(120.0)
+        assertThat(frame.centerX).isWithin(1e-9).of(540.0)
+    }
 }

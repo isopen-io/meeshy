@@ -68,4 +68,14 @@ class SceneLocationPillMetricsTest {
         assertThat(SceneLocationPillMetrics.templateId("time.digital")).isNull()
         assertThat(SceneLocationPillMetrics.templateId("location.inconnu")).isNull()
     }
+
+    @Test
+    fun `les emplacements d un gabarit portent le nom puis le detail`() {
+        val slots = SceneLocationPillMetrics.slots(SharedPlace(1.0, 2.0, name = "Louvre", address = "Rue de Rivoli"), "Ici")
+        assertThat(slots).containsExactly("placeName", "Louvre", "placeDetail", "Rue de Rivoli")
+        val unnamed = SceneLocationPillMetrics.slots(SharedPlace(1.0, 2.0, address = "Rue de Rivoli"), "Ici")
+        assertThat(unnamed).containsExactly("placeName", "Rue de Rivoli", "placeDetail", "")
+        val bare = SceneLocationPillMetrics.slots(SharedPlace(1.0, 2.0), "Ici")
+        assertThat(bare).containsExactly("placeName", "Ici", "placeDetail", "")
+    }
 }
