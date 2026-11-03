@@ -3,10 +3,6 @@ package me.meeshy.ui.component.identity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AdminPanelSettings
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +16,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyIconSize
 import me.meeshy.ui.theme.MeeshyPalette
@@ -47,9 +44,9 @@ public enum class RoleBadgeStyle {
 }
 
 private fun RoleBadgeStyle.icon(): ImageVector = when (this) {
-    RoleBadgeStyle.Creator -> Icons.Filled.WorkspacePremium
-    RoleBadgeStyle.Admin -> Icons.Filled.AdminPanelSettings
-    RoleBadgeStyle.Moderator -> Icons.Filled.Shield
+    RoleBadgeStyle.Creator -> MeeshyIcons.Premium
+    RoleBadgeStyle.Admin -> MeeshyIcons.AdminPanel
+    RoleBadgeStyle.Moderator -> MeeshyIcons.ShieldFilled
 }
 
 @Composable
