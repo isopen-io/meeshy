@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -27,6 +28,7 @@ import me.meeshy.sdk.net.api.TwoFactorSetupInfo
 import me.meeshy.sdk.net.api.TwoFactorStatusInfo
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.user.UserRepository
+import me.meeshy.ui.component.auth.AUTH_TEXT_FIELD_FRAME_TAG
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -75,7 +77,7 @@ class SecurityScreensFormWidthTest {
         val viewModel = changePasswordViewModel()
         show { ChangePasswordScreen(onBack = {}, viewModel = viewModel) }
 
-        compose.assertInCenteredFormColumn(hasSetTextAction())
+        compose.assertInCenteredFormColumn(hasTestTag(AUTH_TEXT_FIELD_FRAME_TAG))
     }
 
     @Test
@@ -84,7 +86,7 @@ class SecurityScreensFormWidthTest {
         val viewModel = changePasswordViewModel()
         show { ChangePasswordScreen(onBack = {}, viewModel = viewModel) }
 
-        compose.assertSpansPhoneWidth(hasSetTextAction(), horizontalPadding = MeeshySpacing.lg)
+        compose.assertSpansPhoneWidth(hasTestTag(AUTH_TEXT_FIELD_FRAME_TAG), horizontalPadding = MeeshySpacing.lg)
     }
 
     @Test

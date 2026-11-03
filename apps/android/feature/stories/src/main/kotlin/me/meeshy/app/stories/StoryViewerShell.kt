@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.meeshy.app.feed.PostCommentsViewModel
@@ -66,20 +67,48 @@ internal fun StoryViewerShell(
     var headerHeightPx by remember { mutableIntStateOf(0) }
     var composerHeightPx by remember { mutableIntStateOf(0) }
     val overlayActiveState = rememberUpdatedState(rail.overlayActive)
+    val surfaceOpenState = rememberUpdatedState(
+        StoryReaderSurfaceRules.hasActiveReaderFeature(
+            showLanguageOptions = rail.languageBarVisible,
+            showFullLanguagePicker = state.languageExplorer != null,
+            showEmojiStrip = rail.reactionBarVisible,
+            showFullEmojiPicker = rail.showFullEmojiPicker,
+            showCommentsOverlay = chrome.showComments,
+        ),
+    )
+    val composerEngagedState = rememberUpdatedState(composing)
+    val focusManager = LocalFocusManager.current
+    val nextLabel = stringResource(R.string.stories_viewer_next)
+    val previousLabel = stringResource(R.string.stories_viewer_previous)
     val hasNextGroupState = rememberUpdatedState(state.hasNextGroup)
     val hasPreviousGroupState = rememberUpdatedState(state.hasPreviousGroup)
     StoryCubeEntryOnAuthorChange(cardMotion, authorKey = state.authorUserId, groupIndex = state.groupIndex)
+    StoryCardAppearOnOpen(cardMotion)
+    StoryViewerImmersiveMode()
+    StoryCloseOnStop {
+        viewModel.endCurrentDwell()
+        actions.onClose()
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .storyNavigationActions(nextLabel, previousLabel, onNext = viewModel::advance, onPrevious = viewModel::back)
             .storyCanvasGestures(
                 groupIndex = state.groupIndex,
                 index = state.index,
                 slideCount = state.slides.size,
-                overlayActive = overlayActiveState,
-                onCloseBars = rail::closeBars,
+                surfaceOpen = surfaceOpenState,
+                composerEngaged = composerEngagedState,
+                onCloseSurfaces = {
+                    rail.closeBars()
+                    rail.showFullEmojiPicker = false
+                    chrome.showComments = false
+                    viewModel.closeLanguageExplorer()
+                },
+                onDismissComposer = { focusManager.clearFocus() },
+                onNavigate = haptics::light,
                 viewModel = viewModel,
             )
             .storyCardDrag(
