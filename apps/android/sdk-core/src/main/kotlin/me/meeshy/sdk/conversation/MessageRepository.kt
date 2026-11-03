@@ -109,6 +109,15 @@ class MessageRepository internal constructor(
         limit: Int = MessageHistoryReader.PREVIEW_LIMIT,
     ): List<LocalMessage> = history.recentMessages(conversationId, limit)
 
+    /** Whether the conversation's cached window is still within the messages freshness policy. */
+    suspend fun isCacheFresh(conversationId: String): Boolean = history.isCacheFresh(conversationId)
+
+    /** The aperçu's bounded network read (newest [limit], oldest first, not persisted); `null` on failure. */
+    suspend fun recentMessagesFromNetwork(
+        conversationId: String,
+        limit: Int = MessageHistoryReader.PREVIEW_LIMIT,
+    ): List<ApiMessage>? = history.recentMessagesFromNetwork(conversationId, limit)
+
     /**
      * Backwards pagination: appends the page of messages older than the oldest cached server row
      * to the Room cache. Returns whether more history remains.

@@ -67,6 +67,7 @@ internal fun ConversationContextMenu(
     panelState: ConversationMenuPanelState,
     accent: Color,
     previewMessages: List<LocalMessage>?,
+    previewUnavailable: Boolean,
     previewShowSender: Boolean,
     currentUserId: String?,
     currentUserPrefs: MeeshyUser?,
@@ -98,6 +99,7 @@ internal fun ConversationContextMenu(
             isPinned = isPinned,
             isMuted = isMuted,
             messages = previewMessages,
+            isUnavailable = previewUnavailable,
             isSealed = isLocked,
             showSender = previewShowSender,
             currentUserId = currentUserId,
@@ -258,6 +260,7 @@ private fun ConversationPreviewCard(
     isPinned: Boolean,
     isMuted: Boolean,
     messages: List<LocalMessage>?,
+    isUnavailable: Boolean,
     isSealed: Boolean,
     showSender: Boolean,
     currentUserId: String?,
@@ -317,6 +320,11 @@ private fun ConversationPreviewCard(
                     color = MeeshyTheme.tokens.textMuted,
                 )
             }
+            messages == null && isUnavailable -> Text(
+                text = stringResource(R.string.preview_messages_unavailable),
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textMuted,
+            )
             messages == null -> Text(
                 text = stringResource(R.string.conversations_preview_loading),
                 style = MaterialTheme.typography.bodySmall,

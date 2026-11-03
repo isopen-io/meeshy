@@ -373,6 +373,7 @@
     <string name="new_conversation_selected">Ausgewählt</string>
     <string name="new_conversation_title">Neue Unterhaltung</string>
     <string name="participantProfile_linkExpires">Läuft ab am</string>
+    <string name="preview_messages_unavailable">Nachrichten konnten nicht geladen werden</string>
     <string name="row_a11y_conversation_with">Unterhaltung mit %1$s</string>
     <string name="row_a11y_last_message">letzte Nachricht: %1$s</string>
     <string name="row_a11y_muted">stummgeschaltet</string>

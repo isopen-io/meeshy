@@ -11,7 +11,7 @@ import me.meeshy.sdk.model.ApiConversationLastMessage
  * session has hydrated (mirrors the same-shaped fallback each feature module
  * already keeps locally, e.g. chat's/feed's own `EmptyContentPreferences`).
  */
-private object NoLanguagePreferences : LanguageResolver.ContentLanguagePreferences {
+internal object NoLanguagePreferences : LanguageResolver.ContentLanguagePreferences {
     override val systemLanguage: String? = null
     override val regionalLanguage: String? = null
     override val customDestinationLanguage: String? = null

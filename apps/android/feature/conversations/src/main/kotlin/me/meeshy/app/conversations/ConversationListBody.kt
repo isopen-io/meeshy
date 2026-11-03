@@ -167,6 +167,7 @@ private fun ConversationListRow(
             typingDisplayName = state.typingDisplayNameFor(conversation.id),
             categories = state.categories,
             previewMessages = state.previewFor(conversation.id),
+            previewUnavailable = state.isPreviewUnavailable(conversation.id),
             isLocked = state.isLocked(conversation.id),
             nowMillis = now,
             hasPendingSync = signals.hasPendingSync(conversation.id),
