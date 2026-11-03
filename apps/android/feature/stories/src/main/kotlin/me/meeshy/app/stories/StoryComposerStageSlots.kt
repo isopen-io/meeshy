@@ -84,6 +84,9 @@ internal fun StoryComposerScene(
                 isDrawingActive = state.isDrawingActive,
                 drawColorHex = state.drawColorHex,
                 drawWidthDesign = state.drawWidthDesign,
+                drawTool = state.drawTool,
+                drawSmoothing = state.drawSmoothing,
+                onStrokeErased = { points -> if (viewModel.onEraseGesture(points)) haptics.light() },
                 onStrokeCaptured = viewModel::onStrokeCaptured,
                 onTransform = viewModel::onCanvasTransform,
                 onElementTap = viewModel::onTapTextElement,
@@ -160,22 +163,19 @@ internal fun StoryComposerBottomPanel(
     comparison: LookComparison,
     toolPanel: @Composable () -> Unit,
     onCloseLocal: () -> Unit,
+    zoom: ComposerViewportZoom? = null,
 ) {
     if (panel == StoryScenePanel.TOOL) {
         toolPanel()
         return
     }
+    if (panel == StoryScenePanel.DRAWING) {
+        ComposerDrawingPanel(state, viewModel, zoom)
+        return
+    }
     ScenePanelSurface {
         when (panel) {
-            StoryScenePanel.DRAWING -> StoryDrawingToolbar(
-                activeColorHex = state.drawColorHex,
-                activeWidthDesign = state.drawWidthDesign,
-                canUndo = state.drawingBoard.canUndo,
-                onColorSelected = viewModel::onDrawColorSelected,
-                onWidthSelected = viewModel::onDrawWidthSelected,
-                onUndo = viewModel::onDrawUndo,
-                onDone = viewModel::onExitDrawingMode,
-            )
+            StoryScenePanel.DRAWING -> Unit
             StoryScenePanel.DURATION -> DurationPanel(state, viewModel, onCloseLocal)
             StoryScenePanel.SCENE_EFFECTS -> SceneEffectsDock(state, viewModel)
             StoryScenePanel.TOOL, StoryScenePanel.TEXT, StoryScenePanel.CAPTION -> Unit

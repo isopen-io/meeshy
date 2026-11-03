@@ -93,6 +93,11 @@ data class StoryComposerUiState(
     val drawingBoard: StoryDrawingBoard = StoryDrawingBoard(),
     val drawColorHex: String = StoryDrawingPalette.DEFAULT_COLOR,
     val drawWidthDesign: Double = StoryDrawingPalette.DEFAULT_WIDTH,
+    /** Le pinceau actif (stylo, marqueur, gomme) et son lissage ; un trait sélectionné est édité à leur place. */
+    val drawTool: me.meeshy.sdk.model.StrokeTool = me.meeshy.sdk.model.StrokeTool.PEN,
+    val drawSmoothing: me.meeshy.sdk.model.StrokeSmoothing = me.meeshy.sdk.model.StrokeSmoothing.CURVE,
+    /** Le panneau d'options déplié sous les bulles du dessin ; `null` ⇒ replié. */
+    val drawingExpandedTool: DrawingEditTool? = null,
     val isUploadingMedia: Boolean = false,
     /** Une ligne par média de la sélection en cours d'envoi, avec ses propres octets (#13429). */
     val uploadingMedia: List<MediaUploadProgress> = emptyList(),

@@ -270,4 +270,25 @@ class StoryDrawingBoardTest {
         val board = boardOf("a")
         assertThat(board.resyncedTo(emptyList()).isEmpty).isTrue()
     }
+
+    @Test
+    fun `erase removes the grazed stroke, empties redo and lifts a selection on it`() {
+        val a = StoryDrawingStroke("a", listOf(StoryDrawingStrokePoint(100.0, 100.0), StoryDrawingStrokePoint(400.0, 100.0)), "FFFFFF", 10.0)
+        val b = StoryDrawingStroke("b", listOf(StoryDrawingStrokePoint(100.0, 900.0), StoryDrawingStrokePoint(400.0, 900.0)), "FFFFFF", 10.0)
+        val board = StoryDrawingBoard(strokes = listOf(a, b), redoStack = listOf(a.copy(id = "z")), selectedStrokeId = "a")
+
+        val after = board.erase(listOf(me.meeshy.sdk.model.scene.StrokePoint(200.0, 110.0)))
+
+        assertThat(after.strokes.map { it.id }).containsExactly("b")
+        assertThat(after.redoStack).isEmpty()
+        assertThat(after.selectedStrokeId).isNull()
+    }
+
+    @Test
+    fun `erase that hits nothing keeps the very same board and its redo history`() {
+        val a = StoryDrawingStroke("a", listOf(StoryDrawingStrokePoint(100.0, 100.0)), "FFFFFF", 10.0)
+        val board = StoryDrawingBoard(strokes = listOf(a), redoStack = listOf(a.copy(id = "z")))
+
+        assertThat(board.erase(listOf(me.meeshy.sdk.model.scene.StrokePoint(900.0, 1500.0)))).isSameInstanceAs(board)
+    }
 }
