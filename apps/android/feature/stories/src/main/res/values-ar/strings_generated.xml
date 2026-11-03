@@ -94,6 +94,7 @@
     <string name="composer_object_editor_start">البداية</string>
     <string name="composer_object_editor_window">من %1$s إلى %2$s</string>
     <string name="composer_object_editor_window_permanent">من %1$s إلى النهاية</string>
+    <string name="composer_preupload_uploading">جارٍ الرفع</string>
     <string name="composer_publish_as_post">نشر المنشور</string>
     <string name="composer_publish_as_reel">نشر الريل</string>
     <string name="composer_publish_as_story">نشر القصة</string>
