@@ -316,7 +316,10 @@
     <string name="share_link_join_anonymously">Join anonymously</string>
     <string name="share_link_resume_anonymously">Resume anonymously</string>
     <string name="signup_back">Back</string>
+    <string name="signup_card_code_lead">Enter the 6-digit code sent to %1$s, or open the link you received.</string>
     <string name="signup_card_title">Your account</string>
+    <string name="signup_card_verified">Account verified!</string>
+    <string name="signup_card_verified_lead">You’re all set: people read you in your language.</string>
     <string name="signup_close">Close</string>
     <string name="signup_country_search_hint">Search for a country</string>
     <string name="signup_display_name_label">What should we call you?</string>
@@ -354,9 +357,11 @@
     <string name="signup_sign_in">Log in</string>
     <string name="signup_submit_in_progress">Creating account</string>
     <string name="signup_subtitle">You’ll read everyone in your own language.</string>
+    <string name="signup_talk">Talk to people</string>
     <string name="signup_title">Create your account</string>
     <string name="signup_username_invalid_characters">Unaccented letters, digits, - and _ only — no spaces.</string>
     <string name="signup_username_too_long">%1$d characters at most.</string>
+    <string name="signup_validate_now">Verify my account now</string>
     <string name="visitor_body">Create your account or sign in to react, comment and read everything in your language.</string>
     <string name="visitor_close">Close</string>
     <string name="visitor_failed_body">This content couldn’t be loaded. Check your connection and try again.</string>

@@ -144,6 +144,8 @@ class SignupViewModelTest {
         val api: FakeAuthApi,
         val coordinator: RealtimeSessionCoordinator,
         val tokenStore: InMemoryTokenStore,
+        val port: FakeProvenSessionPort,
+        val celebration: me.meeshy.sdk.auth.ArrivalCelebrating,
     )
 
     private fun scenario(
@@ -152,7 +154,15 @@ class SignupViewModelTest {
         deviceLocaleProvider: DeviceLocaleProvider = FakeDeviceLocaleProvider(),
         referrals: me.meeshy.sdk.auth.PendingReferralStore = me.meeshy.sdk.auth.InMemoryPendingReferralStore(),
         handoffs: me.meeshy.sdk.auth.LoginHandoffs = me.meeshy.sdk.auth.LoginHandoffs(),
+        port: FakeProvenSessionPort = FakeProvenSessionPort(),
+        now: () -> Long = { dispatcher.scheduler.currentTime },
     ): Scenario {
+        val opener = provenOpener(
+            port = port,
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + dispatcher),
+            nowMs = now,
+        )
+        val celebration = arrivalCelebration()
         val api = FakeAuthApi(registerResponse, registerFailure)
         val store = InMemoryTokenStore()
         val coordinator = mockk<RealtimeSessionCoordinator>(relaxed = true)
@@ -163,7 +173,7 @@ class SignupViewModelTest {
             mockk<SessionTeardown>(relaxed = true),
             SyncSeqTracker(),
         )
-        return Scenario(SignupViewModel(repository, coordinator, deviceLocaleProvider, me.meeshy.sdk.notification.InMemoryPushPermissionDeferralStore(), referrals, handoffs), api, coordinator, store)
+        return Scenario(SignupViewModel(repository, coordinator, deviceLocaleProvider, me.meeshy.sdk.notification.InMemoryPushPermissionDeferralStore(), referrals, handoffs, provenSessions = opener, celebration = celebration, clock = object : me.meeshy.sdk.cache.CacheClock { override fun nowMillis(): Long = now() }), api, coordinator, store, port, celebration)
     }
 
     private fun session() = RegisterResponse(
@@ -799,5 +809,156 @@ class SignupViewModelTest {
         vm.onSwitchToLogin()
 
         assertThat(handoffs.signupEmail.take()).isNull()
+    }
+
+    // ---- « Valider mon compte maintenant » : la session TENUE, le code dans la carte ---------------
+
+    private fun SignupViewModel.validated(): SignupViewModel = apply { fillValid() }
+
+    private val held = RegisterResponse(
+        user = MeeshyUser(id = "u1", username = "ada"),
+        token = "jwt-held",
+        sessionToken = "sess-held",
+        pendingSessionToken = "pending-1",
+    )
+
+    private val codeSession = AuthSession(MeeshyUser(id = "u1", username = "ada"), token = "jwt-code")
+
+    @Test
+    fun validateNow_createsTheAccountHoldingTheSessionAndShowsTheCodeInTheCard() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = held))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+
+        val state = s.viewModel.state.value
+        val card = state.card as SignupCard.AwaitingCode
+        assertThat(card.step.email).isEqualTo("ada@meeshy.me")
+        assertThat(card.step.pendingSessionToken).isEqualTo("pending-1")
+        assertThat(state.phase).isEqualTo(SignupPhase.CODE)
+        assertThat(state.isRegistered).isFalse()
+        assertThat(s.tokenStore.jwt).isNull()
+        assertThat(s.port.installed).isEmpty()
+        verify(exactly = 0) { s.coordinator.onAuthenticatedChanged(true) }
+    }
+
+    @Test
+    fun validateNow_withARefusedPayload_staysOnTheEditingCardWithTheRefusal() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = RegisterResponse(phoneOwnershipConflict = true)))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+
+        val state = s.viewModel.state.value
+        assertThat(state.card).isEqualTo(SignupCard.Editing)
+        assertThat(state.isValidating).isFalse()
+        assertThat(state.submitError).isNotNull()
+    }
+
+    @Test
+    fun aRightCode_turnsTheCardIntoAValidatedAccountWhoseButtonSpeaksToOthers() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = held))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+
+        s.viewModel.onCodeVerified(me.meeshy.sdk.model.auth.LoginOutcome.Authenticated(codeSession))
+
+        val state = s.viewModel.state.value
+        assertThat(state.card).isInstanceOf(SignupCard.Verified::class.java)
+        assertThat(state.phase).isEqualTo(SignupPhase.VERIFIED)
+        assertThat(state.primaryAction).isEqualTo(me.meeshy.sdk.model.auth.SignupPrimaryAction.Talk)
+    }
+
+    @Test
+    fun aLinkOpenedElsewhere_validatesTheAccountWhoseSessionIsHeldHere() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = held))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+
+        s.viewModel.onLinkOpenedElsewhere()
+
+        assertThat((s.viewModel.state.value.card as SignupCard.Verified).proof).isEqualTo(SignupProof.LINK)
+    }
+
+    @Test
+    fun talkingToOthers_afterTheLink_opensTheHeldSessionAndThePreload() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = held))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+        s.viewModel.onLinkOpenedElsewhere()
+
+        s.viewModel.onPrimary()
+        dispatcher.scheduler.runCurrent()
+
+        assertThat(s.port.installed.map { it.first.token }).containsExactly("jwt-held")
+        assertThat(s.viewModel.state.value.isRegistered).isTrue()
+        verify { s.celebration.prepare("u1") }
+        verify { s.coordinator.onAuthenticatedChanged(true) }
+    }
+
+    @Test
+    fun talkingToOthers_afterTheCode_prefersTheProvenSessionAndClosesTheHeldOne() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = held))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+        s.viewModel.onCodeVerified(me.meeshy.sdk.model.auth.LoginOutcome.Authenticated(codeSession))
+
+        s.viewModel.onPrimary()
+        dispatcher.scheduler.runCurrent()
+
+        assertThat(s.port.installed.map { it.first.token }).containsExactly("jwt-code")
+        assertThat(s.port.closedJwts).containsExactly("jwt-held")
+        assertThat(s.viewModel.state.value.isRegistered).isTrue()
+    }
+
+    @Test
+    fun aRefusedOpening_isSaidWithoutLosingTheValidatedCard() = runTest(dispatcher) {
+        val s = scenario(
+            registerResponse = ApiResponse(success = true, data = held),
+            port = FakeProvenSessionPort(isAuthenticated = true, activeUserId = "someone-else"),
+        )
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+        s.viewModel.onLinkOpenedElsewhere()
+
+        s.viewModel.onPrimary()
+        dispatcher.scheduler.runCurrent()
+
+        val state = s.viewModel.state.value
+        assertThat(state.openRefused).isTrue()
+        assertThat(state.isRegistered).isFalse()
+        assertThat(state.card).isInstanceOf(SignupCard.Verified::class.java)
+        assertThat(s.port.installed).isEmpty()
+    }
+
+    @Test
+    fun signingUpWithoutACode_isAllowedDuringTheGracePeriodAndInstallsTheHeldSession() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = held))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+        assertThat(s.viewModel.state.value.primaryAction)
+            .isEqualTo(me.meeshy.sdk.model.auth.SignupPrimaryAction.SignUp(enabled = true))
+
+        s.viewModel.onPrimary()
+        dispatcher.scheduler.runCurrent()
+
+        assertThat(s.port.installed.map { it.first.token }).containsExactly("jwt-held")
+        assertThat(s.viewModel.state.value.isRegistered).isTrue()
+    }
+
+    @Test
+    fun afterTheGracePeriod_theHeldSessionIsDiscardedAndTheUserIsSentToSignIn() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = held))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+
+        dispatcher.scheduler.advanceTimeBy(300_000)
+        dispatcher.scheduler.runCurrent()
+        s.viewModel.onPrimary()
+        dispatcher.scheduler.runCurrent()
+
+        assertThat(s.port.closedJwts).containsExactly("jwt-held")
+        assertThat(s.port.installed).isEmpty()
+        val state = s.viewModel.state.value
+        assertThat(state.needsSignIn).isTrue()
+        assertThat(state.isRegistered).isFalse()
     }
 }

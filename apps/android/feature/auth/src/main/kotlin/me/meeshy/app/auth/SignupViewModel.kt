@@ -8,12 +8,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.auth.ArrivalCelebrating
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.auth.InMemoryPendingReferralStore
 import me.meeshy.sdk.auth.LoginHandoffs
 import me.meeshy.sdk.auth.PendingReferralStore
+import me.meeshy.sdk.auth.ProvenSessionOpener
 import me.meeshy.sdk.auth.RegisterOutcome
+import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.locale.DeviceLocaleProvider
+import me.meeshy.sdk.model.auth.EmailProvenSession
+import me.meeshy.sdk.model.auth.LoginOutcome
+import me.meeshy.sdk.model.auth.ProvenOpenResult
+import me.meeshy.sdk.model.auth.SessionOrigin
 import me.meeshy.sdk.model.auth.CountryCatalog
 import me.meeshy.sdk.model.auth.LanguageStepSelection
 import me.meeshy.sdk.model.auth.SignupErrorRouter
@@ -21,7 +29,6 @@ import me.meeshy.sdk.model.auth.SignupField
 import me.meeshy.sdk.model.auth.SignupFieldMessage
 import me.meeshy.sdk.model.auth.SignupFieldIssue
 import me.meeshy.sdk.model.auth.SignupFieldMessages
-import me.meeshy.sdk.model.auth.SignupCardStage
 import me.meeshy.sdk.model.auth.SignupPhase
 import me.meeshy.sdk.model.auth.SignupPrimaryAction
 import me.meeshy.sdk.model.auth.RegistrationIdentity
@@ -50,6 +57,14 @@ import javax.inject.Inject
 data class SignupUiState(
     val form: SignupForm,
     val isSubmitting: Boolean = false,
+    /** « Valider mon compte maintenant » est en vol : le compte se crée en TENANT sa session. */
+    val isValidating: Boolean = false,
+    /** Ce que la carte montre : la saisie, le code attendu DANS la carte, ou le compte validé. */
+    val card: SignupCard = SignupCard.Editing,
+    /** L'ouverture de la session a été refusée (changement de compte, fenêtre échue) : dit sans perdre la carte. */
+    val openRefused: Boolean = false,
+    /** Le compte est validé mais plus aucune session n'est à ouvrir ici : « Se connecter ». */
+    val needsSignIn: Boolean = false,
     val isRegistered: Boolean = false,
     val submitError: SignupSubmitError? = null,
     /** Ce qui est PARU — monotone : une phase apparue ne disparaît jamais. */
@@ -64,13 +79,19 @@ data class SignupUiState(
     /** Les refus locaux qu'on AFFICHE — un champ encore vide n'en porte aucun. */
     val validation: SignupValidation get() = form.visibleValidation()
 
-    /** La phase courante (téléphone, adresse, carte) — loi `SignupPhases`. */
-    val phase: SignupPhase get() = SignupPhases.phase(progress, SignupCardStage.Editing)
+    /** La phase courante (téléphone, adresse, carte, code, validé) — loi `SignupPhases`. */
+    val phase: SignupPhase get() = SignupPhases.phase(progress, card.stage)
+
+    /** Le formulaire ne se modifie plus : un envoi est en vol, ou la carte a déjà créé le compte. */
+    val isLocked: Boolean get() = isSubmitting || isValidating || card !is SignupCard.Editing
+
+    /** « S'inscrire » puis « Parler aux autres » — loi `SignupPhases`. */
+    val primaryAction: SignupPrimaryAction
+        get() = SignupPhases.primaryAction(progress, card.stage, form.canSubmitPhased && !isSubmitting && !isValidating)
 
     /** Le bouton est actif dès la carte et un formulaire prêt ; aucune attente réseau n'y entre. */
     val canSubmit: Boolean
-        get() = SignupPhases.primaryAction(progress, SignupCardStage.Editing, form.canSubmitPhased && !isSubmitting)
-            .let { it is SignupPrimaryAction.SignUp && it.enabled }
+        get() = card is SignupCard.Editing && primaryAction.let { it is SignupPrimaryAction.SignUp && it.enabled }
 
     /** Le refus qu'aucun champ ne porte — rendu au-dessus du bouton. */
     val globalError: SignupSubmitError?
@@ -156,6 +177,9 @@ class SignupViewModel @Inject constructor(
     private val pushPermissionDeferral: PushPermissionDeferralStore,
     private val referrals: PendingReferralStore = InMemoryPendingReferralStore(),
     private val loginHandoffs: LoginHandoffs = LoginHandoffs(),
+    private val provenSessions: ProvenSessionOpener,
+    private val celebration: ArrivalCelebrating,
+    private val clock: CacheClock = SystemCacheClock,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
@@ -169,6 +193,8 @@ class SignupViewModel @Inject constructor(
         ),
     )
     val state: StateFlow<SignupUiState> = _state.asStateFlow()
+
+    private var accountUserId: String? = null
 
     fun onDisplayNameChange(value: String) {
         editForm { it.copy(displayName = value) }
@@ -235,20 +261,23 @@ class SignupViewModel @Inject constructor(
         viewModelScope.launch {
             when (val result = authRepository.register(request)) {
                 is NetworkResult.Success -> applyOutcome(result.data)
-                is NetworkResult.Failure -> _state.update {
-                    it.copy(
-                        isSubmitting = false,
-                        submitError = SignupErrorRouter.route(
-                            code = result.error.code,
-                            fieldName = result.error.fieldName,
-                            message = result.error.message,
-                            violations = result.error.violations,
-                            suggestions = result.error.suggestions,
-                        ),
-                    )
-                }
+                is NetworkResult.Failure -> rejected(result.error)
             }
         }
+    }
+
+    private fun rejected(error: me.meeshy.sdk.net.ApiError) = _state.update {
+        it.copy(
+            isSubmitting = false,
+            isValidating = false,
+            submitError = SignupErrorRouter.route(
+                code = error.code,
+                fieldName = error.fieldName,
+                message = error.message,
+                violations = error.violations,
+                suggestions = error.suggestions,
+            ),
+        )
     }
 
     /**
@@ -260,12 +289,121 @@ class SignupViewModel @Inject constructor(
         when (outcome) {
             is RegisterOutcome.Created -> {
                 referrals.forget()
-                pushPermissionDeferral.postpone()
-                realtimeCoordinator.onAuthenticatedChanged(true)
+                sessionOpened()
                 _state.update { it.copy(isSubmitting = false, isRegistered = true) }
             }
             RegisterOutcome.PhoneOwnershipConflict -> _state.update {
-                it.copy(isSubmitting = false, submitError = SignupErrorRouter.phoneOwnershipConflict)
+                it.copy(isSubmitting = false, isValidating = false, submitError = SignupErrorRouter.phoneOwnershipConflict)
+            }
+        }
+    }
+
+    private suspend fun sessionOpened() {
+        pushPermissionDeferral.postpone()
+        realtimeCoordinator.onAuthenticatedChanged(true)
+    }
+
+    /**
+     * « Valider mon compte maintenant » (iOS `validateNow`) : crée le compte en TENANT sa session
+     * ([ProvenSessionOpener.hold], délai de grâce) — la racine de l'app ne bascule pas — et fait paraître le
+     * code DANS la carte. Un seul vol à la fois ; un formulaire invalide n'appelle rien.
+     */
+    fun validateNow() {
+        val current = _state.value
+        if (current.isSubmitting || current.isValidating || current.card !is SignupCard.Editing) return
+        if (!current.canSubmit) {
+            _state.update { it.copy(phoneChecked = true) }
+            return
+        }
+        _state.update { it.copy(isValidating = true, submitError = null) }
+        val request = current.form.toPhasedRegisterRequest(referralCode = referrals.recall())
+        viewModelScope.launch {
+            when (val result = authRepository.registerHoldingSession(request)) {
+                is NetworkResult.Failure -> rejected(result.error)
+                is NetworkResult.Success -> applyHeld(result.data, current.form.email)
+            }
+        }
+    }
+
+    private fun applyHeld(outcome: RegisterOutcome, typedEmail: String) {
+        when (outcome) {
+            is RegisterOutcome.Created -> {
+                referrals.forget()
+                accountUserId = outcome.session.user.id
+                provenSessions.hold(proven(outcome.session))
+                _state.update {
+                    it.copy(
+                        isValidating = false,
+                        card = SignupCard.AwaitingCode(
+                            SignupCodeStep(
+                                email = typedEmail.trim().lowercase(),
+                                pendingSessionToken = outcome.pendingSessionToken,
+                                signedIn = true,
+                            ),
+                        ),
+                    )
+                }
+            }
+            RegisterOutcome.PhoneOwnershipConflict -> _state.update {
+                it.copy(isValidating = false, submitError = SignupErrorRouter.phoneOwnershipConflict)
+            }
+        }
+    }
+
+    private fun proven(session: me.meeshy.sdk.model.AuthSession) =
+        EmailProvenSession(session = session, origin = SessionOrigin.REGISTRATION, receivedAtMs = clock.nowMillis())
+
+    /** Le code juste : la carte passe à « Compte validé ! ». La session que la preuve rend sert à l'ouvrir. */
+    fun onCodeVerified(outcome: LoginOutcome) {
+        if (_state.value.card !is SignupCard.AwaitingCode) return
+        val codeSession = (outcome as? LoginOutcome.Authenticated)?.session?.let(::proven)
+        _state.update { it.copy(card = SignupCard.Verified(SignupProof.CODE, codeSession), submitError = null) }
+    }
+
+    /**
+     * Le lien ouvert AILLEURS ne valide que le compte dont la session est tenue ici — « si et seulement si » :
+     * un compte sans session n'entre que par le code saisi sur cet appareil.
+     */
+    fun onLinkOpenedElsewhere() {
+        val awaiting = _state.value.card as? SignupCard.AwaitingCode ?: return
+        if (!awaiting.step.signedIn) return
+        _state.update { it.copy(card = SignupCard.Verified(SignupProof.LINK, null)) }
+    }
+
+    /**
+     * Le bouton principal : « Parler aux autres » ouvre la session validée ; « S'inscrire » entre avec le compte déjà
+     * créé par la carte (inscription SANS code, permise pendant le délai de grâce), ou crée le compte.
+     */
+    fun onPrimary() {
+        when (_state.value.card) {
+            SignupCard.Editing -> register()
+            is SignupCard.AwaitingCode, is SignupCard.Verified -> openAccount()
+        }
+    }
+
+    /**
+     * Ouvre la session du compte créé. Un compte validé par le code préfère la session que la preuve a rendue (son
+     * utilisateur porte l'adresse prouvée) et referme la session tenue ; sinon la session tenue s'installe. Un refus
+     * d'ouverture est dit sans perdre la carte ; plus aucune session à ouvrir (délai de grâce passé) mène à « Se connecter ».
+     */
+    private fun openAccount() {
+        val codeSession = (_state.value.card as? SignupCard.Verified)?.codeSession
+        viewModelScope.launch {
+            val viaCode = codeSession?.let(provenSessions::open)
+            val result = if (viaCode is ProvenOpenResult.Opened) {
+                provenSessions.discardHeld()
+                viaCode
+            } else {
+                provenSessions.installHeld() ?: viaCode
+            }
+            when (result) {
+                ProvenOpenResult.Opened -> {
+                    accountUserId?.let(celebration::prepare)
+                    sessionOpened()
+                    _state.update { it.copy(openRefused = false, needsSignIn = false, isRegistered = true) }
+                }
+                is ProvenOpenResult.Refused -> _state.update { it.copy(openRefused = true, needsSignIn = false) }
+                null -> _state.update { it.copy(openRefused = false, needsSignIn = true) }
             }
         }
     }

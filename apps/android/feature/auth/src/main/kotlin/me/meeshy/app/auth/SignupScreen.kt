@@ -69,6 +69,7 @@ import me.meeshy.feature.auth.R
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.auth.LanguageStepSelection
 import me.meeshy.sdk.model.auth.SignupField
+import me.meeshy.sdk.model.auth.SignupPrimaryAction
 import me.meeshy.sdk.model.auth.SignupFieldMessage
 import me.meeshy.sdk.model.auth.SignupRefusal
 import me.meeshy.sdk.model.auth.SignupSubmitError
@@ -123,7 +124,9 @@ fun SignupScreen(
             onUsernameChange = viewModel::onUsernameChange,
             onSuggestionPicked = viewModel::onUsernameSuggestionPicked,
             onPasswordChange = viewModel::onPasswordChange,
-            onSubmit = viewModel::register,
+            onSubmit = viewModel::onPrimary,
+            onValidateNow = viewModel::validateNow,
+            onSignIn = { viewModel.onSwitchToLogin(); onClose() },
         )
     }
 
@@ -162,14 +165,18 @@ fun SignupScreen(
                         modifier = Modifier.padding(top = PHASE_GAP),
                         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xl),
                     ) {
-                        SignupIdentityCard(state = state, actions = actions)
-                        LanguagePill(state = state, viewModel = viewModel)
+                        SignupIdentityCard(
+                            state = state,
+                            actions = actions,
+                            codeStep = { step -> SignupCodeHost(step, viewModel) },
+                        )
+                        if (state.card is SignupCard.Editing) LanguagePill(state = state, viewModel = viewModel)
                     }
                 }
                 if (state.globalError != null) {
                     Box(Modifier.padding(top = PHASE_GAP)) { GlobalErrorBanner(error = state.globalError) }
                 }
-                SignupPrimaryButton(state = state, onClick = viewModel::register, modifier = Modifier.padding(top = PHASE_GAP))
+                SignupPrimaryButton(state = state, onClick = viewModel::onPrimary, modifier = Modifier.padding(top = PHASE_GAP))
                 LegalNotice(onOpenTerms = onOpenTerms, onOpenPrivacy = onOpenPrivacy)
                 SignInPrompt(enabled = !state.isSubmitting, onSignIn = { viewModel.onSwitchToLogin(); onClose() })
             }
@@ -247,7 +254,7 @@ private fun SignupPhoneSection(state: SignupUiState, viewModel: SignupViewModel)
         onCountryClick = { showCountryPicker = true },
         onFieldLeft = viewModel::onPhoneFieldLeft,
         errorText = phoneErrorText(state),
-        enabled = !state.isSubmitting,
+        enabled = !state.isLocked,
     )
     if (showCountryPicker) {
         CountryPickerSheet(
@@ -279,7 +286,7 @@ private fun EmailPhase(
             icon = MeeshyIcons.Mail,
             contentType = AuthContentType.Email,
             imeAction = ImeAction.Next,
-            enabled = !state.isSubmitting,
+            enabled = !state.isLocked,
             errorText = errorText,
             modifier = Modifier.testTag(SIGNUP_EMAIL_TAG),
         )
@@ -307,17 +314,21 @@ private fun EmailPhase(
  */
 @Composable
 private fun SignupPrimaryButton(state: SignupUiState, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val title = stringResource(R.string.signup_phased_submit)
+    val action = state.primaryAction
+    val title = stringResource(
+        if (action is SignupPrimaryAction.Talk) R.string.signup_talk else R.string.signup_phased_submit,
+    )
     val inProgress = stringResource(R.string.signup_submit_in_progress)
+    val active = action is SignupPrimaryAction.Talk || (action as? SignupPrimaryAction.SignUp)?.enabled == true
     Box(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = PRIMARY_MIN_HEIGHT)
             .testTag(SIGNUP_PRIMARY_TAG)
-            .alpha(if (state.canSubmit || state.isSubmitting) 1f else INACTIVE_ALPHA)
+            .alpha(if (active || state.isSubmitting) 1f else INACTIVE_ALPHA)
             .clip(RoundedCornerShape(MeeshyRadius.md))
             .background(Brush.linearGradient(MeeshyPalette.BrandGradient))
-            .clickable(enabled = !state.isSubmitting, role = Role.Button, onClick = onClick)
+            .clickable(enabled = !state.isSubmitting && !state.isValidating, role = Role.Button, onClick = onClick)
             .semantics {
                 contentDescription = title
                 if (state.isSubmitting) stateDescription = inProgress
@@ -335,6 +346,18 @@ private fun SignupPrimaryButton(state: SignupUiState, onClick: () -> Unit, modif
             )
         }
     }
+}
+
+/** La saisie du code dans la carte : son ViewModel est celui de l'écran du code, une instance par écran d'inscription. */
+@Composable
+private fun SignupCodeHost(step: SignupCodeStep, viewModel: SignupViewModel) {
+    val entry: EmailVerificationViewModel = hiltViewModel(key = "signup-code")
+    SignupCodeStepContent(
+        step = step,
+        entry = entry,
+        onVerified = viewModel::onCodeVerified,
+        onProvenElsewhere = viewModel::onLinkOpenedElsewhere,
+    )
 }
 
 /**
