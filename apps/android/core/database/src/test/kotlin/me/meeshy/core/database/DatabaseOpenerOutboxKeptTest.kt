@@ -2,6 +2,8 @@ package me.meeshy.core.database
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import java.io.File
@@ -137,5 +139,42 @@ class DatabaseOpenerOutboxKeptTest {
         assertThat(database.pendingIdDao().byServerId("srv-1")?.localId).isEqualTo("cid_1")
         assertThat(diagnostics.events.value.map { it.stage }).contains(DatabaseInitStage.PENDING_IDS_SALVAGED)
         database.close()
+    }
+
+    private val inertCallback = object : SupportSQLiteOpenHelper.Callback(1) {
+        override fun onCreate(db: SupportSQLiteDatabase) = Unit
+        override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    }
+
+    @Test
+    fun `une corruption signalee en cours d'usage est reparee au lancement suivant`() {
+        val name = "corrupt-in-use.db"
+        val file = seeded(name)
+        opener(name, DatabaseInitDiagnostics()).open().apply {
+            KeepFileOnCorruption(inertCallback).onCorruption(openHelper.writableDatabase)
+            close()
+        }
+        assertThat(DatabaseRecovery.isMarkedCorrupted(file)).isTrue()
+        val diagnostics = DatabaseInitDiagnostics()
+
+        val database = opener(name, diagnostics).open()
+
+        assertThat(File(file.path + ".corrupted.99").exists()).isTrue()
+        assertThat(diagnostics.events.value.map { it.stage }).containsAtLeast(
+            DatabaseInitStage.FIRST_FAILURE,
+            DatabaseInitStage.QUARANTINED,
+            DatabaseInitStage.RECREATED,
+            DatabaseInitStage.OUTBOX_SALVAGED,
+        ).inOrder()
+        assertThat(database.openHelper.readableDatabase.query("SELECT cmid FROM outbox").use {
+            it.moveToFirst()
+            it.getString(0)
+        }).isEqualTo("c-1")
+        assertThat(DatabaseRecovery.isMarkedCorrupted(file)).isFalse()
+        database.close()
+
+        val afterRepair = DatabaseInitDiagnostics()
+        opener(name, afterRepair).open().close()
+        assertThat(afterRepair.events.value).isEmpty()
     }
 }
