@@ -231,12 +231,12 @@ class NotificationDestinationResolverTest {
     }
 
     @Test
-    fun `the friend_new_story owner shortcut still needs an actor id`() {
+    fun `the friend_new_story without an actor id opens the viewer by the story id`() {
         val dest = NotificationDestinationResolver.resolve(
             notification("friend_new_story", postId = "p1", postType = "STORY"),
         )
 
-        assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
+        assertThat(dest).isEqualTo(NotificationDestination.StoryContent("p1", null, null, null))
     }
 
     @Test

@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.lock.LockPinState
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.ApiConversation
