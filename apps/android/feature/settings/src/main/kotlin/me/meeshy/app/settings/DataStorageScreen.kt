@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +35,7 @@ import me.meeshy.ui.component.chrome.leadingNavigationIcon
 import me.meeshy.ui.component.chrome.leadingNavigationLabel
 import me.meeshy.ui.component.settings.SettingsCard
 import me.meeshy.ui.component.settings.SettingsSectionHeader
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -94,14 +93,14 @@ fun DataStorageScreen(
 private fun MediaCacheCard(totalBytes: Long?) {
     val tint = MeeshyPalette.Indigo500
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-        SettingsSectionHeader(stringResource(R.string.data_storage_section_cache), Icons.Filled.Storage, tint)
+        SettingsSectionHeader(stringResource(R.string.data_storage_section_cache), MeeshyIcons.Storage, tint)
         SettingsCard(tint = tint) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.lg),
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-                    Icon(Icons.Filled.Storage, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+                    Icon(MeeshyIcons.Storage, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = stringResource(R.string.data_storage_cache_title),
