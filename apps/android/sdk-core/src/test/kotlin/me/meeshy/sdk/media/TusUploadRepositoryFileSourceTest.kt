@@ -40,17 +40,18 @@ class TusUploadRepositoryFileSourceTest {
         MeeshyConfig(apiBaseUrl = "https://gate/api/v1/"), UploadedMediaSeeder.None, leases, FileDigestMemo(), progress,
     )
 
-    /**
-     * Une vidéo lisible d'une seule boîte `mdat` (sa taille est celle du fichier) : le nettoyeur n'a rien à retirer et
-     * la laisse intacte, les octets envoyés sont ceux du fichier. Des octets quelconques déclarés vidéo seraient refusés (#13543).
-     */
-    private fun videoBytes(size: Int, fill: (Int) -> Byte = { it.toByte() }): ByteArray =
-        java.nio.ByteBuffer.allocate(size).putInt(size).put("mdat".toByteArray(Charsets.ISO_8859_1)).array().also { bytes ->
-            (8 until size).forEach { bytes[it] = fill(it) }
-        }
-
+    /** Un faux « mp4 » sans moov : une seule boîte `mdat` qui couvre tout le fichier, que le nettoyeur laisse intacte. */
     private fun videoFile(name: String = "clip.mp4", size: Int = 25): File =
-        folder.newFile(name).also { it.writeBytes(videoBytes(size)) }
+        folder.newFile(name).also { file -> file.writeBytes(fakeMp4(size) { it.toByte() }) }
+
+    private fun fakeMp4(size: Int, fill: (Int) -> Byte): ByteArray =
+        ByteArray(size) { index ->
+            when (index) {
+                in 0..3 -> (size ushr (8 * (3 - index))).toByte()
+                in 4..7 -> "mdat"[index - 4].code.toByte()
+                else -> fill(index)
+            }
+        }
 
     private fun onDisk(file: File, name: String = file.name) = MediaUploadItem.onDisk(file, name, "video/mp4")
 
@@ -123,7 +124,7 @@ class TusUploadRepositoryFileSourceTest {
     fun `a file modified since the checkpoint starts over`() = runTest {
         val file = videoFile(size = 25)
         val staleKey = contentKey(file)
-        file.writeBytes(videoBytes(25) { 9 })
+        file.writeBytes(fakeMp4(25) { 9 })
         coEvery { checkpoints.find(staleKey) } returns TusUploadCheckpointEntity(staleKey, "https://gate/api/v1/uploads/old", 10L, 25L, 0L)
         coEvery { api.createUpload(any(), any(), any()) } returns created()
         coEvery { api.uploadData(any(), any(), any(), any()) } returns finish()
@@ -151,7 +152,7 @@ class TusUploadRepositoryFileSourceTest {
 
     @Test
     fun `the creation header declares thumbhash, capture and transcription`() = runTest {
-        val file = videoFile(size = 16)
+        val file = videoFile(size = 8)
         val metadata = mutableListOf<String>()
         coEvery { api.createUpload(any(), capture(metadata), any()) } returns created()
         coEvery { api.uploadData(any(), any(), any(), any()) } returns finish()
@@ -200,7 +201,7 @@ class TusUploadRepositoryFileSourceTest {
 
     @Test
     fun `an exhausted retry leaves the file failed but retryable`() = runTest {
-        val file = videoFile(size = 16)
+        val file = videoFile(size = 8)
         coEvery { api.createUpload(any(), any(), any()) } returns status(503)
 
         val result = repository().upload(onDisk(file), TusUploadContext.STORY, extras = TusUploadExtras(progressId = "p2"))
