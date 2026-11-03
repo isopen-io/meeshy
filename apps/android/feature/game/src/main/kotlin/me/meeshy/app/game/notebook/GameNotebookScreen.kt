@@ -55,7 +55,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import me.meeshy.app.game.progression.GamePageScaffold
 import me.meeshy.feature.game.R
 import me.meeshy.sdk.model.game.PhotoLawEntry
 import me.meeshy.ui.component.MeeshySkeletonBox

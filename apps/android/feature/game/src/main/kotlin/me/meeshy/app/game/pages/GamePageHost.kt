@@ -7,7 +7,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.app.game.GamePageScaffold
-import me.meeshy.app.game.progression.GamePageScaffold
 import me.meeshy.app.game.progression.ProgressionNoticeView
 import me.meeshy.app.game.progression.ProgressionSkeleton
 import me.meeshy.app.game.progression.ProgressionViewModel
