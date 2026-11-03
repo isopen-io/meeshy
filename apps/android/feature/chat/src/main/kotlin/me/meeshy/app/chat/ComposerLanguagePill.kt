@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -45,9 +46,11 @@ internal fun ComposerLanguagePill(
     tint: Color,
     accentColor: Color,
     onPick: (String) -> Unit,
+    collapsed: Boolean = false,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val description = stringResource(R.string.chat_composer_language)
+    val hint = stringResource(R.string.a11y_composer_language_hint)
     val languageName = LanguageData.info(languageCode)?.nativeName ?: languageCode
     Box {
         Row(
@@ -58,19 +61,22 @@ internal fun ComposerLanguagePill(
                 .semantics {
                     contentDescription = description
                     stateDescription = languageName
+                    onClick(label = hint, action = null)
                 }
                 .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
         ) {
             Text(text = ComposerLanguage.flag(languageCode), fontSize = 12.sp)
-            Text(
-                text = languageCode.substringBefore('-').uppercase(),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = tint,
-                maxLines = 1,
-            )
+            if (!collapsed) {
+                Text(
+                    text = languageCode.substringBefore('-').uppercase(),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = tint,
+                    maxLines = 1,
+                )
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             LanguageData.commonLanguageCodes.forEach { code ->
