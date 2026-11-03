@@ -44,7 +44,7 @@ class OutboxFlushWorkerSocketFallbackTest {
 
     private fun row() = outboxRow(OutboxKind.SEND_MESSAGE, targetId = "c1", payload = encodedPayload(request))
 
-    private fun http(status: Int) = HttpException(Response.error<Any>(status, "{}".toResponseBody("application/json".toMediaTypeOrNull())))
+    private fun http(status: Int) = HttpException(Response.error<Any>(status, """{"success":false,"error":"refus","code":"VALIDATION_ERROR"}""".toResponseBody("application/json".toMediaTypeOrNull())))
 
     @Test
     fun `un 5xx du REST bascule sur la socket avec le meme clientMessageId et reconcilie sur l'accuse`() = runTest {
