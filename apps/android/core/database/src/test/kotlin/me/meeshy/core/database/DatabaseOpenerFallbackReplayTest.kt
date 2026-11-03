@@ -25,10 +25,10 @@ class DatabaseOpenerFallbackReplayTest {
 
     private fun secondary(name: String) = File(context.cacheDir, "replay-secondary-$name")
 
-    private fun opener(name: String) = DatabaseOpener(
+    private fun opener(name: String, health: StorageHealth = StorageHealth()) = DatabaseOpener(
         context = context,
         diagnostics = DatabaseInitDiagnostics(),
-        health = StorageHealth(),
+        health = health,
         primaryName = name,
         clock = { 7L },
         secondaryFile = secondary(name),
@@ -54,10 +54,10 @@ class DatabaseOpenerFallbackReplayTest {
             buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
         }
 
-    private fun rawPrimary(name: String, sql: String) {
-        SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, SQLiteDatabase.OPEN_READWRITE).use {
-            it.execSQL(sql)
-        }
+    private fun rawPrimary(name: String, sql: String) = raw(context.getDatabasePath(name), sql)
+
+    private fun raw(file: File, sql: String) {
+        SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READWRITE).use { it.execSQL(sql) }
     }
 
     @Test
@@ -100,5 +100,39 @@ class DatabaseOpenerFallbackReplayTest {
         assertThat(kept).isEqualTo(50L to 50L)
         assertThat(secondary(name).exists()).isFalse()
         database.close()
+    }
+
+    @Test
+    fun `quand ni l'insertion ni le retrait ne passent, aucune ligne de repli n'est perdue et l'utilisateur est prevenu`() {
+        val name = "disk-full-keeps.db"
+        seed(DatabaseLocation.Named(secondary(name).absolutePath), row("c-1"), row("c-2"))
+        seed(DatabaseLocation.Named(name))
+        raw(
+            secondary(name),
+            "CREATE TRIGGER keep_c1 BEFORE DELETE ON outbox WHEN OLD.cmid = 'c-1' " +
+                "BEGIN SELECT RAISE(ABORT, 'disk full'); END",
+        )
+        rawPrimary(
+            name,
+            "CREATE TRIGGER refuse_c2 BEFORE INSERT ON outbox WHEN NEW.cmid = 'c-2' " +
+                "BEGIN SELECT RAISE(ABORT, 'disk full'); END",
+        )
+        val health = StorageHealth()
+
+        opener(name, health).open().apply {
+            assertThat(cmids()).isEmpty()
+            close()
+        }
+
+        assertThat(secondary(name).exists()).isTrue()
+        assertThat(health.current.value).isEqualTo(StorageState.Degraded("fallback-kept:2"))
+        raw(secondary(name), "DROP TRIGGER keep_c1")
+        rawPrimary(name, "DROP TRIGGER refuse_c2")
+
+        val relaunched = opener(name).open()
+
+        assertThat(relaunched.cmids()).containsExactly("c-1", "c-2")
+        assertThat(secondary(name).exists()).isFalse()
+        relaunched.close()
     }
 }

@@ -69,6 +69,21 @@ class DatabaseOpenerOutboxKeptTest {
 
     private fun corrupted(name: String): File = seeded(name).also(::corruptRoomMasterTable)
 
+    /** Écrase la page racine de l'outbox seule : Room s'ouvre normalement, et c'est la lecture de l'outbox qui échoue. */
+    private fun corruptOutboxPage(file: File) {
+        val (pageSize, rootPage) = SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+            val size = db.rawQuery("PRAGMA page_size", null).use { it.moveToFirst(); it.getLong(0) }
+            val root = db.rawQuery("SELECT rootpage FROM sqlite_master WHERE name = 'outbox'", null)
+                .use { it.moveToFirst(); it.getLong(0) }
+            size to root
+        }
+        listOf("-wal", "-shm").forEach { File(file.path + it).delete() }
+        RandomAccessFile(file, "rw").use { raw ->
+            raw.seek((rootPage - 1) * pageSize)
+            raw.write(ByteArray(pageSize.toInt()) { 0xFF.toByte() })
+        }
+    }
+
     private fun opener(name: String, diagnostics: DatabaseInitDiagnostics) = DatabaseOpener(
         context = context,
         diagnostics = diagnostics,
@@ -176,5 +191,17 @@ class DatabaseOpenerOutboxKeptTest {
         val afterRepair = DatabaseInitDiagnostics()
         opener(name, afterRepair).open().close()
         assertThat(afterRepair.events.value).isEmpty()
+    }
+
+    @Test
+    fun `une page abimee lue en cours d'usage par la fabrique de production pose le marqueur`() {
+        val name = "page-in-use.db"
+        val file = seeded(name).also(::corruptOutboxPage)
+        val database = DatabaseModule.meeshyDatabaseBuilder(context, name).allowMainThreadQueries().build()
+
+        runCatching { database.openHelper.writableDatabase.query("SELECT * FROM outbox").use { it.moveToFirst() } }
+        database.close()
+
+        assertThat(DatabaseRecovery.isMarkedCorrupted(file)).isTrue()
     }
 }

@@ -450,6 +450,19 @@ class SessionTeardownTest {
     }
 
     @Test
+    fun wipe_aCorruptionMarkerLeftOnAFileTheVacuumHealedIsCleared() = runTest {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        db.close()
+        db = Room.databaseBuilder(context, MeeshyDatabase::class.java, "teardown-marker.db").allowMainThreadQueries().build()
+        val file = java.io.File(requireNotNull(db.openHelper.writableDatabase.path))
+        me.meeshy.core.database.DatabaseRecovery.markCorrupted(file)
+
+        teardown().wipe()
+
+        assertThat(me.meeshy.core.database.DatabaseRecovery.isMarkedCorrupted(file)).isFalse()
+    }
+
+    @Test
     fun wipeAfterServerInvalidation_aDeletedAccountLeavesNoDatabaseCopyBehind() = runTest {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val primary = context.getDatabasePath("deleted-leftovers.db").also { it.parentFile?.mkdirs() }
