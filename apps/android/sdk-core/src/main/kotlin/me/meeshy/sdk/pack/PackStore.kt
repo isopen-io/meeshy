@@ -1,6 +1,8 @@
 package me.meeshy.sdk.pack
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -148,7 +150,7 @@ class PackStore<P : InstallablePack<P>>(
 
     private suspend fun rollBack(slug: String, previous: PackShelfState<P>, owner: Int) {
         if (owner != epoch) return
-        gate.withLock { _state.value = _state.value.rolledBack(slug, previous) }
+        withContext(NonCancellable) { gate.withLock { _state.value = _state.value.rolledBack(slug, previous) } }
     }
 
     /** Sert le cache du compte une fois par vie de l'étagère : frais une heure, servi périmé un mois. */
