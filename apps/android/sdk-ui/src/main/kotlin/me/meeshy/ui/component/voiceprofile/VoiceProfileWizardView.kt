@@ -168,12 +168,12 @@ private fun StepIndicator(step: VoiceWizardStep, accent: Color, stepTitle: Strin
             modifier = Modifier
                 .widthIn(max = PROGRESS_MAX_WIDTH)
                 .fillMaxWidth()
+                .testTag(VOICE_WIZARD_PROGRESS_TAG)
                 .clearAndSetSemantics {
                     contentDescription = stepTitle
                     liveRegion = LiveRegionMode.Polite
                     progressBarRangeInfo = ProgressBarRangeInfo((step.ordinal + 1).toFloat(), 1f..total.toFloat(), total - 2)
-                }
-                .testTag(VOICE_WIZARD_PROGRESS_TAG),
+                },
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         ) {
             VoiceWizardStep.entries.forEach { segment ->

@@ -1,9 +1,12 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -117,7 +120,9 @@ class BubbleFileRowTest {
             }
         }
 
-        compose.onNodeWithText("Excel").assertIsDisplayed()
+        val labels = compose.onAllNodesWithText("Excel")
+        labels.assertCountEquals(2)
+        labels.onFirst().assertIsDisplayed()
     }
 
     @Test

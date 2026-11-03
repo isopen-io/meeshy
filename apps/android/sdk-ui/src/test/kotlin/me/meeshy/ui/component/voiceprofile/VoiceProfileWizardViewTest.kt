@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.VoiceProfile
@@ -95,9 +96,9 @@ class VoiceProfileWizardViewTest {
     fun `toggling the acceptance reports the new value and an accepted consent enables continue`() {
         val calls = show(VoiceWizardState(consentGiven = true))
         compose.onNodeWithTag(VOICE_WIZARD_CONSENT_CONTINUE_TAG).assertIsEnabled()
-        compose.onNodeWithTag(VOICE_WIZARD_CONSENT_TOGGLE_TAG).performClick()
+        compose.onNodeWithTag(VOICE_WIZARD_CONSENT_TOGGLE_TAG).performScrollTo().performClick()
         assertThat(calls.consent).isFalse()
-        compose.onNodeWithTag(VOICE_WIZARD_CONSENT_CONTINUE_TAG).performClick()
+        compose.onNodeWithTag(VOICE_WIZARD_CONSENT_CONTINUE_TAG).performScrollTo().performClick()
         assertThat(calls.continued).isEqualTo(1)
     }
 
@@ -133,7 +134,7 @@ class VoiceProfileWizardViewTest {
         compose.onNodeWithText("31s").assertExists()
         compose.onNodeWithText("87%").assertExists()
         compose.onNodeWithText(string(R.string.voiceProfile_wizard_status_ready)).assertExists()
-        compose.onNodeWithTag(VOICE_WIZARD_FINISH_TAG).performClick()
+        compose.onNodeWithTag(VOICE_WIZARD_FINISH_TAG).performScrollTo().performClick()
         assertThat(calls.closed).isEqualTo(1)
     }
 
