@@ -57,11 +57,12 @@ public class UnreadLedger @Inject constructor() : PerAccountCache {
         val closing = windows.close(conversationId)
         windows = closing.next
         state = state.apply(ConversationReadEvent.LocalOpenSet(windows.ids)).state
-        if (closing.closed && closing.restore != null) {
-            state = state.apply(ConversationReadEvent.ServerUnread(conversationId, closing.restore)).state
+        val restore = closing.restore
+        if (closing.closed && restore != null) {
+            state = state.apply(ConversationReadEvent.ServerUnread(conversationId, restore)).state
         }
         publish()
-        closing.restore
+        restore
     }
 
     /** Après une lecture partielle : ce qui reste réellement à lire. */
