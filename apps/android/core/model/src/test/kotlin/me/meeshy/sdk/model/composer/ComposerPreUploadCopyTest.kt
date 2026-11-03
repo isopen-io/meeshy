@@ -12,7 +12,7 @@ class ComposerPreUploadCopyTest {
         val label = ComposerPreUploadCopy.label(
             ComposerPreUploadState.Uploading(4_800_000, 14_200_000), "MONTÉE EN COURS", units, Locale.FRANCE,
         )
-        assertThat(label).isEqualTo("MONTÉE EN COURS · 34\u202f% — 4,8 / 14,2 Mo")
+        assertThat(label).isEqualTo("MONTÉE EN COURS · 34\u00a0% — 4,8 / 14,2 Mo")
     }
 
     @Test

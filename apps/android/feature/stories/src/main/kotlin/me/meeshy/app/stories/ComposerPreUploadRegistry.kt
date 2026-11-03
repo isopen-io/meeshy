@@ -2,6 +2,7 @@ package me.meeshy.app.stories
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -65,7 +66,9 @@ internal class ComposerPreUploadRegistry(
     private fun drain() {
         while (jobs.size < ComposerPreUploadPolicy.MAXIMUM_CONCURRENT && waiting.isNotEmpty()) {
             val (path, mime) = waiting.removeFirst()
-            jobs[path] = scope.launch { run(path, mime) }
+            val job = scope.launch(start = CoroutineStart.LAZY) { run(path, mime) }
+            jobs[path] = job
+            job.start()
         }
     }
 

@@ -13,6 +13,7 @@ object ComposerPreUploadCopy {
         val uploading = state as? ComposerPreUploadState.Uploading ?: return null
         val percent = NumberFormat.getPercentInstance(locale).apply { maximumFractionDigits = 0 }
             .format(Math.round((state.fraction ?: 0.0) * 100) / 100.0)
+            .replace(Regex("[\\s\u202f]"), "\u00a0")
         return "$header · $percent — ${bytes(uploading.sent, uploading.total, units, locale)}"
     }
 
