@@ -2,6 +2,7 @@
 <resources>
     <string name="bookmarks_back">Retour</string>
     <string name="feed_action_bookmark">Enregistrer</string>
+    <string name="feed_action_cancel">Annuler</string>
     <string name="feed_action_copy_link">Copier le lien</string>
     <string name="feed_action_copy_text">Copier le texte</string>
     <string name="feed_action_delete">Supprimer</string>
@@ -12,6 +13,7 @@
     <string name="feed_action_send">Envoyer</string>
     <string name="feed_action_share">Partager</string>
     <string name="feed_action_view_profile">Voir le profil</string>
+    <string name="feed_bookmark_success">Ajouté aux favoris</string>
     <string name="feed_comment_card_folded">+%1$d réponses</string>
     <string name="feed_comment_card_thread">Fil de commentaires</string>
     <string name="feed_comment_imagine">Imager</string>
@@ -43,6 +45,28 @@
     <string name="feed_notice_repost_failed">Erreur lors du repost</string>
     <string name="feed_notice_translation_failed">Erreur de traduction</string>
     <string name="feed_post_reposted_from">a republié de @%1$s</string>
+    <plurals name="feed_post_stat_comments">
+        <item quantity="one">%1$d commentaire</item>
+        <item quantity="many">%1$d commentaires</item>
+        <item quantity="other">%1$d commentaires</item>
+    </plurals>
+    <plurals name="feed_post_stat_likes">
+        <item quantity="one">%1$d j\'aime</item>
+        <item quantity="many">%1$d j\'aime</item>
+        <item quantity="other">%1$d j\'aime</item>
+    </plurals>
+    <plurals name="feed_post_stat_replies">
+        <item quantity="one">%1$d réponse</item>
+        <item quantity="many">%1$d réponses</item>
+        <item quantity="other">%1$d réponses</item>
+    </plurals>
+    <plurals name="feed_post_stat_reposts">
+        <item quantity="one">%1$d repartage</item>
+        <item quantity="many">%1$d repartages</item>
+        <item quantity="other">%1$d repartages</item>
+    </plurals>
+    <string name="feed_post_stat_saves">%1$d enregistrements</string>
+    <string name="feed_post_stat_shares">%1$d partages</string>
     <string name="feed_quote_cancel">Annuler</string>
     <string name="feed_quote_submit">Repartager</string>
     <string name="feed_reel">Réel</string>

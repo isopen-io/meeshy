@@ -70,6 +70,7 @@ class FeedRepostTest {
     private fun viewModel(): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         every { repository.feedHasMore } returns MutableStateFlow(true)
+        every { repository.gestureRefusals } returns MutableSharedFlow()
         every { repository.feedStream(any(), any()) } returns feed
         every { socialSocket.postCreated } returns MutableSharedFlow()
         every { socialSocket.postDeleted } returns MutableSharedFlow()

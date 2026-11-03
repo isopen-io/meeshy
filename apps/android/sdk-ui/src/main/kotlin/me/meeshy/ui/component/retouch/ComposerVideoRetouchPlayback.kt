@@ -30,7 +30,10 @@ import me.meeshy.sdk.model.composer.look.ComposerRetouchTextBoard
 import me.meeshy.sdk.model.imageedit.NormalizedCrop
 
 /** La taille de la vidéo rendue : la prise debout, recadrée. */
-internal fun RetouchVideoProbe.rendered(crop: NormalizedCrop?): Pair<Int, Int> =
+internal fun RetouchVideoProbe.rendered(crop: NormalizedCrop?): Pair<Int, Int> = renderedVideoSize(width, height, crop)
+
+/** La taille d'une vidéo de [width] × [height] (debout) une fois recadrée par [crop]. */
+internal fun renderedVideoSize(width: Int, height: Int, crop: NormalizedCrop?): Pair<Int, Int> =
     ((crop?.width ?: 1f) * width).roundToInt().coerceAtLeast(2) to ((crop?.height ?: 1f) * height).roundToInt().coerceAtLeast(2)
 
 /**
