@@ -55,7 +55,7 @@ class StickerRasterPlanTest {
 
     @Test
     fun `le plafond se garantit sur l image rendue sans jamais agrandir`() {
-        assertThat(StickerRasterPlan.fitted(600f, 300f)).isEqualTo(StickerBoxLaw.Size(512f, 256f))
+        assertThat(StickerRasterPlan.fitted(1024f, 512f)).isEqualTo(StickerBoxLaw.Size(512f, 256f))
         assertThat(StickerRasterPlan.fitted(100f, 50f)).isEqualTo(StickerBoxLaw.Size(100f, 50f))
     }
 
