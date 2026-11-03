@@ -483,6 +483,27 @@ class OutboxCoalescerTest {
     }
 
     @Test
+    fun `a repeated application settings update keeps only the latest theme`() {
+        val first = row("t1", OutboxKind.UPDATE_APPLICATION_SETTINGS, "me")
+        val second = row("t2", OutboxKind.UPDATE_APPLICATION_SETTINGS, "me")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("t1"), second))
+    }
+
+    @Test
+    fun `an application update never coalesces with a pending privacy, notification or audio update`() {
+        val pending = listOf(
+            row("v1", OutboxKind.UPDATE_PRIVACY_SETTINGS, "me"),
+            row("n1", OutboxKind.UPDATE_SETTINGS, "me"),
+            row("a1", OutboxKind.UPDATE_AUDIO_SETTINGS, "me"),
+        )
+        val application = row("t1", OutboxKind.UPDATE_APPLICATION_SETTINGS, "me")
+
+        assertThat(OutboxCoalescer.decide(application, pending)).isEqualTo(CoalesceDecision.Enqueue(application))
+    }
+
+    @Test
     fun `two preference snapshots of one conversation keep only the latest`() {
         val first = row("p1", OutboxKind.UPDATE_CONVERSATION_PREFS, "c1")
         val second = row("p2", OutboxKind.UPDATE_CONVERSATION_PREFS, "c1")
