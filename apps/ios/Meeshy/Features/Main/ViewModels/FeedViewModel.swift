@@ -91,6 +91,15 @@ class FeedViewModel: ObservableObject {
         self.feedCache = feedCache
         self.cacheSaver = FeedCacheSaver(feedCache: feedCache)
         observePreferredLanguageChanges()
+        observeWithdrawnPublications()
+    }
+
+    /// Une publication annulée AILLEURS (pastille, détail) n'a plus de ligne
+    /// pour réconcilier sa carte optimiste : elle quitte le fil (#10331).
+    private func observeWithdrawnPublications() {
+        PendingPublicationCancel.withdrawn
+            .sink { [weak self] cmid in self?.removeOptimisticPost(id: cmid) }
+            .store(in: &cancellables)
     }
 
     /// B2 (Prisme Linguistique) — when the viewer's preferred-content

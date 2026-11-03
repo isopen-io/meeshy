@@ -64,7 +64,6 @@ import me.meeshy.app.chat.river.RiverScreen
 import me.meeshy.sdk.model.reading.river.RiverModeGate
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.sdk.model.reading.focal.ScrollTimePillLaw
-import me.meeshy.ui.profile.LocalProfileSheetOpener
 import me.meeshy.ui.component.location.LiveLocationBadge
 import me.meeshy.ui.component.location.LocationFullscreen
 import me.meeshy.ui.component.video.MeeshyVideoViewer
@@ -89,7 +88,7 @@ internal fun ChatListHost(
     val bubbleFrames = host.bubbleFrames
     val listState = rememberLazyListState()
     // La fiche de l'auteur ouverte depuis l'avatar du pied d'identité (iOS `selectedProfileUser`).
-    val profileOpener = LocalProfileSheetOpener.current
+    val profileTap = rememberProfileTap(state.conversationId, accentColor)
     // L'en-tête efface sa grappe d'actions pendant le défilement (iOS `hiddenWhileScrolling`).
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }
@@ -290,7 +289,7 @@ internal fun ChatListHost(
     val openMessageMenu: (String) -> Unit = { id ->
         MessageMenuKeyboard.open(id, { focusManager.clearFocus(force = true); keyboardController?.hide() }, actions.onMessageLongPress)
     }
-    val rowActions = remember(actions, bubbleFrames, profileOpener, haptics, capReachedMessage, host.navigation, media) {
+    val rowActions = remember(actions, bubbleFrames, profileTap, haptics, capReachedMessage, host.navigation, media) {
         ChatMessageRowActions(
             onReply = { messageId -> actions.startReply(messageId) },
             onForward = { messageId -> actions.openForward(messageId) },
@@ -325,7 +324,7 @@ internal fun ChatListHost(
             onReplyCountTap = { messageId -> actions.onReplyCountTap(messageId) },
             onReplyCountLongPress = { messageId -> actions.openReplyThread(messageId) },
             onRetry = { messageId -> actions.retryMessage(messageId) },
-            onSenderTap = { bubble -> bubble.senderProfile?.let(profileOpener::open) },
+            onSenderTap = { bubble -> bubble.senderProfile?.let(profileTap) },
             onAddReaction = { messageId -> actions.openEmojiPicker(messageId) },
             onTranslationDetail = { messageId -> actions.openLanguageExplorer(messageId) },
             onBubbleFramed = { messageId, frame -> bubbleFrames[messageId] = frame },
@@ -430,7 +429,7 @@ internal fun ChatListHost(
     CompositionLocalProvider(LocalBubbleFileTransfers provides fileTransfers, LocalViewOnceConsumer provides viewOnceConsumer) {
     Box(modifier = modifier.fillMaxSize()) {
         when {
-            state.showSkeleton -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) { ChatSkeleton() }
+            state.loadingPhase(host.landing.isLoadingNewer).isBlockingSpinnerNeeded -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) { ChatSkeleton() }
 
             state.messages.isEmpty() && state.errorMessage != null -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) {
                 ChatNotice(state.errorMessage!!, onRetry = actions.refresh)
@@ -510,6 +509,7 @@ internal fun ChatListHost(
                         focalScale = scale,
                         selecting = host.selection.isActive,
                         selectedIds = host.selection.ids,
+                        overlayMessageId = state.actionMessageId,
                     ) }
                     val landed = item is ChatListItem.Message && item.bubble.messageId == host.landing.highlightedMessageId
                     if (focalMode) {
