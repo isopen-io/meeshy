@@ -324,6 +324,10 @@
     <string name="story_media_soundExtraction_a11yHint">Andere Personen können den Ton der Videos dieses Beitrags in ihren eigenen Beiträgen wiederverwenden.</string>
     <string name="story_media_soundExtraction_caption">Andere Personen können den Ton der Videos dieses Beitrags wiederverwenden.</string>
     <string name="story_media_soundExtraction_label">Wiederverwendung des Tons erlauben</string>
+    <string name="story_notification_expired_back">Zurück zu den Mitteilungen</string>
+    <string name="story_notification_expired_cta_create">Story erstellen</string>
+    <string name="story_notification_expired_subtitle">Diese Story ist nicht mehr verfügbar.</string>
+    <string name="story_notification_expired_title">Story abgelaufen</string>
     <string name="story_reader_buffering">Story wird geladen</string>
     <string name="story_reader_loading">Story wird geladen…</string>
     <string name="story_repost_error_forbidden">Diese Story kann nicht erneut geteilt werden</string>

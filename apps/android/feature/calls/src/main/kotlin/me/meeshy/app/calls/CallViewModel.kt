@@ -16,7 +16,10 @@ import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
+import me.meeshy.sdk.model.call.CallIdentity
+import me.meeshy.sdk.model.call.CallPreflightDecision
 import me.meeshy.sdk.model.call.CallPreviewPhase
+import me.meeshy.sdk.model.call.CallStartAdmission
 import me.meeshy.sdk.model.call.CallRejoinMedia
 import me.meeshy.sdk.model.call.CallRejoinStep
 import me.meeshy.sdk.model.call.CallRetryPolicy
@@ -25,6 +28,7 @@ import me.meeshy.sdk.model.call.CallSoundPolicy
 import me.meeshy.sdk.model.call.CallSignalingRejoinLaw
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallVideoFallback
+import me.meeshy.sdk.model.call.CallVideoNotice
 import me.meeshy.sdk.model.call.CallStateMachine
 import me.meeshy.sdk.model.call.CallTurnCredentialsLaw
 import me.meeshy.sdk.model.call.IceServersRefreshedPayload
@@ -77,6 +81,8 @@ class CallViewModel @Inject constructor(
     private val videoFallbackAnnouncer: CallVideoFallbackAnnouncer = CallVideoFallbackAnnouncer.None,
     private val pictureInPicture: CallPictureInPictureCoordinator = CallPictureInPictureCoordinator(),
     private val reliability: CallReliability = CallReliability.Inert,
+    private val preflightAnnouncer: CallPreflightAnnouncer = CallPreflightAnnouncer.None,
+    private val ringGuard: CallRingGuarding = CallRingGuarding.Inert,
 ) : ViewModel() {
 
     /** Appel établi, socket de signalisation tombée : la bannière « Signalisation interrompue » (le média tient). */
@@ -91,6 +97,9 @@ class CallViewModel @Inject constructor(
     private var config: CallConfig = CallConfig.EMPTY
     private var media: CallMedia = CallMedia()
     private var callState: CallState = CallState.Idle
+
+    /** Le contexte complet du dernier appel SORTANT, tel que composé : ce que « Réessayer » rejoue (iOS `lastOutgoingContext`). */
+    private var lastOutgoing: CallConfig? = null
 
     /** The loop currently asked of [toneController]; dedups redundant `setLoop` calls. */
     private var activeLoop: CallSound = CallSound.None
@@ -126,6 +135,8 @@ class CallViewModel @Inject constructor(
 
     /** `true` while the app itself froze the outgoing video ([CallVideoHealth]). */
     private var videoAutoPaused: Boolean = false
+
+    private var videoNotice: CallVideoNotice = CallVideoNotice.None
 
     /**
      * The name of a group call once its primary left (#13768, iOS `groupCallTitleDidChange` → `remoteUsername`): the
@@ -201,9 +212,11 @@ class CallViewModel @Inject constructor(
         coordinator.onSetupFailed = { message -> dispatch(CallEvent.ConnectionFailed(message)) }
         coordinator.onPrimaryVacated = ::onPrimaryVacated
         coordinator.onVideoUnavailable = ::onVideoUnavailable
+        coordinator.onThermalCritical = ::onThermalCritical
         peers.attach(host)
         waiting.attach(host)
         watchdogs.attach(host) { reliability.catchUpConnected() }
+        ringGuard.attach(host)
         reliability.attach(host, coordinator)
         analytics.attach(host)
         turnCredentials.attach(host)
@@ -229,6 +242,9 @@ class CallViewModel @Inject constructor(
         }
         viewModelScope.launch {
             extensions.videoHealth.isVideoAutoPaused.collect(::onVideoHealthChanged)
+        }
+        viewModelScope.launch {
+            extensions.videoHealth.videoNotice.collect(::onVideoNoticeChanged)
         }
         viewModelScope.launch {
             signalManager.mediaToggles.collect(::onPeerEscalatedToVideo)
@@ -286,6 +302,19 @@ class CallViewModel @Inject constructor(
         if (paused == videoAutoPaused) return
         videoAutoPaused = paused
         publish()
+    }
+
+    private fun onVideoNoticeChanged(notice: CallVideoNotice) {
+        if (notice == videoNotice) return
+        videoNotice = notice
+        publish()
+    }
+
+    /** L'appareil est trop chaud : la caméra se coupe, le pair le voit comme une caméra coupée, l'appel continue en audio. */
+    private fun onThermalCritical() {
+        if (!config.isVideo || localCameraPending || !media.isCameraOn) return
+        toggleCamera()
+        videoFallbackAnnouncer.announce(CallVideoFallback.DeviceTooHot)
     }
 
     /**
@@ -369,7 +398,15 @@ class CallViewModel @Inject constructor(
      * [CallConfig.callId] (blank for an outgoing call, which mints its own).
      */
     fun start(config: CallConfig) {
+        when (CallStartAdmission.decide(callState, identity(), config.identity())) {
+            CallStartAdmission.Inert -> return
+            CallStartAdmission.Busy -> return preflightAnnouncer.busy()
+            CallStartAdmission.SettleThenStart -> dispatch(CallEvent.Settle)
+            CallStartAdmission.Start -> Unit
+        }
         if (!callState.canStart) return
+        lastOutgoing = config.takeIf { it.isOutgoing }
+        ringGuard.reset()
         this.config = config
         // iOS parity (`isSpeaker = isVideo`): video defaults to the loudspeaker.
         this.media = CallMedia(isCameraOn = config.isVideo, isSpeakerOn = config.isVideo)
@@ -393,6 +430,25 @@ class CallViewModel @Inject constructor(
         peers.clear()
         resolvePeerVisual(config)
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
+    }
+
+    private fun identity() = CallIdentity(config.conversationId, config.peerId, config.isOutgoing, callId)
+
+    private fun CallConfig.identity() = CallIdentity(conversationId, peerId, isOutgoing, callId)
+
+    /**
+     * Un appel sortant dont les permissions viennent d'être tranchées ([CallPermissionGate.preflightOutgoing]) :
+     * micro refusé, rien ne part et on le dit ; sinon l'appel part dans le type réellement composé, et une caméra
+     * refusée est annoncée (toast vers les Réglages) — le pair le sait, l'appel naît en audio.
+     */
+    fun startAfterPreflight(config: CallConfig, decision: CallPreflightDecision) {
+        when (decision) {
+            CallPreflightDecision.MicrophoneDenied -> preflightAnnouncer.microphoneDenied()
+            is CallPreflightDecision.Proceed -> {
+                start(config.copy(isVideo = decision.isVideo))
+                decision.fallback?.let(videoFallbackAnnouncer::announce)
+            }
+        }
     }
 
     /** Le visuel d'un appel précédent ne survit jamais : vide d'abord, puis ce que la source résout. */
@@ -632,9 +688,9 @@ class CallViewModel @Inject constructor(
     fun retry() {
         val ended = callState as? CallState.Ended ?: return
         if (!CallRetryPolicy.isRetryable(ended.reason)) return
-        val previous = config
+        val previous = lastOutgoing ?: return
         dispatch(CallEvent.Settle)
-        start(previous.copy(callId = "", isOutgoing = true))
+        start(previous.copy(callId = ""))
     }
 
     /** Reject the waiting call (also the resolution of the banner's 15 s auto-dismiss). */
@@ -704,6 +760,7 @@ class CallViewModel @Inject constructor(
         syncQuality()
         watchdogs.onTransition(callState)
         reliability.onTransition(callState)
+        ringGuard.onTransition(callState)
         peers.onTransition(callState)
         if (callState != previous) extensions.controllers.notifyTransition(previous, callState, session())
         publish()
@@ -780,7 +837,7 @@ class CallViewModel @Inject constructor(
             callState, config, media, elapsedSeconds, connectionQuality, waiting.state,
             peer.qualityDegraded, peer.screenCapturing, peer.caption,
             peer.audioEnabled, peer.videoEnabled, videoAutoPaused, mediaEstablished,
-            peerScreenSharing = peer.screenSharing,
+            peerScreenSharing = peer.screenSharing, videoNotice = videoNotice,
         ).withGroupTitle(groupTitle?.text(groupTitleWording.current()))
         syncPreview()
     }

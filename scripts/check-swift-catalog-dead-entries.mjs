@@ -577,9 +577,6 @@ const PENDING_CLIENT_ENTRIES = {
   'LensEndpoint.partnersPending': { issue: 14097, reason: 'GET /lens/partners/pending — file de vérification, console web seulement' },
   'LensEndpoint.partnersByUserIdVerify': { issue: 14097, reason: 'POST /lens/partners/:userId/verify — console web seulement' },
   'LensEndpoint.partnersByUserIdRevoke': { issue: 14097, reason: 'POST /lens/partners/:userId/revoke — console web seulement' },
-  // Les cercles (`/api/v1/relations`, #13933, servis depuis la PR #14082) : l'écran iOS « Mes cercles » (#13938) lit
-  // déjà `root` et `config` et pilote le rituel (`byUserIdRitual`) ; la baisse silencieuse d'un lien reste à venir (#14228).
-  'RelationsEndpoint.byUserIdLevel': { issue: 14228, reason: 'POST /relations/:userId/level — la baisse silencieuse d’un lien' },
   // Le Bring et les réglages par personne (#13936, servis par la PR #14441) : le sous-lot iOS
   // `proche-bring@ios` les appellera ; les réglages par personne, l'écran de #14229.
   'BringEndpoint.byUserId': { issue: 13936, reason: 'GET|POST /bring/:userId — disponibilité et envoi du Bring, sous-lot iOS' },

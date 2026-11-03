@@ -62,6 +62,21 @@ object CallSelfTileControlsLaw {
         )
     }
 
+    /**
+     * Pendant le glissé les rangées suivent la vignette du MÊME décalage — sans changer de côté sous le doigt — et
+     * restent dans [within] (iOS `following`).
+     */
+    fun following(frames: CallSelfTileControlFrames, dxDp: Float, dyDp: Float, within: CallTileRect): CallSelfTileControlFrames =
+        CallSelfTileControlFrames(
+            effects = frames.effects?.let { moved(it, dxDp, dyDp, within) },
+            camera = frames.camera?.let { moved(it, dxDp, dyDp, within) },
+        )
+
+    private fun moved(row: CallTileRect, dxDp: Float, dyDp: Float, within: CallTileRect): CallTileRect = row.copy(
+        xDp = clamp(row.xDp + dxDp, within.xDp, within.xDp + within.widthDp - row.widthDp),
+        yDp = clamp(row.yDp + dyDp, within.yDp, within.yDp + within.heightDp - row.heightDp),
+    )
+
     private class Geometry(val center: CallTilePoint, val tile: CallTileSize, val bounds: CallTileRect) {
         private val minY = bounds.yDp
         private val maxY = bounds.yDp + bounds.heightDp

@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -20,11 +21,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.feed.R
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -40,22 +44,29 @@ internal fun NewPostsBanner(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val haptics = rememberMeeshyHaptics()
     AnimatedVisibility(
         visible = count > 0,
         enter = fadeIn() + slideInVertically { -it },
         exit = fadeOut() + slideOutVertically { -it },
         modifier = modifier,
     ) {
+        val shape = RoundedCornerShape(MeeshyRadius.pill)
         Surface(
-            shape = RoundedCornerShape(MeeshyRadius.pill),
-            color = MeeshyPalette.Indigo500,
+            shape = shape,
+            color = Color.Transparent,
             shadowElevation = 6.dp,
-            modifier = Modifier.clickable(onClick = onClick),
+            modifier = Modifier.clip(shape).clickable {
+                haptics.light()
+                onClick()
+            },
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-                modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+                modifier = Modifier
+                    .background(Brush.horizontalGradient(listOf(MeeshyPalette.Indigo500, MeeshyPalette.Indigo700)))
+                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
             ) {
                 Icon(
                     imageVector = Icons.Filled.ArrowUpward,

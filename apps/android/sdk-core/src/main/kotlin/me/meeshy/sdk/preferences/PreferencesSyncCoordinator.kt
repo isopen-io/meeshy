@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.audio.AudioPreferencesStore
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.PreferencesApi
 import me.meeshy.sdk.net.apiCall
@@ -75,15 +76,15 @@ import timber.log.Timber
  * could already race its own echo. The connection trigger only turns a narrow race into the
  * nominal one.
  *
- * ## Which categories are handled, and why only two
+ * ## Which categories are handled, and why only three
  *
  * The gateway has seven (`privacy`, `audio`, `message`, `notification`, `video`,
- * `document`, `application`). Android caches exactly two of them locally, so only those
- * two can go stale — and only those two are worth a request. The other five are read on
+ * `document`, `application`). Android caches exactly three of them locally (notification, privacy, audio), so only those
+ * three can go stale — and only those two are worth a request. The other four are read on
  * demand by the screens that use them: they have no store to invalidate and no store to
  * hydrate, and giving them one now would cache blocks nothing reads between screens
  * (decided for #4197, criterion 5). An unknown or unhandled name is ignored, not logged as
- * an error — it is the nominal case for five of seven.
+ * an error — it is the nominal case for four of seven.
  *
  * Constructed by `SdkModule` rather than by `@Inject`, for the reason every store in
  * that module is: the graph binds no `CoroutineScope`, so each owner of a long-lived
@@ -102,6 +103,7 @@ class PreferencesSyncCoordinator(
     private val outboxRepository: OutboxRepository,
     private val notificationStore: NotificationPreferencesStore,
     private val privacyStore: PrivacyPreferencesStore,
+    private val audioStore: AudioPreferencesStore,
     private val scope: CoroutineScope,
 ) {
     private var job: Job? = null
@@ -156,6 +158,7 @@ class PreferencesSyncCoordinator(
         when (category) {
             NOTIFICATION -> refreshNotification()
             PRIVACY -> refreshPrivacy()
+            AUDIO -> refreshAudio()
             else -> Unit
         }
     }
@@ -182,6 +185,16 @@ class PreferencesSyncCoordinator(
         }
     }
 
+    internal suspend fun refreshAudio() {
+        if (owesServerAWrite(OutboxKind.UPDATE_AUDIO_SETTINGS)) return
+        when (val result = apiCall { preferencesApi.getAudio() }) {
+            is NetworkResult.Success ->
+                audioStore.setPreferences(result.data.toPreferences(audioStore.preferences.value))
+            is NetworkResult.Failure ->
+                Timber.w("Audio preferences refresh failed: %s", result.error.message)
+        }
+    }
+
     /**
      * An unreadable queue answers `true` — skip. The two outcomes are not symmetric: a
      * needless skip leaves a block stale until the next connection, while a needless read
@@ -205,8 +218,9 @@ class PreferencesSyncCoordinator(
     private companion object {
         const val NOTIFICATION = "notification"
         const val PRIVACY = "privacy"
+        const val AUDIO = "audio"
 
         /** The blocks this device caches, and therefore the only ones a connection re-reads. */
-        val CACHED_CATEGORIES = listOf(NOTIFICATION, PRIVACY)
+        val CACHED_CATEGORIES = listOf(NOTIFICATION, PRIVACY, AUDIO)
     }
 }
