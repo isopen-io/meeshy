@@ -46,13 +46,18 @@ class OrderedParallelUploadTest {
 
     @Test
     fun `the first failure cancels the siblings and surfaces`() = runTest {
+        val siblingRunning = CompletableDeferred<Unit>()
         val cancelled = CompletableDeferred<Boolean>()
 
         assertThrows(IllegalStateException::class.java) {
             kotlinx.coroutines.runBlocking {
                 OrderedParallelUpload.run(listOf(0, 1)) { index, _ ->
-                    if (index == 0) error("boom")
+                    if (index == 0) {
+                        siblingRunning.await()
+                        error("boom")
+                    }
                     try {
+                        siblingRunning.complete(Unit)
                         delay(10_000)
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         cancelled.complete(true)
@@ -62,6 +67,6 @@ class OrderedParallelUploadTest {
             }
         }
 
-        assertThat(cancelled.await()).isTrue()
+        assertThat(cancelled.isCompleted).isTrue()
     }
 }
