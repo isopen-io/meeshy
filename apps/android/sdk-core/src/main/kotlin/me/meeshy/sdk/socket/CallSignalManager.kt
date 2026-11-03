@@ -159,9 +159,9 @@ class CallSignalManager internal constructor(
      */
     val lastParticipantArrival: StateFlow<CallParticipantArrival?> = _lastParticipantArrival.asStateFlow()
 
-    /** La requête accessoire récente à laquelle ce `call:error` répond (fenêtre de [CallAccessoryRequestLedger]), sinon `null`. */
-    fun accessoryRequestAnswered(error: CallErrorSignal): CallAccessoryRequest? =
-        social.accessoryRequests.requestAnsweredBy(error.callId)
+    /** La requête accessoire récente à laquelle ce `call:error` répond (fenêtre de [CallAccessoryRequestLedger]), sinon `false`. */
+    fun accessoryRequestAnswered(error: CallErrorSignal): Boolean =
+        social.accessoryRequests.requestAnsweredBy(error.callId) != null
 
     private val _participantLeft = SocketInboundRoute.subject<CallParticipantLeftPayload>()
     val participantLeft: SharedFlow<CallParticipantLeftPayload> = _participantLeft.exposed()

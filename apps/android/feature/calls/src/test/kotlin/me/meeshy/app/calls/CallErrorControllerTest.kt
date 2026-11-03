@@ -14,7 +14,7 @@ import org.junit.Test
 class CallErrorControllerTest {
     private var answeredAccessory: CallAccessoryRequest? = null
     private val signals: CallSignalManager = mockk(relaxed = true) {
-        every { accessoryRequestAnswered(any()) } answers { answeredAccessory }
+        every { accessoryRequestAnswered(any()) } answers { answeredAccessory != null }
     }
     private val dispatched = mutableListOf<CallEvent>()
     private var pendingTurnRequest = false
