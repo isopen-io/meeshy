@@ -1,6 +1,5 @@
 package me.meeshy.sdk.model.story
 
-import kotlin.math.abs
 import kotlin.math.max
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.StoryTransitionEffect
@@ -52,34 +51,4 @@ object StoryGroupIntroGesture {
     /** Moitié gauche : annule le changement de groupe ; moitié droite : passe à la première slide. */
     fun onTap(x: Float, width: Float): StoryGroupIntroAction =
         if (x < width / 2f) StoryGroupIntroAction.Back else StoryGroupIntroAction.Skip
-}
-
-/**
- * Le mouchard de déplacement d'un toucher sur l'interlude (iOS `didMoveDuringTouch`) : COLLANT pour tout le toucher —
- * un glissé avorté, revenu à son point de départ, ne redevient pas un toucher. Il ne repart propre qu'à l'OUVERTURE
- * d'un nouveau toucher (origine différente) ou par [reset].
- */
-class StoryGroupIntroTouch(private val slopPx: Float = TAP_SLOP_PX) {
-    private var origin: Pair<Float, Float>? = null
-    private var moved = false
-
-    val isTap: Boolean get() = !moved
-
-    fun move(originX: Float, originY: Float, dx: Float, dy: Float) {
-        val key = originX to originY
-        if (origin != key) {
-            origin = key
-            moved = false
-        }
-        if (max(abs(dx), abs(dy)) > slopPx) moved = true
-    }
-
-    fun reset() {
-        origin = null
-        moved = false
-    }
-
-    companion object {
-        const val TAP_SLOP_PX: Float = 14f
-    }
 }

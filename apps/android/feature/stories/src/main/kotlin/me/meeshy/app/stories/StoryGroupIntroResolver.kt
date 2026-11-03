@@ -12,7 +12,7 @@ import me.meeshy.sdk.model.story.StoryGroupIntro
  * bannière, l'humeur ensuite. Une source qui échoue laisse le substitut tel quel — l'interlude s'affiche de toute
  * façon, avec ce que la story a déjà servi.
  */
-internal class StoryGroupIntroResolver(
+class StoryGroupIntroResolver(
     private val cachedProfile: suspend (String) -> MeeshyUser?,
     private val fetchProfile: suspend (String) -> MeeshyUser?,
     private val storeProfile: suspend (MeeshyUser, String) -> Unit,

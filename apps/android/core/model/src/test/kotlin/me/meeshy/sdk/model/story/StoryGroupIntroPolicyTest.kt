@@ -54,30 +54,6 @@ class StoryGroupIntroPolicyTest {
     }
 
     @Test
-    fun `un glisse n est pas requalifie en toucher meme revenu a son point de depart`() {
-        val touch = StoryGroupIntroTouch()
-        touch.move(originX = 5f, originY = 5f, dx = 40f, dy = 0f)
-        touch.move(originX = 5f, originY = 5f, dx = 0f, dy = 0f)
-        assertThat(touch.isTap).isFalse()
-    }
-
-    @Test
-    fun `un nouveau toucher repart propre`() {
-        val touch = StoryGroupIntroTouch()
-        touch.move(5f, 5f, 40f, 0f)
-        touch.move(90f, 90f, 1f, 1f)
-        assertThat(touch.isTap).isTrue()
-    }
-
-    @Test
-    fun `le jeton de purge efface le drapeau colle`() {
-        val touch = StoryGroupIntroTouch()
-        touch.move(5f, 5f, 40f, 0f)
-        touch.reset()
-        assertThat(touch.isTap).isTrue()
-    }
-
-    @Test
     fun `le detail de presence est reserve aux amis`() {
         val online = UserPresence(isOnline = true)
         assertThat(StoryGroupIntroPolicy.presenceDetail(isFriend = true, presence = online, nowEpochMillis = 0L)).isEqualTo(PresenceState.ONLINE)

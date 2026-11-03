@@ -366,6 +366,11 @@
     <string name="story_edit_error">Story konnte nicht aktualisiert werden</string>
     <string name="story_edit_offline">Zum Bearbeiten der Story ist eine Verbindung erforderlich</string>
     <string name="story_edit_save">Sichern</string>
+    <string name="story_group_intro_away">Abwesend</string>
+    <string name="story_group_intro_idle">Inaktiv</string>
+    <string name="story_group_intro_offline">Offline</string>
+    <string name="story_group_intro_online">Online</string>
+    <string name="story_group_intro_skip_hint">Zum Überspringen zur Story tippen</string>
     <string name="story_language_close">Schließen</string>
     <string name="story_language_original">Original</string>
     <string name="story_language_original_hint">Jeder Text in seiner Sprache</string>
