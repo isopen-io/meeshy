@@ -97,6 +97,8 @@ private fun SceneStyledText(text: StoryTextObject, shown: String, fontPx: Float,
         frame = StoryTextFrame.fromWire(text.frameShape, text.framePaddingScale, text.frameBorderWidth, text.frameBorderColor),
         pxPerDesign = pxPerDesign,
         glyphStyle = TextStyle(fontSize = fontSize, fontFamily = font.family, fontWeight = font.weight, fontStyle = font.style),
+        inkText = shown,
+        inkStyle = base.copy(shadow = null),
     ) {
         if (outlineWidth != null && outlineColor != null) {
             Text(
