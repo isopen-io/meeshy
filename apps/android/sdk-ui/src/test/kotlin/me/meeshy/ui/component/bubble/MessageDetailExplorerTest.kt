@@ -225,13 +225,13 @@ class MessageDetailExplorerTest {
     }
 
     @Test
-    fun `with no candidates and empty preferences the fallback language still appears`() {
+    fun `with no candidates and empty preferences no default french row is invented`() {
         val model = build(
             originalLanguage = "en",
             preferences = ExplorerPrefs(systemLanguage = null),
             candidates = emptyList(),
         )
 
-        assertThat(model.rows.map { it.code }).containsExactly("fr")
+        assertThat(model.rows).isEmpty()
     }
 }

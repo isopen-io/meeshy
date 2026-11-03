@@ -2024,7 +2024,7 @@ class StoryViewerViewModelTest {
 
         vm.removeCurrentStory("  ab ")
 
-        coVerify(exactly = 0) { storyRepository.delete(any(), any<String?>()) }
+        coVerify(exactly = 0) { storyRepository.delete(any(), any()) }
         assertThat(vm.state.value.slides).hasSize(2)
     }
 

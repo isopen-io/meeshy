@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.TypingNames
 import me.meeshy.sdk.e2ee.libsignal.EndToEndThreadAccess
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
@@ -507,7 +508,7 @@ class ChatViewModel @Inject constructor(
             launch {
                 messageSocketManager.typingStarted.collect { event ->
                     if (event.conversationId == conversationId) {
-                        val name = event.displayName ?: event.username ?: event.userId
+                        val name = TypingNames.inConversation(event)
                         typingCleanupJobs[event.userId]?.cancel()
                         _state.update { s ->
                             s.copy(

@@ -168,7 +168,7 @@ class ConversationViewingBinding @Inject constructor(
     private fun restKey(change: ViewingChange) = "${change.conversationId}\u0000${change.userId}"
 
     internal companion object {
-        const val ACTIVITY_HOLD_MS: Long = 4_000L
+        const val ACTIVITY_HOLD_MS: Long = ConversationViewers.ACTIVITY_HOLD_MS
     }
 }
 
