@@ -237,6 +237,9 @@ internal fun ChatMessageRow(
         accentColor = accentColor,
         onToggle = { actions.onToggleSelection(messageId) },
     ) {
+    val mentionNames = remember(mentionDisplayNames, bubble.servedMentionNames) {
+        MentionRoster.withServedNames(mentionDisplayNames, bubble.servedMentionNames)
+    }
     SwipeRowContainer(
         isOutgoing = bubble.isOutgoing,
         createdAtIso = bubble.createdAtIso,
@@ -254,7 +257,7 @@ internal fun ChatMessageRow(
                 accentColor = accentColor,
                 callbacks = callbacks,
                 audioPlayback = audioPlayback,
-                mentionDisplayNames = mentionDisplayNames,
+                mentionDisplayNames = mentionNames,
                 highlightTerm = highlightTerm,
                 metaAlpha = metaAlpha,
                 bodyAccessory = linkAccessory,
@@ -266,7 +269,7 @@ internal fun ChatMessageRow(
             // de la conversation — l'accent reste aux liens, citations et réactions.
             outgoingColor = MeeshyPalette.Indigo500,
             accentColor = accentColor,
-            mentionDisplayNames = mentionDisplayNames,
+            mentionDisplayNames = mentionNames,
             highlightTerm = highlightTerm,
             callbacks = callbacks,
             audioPlayback = audioPlayback,
