@@ -12,6 +12,7 @@ import me.meeshy.sdk.net.PagedResult
 import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.api.UpdateCommentRequest
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.net.apiCallUnit
 import me.meeshy.sdk.net.pagedApiCall
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -59,10 +60,10 @@ class StoryCommentsRepository @Inject constructor(
         }
 
     suspend fun like(storyId: String, commentId: String): NetworkResult<Unit> =
-        apiCall { storyApi.likeComment(storyId, commentId) }
+        apiCallUnit { storyApi.likeComment(storyId, commentId) }
 
     suspend fun unlike(storyId: String, commentId: String): NetworkResult<Unit> =
-        apiCall { storyApi.unlikeComment(storyId, commentId) }
+        apiCallUnit { storyApi.unlikeComment(storyId, commentId) }
 
     suspend fun edit(
         storyId: String,
@@ -74,7 +75,7 @@ class StoryCommentsRepository @Inject constructor(
             .map { it.toStoryComment(prefs) }
 
     suspend fun delete(storyId: String, commentId: String): NetworkResult<Unit> =
-        apiCall { storyApi.deleteComment(storyId, commentId) }
+        apiCallUnit { storyApi.deleteComment(storyId, commentId) }
 
     private class WirePage(val rows: List<ApiPostComment>, val nextCursor: String?, val hasMore: Boolean) {
         fun toStoryPage(prefs: ContentLanguagePreferences) =
