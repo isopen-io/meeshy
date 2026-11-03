@@ -7,7 +7,7 @@ package me.meeshy.sdk.story
 public class LegacyDraftMigrator(
     private val legacy: StoryComposerDraftStore,
     private val store: StoryDraftStoring,
-    private val newId: () -> String = StoryDraftStoring::newDraftId,
+    private val newId: () -> String = { StoryDraftStoring.newDraftId() },
 ) {
     /** L'identifiant du brouillon migré, ou `null` quand il n'y avait rien à migrer (ou que l'écriture a échoué : l'ancien reste). */
     public suspend fun migrate(): String? {
