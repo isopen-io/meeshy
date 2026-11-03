@@ -339,6 +339,7 @@
     <string name="story_repost_error_forbidden">Questa storia non può essere ricondivisa</string>
     <string name="story_repost_error_generic">Ripubblicazione non riuscita</string>
     <string name="story_repost_error_unavailable">Questa storia non è più disponibile</string>
+    <string name="story_repost_reprojected">%1$d elemento/i riposizionato/i per il nuovo formato</string>
     <string name="story_repost_success">Ripubblicato nel tuo feed</string>
     <string name="story_repost_success_reel">Ricondiviso nei tuoi reel</string>
     <string name="story_send_caption_hint">Aggiungi un messaggio…</string>

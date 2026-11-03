@@ -11,6 +11,7 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -113,6 +114,7 @@ internal fun StoryCanvasSurface(
     stack: List<SceneObjectRef>,
     pins: @Composable (ref: SceneObjectRef, canvasWidthPx: Float, canvasHeightPx: Float) -> Unit = { _, _, _ -> },
     live: ComposerLiveStage? = null,
+    canvasFormat: me.meeshy.sdk.model.scene.CanvasFormat = me.meeshy.sdk.model.scene.CanvasFormat.PORTRAIT,
 ) {
     val canvasLabel = formatLabel(ComposerFormatLabel.CANVAS)
     val backgroundTap by rememberUpdatedState(onBackgroundTap)
@@ -132,8 +134,8 @@ internal fun StoryCanvasSurface(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxHeight()
-                .aspectRatio(9f / 16f)
+                .then(if (canvasFormat == me.meeshy.sdk.model.scene.CanvasFormat.PORTRAIT) Modifier.fillMaxHeight() else Modifier.fillMaxWidth())
+                .aspectRatio(canvasFormat.ratio.toFloat())
                 .clip(frameShape)
                 .background(sceneBrush)
                 .then(

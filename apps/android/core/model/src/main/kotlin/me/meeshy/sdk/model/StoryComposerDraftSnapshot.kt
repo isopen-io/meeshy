@@ -233,6 +233,8 @@ data class StoryDraftSlideSnapshot(
     val mediaLooks: Map<String, StoryMediaLook> = emptyMap(),
     /** Le dessin à main levée de la diapo (#13863) ; un blob d'avant se lit « aucun trait ». */
     val strokes: List<StoryDrawingStroke> = emptyList(),
+    /** Le format du cadre de la diapo (`"landscape"`) ; absent : un blob d'avant se rouvre en 9:16. */
+    val canvasFormat: String? = null,
 ) {
     /**
      * True once the slide carries content worth restoring: a caption, attached media, a
