@@ -102,7 +102,7 @@ fun rememberProfilePostsItems(
         clipboard = LocalClipboardManager.current,
         shareLauncher = LocalShareLauncher.current,
         shareOut = rememberContentShareOut(),
-        copyLink = rememberPostLinkCopy(),
+        linkCopier = rememberPostLinkCopy(),
         linkCopied = stringResource(R.string.feed_link_copied),
         toasts = viewModel.toasts,
         context = context,

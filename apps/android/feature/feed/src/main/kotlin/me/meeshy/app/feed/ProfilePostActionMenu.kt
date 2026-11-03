@@ -56,7 +56,7 @@ internal class ProfilePostCardActions(
     private val clipboard: ClipboardManager,
     private val shareLauncher: ShareLauncher?,
     private val shareOut: (ShareCard) -> Unit,
-    private val copyLink: (String, (String) -> Unit) -> Unit,
+    private val linkCopier: (String, (String) -> Unit) -> Unit,
     private val linkCopied: String,
     private val toasts: FeedbackToastCenter,
     private val context: Context,
@@ -69,7 +69,7 @@ internal class ProfilePostCardActions(
     }
 
     fun copyLink(post: FeedPostPresentation) {
-        copyLink(post.id) { url ->
+        linkCopier(post.id) { url ->
             clipboard.setText(AnnotatedString(url))
             toasts.show(linkCopied, FeedbackToastKind.SUCCESS)
         }
