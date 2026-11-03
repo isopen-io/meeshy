@@ -180,4 +180,33 @@ class AuthRepositoryLogoutTest {
         assertThat(order).containsExactly("close", "wipe").inOrder()
         assertThat(tokensWhenClosing).isNull()
     }
+
+    @Test
+    fun `avec l'executeur de fermeture, la deconnexion rend la main et lui remet les jetons d'avant l'effacement`() = runTest {
+        val store = InMemoryTokenStore(jwt = "jwt-a", sessionToken = "sess-a")
+        val api = mockk<AuthApi>()
+        val handed = mutableListOf<Pair<String?, String?>>()
+        val scheduler = object : ServerLogoutScheduler {
+            override fun schedule(jwt: String?, sessionToken: String?) {
+                handed += jwt to sessionToken
+            }
+        }
+        val quiet = object : ServerLogoutLog {
+            override fun info(message: String) = Unit
+            override fun warn(message: String) = Unit
+            override fun error(message: String) = Unit
+        }
+        coEvery { api.logout(any(), any()) } throws IOException("offline")
+        val serverLogout = ServerLogout(api, scheduler, quiet, backgroundScope)
+        val repository = AuthRepository(
+            api, store, SessionRepository(api, store), RecordingTeardown(), SyncSeqTracker(), serverLogout = serverLogout,
+        )
+
+        repository.logout()
+
+        assertThat(store.isAuthenticated).isFalse()
+        testScheduler.advanceUntilIdle()
+        coVerify(exactly = 3) { api.logout("Bearer jwt-a", "sess-a") }
+        assertThat(handed).containsExactly("jwt-a" to "sess-a")
+    }
 }
