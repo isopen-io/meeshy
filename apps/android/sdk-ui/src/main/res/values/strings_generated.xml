@@ -41,6 +41,11 @@
     <string name="audio_editor_use">Use audio</string>
     <string name="audio_editor_volume_normal">Normal</string>
     <string name="audio_fullscreen_dial">Position in the voice message</string>
+    <string name="audio_recorder_micDenied">Microphone permission denied</string>
+    <string name="audio_recorder_micDeniedSettings">Microphone denied — allow it in Settings</string>
+    <string name="audio_recorder_record">Record</string>
+    <string name="audio_recorder_recording">Recording</string>
+    <string name="audio_recorder_tapToRecord">Tap to record</string>
     <string name="audio_split_handle_end">Cut end</string>
     <string name="audio_split_handle_start">Cut start</string>
     <string name="audio_trim_handle_end">Selection end</string>
@@ -388,6 +393,11 @@
     <string name="sticker_sheet_unpin">Remove from favorites</string>
     <string name="story_sticker_a11y">Sticker %1$s</string>
     <string name="story_sticker_title">Stickers</string>
+    <string name="story_voiceRecorder_fromFiles">Files</string>
+    <string name="story_voiceRecorder_fromLibrary">Library</string>
+    <string name="story_voiceRecorder_start">Record</string>
+    <string name="story_voiceRecorder_stop">Stop recording</string>
+    <string name="story_voiceRecorder_title">Recording</string>
     <string name="time_lastSeen_beforeYesterdayAt">Seen two days ago at %1$s</string>
     <string name="time_lastSeen_dateAt">Seen on %1$s at %2$s</string>
     <string name="time_lastSeen_online">Online</string>

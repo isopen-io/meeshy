@@ -41,6 +41,11 @@
     <string name="audio_editor_use">Audio verwenden</string>
     <string name="audio_editor_volume_normal">Normal</string>
     <string name="audio_fullscreen_dial">Position in der Sprachnachricht</string>
+    <string name="audio_recorder_micDenied">Mikrofonberechtigung verweigert</string>
+    <string name="audio_recorder_micDeniedSettings">Mikrofon verweigert — in den Einstellungen erlauben</string>
+    <string name="audio_recorder_record">Aufnehmen</string>
+    <string name="audio_recorder_recording">Aufnahme</string>
+    <string name="audio_recorder_tapToRecord">Zum Aufnehmen tippen</string>
     <string name="audio_split_handle_end">Ende des Schnitts</string>
     <string name="audio_split_handle_start">Beginn des Schnitts</string>
     <string name="audio_trim_handle_end">Auswahlende</string>
@@ -388,6 +393,11 @@
     <string name="sticker_sheet_unpin">Aus Favoriten entfernen</string>
     <string name="story_sticker_a11y">Sticker %1$s</string>
     <string name="story_sticker_title">Sticker</string>
+    <string name="story_voiceRecorder_fromFiles">Dateien</string>
+    <string name="story_voiceRecorder_fromLibrary">Bibliothek</string>
+    <string name="story_voiceRecorder_start">Aufnehmen</string>
+    <string name="story_voiceRecorder_stop">Aufnahme beenden</string>
+    <string name="story_voiceRecorder_title">Aufnahme</string>
     <string name="time_lastSeen_beforeYesterdayAt">Vorgestern um %1$s gesehen</string>
     <string name="time_lastSeen_dateAt">Am %1$s um %2$s gesehen</string>
     <string name="time_lastSeen_online">Online</string>
