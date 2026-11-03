@@ -57,4 +57,19 @@ class DailyGestureLimitTest {
         assertThat(DailyGestureLimit.parseInstant("")).isNull()
         assertThat(DailyGestureLimit.parseInstant("demain")).isNull()
     }
+
+    @Test
+    fun `la raison d'echec de la file se relit sans perte`() {
+        val limit = DailyGestureLimit(DailyGestureLimit.Gesture.COMMENT, 1_793_743_200_000L, 50)
+        assertThat(limit.reason).contains("DAILY_COMMENT_LIMIT")
+        assertThat(DailyGestureLimit.fromReason(limit.reason)).isEqualTo(limit)
+    }
+
+    @Test
+    fun `une raison sans heure ni plafond reste une limite du jour`() {
+        val limit = DailyGestureLimit.fromReason("Refused: HTTP 429 DAILY_REACTION_LIMIT")
+        assertThat(limit).isEqualTo(DailyGestureLimit(DailyGestureLimit.Gesture.REACTION, null, null))
+        assertThat(DailyGestureLimit.fromReason("Refused: HTTP 404 POST_NOT_FOUND")).isNull()
+        assertThat(DailyGestureLimit.fromReason(null)).isNull()
+    }
 }

@@ -7,7 +7,6 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoMap
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
-import me.meeshy.sdk.model.feedback.DailyGestureLimit
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.PostApi
@@ -77,7 +76,6 @@ internal fun NetworkResult<*>.toToggleSendResult(): SendResult {
     return when {
         status in ALREADY_APPLIED_STATUSES -> SendResult.Success
         status in DEFINITIVE_REFUSALS && error?.code != "HTTP_$status" -> SendResult.PermanentFailure("Refused: HTTP $status ${error?.code}")
-        status == 429 && error?.code == DailyGestureLimit.REACTION_CODE -> SendResult.PermanentFailure("Refused: HTTP 429 ${DailyGestureLimit.REACTION_CODE}")
         else -> toSendResult()
     }
 }
