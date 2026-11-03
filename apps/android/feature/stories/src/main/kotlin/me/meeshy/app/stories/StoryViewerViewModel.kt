@@ -725,7 +725,7 @@ class StoryViewerViewModel @Inject constructor(
 
         val user = sessionRepository.currentUser.value ?: return present
         val presentLower = presentCodes.mapTo(mutableSetOf()) { it.lowercase() }
-        val translatable = ReaderPrism.resolve(user, java.util.Locale.getDefault())
+        val translatable = ReaderPrism.resolve(user)
             .distinctBy { it.lowercase() }
             .filter { it.lowercase() !in presentLower }
             .map { languageOption(it, storyId, isTranslatable = true) }
