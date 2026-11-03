@@ -616,7 +616,7 @@ class StoryViewerViewModel @Inject constructor(
 
     private fun emit() {
         val now = clock.nowMillis()
-        playback = playback.skippingUnplayable(sessionRepository.currentUserId, rawItems::get) { it.isExpired(now) }
+        playback = playback.skippingUnplayable(sessionRepository.currentUserId, { rawItems[it] }) { it.isExpired(now) }
         val currentId = playback.currentSlide?.id
         transitionPostRoom(currentId)
         // Dwell follows the slide on screen; a dismissed viewer is treated as no slide, so the
