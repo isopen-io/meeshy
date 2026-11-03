@@ -13,6 +13,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,6 +54,7 @@ import me.meeshy.sdk.model.scene.SceneObjectNumbers
 import me.meeshy.sdk.model.scene.SceneLookRecipe
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
 import me.meeshy.sdk.model.story.StoryRepostDestination
+import me.meeshy.sdk.model.story.StoryViewerContentRules
 import me.meeshy.sdk.model.story.StoryRepostFailure
 import me.meeshy.sdk.story.StoryDirectRepostOutcome
 import me.meeshy.sdk.story.StoryRepository
@@ -126,11 +128,8 @@ class StoryViewerViewModel @Inject constructor(
     private val rawItems = mutableMapOf<String, StoryItem>()
 
     /** Ephemeral "Exploration" override, keyed to the slide it was chosen on. */
-    private var languageOverride: Pair<String, String>? = null
+    private val languageController = StoryLanguageController { clock.nowMillis() }
     private var explorerOpen = false
-
-    /** In-flight on-demand translation requests, keyed `storyId|lang` (lowercased). */
-    private val translatingLanguages = mutableSetOf<String>()
 
     /**
      * Image URLs whose load has resolved (succeeded or failed) on screen. Feeds
@@ -479,14 +478,14 @@ class StoryViewerViewModel @Inject constructor(
      */
     fun toggleLanguageOverride(code: String) {
         val storyId = playback.currentSlide?.id ?: return
-        languageOverride = if (languageOverride == storyId to code) null else storyId to code
+        languageController.tap(storyId, code)
         emit()
     }
 
     /** Choix dans l'explorateur de langues : la langue s'AFFICHE et se rechoisit sans basculer (≠ puce). */
     fun selectLanguage(code: String) {
         val storyId = playback.currentSlide?.id ?: return
-        languageOverride = storyId to code
+        languageController.select(storyId, code)
         emit()
     }
 
@@ -639,9 +638,10 @@ class StoryViewerViewModel @Inject constructor(
     }
 
     /** La chaîne du Prisme pour la transcription : l'exploration en tête, puis les rangs stricts du lecteur. */
-    fun transcriptLanguageChain(): List<String> =
-        listOfNotNull(languageOverride?.second?.takeUnless(StoryLanguageOverride::isOriginal)) +
-            StoryContentResolver.readerLanguages(sessionRepository.currentUser.value ?: EmptyContentPreferences)
+    fun transcriptLanguageChain(): List<String> = StoryViewerContentRules.viewerLanguageChain(
+        base = StoryContentResolver.readerLanguages(sessionRepository.currentUser.value ?: EmptyContentPreferences),
+        override = languageController.overrideFor(playback.currentSlide?.id),
+    )
 
     private fun emit() {
         val now = clock.nowMillis()
@@ -651,8 +651,7 @@ class StoryViewerViewModel @Inject constructor(
         // Dwell follows the slide on screen; a dismissed viewer is treated as no slide, so the
         // running session ends the moment the viewer is swiped away rather than lingering to teardown.
         transitionDwell(if (playback.isDismissed) null else currentId)
-        if (languageOverride != null && languageOverride?.first != currentId) languageOverride = null
-        val override = languageOverride?.second
+        val override = languageController.overrideFor(currentId)
         val prefsNow = sessionRepository.currentUser.value ?: EmptyContentPreferences
         val currentItem = currentId?.let { rawItems[it] }
         val currentResolved = currentItem?.let { StoryContentResolver.resolve(it, prefsNow, override) }
@@ -704,7 +703,7 @@ class StoryViewerViewModel @Inject constructor(
                     preferences = prefsNow,
                     resolved = currentResolved,
                     override = override,
-                    translatingCodes = translatingCodesOf(currentId),
+                    translatingCodes = translatingCodesOf(currentId, currentItem),
                 )
             } else {
                 null
@@ -767,17 +766,33 @@ class StoryViewerViewModel @Inject constructor(
             flag = info?.flag ?: "🌐",
             label = info?.nativeName ?: code,
             isTranslatable = isTranslatable,
-            isTranslating = translationKey(storyId, code) in translatingLanguages,
+            isTranslating = languageController.isTranslating(storyId, code),
         )
     }
 
-    private fun translatingCodesOf(storyId: String): Set<String> =
-        translatingLanguages.mapNotNullTo(mutableSetOf()) { key ->
-            key.substringAfter('|', "").takeIf { it.isNotEmpty() && key.substringBefore('|') == storyId }
-        }
+    /** Les langues qui tournent : première traduction demandée, ou retraduction dont le texte n'a pas bougé. */
+    private fun translatingCodesOf(storyId: String, item: StoryItem): Set<String> =
+        languageController.translatingCodes(storyId) +
+            languageController.retranslatingCodes(storyId) { code -> item.translatedText(code) }
 
-    private fun translationKey(storyId: String, code: String): String =
-        "$storyId|${code.trim().lowercase()}"
+    private fun StoryItem.translatedText(code: String): String? =
+        translations.orEmpty().firstOrNull { it.language.equals(code, ignoreCase = true) }?.content
+
+    /**
+     * « Retraduire » : la base du texte servi est mémorisée, le spinner tient jusqu'à ce qu'il change (traduction
+     * arrivée par socket ou tirée ici) ou 20 s, puis l'écran se rafraîchit seul (iOS `retranslateTimeout`).
+     */
+    fun retranslateStory(code: String) {
+        val storyId = playback.currentSlide?.id ?: return
+        val baseline = rawItems[storyId]?.translatedText(code) ?: return
+        languageController.beginRetranslation(storyId, code, baseline)
+        emit()
+        viewModelScope.launch {
+            delay(StoryViewerContentRules.RETRANSLATE_TIMEOUT_MILLIS)
+            emit()
+        }
+        requestStoryTranslation(code)
+    }
 
     /**
      * On-demand translation request (Prisme pull side): the viewer tapped a configured
@@ -793,22 +808,21 @@ class StoryViewerViewModel @Inject constructor(
         val item = rawItems[storyId] ?: return
         val target = code.trim()
         if (target.isEmpty()) return
-        val key = translationKey(storyId, target)
-        if (!translatingLanguages.add(key)) return
+        if (!languageController.beginTranslation(storyId, target)) return
         emit()
         viewModelScope.launch {
             try {
                 val merged = storyRepository.translateStory(item, target)
                 if (merged != null) {
                     rawItems[storyId] = merged
-                    languageOverride = storyId to target
+                    languageController.select(storyId, target)
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 // Inert — a failed request leaves the strip untouched to retry.
             } finally {
-                translatingLanguages.remove(key)
+                languageController.endTranslation(storyId, target)
                 emit()
             }
         }
