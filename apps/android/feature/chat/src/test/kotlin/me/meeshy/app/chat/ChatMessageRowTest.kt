@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
@@ -160,31 +161,37 @@ class ChatMessageRowTest {
     fun `TalkBack offers the reply and the forward the law grants, each reporting its own id`() {
         val replied = mutableListOf<String>()
         val forwarded = mutableListOf<String>()
+        val pressed = mutableListOf<String>()
         show(
             bubble(id = "m4"),
-            actions = ChatMessageRowActions(onReply = { replied += it }, onForward = { forwarded += it }),
+            actions = ChatMessageRowActions(
+                onReply = { replied += it },
+                onForward = { forwarded += it },
+                onLongPress = { pressed += it },
+            ),
         )
 
         val spoken = spokenActions()
-        assertThat(spoken.map { it.label }).containsExactly("Reply", "Forward").inOrder()
+        assertThat(spoken.map { it.label }).containsExactly("Reply", "Forward", "Menu").inOrder()
         compose.runOnIdle { spoken.forEach { it.action() } }
 
         assertThat(replied).containsExactly("m4")
         assertThat(forwarded).containsExactly("m4")
+        assertThat(pressed).containsExactly("m4")
     }
 
     @Test
     fun `TalkBack offers no reply to a reader who may not write`() {
         show(bubble(), canWrite = false)
 
-        assertThat(spokenActions().map { it.label }).containsExactly("Forward")
+        assertThat(spokenActions().map { it.label }).containsExactly("Forward", "Menu").inOrder()
     }
 
     @Test
-    fun `TalkBack offers nothing on a bubble the server does not know yet`() {
+    fun `TalkBack offers only the menu on a bubble the server does not know yet`() {
         show(bubble(id = "cid_0b8f3c2e-4d5a-4b6c-8d7e-9f0a1b2c3d4e"))
 
-        assertThat(spokenActions()).isEmpty()
+        assertThat(spokenActions().map { it.label }).containsExactly("Menu")
     }
 
     @Test
@@ -204,6 +211,22 @@ class ChatMessageRowTest {
 
         swipeTowardReply()
 
+        assertThat(replied).isEmpty()
+    }
+
+    @Test
+    fun `swiping a received message toward the forward side forwards it`() {
+        val forwarded = mutableListOf<String>()
+        val replied = mutableListOf<String>()
+        show(
+            bubble(id = "m7"),
+            actions = ChatMessageRowActions(onForward = { forwarded += it }, onReply = { replied += it }),
+        )
+
+        compose.onNodeWithText("Salut à tous").performTouchInput { swipeLeft(startX = centerX, endX = centerX - 180f) }
+        compose.waitForIdle()
+
+        assertThat(forwarded).containsExactly("m7")
         assertThat(replied).isEmpty()
     }
 }

@@ -72,9 +72,9 @@ import me.meeshy.sdk.model.call.CallCaptionReader
 import me.meeshy.sdk.model.call.CallCaptionsState
 import me.meeshy.sdk.model.call.CallJournalFollow
 import me.meeshy.sdk.model.call.CallLiveCaptionLine
+import me.meeshy.sdk.call.CallSpeakerColor
 import me.meeshy.sdk.model.call.CallLiveCaptionLines
 import me.meeshy.sdk.model.call.CaptionsMode
-import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
@@ -198,7 +198,7 @@ internal fun CallCaptionRow(line: CallLiveCaptionLine, showsTime: Boolean, onTog
         else -> stringResource(R.string.call_transcript_show_original)
     }
     val speakerColor = remember(line.speakerId) {
-        hexColor(DynamicColorGenerator.adaptedColor(DynamicColorGenerator.colorForName(line.speakerId), DynamicColorGenerator.ThemeMode.DARK))
+        hexColor(CallSpeakerColor.hex(line.speakerId))
     }
     Column(
         modifier = Modifier

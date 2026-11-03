@@ -994,7 +994,7 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.new.group-name",
+          "iosKey": "conversation.new.group-name.required",
           "androidName": "new_conversation_group_title",
           "status": "adopted"
         },

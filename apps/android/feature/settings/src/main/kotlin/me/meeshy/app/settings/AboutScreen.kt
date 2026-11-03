@@ -5,7 +5,9 @@ import android.os.Build
 import me.meeshy.ui.component.link.openExternalLink
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,12 +24,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,13 +46,26 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.sdk.model.media.DeviceMediaTier
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -53,6 +75,7 @@ import me.meeshy.sdk.model.about.AboutFeatureKey
 import me.meeshy.sdk.model.about.AboutInfoKey
 import me.meeshy.sdk.model.about.AboutLink
 import me.meeshy.sdk.model.about.AboutLinkKind
+import me.meeshy.sdk.model.about.AboutLinkResolver
 import me.meeshy.sdk.model.about.AboutParams
 import me.meeshy.sdk.model.about.AboutPresentationBuilder
 import me.meeshy.ui.component.chrome.MeeshyBackground
@@ -71,9 +94,10 @@ import me.meeshy.ui.component.chrome.leadingNavigationLabel
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AboutScreen(onBack: () -> Unit) {
+fun AboutScreen(onBack: () -> Unit, viewModel: AboutViewModel = hiltViewModel()) {
     val context = LocalContext.current
-    val presentation = remember {
+    val mediaTier by viewModel.mediaTier.collectAsStateWithLifecycle()
+    val presentation = remember(mediaTier) {
         val pkg: PackageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
         val versionCode = pkg.versionCodeCompat()
         AboutPresentationBuilder.build(
@@ -83,6 +107,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 osRelease = Build.VERSION.RELEASE.orEmpty(),
                 applicationId = context.packageName,
                 sdkVersion = AboutPresentationBuilder.DEFAULT_SDK_VERSION,
+                mediaTier = mediaTier,
             ),
         )
     }
@@ -123,7 +148,14 @@ fun AboutScreen(onBack: () -> Unit) {
                 SectionCard(title = stringResource(R.string.about_section_informations)) {
                     presentation.infoRows.forEachIndexed { index, row ->
                         if (index > 0) Spacer(Modifier.height(MeeshySpacing.sm))
-                        InfoRow(label = stringResource(row.key.labelRes()), value = row.value)
+                        InfoRow(
+                            label = stringResource(row.key.labelRes()),
+                            value = if (row.key == AboutInfoKey.MEDIA_TIER) {
+                                stringResource(DeviceMediaTier.valueOf(row.value).labelRes())
+                            } else {
+                                row.value
+                            },
+                        )
                     }
                 }
 
@@ -192,11 +224,14 @@ private fun AppHeader(versionLabel: String) {
             fontWeight = FontWeight.Bold,
             color = MeeshyTheme.tokens.textPrimary,
         )
-        Text(
-            text = stringResource(R.string.about_version_label, versionLabel),
-            style = MaterialTheme.typography.bodySmall,
-            color = MeeshyTheme.tokens.textMuted,
-        )
+        val versionText = stringResource(R.string.about_version_label, versionLabel)
+        CopyableValue(value = versionText) {
+            Text(
+                text = versionText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textMuted,
+            )
+        }
     }
 }
 
@@ -227,13 +262,52 @@ private fun SectionCard(title: String, content: @Composable () -> Unit) {
 
 @Composable
 private fun InfoRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+    CopyableValue(value = value) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = MeeshyTheme.tokens.textPrimary)
+            Text(value, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textMuted)
+        }
+    }
+}
+
+/**
+ * Le maintien ouvre « Copier » (menu contextuel) : copie la valeur, haptique succès — comme le
+ * `contextMenu` d'iOS. Une action d'accessibilité nommée « Copier » expose la même chose à TalkBack.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CopyableValue(value: String, content: @Composable () -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    val haptics = rememberMeeshyHaptics()
+    val copyLabel = stringResource(R.string.about_copy)
+    var menuOpen by remember { mutableStateOf(false) }
+    val copy = {
+        clipboard.setText(AnnotatedString(value))
+        haptics.success()
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = {}, onLongClick = { menuOpen = true })
+            .semantics(mergeDescendants = true) {
+                customActions = listOf(CustomAccessibilityAction(copyLabel) { copy(); true })
+            },
+        contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = MeeshyTheme.tokens.textPrimary)
-        Text(value, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textMuted)
+        content()
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text(copyLabel) },
+                onClick = {
+                    menuOpen = false
+                    copy()
+                },
+            )
+        }
     }
 }
 
@@ -253,11 +327,12 @@ private fun FeatureRow(icon: ImageVector, label: String) {
 @Composable
 private fun LinkRow(link: AboutLink, label: String) {
     val context = LocalContext.current
+    val hint = stringResource(R.string.about_link_hint, label)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable {
-                context.openExternalLink(link.url)
+            .clickable(onClickLabel = hint, role = Role.Button) {
+                AboutLinkResolver.launchOrFallback(link) { context.openExternalLink(it) }
             },
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,
@@ -283,6 +358,14 @@ private fun AboutInfoKey.labelRes(): Int = when (this) {
     AboutInfoKey.PLATFORM -> R.string.about_info_platform
     AboutInfoKey.APPLICATION_ID -> R.string.about_info_application_id
     AboutInfoKey.SDK_VERSION -> R.string.about_info_sdk_version
+    AboutInfoKey.MEDIA_TIER -> R.string.about_info_media_tier
+}
+
+private fun DeviceMediaTier.labelRes(): Int = when (this) {
+    DeviceMediaTier.LOW -> R.string.about_media_tier_low
+    DeviceMediaTier.MID -> R.string.about_media_tier_mid
+    DeviceMediaTier.HIGH -> R.string.about_media_tier_high
+    DeviceMediaTier.PRO -> R.string.about_media_tier_pro
 }
 
 private fun AboutFeatureKey.labelRes(): Int = when (this) {
@@ -303,12 +386,22 @@ private fun AboutFeatureKey.icon(): ImageVector = when (this) {
 
 private fun AboutLinkKind.labelRes(): Int = when (this) {
     AboutLinkKind.WEBSITE -> R.string.about_link_website
+    AboutLinkKind.ABOUT -> R.string.about_link_about
+    AboutLinkKind.TERMS -> R.string.settings_terms_of_service
+    AboutLinkKind.PRIVACY -> R.string.settings_privacy_policy
+    AboutLinkKind.CONTACT -> R.string.about_link_contact
+    AboutLinkKind.PARTNERS -> R.string.about_link_partners
     AboutLinkKind.TWITTER -> R.string.about_link_twitter
     AboutLinkKind.GITHUB -> R.string.about_link_github
 }
 
 private fun AboutLinkKind.icon(): ImageVector = when (this) {
     AboutLinkKind.WEBSITE -> Icons.Filled.Public
+    AboutLinkKind.ABOUT -> Icons.Filled.Info
+    AboutLinkKind.TERMS -> Icons.Filled.Description
+    AboutLinkKind.PRIVACY -> Icons.Filled.PanTool
+    AboutLinkKind.CONTACT -> Icons.Filled.Email
+    AboutLinkKind.PARTNERS -> Icons.Filled.Group
     AboutLinkKind.TWITTER -> Icons.Filled.Language
     AboutLinkKind.GITHUB -> Icons.Filled.Code
 }

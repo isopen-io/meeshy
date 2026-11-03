@@ -122,11 +122,9 @@ class MessageDeltaApplier internal constructor(
         transform(messageId) { AttachmentLiveDeltas.enriched(it, conversationId, attachmentId, piece) }
     }
 
-    /** Chaque message du fil qui cite le post retiré devient « Story indisponible » (#7969, #13296). */
+    /** Chaque message du fil qui cite le post retiré devient « Story indisponible » (#7969, #13296), en une seule écriture. */
     private suspend fun withdrawCitedPost(event: MessageCitedPostWithdrawnEvent) {
-        database.messageDao().mentioning(event.conversationId, event.postId).forEach { row ->
-            transform(row.id) { ConversationEventDeltas.citedPostWithdrawn(it, event.postId) }
-        }
+        CitedPostWithdrawn(database, updater).apply(event.conversationId, event.postId)
     }
 
     private suspend fun transform(messageId: String, delta: (ApiMessage) -> ApiMessage) {

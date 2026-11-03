@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.app.game.GamePageScaffold
 import me.meeshy.app.game.gameString
 import me.meeshy.app.game.gestures.ConceptGestures
 import me.meeshy.app.game.gestures.GameGesturesViewModel
