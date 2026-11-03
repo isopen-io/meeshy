@@ -588,6 +588,12 @@ internal fun ChatComposer(
                     ComposerAttachmentTray(
                         tiles = ladderTiles,
                         recentMedia = recentStrip.takeIf { configuration.offers(ComposerCapability.PHOTO_LIBRARY) },
+                        handle = {
+                            ComposerPanelHandle(
+                                onOpenFullLibrary = { dock.closePanels(); openPhotos() },
+                                onClose = { dock.closePanels() },
+                            )
+                        },
                         onTileClick = { kind ->
                             dock.closePanels()
                             when (kind) {

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_panel_handle_label">Maniglia del pannello allegati</string>
+    <string name="composer_panel_handle_open_library">Apri tutta la libreria foto</string>
+    <string name="composer_panel_handle_close">Chiudi allegati</string>
+</resources>
