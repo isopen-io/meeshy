@@ -411,6 +411,9 @@
     <string name="share_a11y_selected">selezionato</string>
     <string name="share_action_copy_link">Copia link</string>
     <string name="share_action_share_out">Condividi fuori da Meeshy</string>
+    <string name="share_button_a11y">Invia a %1$d destinatari</string>
+    <string name="share_button_forward">Inoltra · %1$d</string>
+    <string name="share_button_send">Invia · %1$d</string>
     <string name="share_caption_hint">Aggiungi un messaggio…</string>
     <string name="share_close">Chiudi</string>
     <string name="share_community_channels">Canali in cui puoi scrivere</string>
@@ -426,10 +429,15 @@
     <string name="share_detail_group_unsized">Gruppo</string>
     <string name="share_empty_body">Cerca una persona per nome, nome utente o numero.</string>
     <string name="share_empty_title">Ancora nessuno qui</string>
+    <string name="share_encryption_warning">«%1$s» non è cifrata: lì questo messaggio uscirà dalla crittografia end-to-end.</string>
     <string name="share_error_generic">Errore durante la condivisione</string>
     <string name="share_flame_title">Scompare dopo</string>
     <string name="share_group_create">Crea un gruppo con %1$s</string>
+    <string name="share_grouping_separately">Separatamente</string>
+    <string name="share_grouping_together">Insieme</string>
     <string name="share_limits_recipients">Al massimo 10 destinatari per invio</string>
+    <string name="share_limits_too_heavy">%1$d file, %2$s. Una condivisione porta al massimo %3$d file e %4$s.</string>
+    <string name="share_limits_trim">Rimuovi %1$d file per inviare</string>
     <string name="share_offline">Offline. Ciò che non è partito partirà al ritorno della rete, anche se chiudi Meeshy.</string>
     <string name="share_refused_encrypted_destination">Questa conversazione è cifrata: per ora la condivisione non vi invia nulla.</string>
     <string name="share_refused_undecrypted_source">Questo messaggio non è stato decifrato su questo dispositivo: non può essere copiato.</string>

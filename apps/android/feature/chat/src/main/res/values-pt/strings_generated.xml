@@ -411,6 +411,9 @@
     <string name="share_a11y_selected">selecionado</string>
     <string name="share_action_copy_link">Copiar link</string>
     <string name="share_action_share_out">Compartilhar fora do Meeshy</string>
+    <string name="share_button_a11y">Enviar para %1$d destinatários</string>
+    <string name="share_button_forward">Encaminhar · %1$d</string>
+    <string name="share_button_send">Enviar · %1$d</string>
     <string name="share_caption_hint">Adicionar uma mensagem…</string>
     <string name="share_close">Fechar</string>
     <string name="share_community_channels">Canais onde você pode escrever</string>
@@ -426,10 +429,15 @@
     <string name="share_detail_group_unsized">Grupo</string>
     <string name="share_empty_body">Procure alguém pelo nome, usuário ou número.</string>
     <string name="share_empty_title">Ninguém aqui ainda</string>
+    <string name="share_encryption_warning">“%1$s” não é criptografada: lá esta mensagem sairá da criptografia de ponta a ponta.</string>
     <string name="share_error_generic">Erro ao compartilhar</string>
     <string name="share_flame_title">Desaparece após</string>
     <string name="share_group_create">Criar um grupo com %1$s</string>
+    <string name="share_grouping_separately">Separadamente</string>
+    <string name="share_grouping_together">Juntos</string>
     <string name="share_limits_recipients">No máximo 10 destinatários por envio</string>
+    <string name="share_limits_too_heavy">%1$d arquivos, %2$s. Um compartilhamento leva no máximo %3$d arquivos e %4$s.</string>
+    <string name="share_limits_trim">Remova %1$d arquivos para enviar</string>
     <string name="share_offline">Offline. O que não foi enviado sairá quando a rede voltar, mesmo se você fechar o Meeshy.</string>
     <string name="share_refused_encrypted_destination">Esta conversa é criptografada: por enquanto, o compartilhamento não envia nada para ela.</string>
     <string name="share_refused_undecrypted_source">Esta mensagem não foi descriptografada neste dispositivo: não pode ser copiada.</string>

@@ -411,6 +411,9 @@
     <string name="share_a11y_selected">seleccionado</string>
     <string name="share_action_copy_link">Copiar enlace</string>
     <string name="share_action_share_out">Compartir fuera de Meeshy</string>
+    <string name="share_button_a11y">Enviar a %1$d destinatarios</string>
+    <string name="share_button_forward">Reenviar · %1$d</string>
+    <string name="share_button_send">Enviar · %1$d</string>
     <string name="share_caption_hint">Añadir un mensaje…</string>
     <string name="share_close">Cerrar</string>
     <string name="share_community_channels">Canales donde puedes escribir</string>
@@ -426,10 +429,15 @@
     <string name="share_detail_group_unsized">Grupo</string>
     <string name="share_empty_body">Busca a alguien por su nombre, usuario o número.</string>
     <string name="share_empty_title">Todavía no hay nadie</string>
+    <string name="share_encryption_warning">«%1$s» no está cifrada: allí este mensaje saldrá del cifrado de extremo a extremo.</string>
     <string name="share_error_generic">Error al compartir</string>
     <string name="share_flame_title">Desaparece tras</string>
     <string name="share_group_create">Crear un grupo con %1$s</string>
+    <string name="share_grouping_separately">Por separado</string>
+    <string name="share_grouping_together">Juntos</string>
     <string name="share_limits_recipients">Como máximo 10 destinatarios por envío</string>
+    <string name="share_limits_too_heavy">%1$d archivos, %2$s. Un envío lleva como máximo %3$d archivos y %4$s.</string>
+    <string name="share_limits_trim">Quita %1$d archivos para enviar</string>
     <string name="share_offline">Sin conexión. Lo que no se ha enviado saldrá cuando vuelva la red, aunque cierres Meeshy.</string>
     <string name="share_refused_encrypted_destination">Esta conversación está cifrada: por ahora, compartir no envía nada allí.</string>
     <string name="share_refused_undecrypted_source">Este mensaje no se descifró en este dispositivo: no se puede copiar.</string>
