@@ -58,6 +58,10 @@ import me.meeshy.ui.component.chrome.StatusBarIconsOverDark
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.video.rememberVideoWindowShown
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.sdk.model.profile.ofAuthor
+import me.meeshy.ui.profile.LocalProfileSheetOpener
+import me.meeshy.ui.profile.LocalProfileSheetPresented
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.ui.unit.LayoutDirection
 
@@ -142,11 +146,23 @@ fun ReelsScreen(
             },
         )
     }
-    val openProfile by rememberUpdatedState(onOpenProfile)
     val openStory by rememberUpdatedState(onOpenStory)
     val hasStory by rememberUpdatedState(authorHasStory)
-    // Un auteur qui a une story non vue : son avatar ouvre cette story (un seul groupe), sinon son profil (iOS).
-    val openAuthor = remember { { id: String -> if (hasStory(id)) openStory(id) else openProfile(id) } }
+    val profileOpener = LocalProfileSheetOpener.current
+    val reelsNow by rememberUpdatedState(state.reels)
+    // Un auteur qui a une story non vue : son avatar ouvre cette story (un seul groupe), sinon sa fiche (iOS).
+    val openAuthor = remember(profileOpener) {
+        { id: String ->
+            if (hasStory(id)) {
+                openStory(id)
+            } else {
+                val reel = reelsNow.firstOrNull { it.authorId == id }
+                ProfileSheetUser.ofAuthor(id, reel?.username, reel?.authorName, reel?.authorAvatarUrl)?.let(profileOpener::open)
+            }
+        }
+    }
+    // La fiche ouverte fige le lecteur (même verrou qu'un appel) : il reprend à sa fermeture.
+    val profileSheetOpen = LocalProfileSheetPresented.current.value
 
     ReelsRevealContainer(
         feedButtonStorage = feedButtonStorage,
@@ -175,7 +191,7 @@ fun ReelsScreen(
                     onSoundProbed = { id, hasTrack -> probedAudio[id] = hasTrack },
                     chromeHidden = chromeOff,
                     revealCompleted = revealCompleted,
-                    isCallActive = isCallActive,
+                    isCallActive = isCallActive || profileSheetOpen,
                     quickEmojis = quickEmojis,
                     railActions = railActions,
                     onChromeHidden = chrome::setHidden,

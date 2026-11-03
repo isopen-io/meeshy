@@ -247,7 +247,7 @@ private fun CommentRow(
             .fillMaxWidth()
             .alpha(if (comment.isPending) 0.5f else 1f),
     ) {
-        MeeshyAvatar(name = comment.authorName ?: unknownAuthor, size = 32.dp, imageUrl = comment.authorAvatarUrl, presence = rememberPresence(comment.authorId))
+        MeeshyAvatar(name = comment.authorName ?: unknownAuthor, size = 32.dp, imageUrl = comment.authorAvatarUrl, presence = rememberPresence(comment.authorId), modifier = Modifier.opensAuthorProfile(comment.authorProfile(), minTarget = true))
         Spacer(Modifier.width(MeeshySpacing.sm))
         Column(Modifier.weight(1f)) {
             Column(textBlockSemantics) {
@@ -257,6 +257,7 @@ private fun CommentRow(
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MeeshyTheme.tokens.textPrimary,
+                    modifier = Modifier.opensAuthorProfile(comment.authorProfile()),
                 )
                 if (comment.isReply) {
                     Spacer(Modifier.width(MeeshySpacing.xs))

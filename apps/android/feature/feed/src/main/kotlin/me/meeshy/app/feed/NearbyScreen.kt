@@ -321,7 +321,7 @@ internal fun NearbyPostCard(
     ) {
         Column(Modifier.padding(MeeshySpacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
+                val profileTap = Modifier.opensAuthorProfile(post.authorProfile())
                 MeeshyAvatar(
                     name = post.authorName ?: unknownAuthor,
                     size = 40.dp,

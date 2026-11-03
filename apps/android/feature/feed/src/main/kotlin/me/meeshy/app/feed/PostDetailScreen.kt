@@ -322,7 +322,7 @@ internal fun PostDetailContent(
                                 revealChip(PostDetailHeaderReveal.revealed(block.positionInRoot().y + block.size.height, viewportTop))
                             },
                         ) {
-                            val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
+                            val profileTap = Modifier.opensAuthorProfile(post.authorProfile())
                             MeeshyAvatar(
                                 name = post.authorName ?: unknownAuthor,
                                 size = 44.dp,

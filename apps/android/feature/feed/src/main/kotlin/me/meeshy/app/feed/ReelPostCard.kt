@@ -67,7 +67,7 @@ internal fun ReelPostCard(
     val source = post.republishedReel
     val authorName = source?.authorName ?: post.authorName ?: unknownAuthor
     val authorAvatar = if (source != null) source.authorAvatarUrl else post.authorAvatarUrl
-    val authorId = if (source != null) source.authorId else post.authorId
+    val authorProfileUser = if (source != null) source.authorProfile() else post.authorProfile()
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -113,7 +113,7 @@ internal fun ReelPostCard(
                     name = authorName,
                     size = 32.dp,
                     imageUrl = authorAvatar,
-                    modifier = Modifier.opensAuthorProfile(authorId, onOpenProfile),
+                    modifier = Modifier.opensAuthorProfile(authorProfileUser),
                 )
                 Spacer(Modifier.width(MeeshySpacing.sm))
                 Text(
@@ -123,7 +123,7 @@ internal fun ReelPostCard(
                     color = MeeshyPalette.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false).opensAuthorProfile(authorId, onOpenProfile),
+                    modifier = Modifier.weight(1f, fill = false).opensAuthorProfile(authorProfileUser),
                 )
             }
             post.content.takeIf { it.isNotBlank() }?.let { caption ->
