@@ -10,6 +10,15 @@
     <string name="common_inactive">غير نشط</string>
     <string name="common_retry">إعادة المحاولة</string>
     <string name="common_share">مشاركة</string>
+    <string name="context_admin_open">فتح في الإدارة</string>
+    <string name="context_call">اتصال</string>
+    <string name="context_details">التفاصيل</string>
+    <string name="context_favorite">مفضّل</string>
+    <string name="context_invite_friends">دعوة أصدقائي</string>
+    <string name="context_more_options">خيارات أخرى</string>
+    <string name="context_rename">إعادة تسمية</string>
+    <string name="context_report">إبلاغ</string>
+    <string name="context_search">بحث</string>
     <string name="conversationCard_expired">انتهت صلاحية الرابط</string>
     <string name="conversations_action_archive">أرشفة</string>
     <string name="conversations_action_create_category">إنشاء «%1$s»</string>
@@ -208,6 +217,7 @@
     <string name="invite_share">مشاركة</string>
     <string name="invite_title">دعوة</string>
     <string name="invite_unlimited">غير محدود</string>
+    <string name="lentille_mode_menu_title">وضع القراءة</string>
     <string name="links_affiliate_action_copy">نسخ رابط الإحالة</string>
     <string name="links_affiliate_action_create">إنشاء رابط إحالة</string>
     <string name="links_affiliate_action_delete">حذف رابط الإحالة</string>
