@@ -158,6 +158,9 @@
     <string name="fullscreen_react">Reagisci</string>
     <string name="fullscreen_reply">Rispondi</string>
     <string name="fullscreen_show_controls">Mostra i controlli</string>
+    <string name="identity_role_admin">Amministratore</string>
+    <string name="identity_role_creator">Creatore</string>
+    <string name="identity_role_moderator">Moderatore</string>
     <string name="image_editor_before">Originale</string>
     <string name="image_editor_cancel">Annulla</string>
     <string name="image_editor_crop_applied">Ritaglio</string>

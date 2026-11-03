@@ -156,6 +156,9 @@
     <string name="fullscreen_react">Reagieren</string>
     <string name="fullscreen_reply">Antworten</string>
     <string name="fullscreen_show_controls">Bedienelemente einblenden</string>
+    <string name="identity_role_admin">Admin</string>
+    <string name="identity_role_creator">Ersteller</string>
+    <string name="identity_role_moderator">Moderator</string>
     <string name="image_editor_before">Original</string>
     <string name="image_editor_cancel">Abbrechen</string>
     <string name="image_editor_crop_applied">Zuschnitt</string>

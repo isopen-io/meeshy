@@ -164,6 +164,9 @@
     <string name="fullscreen_react">تفاعل</string>
     <string name="fullscreen_reply">رد</string>
     <string name="fullscreen_show_controls">إظهار عناصر التحكّم</string>
+    <string name="identity_role_admin">مشرف</string>
+    <string name="identity_role_creator">المنشئ</string>
+    <string name="identity_role_moderator">مُنظّم</string>
     <string name="image_editor_before">الأصل</string>
     <string name="image_editor_cancel">إلغاء</string>
     <string name="image_editor_crop_applied">اقتصاص</string>
