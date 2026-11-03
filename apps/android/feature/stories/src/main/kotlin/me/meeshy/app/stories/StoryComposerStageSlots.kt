@@ -133,6 +133,7 @@ internal fun StoryComposerScene(
                 canvasFormat = state.deck.selectedSlide.canvasFormat,
                 pins = { ref, width, height -> ScenePin(state, viewModel, ref, width, height) },
             )
+            ComposerSceneAccessibility(state, viewModel)
             if (state.repositionedCount > 0) {
                 ComposerRepositionedBanner(state.repositionedCount, Modifier.align(Alignment.TopCenter).padding(top = WAITING_BADGE_TOP))
             }
