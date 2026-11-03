@@ -54,6 +54,7 @@ class AuthRepository @Inject constructor(
     private val keepSignedIn: KeepSignedInConsent? = null,
     private val accountShelf: AccountShelf = NoAccountShelf,
     private val sessionClosing: me.meeshy.sdk.session.SessionClosing? = null,
+    private val serverLogout: ServerLogout? = null,
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
 
@@ -435,7 +436,9 @@ class AuthRepository @Inject constructor(
         val frozenJwt = tokenStore.jwt
         val frozenSessionToken = tokenStore.sessionToken
         purgeLocalSession()
-        closeServerSession(frozenJwt, frozenSessionToken)
+        // Trois essais en arrière-plan puis reprise WorkManager : la déconnexion ne les attend jamais.
+        serverLogout?.closeInBackground(frozenJwt, frozenSessionToken)
+            ?: closeServerSession(frozenJwt, frozenSessionToken)
     }
 
     /**

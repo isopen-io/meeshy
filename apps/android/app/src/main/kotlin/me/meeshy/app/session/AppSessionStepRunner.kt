@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.work.WorkManager
+import me.meeshy.sdk.e2ee.E2eeBundlePublishWorker
+import me.meeshy.sdk.outbox.OutboxFlushWorker
 import com.google.firebase.messaging.FirebaseMessaging
 import dagger.Binds
 import dagger.Module
@@ -87,7 +89,7 @@ class AppSessionStepRunner @Inject constructor(
             SessionClosingStep.UnregisterCallService -> callService.sync(null)
             SessionClosingStep.EndActiveCall -> activeCall.hangUp()
             SessionClosingStep.DisconnectSockets -> realtime.closeRealtime()
-            SessionClosingStep.CancelBackgroundTasks -> workManager.cancelAllWork().let { Unit }
+            SessionClosingStep.CancelBackgroundTasks -> SESSION_WORK_TAGS.forEach { workManager.cancelAllWorkByTag(it) }
             SessionClosingStep.UntagCrashReports,
             SessionClosingStep.ClearE2eeSessions,
             SessionClosingStep.StopEndToEnd,
@@ -95,6 +97,17 @@ class AppSessionStepRunner @Inject constructor(
             SessionClosingStep.StopSocketRelays,
             -> Unit
         }
+    }
+
+    internal companion object {
+        /**
+         * Les travaux de la session qui se ferme, par leur étiquette automatique (nom de classe). Jamais
+         * `cancelAllWork()` : la fermeture serveur d'une session quittée (`ServerLogoutWorker`) survit à la suivante.
+         */
+        val SESSION_WORK_TAGS: List<String> = listOf(
+            OutboxFlushWorker::class.java.name,
+            E2eeBundlePublishWorker::class.java.name,
+        )
     }
 
     private fun reRegisterPushToken() {
