@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.header.return",
+          "androidName": "chat_call_return",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.header.rejoin.a11y",
+          "androidName": "chat_call_rejoin_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.header.share",
+          "androidName": "chat_header_share",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.view.close",
+          "androidName": "chat_guest_bar_close",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

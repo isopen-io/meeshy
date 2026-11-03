@@ -40,6 +40,8 @@
     <string name="chat_back">Zurück</string>
     <string name="chat_call_audio">Audioanruf</string>
     <string name="chat_call_rejoin">Beitreten</string>
+    <string name="chat_call_rejoin_a11y">Anruf läuft, zum Beitreten tippen</string>
+    <string name="chat_call_return">Laufender Anruf, zum Zurückkehren tippen</string>
     <string name="chat_call_video">Videoanruf</string>
     <string name="chat_camera_chooser_photo">Foto</string>
     <string name="chat_camera_chooser_title">Foto oder Video aufnehmen</string>
@@ -125,11 +127,13 @@
     </plurals>
     <string name="chat_forward_search_hint">Unterhaltung suchen...</string>
     <string name="chat_forward_sent">Weitergeleitet</string>
+    <string name="chat_guest_bar_close">Unterhaltung schließen</string>
     <string name="chat_header_flame_hint">Blendet die Flamme bis zum nächsten Aufklappen der Kopfzeile aus</string>
     <plurals name="chat_header_members">
         <item quantity="one">%1$d Mitglied</item>
         <item quantity="other">%1$d Mitglieder</item>
     </plurals>
+    <string name="chat_header_share">Unterhaltung teilen</string>
     <string name="chat_link_open">Link öffnen</string>
     <string name="chat_media_pause">Pausieren</string>
     <string name="chat_media_play">Abspielen</string>
