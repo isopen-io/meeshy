@@ -1146,3 +1146,28 @@ class StoryComposerAutosaveTest {
         assertThat(StoryComposerAutosave.restore(written, deckIsPristine = StoryComposerAutosave.deckIsPristine(textDeck("deja")))).isNull()
     }
 }
+
+class StoryComposerAutosaveCoverTest {
+
+    @Test
+    fun `la couverture est ecrite apres la sauvegarde du brouillon`() = kotlinx.coroutines.test.runTest {
+        val order = mutableListOf<String>()
+        StoryComposerAutosave.saveThenCover({ order += "save" }, { order += "cover" })
+        assertThat(order).containsExactly("save", "cover").inOrder()
+    }
+
+    @Test
+    fun `un echec de couverture ne bloque jamais la sauvegarde`() = kotlinx.coroutines.test.runTest {
+        var saved = false
+        StoryComposerAutosave.saveThenCover({ saved = true }, { error("rendu impossible") })
+        assertThat(saved).isTrue()
+    }
+
+    @Test
+    fun `un echec de sauvegarde se propage et n'ecrit pas de couverture`() = kotlinx.coroutines.test.runTest {
+        var covered = false
+        val failure = runCatching { StoryComposerAutosave.saveThenCover({ error("disque plein") }, { covered = true }) }
+        assertThat(failure.isFailure).isTrue()
+        assertThat(covered).isFalse()
+    }
+}

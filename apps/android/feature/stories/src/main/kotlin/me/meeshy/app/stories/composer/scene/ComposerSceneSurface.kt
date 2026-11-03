@@ -14,6 +14,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.app.stories.StoryComposerUiState
 import me.meeshy.app.stories.isBlankScene
+import me.meeshy.app.stories.selectedSceneObject
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerSceneInvite as SceneInviteLaw
 
@@ -31,7 +32,7 @@ internal fun ComposerSceneInvite(shown: Boolean, modifier: Modifier = Modifier) 
             style = MaterialTheme.typography.bodyLarge,
             color = Color.White.copy(alpha = 0.72f),
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 48.dp),
+            modifier = Modifier.padding(horizontal = 72.dp),
         )
     }
 }

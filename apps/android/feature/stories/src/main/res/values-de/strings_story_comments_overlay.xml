@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_comments_overlay_expired">Story abgelaufen – die Kommentare bleiben sichtbar</string>
+    <string name="stories_comments_overlay_reply">Antworten</string>
+    <string name="stories_comments_overlay_more">Kommentaroptionen</string>
+    <string name="stories_comments_overlay_copy">Text kopieren</string>
+    <string name="stories_comments_overlay_edit">Bearbeiten</string>
+    <string name="stories_comments_overlay_delete">Löschen</string>
+    <string name="stories_comments_overlay_report">Melden</string>
+    <string name="stories_comments_overlay_remove">Entfernen</string>
+    <string name="stories_comments_overlay_save">Speichern</string>
+    <string name="stories_comments_overlay_cancel">Abbrechen</string>
+    <string name="stories_comments_overlay_editing">Kommentar wird bearbeitet</string>
+    <string name="stories_comments_overlay_like">Gefällt mir</string>
+    <string name="stories_comments_overlay_unlike">Gefällt mir nicht mehr</string>
+    <string name="stories_comments_overlay_show_original">Original anzeigen</string>
+    <string name="stories_comments_overlay_show_translated">Übersetzung anzeigen</string>
+    <string name="stories_comments_overlay_show_replies">Antworten anzeigen</string>
+    <string name="stories_comments_overlay_hide_replies">Antworten ausblenden</string>
+    <string name="stories_comments_overlay_more_replies">Weitere Antworten laden</string>
+    <string name="stories_comments_overlay_retry">Erneut versuchen</string>
+    <string name="stories_comments_overlay_media">Angehängtes Medium</string>
+    <string name="stories_comments_overlay_cancel_reply">Antwort abbrechen</string>
+</resources>
