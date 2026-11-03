@@ -367,7 +367,7 @@ class SessionTeardownTest {
         val registry = me.meeshy.sdk.cache.store.CacheStoreRegistry(kotlinx.coroutines.Dispatchers.Unconfined)
         val store = registry.roomStore(
             db.cacheEntryDao(), "registry-ns", me.meeshy.sdk.cache.CachePolicy(1_000, 10_000, 10),
-            kotlinx.serialization.builtins.serializer<String>(), { it },
+            kotlinx.serialization.serializer<String>(), { it },
         )
         store.save(listOf("a"), "k")
         store.load("k")
