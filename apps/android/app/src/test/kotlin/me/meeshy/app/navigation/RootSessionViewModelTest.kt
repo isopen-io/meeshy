@@ -54,7 +54,7 @@ class RootSessionViewModelTest {
     @Test
     fun `sans session stockee la racine ne montre rien tant que la restauration est en vol`() = runTest {
         val h = harness()
-        backgroundScope.launch { h.vm.state.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { h.vm.state.collect {} }
         assertThat(h.vm.state.value.route).isEqualTo(RootRoute.NONE)
         h.vm.onEvent(RootSessionEvent.AuthChanged(isAuthenticated = false, isRestoringSession = false))
         assertThat(h.vm.state.value.route).isEqualTo(RootRoute.LOGIN)
@@ -63,7 +63,7 @@ class RootSessionViewModelTest {
     @Test
     fun `la session resolue leve l'attente meme si une restauration reste annoncee`() = runTest {
         val h = harness()
-        backgroundScope.launch { h.vm.state.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { h.vm.state.collect {} }
         h.resolved.value = true
         assertThat(h.vm.state.value.route).isEqualTo(RootRoute.LOGIN)
     }
@@ -71,7 +71,7 @@ class RootSessionViewModelTest {
     @Test
     fun `le lien en attente n'apparait que sur la connexion`() = runTest {
         val h = harness()
-        backgroundScope.launch { h.vm.state.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { h.vm.state.collect {} }
         h.vm.onEvent(RootSessionEvent.PendingLinkChanged(true))
         assertThat(h.vm.state.value.showsPendingLinkNotice).isFalse()
         h.vm.onEvent(RootSessionEvent.AuthChanged(isAuthenticated = false, isRestoringSession = false))
