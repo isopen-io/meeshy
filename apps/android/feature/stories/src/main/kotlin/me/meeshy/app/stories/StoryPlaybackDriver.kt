@@ -48,7 +48,7 @@ internal fun storyPlaybackCauses(
     foreground: Boolean,
     interrupted: Boolean,
 ): StoryPlaybackCauses = StoryPlaybackCauses(
-    explicitPause = state.isPaused,
+    explicitPause = state.isPaused || cover.groupIntro,
     reacting = rail.reactionBarVisible || rail.showFullEmojiPicker || rail.reactionFlight != null,
     gestureInFlight = dragging || rail.scrubKind != null,
     coveredByScreen = !foreground,
@@ -89,7 +89,7 @@ internal fun rememberStoryPlayback(
     val readyNow by rememberUpdatedState(state.canAutoAdvance && !readiness.waiting)
     val stalledNow by rememberUpdatedState(readiness.waiting)
     val slideKey = "${state.groupIndex}:${state.index}:${state.currentStoryId}"
-    val live = state.slides.isNotEmpty() && !state.isDismissed
+    val live = state.slides.isNotEmpty() && !state.isDismissed && !cover.groupIntro
 
     LaunchedEffect(slideKey, live) {
         if (!live) return@LaunchedEffect

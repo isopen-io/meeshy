@@ -368,6 +368,11 @@
     <string name="story_edit_error">Falha ao atualizar o story</string>
     <string name="story_edit_offline">Conexão necessária para editar o story</string>
     <string name="story_edit_save">Salvar</string>
+    <string name="story_group_intro_away">Ausente</string>
+    <string name="story_group_intro_idle">Inativo(a)</string>
+    <string name="story_group_intro_offline">Offline</string>
+    <string name="story_group_intro_online">Online</string>
+    <string name="story_group_intro_skip_hint">Toque para pular para a story</string>
     <string name="story_language_close">Fechar</string>
     <string name="story_language_original">Original</string>
     <string name="story_language_original_hint">Cada texto no seu idioma</string>
