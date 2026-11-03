@@ -18,6 +18,9 @@ object SocketEventNames {
     const val AUTH_SESSION_REVOKED = "auth:session-revoked"
     const val AUTH_TOKEN_EXPIRED = "auth:token-expired"
 
+    // connection health
+    const val HEARTBEAT_ACK = "heartbeat:ack"
+
     // call
     const val CALL_ALREADY_ANSWERED = "call:already-answered"
     const val CALL_ANALYTICS = "call:analytics"
@@ -250,6 +253,7 @@ object SocketEventNames {
         AUDIO_TRANSLATION_READY,
         AUTH_SESSION_REVOKED,
         AUTH_TOKEN_EXPIRED,
+        HEARTBEAT_ACK,
         CALL_ALREADY_ANSWERED,
         CALL_ANALYTICS,
         CALL_BACKGROUNDED,

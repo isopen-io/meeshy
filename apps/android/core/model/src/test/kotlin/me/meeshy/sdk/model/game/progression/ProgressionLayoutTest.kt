@@ -10,7 +10,8 @@ import org.junit.Test
 
 class ProgressionLayoutTest {
 
-    private fun base(): EngagementProgress = EngagementProgressResolver.resolve(ApiEngagementProgress.empty)
+    private fun base(): EngagementProgress =
+        EngagementProgressResolver.resolve(ApiEngagementProgress.empty).copy(achievementSections = emptyList())
 
     private fun meesh() = EngagementMeeshProgress(
         balance = 0, mintedLifetime = 0, debitablePoints = 0, floorPoints = 0, missingPoints = 0,

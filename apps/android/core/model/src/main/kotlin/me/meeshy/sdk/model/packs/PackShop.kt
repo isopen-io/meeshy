@@ -12,6 +12,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import me.meeshy.sdk.model.appearance.AppearancePackDomain
 import me.meeshy.sdk.model.appearance.LossyListSerializer
+import me.meeshy.sdk.model.pack.InstallablePack
 
 /**
  * La vitrine unique des packs — miroir de `ShopPack` / `PackShopResponse` d'iOS (`PackShopModels.swift`) pour les quatre
@@ -23,7 +24,7 @@ import me.meeshy.sdk.model.appearance.LossyListSerializer
  */
 @Serializable
 data class ShopPack(
-    val slug: String,
+    override val slug: String,
     val name: String? = null,
     val description: String? = null,
     val author: String? = null,
@@ -31,8 +32,8 @@ data class ShopPack(
     val coverUrl: String? = null,
     /** Additif : la passerelle ne le sert pas encore pour les packs ; lu s'il vient, jamais fabriqué. */
     val coverThumbHash: String? = null,
-    val installed: Boolean = false,
-    val installCount: Int = 0,
+    override val installed: Boolean = false,
+    override val installCount: Int = 0,
     /** En Meeshes ; absent = gratuit. Jamais 0 : un prix nul ou négatif se lit gratuit ([meeshes]). */
     val price: Int? = null,
     /** `null` = le serveur ne le dit pas (ancien serveur) : gratuit ⇒ possédé. */
@@ -42,7 +43,11 @@ data class ShopPack(
     val names: JsonObject? = null,
     /** Ce qui reste à débloquer ; seul le verdict `met` du serveur est lu ici. */
     val requirementPreview: JsonElement? = null,
-) {
+) : InstallablePack<ShopPack> {
+    override val isBundled: Boolean get() = builtin
+
+    override fun withInstall(installed: Boolean, installCount: Int): ShopPack = copy(installed = installed, installCount = installCount)
+
     /** Le prix en Meeshes, `null` pour un pack gratuit. */
     val meeshes: Int? get() = price?.takeIf { it > 0 }
 

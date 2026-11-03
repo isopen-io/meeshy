@@ -1,12 +1,11 @@
 package me.meeshy.app.feed
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -43,7 +42,7 @@ internal fun FeedErrorCard(onRetry: () -> Unit, modifier: Modifier = Modifier, d
             modifier = Modifier.semantics(mergeDescendants = true) {},
         ) {
             Icon(
-                imageVector = Icons.Outlined.WarningAmber,
+                imageVector = MeeshyIcons.WarningAmberOutlined,
                 contentDescription = null,
                 tint = MeeshyTheme.tokens.textSecondary,
                 modifier = Modifier.size(40.dp),
