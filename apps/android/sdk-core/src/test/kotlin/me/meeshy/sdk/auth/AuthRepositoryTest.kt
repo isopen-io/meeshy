@@ -304,6 +304,53 @@ class AuthRepositoryTest {
     }
 
     @Test
+    fun registerHoldingSession_created_doesNotStoreTheSessionBeforeAnExplicitInstall() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(
+            response = ApiResponse(success = false),
+            registerResponse = ApiResponse(
+                success = true,
+                data = RegisterResponse(
+                    user = MeeshyUser(id = "u1", username = "atabeth"),
+                    token = "jwt-123",
+                    sessionToken = "sess-456",
+                    pendingSessionToken = "pending-789",
+                ),
+            ),
+        )
+        val (repo, session) = repository(api, store)
+
+        val result = repo.registerHoldingSession(RegisterRequest(email = "a@b.co", password = "secret"))
+
+        val created = result.getOrNull() as RegisterOutcome.Created
+        assertThat(created.session.token).isEqualTo("jwt-123")
+        assertThat(created.pendingSessionToken).isEqualTo("pending-789")
+        assertThat(store.jwt).isNull()
+        assertThat(store.sessionToken).isNull()
+        assertThat(session.currentUser.value).isNull()
+
+        repo.adoptSession(created.session)
+
+        assertThat(store.jwt).isEqualTo("jwt-123")
+        assertThat(session.currentUser.value?.id).isEqualTo("u1")
+    }
+
+    @Test
+    fun registerHoldingSession_phoneOwnershipConflict_holdsNothing() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(
+            response = ApiResponse(success = false),
+            registerResponse = ApiResponse(success = true, data = RegisterResponse(phoneOwnershipConflict = true)),
+        )
+        val (repo, _) = repository(api, store)
+
+        val result = repo.registerHoldingSession(RegisterRequest(email = "a@b.co", password = "secret"))
+
+        assertThat(result.getOrNull()).isEqualTo(RegisterOutcome.PhoneOwnershipConflict)
+        assertThat(store.jwt).isNull()
+    }
+
+    @Test
     fun register_phoneOwnershipConflict_isSuccessButAdoptsNothing() = runTest {
         val store = InMemoryTokenStore()
         val api = FakeAuthApi(

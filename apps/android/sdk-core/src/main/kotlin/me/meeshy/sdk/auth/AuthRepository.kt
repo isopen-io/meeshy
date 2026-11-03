@@ -191,6 +191,21 @@ class AuthRepository @Inject constructor(
      * connectée sans compte.
      */
     suspend fun register(request: RegisterRequest): NetworkResult<RegisterOutcome> =
+        when (val result = registerHoldingSession(request)) {
+            is NetworkResult.Success -> {
+                (result.data as? RegisterOutcome.Created)?.let { storeSession(it.session) }
+                result
+            }
+            is NetworkResult.Failure -> result
+        }
+
+    /**
+     * Crée le compte SANS poser la session (iOS `registerHoldingSession`) : l'écran d'inscription la TIENT le temps
+     * que sa carte reçoive le code, puis la pose par [ProvenSessionOpener] (`hold` / `installHeld`). Rien n'est écrit
+     * dans le porte-jetons, donc la racine de l'app ne bascule pas et ne démonte pas l'écran qui attend le code.
+     * Mêmes issues et mêmes refus que [register].
+     */
+    suspend fun registerHoldingSession(request: RegisterRequest): NetworkResult<RegisterOutcome> =
         when (val result = apiCall { authApi.register(request) }) {
             is NetworkResult.Failure -> result
             is NetworkResult.Success -> {
@@ -198,10 +213,12 @@ class AuthRepository @Inject constructor(
                 when {
                     result.data.phoneOwnershipConflict ->
                         NetworkResult.Success(RegisterOutcome.PhoneOwnershipConflict)
-                    session != null -> {
-                        storeSession(session)
-                        NetworkResult.Success(RegisterOutcome.Created(session))
-                    }
+                    session != null -> NetworkResult.Success(
+                        RegisterOutcome.Created(
+                            session = session,
+                            pendingSessionToken = result.data.pendingSessionToken?.takeIf { it.isNotEmpty() },
+                        ),
+                    )
                     // Ni identité, ni conflit déclaré : la charge ne dit rien
                     // d'exploitable. Un échec explicite vaut mieux qu'un conflit
                     // supposé, qui enverrait l'utilisateur corriger un numéro
@@ -559,8 +576,11 @@ class AuthRepository @Inject constructor(
  */
 sealed interface RegisterOutcome {
 
-    /** Le compte existe et la session est déjà adoptée. */
-    data class Created(val session: AuthSession) : RegisterOutcome
+    /**
+     * Le compte existe. La session est adoptée par [AuthRepository.register], TENUE par
+     * [AuthRepository.registerHoldingSession] ; [pendingSessionToken] sert à la veille d'une preuve ailleurs.
+     */
+    data class Created(val session: AuthSession, val pendingSessionToken: String? = null) : RegisterOutcome
 
     /** Le numéro est rattaché à un autre compte vérifié ; aucun compte créé. */
     data object PhoneOwnershipConflict : RegisterOutcome
