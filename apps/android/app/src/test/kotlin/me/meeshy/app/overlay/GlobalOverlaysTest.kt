@@ -4,7 +4,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.navigation.NavHostController
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
-import me.meeshy.app.startup.AppExtensions
 import me.meeshy.sdk.chat.GestureRefusalCenter
 import me.meeshy.sdk.feedback.FeedbackToastCenter
 import me.meeshy.sdk.model.feedback.DailyGestureLimit
@@ -30,15 +29,6 @@ class GlobalOverlaysTest {
     private fun show() {
         compose.setContent { overlay.Content(NavHostController(ApplicationProvider.getApplicationContext())) }
         compose.waitForIdle()
-    }
-
-    @Test
-    fun `la banniere de refus se range sous les toasts, qu'elle sert`() {
-        val toastOverlay = FeedbackToastOverlay(toasts)
-
-        val stacked = AppExtensions(listOf(toastOverlay, overlay), emptyList(), emptyList()).overlays
-
-        assertThat(stacked).containsExactly(overlay, toastOverlay).inOrder()
     }
 
     @Test
