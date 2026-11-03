@@ -166,10 +166,10 @@ private fun initials(title: String): String =
     title.split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2).joinToString("") { it.first().uppercase() }
 
 @Composable
-internal fun StatsRow(stats: ConversationCardStats, accent: Color) {
+internal fun StatsRow(stats: ConversationCardStats, accent: Color, modifier: Modifier = Modifier) {
     FitsHorizontally(
         LanguagePillSteps.map { visible -> FitCandidate({ StatsLine(stats, accent, visible) }) },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     )
 }
 

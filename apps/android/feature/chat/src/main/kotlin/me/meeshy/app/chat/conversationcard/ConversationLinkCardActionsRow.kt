@@ -48,10 +48,11 @@ internal fun ConversationLinkCardActionsRow(
     onJoinAnonymously: (identifier: String) -> Unit,
     onLeave: () -> Unit,
     onOpen: (conversationId: String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val tokens = MeeshyTheme.tokens
     val busy = pending != Pending.NONE
-    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs), modifier = modifier) {
         when {
             isExpired -> Row(
                 verticalAlignment = Alignment.CenterVertically,
