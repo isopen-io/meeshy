@@ -461,6 +461,9 @@ private class CountingConversationDao(private val delegate: ConversationDao) : C
     override suspend fun deleteByIds(ids: List<String>) = delegate.deleteByIds(ids)
     override suspend fun clear() = delegate.clear()
 
+    override fun totalUnreadExcludingOpen(openIds: List<String>): Flow<Int> =
+        delegate.totalUnreadExcludingOpen(openIds)
+
     override fun totalUnreadCount(): Flow<Int> {
         totalUnreadCountCalls++
         return delegate.totalUnreadCount()
