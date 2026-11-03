@@ -50,7 +50,6 @@ class ScenePublishSocleLabelTest {
                 Box(Modifier.size(width = 360.dp, height = 545.dp)) {
                     StorySceneFirstLayout(
                         onDismiss = {},
-                        reduced = false,
                         scene = { modifier -> Box(modifier) },
                         top = { SceneTopBar(onClose = {}, history = null, onUndo = {}, onRedo = {}) },
                         trailing = {

@@ -278,7 +278,6 @@ class ComposerIncomingMediaComposeTest {
                 Box(Modifier.size(width = 360.dp, height = 692.dp)) {
                     StorySceneFirstLayout(
                         onDismiss = {},
-                        reduced = false,
                         scene = { modifier -> Box(modifier) },
                         top = {},
                         trailing = { TextButton(onClick = { tapped++ }, modifier = Modifier.testTag("tool")) { Text("T") } },

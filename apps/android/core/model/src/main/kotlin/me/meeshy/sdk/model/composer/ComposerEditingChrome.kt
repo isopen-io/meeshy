@@ -9,7 +9,7 @@ enum class ComposerSelectionSubject { NONE, OBJECT, BACKGROUND }
 /** Ce que porte la colonne de la scène, à la même place : les six outils, les options de l'objet sélectionné, le niveau « Fond » du fond sélectionné, ou rien. */
 enum class ComposerRailContent { TOOLS, OBJECT_OPTIONS, BACKGROUND_OPTIONS, NONE }
 
-/** Où se posent ↶ ↷ : en haut à droite de la scène pleine, ou nulle part (une scène réduite ou un chrome qui se tait). */
+/** Où se posent ↶ ↷ : en haut à droite de la scène, ou nulle part (un panneau au bas ou un chrome qui se tait). */
 enum class ComposerHistoryPlace { TOP, NONE }
 
 /** Ce que TalkBack dit quand la colonne change de rôle : on entre en édition d'un objet, ou on revient aux outils. */
@@ -19,10 +19,9 @@ enum class ComposerEditingAnnouncement { EDITING, TOOLS_BACK }
  * Le chrome visible selon la sélection (#13956, décision porteur du 2026-10-31, spec R6). [close] : Annuler / Fermer ;
  * [publication] : l'audience, Publier, le texte du post et les références ; [sceneControls] : ↶↷, la rangée des diapos et
  * les messages de l'éditeur ; [rail] : ce que porte la colonne ; [editing] : un objet ou le fond est en édition — le fond
- * suit la même grammaire (#13973) : plus de barre à part au-dessus de Publier. Une scène RÉDUITE par ce qui monte au bas
- * ne porte plus rien que les options de ce qu'on édite (#14186). [history] : la place de ↶ ↷, qui suit [sceneControls].
- * [cedesLane] : la scène réduite garde posées les options de ce qu'on édite et leur cède son couloir, pour que rien ne la
- * recouvre ; une scène pleine n'en cède jamais (#14249 : sélectionner un objet ou le fond ne réduit pas la scène).
+ * suit la même grammaire (#13973) : plus de barre à part au-dessus de Publier. Un panneau posé au bas ne laisse sur la
+ * scène que les options de ce qu'on édite (#14186) ; il se pose par-dessus elle, qui garde sa taille (#15192, la loi de
+ * [ComposerSceneReduction]). [history] : la place de ↶ ↷, qui suit [sceneControls].
  */
 data class ComposerEditingChrome(
     val close: Boolean,
@@ -31,19 +30,18 @@ data class ComposerEditingChrome(
     val rail: ComposerRailContent,
     val editing: Boolean,
     val history: ComposerHistoryPlace,
-    val cedesLane: Boolean = false,
 ) {
     /**
-     * [gestureOpen] : un panneau est monté ou un texte s'écrit — la colonne se tait, l'édition continue. [sceneReduced] : un
-     * panneau ou la bande d'un réglage occupe le bas et la scène se réduit au-dessus — rien de ce qu'elle portait en plein
-     * écran ne s'y pose plus, seules les options de l'objet ou du fond en édition restent, dans le couloir qu'elle leur cède.
+     * [gestureOpen] : un panneau est monté ou un texte s'écrit — la colonne se tait, l'édition continue. [bottomPanelOpen] :
+     * un panneau ou la bande d'un réglage occupe le bas, par-dessus la scène — rien de ce qu'elle portait au repos ne s'y
+     * pose plus, seules les options de l'objet ou du fond en édition restent dans leur colonne.
      */
     data class Input(
         val subject: ComposerSelectionSubject,
         val drawing: Boolean = false,
         val viewfinderArmed: Boolean = false,
         val gestureOpen: Boolean = false,
-        val sceneReduced: Boolean = false,
+        val bottomPanelOpen: Boolean = false,
     )
 
     companion object {
@@ -61,18 +59,17 @@ data class ComposerEditingChrome(
             input.drawing || input.viewfinderArmed -> QUIET
             input.subject == ComposerSelectionSubject.OBJECT -> editingWith(ComposerRailContent.OBJECT_OPTIONS, input)
             input.subject == ComposerSelectionSubject.BACKGROUND -> editingWith(ComposerRailContent.BACKGROUND_OPTIONS, input)
-            input.sceneReduced -> QUIET
+            input.bottomPanelOpen -> QUIET
             else -> REST
         }
 
         private fun editingWith(options: ComposerRailContent, input: Input) = REST.copy(
             close = false,
             publication = false,
-            sceneControls = !input.sceneReduced,
+            sceneControls = !input.bottomPanelOpen,
             rail = if (input.gestureOpen) ComposerRailContent.NONE else options,
             editing = true,
-            history = if (input.sceneReduced) ComposerHistoryPlace.NONE else ComposerHistoryPlace.TOP,
-            cedesLane = input.sceneReduced && !input.gestureOpen,
+            history = if (input.bottomPanelOpen) ComposerHistoryPlace.NONE else ComposerHistoryPlace.TOP,
         )
 
         /** Rien à l'ouverture ; l'édition à chaque sélection d'un objet ; le retour aux outils une fois qu'on en est sorti. */
