@@ -38,7 +38,7 @@ import javax.inject.Inject
  */
 class WebRtcCallCoordinator @Inject constructor(
     private val engine: WebRtcEngine,
-    signals: CallSignalManager,
+    private val signals: CallSignalManager,
     @ApplicationContext appContext: Context,
     names: GroupCallNameSource,
     statsFeed: CallQualityStatsFeed = CallQualityStatsFeed(),

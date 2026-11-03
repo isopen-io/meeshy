@@ -52,7 +52,7 @@ class ReactionSendersTest {
         assertThat(handler.send(row(OutboxKind.ADD_REACTION))).isEqualTo(SendResult.TransientFailure)
 
         coEvery { reactionApi.add(any()) } throws IOException("offline")
-        assertThat(handler.send(row(OutboxKind.ADD_REACTION))).isEqualTo(SendResult.TransientFailure)
+        assertThat(handler.send(row(OutboxKind.ADD_REACTION))).isEqualTo(SendResult.TransportFailure)
     }
 
     @Test

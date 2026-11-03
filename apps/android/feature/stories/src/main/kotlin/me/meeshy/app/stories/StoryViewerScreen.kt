@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import me.meeshy.sdk.model.StoryViewerInitialAction
 import androidx.compose.runtime.getValue
@@ -106,6 +107,7 @@ fun StoryViewerScreen(
     val playback = rememberStoryPlayback(state, slideDurationMs, cover, rail, cardMotion.dragging, viewModel)
     StoryViewerLifecycleEffects(state, onClose)
 
+    CompositionLocalProvider(LocalStoryAudioGain provides { StoryViewerCardTransform.audioGain(cardMotion.dismissal.value) }) {
     StoryViewerShell(
         state = state,
         slide = slide,
@@ -129,6 +131,7 @@ fun StoryViewerScreen(
         haptics = meeshyHaptics,
         viewModel = viewModel,
     )
+    }
     StoryViewerSheetsHost(
         state = state,
         chrome = chrome,
