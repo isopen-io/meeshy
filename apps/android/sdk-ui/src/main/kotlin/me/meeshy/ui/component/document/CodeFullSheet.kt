@@ -6,7 +6,9 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -155,7 +157,7 @@ private fun CodeSheetLines(text: String, language: CodeLanguage, theme: SyntaxTh
         Box(Modifier.fillMaxSize().horizontalScroll(rememberScrollState())) {
             LazyColumn(Modifier.fillMaxHeight().padding(vertical = 12.dp)) {
                 itemsIndexed(lines, key = { index, _ -> index }) { index, line ->
-                    Row(Modifier.padding(horizontal = 8.dp, vertical = 1.dp).testTag("code-sheet-line-$index")) {
+                    Row(Modifier.height(IntrinsicSize.Min).padding(horizontal = 8.dp, vertical = 1.dp).testTag("code-sheet-line-$index")) {
                         DisableSelection {
                             Text(
                                 (index + 1).toString(),
