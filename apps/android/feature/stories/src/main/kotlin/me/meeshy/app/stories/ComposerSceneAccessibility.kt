@@ -70,7 +70,8 @@ internal fun ComposerSceneAccessibility(
         } else {
             stringResource(R.string.story_composer_a11y_compositionCount_many, s.count)
         }
-        stringResource(R.string.story_composer_a11y_composition, count, s.labels.joinToString(", ") { entryLabel(it) })
+        val spoken = s.labels.map { entryLabel(it) }
+        stringResource(R.string.story_composer_a11y_composition, count, spoken.joinToString(", "))
     }
     SceneAccessibilityLayer(summary = summary, nodes = nodes, modifier = modifier)
 }
