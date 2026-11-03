@@ -412,6 +412,7 @@
     <string name="game_concept_elans_use">Regarde quelles familles sont actives, puis fais un geste dans une famille qui manque. Tant que l’élan tient, chaque geste fait jaillir plus d’étincelles.</string>
     <string name="game_concept_elans_what">Un élan est un multiplicateur d’étincelles. Il s’allume quand tu es actif dans plusieurs familles de gestes ces jours-ci.</string>
     <string name="game_concept_elans_why">Un élan multiplie les étincelles de tes prochains gestes.</string>
+    <string name="game_concept_fact_after">Après</string>
     <string name="game_concept_fact_balance">Tu as</string>
     <string name="game_concept_fact_closes">Fermeture</string>
     <string name="game_concept_fact_cost">Il faut</string>
@@ -426,6 +427,7 @@
     <string name="game_concept_fact_prism_hour">Heure Prisme</string>
     <string name="game_concept_fact_record">Au plus haut</string>
     <string name="game_concept_fact_remaining">Restants</string>
+    <string name="game_concept_fact_required">Requis</string>
     <string name="game_concept_fact_seal">Sceau</string>
     <string name="game_concept_fact_state">État</string>
     <string name="game_concept_fact_tier">État de ta lumière</string>
@@ -938,7 +940,12 @@
     <string name="game_notebook_remove_failed">La Chronique n’a pas pu retirer cette photo.</string>
     <string name="game_notebook_size">La Chronique occupe %1$s.</string>
     <string name="game_photo_a11y">Photo : %1$s</string>
+    <string name="game_photo_author_caption_achievement">Haut fait de</string>
+    <string name="game_photo_author_caption_mission">Rêve réalisé par</string>
+    <string name="game_photo_author_caption_rank">Rang atteint par</string>
     <string name="game_photo_author_label_achievement">Haut fait de %1$s</string>
+    <string name="game_photo_author_label_mission">Rêve réalisé par %1$s</string>
+    <string name="game_photo_author_label_rank">Rang atteint par %1$s</string>
     <string name="game_photo_camera_denied">La caméra est refusée. Autorise-la dans les réglages de ton appareil, ou choisis une photo dans ta galerie.</string>
     <string name="game_photo_camera_unavailable">La caméra n’est pas disponible (une autre application l’utilise ?). Choisis une photo dans ta galerie, ou garde la carte seule.</string>
     <string name="game_photo_camera_unsupported">Cet appareil ne permet pas la caméra ici. Choisis une photo dans ta galerie, ou garde la carte seule.</string>
@@ -1078,9 +1085,11 @@
     <string name="game_sparks_pocket_label">Ta lumière</string>
     <string name="game_sparks_record_line">%1$s reçues depuis toujours</string>
     <string name="game_spend_missing_freeze">Il manque %1$s pour prendre une Veilleuse.</string>
+    <string name="game_spend_missing_mint">Il manque %1$s à ta lumière pour frapper la Meesh n° %2$s.</string>
     <string name="game_spend_missing_relight">Il manque %1$s pour rallumer ta Flamme.</string>
     <string name="game_spend_missing_reroll">Il manque %1$s pour changer cet acte.</string>
     <string name="game_spend_missing_seal">Il manque %1$s pour prendre le Sceau du voyage.</string>
+    <string name="game_spend_missing_unlock">Il manque %1$s pour l’ouvrir.</string>
     <string name="game_starFragments_one">%1$s fragment d’étoile</string>
     <string name="game_starFragments_other">%1$s fragments d’étoile</string>
     <string name="game_state_atlas_progress">Langues tamponnées : %1$s sur %2$s. Échanges à moitié faits : %3$s.</string>
@@ -1173,6 +1182,9 @@
     <string name="game_treasury_tresor">Trésor</string>
     <string name="progression_a11y_bar_level">Vers le niveau %1$d</string>
     <string name="progression_a11y_bar_meesh">Vers la prochaine Meesh</string>
+    <string name="progression_a11y_bar_streak">Ta Flamme, vers son prochain jalon</string>
+    <string name="progression_a11y_tier_pending">Palier %1$d à atteindre</string>
+    <string name="progression_a11y_tier_reached">Palier %1$d atteint</string>
     <string name="progression_achievement_a11y_hint">Touche pour voir ce haut fait en grand.</string>
     <string name="progression_achievement_all_content_types_condition">Un message vocal, un message texte, une publication, une story et un réel</string>
     <string name="progression_achievement_all_content_types_title">Touche-à-tout</string>

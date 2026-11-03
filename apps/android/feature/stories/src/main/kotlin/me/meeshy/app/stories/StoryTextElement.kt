@@ -12,25 +12,50 @@ import me.meeshy.sdk.model.scene.StoryTextFade
 import me.meeshy.sdk.model.scene.StoryTextLanguage
 import me.meeshy.sdk.model.scene.StoryTextFrameShape
 import me.meeshy.sdk.model.scene.StoryTextFrame
+import me.meeshy.sdk.model.scene.StoryTextFace
+import me.meeshy.sdk.model.scene.StoryTextGenericFamily
 import me.meeshy.sdk.model.scene.StoryTextOutline
+import me.meeshy.sdk.model.scene.StoryTextStyleCatalog
+import me.meeshy.sdk.model.scene.StoryTextStyleKind
 
 /**
- * The visual style of an on-canvas text element — parity with the iOS
- * `StoryTextStyle` cases (bold / neon / typewriter / handwriting / classic). The
- * [wire] string is exactly what the gateway expects on `StoryTextObject.textStyle`,
- * so the UI never hardcodes the literal.
+ * The visual style of an on-canvas text element — the eighteen iOS `StoryTextStyle` cases, DERIVED from the shared
+ * [StoryTextStyleCatalog] (the single source of truth: wire value, face, weight). The [wire] string is exactly what
+ * the gateway expects on `StoryTextObject.textStyle`, so the UI never hardcodes the literal. The composer's picker
+ * offers [composerOffered]; the other cases are read, kept and republished untouched.
  */
-enum class StoryTextStyle(val wire: String) {
-    BOLD("bold"),
-    NEON("neon"),
-    TYPEWRITER("typewriter"),
-    HANDWRITING("handwriting"),
-    CLASSIC("classic"),
+enum class StoryTextStyle(val kind: StoryTextStyleKind) {
+    BOLD(StoryTextStyleKind.BOLD),
+    NEON(StoryTextStyleKind.NEON),
+    TYPEWRITER(StoryTextStyleKind.TYPEWRITER),
+    HANDWRITING(StoryTextStyleKind.HANDWRITING),
+    CLASSIC(StoryTextStyleKind.CLASSIC),
+    CALLIGRAPHY(StoryTextStyleKind.CALLIGRAPHY),
+    CARTOON(StoryTextStyleKind.CARTOON),
+    FUTURISTIC(StoryTextStyleKind.FUTURISTIC),
+    FANTASY(StoryTextStyleKind.FANTASY),
+    CURVE(StoryTextStyleKind.CURVE),
+    TAG(StoryTextStyleKind.TAG),
+    ITALIC(StoryTextStyleKind.ITALIC),
+    RETRO(StoryTextStyleKind.RETRO),
+    ELEGANT(StoryTextStyleKind.ELEGANT),
+    POSTER(StoryTextStyleKind.POSTER),
+    BUBBLE(StoryTextStyleKind.BUBBLE),
+    NOTE(StoryTextStyleKind.NOTE),
+    BRUSH(StoryTextStyleKind.BRUSH),
     ;
 
+    val wire: String get() = kind.wire
+
     companion object {
+        /** The five styles the composer's picker offers (selector unchanged by the 18-style reader). */
+        val composerOffered: List<StoryTextStyle> = listOf(BOLD, NEON, TYPEWRITER, HANDWRITING, CLASSIC)
+
         /** The style a wire `textStyle` names — absent or unknown reads as [BOLD], iOS `parsedTextStyle` parity. */
-        fun fromWire(raw: String?): StoryTextStyle = entries.firstOrNull { it.wire == raw } ?: BOLD
+        fun fromWire(raw: String?): StoryTextStyle {
+            val kind = StoryTextStyleCatalog.fromWire(raw)
+            return entries.first { it.kind == kind }
+        }
     }
 }
 
@@ -72,49 +97,23 @@ data class StoryTextTypography(
     val family: StoryTextFontFamily,
     val letterSpacingEm: Float,
     val glow: Boolean,
+    val face: StoryTextFace = StoryTextFace.SYSTEM_SANS,
 )
 
-/**
- * Maps a style to its [StoryTextTypography] — the iOS-parity look of each of the five
- * cases. Total over the enum so the canvas Composable stays glue.
- */
-fun StoryTextStyle.typography(): StoryTextTypography = when (this) {
-    StoryTextStyle.BOLD -> StoryTextTypography(
-        fontWeight = 800,
-        italic = false,
-        family = StoryTextFontFamily.SANS,
-        letterSpacingEm = 0f,
-        glow = false,
-    )
-    StoryTextStyle.NEON -> StoryTextTypography(
-        fontWeight = 700,
-        italic = false,
-        family = StoryTextFontFamily.SANS,
-        letterSpacingEm = 0.05f,
-        glow = true,
-    )
-    StoryTextStyle.TYPEWRITER -> StoryTextTypography(
-        fontWeight = 500,
-        italic = false,
-        family = StoryTextFontFamily.MONOSPACE,
-        letterSpacingEm = 0.03f,
-        glow = false,
-    )
-    StoryTextStyle.HANDWRITING -> StoryTextTypography(
-        fontWeight = 400,
-        italic = true,
-        family = StoryTextFontFamily.CURSIVE,
-        letterSpacingEm = 0f,
-        glow = false,
-    )
-    StoryTextStyle.CLASSIC -> StoryTextTypography(
-        fontWeight = 400,
-        italic = false,
-        family = StoryTextFontFamily.SERIF,
-        letterSpacingEm = 0f,
-        glow = false,
-    )
-}
+/** Maps a style to its [StoryTextTypography], straight from the shared catalog. */
+fun StoryTextStyle.typography(): StoryTextTypography = StoryTextTypography(
+    fontWeight = kind.fontWeight,
+    italic = kind.italic,
+    family = when (kind.generic) {
+        StoryTextGenericFamily.SANS -> StoryTextFontFamily.SANS
+        StoryTextGenericFamily.SERIF -> StoryTextFontFamily.SERIF
+        StoryTextGenericFamily.MONOSPACE -> StoryTextFontFamily.MONOSPACE
+        StoryTextGenericFamily.CURSIVE -> StoryTextFontFamily.CURSIVE
+    },
+    letterSpacingEm = kind.letterSpacingEm,
+    glow = kind.glow,
+    face = kind.face,
+)
 
 /**
  * The EFFECT this composer's style PRESET carries (#4870). A style is a FONT and nothing

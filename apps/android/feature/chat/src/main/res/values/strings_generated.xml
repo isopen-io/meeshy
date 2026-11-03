@@ -369,6 +369,7 @@
     <string name="message_detail_views_read_all">Read by everyone</string>
     <string name="message_detail_views_read_empty">No one has read this message</string>
     <string name="message_detail_views_sent">Sent</string>
+    <string name="message_translation_e2ee_serverRefused">End-to-end encrypted: this conversation is translated on your device, never by the server.</string>
     <string name="permission_location_denied">Location denied — allow it in Settings</string>
     <string name="piece_a11y_photo">Photo %1$d of %2$d</string>
     <string name="piece_a11y_video">Video %1$d of %2$d</string>

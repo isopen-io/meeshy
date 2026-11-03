@@ -176,3 +176,11 @@ release :
 Sur Android, un hôte `autoVerify` oblige `https://<hôte>/.well-known/assetlinks.json` à répondre ;
 déclarer un hôte d'API ne fait qu'ajouter une vérification qui peut échouer sans jamais servir une page.
 `AppLinksAssetlinksGuardTest` verrouille cet ensemble d'hôtes.
+
+## Autres App Links (racine-liens-profonds-android, #14828)
+
+Le manifeste revendique aussi, en `autoVerify`, sur `meeshy.me`, `www.meeshy.me` et `app.meeshy.me` : `/me`, `/me/…`,
+`/c/`, `/conversation/`, `/l/`, `/p/`, `/s/`, `/stories/`, `/users/`, `/reels`, `/community/`, `/communities/`, `/hashtag/`
+et `/signup`. `/share` n'est PAS revendiqué (le navigateur le garde). Le fichier `/.well-known/assetlinks.json` de chaque
+hôte doit nommer `me.meeshy.app` avec l'empreinte du certificat de signature, sinon Android n'ouvre pas ces liens dans
+l'app. Aucun lien à jeton d'authentification n'est revendiqué hors https ; `ManifestDeepLinksGuardTest` le garde.

@@ -73,6 +73,37 @@ internal class CallIceStateMonitor(
         reconnectAttempt = 0
     }
 
+    /**
+     * Un cycle de reconnexion démarré par un déclencheur extérieur à l'ICE (arête réseau, lien à moitié
+     * ouvert) : le pair se dit encore connecté, mais le cycle est ouvert. Le retour `CONNECTED` qui suit le
+     * referme comme un stall ICE ([onIceUp]). La FSM est déjà passée en reconnexion par le déclencheur.
+     */
+    fun beginExternalCycle() {
+        if (!connected || stalled) return
+        stalled = true
+        reconnectAttempt = minOf(reconnectAttempt + 1, MAX_WIRE_ATTEMPT)
+        signals.emitReconnecting(callId, selfId, attempt = reconnectAttempt)
+    }
+
+    /**
+     * Rattrapage par niveau (#8270) : le pair est déjà `CONNECTED` alors que la FSM négocie encore. Même
+     * issue que le front ICE manqué — `call:reconnected` si un cycle était ouvert, puis « connecté ».
+     */
+    fun catchUpConnected() {
+        connected = true
+        if (stalled) {
+            stalled = false
+            signals.emitReconnected(callId, selfId)
+        }
+        onMediaConnected?.invoke()
+    }
+
+    /** `true` quand la connexion ICE du pair est établie (`CONNECTED` ou `COMPLETED`). */
+    val isPeerConnected: Boolean
+        get() = engine.iceConnectionState.value.let {
+            it == PeerConnection.IceConnectionState.CONNECTED || it == PeerConnection.IceConnectionState.COMPLETED
+        }
+
     private fun onIceState(state: PeerConnection.IceConnectionState) {
         when (state) {
             PeerConnection.IceConnectionState.CONNECTED,

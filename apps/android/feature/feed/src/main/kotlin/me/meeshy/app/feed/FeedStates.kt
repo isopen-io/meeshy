@@ -44,6 +44,8 @@ internal fun FeedNotice.messageRes(): Int = when (this) {
     FeedNotice.REPOSTED -> R.string.feed_repost_reposted
     FeedNotice.REPOST_FAILED -> R.string.feed_notice_repost_failed
     FeedNotice.PIN_FAILED -> R.string.feed_notice_pin_failed
+    FeedNotice.PINNED -> R.string.feed_post_pinned
+    FeedNotice.DELETED -> R.string.feed_post_deleted
     FeedNotice.DELETE_FAILED -> R.string.feed_notice_delete_failed
     FeedNotice.REPORT_FAILED -> R.string.feed_notice_report_failed
     FeedNotice.REPORTED -> R.string.feed_notice_reported

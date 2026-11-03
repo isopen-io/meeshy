@@ -20,6 +20,10 @@ public interface PendingIdDao {
     @Query("DELETE FROM pending_ids WHERE conversationId = :conversationId")
     public suspend fun clearConversation(conversationId: String)
 
+    /** Rétention — le pont d'un message supprimé, retrouvé par l'un ou l'autre de ses identifiants. */
+    @Query("DELETE FROM pending_ids WHERE localId IN (:ids) OR serverId IN (:ids)")
+    public suspend fun deleteForMessages(ids: List<String>)
+
     @Query("DELETE FROM pending_ids")
     public suspend fun clear()
 }

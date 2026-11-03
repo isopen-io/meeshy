@@ -5,6 +5,8 @@ import me.meeshy.sdk.model.JoinNoticePresentation
 import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.BubbleStickerSpec
 import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.MessageSourceKind
+import me.meeshy.sdk.model.ServedProfileDecorItem
 import me.meeshy.sdk.model.MessageExitOffer
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 
@@ -58,6 +60,16 @@ public data class BubbleContent(
      * teinte le fond et le contour de la bulle reçue, et l'avatar de repli (iOS `senderColor`).
      */
     val senderColorHex: String? = null,
+    /** L'auteur est un invité SANS compte (type `anonymous`, jamais le pseudo) : son avatar est un fantôme. */
+    val senderIsAnonymous: Boolean = false,
+    /** L'auteur a un compte qui l'engage ; fail-closed : un type absent ou inconnu vaut invité. */
+    val senderHasAccount: Boolean = true,
+    /** Le contour d'avatar équipé de l'auteur, servi avec le message (#10713). */
+    val senderRing: ServedProfileDecorItem? = null,
+    /** `pseudo → nom d'affichage` des personnes mentionnées, tels que la passerelle les sert avec le message. */
+    val servedMentionNames: Map<String, String> = emptyMap(),
+    /** D'où vient le message (utilisateur, système, annonce, application, agent, autorité). */
+    val sourceKind: MessageSourceKind = MessageSourceKind.User,
     val isEdited: Boolean,
     val isDeleted: Boolean,
     val createdAtIso: String?,
