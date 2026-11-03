@@ -241,6 +241,7 @@ class AccessScreensFormWidthTest {
             mockk(relaxed = true),
             SessionOpeningGate(),
             mockk(relaxed = true),
+            mockk(relaxed = true),
             SavedStateHandle(mapOf(MagicLinkValidateViewModel.TOKEN_ARG to "expired-token")),
         )
     }
