@@ -1,6 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
     <string name="about_app_name">Meeshy</string>
+    <string name="about_copy">نسخ</string>
     <string name="about_copyright">‏2024-2026 Meeshy. جميع الحقوق محفوظة.</string>
     <string name="about_description_body">Meeshy منصة مراسلة فورية عالية الأداء مع ترجمة متعددة اللغات واستنساخ صوتي وتشفير من طرف إلى طرف.</string>
     <string name="about_feature_cloud_sync">المزامنة السحابية</string>
@@ -8,11 +9,19 @@
     <string name="about_feature_themes">سمات قابلة للتخصيص</string>
     <string name="about_feature_translation">ترجمة فورية</string>
     <string name="about_feature_voice_cloning">استنساخ الصوت</string>
+    <string name="about_info_media_tier">ملف الوسائط</string>
     <string name="about_info_platform">المنصة</string>
     <string name="about_info_sdk_version">إصدار SDK</string>
+    <string name="about_link_about">عن ميشي</string>
+    <string name="about_link_contact">اتصل بنا</string>
     <string name="about_link_github">GitHub</string>
+    <string name="about_link_partners">الشركاء</string>
     <string name="about_link_twitter">تويتر / إكس</string>
     <string name="about_link_website">الموقع الإلكتروني</string>
+    <string name="about_media_tier_high">عالٍ</string>
+    <string name="about_media_tier_low">أساسي</string>
+    <string name="about_media_tier_mid">متوسط</string>
+    <string name="about_media_tier_pro">احترافي</string>
     <string name="about_section_description">الوصف</string>
     <string name="about_section_features">الميزات</string>
     <string name="about_section_informations">معلومات</string>
@@ -93,12 +102,16 @@
     <string name="delete_account_warning_conversations">كل محادثاتك</string>
     <string name="delete_account_warning_messages">كل رسائلك</string>
     <string name="delete_account_warning_preferences">تفضيلاتك وإعداداتك</string>
+    <string name="legal_language_picker_a11y">لغة المستند</string>
     <string name="licenses_agpl_title">نص ترخيص AGPL-3.0</string>
+    <string name="licenses_card_label">%1$s من %2$s، ترخيص %3$s</string>
+    <string name="licenses_intro">يستخدم Meeshy مكتبات مفتوحة المصدر التالية.</string>
     <string name="licenses_libsignal_body">مكتبة libsignal والمكتبات التي تتضمنها، مع نص تراخيصها.</string>
     <string name="licenses_libsignal_title">إشعارات libsignal</string>
     <string name="licenses_meeshy_body">يُنشر الكود المصدري لـ Meeshy بموجب ترخيص MIT. يتضمن هذا التطبيق مكتبة libsignal ‏(Signal Messenger) المنشورة بموجب ترخيص GNU AGPL-3.0، لذا فإن التطبيق الموزَّع عمل مرخَّص بموجب ترخيص AGPL-3.0 فقط.</string>
     <string name="licenses_meeshy_body_mit">يُنشر الكود المصدري لـ Meeshy بموجب ترخيص MIT.</string>
     <string name="licenses_meeshy_title">ترخيص Meeshy</string>
+    <string name="licenses_section_open_source">مفتوح المصدر</string>
     <string name="licenses_source_body">الكود المصدري المقابل لهذا الإصدار، بما في ذلك سكربتات البناء، متاح مجانًا.</string>
     <string name="licenses_source_commit">المراجعة %1$s</string>
     <string name="licenses_source_open">فتح الكود المصدري</string>
@@ -286,6 +299,8 @@
     <string name="settings_transcription_engine">محرك النسخ النصي</string>
     <string name="settings_transcription_engine_a11y">محرك النسخ النصي</string>
     <string name="settings_version_label">الإصدار</string>
+    <string name="support_a11y_opens">يفتح %1$s</string>
+    <string name="support_help_rate">تقييم التطبيق</string>
     <string name="support_info_build">الإصدار</string>
     <string name="support_info_platform">المنصة</string>
     <string name="support_info_version">الإصدار</string>

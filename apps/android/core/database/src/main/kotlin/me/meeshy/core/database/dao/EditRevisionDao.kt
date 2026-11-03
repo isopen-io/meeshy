@@ -21,6 +21,9 @@ public interface EditRevisionDao {
     @Query("DELETE FROM message_edit_revisions WHERE messageId = :messageId")
     public suspend fun deleteForMessage(messageId: String)
 
+    @Query("DELETE FROM message_edit_revisions WHERE messageId IN (:messageIds)")
+    public suspend fun deleteForMessages(messageIds: List<String>)
+
     @Query("DELETE FROM message_edit_revisions WHERE messageId = :messageId AND revision <= :floor")
     public suspend fun deleteUpTo(messageId: String, floor: Int)
 

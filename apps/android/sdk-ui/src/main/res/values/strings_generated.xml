@@ -76,6 +76,7 @@
     <string name="emoji_category_travel">Travel</string>
     <string name="focal_focus_add_reaction">Add a reaction</string>
     <string name="focal_focus_translation_detail">Translation details</string>
+    <string name="focal_row_anonymousSender">No account</string>
     <string name="focal_row_you">You</string>
     <string name="image_editor_before">Original</string>
     <string name="image_editor_cancel">Cancel</string>
@@ -106,6 +107,10 @@
     <string name="media_audio_play">Play audio</string>
     <string name="media_audio_speed_cycle">Playback speed %1$s</string>
     <string name="media_audio_transcribe">Transcribe</string>
+    <string name="media_caption_see_less">see less</string>
+    <string name="media_caption_see_less_hint">Collapses the caption</string>
+    <string name="media_caption_see_more">see more</string>
+    <string name="media_caption_see_more_hint">Shows the full caption</string>
     <string name="media_crop_a11y_handle_bottom">Bottom edge</string>
     <string name="media_crop_a11y_handle_bottomLeft">Bottom left corner</string>
     <string name="media_crop_a11y_handle_bottomRight">Bottom right corner</string>
@@ -153,6 +158,9 @@
     </plurals>
     <string name="presence_offline">Offline</string>
     <string name="presence_online">Online</string>
+    <string name="pull_refresh_armed">Release to refresh</string>
+    <string name="pull_refresh_done">Refreshed</string>
+    <string name="pull_refresh_refreshing">Refreshing</string>
     <string name="reactions_more">More reactions</string>
     <string name="retouch_crop_original">Original</string>
     <string name="retouch_effect_angel">Angel</string>
@@ -215,6 +223,10 @@
     <string name="retouch_tool_text">Text</string>
     <string name="retouch_tool_trim">Trim</string>
     <string name="settings_info_button_label">Learn more about %1$s</string>
+    <string name="skeleton_feed_post_loading">Loading a post</string>
+    <string name="skeleton_link_row_loading">Loading a link</string>
+    <string name="skeleton_profile_loading">Loading the profile</string>
+    <string name="skeleton_stories_loading">Loading stories</string>
     <string name="slide_rail_delete_cancel">Cancel</string>
     <string name="slide_rail_delete_confirm_action">Delete</string>
     <string name="slide_rail_delete_confirm_title">Delete this scene?</string>

@@ -146,6 +146,8 @@ internal fun StoryForegroundLayer(
     modifier: Modifier = Modifier,
     rewindWhenInactive: Boolean = false,
     onAudioFocusLost: () -> Unit = {},
+    onAudioFocusGained: () -> Unit = {},
+    onAudioFocusLostForGood: () -> Unit = {},
     players: Boolean = true,
     holdsAudioFocus: Boolean = true,
     looks: StorySceneMediaLooks? = null,
@@ -191,8 +193,11 @@ internal fun StoryForegroundLayer(
                 sourceStartMs = media.sourceWindow?.startMs,
                 sourceEndMs = media.sourceWindow?.endMs,
                 onAudioFocusLost = onAudioFocusLost,
+                onAudioFocusGained = onAudioFocusGained,
+                onAudioFocusLostForGood = onAudioFocusLostForGood,
                 holdsAudioFocus = holdsAudioFocus,
                 textured = true,
+                effects = rememberSceneVideoEffects(media.url, media.posterUrl, looks),
             )
         } else {
             Box(layerModifier) {

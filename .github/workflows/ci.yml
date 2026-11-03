@@ -599,6 +599,11 @@ jobs:
       - name: Docker prune & deploy-only-on-dev guard
         run: node scripts/check-docker-prune-noninteractive.mjs --self-test && node scripts/check-docker-prune-noninteractive.mjs
 
+      # #14878 — un build Docker lancé sur `dev` va jusqu'au déploiement du
+      # staging : jamais `cancel-in-progress: true` sur `docker.yml`.
+      - name: Docker build never cancelled guard
+        run: node scripts/check-docker-build-never-cancelled.mjs --self-test && node scripts/check-docker-build-never-cancelled.mjs
+
       # #9825, #10048 — un tag `sha-…` épinglé dans le `.env` de l'hôte de
       # staging faisait tirer et garder une image figée sous un déploiement
       # vert. Le verdict de `docker.yml` (job deploy-staging) refuse tout

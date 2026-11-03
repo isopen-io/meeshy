@@ -34,6 +34,21 @@ class ContentShareOutViewModel @Inject constructor(
             open(TrackedShareCard.outgoingText(ready))
         }
     }
+
+    fun copyLink(postId: String, ready: (String) -> Unit) {
+        viewModelScope.launch { ready(links.resolve(postId, COPY_PLATFORM).url) }
+    }
+
+    private companion object {
+        const val COPY_PLATFORM = "copy"
+    }
+}
+
+/** « Copier le lien » (#14827) : le lien suivi de l'utilisateur ([PostShareLinkService], plateforme `copy`), sinon l'URL brute. */
+@Composable
+fun rememberPostLinkCopy(): (String, (String) -> Unit) -> Unit {
+    val viewModel: ContentShareOutViewModel = hiltViewModel()
+    return remember(viewModel) { { postId, ready -> viewModel.copyLink(postId, ready) } }
 }
 
 /** Le geste « Partager » prêt à poser sur une entrée de menu : il prend la carte du contenu touché. */

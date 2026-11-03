@@ -15,6 +15,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.app.game.GamePageScaffold
 import me.meeshy.app.game.pages.rememberGameHidden
 import me.meeshy.feature.game.R
 import me.meeshy.sdk.model.game.engagement.EngagementProgress

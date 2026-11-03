@@ -44,4 +44,18 @@
     <string name="contacts_tab_discover">اكتشاف</string>
     <string name="contacts_tab_requests">الطلبات</string>
     <string name="contacts_title">جهات الاتصال</string>
+    <string name="phone_prompt_benefit">يجدك معارفك على Meeshy بفضل رقمك. ويمكنك أيضًا استخدامه لتسجيل الدخول.</string>
+    <string name="phone_prompt_code_label">رمز من 6 أرقام</string>
+    <string name="phone_prompt_code_sent">تم إرسال الرمز برسالة نصية</string>
+    <string name="phone_prompt_edit">تعديل</string>
+    <string name="phone_prompt_error_code_invalid">رمز غير صحيح أو منتهي الصلاحية</string>
+    <string name="phone_prompt_error_generic">حدث خطأ</string>
+    <string name="phone_prompt_implausible">لا يبدو هذا الرقم حقيقيًا، يُرجى التحقق منه.</string>
+    <string name="phone_prompt_later">لاحقًا</string>
+    <string name="phone_prompt_later_a11y">لاحقًا، البحث عن جهات اتصالي دون إضافة رقم</string>
+    <string name="phone_prompt_phone_label">الهاتف</string>
+    <string name="phone_prompt_send_code">استلام الرمز عبر رسالة نصية</string>
+    <string name="phone_prompt_title">أضف رقمك</string>
+    <string name="phone_prompt_too_short">هذا الرقم قصير جدًا: %1$d أرقام على الأقل.</string>
+    <string name="phone_prompt_verify">تحقُّق</string>
 </resources>

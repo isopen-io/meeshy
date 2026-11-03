@@ -200,6 +200,9 @@ internal class ConversationListDialogController(
         show(ConversationListDialog.Info(conversationId))
     }
 
+    fun displayTitleOf(conversationId: String): String? =
+        conversationOf(conversationId)?.displayTitle(state.value.currentUserId)
+
     fun requestInvite(conversationId: String) {
         val conversation = conversationOf(conversationId) ?: return
         if (!capabilities(conversation).invite) return
