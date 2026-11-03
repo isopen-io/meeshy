@@ -18,7 +18,7 @@ import javax.inject.Singleton
 @Singleton
 class OpenConversationRegistry @Inject constructor(
     private val rooms: ConversationRoomRegistry,
-) {
+) : OpenConversationLookup {
     private val lock = Any()
     private val _ledger = MutableStateFlow(OpenConversationLedger())
 
@@ -27,6 +27,8 @@ class OpenConversationRegistry @Inject constructor(
     val activeConversationId: String? get() = _ledger.value.activeConversationId
 
     val openConversationIds: Set<String> get() = _ledger.value.openConversationIds
+
+    override fun isOpen(conversationId: String): Boolean = conversationId in openConversationIds
 
     /** Rend vrai à la première ouverture de cette conversation. */
     fun open(conversationId: String): Boolean {
