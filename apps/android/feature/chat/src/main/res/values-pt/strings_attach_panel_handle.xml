@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_panel_handle_label">Alça do painel de anexos</string>
+    <string name="composer_panel_handle_open_library">Abrir toda a fototeca</string>
+    <string name="composer_panel_handle_close">Fechar anexos</string>
+</resources>

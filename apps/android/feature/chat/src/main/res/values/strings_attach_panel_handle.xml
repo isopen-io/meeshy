@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_panel_handle_label">Attachment panel handle</string>
+    <string name="composer_panel_handle_open_library">Open the full photo library</string>
+    <string name="composer_panel_handle_close">Close attachments</string>
+</resources>
