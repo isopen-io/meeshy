@@ -36,6 +36,6 @@ class ComposeLanguageDefaultTest {
     @Test
     fun `un code hors de la liste supportee est ecarte`() {
         assertThat(ComposeLanguageDefault.of(prefs(system = "fr"), "en", setOf("en"))).isEqualTo("en")
-        assertThat(ComposeLanguageDefault.of(prefs(), "xx")).isNull()
+        assertThat(ComposeLanguageDefault.of(prefs(), "  ")).isNull()
     }
 }
