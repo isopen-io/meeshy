@@ -62,8 +62,8 @@ internal enum class EntryShortcut(val shortcutId: String, val address: String, @
 
     companion object {
         /** Les places que les conversations gardent une fois les raccourcis d'entrée posés. */
-        fun conversationSlots(maxCount: Int): Int = (maxCount - entries.size).coerceAtLeast(0)
+        fun conversationSlots(maxCount: Int): Int = (maxCount - all.size).coerceAtLeast(0)
 
-        val entries: List<EntryShortcut> = values().toList()
+        val all: List<EntryShortcut> = values().toList()
     }
 }

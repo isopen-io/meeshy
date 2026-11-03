@@ -31,7 +31,7 @@ internal object DynamicShortcutsPublisher {
         val maxCount = ShortcutManagerCompat.getMaxShortcutCountPerActivity(context)
         val presentation = DynamicShortcutsPresentation.from(conversations, currentUserId, EntryShortcut.conversationSlots(maxCount))
         val icon = IconCompat.createWithResource(context, R.mipmap.ic_launcher)
-        val entries = EntryShortcut.entries.map { entry ->
+        val entries = EntryShortcut.all.map { entry ->
             val label = context.getString(entry.labelRes)
             ShortcutInfoCompat.Builder(context, entry.shortcutId)
                 .setShortLabel(label)

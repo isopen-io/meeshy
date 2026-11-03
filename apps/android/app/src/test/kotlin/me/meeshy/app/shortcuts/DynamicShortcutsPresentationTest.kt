@@ -158,11 +158,11 @@ class DynamicShortcutsPresentationTest {
 
     @Test
     fun `the entry shortcuts open the recent and unread elections`() {
-        assertThat(EntryShortcut.entries.map { it.address }).containsExactly(
+        assertThat(EntryShortcut.all.map { it.address }).containsExactly(
             "meeshy://conversations/recent",
             "meeshy://conversations/unread",
         ).inOrder()
-        assertThat(EntryShortcut.entries.map { it.shortcutId }).containsNoDuplicates()
+        assertThat(EntryShortcut.all.map { it.shortcutId }).containsNoDuplicates()
     }
 
     @Test
