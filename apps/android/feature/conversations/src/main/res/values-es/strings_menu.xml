@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="menu_block">Bloquear</string>
+    <string name="menu_unblock">Desbloquear</string>
+    <string name="menu_my_conversations">Mis conversaciones</string>
+</resources>

@@ -25,6 +25,18 @@ class PreferencesRoutesTest {
     }
 
     @Test
+    fun `the theme patch hits the application block with the theme alone`() = runTest {
+        val http = RecordingHttp()
+
+        http.serve(PreferencesApi::class.java)
+            .updateApplication(me.meeshy.sdk.model.ApplicationPreferenceSyncBody(me.meeshy.sdk.model.AppThemeMode.DARK))
+
+        assertThat(http.only.method).isEqualTo("PATCH")
+        assertThat(http.only.path).isEqualTo("/api/v1/me/preferences/application")
+        assertThat(http.only.body).isEqualTo("""{"theme":"dark"}""")
+    }
+
+    @Test
     fun `resetting a block is a DELETE on its route`() = runTest {
         val http = RecordingHttp()
 
