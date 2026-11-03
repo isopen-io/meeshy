@@ -53,8 +53,8 @@ class DeviceCallRecordingCapturerTest {
         val capturer = DeviceCallRecordingCapturer(
             MutableSharedFlow(), MutableSharedFlow(), { null }, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), { Writer() },
         )
-        assertThat(capturer.start(File.createTempFile("a", ".m4a"), CallRecordingKind.AUDIO)).isTrue()
-        assertThat(capturer.start(File.createTempFile("b", ".m4a"), CallRecordingKind.AUDIO)).isFalse()
+        assertThat(capturer.start(File.createTempFile("first", ".m4a"), CallRecordingKind.AUDIO)).isTrue()
+        assertThat(capturer.start(File.createTempFile("second", ".m4a"), CallRecordingKind.AUDIO)).isFalse()
     }
 
     @Test

@@ -567,7 +567,7 @@ class SocketManager internal constructor(
         private const val EVENT_SESSION_REVOKED = SocketEventNames.AUTH_SESSION_REVOKED
         private const val EVENT_ERROR = "error"
         private const val EVENT_HEARTBEAT = "heartbeat"
-        private const val EVENT_HEARTBEAT_ACK = "heartbeat:ack"
+        private const val EVENT_HEARTBEAT_ACK = SocketEventNames.HEARTBEAT_ACK
 
         /** L'erreur d'un accusé refusé parce que la session de l'émission est finie (#13566). */
         const val SESSION_ENDED: String = "SESSION_ENDED"
