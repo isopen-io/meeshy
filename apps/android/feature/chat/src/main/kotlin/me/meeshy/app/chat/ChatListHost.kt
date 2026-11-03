@@ -91,12 +91,17 @@ internal fun ChatListHost(
     val profileTap = rememberProfileTap(state.conversationId, accentColor)
     // L'en-tête efface sa grappe d'actions pendant le défilement (iOS `hiddenWhileScrolling`).
     LaunchedEffect(listState) {
-        snapshotFlow { listState.isScrollInProgress }
-            .distinctUntilChanged()
-            .collect {
-                host.chrome.isScrolling = it
-                if (!it) host.chrome.isUserScrolling = false
-            }
+        try {
+            snapshotFlow { listState.isScrollInProgress }
+                .distinctUntilChanged()
+                .collect {
+                    host.chrome.listGate?.setScrolling(it)
+                    host.chrome.isScrolling = it
+                    if (!it) host.chrome.isUserScrolling = false
+                }
+        } finally {
+            host.chrome.listGate?.setScrolling(false)
+        }
     }
     // Seul un glissé du doigt arme le défilement « utilisateur » ; il retombe à l'arrêt de l'élan.
     LaunchedEffect(listState) {

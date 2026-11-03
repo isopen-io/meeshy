@@ -82,7 +82,7 @@ internal class ChatSheetVisibility {
  * efface alors sa grappe d'actions (iOS `hiddenWhileScrolling`).
  */
 @Stable
-internal class ChatChromeState {
+internal class ChatChromeState(val listGate: ChatListUpdateGate? = null) {
     var isScrolling by mutableStateOf(false)
     /**
      * Un défilement parti du DOIGT est en cours (glissé puis son élan) — jamais un saut
@@ -181,12 +181,13 @@ internal fun rememberChatHostContext(
     landing: ChatLandingState = ChatLandingState(),
     composerClosure: me.meeshy.sdk.model.ComposerClosure? = null,
     capabilities: me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities? = null,
+    listGate: ChatListUpdateGate? = null,
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
-    val chrome = remember { ChatChromeState() }
+    val chrome = remember(listGate) { ChatChromeState(listGate) }
     return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing, composerClosure, capabilities)
 }
 
