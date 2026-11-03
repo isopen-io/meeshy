@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.BubbleStickerSpec
 import me.meeshy.sdk.model.StickerPicture
 import me.meeshy.sdk.model.DeliveryStatusResolver
+import me.meeshy.sdk.model.ForwardAttribution
 import me.meeshy.sdk.model.ForwardBadgePolicy
 import me.meeshy.sdk.model.ForwardReference
 import me.meeshy.sdk.model.MessageEffectFlags
@@ -225,16 +226,16 @@ public object BubbleContentBuilder {
             expiresAtIso = if (isDeleted) null else message.expiresAt?.trim()?.ifBlank { null },
             pinnedAtIso = if (isDeleted) null else message.pinnedAt?.trim()?.ifBlank { null },
             isForwarded = !isDeleted && !message.forwardedFromId.isNullOrBlank(),
-            // Name the SOURCE conversation for a group forward (else null → the
-            // generic "Forwarded" label). Mirrors iOS building a `ForwardReference`
-            // from `forwardedFromConversation` (`title ?? identifier`, `type`), then
-            // running `ForwardBadgePolicy`. A deleted tombstone never names a source.
-            forwardedFromName = if (isDeleted) {
-                null
+            // Qui a le droit d'être nommé sous un transfert : trois issues (groupe, personne, personne)
+            // décidées par `ForwardBadgePolicy` (iOS `ForwardReference` → `ForwardAttribution`). Un
+            // tombeau supprimé ne nomme jamais sa source.
+            forwardAttribution = if (isDeleted) {
+                ForwardAttribution.Anonymous
             } else {
-                ForwardBadgePolicy.conversationName(
+                ForwardBadgePolicy.attribution(
                     message.forwardedFromConversation?.let { conv ->
                         ForwardReference(
+                            senderName = message.forwardedFrom?.sender?.let { it.displayName ?: it.user?.displayName ?: it.username }.orEmpty(),
                             conversationName = conv.title ?: conv.identifier,
                             conversationType = conv.type,
                         )
