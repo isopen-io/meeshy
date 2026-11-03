@@ -22,7 +22,7 @@ class PackAssetFetcherTest {
     private fun http(code: Int) = HttpException(Response.error<Unit>(code, "{}".toResponseBody()))
 
     @Test
-    fun `the body is read bounded to the declared size plus one`() = runBlocking {
+    fun `the body is read bounded to the declared size plus one`() = runBlocking<Unit> {
         val ref = packRef("abc")
         val api = mockk<PackAssetsApi>()
         coEvery { api.file(ref.src) } returns "abcdefgh".toResponseBody()

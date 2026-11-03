@@ -25,7 +25,7 @@ class ContentAddressedStoreTest {
         ContentAddressedStore(dir, fetcher, Dispatchers.IO)
 
     @Test
-    fun `a file is downloaded once then read from disk without the network`() = runBlocking {
+    fun `a file is downloaded once then read from disk without the network`() = runBlocking<Unit> {
         val ref = packRef("{\"a\":1}")
         val fetcher = FakePackFetcher(mapOf(ref.src to "{\"a\":1}".toByteArray()))
         val store = store(fetcher)
@@ -48,7 +48,7 @@ class ContentAddressedStoreTest {
     }
 
     @Test
-    fun `a file altered on disk is downloaded again`() = runBlocking {
+    fun `a file altered on disk is downloaded again`() = runBlocking<Unit> {
         val ref = packRef("good")
         val fetcher = FakePackFetcher(mapOf(ref.src to "good".toByteArray()))
         val dir = File(folder.root, "packs")
@@ -62,7 +62,7 @@ class ContentAddressedStoreTest {
     }
 
     @Test
-    fun `two simultaneous requests for the same file make one request`() = runBlocking {
+    fun `two simultaneous requests for the same file make one request`() = runBlocking<Unit> {
         val ref = packRef("shared")
         val fetcher = FakePackFetcher(mapOf(ref.src to "shared".toByteArray())).apply { gate = CompletableDeferred() }
         val store = store(fetcher)
@@ -88,7 +88,7 @@ class ContentAddressedStoreTest {
     }
 
     @Test
-    fun `prune removes only the named content addressed files that exist`() = runBlocking {
+    fun `prune removes only the named content addressed files that exist`() = runBlocking<Unit> {
         val ref = packRef("bye")
         val other = packRef("stay")
         val fetcher = FakePackFetcher(mapOf(ref.src to "bye".toByteArray(), other.src to "stay".toByteArray()))
