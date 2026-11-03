@@ -13,12 +13,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.feature.auth.R
 import me.meeshy.sdk.auth.AuthRepository
+import me.meeshy.sdk.auth.LoginHandoffs
 import me.meeshy.sdk.auth.SavedAccountsStore
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.auth.CredentialRefusal
 import me.meeshy.sdk.model.auth.EmailVerificationRequest
 import me.meeshy.sdk.model.auth.KeepSignedInPolicy
+import me.meeshy.sdk.model.auth.LoginAccountIntent
+import me.meeshy.sdk.model.auth.LoginEmailCandidate
 import me.meeshy.sdk.model.auth.LoginOutcome
 import me.meeshy.sdk.model.auth.PendingEmailVerification
 import me.meeshy.sdk.model.auth.SavedAccount
@@ -76,6 +79,9 @@ data class AuthUiState(
     /** Ce que la session qui s'ouvre garde : le premier compte de l'appareil l'est sans question (iOS `keepsNewSession`). */
     val keepsNewSession: Boolean get() = KeepSignedInPolicy.keepsNewSession(offersKeepSignedIn, keepSignedIn)
 
+    /** iOS `LoginView.prefillableEmail` : l'identifiant tapé quand c'est une adresse valide — le lien par e-mail et le mot de passe oublié la reçoivent. */
+    val prefillableEmail: String get() = LoginEmailCandidate.from(username)
+
     val canSubmit: Boolean get() = username.isNotBlank() && password.isNotBlank() && !isSubmitting
 
     /** iOS `LoginView` : « Se connecter » de l'étape 2FA reste grisé sous 6 caractères. */
@@ -114,6 +120,7 @@ class AuthViewModel @Inject constructor(
     private val cacheClock: CacheClock,
     private val config: MeeshyConfig,
     private val serverEnvironmentStore: ServerEnvironmentStore,
+    private val loginHandoffs: LoginHandoffs = LoginHandoffs(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
@@ -144,6 +151,7 @@ class AuthViewModel @Inject constructor(
         } else {
             restoration = viewModelScope.launch { restoreBackedUpSession() }
         }
+        adoptPendingHandoffs()
         viewModelScope.launch {
             savedAccountsStore.accounts.collect { accounts ->
                 _state.update {
@@ -151,6 +159,28 @@ class AuthViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * iOS `LoginView.onAppear` : ce que l'inscription ou « Changer / Ajouter un compte » a remis à la
+     * connexion avant qu'elle n'existe (#8216, #8286). À usage unique : l'écran le rappelle à chaque
+     * apparition, un second appel ne trouve rien.
+     */
+    fun adoptPendingHandoffs() {
+        loginHandoffs.signupEmail.take()?.takeIf { it.isNotEmpty() }?.let { email ->
+            _state.update { it.copy(username = email, showNormalLogin = true, errorMessage = null, errorRes = null) }
+        }
+        when (val intent = loginHandoffs.account.take()) {
+            LoginAccountIntent.AddAccount -> _state.update { it.copy(showNormalLogin = true, selectedAccount = null) }
+            is LoginAccountIntent.Account ->
+                _state.value.savedAccounts.firstOrNull { it.id == intent.id }?.let(::selectAccount)
+            null -> Unit
+        }
+    }
+
+    /** Avant d'ouvrir le lien par e-mail ou le mot de passe oublié : l'adresse tapée les y attend. */
+    fun holdRecoveryEmail() {
+        loginHandoffs.recoveryEmail.hold(_state.value.prefillableEmail.takeIf { it.isNotEmpty() })
     }
 
     private fun abandonRestoration() {
