@@ -94,6 +94,7 @@ private fun SceneFirstFrame(
     capture: StorySceneCapture?,
 ) {
     val comparison = remember { LookComparison() }
+    val zoom = rememberComposerViewportZoom()
     val armed = capture?.armed == true
     val panel = state.scenePanel(morePanel)?.takeIf { !armed }
     val typing = rememberStoryTyping(state, viewModel, morePanel, onMorePanel, keyboard)
@@ -122,12 +123,12 @@ private fun SceneFirstFrame(
             scene = { modifier ->
                 CompositionLocalProvider(LocalPlacedReframe provides placedReframe(edition.placedBand, placed, viewModel)) {
                     Box(modifier) {
-                        StoryComposerScene(state, viewModel, comparison, Modifier.fillMaxSize(), capture, captureOffered)
+                        StoryComposerScene(state, viewModel, comparison, Modifier.fillMaxSize(), capture, captureOffered, zoom)
                         ComposerSceneInvite(sceneInviteShown(state, armed, panel != null || typing != null || openSheet != null))
                     }
                 }
             },
-            top = { StorySceneTop(state, viewModel, doors.onClose, editing) },
+            top = { if (!zoom.zoomed) StorySceneTop(state, viewModel, doors.onClose, editing) },
             strip = { if (chrome) StorySlideStrip(state, viewModel) },
             trailing = {
                 SceneRail(

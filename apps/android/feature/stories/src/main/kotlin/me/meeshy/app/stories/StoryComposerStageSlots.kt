@@ -38,6 +38,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
+import me.meeshy.sdk.model.composer.scene.StoryFitMode
+import me.meeshy.sdk.model.scene.BackgroundLongPressOutcome
+import me.meeshy.sdk.model.scene.CanvasViewportZoomPolicy
+import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -56,9 +60,11 @@ internal fun StoryComposerScene(
     modifier: Modifier = Modifier,
     capture: StorySceneCapture? = null,
     captureOffered: Boolean = false,
+    zoom: ComposerViewportZoom? = null,
 ) {
     val armsCapture = capture?.takeIf { captureOffered }
     val accentHex = viewModel.observedAuthorAccentHex()
+    val haptics = rememberMeeshyHaptics()
     CompositionLocalProvider(LocalComposerLookAuthor provides rememberComposerLookAuthor(viewModel.lookPerson)) {
     Box(modifier.followsSceneHold(capture)) {
             StoryCanvasSurface(
@@ -113,9 +119,15 @@ internal fun StoryComposerScene(
                 backgroundRotationDeg = state.paintedBackgroundSetting.rotationDeg,
                 backgroundCrop = state.paintedBackgroundSetting.crop,
                 backgroundSourceAspect = state.backgroundSourceAspect,
-                onBackgroundLongPress = state.selectedSlideBackdropMediaId
-                    ?.let { { viewModel.onSelectBackground() } }
-                    ?: armsCapture?.takeIf { scene -> scene.offer?.allowsVideo == true }?.let { scene -> { scene.arm(films = true) } },
+                onBackgroundLongPress = when (BackgroundLongPressOutcome.resolve(true, null, state.selectedSlideBackdropMediaId)) {
+                    is BackgroundLongPressOutcome.SelectBackground -> ({ viewModel.onSelectBackground() })
+                    BackgroundLongPressOutcome.OpenViewfinder ->
+                        armsCapture?.takeIf { scene -> scene.offer?.allowsVideo == true }?.let { scene -> { scene.arm(films = true) } }
+                    BackgroundLongPressOutcome.Nothing -> null
+                },
+                onBackgroundDoubleTap = zoom?.let { z -> { onBackgroundDoubleTap(state, viewModel, z, haptics) } },
+                viewportScale = zoom?.scale ?: 1f,
+                onViewportScale = zoom?.let { z -> z::set },
                 stack = remember(state.deck.selectedSlide) { StorySceneStack.order(state.deck.selectedSlide) },
                 live = LocalComposerLive.current?.comparing(comparison.mediaId),
                 canvasFormat = state.deck.selectedSlide.canvasFormat,
@@ -127,6 +139,7 @@ internal fun StoryComposerScene(
             state.selectedSlideBackdropPendingPhase?.let { phase ->
                 IncomingWaitingBadge(phase, Modifier.align(Alignment.TopCenter).padding(top = WAITING_BADGE_TOP))
             }
+            zoom?.let { ViewportZoomResetButton(it, Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 12.dp)) }
             armsCapture?.offer?.let { offer -> StorySceneCaptureHint(offer) }
             capture?.takeIf { it.armed }?.let { scene -> scene.viewfinder(scene, Modifier.fillMaxSize()) }
     }
@@ -384,4 +397,17 @@ internal fun StoryPlanFrise(state: StoryComposerUiState, viewModel: StoryCompose
         keyframeHeld = state.selectedSceneObject?.id?.let { StoryComposerKeyframeReducer.keyframeAtPlayhead(state, it) } != null,
         onKeyframe = { id -> viewModel.onSceneReduce { s -> StoryComposerKeyframeReducer.toggled(s, id) } },
     )
+}
+
+/** Le double-toucher du fond : remet la scène zoomée à l'échelle 1, sinon fait basculer le fond média entre ajusté et rempli. */
+private fun onBackgroundDoubleTap(state: StoryComposerUiState, viewModel: StoryComposerViewModel, zoom: ComposerViewportZoom, haptics: MeeshyHaptics) {
+    if (CanvasViewportZoomPolicy.doubleTapResetsViewport(zoom.zoomed, null)) {
+        haptics.light()
+        zoom.reset()
+        return
+    }
+    if (state.selectedSlideBackdropMediaId == null) return
+    val filled = StoryFitMode.rendersFilled(ComposerBackdropFraming.fitMode(state.deck.selectedSlide.frame.backgroundTransform()))
+    haptics.light()
+    viewModel.onSceneReduce { StoryComposerBackgroundReducer.fitModeSet(it, if (filled) StoryFitMode.FIT else StoryFitMode.FILL) }
 }
