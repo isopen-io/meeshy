@@ -26,8 +26,8 @@ class SceneTextStyleRobolectricTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun plan(text: StoryTextObject) =
-        SceneRenderPlanner.plan(SceneLists(texts = listOf(text)), 0.0, SceneRenderMode.PLAY, SceneReaderLanguages.NONE)
+    private fun plan(texts: List<StoryTextObject>) =
+        SceneRenderPlanner.plan(SceneLists(texts = texts), 0.0, SceneRenderMode.PLAY, SceneReaderLanguages.NONE)
 
     @Test
     fun `every one of the eighteen styles resolves a font family`() {
@@ -47,25 +47,25 @@ class SceneTextStyleRobolectricTest {
 
     @Test
     fun `an eighteen-style text with outline effect and rtl content paints`() {
-        StoryTextStyleCatalog.all.forEach { style ->
-            val text = StoryTextObject(
+        val texts = StoryTextStyleCatalog.all.map { style ->
+            StoryTextObject(
                 id = style.wire, text = "مرحبا", textStyle = style.wire, fontWeight = "semibold",
                 borderWidth = 4.0, borderColor = "FF0000", textEffect = "neonPink",
             )
-            compose.setContent { SceneCanvas(items = plan(text)) }
-            compose.onAllNodesWithTag(SCENE_TEXT_TAG).assertCountEquals(1)
         }
+        compose.setContent { SceneCanvas(items = plan(texts)) }
+        compose.onAllNodesWithTag(SCENE_TEXT_TAG).assertCountEquals(texts.size)
     }
 
     @Test
     fun `diamond cloud and speech frames paint without throwing`() {
-        listOf("diamond", "cloud", "speech").forEach { shape ->
-            val text = StoryTextObject(
+        val texts = listOf("diamond", "cloud", "speech").map { shape ->
+            StoryTextObject(
                 id = shape, text = "Salut", frameShape = shape, frameBorderWidth = 3.0,
                 backgroundStyle = StoryTextBackgroundStyle(type = "solid", hex = "112233"),
             )
-            compose.setContent { SceneCanvas(items = plan(text)) }
-            compose.onAllNodesWithTag(SCENE_TEXT_TAG).assertCountEquals(1)
         }
+        compose.setContent { SceneCanvas(items = plan(texts)) }
+        compose.onAllNodesWithTag(SCENE_TEXT_TAG).assertCountEquals(texts.size)
     }
 }
