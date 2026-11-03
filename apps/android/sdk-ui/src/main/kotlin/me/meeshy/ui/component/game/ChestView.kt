@@ -39,7 +39,7 @@ internal data class ChestPlan(
 
         fun of(openProgress: Float): ChestPlan {
             val p = openProgress.coerceIn(0f, 1f)
-            return ChestPlan(1f - p, p, -LIFT * (1f - p), p)
+            return ChestPlan(1f - p, p, LIFT * (p - 1f), p)
         }
     }
 }

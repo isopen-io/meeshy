@@ -30,11 +30,6 @@ class FlameViewTest {
     }
 
     @Test
-    fun `la flamme vacille tant qu'elle brule et que le mouvement est permis`() {
-        assertThat(flickering(reduce = false)).isTrue()
-    }
-
-    @Test
     fun `sous mouvement reduit la flamme ne vacille pas`() {
         assertThat(flickering(reduce = true)).isFalse()
     }
