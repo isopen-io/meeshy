@@ -14,7 +14,13 @@ import me.meeshy.sdk.model.scene.export.StoryExportVideoFormat
  * se lit une fois puis tient son image ([hold]) jusqu'à la fin de la slide —, ou une image fixe.
  */
 public sealed interface SceneExportSlideFill {
-    public data class Video(val file: File, val laps: List<StoryExportClipRange>, val hold: SceneExportHold? = null) : SceneExportSlideFill
+    /** [look] : le réglage du compositeur (#14875), posé par le rendu sur chaque tour et sur l'image tenue ; `null` : la vidéo telle quelle. */
+    public data class Video(
+        val file: File,
+        val laps: List<StoryExportClipRange>,
+        val hold: SceneExportHold? = null,
+        val look: SceneExportVideoLook? = null,
+    ) : SceneExportSlideFill
 
     public data class Picture(val file: File) : SceneExportSlideFill
 }
@@ -67,15 +73,22 @@ public data class SceneExportPlacement(
  * **Une vidéo POSÉE sur la scène** (#13897), rendue vivante dans son cadre : son fichier rapatrié, son horloge sur la
  * timeline commune ([clock] : présence, fenêtre coupée, boucle), sa place dans la pile ([depth] : au-dessus des calques
  * de même profondeur, sous ceux de profondeur supérieure), son look ([colorMatrix], matrice 4×5 d'Android ; `null` :
- * neutre) et sa pose à chaque instant de la composition ([placementAt] ; `null` : invisible à cet instant).
+ * neutre), le réglage du compositeur peint sur chaque image avant lui ([look], #14875) et sa pose à chaque instant de la
+ * composition ([placementAt] ; `null` : invisible à cet instant).
  */
 public class SceneExportPlacedVideo(
     public val file: File,
     public val clock: StoryExportPlacedVideoClock,
     public val depth: Int,
     public val colorMatrix: FloatArray? = null,
+    public val look: SceneExportVideoLook? = null,
     public val placementAt: (Long) -> SceneExportPlacement?,
-)
+) {
+    public companion object {
+        /** Le plus grand côté des images décodées d'une vidéo posée : son réglage s'y peint à cette taille. */
+        public const val DECODED_LONG_SIDE: Int = 1_080
+    }
+}
 
 /** Un fichier son rapatrié, et sa durée sondée (`null` : non sondée — il se lit alors une fois, sans boucle). */
 public data class SceneExportSoundFile(val file: File, val durationMillis: Long?)

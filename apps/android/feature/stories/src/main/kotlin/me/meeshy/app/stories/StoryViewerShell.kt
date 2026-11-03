@@ -83,6 +83,12 @@ internal fun StoryViewerShell(
     val hasNextGroupState = rememberUpdatedState(state.hasNextGroup)
     val hasPreviousGroupState = rememberUpdatedState(state.hasPreviousGroup)
     StoryCubeEntryOnAuthorChange(cardMotion, authorKey = state.authorUserId, groupIndex = state.groupIndex)
+    StoryCardAppearOnOpen(cardMotion)
+    StoryViewerImmersiveMode()
+    StoryCloseOnStop {
+        viewModel.endCurrentDwell()
+        actions.onClose()
+    }
 
     Box(
         modifier = Modifier
