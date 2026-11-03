@@ -15,7 +15,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
-import me.meeshy.app.chat.conversationcard.ConversationLinkCard
 import me.meeshy.app.chat.conversationcard.LocalConversationLinkCards
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.deeplink.ConversationLinkTarget
@@ -222,17 +221,13 @@ internal fun ChatMessageRow(
                     onOpenUrl = { url -> openChatLink(linkContext, url, accentColor.toArgb()) },
                 )
             }
-            if (conversationCards != null && conversationCardTarget != null) {
-                ConversationLinkCard(
-                    target = conversationCardTarget,
-                    cards = conversationCards,
-                    fallbackAccent = accentColor,
-                    onOpenConversation = actions.onOpenConversation,
-                    fallback = preview,
-                )
-            } else {
-                preview()
-            }
+            MessageLinkAttachment(
+                cardTarget = conversationCardTarget,
+                cards = conversationCards,
+                fallbackAccent = accentColor,
+                onOpenConversation = actions.onOpenConversation,
+                preview = preview,
+            )
         }
     }
     SelectableRowFrame(
