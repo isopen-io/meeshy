@@ -1,5 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="a11y_feed_video_sound_mute">Disattiva audio del video</string>
+    <string name="a11y_feed_video_sound_unmute">Riattiva audio del video</string>
     <string name="a11y_media_download_action">Scarica</string>
     <string name="a11y_media_download_cancel">Annulla il download</string>
     <string name="audio_editor_a11y_playhead">Posizione di riproduzione</string>
