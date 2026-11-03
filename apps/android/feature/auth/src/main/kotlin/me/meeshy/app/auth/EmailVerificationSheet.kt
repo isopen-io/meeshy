@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MarkEmailUnread
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -78,7 +76,7 @@ internal fun EmailVerificationSheet(
             EmailVerifiedCheck()
             return@Column
         }
-        Icon(Icons.Filled.MarkEmailUnread, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(48.dp))
+        Icon(MeeshyIcons.MailUnread, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(48.dp))
         Text(
             text = stringResource(R.string.email_verification_title),
             style = MaterialTheme.typography.titleLarge,
