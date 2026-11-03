@@ -27,10 +27,11 @@ class MintCeremonyParticlesTest {
     @Test
     fun `le budget de particules est tenu et le pas de deux allege la peinture`() {
         val particles = MintCeremonyParticles.build(prism, seed = 1000)
-        assertThat(particles.count).isAtMost(4_500)
+        assertThat(particles.weave.size + particles.dust.size).isAtMost(GameMintCeremony.PARTICLE_BUDGET)
         val full = particles.paint(prism, 2.7)
         val half = particles.paint(prism, 2.7, stride = 2)
         assertThat(half.painted).isLessThan(full.painted)
-        assertThat(full.batches.size).isLessThan(full.painted / 10)
+        assertThat(full.painted).isGreaterThan(3000)
+        assertThat(full.batches.size).isLessThan(300)
     }
 }
