@@ -21,7 +21,8 @@ nonisolated struct StoryPostRoomLedger: Equatable {
     private(set) var held: String?
 
     /// Ce qu'il faut quitter et rejoindre pour tenir `postId` (nil : ne rien tenir).
-    mutating func hold(_ postId: String?) -> Move {
+    mutating func hold(_ storyId: String?) -> Move {
+        let postId = PendingStoryMarker.serverId(of: storyId)
         guard postId != held else { return Move() }
         let move = Move(leave: held, join: postId)
         held = postId

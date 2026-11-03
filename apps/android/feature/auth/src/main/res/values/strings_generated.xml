@@ -327,8 +327,14 @@
     <string name="signup_close">Close</string>
     <string name="signup_country_search_hint">Search for a country</string>
     <string name="signup_display_name_label">What should we call you?</string>
+    <string name="signup_email_forgot_password">Forgot password?</string>
+    <string name="signup_email_is_it_you">Is this you?</string>
+    <string name="signup_email_its_me">It’s me — recover my account</string>
     <string name="signup_email_label">Email</string>
+    <string name="signup_email_not_me">It’s not me</string>
+    <string name="signup_email_not_me_note">The code sent to this address will be required to claim it.</string>
     <string name="signup_email_placeholder">you@example.com</string>
+    <string name="signup_email_send_sign_in_link">Get a sign-in link</string>
     <string name="signup_email_taken">An account already exists with this address.</string>
     <string name="signup_error_generic">Account creation failed. Please try again.</string>
     <string name="signup_error_network">No connection. Check your network and try again.</string>

@@ -1,15 +1,15 @@
 package me.meeshy.sdk.model.scene
 
 /** Ce que la slide a besoin de voir avant que son compte à rebours ne démarre (iOS `scheduleContentReadyEvaluation`). */
-public sealed interface SceneBackgroundKind {
+public sealed interface SceneReadinessKind {
     /** Aplat ou dégradé : dessiné tout de suite. */
-    public data object Flat : SceneBackgroundKind
+    public data object Flat : SceneReadinessKind
 
     /** Image : prête au premier bitmap RÉEL (jamais le ThumbHash), ou au ThumbHash seul si elle n'a pas de bitmap à attendre. */
-    public data object Image : SceneBackgroundKind
+    public data object Image : SceneReadinessKind
 
     /** Vidéo : prête en `STATE_READY` (première image composée). */
-    public data object Video : SceneBackgroundKind
+    public data object Video : SceneReadinessKind
 
     public val isVisualMedia: Boolean get() = this is Image || this is Video
 }
@@ -23,17 +23,17 @@ public sealed interface SceneBackgroundKind {
  */
 public class SceneContentReadiness {
     private var currentKey: String? = null
-    private var kind: SceneBackgroundKind = SceneBackgroundKind.Flat
+    private var kind: SceneReadinessKind = SceneReadinessKind.Flat
     private var backgroundReady = false
     private var foregroundReady = true
     private var foregroundTimedOut = false
     private var fired = false
 
     /** Une slide devient la courante : tout repart d'une page blanche. */
-    public fun begin(slideKey: String, kind: SceneBackgroundKind, foregroundVideosPending: Boolean = false) {
+    public fun begin(slideKey: String, kind: SceneReadinessKind, foregroundVideosPending: Boolean = false) {
         currentKey = slideKey
         this.kind = kind
-        backgroundReady = kind == SceneBackgroundKind.Flat
+        backgroundReady = kind == SceneReadinessKind.Flat
         foregroundReady = !foregroundVideosPending
         foregroundTimedOut = false
         fired = false

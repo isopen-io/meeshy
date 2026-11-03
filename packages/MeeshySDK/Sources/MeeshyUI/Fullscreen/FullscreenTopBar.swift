@@ -70,20 +70,25 @@ public nonisolated enum FullscreenTopBarLayout {
 /// L'avatar est fourni par l'hôte (en général `MeeshyAvatar`, dont il choisit le
 /// contexte et la couleur d'accent) ; `accessory` porte ce que la surface ajoute sous
 /// le nom (crédit d'un son, attribution d'une republication).
-public struct FullscreenIdentityRow<Avatar: View, Accessory: View>: View {
+public struct FullscreenIdentityRow<Avatar: View, NameBadge: View, Accessory: View>: View {
 
     private let name: String
     private let subtitle: String?
     private let avatar: Avatar
+    private let nameBadge: NameBadge
     private let accessory: Accessory
 
+    /// `nameBadge` se pose sur la ligne du nom, après la date — un état qui
+    /// qualifie la publication (l'horloge d'un envoi en attente), sans libellé.
     public init(name: String,
                 subtitle: String? = nil,
                 @ViewBuilder avatar: () -> Avatar,
+                @ViewBuilder nameBadge: () -> NameBadge,
                 @ViewBuilder accessory: () -> Accessory) {
         self.name = name
         self.subtitle = subtitle
         self.avatar = avatar()
+        self.nameBadge = nameBadge()
         self.accessory = accessory()
     }
 
@@ -102,6 +107,7 @@ public struct FullscreenIdentityRow<Avatar: View, Accessory: View>: View {
                             .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                             .lineLimit(1)
                     }
+                    nameBadge
                 }
                 accessory
             }
@@ -111,10 +117,19 @@ public struct FullscreenIdentityRow<Avatar: View, Accessory: View>: View {
     }
 }
 
-public extension FullscreenIdentityRow where Accessory == EmptyView {
+public extension FullscreenIdentityRow where NameBadge == EmptyView {
+    init(name: String,
+         subtitle: String? = nil,
+         @ViewBuilder avatar: () -> Avatar,
+         @ViewBuilder accessory: () -> Accessory) {
+        self.init(name: name, subtitle: subtitle, avatar: avatar, nameBadge: { EmptyView() }, accessory: accessory)
+    }
+}
+
+public extension FullscreenIdentityRow where NameBadge == EmptyView, Accessory == EmptyView {
     init(name: String,
          subtitle: String? = nil,
          @ViewBuilder avatar: () -> Avatar) {
-        self.init(name: name, subtitle: subtitle, avatar: avatar, accessory: { EmptyView() })
+        self.init(name: name, subtitle: subtitle, avatar: avatar, nameBadge: { EmptyView() }, accessory: { EmptyView() })
     }
 }

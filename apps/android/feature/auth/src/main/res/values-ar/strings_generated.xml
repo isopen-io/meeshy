@@ -347,8 +347,14 @@
     <string name="signup_close">إغلاق</string>
     <string name="signup_country_search_hint">ابحث عن بلد</string>
     <string name="signup_display_name_label">بماذا نناديك؟</string>
+    <string name="signup_email_forgot_password">نسيت كلمة المرور؟</string>
+    <string name="signup_email_is_it_you">هل هذا أنت؟</string>
+    <string name="signup_email_its_me">هذا أنا — استعادة حسابي</string>
     <string name="signup_email_label">البريد الإلكتروني</string>
+    <string name="signup_email_not_me">ليس أنا</string>
+    <string name="signup_email_not_me_note">سيُطلب الرمز المرسل إلى هذا العنوان للحصول عليه.</string>
     <string name="signup_email_placeholder">you@example.com</string>
+    <string name="signup_email_send_sign_in_link">تلقي رابط تسجيل الدخول</string>
     <string name="signup_email_taken">يوجد حساب بهذا العنوان بالفعل.</string>
     <string name="signup_error_generic">تعذّر إنشاء الحساب. حاول مرة أخرى.</string>
     <string name="signup_error_network">لا يوجد اتصال. تحقق من شبكتك وحاول مرة أخرى.</string>

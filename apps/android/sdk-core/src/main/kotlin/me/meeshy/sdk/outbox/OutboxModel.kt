@@ -392,6 +392,19 @@ public data class FriendRequestPayload(val message: String? = null, val targetLe
 public data class FriendRespondPayload(val action: String, val userId: String)
 
 /**
+ * Payload of a `READ_RECEIPT` outbox row: what the reader saw and in which language, resolved when the receipt was
+ * COMPOSED (never at send time). Every field is optional — a row queued before this payload (`"{}"`) is a plain
+ * conversation-wide receipt.
+ */
+@kotlinx.serialization.Serializable
+public data class ReadReceiptPayload(
+    val messageIds: List<String>? = null,
+    val language: String? = null,
+    val messageLanguages: Map<String, String>? = null,
+    val caughtUpToMessageId: String? = null,
+)
+
+/**
  * Payload of an `UPDATE_CONVERSATION_PREFS` outbox row — the full desired
  * per-user preference snapshot at enqueue time. Carrying the complete snapshot
  * (computed from the already-mutated cache) makes coalescing a plain

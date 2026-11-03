@@ -66,8 +66,8 @@ extension StoryViewerView {
         triggerInitialActionIfNeeded()
         commentSession.observeRealtime(languages: { resolvedViewerLanguageChain })
         engagement.holdPostRoom(of: currentStory)
-        if let story = currentStory {
-            EngagementTracker.shared.begin(postId: story.id, contentType: .story, surface: .storyViewer)
+        if let postId = PendingStoryMarker.serverId(of: currentStory?.id) {
+            EngagementTracker.shared.begin(postId: postId, contentType: .story, surface: .storyViewer)
         }
     }
 
@@ -91,11 +91,11 @@ extension StoryViewerView {
         // without the viewer needing a direct reference.
         PlaybackCoordinator.shared.stopAll()
         engagement.holdPostRoom(of: nil)
-        if let story = currentStory {
+        if let postId = PendingStoryMarker.serverId(of: currentStory?.id) {
             // Relâche la déclaration de contenu actif — conditionnelle à
             // l'identité pour rester correcte si un autre écran a déjà
             // déclaré le sien entre-temps.
-            NotificationToastManager.shared.onPostClosed(story.id)
+            NotificationToastManager.shared.onPostClosed(postId)
         }
         Task { await EngagementTracker.shared.end(surface: .storyViewer) }
     }

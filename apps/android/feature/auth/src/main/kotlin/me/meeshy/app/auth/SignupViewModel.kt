@@ -3,7 +3,9 @@ package me.meeshy.app.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -19,6 +21,8 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.locale.DeviceLocaleProvider
 import me.meeshy.sdk.model.auth.EmailProvenSession
+import me.meeshy.sdk.model.auth.EmailTaken
+import me.meeshy.sdk.model.auth.SentEmailCode
 import me.meeshy.sdk.model.auth.LoginOutcome
 import me.meeshy.sdk.model.auth.ProvenOpenResult
 import me.meeshy.sdk.model.auth.SessionOrigin
@@ -75,7 +79,16 @@ data class SignupUiState(
     val passwordRevealed: Boolean = false,
     /** Le nom affiché a été touché : sinon il SUIT l'adresse en direct. */
     val displayNameEdited: Boolean = false,
+    /** L'adresse refusée comme DÉJÀ UTILISÉE et son titulaire masqué ; les gestes ne valent que pour elle. */
+    val emailTaken: EmailTaken? = null,
+    /** « Recevoir un lien de connexion » est en vol. */
+    val isRequestingSignInLink: Boolean = false,
+    /** Pourquoi le lien n'est pas parti — dit SOUS le geste qui l'a demandé, jamais en bandeau global. */
+    val signInLinkFailure: SignInLinkFailure? = null,
 ) {
+    /** « Est-ce vous ? » : l'adresse du champ est toujours celle que la passerelle a refusée. */
+    val showsEmailTakenActions: Boolean get() = emailTaken?.isShownFor(form.email) == true
+
     /** Les refus locaux qu'on AFFICHE — un champ encore vide n'en porte aucun. */
     val validation: SignupValidation get() = form.visibleValidation()
 
@@ -135,6 +148,10 @@ data class SignupUiState(
 
     /** Le message que [field] affiche sous lui, refus serveur d'abord. */
     fun messageFor(field: SignupField): SignupFieldMessage? {
+        if (field == SignupField.EMAIL && showsEmailTakenActions) {
+            val served = (submitError as? SignupSubmitError.Field)?.takeIf { it.refusal == SignupRefusal.EMAIL_TAKEN }
+            return SignupFieldMessage.Refused(SignupRefusal.EMAIL_TAKEN, served?.serverMessage)
+        }
         val refused = SignupFieldMessages.resolve(field, SignupValidation(), submitError)
         if (refused != null) return refused
         return when (field) {
@@ -152,6 +169,18 @@ data class SignupUiState(
         null, SignupPhoneRefusal.Missing -> null
         is SignupPhoneRefusal.Implausible -> validation.phone
     }
+}
+
+/** Pourquoi le lien de connexion n'est pas parti. */
+enum class SignInLinkFailure { NETWORK, OTHER }
+
+/** Ce que l'écran d'inscription demande à son hôte une seule fois. */
+sealed interface SignupEffect {
+    /** Le code et le lien sont partis : la connexion par e-mail s'ouvre sur son attente. */
+    data object OpenSignInLink : SignupEffect
+
+    /** « Mot de passe oublié ? » : la feuille s'ouvre sur l'adresse refusée. */
+    data object OpenForgotPassword : SignupEffect
 }
 
 /**
@@ -193,6 +222,9 @@ class SignupViewModel @Inject constructor(
         ),
     )
     val state: StateFlow<SignupUiState> = _state.asStateFlow()
+
+    private val effects = Channel<SignupEffect>(Channel.BUFFERED)
+    val effect = effects.receiveAsFlow()
 
     private var accountUserId: String? = null
 
@@ -256,7 +288,7 @@ class SignupViewModel @Inject constructor(
             _state.update { it.copy(phoneChecked = true) }
             return
         }
-        _state.update { it.copy(isSubmitting = true, submitError = null) }
+        _state.update { it.copy(isSubmitting = true, submitError = null, emailTaken = null, signInLinkFailure = null) }
         val request = current.form.toPhasedRegisterRequest(referralCode = referrals.recall())
         viewModelScope.launch {
             when (val result = authRepository.register(request)) {
@@ -267,17 +299,103 @@ class SignupViewModel @Inject constructor(
     }
 
     private fun rejected(error: me.meeshy.sdk.net.ApiError) = _state.update {
+        val routed = SignupErrorRouter.route(
+            code = error.code,
+            fieldName = error.fieldName,
+            message = error.message,
+            violations = error.violations,
+            suggestions = error.suggestions,
+            emailOwner = error.emailOwner,
+        )
         it.copy(
             isSubmitting = false,
             isValidating = false,
-            submitError = SignupErrorRouter.route(
-                code = error.code,
-                fieldName = error.fieldName,
-                message = error.message,
-                violations = error.violations,
-                suggestions = error.suggestions,
-            ),
+            submitError = routed,
+            emailTaken = EmailTaken.from(routed, it.form.email),
         )
+    }
+
+    /**
+     * « Ce n'est pas moi » (iOS `claimEmail`) : rejoue la MÊME inscription en REVENDIQUANT l'adresse — la passerelle
+     * crée le compte SANS session et envoie un code à l'adresse, que sa preuve seule donne au nouveau compte. La
+     * carte attend alors le code ([awaitCode]). Sans numéro plausible rien ne part, comme le bouton principal.
+     *
+     * Elle part par [AuthRepository.register], qui POSE la session d'un compte créé : si l'adresse s'est libérée
+     * entre le refus et le geste, la passerelle crée un compte ordinaire AVEC session, et [applyOutcome] le traite
+     * comme une inscription nominale (iOS `claimEmail` → `submit` → `register`).
+     */
+    fun claimEmail() {
+        val current = _state.value
+        if (current.isSubmitting || current.isValidating || !current.showsEmailTakenActions) return
+        if (!current.canSubmit) {
+            _state.update { it.copy(phoneChecked = true) }
+            return
+        }
+        _state.update { it.copy(isSubmitting = true, submitError = null, emailTaken = null, signInLinkFailure = null) }
+        val request = current.form.toPhasedRegisterRequest(referralCode = referrals.recall()).claimingEmail()
+        viewModelScope.launch {
+            when (val result = authRepository.register(request)) {
+                is NetworkResult.Failure -> rejected(result.error)
+                is NetworkResult.Success -> applyOutcome(result.data)
+            }
+        }
+    }
+
+    /**
+     * « C'est moi — récupérer mon compte » (iOS `requestSignInLink`) : UN geste envoie le code ET le lien à l'adresse
+     * refusée, normalisée comme l'inscription l'aurait envoyée, puis ouvre l'attente de type lien magique. L'échec se
+     * dit sous le geste.
+     */
+    fun requestSignInLink() {
+        val current = _state.value
+        if (!current.showsEmailTakenActions || current.isRequestingSignInLink) return
+        val email = current.form.email.trim().lowercase()
+        _state.update { it.copy(isRequestingSignInLink = true, signInLinkFailure = null) }
+        viewModelScope.launch {
+            when (val result = authRepository.requestEmailCode(email)) {
+                is NetworkResult.Success -> {
+                    loginHandoffs.sentEmailCode.hold(SentEmailCode(email, result.data))
+                    _state.update { it.copy(isRequestingSignInLink = false) }
+                    effects.trySend(SignupEffect.OpenSignInLink)
+                }
+                is NetworkResult.Failure -> _state.update {
+                    it.copy(
+                        isRequestingSignInLink = false,
+                        signInLinkFailure = if (result.error.code == SignupErrorRouter.CODE_NETWORK) {
+                            SignInLinkFailure.NETWORK
+                        } else {
+                            SignInLinkFailure.OTHER
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    /** « Mot de passe oublié ? » : la feuille s'ouvre sur l'adresse refusée. */
+    fun onForgotPassword() {
+        val current = _state.value
+        if (!current.showsEmailTakenActions) return
+        loginHandoffs.recoveryEmail.hold(LoginEmailCandidate.from(current.form.email).takeIf { it.isNotEmpty() })
+        effects.trySend(SignupEffect.OpenForgotPassword)
+    }
+
+    /** Le compte revendiqué existe SANS session : la carte attend le code, seule preuve qui l'ouvre. */
+    private fun awaitCode(outcome: RegisterOutcome.VerificationRequired) {
+        referrals.forget()
+        _state.update {
+            it.copy(
+                isSubmitting = false,
+                isValidating = false,
+                card = SignupCard.AwaitingCode(
+                    SignupCodeStep(
+                        email = outcome.email.trim(),
+                        pendingSessionToken = outcome.pendingSessionToken,
+                        signedIn = false,
+                    ),
+                ),
+            )
+        }
     }
 
     /**
@@ -295,6 +413,7 @@ class SignupViewModel @Inject constructor(
             RegisterOutcome.PhoneOwnershipConflict -> _state.update {
                 it.copy(isSubmitting = false, isValidating = false, submitError = SignupErrorRouter.phoneOwnershipConflict)
             }
+            is RegisterOutcome.VerificationRequired -> awaitCode(outcome)
         }
     }
 
@@ -315,7 +434,7 @@ class SignupViewModel @Inject constructor(
             _state.update { it.copy(phoneChecked = true) }
             return
         }
-        _state.update { it.copy(isValidating = true, submitError = null) }
+        _state.update { it.copy(isValidating = true, submitError = null, emailTaken = null, signInLinkFailure = null) }
         val request = current.form.toPhasedRegisterRequest(referralCode = referrals.recall())
         viewModelScope.launch {
             when (val result = authRepository.registerHoldingSession(request)) {
@@ -347,6 +466,7 @@ class SignupViewModel @Inject constructor(
             RegisterOutcome.PhoneOwnershipConflict -> _state.update {
                 it.copy(isValidating = false, submitError = SignupErrorRouter.phoneOwnershipConflict)
             }
+            is RegisterOutcome.VerificationRequired -> awaitCode(outcome)
         }
     }
 
