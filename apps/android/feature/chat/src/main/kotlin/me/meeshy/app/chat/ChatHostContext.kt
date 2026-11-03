@@ -35,6 +35,8 @@ internal class ChatNavigationActions(
     val onRejoinCall: (call: ActiveCallSession, peerName: String) -> Unit,
     val onCreateShareLink: () -> Unit,
     val hasLocalLiveCall: Boolean,
+    /** L'appel de cet appareil vu de l'en-tête (pastille « Toucher pour revenir »). */
+    val localCall: ChatLocalCall = ChatLocalCall.NONE,
     /** Ouvre le post (story) cité par un message : la carte de citation du fil (#13296). */
     val onOpenCitedPost: (postId: String) -> Unit = {},
     /** Ouvre une autre conversation (« Écrire » depuis une carte de visite du fil, #13495). */

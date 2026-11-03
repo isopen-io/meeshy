@@ -117,7 +117,15 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
     }
 
     Column(Modifier.statusBarsPadding()) {
-        AnimatedContent(
+        if (isGuest) {
+            ChatGuestHeaderBar(
+                title = title,
+                avatarUrl = header.avatarUrl,
+                shareUrl = header.publicShareUrl,
+                accentColor = accentColor,
+                onClose = navigation.onBack,
+            )
+        } else AnimatedContent(
             targetState = expanded,
             transitionSpec = {
                 fadeIn(spring(dampingRatio = HEADER_SPRING_DAMPING, stiffness = HEADER_SPRING_STIFFNESS)) togetherWith
@@ -169,24 +177,19 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
                     onSearch = actions.openSearch,
                     onToggle = toggle,
                     callSlot = {
-                        val peerName = state.conversationTitle.orEmpty()
-                        val callEntry = navigation.callEntry.takeIf { !isGuest }
-                        val ongoing = state.activeCall
-                            ?.takeIf { callEntry != null && RejoinPillPolicy.shouldOffer(it, navigation.hasLocalLiveCall) }
-                        if (ongoing != null) {
-                            // A call the local session lost is still live server-side: offer
-                            // « Rejoindre » (joins the existing call) instead of placing a NEW call.
-                            RejoinCallPill(
-                                isVideo = ongoing.isVideo,
-                                onClick = { navigation.onRejoinCall(ongoing, peerName) },
-                            )
-                        } else if (callEntry?.canStart == true) {
-                            ChatHeaderCallButton(
-                                isGroup = state.isGroup,
-                                accentColor = accentColor,
-                                onCall = { isVideo -> navigation.onStartCall(peerName, isVideo) },
-                            )
-                        }
+                        ChatHeaderCallSlot(
+                            conversationId = state.conversationId,
+                            entry = navigation.callEntry.takeIf { !isGuest },
+                            serverActiveCall = state.activeCall,
+                            localCall = navigation.localCall,
+                            hasLocalLiveCall = navigation.hasLocalLiveCall,
+                            isGroup = state.isGroup,
+                            calleeName = state.conversationTitle.orEmpty(),
+                            accentColor = accentColor,
+                            onStartCall = { isVideo -> navigation.onStartCall(state.conversationTitle.orEmpty(), isVideo) },
+                            onRejoinCall = { call -> navigation.onRejoinCall(call, state.conversationTitle.orEmpty()) },
+                        )
+                        header.publicShareUrl?.let { ChatHeaderShareButton(url = it, accentColor = accentColor) }
                     },
                     avatar = {
                         HeaderFlameDecoration(
