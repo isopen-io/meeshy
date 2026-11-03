@@ -49,36 +49,36 @@ class InviteFriendsSheetTest {
     @Test
     fun `la phase un montre la carte, le lien, le resume et le bouton Partager`() {
         render(ready())
-        compose.onNodeWithText("Les amis").assertIsDisplayed()
-        compose.onNodeWithText("https://meeshy.me/chat/abc").assertIsDisplayed()
-        compose.onNodeWithText("Share").assertIsDisplayed()
-        compose.onNodeWithText("Customise the options").assertIsDisplayed()
+        compose.onNodeWithText("Les amis").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("https://meeshy.me/chat/abc").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Share").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Customise the options").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun `toucher Partager emet l'evenement de partage`() {
         render(ready())
-        compose.onNodeWithText("Share").performClick()
+        compose.onNodeWithText("Share").performScrollTo().performClick()
         assertThat(events).containsExactly(InviteFriendsUiEvent.Share)
     }
 
     @Test
     fun `toucher Copier emet la copie et l'etat copie change le libelle`() {
         render(ready())
-        compose.onNodeWithText("Copy").performClick()
+        compose.onNodeWithText("Copy").performScrollTo().performClick()
         assertThat(events).containsExactly(InviteFriendsUiEvent.Copy)
     }
 
     @Test
     fun `l'etat copie affiche Copie`() {
         render(ready(copied = true))
-        compose.onNodeWithText("Copied!").assertIsDisplayed()
+        compose.onNodeWithText("Copied!").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun `Personnaliser deplie les sections d'options`() {
         render(ready())
-        compose.onNodeWithText("Customise the options").performClick()
+        compose.onNodeWithText("Customise the options").performScrollTo().performClick()
         assertThat(events).containsExactly(InviteFriendsUiEvent.ToggleOptions)
     }
 

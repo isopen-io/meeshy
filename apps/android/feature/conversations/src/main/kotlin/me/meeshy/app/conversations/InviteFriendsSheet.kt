@@ -99,7 +99,7 @@ internal fun InviteFriendsSheet(
     info: InviteConversationInfo,
     accent: Color,
     onDismiss: () -> Unit,
-    viewModel: InviteFriendsViewModel = hiltViewModel(),
+    viewModel: InviteFriendsViewModel = hiltViewModel(key = conversationId),
 ) {
     val context = LocalContext.current
     val haptics = rememberMeeshyHaptics()
