@@ -1,4 +1,4 @@
-package me.meeshy.app.chat
+package me.meeshy.app.chat.share
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.ui.icons.MeeshyIcons
