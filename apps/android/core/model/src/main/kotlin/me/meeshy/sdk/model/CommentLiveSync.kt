@@ -58,3 +58,15 @@ fun CommentLikeState.aggregated(commentId: String, viewerHeart: Boolean?): Comme
     val settled = if (commentId in inFlightIds) deltas else deltas - commentId
     return if (liked == likedIds && settled == deltas) this else copy(likedIds = liked, deltas = settled)
 }
+
+/**
+ * La première page lue (ou le disque servi) posée sur le fil SANS écraser une ligne optimiste ni un écho socket arrivé
+ * pendant la lecture : voir [CommentSheetRules.mergeFetched]. Le curseur de pagination avance avec la page.
+ */
+fun CommentThreadState.mergedFirstPage(page: List<ApiPostComment>, nextCursor: String?, more: Boolean): CommentThreadState =
+    copy(
+        comments = CommentSheetRules.mergeFetched(comments, page),
+        cursor = nextCursor,
+        hasMore = more,
+        hasLoaded = true,
+    )
