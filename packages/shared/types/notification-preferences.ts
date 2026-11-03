@@ -35,6 +35,10 @@ export interface NotificationPreference {
   readonly gameEnabled?: boolean;
   /** « Moments à immortaliser » (#10175, D8) : le push d'une étape franchie app fermée — absent = reçu. */
   readonly gamePhotoEnabled?: boolean;
+  /** « Recevoir des Bring » (#13936, #14407) : coupé, personne ne peut me faire sonner — absent = reçu. */
+  readonly bringEnabled?: boolean;
+  /** « Recevoir le talkie » (#13935) : coupé, la voix arrive en message vocal — absent = reçu. */
+  readonly talkieEnabled?: boolean;
 
   // === DO NOT DISTURB ===
   readonly dndEnabled: boolean;

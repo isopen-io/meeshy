@@ -209,15 +209,17 @@ struct OutboxDispatcher: OutboxDispatching {
         logger.info("unblockUser dispatched for \(payload.targetUserId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
-    /// POST /friend-requests — gateway expects `{ receiverId, message? }`.
+    /// POST /friend-requests — gateway expects `{ receiverId, message?, targetLevel? }`.
     /// The iOS payload uses `targetUserId` to match the consumer-facing
     /// naming ; we translate at the wire boundary.
     private func dispatchSendFriendRequest(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: SendFriendRequestPayload.self)
         struct SendFriendRequestBody: Encodable {
             let receiverId: String
+            /// Le cran visé (#13938) : omis quand `nil`, donc une ligne gravée avant ce champ part comme avant.
+            let targetLevel: String?
         }
-        let body = SendFriendRequestBody(receiverId: payload.targetUserId)
+        let body = SendFriendRequestBody(receiverId: payload.targetUserId, targetLevel: payload.targetLevel)
         let _: APIResponse<FriendRequest> = try await APIClient.shared.requestWithHeaders(
             // `/directory/friend-requests` (#4162) — et c'est CE chemin-ci qui
             // rend la migration urgente : le rejeu hors ligne rejoue des

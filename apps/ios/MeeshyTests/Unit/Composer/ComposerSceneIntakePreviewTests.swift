@@ -4,9 +4,10 @@ import UIKit
 import MeeshySDK
 @testable import Meeshy
 
-/// #13906 — **l'espace réservé d'une photo qui entre montre sa vignette**,
-/// avant la fin de la préparation, comme Android (`IncomingMediaPlaceholder`) ;
-/// une vidéo garde la forme neutre.
+/// #13906 — **l'espace réservé d'une photo ou d'une vidéo qui entre montre sa
+/// vignette**, avant la fin de la préparation ; un sticker garde la forme
+/// neutre. La vidéo est l'ajout le plus long : c'est elle qui a le plus besoin
+/// de montrer ce qui arrive.
 @MainActor
 final class ComposerSceneIntakePreviewTests: XCTestCase {
 
@@ -23,10 +24,10 @@ final class ComposerSceneIntakePreviewTests: XCTestCase {
 
     // MARK: - Ce que l'espace réservé montre
 
-    func test_aPhoto_showsItsThumbnail_aVideoOrASticker_stayNeutral() {
-        XCTAssertTrue(ComposerSceneIntakePreview.showsThumbnail(kind: .media, isVideo: false))
-        XCTAssertFalse(ComposerSceneIntakePreview.showsThumbnail(kind: .media, isVideo: true))
-        XCTAssertFalse(ComposerSceneIntakePreview.showsThumbnail(kind: .sticker, isVideo: false))
+    func test_aPhotoOrAVideo_showsItsThumbnail_aSticker_staysNeutral() {
+        XCTAssertTrue(ComposerSceneIntakePreview.showsThumbnail(kind: .media),
+                      "une photo ou une vidéo en préparation montre sa vignette, pas une forme vide")
+        XCTAssertFalse(ComposerSceneIntakePreview.showsThumbnail(kind: .sticker))
     }
 
     func test_theThumbnail_staysWhileItsIntakePrepares() {
@@ -57,7 +58,17 @@ final class ComposerSceneIntakePreviewTests: XCTestCase {
 
     // MARK: - La vignette elle-même
 
-    func test_theThumbnailOfAStagedPhoto_isReduced() throws {
+    func test_theThumbnailOfAStagedVideo_isItsFirstFrame_reduced() async throws {
+        let url = try await ComposerCaptureTakesTests.tinyMovie()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let premiere = await ComposerSceneIntakePreview.thumbnail(at: url)
+        let vignette = try XCTUnwrap(premiere, "une vidéo copiée donne sa première image à l'espace réservé")
+        XCTAssertLessThanOrEqual(max(vignette.size.width * vignette.scale, vignette.size.height * vignette.scale),
+                                 ComposerSceneIntakePreview.maxPixel + 1)
+    }
+
+    func test_theThumbnailOfAStagedPhoto_isReduced() async throws {
         let photo = UIGraphicsImageRenderer(size: CGSize(width: 3000, height: 2000)).image { context in
             UIColor.blue.setFill()
             context.fill(CGRect(x: 0, y: 0, width: 3000, height: 2000))
@@ -67,13 +78,15 @@ final class ComposerSceneIntakePreviewTests: XCTestCase {
         try XCTUnwrap(photo.jpegData(compressionQuality: 0.8)).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let vignette = try XCTUnwrap(ComposerSceneIntakePreview.thumbnail(at: url))
+        let reduite = await ComposerSceneIntakePreview.thumbnail(at: url)
+        let vignette = try XCTUnwrap(reduite)
         XCTAssertLessThanOrEqual(max(vignette.size.width * vignette.scale, vignette.size.height * vignette.scale),
                                  ComposerSceneIntakePreview.maxPixel + 1)
     }
 
-    func test_anUnreadableFile_hasNoThumbnail() {
-        XCTAssertNil(ComposerSceneIntakePreview.thumbnail(at: URL(fileURLWithPath: "/nulle-part.jpg")))
+    func test_anUnreadableFile_hasNoThumbnail() async {
+        let vignette = await ComposerSceneIntakePreview.thumbnail(at: URL(fileURLWithPath: "/nulle-part.jpg"))
+        XCTAssertNil(vignette)
     }
 
     // MARK: - Le dessin
@@ -101,7 +114,7 @@ final class ComposerSceneIntakePreviewTests: XCTestCase {
         XCTAssertLessThan(offre.lowerBound, fin.lowerBound, "la vignette arrive avant la fin de la préparation")
         XCTAssertTrue(source.contains("photoLibrary: .shared()"),
                       "sans la photothèque partagée, le sélecteur ne donne aucun identifiant d'image")
-        XCTAssertTrue(corps.contains("ComposerSceneIntakePreview.request(staged: url, of: item, for: ajout"),
+        XCTAssertTrue(corps.contains("ComposerSceneIntakePreview.request(staged: url, for: ajout"),
                       "sans accès à la photothèque, le fichier copié ne donne aucune vignette")
     }
 

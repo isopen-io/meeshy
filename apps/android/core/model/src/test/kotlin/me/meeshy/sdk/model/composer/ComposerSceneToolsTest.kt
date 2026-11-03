@@ -40,6 +40,14 @@ class ComposerSceneToolsTest {
     }
 
     @Test
+    fun `a post or a reel keeps the story's column and adds the post text just before the more button`() {
+        assertThat(ComposerSceneTools.column(writesPostText = false)).isEqualTo(ComposerSceneTools.column)
+        val post = ComposerSceneTools.column(writesPostText = true)
+        assertThat(post - ComposerSceneTool.POST_TEXT).isEqualTo(ComposerSceneTools.column)
+        assertThat(post.takeLast(2)).containsExactly(ComposerSceneTool.POST_TEXT, ComposerSceneTool.MORE).inOrder()
+    }
+
+    @Test
     fun `a bare scene's more menu holds what every scene can do, then nothing to export`() {
         assertThat(more()).containsExactly(
             ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.SLIDE_DURATION,

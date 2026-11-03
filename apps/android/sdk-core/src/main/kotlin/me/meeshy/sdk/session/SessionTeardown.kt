@@ -7,6 +7,7 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.category.CategorySnapshotStore
 import me.meeshy.sdk.preferences.PreferenceSnapshotStore
 import me.meeshy.sdk.chat.ConversationDraftStore
+import me.meeshy.sdk.feedback.FeedbackToastCenter
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.lock.ConversationLockStore
@@ -53,6 +54,7 @@ public class DefaultSessionTeardown(
     private val perAccountCaches: Set<PerAccountCache> = emptySet(),
     private val guestSessions: AnonymousSessionStore? = null,
     private val fence: AccountFence? = null,
+    private val feedbackToasts: FeedbackToastCenter? = null,
 ) : SessionTeardown {
 
     /**
@@ -64,9 +66,22 @@ public class DefaultSessionTeardown(
         if (fence == null) clearAll() else fence.close { clearAll() }
     }
 
+    /**
+     * #14655 — the vault outlives the session (same account, same history), so the erasures still owed to an account
+     * survive its logout: they are only identifiers, stamped with their account, and the next session of THAT account
+     * drains them. An unstamped row could be drained by another account, so it does not survive.
+     */
+    private suspend fun clearKeepingPlaintextErasures() {
+        val erasures = database.plaintextErasureDao()
+        val owed = erasures.all().filter { it.account.isNotEmpty() }
+        database.clearAllTables()
+        if (owed.isNotEmpty()) erasures.restore(owed)
+    }
+
     private suspend fun clearAll() {
+        feedbackToasts?.clear()
         // Room's clearAllTables() is a blocking call — never on the caller's dispatcher.
-        withContext(Dispatchers.IO) { database.clearAllTables() }
+        withContext(Dispatchers.IO) { clearKeepingPlaintextErasures() }
         categorySnapshotStore.clearAll()
         conversationDraftStore.clearAll()
         conversationLockStore.resetForLogout()

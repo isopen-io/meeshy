@@ -31555,43 +31555,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جهات الاتصال"
+            "value": "الأصدقاء"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kontakte"
+            "value": "Freunde"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contacts"
+            "value": "Friends"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contactos"
+            "value": "Amigos"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Contacts"
+            "state": "translated",
+            "value": "Amis"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contatti"
+            "value": "Amici"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contatos"
+            "value": "Amigos"
           }
         }
       }
@@ -84374,6 +84374,147 @@
           "stringUnit": {
             "state": "translated",
             "value": "Molduras de banner"
+          }
+        }
+      }
+    },
+    "post.visibility.acquaintances": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المعارف"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bekannte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acquaintances"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conocidos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connaissances"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conoscenti"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conhecidos"
+          }
+        }
+      }
+    },
+    "post.visibility.close": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المقرّبون"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vertraute"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cercanos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proches"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intimi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Próximos"
+          }
+        }
+      }
+    },
+    "post.visibility.blood": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الدم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blut"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blood"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sangre"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sang"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sangue"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sangue"
           }
         }
       }

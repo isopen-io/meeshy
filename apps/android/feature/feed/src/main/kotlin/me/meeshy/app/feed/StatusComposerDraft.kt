@@ -31,7 +31,16 @@ data class StatusPublishRequest(
 enum class StatusVisibility(val wire: String) {
     PUBLIC("PUBLIC"),
     COMMUNITY("COMMUNITY"),
+
+    /** Connaissances et au-dessus (#13939) — l'échelle des cercles, du plus large au plus étroit, comme le composeur. */
+    ACQUAINTANCES("ACQUAINTANCES"),
     FRIENDS("FRIENDS"),
+
+    /** Proches et au-dessus. */
+    CLOSE("CLOSE"),
+
+    /** Sang seul — jamais repartagé (RG-18). */
+    BLOOD("BLOOD"),
     PRIVATE("PRIVATE"),
 }
 
@@ -165,5 +174,5 @@ internal fun StatusComposerDraft.toSnapshot(nowMillis: Long): StatusComposerDraf
 
 internal fun StatusComposerDraftSnapshot.toComposerDraft(): StatusComposerDraft = StatusComposerDraft(
     selectedEmoji = emoji,
-    visibility = StatusVisibility.entries.firstOrNull { it.wire == visibility } ?: StatusVisibility.PUBLIC,
+    visibility = StatusVisibility.entries.firstOrNull { it.wire == visibility } ?: StatusVisibility.PRIVATE,
 ).withText(text)

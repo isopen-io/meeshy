@@ -81,9 +81,9 @@ internal fun ReelRail(
         }
         FullscreenActionButton(
             icon = FullscreenChromeSymbol.Comments.icon,
-            label = stringResource(R.string.reels_comments),
+            label = stringResource(R.string.reels_action_comment),
             onClick = { actions.onComments(reel.id) },
-            caption = ReelRailCaption.of(reel.commentCount, stringResource(R.string.reels_comments), locale),
+            caption = ReelRailCaption.of(reel.commentCount, stringResource(R.string.reels_action_comment), locale),
             accessibilityValue = reel.commentCount.takeIf { it > 0 }?.toString(),
         )
         FullscreenActionButton(
@@ -98,10 +98,13 @@ internal fun ReelRail(
         )
         FullscreenActionButton(
             icon = FullscreenChromeSymbol.Repost.icon,
-            label = stringResource(R.string.reels_repost),
+            label = stringResource(R.string.reels_action_repost),
             onClick = { actions.onRepost(reel.id) },
-            caption = ReelRailCaption.of(reel.repostCount, stringResource(R.string.reels_repost), locale),
+            caption = ReelRailCaption.of(reel.repostCount, stringResource(R.string.reels_action_repost), locale),
             accessibilityValue = reel.repostCount.takeIf { it > 0 }?.toString(),
+            isActive = reel.isReposted,
+            activeTint = MeeshyPalette.Success,
+            outlineTint = if (reel.isReposted) MeeshyPalette.Success else null,
         )
         FullscreenActionButton(
             icon = MeeshyIcons.Send,

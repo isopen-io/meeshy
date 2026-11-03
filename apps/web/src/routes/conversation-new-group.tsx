@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { PeerAvatar } from '@/components/peer-avatar';
 import { Field } from '@/components/field';
 import { Glyph } from '@/components/glyph';
@@ -61,6 +63,7 @@ export function GroupComposer({
     refusedField === field && refusalMessage !== null ? refusalMessage : undefined;
 
   const disabled = busy || !online;
+  const [describing, setDescribing] = useState(draft.description !== '' || refusedField === 'description');
 
   return (
     <form
@@ -101,32 +104,45 @@ export function GroupComposer({
         )}
       </Field>
 
-      <Field
-        id="group-description"
-        label={translate(currentInterfaceLanguage(), 'newConversation.group.description')}
-        tint={FIELD_TINT}
-        focused={focused === 'description'}
-        error={errorFor('description')}
-      >
-        {({ id, describedBy }) => (
-          <textarea
-            id={id}
-            name="description"
-            data-group-description
-            aria-describedby={describedBy}
-            aria-invalid={refusedField === 'description'}
-            rows={2}
-            maxLength={GROUP_DESCRIPTION_MAX}
-            value={draft.description}
-            placeholder={translate(currentInterfaceLanguage(), 'newConversation.group.description.placeholder')}
-            onInput={(event) => onEdit('description', event.currentTarget.value)}
-            onFocus={() => onFocus('description')}
-            onBlur={() => onFocus(null)}
-            className="w-0 min-w-0 flex-1 resize-none bg-transparent py-2.5 text-body outline-none"
-            style={{ color: 'var(--color-ios-ink)' }}
-          />
-        )}
-      </Field>
+      {describing ? (
+        <Field
+          id="group-description"
+          label={translate(currentInterfaceLanguage(), 'newConversation.group.description')}
+          tint={FIELD_TINT}
+          focused={focused === 'description'}
+          error={errorFor('description')}
+        >
+          {({ id, describedBy }) => (
+            <textarea
+              id={id}
+              name="description"
+              data-group-description
+              aria-describedby={describedBy}
+              aria-invalid={refusedField === 'description'}
+              rows={2}
+              maxLength={GROUP_DESCRIPTION_MAX}
+              value={draft.description}
+              placeholder={translate(currentInterfaceLanguage(), 'newConversation.group.description.placeholder')}
+              onInput={(event) => onEdit('description', event.currentTarget.value)}
+              onFocus={() => onFocus('description')}
+              onBlur={() => onFocus(null)}
+              className="w-0 min-w-0 flex-1 resize-none bg-transparent py-2.5 text-body outline-none"
+              style={{ color: 'var(--color-ios-ink)' }}
+            />
+          )}
+        </Field>
+      ) : (
+        <button
+          type="button"
+          data-group-description-open
+          onClick={() => setDescribing(true)}
+          className="flex items-center gap-2 justify-self-start rounded-chip px-1 text-caption font-semibold"
+          style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
+        >
+          <Glyph name="plus" size={14} />
+          {translate(currentInterfaceLanguage(), 'newConversation.group.description')}
+        </button>
+      )}
 
       <ChosenPeople chosen={chosen} error={errorFor('participants')} onRemove={onRemove} />
 

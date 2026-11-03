@@ -149,7 +149,7 @@ class AccountCacheWriteRaceTest {
             release.await()
             Response.success(ApiResponse(success = true, data = listOf(ApiMessage(id = "m-de-A", conversationId = "c1", content = "secret de A"))))
         }
-        val source = MessageCacheSource("c1", db, db.messageDao(), db.syncMetaDao(), api, clock, flowOf(50), fence)
+        val source = MessageCacheSource("c1", db, db.messageDao(), db.syncMetaDao(), api, clock, flowOf(HistoryWindow.Recent(50)), fence)
 
         val sweep = async(Dispatchers.IO) { runCatching { source.revalidate() } }
         withTimeout(10_000) { requested.await() }

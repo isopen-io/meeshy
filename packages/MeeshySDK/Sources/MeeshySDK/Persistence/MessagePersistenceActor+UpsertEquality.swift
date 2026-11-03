@@ -68,6 +68,7 @@ func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord) -> Bool {
         && a.senderIsAnonymous == b.senderIsAnonymous && a.senderHasAccount == b.senderHasAccount
         && a.senderRingJson == b.senderRingJson
         && a.editedById == b.editedById
+        && a.servedClientMessageId == b.servedClientMessageId
         && ephemeralClock
         && a.viewOnceOpenedAt == b.viewOnceOpenedAt
     return contentAndState && attachmentsAndReactions && encryptionAndDelivery

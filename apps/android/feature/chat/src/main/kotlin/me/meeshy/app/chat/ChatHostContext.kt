@@ -124,6 +124,10 @@ internal class ChatHostContext(
     val engagement: ChatEngagementBinding = ChatEngagementBinding.None,
     /** Les pièces-fichiers reçues pendant la session : la rangée dit « prêt » (#13492). */
     val downloadedFileIds: Set<String> = emptySet(),
+    /** Le message sur lequel la conversation s'ouvre (argument `messageId` de la route), rendu UNE fois puis effacé. */
+    val takeLandingMessageId: () -> String? = { null },
+    /** #14670 — la fenêtre ancrée sur un message ancien et le message allumé à l'arrivée. */
+    val landing: ChatLandingState = ChatLandingState(),
 )
 
 /** Ce que l'en-tête lit du [ChatEngagementController], sans connaître le contrôleur. */
@@ -170,13 +174,15 @@ internal fun rememberChatHostContext(
     selection: MessageSelection = MessageSelection.Inactive,
     engagement: ChatEngagementBinding = ChatEngagementBinding.None,
     downloadedFileIds: Set<String> = emptySet(),
+    takeLandingMessageId: () -> String? = { null },
+    landing: ChatLandingState = ChatLandingState(),
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
     val chrome = remember { ChatChromeState() }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */
@@ -185,6 +191,8 @@ internal class ChatHostActions(
     val onScrollHandled: () -> Unit,
     val scrollToMessage: (String) -> Unit = {},
     val loadOlder: () -> Unit,
+    val loadNewer: () -> Unit = {},
+    val returnToPresent: () -> Unit = {},
     val refresh: () -> Unit,
     val openSearch: () -> Unit,
     val onSearchQueryChange: (String) -> Unit,
@@ -306,6 +314,8 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     onScrollHandled = this::onScrollHandled,
     scrollToMessage = this::scrollToMessage,
     loadOlder = this::loadOlder,
+    loadNewer = this::loadNewer,
+    returnToPresent = this::returnToPresent,
     refresh = this::refresh,
     openSearch = this::openSearch,
     onSearchQueryChange = this::onSearchQueryChange,

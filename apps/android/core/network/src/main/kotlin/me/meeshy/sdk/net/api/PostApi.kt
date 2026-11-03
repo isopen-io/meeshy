@@ -134,6 +134,8 @@ data class CreateCommentRequest(
     val originalLanguage: String? = null,
     /** Les médias téléversés sous le contexte `comment` qui partent avec le commentaire (#12972). */
     val attachmentIds: List<String>? = null,
+    /** Le lieu joint au commentaire (#14387, iOS `location: place`) ; la passerelle le hisse en `location`. */
+    val location: SharedPlace? = null,
 )
 
 /** Repost a post — port of RepostRequest (StoryModels.swift). */
@@ -264,6 +266,19 @@ interface PostApi {
         @Query("radiusKm") radiusKm: Double,
         @Query("cursor") cursor: String? = null,
         @Query("limit") limit: Int? = null,
+    ): ApiResponse<List<ApiPost>>
+
+    /**
+     * La recherche générale des publications (#14620) : posts, réels et stories dont le texte
+     * (contenu, légende, traduction en clair) correspond, filtrés par la loi de visibilité du fil.
+     * [types] : `POST`, `REEL`, `STORY` séparés par des virgules ; absent, les trois.
+     */
+    @GET("posts/search")
+    suspend fun search(
+        @Query("q") query: String,
+        @Query("types") types: String? = null,
+        @Query("limit") limit: Int? = null,
+        @Query("cursor") cursor: String? = null,
     ): ApiResponse<List<ApiPost>>
 
     @POST("posts")

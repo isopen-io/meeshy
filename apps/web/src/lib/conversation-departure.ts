@@ -14,8 +14,12 @@ import type { Conversation } from './api/types';
  * peut être réinvité, l'historique reste lisible — `POST …/leave`) ;
  * SUPPRIMER POUR MOI retire la conversation de sa liste
  * (`DELETE …/delete-for-me`). D'où deux confirmations distinctes.
+ *
+ * RENDRE OBSOLÈTE (#14645) est le troisième geste, celui d'un administrateur
+ * de la conversation (`DELETE …/obsolete`, #14643) : elle quitte la liste de
+ * TOUS, son contenu devient illisible et il est effacé sous 48 h.
  */
-export type DepartureKind = 'leave' | 'delete';
+export type DepartureKind = 'leave' | 'delete' | 'obsolete';
 
 export type DepartureRequest = {
   readonly conversationId: string;

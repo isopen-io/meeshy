@@ -275,6 +275,42 @@ describe('POST /links/:id/messages — anonymous: conversation close', () => {
   });
 });
 
+describe('POST /links/:id/messages — anonymous: conversation obsoleted while writing (#14643)', () => {
+  const OBSOLETED_AT = new Date('2026-11-02T10:00:00.000Z');
+  let app: FastifyInstance;
+  let prisma: any;
+  let socket: any;
+  let translationService: any;
+  beforeAll(async () => {
+    prisma = makePrisma();
+    prisma.message.updateMany = jest.fn<any>().mockResolvedValue({ count: 1 });
+    prisma.conversation.findUnique = jest.fn<any>().mockImplementation(async () => ({
+      title: 'Test', type: 'group', participants: [{ userId: PEER_USER_ID }],
+      deletedAt: prisma.message.create.mock.calls.length > 0 ? OBSOLETED_AT : null,
+    }));
+    socket = makeSocketIOHandler(true);
+    translationService = makeTranslationService();
+    app = await buildApp({ prisma, socketIOHandler: socket, translationService });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 410, the written message is born deleted, and nothing is broadcast', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+    await flushPostSaveEffects();
+    expect(res.statusCode).toBe(410);
+    expect(prisma.message.updateMany).toHaveBeenCalledWith({
+      where: { id: MSG_ID, OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] },
+      data: { deletedAt: OBSOLETED_AT },
+    });
+    expect(socket.to).not.toHaveBeenCalled();
+    expect(socket.enqueueOfflineLinkMessage).not.toHaveBeenCalled();
+    expect(translationService.handleNewMessage).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /links/:id/messages — anonymous: allowAnonymousMessages=false', () => {
   let app: FastifyInstance;
   beforeAll(async () => {

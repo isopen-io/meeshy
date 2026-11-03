@@ -379,7 +379,7 @@ function LensRowImpl({
   };
   const onAction = (id: RowActionId) => {
     if (id === 'search') return navigate(href('thread', { conversation: conversation.id }, { [THREAD_SEARCH_PARAM]: '1' }));
-    if (id === 'delete' || id === 'leave') return requestDeparture({ conversationId: conversation.id, kind: id, returnToList: false });
+    if (id === 'delete' || id === 'leave' || id === 'obsolete') return requestDeparture({ conversationId: conversation.id, kind: id, returnToList: false });
     if (id === 'invite' || id === 'manageMembers') return openDetailsOn(id === 'invite' ? 'invite' : 'members');
     if (id === 'details') return onOpenDetails?.(conversation.id);
     if (id === 'adminOpen') return navigate(href('adminConversation', { conversation: conversation.id }));

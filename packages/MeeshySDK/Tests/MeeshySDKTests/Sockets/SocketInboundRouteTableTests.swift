@@ -34,6 +34,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "call:signal", "call:transcription-active", "call:translated-segment", "categories:reordered",
         "category:created", "category:deleted", "category:updated", "conversation:closed", "conversation:deleted",
         "conversation:encryption-changed", "conversation:join-error", "conversation:joined", "conversation:left", "conversation:new",
+        "conversation:obsoleted",
         "conversation:participant-banned", "conversation:participant-joined", "conversation:participant-left",
         "conversation:participant-unbanned", "conversation:restored", "conversation:stats",
         "conversation:unread-updated", "conversation:updated", "e2ee:envelope", "engagement:conversation-updated",
@@ -46,6 +47,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "notification:counts", "notification:deleted", "notification:deleted-bulk", "notification:new",
         "notification:read", "notification:read-bulk", "participant:rights-updated", "participant:role-updated",
         "presence:snapshot", "profile:decor-updated", "reaction:added", "reaction:removed", "read-status:updated",
+        "relation:level-raised", "relation:ritual-completed", "relation:ritual-progress", "relation:ritual-started",
         "translation:failed", "typing:start", "typing:stop", "user:preferences-reordered",
         "user:preferences-updated", "user:status", "user:updated", "viewing:activity", "viewing:snapshot",
         "viewing:start", "viewing:stop"
@@ -54,7 +56,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
     private static let socialEventsOfDev: Set<String> = [
         "comment:added", "comment:deleted", "comment:liked", "comment:media-updated", "comment:reaction-added",
         "comment:reaction-removed", "comment:translation-updated", "comment:unliked", "comment:updated",
-        "conversation:closed", "conversation:deleted", "media:caption-translation-updated", "post:bookmarked",
+        "conversation:closed", "conversation:deleted", "conversation:obsoleted", "media:caption-translation-updated", "post:bookmarked",
         "post:created", "post:deleted", "post:liked", "post:reaction-added", "post:reaction-removed",
         "post:reposted", "post:translation-updated", "post:unliked", "post:updated", "status:created",
         "status:deleted", "status:reacted", "status:unreacted", "status:updated", "story:created", "story:deleted",
@@ -251,5 +253,32 @@ final class SocketInboundRouteTableTests: XCTestCase {
 
         await expectOneValue(from: SocialSocketManager.shared.conversationDeleted) { registrar.deliver("conversation:closed", ["conversationId": "c1"]) }
         await expectOneValue(from: SocialSocketManager.shared.conversationDeleted) { registrar.deliver("conversation:deleted", ["conversationId": "c1"]) }
+    }
+
+    func test_conversationObsoleted_reachesTheSocialConversationDeletedChannel() async {
+        let registrar = installed(SocialSocketRoutes.all(for: .shared))
+
+        await expectOneValue(from: SocialSocketManager.shared.conversationDeleted, where: { $0 == "c-obsolete" }) {
+            registrar.deliver("conversation:obsoleted", Self.obsoletedPayload(conversationId: "c-obsolete"))
+        }
+    }
+
+    func test_conversationObsoleted_reachesTheMessageConversationObsoletedChannel() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+
+        await expectOneValue(from: MessageSocketManager.shared.conversationObsoleted, where: {
+            $0.conversationId == "c-obsolete" && $0.obsoletedBy == "admin-1" && $0.purgeAfter == "2026-11-04T10:00:00.000Z"
+        }) {
+            registrar.deliver("conversation:obsoleted", Self.obsoletedPayload(conversationId: "c-obsolete"))
+        }
+    }
+
+    private static func obsoletedPayload(conversationId: String) -> [String: Any] {
+        [
+            "conversationId": conversationId,
+            "obsoletedBy": "admin-1",
+            "obsoletedAt": "2026-11-02T10:00:00.000Z",
+            "purgeAfter": "2026-11-04T10:00:00.000Z",
+        ]
     }
 }

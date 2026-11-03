@@ -4,10 +4,14 @@ import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.ContentRemovalRequest
 import me.meeshy.sdk.model.StoryViewersResponse
+import okhttp3.ResponseBody
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.HTTP
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -16,6 +20,16 @@ import retrofit2.http.Query
 @Serializable
 data class StoryLikeRequest(
     val emoji: String,
+)
+
+/**
+ * Corps de `POST /posts/:id/translate` — `force` est omis quand il est faux (la route le lit comme optionnel) ;
+ * `MeeshyApi.json` a `encodeDefaults=false`, donc le défaut `null` ne part pas.
+ */
+@Serializable
+data class StoryTranslationRequest(
+    val targetLanguage: String,
+    val force: Boolean? = null,
 )
 
 /**
@@ -33,6 +47,7 @@ interface StoryApi {
     suspend fun list(
         @Query("cursor") cursor: String? = null,
         @Query("limit") limit: Int? = null,
+        @Query("updatedSince") updatedSince: String? = null,
     ): ApiResponse<List<ApiPost>>
 
     /**
@@ -58,6 +73,20 @@ interface StoryApi {
     @DELETE("posts/{id}")
     suspend fun delete(@Path("id") storyId: String): ApiResponse<Unit>
 
+    /** Retrait de la story d'un AUTRE avec son motif (#11151) : un 2xx confirme, la charge n'est pas décodée. */
+    @HTTP(method = "DELETE", path = "posts/{id}", hasBody = true)
+    suspend fun deleteWithReason(
+        @Path("id") storyId: String,
+        @Body body: ContentRemovalRequest,
+    ): Response<ResponseBody>
+
+    /** Demande la traduction serveur d'une story ; la charge arrive par le socket social, un 2xx suffit. */
+    @POST("posts/{id}/translate")
+    suspend fun requestTranslation(
+        @Path("id") storyId: String,
+        @Body body: StoryTranslationRequest,
+    ): Response<ResponseBody>
+
     @POST("posts/{id}/like")
     suspend fun react(
         @Path("id") storyId: String,
@@ -81,7 +110,7 @@ interface StoryApi {
     suspend fun repost(
         @Path("id") storyId: String,
         @Body body: RepostPostRequest,
-    ): ApiResponse<Unit>
+    ): ApiResponse<ApiPost>
 
     @GET("posts/{id}")
     suspend fun fetchPost(@Path("id") postId: String): ApiResponse<ApiPost>

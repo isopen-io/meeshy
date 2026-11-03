@@ -11,9 +11,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
@@ -49,6 +52,7 @@ import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.purgingDeadStories
 import me.meeshy.sdk.story.toStoryGroups
 import me.meeshy.sdk.story.toStoryItem
+import me.meeshy.ui.component.FeedbackToastRequest
 import javax.inject.Inject
 
 @HiltViewModel
@@ -82,6 +86,14 @@ class StoryViewerViewModel @Inject constructor(
 
     /** Son coupé pour toute la session de lecture — porté par [emit]. */
     private var isMuted = false
+
+    /** Les republications de ce lecteur, au geste puis confirmées ou rendues (#14443). */
+    private var reposts = StoryRepostMarks()
+
+    private val toastChannel = Channel<FeedbackToastRequest>(Channel.BUFFERED)
+
+    /** Ce que le lecteur dit d'une action locale aboutie ou refusée (iOS `FeedbackToastManager`). */
+    val toasts: Flow<FeedbackToastRequest> = toastChannel.receiveAsFlow()
 
     /** Optimistic reaction state per slide id, seeded lazily from the slide's count. */
     private val reactionStates = mutableMapOf<String, StoryReactionState>()
@@ -527,6 +539,29 @@ class StoryViewerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * « Republier » (#14443, iOS `StoryDirectRepost`) : la story à l'écran repart EN STORY d'un seul geste, chez autrui
+     * seulement. Le compteur et la marque bougent aussitôt ; un refus les rend et dit pourquoi.
+     */
+    fun repostCurrentStory() {
+        val storyId = playback.currentSlide?.id ?: return
+        if (playback.currentGroup?.userId == sessionRepository.currentUserId) return
+        reposts = reposts.begun(storyId) ?: return
+        emit()
+        viewModelScope.launch {
+            val refusal = try {
+                (storyRepository.repost(storyId) as? NetworkResult.Failure)?.let { StoryRepostRefusal.of(it.error) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                StoryRepostRefusal.OTHER
+            }
+            reposts = if (refusal == null) reposts.confirmed(storyId) else reposts.refused(storyId)
+            emit()
+            toastChannel.trySend(StoryRepostRefusal.toast(refusal))
+        }
+    }
+
     private fun rollback(slideId: String, snapshot: StoryReactionState) {
         reactionStates[slideId] = snapshot
         emit()
@@ -590,6 +625,8 @@ class StoryViewerViewModel @Inject constructor(
             isDismissed = playback.isDismissed,
             reactionCount = reaction.count,
             myReactions = reaction.mine,
+            repostCount = reposts.count(currentId, currentItem?.repostCount ?: 0),
+            hasReposted = reposts.has(currentId),
             isOwnStory = playback.currentGroup?.userId == sessionRepository.currentUserId,
             currentStoryId = currentId,
             canCompose = rawItems[currentId]?.let { StoryRecomposition.offered(it.storyEffects, it.content, it.media.size) } == true,

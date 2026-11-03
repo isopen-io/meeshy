@@ -38,6 +38,7 @@ import coil.compose.AsyncImage
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
+import me.meeshy.sdk.model.sticker.MeeInstantCatalog
 import me.meeshy.sdk.model.sticker.StickerSheetChoice
 import me.meeshy.sdk.model.sticker.StickerSlotFiller
 import me.meeshy.sdk.model.sticker.StickerTemplate
@@ -69,7 +70,8 @@ public class StickerLibraryShelf(
 /**
  * L'onglet Personnalisés : « Mes stickers » (si l'hôte sert une bibliothèque), puis les cadres à MOTS — un champ, dix
  * cadres qui montrent les mots tapés et ne se posent qu'avec eux —, puis les décorations d'HEURE, figées à
- * [openedAt] : ce qu'on voit est ce qui se pose.
+ * [openedAt] : ce qu'on voit est ce qui se pose. [instants] : les Instants de Mee et Meo (#14345), seulement chez un hôte
+ * qui sait les ENVOYER (iOS `meeInstantsProvided`, la conversation) — ils écrivent les mots tapés et l'heure de l'ouverture.
  */
 @Composable
 public fun StickerCustomPage(
@@ -77,11 +79,12 @@ public fun StickerCustomPage(
     openedAt: Instant,
     modifier: Modifier = Modifier,
     zone: ZoneId = ZoneId.systemDefault(),
+    instants: Boolean = false,
 ) {
     val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
     var typed by rememberSaveable { mutableStateOf("") }
-    val textTemplates = remember { StickerTemplateCatalog.templates(StickerTemplateFamily.TEXT) }
-    val timeTemplates = remember { StickerTemplateCatalog.templates(StickerTemplateFamily.TIME) }
+    val textTemplates = remember { StickerTemplateCatalog.templates(StickerTemplateFamily.TEXT).filter { StickerTemplateArtwork.knows(it.id) } }
+    val timeTemplates = remember { StickerTemplateCatalog.templates(StickerTemplateFamily.TIME).filter { StickerTemplateArtwork.knows(it.id) } }
     val textTitle = stringResource(R.string.sticker_custom_text)
     val timeTitle = stringResource(R.string.sticker_custom_time)
     StickerArtGrid(modifier) {
@@ -93,6 +96,10 @@ public fun StickerCustomPage(
         templateCells(textTemplates) { StickerSlotFiller.slotsFor(it, openedAt, zone, locale, typed) }
         header("custom:time", timeTitle)
         templateCells(timeTemplates) { StickerSlotFiller.slotsFor(it, openedAt, zone, locale, "") }
+        if (instants) {
+            val time = StickerSlotFiller.timeSlots(openedAt, zone, locale)[StickerSlotFiller.TIME]
+            meeInstantSections(MeeInstantCatalog.typedSlots(typed, time))
+        }
     }
 }
 

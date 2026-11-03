@@ -34,6 +34,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -65,6 +67,8 @@ data class StoryRailCounts(
     val shares: Int = 0,
     val reposts: Int = 0,
     val views: Int = 0,
+    /** Ce lecteur a republié la story : « Republier » prend la teinte d'une participation, comme le cœur (#14443). */
+    val reposted: Boolean = false,
 )
 
 /** Les gestes des boutons du rail qui n'ouvrent ni barre ni geste de balayage (#14313). */
@@ -100,7 +104,7 @@ fun StoryActionRail(
     taps: StoryRailTaps = StoryRailTaps(),
 ) {
     Column(
-        modifier = modifier,
+        modifier = modifier.verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
@@ -178,7 +182,13 @@ private fun StoryRailTapButtons(plan: StoryRailPlan, counts: StoryRailCounts, ta
         TapRailButton(MeeshyIcons.Send, countOr(counts.shares, stringResource(R.string.stories_action_send)), stringResource(R.string.stories_action_send), taps.onSend)
     }
     if (plan.showsRepost) {
-        TapRailButton(FullscreenChromeSymbol.Repost.icon, countOr(counts.reposts, stringResource(R.string.stories_action_repost)), stringResource(R.string.stories_action_repost), taps.onRepost)
+        TapRailButton(
+            FullscreenChromeSymbol.Repost.icon,
+            countOr(counts.reposts, stringResource(R.string.stories_action_repost)),
+            stringResource(R.string.stories_action_repost),
+            taps.onRepost,
+            tint = if (counts.reposted) MeeshyPalette.Indigo400 else MeeshyPalette.White,
+        )
     } else if (plan.showsViews) {
         TapRailButton(MeeshyIcons.EyeFilled, countOr(counts.views, stringResource(R.string.stories_action_views)), stringResource(R.string.stories_action_views), taps.onViews)
     }
@@ -193,11 +203,17 @@ private fun StoryRailTapButtons(plan: StoryRailPlan, counts: StoryRailCounts, ta
 private fun countOr(count: Int, label: String): String = if (count > 0) count.toString() else label
 
 @Composable
-private fun TapRailButton(icon: ImageVector, caption: String, accessibilityLabel: String, onTap: () -> Unit) {
+private fun TapRailButton(
+    icon: ImageVector,
+    caption: String,
+    accessibilityLabel: String,
+    onTap: () -> Unit,
+    tint: Color = MeeshyPalette.White,
+) {
     RailButton(
         icon = icon,
         label = caption,
-        tint = MeeshyPalette.White,
+        tint = tint,
         scale = 1f,
         onTap = onTap,
         scrubKind = null,

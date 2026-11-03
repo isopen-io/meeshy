@@ -149,6 +149,7 @@ import type {
   ConversationActionData,
   ConversationClosedEventData,
   ConversationDeletedEventData,
+  ConversationObsoletedEventData,
   ConversationEncryptionChangedEventData,
   ConversationJoinErrorEventData,
   ConversationNewEventData,
@@ -172,6 +173,16 @@ import type {
   RelationRitualProgressEventData,
   RelationRitualStartedEventData,
 } from './relation.js';
+import type { BringRingEventData, BringStoppedEventData } from '../bring.js';
+import type {
+  TalkieChunkEventData,
+  TalkieChunkPayload,
+  TalkieEndedEventData,
+  TalkieEndPayload,
+  TalkieIncomingEventData,
+  TalkieStartAck,
+  TalkieStartPayload,
+} from '../talkie.js';
 import type {
   LocationLiveStartData,
   LocationLiveStartedEventData,
@@ -333,6 +344,11 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.RELATION_RITUAL_STARTED]: (data: RelationRitualStartedEventData) => void;
   [SERVER_EVENTS.RELATION_RITUAL_PROGRESS]: (data: RelationRitualProgressEventData) => void;
   [SERVER_EVENTS.RELATION_RITUAL_COMPLETED]: (data: RelationRitualCompletedEventData) => void;
+  [SERVER_EVENTS.BRING_RING]: (data: BringRingEventData) => void;
+  [SERVER_EVENTS.BRING_STOPPED]: (data: BringStoppedEventData) => void;
+  [SERVER_EVENTS.TALKIE_INCOMING]: (data: TalkieIncomingEventData) => void;
+  [SERVER_EVENTS.TALKIE_CHUNK]: (data: TalkieChunkEventData) => void;
+  [SERVER_EVENTS.TALKIE_ENDED]: (data: TalkieEndedEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED]: (data: MessageViewOncePurgedEventData) => void;
@@ -467,6 +483,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CONVERSATION_UPDATED]: (data: ConversationUpdatedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED]: (data: ConversationEncryptionChangedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_CLOSED]: (data: ConversationClosedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_OBSOLETED]: (data: ConversationObsoletedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_DELETED]: (data: ConversationDeletedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_RESTORED]: (data: ConversationRestoredEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED]: (data: ConversationParticipantJoinedEventData) => void;
@@ -492,6 +509,9 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.MESSAGE_DELETE]: (data: MessageDeleteData, callback?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.MESSAGE_CAPTURE_DETECTED]: (data: ContentCaptureReportInput, callback?: (response: ContentCaptureAck) => void) => void;
   [CLIENT_EVENTS.E2EE_SEND_SIGNAL]: (data: E2EESignalSocketPayload, callback?: (response: E2EESignalAck) => void) => void;
+  [CLIENT_EVENTS.TALKIE_START]: (data: TalkieStartPayload, callback?: (response: TalkieStartAck) => void) => void;
+  [CLIENT_EVENTS.TALKIE_SEND_CHUNK]: (data: TalkieChunkPayload) => void;
+  [CLIENT_EVENTS.TALKIE_END]: (data: TalkieEndPayload) => void;
   [CLIENT_EVENTS.CONVERSATION_JOIN]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.CONVERSATION_LEAVE]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.TYPING_START]: (data: TypingActionData) => void;

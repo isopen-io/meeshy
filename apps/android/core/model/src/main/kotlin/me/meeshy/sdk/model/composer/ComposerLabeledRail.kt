@@ -9,5 +9,8 @@ object ComposerLabeledRail {
     const val ROW = 48f
     const val GAP = 4f
 
-    val tools: List<ComposerSceneTool> = ComposerSceneTools.column - ComposerSceneTool.MORE
+    val tools: List<ComposerSceneTool> = tools(writesPostText = false)
+
+    /** Les outils du rail d'un format : ceux de sa colonne, sans le « ⋯ » que « Plus » remplace (#14457). */
+    fun tools(writesPostText: Boolean): List<ComposerSceneTool> = ComposerSceneTools.column(writesPostText) - ComposerSceneTool.MORE
 }

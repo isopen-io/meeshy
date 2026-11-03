@@ -2,9 +2,13 @@ package me.meeshy.sdk.socket
 
 import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.SocketPostCreatedData
+import me.meeshy.sdk.model.SocketPostReactionUpdateData
+import me.meeshy.sdk.model.SocketCommentMediaUpdatedData
 import me.meeshy.sdk.model.SocketPostRepostedData
 import me.meeshy.sdk.model.SocketPostUpdatedData
 import me.meeshy.sdk.model.SocketPostLikedData
@@ -62,6 +66,9 @@ class SocialSocketManager @Inject constructor(
     private val _postBookmarked = SocketInboundRoute.subject<SocketPostBookmarkedData>()
     private val _postDeleted = SocketInboundRoute.subject<SocketPostDeletedData>()
     private val _postTranslationUpdated = SocketInboundRoute.subject<SocketPostTranslationUpdatedData>()
+    private val _postReactionAdded = SocketInboundRoute.subject<SocketPostReactionUpdateData>()
+    private val _postReactionRemoved = SocketInboundRoute.subject<SocketPostReactionUpdateData>()
+    private val _commentMediaUpdated = SocketInboundRoute.subject<SocketCommentMediaUpdatedData>()
     private val _commentAdded = SocketInboundRoute.subject<SocketCommentAddedData>()
     private val _commentUpdated = SocketInboundRoute.subject<SocketCommentUpdatedData>()
     private val _commentLiked = SocketInboundRoute.subject<SocketCommentLikedData>()
@@ -114,6 +121,27 @@ class SocialSocketManager @Inject constructor(
     val postTranslationUpdated: SharedFlow<SocketPostTranslationUpdatedData> =
         _postTranslationUpdated.exposed()
     val commentAdded: SharedFlow<SocketCommentAddedData> = _commentAdded.exposed()
+
+    /** `post:reaction-added` : le compte ABSOLU de l'emoji (`aggregation`), jamais un delta. */
+    val postReactionAdded: SharedFlow<SocketPostReactionUpdateData> = _postReactionAdded.exposed()
+
+    /** `post:reaction-removed` : meme forme que [postReactionAdded], le sens vit dans le flux. */
+    val postReactionRemoved: SharedFlow<SocketPostReactionUpdateData> = _postReactionRemoved.exposed()
+
+    /** `comment:media-updated` : le commentaire enrichi (transcription audio prete) a substituer. */
+    val commentMediaUpdated: SharedFlow<SocketCommentMediaUpdatedData> = _commentMediaUpdated.exposed()
+
+    /**
+     * Chaque RECONNEXION de la socket (une connexion qui en suit une autre vue par le collecteur) : le fil relit sa
+     * tete et se reabonne, car les evenements emis pendant la coupure sont perdus. Miroir d'iOS `didReconnect`.
+     */
+    val reconnected: Flow<Unit> = flow {
+        var seen = socketManager.isConnected
+        socketManager.connected.collect {
+            if (seen) emit(Unit)
+            seen = true
+        }
+    }
 
     /**
      * `comment:updated` — a comment was edited server-side; carries the COMPLETE new comment.
@@ -193,6 +221,9 @@ class SocialSocketManager @Inject constructor(
         route(SocketEventNames.POST_BOOKMARKED, _postBookmarked)
         route(SocketEventNames.POST_DELETED, _postDeleted)
         route(SocketEventNames.POST_TRANSLATION_UPDATED, _postTranslationUpdated)
+        route(SocketEventNames.POST_REACTION_ADDED, _postReactionAdded)
+        route(SocketEventNames.POST_REACTION_REMOVED, _postReactionRemoved)
+        route(SocketEventNames.COMMENT_MEDIA_UPDATED, _commentMediaUpdated)
         route(SocketEventNames.COMMENT_ADDED, _commentAdded)
         route(SocketEventNames.COMMENT_UPDATED, _commentUpdated)
         route(SocketEventNames.COMMENT_LIKED, _commentLiked)

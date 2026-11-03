@@ -18,6 +18,11 @@ public enum FriendRequestDirection: String, Sendable {
 public protocol FriendServiceProviding: Sendable {
     func sendFriendRequest(receiverId: String, message: String?) async throws -> FriendRequest
 
+    /// La demande d'un CRAN (#13938) : `targetLevel` vise Connaissance, Ami, Proche ou Sang
+    /// (`nil` = Ami, le sens historique). Le serveur refuse les sauts de phase, le cool-down
+    /// et l'inéligibilité (409) ; le client ne fait que ne pas proposer ce qu'il refusera.
+    func sendFriendRequest(receiverId: String, message: String?, targetLevel: RelationLevel?) async throws -> FriendRequest
+
     /// La lecture CANONIQUE des demandes, par CURSEUR (#4254).
     ///
     /// Elle remplace les trois lectures par décalage ci-dessous : la route à
@@ -50,6 +55,17 @@ public protocol FriendServiceProviding: Sendable {
 }
 
 public extension FriendServiceProviding {
+    /// PONT des doubles, et d'eux seuls : sans cran, c'est l'envoi historique ; avec un cran,
+    /// un conformant qui ne sait pas le porter REFUSE plutôt que d'envoyer une demande d'Ami
+    /// à la place — une montée silencieusement dégradée serait pire qu'un échec.
+    /// `FriendService`, seul conformant de PRODUCTION, le remplace.
+    func sendFriendRequest(receiverId: String, message: String?, targetLevel: RelationLevel?) async throws -> FriendRequest {
+        guard targetLevel == nil else {
+            throw MeeshyError.server(statusCode: 501, message: "Ce service ne porte pas la demande d'un cran")
+        }
+        return try await sendFriendRequest(receiverId: receiverId, message: message)
+    }
+
     /// PONT pour les conformants qui ne savent lire que par décalage — les
     /// DOUBLES de test, et eux seuls (`MockFriendService`, `ThrowingFriendService`).
     ///
@@ -117,7 +133,13 @@ public final class FriendService: FriendServiceProviding, Sendable {
     /// L'adresse canonique porte l'union des gardes des deux, plus le blocage,
     /// qui n'existait dans aucune.
     public func sendFriendRequest(receiverId: String, message: String? = nil) async throws -> FriendRequest {
-        let body = SendFriendRequest(receiverId: receiverId, message: message)
+        try await sendFriendRequest(receiverId: receiverId, message: message, targetLevel: nil)
+    }
+
+    /// Le même chemin, avec le cran visé (#13938) : `targetLevel` n'entre dans le corps que
+    /// s'il est posé, donc la demande simple n'a pas changé d'un octet.
+    public func sendFriendRequest(receiverId: String, message: String?, targetLevel: RelationLevel?) async throws -> FriendRequest {
+        let body = SendFriendRequest(receiverId: receiverId, message: message, targetLevel: targetLevel?.rawValue)
         let response: APIResponse<FriendRequest> = try await api.post(
             DirectoryEndpoint.friendRequests,
             body: body

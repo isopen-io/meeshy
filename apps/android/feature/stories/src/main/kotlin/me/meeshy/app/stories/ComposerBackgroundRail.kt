@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -150,8 +149,8 @@ internal fun rememberBackgroundEditing(
 @Composable
 internal fun SceneBackgroundColumn(background: BackgroundEditing, tools: BackgroundTools) {
     Column(
-        modifier = Modifier.testTag(EDITING_RAIL_TAG).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        modifier = Modifier.testTag(EDITING_RAIL_TAG).composerScrollEdgeCue(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(LocalComposerRailSize.current.gap),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         BackgroundToolItems(tools, wide = false)
@@ -170,7 +169,7 @@ internal fun SceneBackgroundColumn(background: BackgroundEditing, tools: Backgro
 @Composable
 internal fun StoryBackgroundRail(background: BackgroundEditing, tools: BackgroundTools) {
     Column(
-        modifier = Modifier.fillMaxWidth().testTag(EDITING_RAIL_TAG).verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth().testTag(EDITING_RAIL_TAG).composerScrollEdgeCue(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
         Text(

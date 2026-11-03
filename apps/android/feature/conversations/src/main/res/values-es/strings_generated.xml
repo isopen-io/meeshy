@@ -90,6 +90,7 @@
     <string name="conversations_preview_hidden">Mensaje oculto</string>
     <string name="conversations_preview_loading">Cargando…</string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
+    <string name="conversations_preview_sticker">Sticker</string>
     <string name="conversations_preview_typing">%1$s está escribiendo</string>
     <string name="conversations_preview_view_once">Mensaje de una sola vista</string>
     <string name="conversations_preview_you">Tú</string>
@@ -149,11 +150,12 @@
     <string name="encryption_create_header">Cifrado</string>
     <string name="encryption_mode_e2ee_description">Solo tus dispositivos y los de los participantes leen los mensajes. La traducción se hace en tu dispositivo.</string>
     <string name="encryption_mode_e2ee_label">Extremo a extremo</string>
-    <string name="encryption_mode_hybrid_description">Cifrado en nuestros servidores, como Servidor. El doble cifrado por tus dispositivos llegará pronto.</string>
+    <string name="encryption_mode_hybrid_description">Cifrado en nuestros servidores; entre dispositivos compatibles, una segunda capa permite comprobar que un mensaje de texto no se modificó por el camino.</string>
     <string name="encryption_mode_hybrid_label">Híbrido</string>
     <string name="encryption_mode_server_description">Tus mensajes se cifran en nuestros servidores. La traducción, la transcripción y la búsqueda funcionan.</string>
     <string name="encryption_mode_server_label">Servidor</string>
     <string name="global_search_back">Atrás</string>
+    <string name="global_search_empty_subtitle">Mensajes, publicaciones, usuarios</string>
     <plurals name="global_search_members">
         <item quantity="one">%1$d miembro</item>
         <item quantity="many">%1$d miembros</item>
@@ -161,11 +163,15 @@
     </plurals>
     <string name="global_search_no_results">Sin resultados</string>
     <string name="global_search_online">En línea</string>
+    <string name="global_search_post_kind_post">Publicación</string>
+    <string name="global_search_post_kind_reel">Reel</string>
+    <string name="global_search_post_kind_story">Historia</string>
     <string name="global_search_recent_clear">Borrar</string>
     <string name="global_search_recent_remove">Quitar</string>
     <string name="global_search_searching">Buscando…</string>
     <string name="global_search_tab_conversations">Conversaciones</string>
     <string name="global_search_tab_messages">Mensajes</string>
+    <string name="global_search_tab_posts">Publicaciones</string>
     <string name="invite_customize">Personalizar las opciones</string>
     <string name="invite_defaultMessage">Únete para hablar sin filtros ni barreras…</string>
     <string name="links_affiliate_action_copy">Copiar el enlace de recomendación</string>
@@ -316,7 +322,7 @@
     <string name="my_share_links_status_inactive">Inactivo</string>
     <string name="my_share_links_title">Enlaces para compartir</string>
     <string name="my_share_links_toggle">Activos</string>
-    <string name="new_conversation_back">Atrás</string>
+    <string name="new_conversation_close">Cerrar</string>
     <string name="new_conversation_contacts_empty_subtitle">Busca un usuario para iniciar una conversación.</string>
     <string name="new_conversation_contacts_empty_title">Sin contactos</string>
     <string name="new_conversation_contacts_loading">Cargando los contactos</string>

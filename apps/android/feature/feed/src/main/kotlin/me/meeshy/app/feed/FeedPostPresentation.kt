@@ -101,6 +101,8 @@ data class FeedPostPresentation(
     val isBookmarked: Boolean,
     val commentCount: Int,
     val repostCount: Int,
+    /** Le lecteur a republié ce post — servi par la passerelle, ou posé au geste en attendant sa réponse (#14456). */
+    val isReposted: Boolean = false,
     val isPinned: Boolean,
     val isEdited: Boolean,
     val isReel: Boolean,
@@ -239,6 +241,7 @@ object FeedPostBuilder {
             isBookmarked = post.isBookmarkedByMe == true,
             commentCount = post.commentCount ?: 0,
             repostCount = post.repostCount ?: 0,
+            isReposted = post.isRepostedByMe == true,
             isPinned = post.isPinned == true,
             isEdited = post.isEdited == true,
             isReel = isReel,

@@ -9,8 +9,8 @@
     "corner-radius-modifier": 0,
     "disable-autocorrection": 0,
     "environment-router": 12,
-    "fixed-font": 752,
-    "foreground-color": 2393,
+    "fixed-font": 751,
+    "foreground-color": 2345,
     "idiom": 0,
     "logger-subsystem": 0,
     "narrative-comment": 2425,
@@ -29,7 +29,7 @@
     "uiscreen-main": 1,
     "unchecked-sendable": 120,
     "unchecked-sendable-total": 207,
-    "viewmodel-shared": 572
+    "viewmodel-shared": 569
   },
   "version": 1
 }

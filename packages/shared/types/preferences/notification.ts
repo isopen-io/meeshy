@@ -66,6 +66,13 @@ export const NotificationPreferenceSchema = z.object({
   // « Moments à immortaliser » (#10175, D8) — le PUSH d'une étape du jeu franchie app fermée ; « Jeu »
   // coupé le coupe aussi. Absent d'un document existant ⇒ reçu.
   gamePhotoEnabled: z.boolean().default(true),
+  // « Recevoir des Bring » (#13936, #14407) — l'interrupteur GLOBAL de la préférence de
+  // réception du Bring, en plus du blocage par personne. Coupé : personne ne peut me faire
+  // sonner, et chacun lit seulement « Bring indisponible ». Absent d'un document existant ⇒ reçu.
+  bringEnabled: z.boolean().default(true),
+  // « Recevoir le talkie » (#13935, #14407) — l'interrupteur GLOBAL de la réception directe
+  // du talkie. Coupé : la voix d'un Proche arrive en message vocal. Absent ⇒ reçu.
+  talkieEnabled: z.boolean().default(true),
 
   ...circleAudienceShape,
 
@@ -142,6 +149,8 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   contactActivityEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
+  bringEnabled: true,
+  talkieEnabled: true,
   ...CIRCLE_NOTIFY_DEFAULTS,
   dndEnabled: false,
   dndStartTime: '22:00',

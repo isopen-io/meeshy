@@ -30,8 +30,6 @@ import me.meeshy.app.composer.host.ComposerHostScreen
 import me.meeshy.app.stories.StoryComposerScreen
 import me.meeshy.app.stories.StoryComposerSeedAudience
 import me.meeshy.app.stories.StoryViewersSheet
-import me.meeshy.app.stories.StoryViewerScreen
-import me.meeshy.app.stories.StoryViewerViewModel
 
 /** Flux, enregistres, a proximite, detail de post, Reels et stories. */
 internal fun NavGraphBuilder.feedNavGraph(
@@ -99,6 +97,9 @@ internal fun NavGraphBuilder.feedNavGraph(
         route = Routes.POST_DETAIL,
         arguments = listOf(
             navArgument(PostDetailViewModel.POST_ID_ARG) { type = NavType.StringType },
+            navArgument(PostDetailViewModel.SHOW_COMMENTS_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+            navArgument(PostDetailViewModel.COMMENT_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+            navArgument(PostDetailViewModel.PARENT_COMMENT_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
         ),
         deepLinks = (Routes.POST_SHARE_DEEP_LINKS + Routes.STORY_SHARE_DEEP_LINKS).map { pattern -> navDeepLink { uriPattern = pattern } },
     ) {
@@ -125,32 +126,6 @@ internal fun NavGraphBuilder.feedNavGraph(
             onClose = { navController.popBackStack() },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
-        )
-    }
-    composable(
-        route = Routes.STORY_VIEWER,
-        arguments = listOf(
-            navArgument(StoryViewerViewModel.USER_ID_ARG) { type = NavType.StringType },
-            navArgument(StoryViewerViewModel.STORY_ID_ARG) {
-                type = NavType.StringType
-                nullable = true
-                defaultValue = null
-            },
-        ),
-        deepLinks = listOf(
-            navDeepLink { uriPattern = Routes.STORY_DEEP_LINK },
-        ),
-    ) {
-        StoryViewerScreen(
-            onClose = { navController.popBackStack() },
-            onRepost = { storyId -> navController.navigate(Routes.storyComposerRepost(storyId)) },
-            onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
-            onEditStory = { storyId -> navController.navigate(Routes.storyComposerEdit(storyId)) },
-            onComposeStory = { storyId -> navController.navigate(Routes.storyComposerRecompose(storyId)) },
-            // Une story republiée qui n'est plus jouable (expirée, supprimée) ouvre la fiche du post, comme avant le lecteur.
-            onStoryMissing = { postId ->
-                navController.navigate(Routes.postDetail(postId)) { popUpTo(Routes.STORY_VIEWER) { inclusive = true } }
-            },
         )
     }
     composable(

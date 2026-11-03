@@ -62,6 +62,9 @@ private class Sized(
     val quoteFont: CardFont,
     var replyLines: List<String>,
     var quoteLines: List<String>,
+    /** Pour un fil : le niveau de chaque ligne de la réponse, et celles qui portent la séparation ([CardThread]). */
+    var replyLevels: List<Int> = emptyList(),
+    var replySeparators: List<Boolean> = emptyList(),
 )
 
 private class Chrome(
@@ -72,6 +75,7 @@ private class Chrome(
     val replyBubble: Double,
     val link: Double,
     val media: Double,
+    val hero: Double,
 )
 
 /** JS `Math.round` — la moitié monte, comme sur le web et iOS. */
@@ -115,6 +119,8 @@ object CardLayoutEngine {
         val hasReplyText = CardText.nonBlank(input.reply.text) != null
         val mediaBlock = CardMediaLayout.plan(input.media, textWidth, budget)
         val mediaGap = if (hasReplyText && mediaBlock.tiles.isNotEmpty()) CardMediaLayout.BLOCK_GAP else 0.0
+        val heroWidth = width - 2 * CardHero.MARGIN
+        val heroHeight = input.hero?.let { CardHero.height(it.aspect, heroWidth, budget) } ?: 0.0
         val chrome = Chrome(
             header = if (title == null && date == null) 0.0 else
                 (if (title == null) 0.0 else CardMetrics.TITLE_LINE) + (if (date == null) 0.0 else CardMetrics.DATE_LINE) + CardMetrics.HEADER_GAP,
@@ -124,6 +130,7 @@ object CardLayoutEngine {
             replyBubble = if (geometry.bubbles && hasReplyText) 2 * CardMetrics.BUBBLE_PAD_Y else 0.0,
             link = geometry.block,
             media = if (mediaBlock.tiles.isEmpty()) 0.0 else mediaBlock.height + mediaGap,
+            hero = if (heroHeight > 0) heroHeight + CardHero.GAP else 0.0,
         )
 
         fun sizeAt(step: Int): Sized {
@@ -132,17 +139,28 @@ object CardLayoutEngine {
             val quoteSize = maxOf(CardMetrics.QUOTE_FLOOR, CardMetrics.QUOTE_START * factor)
             val replyFont = CardFont(typeface.replyFace, cardRound(replySize))
             val quoteFont = CardFont(typeface.quoteFace, cardRound(quoteSize))
+            val threadRows = if (hasReplyText && input.reply.thread.isNotEmpty()) {
+                CardThread.rows(input.reply.thread, replyWidth, replyFont, measure)
+            } else {
+                emptyList()
+            }
             return Sized(
                 replySize, quoteSize, replyFont, quoteFont,
-                replyLines = if (hasReplyText) CardText.wrap(input.reply.text, replyWidth, replyFont, measure) else emptyList(),
+                replyLines = when {
+                    threadRows.isNotEmpty() -> threadRows.map { it.text }
+                    hasReplyText -> CardText.wrap(input.reply.text, replyWidth, replyFont, measure)
+                    else -> emptyList()
+                },
                 quoteLines = quoted?.let { CardText.wrap(it.text, quoteWidth, quoteFont, measure) } ?: emptyList(),
+                replyLevels = threadRows.map { it.level },
+                replySeparators = threadRows.map { it.separator },
             )
         }
 
         fun contentHeight(sized: Sized): Double {
             val quote = if (hasQuote) chrome.quoteAuthor + sized.quoteLines.size * quoteLineHeight(sized.quoteSize) + chrome.quoteBubble + chrome.link else 0.0
             val reply = chrome.replyAuthor + sized.replyLines.size * replyLineHeight(sized.replySize) + chrome.replyBubble
-            return chrome.header + quote + reply + chrome.media
+            return chrome.header + chrome.hero + quote + reply + chrome.media
         }
 
         fun atFloor(sized: Sized) =
@@ -173,9 +191,15 @@ object CardLayoutEngine {
             val bare = Sized(sized.replySize, sized.quoteSize, sized.replyFont, sized.quoteFont, emptyList(), emptyList())
             val room = budget - contentHeight(bare)
             val quoteKeep = if (hasQuote) minOf(sized.quoteLines.size, maxOf(2, floor(room * 0.3 / quoteLh).toInt())) else 0
-            val replyKeep = maxOf(1, floor((room - quoteKeep * quoteLh) / replyLh).toInt())
+            var replyKeep = maxOf(1, floor((room - quoteKeep * quoteLh) / replyLh).toInt())
+            // Un fil ne se coupe pas sur la séparation d'une entrée : elle n'a pas de texte où poser « … ».
+            while (replyKeep > 1 && replyKeep < sized.replyLines.size && sized.replySeparators.getOrElse(replyKeep - 1) { false }) replyKeep -= 1
+            val lastLevel = sized.replyLevels.getOrElse(replyKeep - 1) { 0 }
+            val lastWidth = if (lastLevel == 0) replyWidth else CardThread.roomAt(lastLevel, replyWidth)
             sized.quoteLines = CardText.truncate(sized.quoteLines, quoteKeep, quoteWidth, sized.quoteFont, measure)
-            sized.replyLines = CardText.truncate(sized.replyLines, replyKeep, replyWidth, sized.replyFont, measure)
+            sized.replyLines = CardText.truncate(sized.replyLines, replyKeep, lastWidth, sized.replyFont, measure)
+            sized.replyLevels = sized.replyLevels.take(sized.replyLines.size)
+            sized.replySeparators = sized.replySeparators.take(sized.replyLines.size)
         }
 
         fun paint(sized: Sized, height: Double, content: Double, truncated: Boolean): CardLayout {
@@ -187,13 +211,15 @@ object CardLayoutEngine {
             var headerOps: List<CardOp> = emptyList()
             if (chrome.header > 0) headerOps = header(painter, ::region)
             val contentTop = painter.y
+            heroOps(painter)
             if (quoted != null) quoteBlock(painter, quoted, sized, ::region)
             val replyStyle = BlockStyle(
                 size = sized.replySize, lineHeight = replyLineHeight(sized.replySize), font = sized.replyFont, ink = palette.replyInk,
                 inset = 0.0, bubble = if (geometry.bubbles && hasReplyText) BubbleStyle(CardMetrics.BUBBLE_OFFSET, palette.replyPanel) else null,
+                threadSeparator = if (sized.replyLevels.any { it > 0 }) ::threadSeparatorOps else null,
             )
             if (hasReplyText || chrome.replyAuthor > 0) {
-                val reply = painter.block(input.reply, sized.replyLines, input.replyTime, replyStyle)
+                val reply = painter.block(input.reply, sized.replyLines, input.replyTime, replyStyle, sized.replyLevels, sized.replySeparators)
                 region(CardPartId.REPLY, reply.top, painter.y)
             }
             mediaOps(painter)
@@ -201,6 +227,14 @@ object CardLayoutEngine {
             val contentOps: List<CardOp> = if (tilt == 0.0 || painter.ops.isEmpty()) painter.ops
             else listOf(CardOp.Group(tilt, width / 2, contentTop + (painter.y - contentTop) / 2, painter.ops.toList()))
             return CardLayout(width, height, headerOps + contentOps, regions, CardLayout.watermark(input.handle), truncated)
+        }
+
+        /** Le visuel du support, pleine largeur avant tout texte ([CardHero]). */
+        fun heroOps(painter: Painter) {
+            val hero = input.hero ?: return
+            if (heroHeight <= 0) return
+            painter.ops.add(CardOp.Picture(hero, CardHero.MARGIN, painter.y, heroWidth, heroHeight, CardMediaLayout.RADIUS))
+            painter.y += heroHeight + CardHero.GAP
         }
 
         /** Les médias sous la réponse, dans sa colonne ([CardMediaLayout]). */
@@ -295,6 +329,24 @@ object CardLayoutEngine {
                 CardLinkId.BULLES, CardLinkId.SILENCE -> emptyList()
             }
         }
+
+        /** La séparation d'une entrée de fil : la liaison du template, compacte, au retrait du niveau ([x] = bord de départ). */
+        fun threadSeparatorOps(x: Double, y: Double, rtl: Boolean, level: Int): List<CardOp> {
+            val length = CardThread.separatorWidth(level)
+            val (x1, x2) = if (rtl) x - length to x else x to x + length
+            val accent = palette.accent
+            return when (input.template.link) {
+                CardLinkId.ORBITE, CardLinkId.GUILLEMETS -> listOf(CardOp.Separator(x1, x2, y, 0.0, accent, listOf(2.0, 14.0), 3.0))
+                CardLinkId.FILET, CardLinkId.FIL -> listOf(CardOp.Separator(x1, x2, y, 0.0, accent, emptyList(), 4.0))
+                CardLinkId.FLECHE -> listOf(
+                    CardOp.Text(
+                        if (rtl) "↲" else "↳", x, y + 18, CardFont(CardFace.system(700), 40.0), accent,
+                        if (rtl) CardAlignment.RIGHT else CardAlignment.LEFT, CardTextDirection.LTR,
+                    ),
+                )
+                CardLinkId.BULLES, CardLinkId.SILENCE -> emptyList()
+            }
+        }
     }
 }
 
@@ -307,6 +359,8 @@ private class BlockStyle(
     val ink: CardColor,
     val inset: Double,
     val bubble: BubbleStyle?,
+    /** Ce qu'une ligne de séparation de fil peint : (bord de départ, milieu de la ligne, rtl, niveau). */
+    val threadSeparator: ((Double, Double, Boolean, Int) -> List<CardOp>)? = null,
 )
 
 /** Le curseur vertical et les opérations accumulées. */
@@ -354,7 +408,14 @@ private class Painter(
     class Placed(val top: Double, val rtl: Boolean)
 
     /** Un bloc : son nom, ses lignes — et, pour la liaison « bulles », la bulle qui les porte. */
-    fun block(part: CardPart, lines: List<String>, time: String?, style: BlockStyle): Placed {
+    fun block(
+        part: CardPart,
+        lines: List<String>,
+        time: String?,
+        style: BlockStyle,
+        levels: List<Int> = emptyList(),
+        separators: List<Boolean> = emptyList(),
+    ): Placed {
         val direction = CardText.direction(part.text)
         val rtl = direction == CardTextDirection.RTL
         val top = y
@@ -369,8 +430,14 @@ private class Painter(
         }
         if (style.bubble != null) y += CardMetrics.BUBBLE_PAD_Y
         if (input.authorPlacement == CardAuthorPlacement.ABOVE) nameLine(part.author, time, startX, endX, rtl)
-        for (line in lines) {
-            text(line, startX, y + cardRound(style.size), style.font, style.ink, direction)
+        lines.forEachIndexed { index, line ->
+            val shift = CardThread.shift(levels.getOrElse(index) { 0 })
+            val x = if (rtl) startX - shift else startX + shift
+            if (separators.getOrElse(index) { false }) {
+                style.threadSeparator?.let { ops.addAll(it(x, y + style.lineHeight / 2, rtl, levels.getOrElse(index) { 0 })) }
+            } else {
+                text(line, x, y + cardRound(style.size), style.font, style.ink, direction)
+            }
             y += style.lineHeight
         }
         if (input.authorPlacement == CardAuthorPlacement.AFTER) nameLine(part.author, time, startX, endX, rtl)

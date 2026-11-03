@@ -34,6 +34,9 @@ public enum class OutboxKind {
     CREATE_COMMENT,
     CONSUME_AFTER_READ,
     CONSUME_VIEW_ONCE,
+
+    /** Un message chiffré de bout en bout (#14591) : la ligne ne porte aucun clair, il attend au coffre E2EE. */
+    SEND_E2EE_MESSAGE,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -115,6 +118,7 @@ public object OutboxLaneMap {
         OutboxKind.SEND_MESSAGE,
         OutboxKind.EDIT_MESSAGE,
         OutboxKind.DELETE_MESSAGE,
+        OutboxKind.SEND_E2EE_MESSAGE,
         -> OutboxLaneAssignment.PerConversation
 
         OutboxKind.ADD_REACTION,
@@ -296,10 +300,12 @@ public data class ConsumeViewOncePayload(val conversationId: String)
 /**
  * Payload of a `SEND_FRIEND_REQUEST` outbox row. The receiver is the row's
  * `targetId` (so a repeated send to the same receiver coalesces per-target); the
- * optional greeting travels here.
+ * optional greeting travels here, and so does the level a circles raise aims at
+ * ([targetLevel], #13938) — a row written before that field reads back without it
+ * (`null` = Friend, the historical meaning).
  */
 @kotlinx.serialization.Serializable
-public data class FriendRequestPayload(val message: String? = null)
+public data class FriendRequestPayload(val message: String? = null, val targetLevel: String? = null)
 
 /**
  * Payload of a `RESPOND_FRIEND_REQUEST` outbox row. The row's `targetId` is the request id
@@ -373,6 +379,30 @@ public data class ConversationPrefsPayload(
      * supersedes it.
      */
     val clearCategory: Boolean = false,
+    /**
+     * Ce que la ligne valait AVANT l'application optimiste : de quoi la restaurer si la file abandonne (retour arrière).
+     * Absent d'une ligne écrite avant ce champ ; [OutboxCoalescer] garde celui de la plus ancienne ligne remplacée,
+     * car c'est l'état que le serveur connaît encore.
+     */
+    val previous: ConversationPrefsPrevious? = null,
+)
+
+/**
+ * L'état des préférences avant l'écriture optimiste d'un instantané ([ConversationPrefsPayload.previous]).
+ * [baseVersion] est la version des préférences à cet instant : une diffusion plus récente depuis a déjà fait
+ * foi, et le retour arrière ne la défait pas.
+ */
+@kotlinx.serialization.Serializable
+public data class ConversationPrefsPrevious(
+    val baseVersion: Int = 0,
+    val isPinned: Boolean = false,
+    val isMuted: Boolean = false,
+    val isArchived: Boolean = false,
+    val mentionsOnly: Boolean = false,
+    val categoryId: String? = null,
+    val customName: String? = null,
+    val reaction: String? = null,
+    val tags: List<String>? = null,
 )
 
 /**

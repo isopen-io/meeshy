@@ -11,6 +11,8 @@ import { withMutationLog } from '../../utils/withMutationLog';
 import { getCacheStore } from '../../services/CacheStore';
 import { blockCacheKey } from '../../utils/block-cache';
 import { cancelAutoAcquaintanceOnBlock } from '../../services/relations/autoAcquaintance';
+import { stopBringsAfterUserBlock } from '../bring';
+import { cutTalkiesOnBlock, talkieCutDepsOf } from '../../services/talkie/talkieCut';
 import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
 import { callerRateKey } from '../../utils/client-rate-key';
 import { sendWithETag } from '../../utils/etag';
@@ -131,6 +133,12 @@ export async function bloquer(
 
   // Les cercles (#13932) : un blocage annule la Connaissance née toute seule.
   cancelAutoAcquaintanceOnBlock(fastify.prisma, { blockerId: moi, blockedId: cibleId });
+
+  // Le Bring (#13936) : un Bring qui sonne entre les deux s'arrête, sans rien apprendre au bloqué.
+  stopBringsAfterUserBlock(fastify, moi, cibleId);
+  // Le talkie (#13935) : une voix qui passe entre les deux est coupée, sans rien apprendre au bloqué.
+  const couper = async () => cutTalkiesOnBlock(talkieCutDepsOf(), { blockerId: moi, blockedId: cibleId, scope: 'user' });
+  couper().catch((error: unknown) => logError(fastify.log, '[BLOCKS] Talkie not cut after block', error));
 
   // `dejaBloque` remonte pour que l'ALIAS puisse rendre son 409 historique
   // SANS relire la ligne : un pré-contrôle chez l'appelant ajouterait une

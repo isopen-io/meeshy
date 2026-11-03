@@ -18,7 +18,7 @@ import Foundation
 /// ## Pourquoi pas `text = ""`
 ///
 /// Parce que l'envoi peut ne pas avoir eu lieu. `sendMessageWithAttachments`
-/// refuse sur `isUploading` et sur un contenu jugé vide ; `submitEdit` a ses
+/// refuse un contenu jugé vide ; `submitEdit` a ses
 /// propres gardes. Vider sans condition effacerait une saisie que PERSONNE n'a
 /// envoyée.
 ///

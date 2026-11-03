@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -65,6 +66,11 @@ import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.sdk.model.composer.ComposerConfiguration
+import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.ui.component.bubble.BubbleBlurReveal
+import me.meeshy.ui.component.bubble.BubbleBlurRevealSpec
+import me.meeshy.ui.component.bubble.messageEffects
 import me.meeshy.ui.component.composer.LocalUniversalComposer
 import me.meeshy.ui.component.composer.UniversalComposerSpec
 import me.meeshy.ui.component.composer.rememberComposerMediaIntake
@@ -225,6 +231,13 @@ fun PostCommentsComposerBar(
             onRemovePiece = viewModel::removeMedia,
             onSubmit = viewModel::submit,
             onCancelReply = viewModel::cancelReply,
+            languageCode = state.composerLanguageCode,
+            onPickLanguage = viewModel::onComposerLanguagePicked,
+            onQuickEmoji = viewModel::sendQuickEmoji,
+            effects = state.effects,
+            onToggleEffect = viewModel::toggleCommentEffect,
+            onClearEffects = viewModel::clearCommentEffects,
+            place = CommentPlaceDoor(state.place, viewModel::attachPlace, viewModel::removePlace),
         )
     }
 }
@@ -242,9 +255,11 @@ private fun CommentRow(
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     val timeText = comment.createdAtIso?.let { detailRelativeTime(it) }
     val replyLabelFormat = stringResource(R.string.post_comments_reply_a11y_label)
+    val veiledLabel = stringResource(me.meeshy.ui.R.string.a11y_message_blurred)
     val textBlockSemantics = if (comment.isReply) {
         Modifier.semantics(mergeDescendants = true) {
-            contentDescription = comment.accessibilityLabel(replyLabelFormat, timeText.orEmpty(), unknownAuthor)
+            val spoken = if (comment.isBlurred) comment.copy(content = veiledLabel) else comment
+            contentDescription = spoken.accessibilityLabel(replyLabelFormat, timeText.orEmpty(), unknownAuthor)
         }
     } else {
         Modifier
@@ -286,19 +301,26 @@ private fun CommentRow(
                     )
                 }
             }
-            if (comment.hasBody) {
-                SelectionContainer {
-                    RichMessageText(
-                        text = comment.content,
-                        color = MeeshyTheme.tokens.textPrimary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        linkColor = MeeshyPalette.Indigo500,
-                        mentionDisplayNames = mentionDisplayNames.ifEmpty { null },
-                    )
+            }
+            CommentBody(comment) {
+                if (comment.hasBody) {
+                    SelectionContainer {
+                        RichMessageText(
+                            text = comment.content,
+                            color = MeeshyTheme.tokens.textPrimary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            linkColor = MeeshyPalette.Indigo500,
+                            mentionDisplayNames = mentionDisplayNames.ifEmpty { null },
+                        )
+                    }
+                }
+                CommentMediaStrip(comment.media)
+                comment.place?.let { place ->
+                    val context = LocalContext.current
+                    Spacer(Modifier.height(MeeshySpacing.xs))
+                    FeedPostLocationSticker(location = place, onTap = { openPlaceOnMap(context, place) })
                 }
             }
-            }
-            CommentMediaStrip(comment.media)
             if (comment.languageStrip.isNotEmpty()) {
                 Spacer(Modifier.height(2.dp))
                 CommentLanguageStrip(
@@ -315,6 +337,24 @@ private fun CommentRow(
                 CommentMoreMenu(comment = comment, onDelete = onDelete, imaging = imaging)
             }
         }
+    }
+}
+
+/**
+ * #14385 — le corps d'un commentaire (texte + médias) avec ses effets, comme iOS `commentBody(effects:)` : les effets
+ * permanents l'habillent, et un commentaire flouté se lit sous le voile de la bulle ([BubbleBlurReveal] — on touche, on
+ * lit, ça se referme). Sans effet, le corps est rendu tel quel.
+ */
+@Composable
+private fun CommentBody(comment: CommentPresentation, content: @Composable () -> Unit) {
+    val shape = RoundedCornerShape(MeeshyRadius.sm)
+    val dressed: @Composable () -> Unit = {
+        Column(if (comment.effects.hasPersistentEffect) Modifier.messageEffects(comment.effects, shape = shape) else Modifier) { content() }
+    }
+    if (comment.isBlurred) {
+        BubbleBlurReveal(messageId = comment.id, spec = BubbleBlurRevealSpec(isViewOnce = false), shape = shape) { dressed() }
+    } else {
+        dressed()
     }
 }
 
@@ -536,10 +576,10 @@ private fun CommentLikeButton(comment: CommentPresentation, onToggleLike: (Strin
 }
 
 /**
- * **LE COMPOSEUR DES COMMENTAIRES EST CELUI DES CONVERSATIONS** (#14265, iOS `UniversalComposerBar(mode: .comment)`) :
- * réglé pour un commentaire, il offre texte, emoji, vocal, photothèque et caméra ; ce qu'on joint rejoint le bandeau,
- * se téléverse aussitôt, et part avec le commentaire. Au-dessus de la saisie : les mentions, la cible de la réponse et
- * les pièces en attente.
+ * **LE COMPOSEUR DES COMMENTAIRES EST CELUI DES CONVERSATIONS** (#14265, #14384, iOS `UniversalComposerBar(mode: .comment)`
+ * + `foldableComment`) : la géométrie de la barre de message — pastille de langue, sticker, photothèque, caméra et ⌄ ;
+ * emojis rapides, vocal et envoi dans la rangée de saisie. Ce qu'on joint rejoint le bandeau, se téléverse aussitôt, et
+ * part avec le commentaire. Au-dessus de la saisie : les mentions, la cible de la réponse et les pièces en attente.
  */
 @Composable
 private fun CommentComposer(
@@ -556,6 +596,13 @@ private fun CommentComposer(
     onRemovePiece: (String) -> Unit,
     onSubmit: () -> Unit,
     onCancelReply: () -> Unit,
+    languageCode: String,
+    onPickLanguage: (String) -> Unit,
+    onQuickEmoji: (String) -> Unit,
+    effects: MessageEffects,
+    onToggleEffect: (Long) -> Unit,
+    onClearEffects: () -> Unit,
+    place: CommentPlaceDoor,
 ) {
     val composer = LocalUniversalComposer.current ?: return
     val intake = rememberComposerMediaIntake(onAttach)
@@ -575,6 +622,16 @@ private fun CommentComposer(
             focusTrigger = focusTrigger,
             onAttachUris = intake.onUris.takeIf { canAttach },
             onAttachFile = intake.onFile.takeIf { canAttach },
+            languageCode = languageCode,
+            onPickLanguage = onPickLanguage,
+            onQuickEmoji = onQuickEmoji,
+            foldable = true,
+            effects = effects,
+            onToggleEffect = onToggleEffect,
+            onClearEffects = onClearEffects,
+            onPickPlace = place.onPick,
+            pendingPlace = place.pending,
+            onRemovePlace = place.onRemove,
             topSlot = {
                 MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected)
                 if (replyTarget != null) ReplyTargetChip(target = replyTarget, onCancelReply = onCancelReply)
@@ -584,6 +641,13 @@ private fun CommentComposer(
         Modifier,
     )
 }
+
+/** #14387 — la porte « Lieu » du composeur : le lieu en attente, le choisir, le retirer. */
+private class CommentPlaceDoor(
+    val pending: SharedPlace?,
+    val onPick: (SharedPlace) -> Unit,
+    val onRemove: () -> Unit,
+)
 
 /** Viser un commentaire pour y répondre rend la main au champ (iOS `beginReply` → `composerFocusTrigger`). */
 @Composable

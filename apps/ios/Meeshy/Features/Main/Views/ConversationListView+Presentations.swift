@@ -141,6 +141,7 @@ struct ConversationListModalPresentations: ViewModifier {
             } message: { _ in
                 Text(String(localized: "conversation.info.leave.message", defaultValue: "Vous ne recevrez plus de messages. Votre historique restera lisible.", bundle: .main))
             }
+            .modifier(ConversationObsoleteConfirmation(target: $sheetTargets.obsoleteTarget, list: conversationViewModel))
             .sheet(item: $sheetTargets.reportTarget) { conversation in
                 ReportMessageSheet(
                     accentColor: conversation.accentColor,

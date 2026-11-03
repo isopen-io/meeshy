@@ -1,8 +1,6 @@
 package me.meeshy.app.stories
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -25,7 +23,6 @@ import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
 import me.meeshy.ui.component.chrome.StatusBarIconsOverDark
 import me.meeshy.ui.icons.MeeshyIcons
-import me.meeshy.ui.theme.MeeshySpacing
 
 /**
  * Ce que l'écran ouvre pour le compositeur : les sélecteurs du système et les feuilles qu'il tient. [onPickFiles] : l'appui
@@ -127,7 +124,7 @@ private fun SceneFirstFrame(
             trailing = {
                 SceneRail(
                     content = editing.rail,
-                    tools = { StorySceneTools(state, viewModel, more, ComposerSceneTools.column) },
+                    tools = { StorySceneTools(state, viewModel, more, ComposerSceneTools.column(state.writesPostText)) },
                     options = { SceneEditingOptions(edited, levels) },
                     background = { SceneEditingBackground(edited, levels) },
                 )
@@ -147,7 +144,7 @@ private fun SceneFirstFrame(
                 } ?: SceneEditingBand(edition, state, viewModel, comparison)
             },
             socle = {
-                if (chrome) StorySocle(state, viewModel, doors, formatChevron, sheet.onOpen, editing.publication) { onMorePanel(StoryMorePanel.POST_TEXT) }
+                if (chrome) StorySocle(state, viewModel, doors, formatChevron, sheet.onOpen, editing.publication)
             },
             sheet = openSheet,
             onSheetDismiss = sheet.onDismiss,
@@ -393,6 +390,7 @@ private fun StorySceneTools(
         },
         onMediaSource = rememberMediaSourceAction(state, more.doors, more.onMorePanel, more.capture),
         cameraServed = more.cameraServed,
+        postText = state.postText,
     )
 }
 
@@ -430,6 +428,8 @@ private fun storySceneRails(
         animated = state.sceneIsAnimated,
         exportEnabled = !sceneExport.isExporting && !state.isPublishing,
         cameraServed = more.cameraServed,
+        writesPostText = state.writesPostText,
+        postText = state.postText,
     )
     return StorySceneRails(
         leading = {
@@ -452,7 +452,7 @@ private fun storySceneRails(
             )
         },
         socle = { if (chrome) StorySocleNotice(state, viewModel::onRetryMediaPick) },
-        below = { if (chrome && editing.publication) StoryPublish(state, viewModel, doors, formatChevron) { more.onMorePanel(StoryMorePanel.POST_TEXT) } },
+        below = { if (chrome && editing.publication) StoryPublish(state, viewModel, doors, formatChevron) },
     )
 }
 
@@ -472,7 +472,7 @@ private fun StoryComposerUiState.activeSceneTool(): ComposerSceneTool? = when (b
 
 /**
  * Texte pose un texte, Média et Son ouvrent leur sélecteur (ou leur panneau s'il y a déjà de quoi), Dessin prend le pinceau,
- * Fond ouvre son panneau, Mention et Lieu leur feuille (#14049).
+ * Fond ouvre son panneau, Mention et Lieu leur feuille (#14049), « Texte du post » son champ collé au clavier (#14457).
  */
 @Composable
 private fun rememberSceneToolAction(
@@ -496,6 +496,7 @@ private fun rememberSceneToolAction(
             ComposerSceneTool.BACKGROUND -> viewModel.onBandToolSwipeUp(StoryToolMode.TEXTURE)
             ComposerSceneTool.MENTION -> more.onOpenSheet(StoryComposerSheet.MENTION)
             ComposerSceneTool.PLACE -> more.onOpenSheet(StoryComposerSheet.PLACE)
+            ComposerSceneTool.POST_TEXT -> more.onMorePanel(StoryMorePanel.POST_TEXT)
             ComposerSceneTool.MORE -> Unit
         }
     }
@@ -580,7 +581,6 @@ private fun StorySocle(
     formatChevron: (@Composable () -> Unit)?,
     onOpenSheet: (StoryComposerSheet) -> Unit,
     publication: Boolean,
-    onPostText: () -> Unit,
 ) {
     if (ComposerSceneReferences.isServed(state.hashtags, state.draft.mentions)) EditingChromeVisibility(publication) {
         ComposerSceneReferenceFooter(
@@ -592,7 +592,7 @@ private fun StorySocle(
     }
     StorySocleNotice(state, viewModel::onRetryMediaPick)
     EditingChromeVisibility(publication) {
-        Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) { StoryPublish(state, viewModel, doors, formatChevron, onPostText) }
+        StoryPublish(state, viewModel, doors, formatChevron)
     }
 }
 
@@ -604,16 +604,17 @@ private fun StorySocleNotice(state: StoryComposerUiState, onRetryMedia: () -> Un
     SceneNoticeLine(notice, onRetry = onRetryMedia.takeIf { retries })
 }
 
-/** « Texte du post » en post et en réel, puis la pastille d'audience et « Publier … ▾ » : posés sur la scène au petit écran, sous elle au grand. */
+/**
+ * La pastille d'audience et « Publier … ▾ » : posés sur la scène au petit écran, sous elle au grand. Le même socle pour la
+ * story, le post et le réel (#14457) — « Texte du post » est une option du rail, jamais une rangée de plus ici.
+ */
 @Composable
 private fun StoryPublish(
     state: StoryComposerUiState,
     viewModel: StoryComposerViewModel,
     doors: StoryComposerDoors,
     formatChevron: (@Composable () -> Unit)?,
-    onPostText: () -> Unit,
 ) {
-    if (state.writesPostText) PostTextPill(state.postText, onPostText)
     val visibility = state.draft.visibility
     val count = state.draft.visibilityUserIds.size
     val label = stringResource(visibility.labelRes())

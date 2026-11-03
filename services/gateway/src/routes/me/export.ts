@@ -23,6 +23,8 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import { withoutExpiredConnectionTraces } from '../../services/retention/retention-bounds';
 import { exportGame } from './export-game';
 import { exportReadingActivity } from './export-reading';
+import { relationsExportSchema } from './export-relations';
+import { exportRelations } from '../../services/relations/relationExport';
 import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
@@ -44,11 +46,12 @@ type ExportType =
   | 'game'
   | 'packs'
   | 'readingActivity'
-  | 'calls';
+  | 'calls'
+  | 'relations';
 
 const VALID_TYPES: ExportType[] = [
   'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game', 'packs',
-  'readingActivity', 'calls',
+  'readingActivity', 'calls', 'relations',
 ];
 
 type ExportFormat = 'json' | 'csv';
@@ -452,8 +455,8 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             types: {
               type: 'string',
               description:
-                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,securityEvents,game,packs,readingActivity,calls. ' +
-                'Defaults to all eleven.',
+                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,securityEvents,game,packs,readingActivity,calls,relations. ' +
+                'Defaults to all of them.',
             },
             limit: {
               type: 'string',
@@ -568,6 +571,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
                   game: gameExportSchema,
                   packs: packsExportSchema,
                   readingActivity: readingActivityExportSchema,
+                  relations: relationsExportSchema,
                   calls: { type: 'array', items: callExportItemSchema, nullable: true },
                   callsCount: { type: 'integer', nullable: true },
                   callsHasMore: { type: 'boolean', nullable: true },
@@ -821,6 +825,10 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
           exportData.readingActivity = await exportReadingActivity(fastify.prisma, userId, page);
         }
 
+        if (requestedTypes.includes('relations')) {
+          exportData.relations = await exportRelations(fastify.prisma, userId, page);
+        }
+
         if (requestedTypes.includes('packs')) {
           const sections = await exportPacks(fastify.prisma, userId, page);
           exportData.packs = {
@@ -915,6 +923,13 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
           if (calls.length > 0) {
             const flat = calls.map((row) => ({ ...row, analytics: JSON.stringify(row.analytics ?? null), feedback: JSON.stringify(row.feedback ?? null) }));
             csvSections.calls = toCsv(Object.keys(flat[0]), flat);
+          }
+
+          // Les cercles (#14400) : une table par liste ; mes passages et mes dates de retrait voyagent en JSON dans leur cellule.
+          const relations = exportData.relations as Record<string, Record<string, unknown>[]> | undefined;
+          for (const childKey of ['links', 'interactionDays', 'consents'] as const) {
+            const flat = (relations?.[childKey] ?? []).map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value !== null && typeof value === 'object' ? JSON.stringify(value) : value])));
+            if (flat.length > 0) csvSections[`relations.${childKey}`] = toCsv(Object.keys(flat[0]), flat);
           }
 
           exportData.csv = csvSections;

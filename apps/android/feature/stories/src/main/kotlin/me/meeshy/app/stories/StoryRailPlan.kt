@@ -32,16 +32,32 @@ data class StoryRailPlan(
             canReply: Boolean = false,
             canCompose: Boolean = false,
             commentCount: Int = 0,
+            /** La loi du repartage n'offre RIEN à une story de Sang (RG-18, #13939) : pas de bouton pour un choix vide. */
+            isRepublishable: Boolean = true,
         ): StoryRailPlan =
             StoryRailPlan(
                 showsReact = !isOwnStory,
                 showsLanguage = hasTranslatableContent,
                 showsReply = StoryReplyRules.railOffersReply(isOwnStory, canReply),
                 showsSend = true,
-                showsRepost = !isOwnStory,
+                showsRepost = !isOwnStory && isRepublishable,
                 showsViews = isOwnStory,
                 showsCompose = !isOwnStory && canCompose,
                 showsComments = commentCount > 0,
+            )
+    }
+}
+
+/**
+ * **Le cadre du rail** (#14394, iOS `sidebarMaxHeight`) : entre le bas de l'en-tête et le haut MESURÉ du composeur
+ * épinglé, à [gapPx] de chacun. Le rail défile s'il ne tient pas ; il ne recouvre jamais le ⌄ ni la pastille de langue.
+ */
+data class StoryRailFrame(val topPx: Int, val bottomPx: Int) {
+    companion object {
+        fun of(headerBottomPx: Int, composerHeightPx: Int, composerPinned: Boolean, gapPx: Int): StoryRailFrame =
+            StoryRailFrame(
+                topPx = headerBottomPx + gapPx,
+                bottomPx = (if (composerPinned) composerHeightPx else 0) + gapPx,
             )
     }
 }

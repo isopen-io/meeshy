@@ -15,6 +15,9 @@ import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.FeedGeneration
+import me.meeshy.sdk.model.FeedMergeLaws
+import me.meeshy.sdk.model.PostReactionSummaryLaw
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.DiscoverabilityPrecision
@@ -80,6 +83,10 @@ class PostRepository @Inject constructor(
 
     private val diskRestore = FeedDiskRestore(feedDisk)
 
+    /** Une page demandee avant un tirer-pour-rafraichir est ignoree a son retour : elle suivait une liste qui n'existe plus. */
+    private val generation = FeedGeneration()
+    private val detailMemo = PostDetailMemo()
+
     // Cursor pagination state (port of FeedViewModel.nextCursor / hasMore).
     @Volatile
     private var feedCursor: String? = null
@@ -98,13 +105,7 @@ class PostRepository @Inject constructor(
     /** Whether older feed pages remain to be fetched (drives the infinite-scroll trigger). */
     val feedHasMore: StateFlow<Boolean> = _feedHasMore.asStateFlow()
 
-    /**
-     * A synchronous read of whatever the feed's in-memory cache currently holds — the
-     * Reels surface's cold-start seed (ARCHITECTURE.md §4, cache-first). Opening Reels
-     * from the Feed can render the video posts the Feed already loaded INSTANTLY, no
-     * spinner, while the real affinity thread loads in the background. `null` when the
-     * feed has never synced (a true cold start with nothing cached).
-     */
+    /** Lecture synchrone du fil en memoire : l'amorce a froid de Reels (cache-first) ; `null` si le fil n'a jamais ete synchronise. */
     val feedCacheSnapshot: List<ApiPost>?
         get() = _feedCache.value
 
@@ -126,7 +127,7 @@ class PostRepository @Inject constructor(
             .transformLatest { (data, syncedAt) ->
                 if (data == null) {
                     emit(CacheResult.Empty)
-                    revalidateFeed(onSyncError)
+                    revalidateFeed(onError = onSyncError)
                     return@transformLatest
                 }
                 val age = syncedAt?.let { clock.nowMillis() - it } ?: Long.MAX_VALUE
@@ -134,11 +135,11 @@ class PostRepository @Inject constructor(
                     age <= policy.freshForMillis -> emit(CacheResult.Fresh(data, age))
                     age <= policy.keepForMillis -> {
                         emit(CacheResult.Stale(data, age))
-                        revalidateFeed(onSyncError)
+                        revalidateFeed(onError = onSyncError)
                     }
                     else -> {
                         emit(CacheResult.Syncing(data))
-                        revalidateFeed(onSyncError)
+                        revalidateFeed(onError = onSyncError)
                     }
                 }
             }
@@ -166,7 +167,8 @@ class PostRepository @Inject constructor(
      */
     suspend fun refreshReporting(): Throwable? {
         var failure: Throwable? = null
-        revalidateFeed { failure = it }
+        generation.advance()
+        revalidateFeed(preserveLoadedPages = false) { failure = it }
         return failure
     }
 
@@ -206,9 +208,11 @@ class PostRepository @Inject constructor(
 
     /** The feed held in memory belongs to the signed-in account: a second account starts cold. */
     override suspend fun clear() {
+        generation.advance()
         diskRestore.reset()
         _feedCache.value = null
         _feedSyncedAt.value = null
+        detailMemo.clear()
         feedCursor = null
         _feedHasMore.value = true
         likeFlips.clear()
@@ -217,6 +221,18 @@ class PostRepository @Inject constructor(
 
     /** The post as the feed cache holds it, or `null` when it is not there. */
     fun cachedPost(postId: String): ApiPost? = _feedCache.value?.firstOrNull { it.id == postId }
+
+    /**
+     * Ce que l'appareil connaît déjà de ce post, sans réseau (#14467) : la carte du fil, sinon le dernier post qu'un détail
+     * a lu, sinon le fil gardé sur le disque. Ne suspend pas quand la mémoire le tient : le détail se peint dès sa première
+     * image.
+     */
+    suspend fun knownPost(postId: String): ApiPost? {
+        cachedPost(postId)?.let { return it }
+        detailMemo.get(postId)?.let { return it }
+        restoreFromDisk()
+        return cachedPost(postId)
+    }
 
     /**
      * The explicit-state twin of [toggleLike], for a surface that owns the post itself (the
@@ -398,18 +414,13 @@ class PostRepository @Inject constructor(
         }
     }
 
-    /**
-     * Infinite-scroll pagination (port of FeedViewModel.loadMoreIfNeeded). Fetches
-     * the page after the current cursor, deduplicates against the in-memory cache and
-     * appends it. The freshness watermark is untouched — older pages do not make the
-     * newest page fresher. Returns whether more pages remain. Silent no-op when the
-     * cursor is exhausted or the network call fails (the user can scroll again).
-     */
+    /** Pagination infinie : la page apres le curseur, sans doublon ; le filigrane de fraicheur ne bouge pas. Rend s'il reste des pages. */
     suspend fun loadMore(): Boolean {
         val cursor = feedCursor
         if (!_feedHasMore.value || cursor == null) return false
         if (_feedCache.value == null) return false
         val ticket = fence?.currentTicket()
+        val token = generation.current()
         return when (val result = rawApiCall { postApi.getFeed(cursor, FEED_PAGE_SIZE) }) {
             is NetworkResult.Success -> {
                 val response = result.data
@@ -418,14 +429,9 @@ class PostRepository @Inject constructor(
                 fence.commitOrWrite(ticket) {
                     // Une page ne prolonge que le fil dont elle suit le curseur : un rafraîchissement arrivé pendant la requête
                     // a remplacé ce fil, y coudre la page cacherait les posts entre sa fin et l'ancien curseur.
-                    if (feedCursor != cursor) return@commitOrWrite
+                    if (feedCursor != cursor || !generation.isCurrent(token)) return@commitOrWrite
                     // Fusionné sur le fil COURANT au moment d'écrire : une mise à jour arrivée pendant la requête survit.
-                    _feedCache.update { current ->
-                        current?.let { rows ->
-                            val existingIds = rows.mapTo(HashSet()) { it.id }
-                            rows + page.filter { it.id !in existingIds }
-                        }
-                    }
+                    _feedCache.update { current -> current?.let { FeedMergeLaws.appendingPage(it, page) } }
                     feedCursor = response.pagination?.nextCursor
                     _feedHasMore.value = response.pagination?.hasMore ?: false
                 } ?: return false
@@ -435,7 +441,7 @@ class PostRepository @Inject constructor(
         }
     }
 
-    private suspend fun revalidateFeed(onError: (Throwable) -> Unit = {}) {
+    private suspend fun revalidateFeed(preserveLoadedPages: Boolean = true, onError: (Throwable) -> Unit = {}) {
         val ticket = fence?.currentTicket()
         try {
             when (val result = rawApiCall { postApi.getFeed(null, FEED_PAGE_SIZE) }) {
@@ -446,14 +452,20 @@ class PostRepository @Inject constructor(
                         onError(Exception(response.error ?: response.message ?: "Unknown error"))
                         return
                     }
+                    val pendingLikes = outboxRepository.pendingLikeStates()
+                    var kept: List<ApiPost> = page
                     val committed = fence.commitOrWrite(ticket) {
-                        _feedCache.value = page
-                        page.forEach { likeFlips.forgetPost(it.id); bookmarkFlips.forgetPost(it.id) }
+                        val revalidated = FeedMergeLaws.revalidated(page, _feedCache.value.orEmpty(), pendingLikes, preserveLoadedPages)
+                        kept = revalidated.posts
+                        _feedCache.value = kept
+                        page.filter { it.id !in pendingLikes }.forEach { likeFlips.forgetPost(it.id); bookmarkFlips.forgetPost(it.id) }
                         _feedSyncedAt.value = clock.nowMillis()
-                        feedCursor = response.pagination?.nextCursor
-                        _feedHasMore.value = response.pagination?.hasMore ?: false
+                        if (!revalidated.keepsDeeperCursor) {
+                            feedCursor = response.pagination?.nextCursor
+                            _feedHasMore.value = response.pagination?.hasMore ?: false
+                        }
                     }
-                    if (committed != null) feedDisk.keep(page, ticket)
+                    if (committed != null) feedDisk.keep(FeedMergeLaws.capForDisk(kept), ticket)
                 }
                 is NetworkResult.Failure -> onError(Exception(result.error.message))
             }
@@ -559,8 +571,12 @@ class PostRepository @Inject constructor(
     suspend fun delete(postId: String): NetworkResult<Unit> =
         apiCall { postApi.delete(postId) }
 
-    suspend fun getPost(postId: String): NetworkResult<ApiPost> =
-        apiCall { postApi.getPost(postId) }
+    suspend fun getPost(postId: String): NetworkResult<ApiPost> {
+        val ticket = fence?.currentTicket()
+        return apiCall { postApi.getPost(postId) }.also { result ->
+            if (result is NetworkResult.Success) fence.commitOrWrite(ticket) { detailMemo.keep(result.data) }
+        }
+    }
 
     /**
      * **Non-durable.** Hits the network directly with no outbox row — unlike
@@ -820,6 +836,10 @@ class PostRepository @Inject constructor(
     suspend fun applyPostUpdate(updated: ApiPost): Boolean =
         fence.commitOrWrite(fence?.currentTicket()) { foldIntoCache(updated.id) { PostUpdateMerge.merge(it, updated) } } ?: false
 
+    /** Le compte absolu de [emoji] (`post:reaction-*`) sur la ligne du fil ; `false` : ligne absente ou compte deja a jour. */
+    suspend fun applyReactionCount(postId: String, emoji: String, count: Int): Boolean =
+        fence.commitOrWrite(fence?.currentTicket()) { foldIntoCache(postId) { PostReactionSummaryLaw.applying(it, emoji, count) } } ?: false
+
     /**
      * On-demand translation for a post the caller already holds (the post-detail
      * surface owns its post outside the feed cache): blocking-translates [post]'s
@@ -890,11 +910,12 @@ class PostRepository @Inject constructor(
         clientMutationId: String? = null,
         originalLanguage: String? = null,
         attachmentIds: List<String>? = null,
+        location: SharedPlace? = null,
     ): NetworkResult<ApiPostComment> =
         apiCall {
             postApi.addComment(
                 postId,
-                CreateCommentRequest(content, parentId, effectFlags, originalLanguage, attachmentIds?.takeIf { it.isNotEmpty() }),
+                CreateCommentRequest(content, parentId, effectFlags, originalLanguage, attachmentIds?.takeIf { it.isNotEmpty() }, location),
                 clientMutationId,
             )
         }

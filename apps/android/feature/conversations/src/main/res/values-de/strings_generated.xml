@@ -90,6 +90,7 @@
     <string name="conversations_preview_hidden">Verborgene Nachricht</string>
     <string name="conversations_preview_loading">Wird geladen…</string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
+    <string name="conversations_preview_sticker">Sticker</string>
     <string name="conversations_preview_typing">%1$s schreibt</string>
     <string name="conversations_preview_view_once">Einmal-Nachricht</string>
     <string name="conversations_preview_you">Du</string>
@@ -149,22 +150,27 @@
     <string name="encryption_create_header">Verschlüsselung</string>
     <string name="encryption_mode_e2ee_description">Nur deine Geräte und die der Teilnehmenden lesen die Nachrichten. Die Übersetzung erfolgt auf deinem Gerät.</string>
     <string name="encryption_mode_e2ee_label">Ende-zu-Ende</string>
-    <string name="encryption_mode_hybrid_description">Auf unseren Servern verschlüsselt, wie Server. Die doppelte Verschlüsselung durch deine Geräte kommt bald.</string>
+    <string name="encryption_mode_hybrid_description">Auf unseren Servern verschlüsselt; zwischen kompatiblen Geräten lässt sich mit einer zweiten Schicht prüfen, dass eine Textnachricht unterwegs nicht verändert wurde.</string>
     <string name="encryption_mode_hybrid_label">Hybrid</string>
     <string name="encryption_mode_server_description">Deine Nachrichten werden auf unseren Servern verschlüsselt. Übersetzung, Transkription und Suche funktionieren.</string>
     <string name="encryption_mode_server_label">Server</string>
     <string name="global_search_back">Zurück</string>
+    <string name="global_search_empty_subtitle">Nachrichten, Beiträge, Benutzer</string>
     <plurals name="global_search_members">
         <item quantity="one">%1$d Mitglied</item>
         <item quantity="other">%1$d Mitglieder</item>
     </plurals>
     <string name="global_search_no_results">Keine Ergebnisse</string>
     <string name="global_search_online">Online</string>
+    <string name="global_search_post_kind_post">Beitrag</string>
+    <string name="global_search_post_kind_reel">Reel</string>
+    <string name="global_search_post_kind_story">Story</string>
     <string name="global_search_recent_clear">Löschen</string>
     <string name="global_search_recent_remove">Entfernen</string>
     <string name="global_search_searching">Suche…</string>
     <string name="global_search_tab_conversations">Unterhaltungen</string>
     <string name="global_search_tab_messages">Nachrichten</string>
+    <string name="global_search_tab_posts">Beiträge</string>
     <string name="invite_customize">Optionen anpassen</string>
     <string name="invite_defaultMessage">Komm dazu — reden wir ohne Filter und ohne Barrieren …</string>
     <string name="links_affiliate_action_copy">Empfehlungslink kopieren</string>
@@ -309,7 +315,7 @@
     <string name="my_share_links_status_inactive">Inaktiv</string>
     <string name="my_share_links_title">Freigabelinks</string>
     <string name="my_share_links_toggle">Aktiv</string>
-    <string name="new_conversation_back">Zurück</string>
+    <string name="new_conversation_close">Schließen</string>
     <string name="new_conversation_contacts_empty_subtitle">Suche nach einer Person, um eine Unterhaltung zu beginnen.</string>
     <string name="new_conversation_contacts_empty_title">Keine Kontakte</string>
     <string name="new_conversation_contacts_loading">Kontakte werden geladen</string>

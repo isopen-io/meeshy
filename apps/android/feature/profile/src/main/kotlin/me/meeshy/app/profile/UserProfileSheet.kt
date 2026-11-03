@@ -22,6 +22,8 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -50,6 +52,7 @@ import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.FeedbackToastRequest
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -90,6 +93,7 @@ fun UserProfileSheet(
         { scope.launch { sheetState.hide() }.invokeOnCompletion { latestDismiss() } }
     }
     val toasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 4) }
+    var reportChoiceOpen by remember { mutableStateOf(false) }
     ProfileSheetActionsBinding(state, actionsViewModel, environment, toasts)
     LaunchedEffect(state.content) {
         // L'état VIVANT, pas l'instantané composé : une fiche précédente fermée ne referme pas la suivante.
@@ -112,11 +116,24 @@ fun UserProfileSheet(
                 isExpanded = sheetState.targetValue == SheetValue.Expanded,
                 onClose = close,
                 onRetry = { viewModel.onEvent(UserProfileSheetEvent.Retry) },
-                actions = actionsViewModel.callbacks(state, environment),
+                actions = actionsViewModel.callbacks(state, environment) { reportChoiceOpen = true },
                 catalog = catalog,
             )
             ConnectionFeedbackHost(feedback = actionsViewModel.connectionFeedback)
             FeedbackToastHost(toasts = toasts)
+            if (reportChoiceOpen) {
+                ProfileReportQuickDialog(
+                    onReason = { reason ->
+                        reportChoiceOpen = false
+                        actionsViewModel.report(reason)
+                    },
+                    onMoreDetails = {
+                        reportChoiceOpen = false
+                        state.profile?.let { environment.onReport(it.id, it.username) }
+                    },
+                    onDismiss = { reportChoiceOpen = false },
+                )
+            }
         }
     }
 }
@@ -141,11 +158,15 @@ private fun ProfileSheetActionsBinding(
         }
     }
     val latest by rememberUpdatedState(environment)
+    val haptics = rememberMeeshyHaptics()
     LaunchedEffect(actionsViewModel) {
         actionsViewModel.events.collect { event ->
             when (event) {
                 is ProfileActionEvent.OpenConversation -> latest.onOpenConversation(event.conversationId)
-                is ProfileActionEvent.Toast -> toasts.tryEmit(event.feedback.toToastRequest())
+                is ProfileActionEvent.Toast -> {
+                    if (event.feedback.isError) haptics.error() else haptics.success()
+                    toasts.tryEmit(event.feedback.toToastRequest())
+                }
                 is ProfileActionEvent.Call -> latest.onCall?.invoke(event.request)
             }
         }
@@ -155,6 +176,7 @@ private fun ProfileSheetActionsBinding(
 private fun ProfileActionsViewModel.callbacks(
     state: UserProfileSheetUiState,
     environment: ProfileSheetEnvironment,
+    onReportChoice: () -> Unit,
 ): ProfileActionCallbacks = ProfileActionCallbacks(
     onSendMessage = this::sendMessage,
     onRequest = this::requestConnection,
@@ -164,10 +186,8 @@ private fun ProfileActionsViewModel.callbacks(
     onDecline = this::declineConnection,
     onBlock = this::block,
     onUnblock = this::unblock,
-    onReport = {
-        val profile = state.profile
-        if (profile != null) environment.onReport(profile.id, profile.username)
-    },
+    onRaise = this::requestRaise,
+    onReport = { if (state.profile != null) onReportChoice() },
     onCall = { isVideo ->
         call(isVideo, state.profile?.let { it.displayName ?: it.username } ?: state.user.resolvedDisplayName)
     },
@@ -293,6 +313,10 @@ private fun ProfileActionFeedback.toToastRequest(): FeedbackToastRequest = Feedb
         ProfileActionFeedback.UnblockFailed -> R.string.profile_toast_unblock_failed
         ProfileActionFeedback.OpenConversationFailed -> R.string.profile_open_conversation_error
         ProfileActionFeedback.CallNotPlaced -> R.string.profile_call_not_placed
+        ProfileActionFeedback.RaiseSent -> me.meeshy.ui.R.string.connection_toast_request_sent
+        ProfileActionFeedback.RaiseFailed -> me.meeshy.ui.R.string.connection_toast_request_send_failed
+        ProfileActionFeedback.ReportSent -> R.string.profile_toast_report_sent
+        ProfileActionFeedback.ReportFailed -> R.string.profile_toast_report_failed
     },
     kind = if (isError) FeedbackKind.Error else FeedbackKind.Success,
 )

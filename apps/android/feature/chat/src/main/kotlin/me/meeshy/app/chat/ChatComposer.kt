@@ -149,14 +149,17 @@ internal fun ChatComposer(
     val isComposing = ConversationComposerFold.isComposing(isFocused = fieldFocused, isRecording = voice.isRecording)
     // Clavier baissé (retour système) = le champ rend la main, comme `resignFirstResponder` sur
     // iOS : sans cela le champ resterait focalisé et le ⌄ ne reviendrait jamais.
+    val dock = rememberComposerDock(rememberComposerKeyboardState())
+    val attachmentTrayOpen = dock.attachmentPanelOpen
+    val emojiPickerOpen = dock.emojiPanelOpen
     val density = LocalDensity.current
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
     var imeWasVisible by remember { mutableStateOf(false) }
     LaunchedEffect(imeVisible) {
+        if (imeWasVisible && !imeVisible) dock.keyboardHidden()
         if (imeWasVisible && !imeVisible && fieldFocused) focusManager.clearFocus()
         imeWasVisible = imeVisible
     }
-    var attachmentTrayOpen by remember { mutableStateOf(false) }
     var ephemeralRailOpen by remember { mutableStateOf(false) }
     var effectsPanelOpen by remember { mutableStateOf(false) }
     // La flèche de la pilule d'enregistrement envoie TOUT DE SUITE (iOS) : la prise rejoint le
@@ -174,7 +177,6 @@ internal fun ChatComposer(
         }
     }
     var cameraChooserOpen by remember { mutableStateOf(false) }
-    var emojiPickerOpen by remember { mutableStateOf(false) }
     val ladderTiles = remember(affordances, onLocationRequest != null, guestAllowance, configuration) {
         ComposerAttachmentLadder.tiles(
             affordances,
@@ -298,11 +300,11 @@ internal fun ChatComposer(
         interact()
         focusManager.clearFocus()
         haptics.light()
-        attachmentTrayOpen = false
+        dock.closePanels()
         ephemeralRailOpen = false
         effectsPanelOpen = false
         cameraChooserOpen = false
-        emojiPickerOpen = false
+        dock.closePanels()
         fieldFocused = false
         minimized = true
     }
@@ -313,12 +315,12 @@ internal fun ChatComposer(
         onMinimizeOutcome = { outcome ->
             when (outcome) {
                 ComposerMinimizeOutcome.MINIMIZE -> {
-                    attachmentTrayOpen = false
+                    dock.closePanels()
                     focusManager.clearFocus()
                     minimized = true
                 }
                 ComposerMinimizeOutcome.DISMISS_SURFACES -> {
-                    attachmentTrayOpen = false
+                    dock.closePanels()
                     focusManager.clearFocus()
                 }
                 ComposerMinimizeOutcome.REBOUND -> Unit
@@ -379,6 +381,7 @@ internal fun ChatComposer(
                         onClear = onClearEffects,
                         onDone = { effectsPanelOpen = false },
                         inline = true,
+                        sections = configuration.effectSections,
                         modifier = Modifier
                             .padding(start = MeeshySpacing.sm, end = MeeshySpacing.sm, top = MeeshySpacing.sm)
                             .clip(RoundedCornerShape(MeeshyRadius.lg))
@@ -423,7 +426,7 @@ internal fun ChatComposer(
                             null
                         },
                         accentColor = accentColor,
-                        onFold = if (foldable && ConversationComposerFold.offersFoldButton(minimized, isComposing)) fold else null,
+                        onFold = if (foldable && configuration.offersFold(minimized, isComposing)) fold else null,
                         configuration = configuration,
                         onSticker = openStickers,
                     )
@@ -476,7 +479,8 @@ internal fun ChatComposer(
                             },
                             onQuickEmojiLongPress = {
                                 interact()
-                                emojiPickerOpen = true
+                                focusManager.clearFocus()
+                                dock.openEmojiPanel()
                             },
                             focusRequester = focusRequester,
                             placeholder = placeholder,
@@ -484,23 +488,23 @@ internal fun ChatComposer(
                                 fieldFocused = focused
                                 if (focused) {
                                     interact()
-                                    attachmentTrayOpen = false
+                                    dock.fieldFocused()
                                 }
                             },
                             onToggleTray = {
                                 interact()
                                 if (attachmentTrayOpen) {
-                                    attachmentTrayOpen = false
+                                    dock.closePanels()
                                     runCatching { focusRequester.requestFocus() }
                                 } else {
                                     focusManager.clearFocus()
-                                    attachmentTrayOpen = true
+                                    dock.toggleAttachmentPanel()
                                 }
                             },
                             onFieldChange = { typed ->
                                 val bounded = configuration.bounded(typed.text)
                                 val newValue = if (bounded == typed.text) typed else TextFieldValue(bounded, TextRange(bounded.length))
-                                if (newValue.text != fieldValue.text) attachmentTrayOpen = false
+                                if (newValue.text != fieldValue.text && dock.state.isPanelOpen) dock.fieldFocused()
                                 fieldValue = newValue
                                 onDraftChange(newValue.text)
                             },
@@ -524,7 +528,7 @@ internal fun ChatComposer(
                             onPickFile = onPickFile,
                             onPickUri = onPickUris?.let { stage -> { uri: Uri -> stage(listOf(uri)) } },
                             onEdit = { picked ->
-                                attachmentTrayOpen = false
+                                dock.closePanels()
                                 ioScope.launch {
                                     val now = System.currentTimeMillis()
                                     val opened = when {
@@ -538,23 +542,28 @@ internal fun ChatComposer(
                             },
                         )
                     }
+                    ComposerPanelSlot(minHeight = dock.attachmentPanelHeight()) {
                     ComposerAttachmentTray(
                         tiles = ladderTiles,
                         recentMedia = recentStrip.takeIf { configuration.offers(ComposerCapability.PHOTO_LIBRARY) },
                         onTileClick = { kind ->
-                            attachmentTrayOpen = false
+                            dock.closePanels()
                             when (kind) {
                                 AttachmentTileKind.Photo -> openPhotos()
                                 AttachmentTileKind.File ->
                                     if (guestAllowance.isRestricted) guestSheetOpen = true else filePicker.launch("*/*")
                                 AttachmentTileKind.Voice -> voice.request()
                                 AttachmentTileKind.Camera -> cameraChooserOpen = true
-                                AttachmentTileKind.Emoji -> emojiPickerOpen = true
+                                AttachmentTileKind.Emoji -> dock.openEmojiPanel()
                                 AttachmentTileKind.Location -> onLocationRequest?.invoke()
                                 AttachmentTileKind.Contact -> pickContactCard()
                             }
                         },
                     )
+                    }
+                }
+                if (emojiPickerOpen && !voice.isRecording && !affordances.isReadOnly) {
+                    ComposerEmojiPanel(accentColor = accentColor, onSelect = ::insertEmoji)
                 }
             }
         },
@@ -575,9 +584,6 @@ internal fun ChatComposer(
             },
             onDismiss = { guestSheetOpen = false },
         )
-    }
-    if (emojiPickerOpen) {
-        ComposerEmojiSheet(accentColor, onSelect = ::insertEmoji, onDismiss = { emojiPickerOpen = false })
     }
 }
 

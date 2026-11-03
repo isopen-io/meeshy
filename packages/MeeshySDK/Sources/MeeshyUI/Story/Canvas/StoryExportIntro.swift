@@ -382,8 +382,8 @@ public enum StoryExportIntro {
     }
 
     /// Encode l'image en un clip vidéo muet de `duration`, prêt à être inséré
-    /// en tête d'une composition. Deux images suffisent — première et dernière —
-    /// l'image étant fixe : inutile d'encoder 66 frames identiques.
+    /// en tête d'une composition. Une seule image suffit, l'image étant fixe :
+    /// inutile d'encoder 51 frames identiques.
     public static func makeClip(image: CGImage,
                                 duration: TimeInterval,
                                 size: CGSize) async throws -> URL {
@@ -397,14 +397,6 @@ public enum StoryExportIntro {
         ]
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
         input.expectsMediaDataInRealTime = false
-        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
-            assetWriterInput: input,
-            sourcePixelBufferAttributes: [
-                kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32ARGB),
-                kCVPixelBufferWidthKey as String: Int(size.width),
-                kCVPixelBufferHeightKey as String: Int(size.height)
-            ]
-        )
         guard writer.canAdd(input) else { throw IntroError.writerRejectedInput }
         writer.add(input)
         // Même règle que la jumelle `StoryExporter` : `startSession` après un
@@ -413,15 +405,23 @@ public enum StoryExportIntro {
         guard writer.startWriting() else { throw IntroError.writerCannotStart(writer.error) }
         writer.startSession(atSourceTime: .zero)
 
-        guard let buffer = pixelBuffer(from: image, size: size) else {
+        // UNE seule frame, qui DURE tout le clip dans le média lui-même. Posée
+        // par l'adaptateur, elle ne durait qu'un quinzième de seconde et seule la
+        // liste d'éditions de `endSession` annonçait `duration` : le décodeur
+        // devait servir des instants sans média, et l'export qui compose ce clip
+        // échouait par intermittence en -11821 (#14495). Une seconde frame posée
+        // à `duration` la faisait au contraire TENIR au-delà, et le clip durait
+        // le double (mesuré 4,4 s pour 2,2 s demandées).
+        let end = CMTime(seconds: duration, preferredTimescale: 600)
+        guard let buffer = pixelBuffer(from: image, size: size),
+              let frame = stillSample(buffer, lasting: end) else {
             writer.cancelWriting()
             throw IntroError.pixelBufferCreationFailed
         }
-        // UNE seule frame, et c'est `endSession` qui fixe la durée. Poser une
-        // seconde frame à `duration` la ferait au contraire TENIR à partir de
-        // là, et le clip durait le double (mesuré 4,4 s pour 2,2 s demandées).
-        let end = CMTime(seconds: duration, preferredTimescale: 600)
-        adaptor.append(buffer, withPresentationTime: .zero)
+        guard input.append(frame) else {
+            writer.cancelWriting()
+            throw IntroError.encodingFailed(writer.error)
+        }
         input.markAsFinished()
         writer.endSession(atSourceTime: end)
         await writer.finishWriting()
@@ -429,6 +429,24 @@ public enum StoryExportIntro {
             throw IntroError.encodingFailed(writer.error)
         }
         return url
+    }
+
+    /// L'échantillon de l'image fixe, présenté à zéro et qui dure `duration`.
+    private static func stillSample(_ buffer: CVPixelBuffer, lasting duration: CMTime) -> CMSampleBuffer? {
+        var format: CMVideoFormatDescription?
+        guard CMVideoFormatDescriptionCreateForImageBuffer(allocator: kCFAllocatorDefault,
+                                                           imageBuffer: buffer,
+                                                           formatDescriptionOut: &format) == noErr,
+              let format else { return nil }
+        var timing = CMSampleTimingInfo(duration: duration, presentationTimeStamp: .zero,
+                                        decodeTimeStamp: .invalid)
+        var sample: CMSampleBuffer?
+        guard CMSampleBufferCreateReadyWithImageBuffer(allocator: kCFAllocatorDefault,
+                                                       imageBuffer: buffer,
+                                                       formatDescription: format,
+                                                       sampleTiming: &timing,
+                                                       sampleBufferOut: &sample) == noErr else { return nil }
+        return sample
     }
 
     private static func pixelBuffer(from image: CGImage, size: CGSize) -> CVPixelBuffer? {
@@ -546,13 +564,13 @@ public enum StoryExportIntro {
         videoComposition.frameDuration = StoryExportFrameRate.frameDuration
         videoComposition.renderSize = renderSize
 
-        // Audio — la signature sonore s'estompe sur le fondu (pas de bascule
-        // sonore brutale) ; le son PROPRE de la story démarre plein à `holdDuration`
-        // (jamais atténué — c'est le contenu de l'auteur).
+        // Audio — la signature sonore joue EN ENTIER ; le son de la story lui
+        // fait place et monte sous sa queue (`StoryExportJingleMix`).
         let audioMix = AVMutableAudioMix()
-        let jingleParams = AVMutableAudioMixInputParameters(track: jingleAudio)
-        jingleParams.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fadeRange)
-        audioMix.inputParameters = [jingleParams]
+        let storyParams = AVMutableAudioMixInputParameters(track: storyAudio)
+        StoryExportBranding.applyStoryEnvelope(to: storyParams, story: CMTimeRange(start: storyStart, duration: storyDuration),
+                                               introJingleEnd: jingleDuration)
+        audioMix.inputParameters = [storyParams]
 
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("meeshy-story-\(UUID().uuidString).mp4")

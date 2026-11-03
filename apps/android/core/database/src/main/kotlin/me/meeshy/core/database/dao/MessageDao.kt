@@ -128,6 +128,52 @@ public interface MessageDao {
     )
     public suspend fun deleteMissingSince(conversationId: String, minCreatedAt: Long, ids: List<String>)
 
+    /** The rows [deleteMissing] would prune, read in the same transaction before it (#14655). */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "AND sendState IS NULL AND id NOT IN (:ids)",
+    )
+    public suspend fun missing(conversationId: String, ids: List<String>): List<MessageEntity>
+
+    /** The rows [deleteMissingSince] would prune, read in the same transaction before it (#14655). */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "AND sendState IS NULL AND createdAt >= :minCreatedAt AND id NOT IN (:ids)",
+    )
+    public suspend fun missingSince(conversationId: String, minCreatedAt: Long, ids: List<String>): List<MessageEntity>
+
+    /**
+     * The rows of a window anchored on an old message (#14670), newest first: [fromMillis] to
+     * [throughMillis], both included. The anchored counterpart of [observeRecentForConversation].
+     */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "AND createdAt >= :fromMillis AND createdAt <= :throughMillis ORDER BY createdAt DESC",
+    )
+    public fun observeRangeForConversation(
+        conversationId: String,
+        fromMillis: Long,
+        throughMillis: Long,
+    ): Flow<List<MessageEntity>>
+
+    /**
+     * Oldest server-acked row among the newest [limit] — the `before` cursor of the RECENT window
+     * (#14670). The cache may hold an older island (a jump to an old message): paging from the
+     * cache's global oldest would leap over the gap between the two.
+     */
+    @Query(
+        "SELECT * FROM (SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "ORDER BY createdAt DESC LIMIT :limit) WHERE sendState IS NULL ORDER BY createdAt ASC LIMIT 1",
+    )
+    public suspend fun oldestSyncedAmongRecent(conversationId: String, limit: Int): MessageEntity?
+
+    /** Oldest server-acked row at or after [fromMillis] — the `before` cursor of an anchored window. */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "AND sendState IS NULL AND createdAt >= :fromMillis ORDER BY createdAt ASC LIMIT 1",
+    )
+    public suspend fun oldestSyncedSince(conversationId: String, fromMillis: Long): MessageEntity?
+
     /** Oldest server-acked row — the `before` cursor for backwards pagination. */
     @Query(
         "SELECT * FROM messages WHERE conversationId = :conversationId " +

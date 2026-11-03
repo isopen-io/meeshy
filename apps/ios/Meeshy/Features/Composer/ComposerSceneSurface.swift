@@ -235,6 +235,7 @@ struct ComposerSceneSurface: View {
     var slideCount: Int = 1
     var restTools: [ComposerRestTool] = []
     var restBackgroundIsMedia = false
+    var restPostText = ""
     var onRestTool: ((ComposerRestTool) -> Void)?
     var moreMenu: AnyView?
     var drawingBar: AnyView?
@@ -442,7 +443,8 @@ struct ComposerSceneSurface: View {
                                          plus: rails.plus,
                                          mediaLongPress: onRailDoorLongPress,
                                          sound: backgroundSoundTrace,
-                                         pasteEntry: railSystemEntry, backgroundIsMedia: restBackgroundIsMedia),
+                                         pasteEntry: railSystemEntry, backgroundIsMedia: restBackgroundIsMedia,
+                                         postText: restPostText),
             selection: ComposerSelectionRail(selection: nil, onUndo: onUndo, onRedo: onRedo),
             objectSelection: selectionColumn.map { ComposerSelectionRail(selection: $0) },
             selectionIsShown: !trailingRailIsShown,
@@ -478,7 +480,9 @@ struct ComposerSceneSurface: View {
                                    sound: backgroundSoundTrace,
                                    pasteEntry: railSystemEntry,
                                    backgroundIsMedia: restBackgroundIsMedia,
-                                   selection: selectionColumn)
+                                   postText: restPostText,
+                                   selection: selectionColumn,
+                                   sceneSideInset: sceneCardLeading - railLaneLeading)
     }
 
     /// **Le volet de description, borné à la CARTE.**

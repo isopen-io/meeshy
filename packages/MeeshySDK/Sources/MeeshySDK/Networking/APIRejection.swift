@@ -171,3 +171,24 @@ struct APIRejectionEnvelope: Decodable {
         )
     }
 }
+
+// MARK: - Le refus servi par la passerelle
+
+public extension APIRejection {
+    /// Le refus tel que la passerelle l'a SERVI : son enveloppe (`success: false`)
+    /// et un `code` machine. `nil` pour tout autre corps — page d'un proxy,
+    /// texte de Traefik, JSON étranger —, que l'appelant ne doit pas lire comme
+    /// une décision de la passerelle (#14693). Sert aux refus qui transportent
+    /// leur corps brut (`MeeshyError.forbidden(reason:body:)`).
+    static func gatewayRefusal(statusCode: Int, body: Data?) -> APIRejection? {
+        guard let body,
+              (try? JSONDecoder().decode(GatewayEnvelopeMark.self, from: body))?.success == false,
+              let envelope = try? JSONDecoder().decode(APIRejectionEnvelope.self, from: body),
+              envelope.code != nil else { return nil }
+        return envelope.rejection(statusCode: statusCode, fallbackMessage: "Refus de la passerelle")
+    }
+}
+
+private struct GatewayEnvelopeMark: Decodable {
+    let success: Bool?
+}
