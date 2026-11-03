@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.story
 
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.StoryComment
 import me.meeshy.sdk.model.appearance.PaintRoleResolver
 
@@ -33,6 +34,10 @@ data class StoryCommentReplyTarget(
 data class StoryCommentComposerState(
     val storyAccentHex: String,
     val reply: StoryCommentReplyTarget? = null,
+    /** Les pièces du plateau (photo, vidéo, fichier, vocal) : le commentaire part avec leurs ids. */
+    val attachments: StoryCommentAttachmentTray = StoryCommentAttachmentTray(),
+    /** Le lieu joint au commentaire. */
+    val place: SharedPlace? = null,
 ) {
     val accentHex: String get() = PaintRoleResolver.normalizedAccent(reply?.authorColorHex ?: storyAccentHex)
 
@@ -48,5 +53,16 @@ data class StoryCommentComposerState(
     val parentIdForSend: String? get() = reply?.rootId
 
     /** Un envoi consomme la cible de réponse : la barre revient au premier niveau. */
-    fun sent(): StoryCommentComposerState = cancelReply()
+    fun sent(): StoryCommentComposerState = copy(reply = null, attachments = StoryCommentAttachmentTray(), place = null)
+
+    /**
+     * Le bouton d'envoi s'allume avec un texte, une pièce ou un lieu — mais jamais pendant qu'une pièce se téléverse
+     * (le commentaire attend ses médias, il ne part pas sans eux).
+     */
+    fun canSend(text: String): Boolean =
+        !attachments.isUploading && (text.isNotBlank() || attachments.hasMedia || place != null)
+
+    /** Un brouillon rouvert, ou un commentaire refusé revenu : ses pièces et son lieu reprennent leur place. */
+    fun restoring(draft: StoryCommentDraft): StoryCommentComposerState =
+        copy(attachments = attachments.restoring(draft.pieces), place = draft.place ?: place)
 }

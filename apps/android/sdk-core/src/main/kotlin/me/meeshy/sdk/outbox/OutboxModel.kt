@@ -327,6 +327,10 @@ public data class CommentPayload(
     val content: String,
     val parentId: String? = null,
     val originalLanguage: String? = null,
+    /** Medias already uploaded under the `comment` context that leave with the comment (#15448). Absent on old rows. */
+    val attachmentIds: List<String>? = null,
+    val effectFlags: Int? = null,
+    val location: me.meeshy.sdk.model.SharedPlace? = null,
 )
 
 /**
