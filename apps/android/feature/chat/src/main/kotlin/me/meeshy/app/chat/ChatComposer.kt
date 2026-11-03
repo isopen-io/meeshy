@@ -147,6 +147,7 @@ internal fun ChatComposer(
         receivePicked,
     )
     val openPhotos: () -> Unit = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
+    PasteContentReceiverEffect(onPickFile)
     val voice = rememberComposerVoice(onStageVoiceFile, onPickFile)
     me.meeshy.ui.component.permission.PermissionFlowHost(voice.permissions, accent = accentColor)
     var minimized by rememberSaveable { mutableStateOf(false) }

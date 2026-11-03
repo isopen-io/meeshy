@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PersistableBundle
+import me.meeshy.sdk.model.paste.ExpiringClipboardPolicy
 
 /**
  * Règle pure de l'effacement du presse-papiers sensible (miroir de `ExpiringClipboard`
@@ -15,7 +16,7 @@ import android.os.PersistableBundle
  * ÉCRIT : un contenu copié depuis par l'utilisateur n'est jamais détruit.
  */
 public object SensitiveClipboardPolicy {
-    public const val CLEAR_DELAY_MS: Long = 30_000L
+    public const val CLEAR_DELAY_MS: Long = ExpiringClipboardPolicy.LIFETIME_MS
 
     public fun shouldClear(written: String, current: String?): Boolean = current == written
 }
@@ -33,14 +34,15 @@ public class SensitiveClipboard(context: Context) {
         val clip = ClipData.newPlainText(label, text)
         clip.description.extras = PersistableBundle().apply { putBoolean(EXTRA_IS_SENSITIVE, true) }
         manager.setPrimaryClip(clip)
-        handler.postDelayed({ clearIfUnchanged(manager, text) }, SensitiveClipboardPolicy.CLEAR_DELAY_MS)
+        val fingerprint = ExpiringClipboardPolicy.fingerprint(text)
+        handler.postDelayed({ clearIfUnchanged(manager, fingerprint) }, ExpiringClipboardPolicy.LIFETIME_MS)
     }
 
-    private fun clearIfUnchanged(manager: ClipboardManager, written: String) {
+    private fun clearIfUnchanged(manager: ClipboardManager, writtenFingerprint: String) {
         val current = runCatching {
             manager.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
         }.getOrNull()
-        if (!SensitiveClipboardPolicy.shouldClear(written, current)) return
+        if (!ExpiringClipboardPolicy.shouldClear(writtenFingerprint, current)) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             manager.clearPrimaryClip()
         } else {
