@@ -24,6 +24,7 @@ import me.meeshy.sdk.outbox.OutboxPlaintextAdmission
 import me.meeshy.sdk.outbox.ConsumeAfterReadPayload
 import me.meeshy.sdk.outbox.ConsumeViewOncePayload
 import me.meeshy.sdk.outbox.PinPayload
+import me.meeshy.sdk.outbox.SendFailureClassifier
 import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.outbox.toSendResult
 import me.meeshy.sdk.outbox.withPayload
@@ -50,7 +51,7 @@ public class SendMessageHandler @Inject constructor(
                     messageRepository.reconcileSent(row.cmid, result.data)
                     SendResult.Success
                 }
-                is NetworkResult.Failure -> PlaintextRefusal.of(result, row.targetId, ledger) ?: SendResult.TransientFailure
+                is NetworkResult.Failure -> PlaintextRefusal.of(result, row.targetId, ledger) ?: SendFailureClassifier.classify(result.error)
             }
         }
 
