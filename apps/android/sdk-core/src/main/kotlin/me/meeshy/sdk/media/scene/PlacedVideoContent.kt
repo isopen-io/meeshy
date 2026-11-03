@@ -2,6 +2,7 @@ package me.meeshy.sdk.media.scene
 
 import kotlin.math.min
 import kotlin.math.sqrt
+import me.meeshy.sdk.model.imageedit.NormalizedCrop
 import me.meeshy.sdk.model.scene.export.StoryExportVideoFormat
 
 /** Une couleur moyenne : composantes PRÉMULTIPLIÉES sur 0–255, opacité sur 0–1. */
@@ -68,7 +69,19 @@ internal data class SceneColor(val red: Float, val green: Float, val blue: Float
 }
 
 /** Une région d'une image, en fractions de sa largeur et de sa hauteur. */
-internal data class SceneRegion(val left: Float, val top: Float, val right: Float, val bottom: Float)
+internal data class SceneRegion(val left: Float, val top: Float, val right: Float, val bottom: Float) {
+
+    /** La même région relue dans la source dont [crop] ne garde qu'une fenêtre ; `null` : la source entière. */
+    fun within(crop: NormalizedCrop?): SceneRegion {
+        if (crop == null) return this
+        return SceneRegion(
+            crop.x + left * crop.width,
+            crop.y + top * crop.height,
+            crop.x + right * crop.width,
+            crop.y + bottom * crop.height,
+        )
+    }
+}
 
 /**
  * Un instant relu dans le cadre d'une vidéo posée : ce qu'elle doit y montrer ([expected], son image sous son look et à

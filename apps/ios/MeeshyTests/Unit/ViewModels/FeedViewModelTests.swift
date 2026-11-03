@@ -2532,6 +2532,12 @@ private final class GatedFeedCacheStore: FeedCacheStoring {
         }
     }
 
+    func removeEverywhere(itemId: String) async {
+        for (key, items) in storage {
+            storage[key] = items.filter { $0.id != itemId }
+        }
+    }
+
     func waitForSaveRequest() async {
         if saveRequestedOnce { return }
         await withCheckedContinuation { saveRequested.append($0) }

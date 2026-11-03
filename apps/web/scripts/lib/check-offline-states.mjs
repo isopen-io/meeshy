@@ -19,6 +19,12 @@
  * 4. « Réessayer » alors que l'appareil est TOUJOURS coupé ne promet rien : le
  *    message reste en échec. Repasser en « en attente » ferait tourner une
  *    horloge pour rien et l'utilisateur croirait que c'est parti.
+ * 5. Au RETOUR du réseau, l'envoi posé hors ligne part SEUL (#14698,
+ *    `outbox-durability-instance.ts` écoute `online`) : l'échec se retire
+ *    sans qu'aucun geste soit demandé, et le message reste dans le fil, UNE
+ *    fois. Exiger un « Réessayer » à ce moment ferait payer à l'utilisateur
+ *    une reprise que le code sait faire (dimension 12) ; le geste reste pour
+ *    l'échec que le réseau revenu ne répare pas (refus, erreur serveur).
  *
  * POURQUOI UN NAVIGATEUR RÉEL. `navigator.onLine`, les événements
  * `online`/`offline` et la coupure elle-même n'existent que là. Aucun test
@@ -209,7 +215,8 @@ export async function checkOfflineStates({ browser, BASE, expect }) {
     for (const what of [
       "réessayer TOUJOURS hors ligne laisse le message en échec",
       "le bandeau disparaît au retour du réseau",
-      "réessayer une fois le réseau revenu retire l'échec",
+      "au retour du réseau, l'envoi part seul : l'échec se retire sans aucun geste",
+      "au retour du réseau, le message reste dans le fil, une seule fois",
     ]) {
       expect(false, `${what} — non vérifiable : aucune bande de reprise`);
     }
@@ -239,13 +246,20 @@ export async function checkOfflineStates({ browser, BASE, expect }) {
       (await page.getByText('Hors ligne', { exact: false }).count()) === 0,
       "le bandeau disparaît au retour du réseau",
     );
-    const clicked = await clickIfPresent(retryGesture(page));
-    await awaitFact(failedBand(page).first(), { state: 'detached' });
+    /* --- 5 : l'envoi part SEUL au retour du réseau (#14698). Aucun clic ici :
+       c'est l'absence de geste qui est la propriété. Le fait attendu est la
+       DISPARITION de la bande, que seul le rejeu automatique peut produire. */
+    const retiredAlone = await awaitFact(failedBand(page).first(), { state: 'detached' });
     expect(
-      clicked && (await failedBand(page).count()) === 0,
-      clicked
-        ? "réessayer une fois le réseau revenu retire l'échec"
-        : "réessayer une fois le réseau revenu retire l'échec — aucun geste de reprise à toucher",
+      retiredAlone && (await failedBand(page).count()) === 0,
+      retiredAlone
+        ? "au retour du réseau, l'envoi part seul : l'échec se retire sans aucun geste"
+        : "au retour du réseau, l'envoi part seul : l'échec se retire sans aucun geste — la bande est restée, rien n'a été rejoué",
+    );
+    const copies = await page.locator('main li').filter({ hasText: 'Un message écrit sans réseau' }).count();
+    expect(
+      copies === 1,
+      `au retour du réseau, le message reste dans le fil, une seule fois (obtenu : ${copies})`,
     );
   }
 
