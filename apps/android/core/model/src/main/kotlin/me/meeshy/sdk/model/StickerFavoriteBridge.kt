@@ -21,7 +21,7 @@ object StickerFavoriteBridge {
             // invisible à jamais, et son emoji de repli ne le remplace pas.
             return StickerTemplateCatalog.template(templateId)?.let { StickerUsageEntry.template(it.id) }
         }
-        return sticker.emoji?.takeIf { it.isNotEmpty() }?.let(StickerUsageEntry::emoji)
+        return sticker.emoji?.takeIf { it.isNotEmpty() }?.let { StickerUsageEntry.emoji(it) }
     }
 
     /** L'état à servir au menu : `null` ⇒ pas d'entrée, sinon « déjà épinglé ? ». */
