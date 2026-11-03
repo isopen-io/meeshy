@@ -152,6 +152,12 @@ object SocketEventNames {
     const val POST_CREATED = "post:created"
     const val POST_DELETED = "post:deleted"
     const val POST_JOIN = "post:join"
+    const val POST_REACTION_ADD = "post:reaction-add"
+    const val POST_REACTION_REMOVE = "post:reaction-remove"
+    const val POST_REACTION_REQUEST_SYNC = "post:reaction-request-sync"
+    const val FEED_SUBSCRIBE = "feed:subscribe"
+    const val FEED_UNSUBSCRIBE = "feed:unsubscribe"
+    const val COMMENT_REACTION_REQUEST_SYNC = "comment:reaction-request-sync"
     const val POST_LEAVE = "post:leave"
     const val POST_LIKED = "post:liked"
     const val POST_REACTION_ADDED = "post:reaction-added"
@@ -368,6 +374,12 @@ object SocketEventNames {
         POST_CREATED,
         POST_DELETED,
         POST_JOIN,
+        POST_REACTION_ADD,
+        POST_REACTION_REMOVE,
+        POST_REACTION_REQUEST_SYNC,
+        FEED_SUBSCRIBE,
+        FEED_UNSUBSCRIBE,
+        COMMENT_REACTION_REQUEST_SYNC,
         POST_LEAVE,
         POST_LIKED,
         POST_REACTION_ADDED,
