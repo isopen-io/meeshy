@@ -57,7 +57,7 @@ class CallQualityDetailViewModel @Inject constructor(
     private fun start() {
         if (subscription?.isActive == true) return
         subscription = feed.readings
-            .onEach(::apply)
+            .onEach(::project)
             .catch { }
             .launchIn(viewModelScope)
     }
@@ -67,7 +67,7 @@ class CallQualityDetailViewModel @Inject constructor(
         subscription = null
     }
 
-    private fun apply(reading: CallQualityReading?) {
+    private fun project(reading: CallQualityReading?) {
         val next = CallQualityDetailUiState(
             rows = CallQualityRows.rows(reading),
             network = CallQualityNetworkContext.from(reading),
