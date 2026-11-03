@@ -242,6 +242,7 @@ private fun ActionMenuPill(menu: IdentityBarElement.ActionMenu, modifier: Modifi
     Box(modifier) {
         PillButton(
             label = menu.label,
+            modifier = Modifier,
             trailing = { Icon(MeeshyIcons.ChevronDown, null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(MeeshyIconSize.xs)) },
             onClick = { expanded = true },
         )

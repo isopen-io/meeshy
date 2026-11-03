@@ -47,6 +47,9 @@
     <string name="feed_notice_reported">تم الإبلاغ عن المنشور</string>
     <string name="feed_notice_repost_failed">خطأ في إعادة النشر</string>
     <string name="feed_notice_translation_failed">خطأ في الترجمة</string>
+    <string name="feed_pending_cancel_send">إلغاء الإرسال</string>
+    <string name="feed_pending_waiting">في انتظار الإرسال</string>
+    <string name="feed_pending_withdrawn">تم إلغاء الإرسال</string>
     <string name="feed_post_deleted">تم حذف المنشور</string>
     <string name="feed_post_open">فتح</string>
     <string name="feed_post_pinned">تم تثبيت المنشور</string>
