@@ -144,6 +144,7 @@
     <string name="call_transcript_participant">مشارك</string>
     <string name="call_transcript_show_original">عرض النص الأصلي</string>
     <string name="call_transcript_show_translated">عرض الترجمة</string>
+    <string name="call_video_permission_denied">الكاميرا: تم رفض الإذن — اضغط لفتح الإعدادات</string>
     <string name="call_zoom_cycle_hint">المس للانتقال إلى مستوى التكبير التالي</string>
     <string name="call_zoom_hint">اسحب لأعلى أو لأسفل للتكبير. على الشاشة، اضغط بإصبعين على صورتك؛ انقر مرتين للعودة إلى 1×</string>
     <string name="call_zoom_label">تكبير كاميرتي</string>

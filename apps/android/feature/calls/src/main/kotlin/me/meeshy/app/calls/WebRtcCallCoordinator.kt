@@ -14,6 +14,7 @@ import me.meeshy.sdk.call.inboundAudioLevel
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallParticipantArrival
 import me.meeshy.sdk.model.call.CallParticipantLeftPayload
+import me.meeshy.sdk.model.call.CallVideoFallback
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.WebRtcError
 import me.meeshy.sdk.socket.CallSignalManager
@@ -105,6 +106,12 @@ class WebRtcCallCoordinator @Inject constructor(
     /** L'installation du pair a échoué (fabrique sans pair) : message précis, l'appel est abandonné. */
     var onSetupFailed: ((message: String) -> Unit)? = null
 
+    /**
+     * La caméra demandée n'a pas pu démarrer (accès refusé, aucune caméra) : l'appel continue en audio seul, le
+     * pair doit l'apprendre comme une caméra coupée (iOS `continueAudioOnly`).
+     */
+    var onVideoUnavailable: ((CallVideoFallback) -> Unit)? = null
+
     /** Les entrées de sous-titres reçues du pair sur le canal de données. */
     val peerCaptions get() = dataChannel.captions
 
@@ -172,7 +179,9 @@ class WebRtcCallCoordinator @Inject constructor(
         speakerOn: Boolean,
         conversationId: String,
     ) {
+        val mutedBeforeTrack = userMuted
         teardown()
+        userMuted = mutedBeforeTrack
         negotiator.begin(callId, peerId, selfId, isCaller)
         iceMonitor.begin(callId, selfId, onMediaConnected, onMediaStalled)
         val cs = scope + SupervisorJob(scope.coroutineContext[Job])
@@ -183,21 +192,25 @@ class WebRtcCallCoordinator @Inject constructor(
         // it is already known (e.g. the user toggled the speaker button while
         // `accept()` was still awaiting the join ACK, before this ran).
         audio.route(speakerOn = speakerOn, isVideo = isVideo)
-        try {
+        val videoUnavailable = try {
             engine.createConnection(iceServers, enableVideo = isVideo)
         } catch (error: WebRtcError) {
             end()
             onSetupFailed?.invoke(error.message ?: "WebRTC setup failed")
             return
         }
+        applyMicrophone()
+        if (mutedBeforeTrack) signals.emitToggleAudio(callId, enabled = false)
+        val sendsVideo = isVideo && !videoUnavailable
         mesh.bind(cs, callId, selfId, isOutgoing = isCaller, primaryUserId = peerId, iceServers = iceServers,
-            sendsAudio = !userMuted && !interrupted, sendsVideo = isVideo, conversationId = conversationId)
-        videoEncoding.begin(cs, wantsVideo = isVideo)
+            sendsAudio = !userMuted && !interrupted, sendsVideo = sendsVideo, conversationId = conversationId)
+        videoEncoding.begin(cs, wantsVideo = sendsVideo)
         negotiator.observe(cs)
         iceMonitor.observe(cs, restartIce = ::restartIceAndRenegotiate)
         dataChannel.observe(cs) { reason ->
             if (mesh.primaryDidLeave()) vacatePrimary() else onRemoteBye?.invoke(reason)
         }
+        if (videoUnavailable) onVideoUnavailable?.invoke(engine.videoFallback ?: CallVideoFallback.NoCamera)
     }
 
     /** Raccroche in-band : le pair passe à Ended immédiatement. `false` si le canal n'est pas ouvert. */
@@ -257,6 +270,25 @@ class WebRtcCallCoordinator @Inject constructor(
         engine.setVideoEnabled(enabled)
         mesh.setSendsVideo(enabled)
         videoEncoding.setUserWantsVideo(enabled)
+    }
+
+    /**
+     * Audio vers vidéo en plein appel (iOS `upgradeToVideo`) : la caméra est acquise, sa piste prend l'émetteur vidéo
+     * et le négociateur émet l'offre, sans couper l'audio. `null` : fait ; sinon pourquoi l'appel reste en audio.
+     */
+    fun upgradeToVideo(): CallVideoFallback? {
+        val failure = engine.upgradeToVideo()
+        if (failure != null) return failure
+        mesh.setSendsVideo(true)
+        videoEncoding.setUserWantsVideo(true)
+        return null
+    }
+
+    /** Vidéo vers audio (iOS `downgradeFromVideo`) : la caméra est libérée (voyant éteint) et le pair renégocie. */
+    fun downgradeFromVideo() {
+        engine.downgradeFromVideo()
+        mesh.setSendsVideo(false)
+        videoEncoding.setUserWantsVideo(false)
     }
 
     /** Le zoom de ma caméra (pincement, objectifs, retour à 1×). */

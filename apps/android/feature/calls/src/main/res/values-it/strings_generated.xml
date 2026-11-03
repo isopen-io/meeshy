@@ -144,6 +144,7 @@
     <string name="call_transcript_participant">Partecipante</string>
     <string name="call_transcript_show_original">Mostra il testo originale</string>
     <string name="call_transcript_show_translated">Mostra la traduzione</string>
+    <string name="call_video_permission_denied">Fotocamera: accesso negato — tocca per aprire Impostazioni</string>
     <string name="call_zoom_cycle_hint">Tocca per passare al fattore di zoom successivo</string>
     <string name="call_zoom_hint">Scorri in alto o in basso per lo zoom. Sullo schermo, pizzica la tua immagine; tocca due volte per tornare a 1×</string>
     <string name="call_zoom_label">Zoom della mia fotocamera</string>

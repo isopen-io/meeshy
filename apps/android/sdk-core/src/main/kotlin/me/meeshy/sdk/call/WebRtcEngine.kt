@@ -14,6 +14,7 @@ import me.meeshy.sdk.call.screen.CallScreenFeeds
 import me.meeshy.sdk.call.screen.CallScreenShareRoute
 import me.meeshy.sdk.call.screen.ScreenFeedFactory
 import me.meeshy.sdk.model.call.CallVideoBudget
+import me.meeshy.sdk.model.call.CallVideoFallback
 import me.meeshy.sdk.model.call.IceCandidateLine
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard.CandidateRoute
@@ -123,9 +124,10 @@ class WebRtcEngine internal constructor(
     /**
      * Ouvre un pair neuf configuré avec les serveurs ICE par utilisateur de la passerelle. Les pistes
      * locales naissent ici mais ne sont attachées qu'à [createOffer] (offreur) ou après
-     * [setRemoteDescription] (répondeur). @throws WebRtcError.ConfigureFailed si la fabrique ne rend pas de pair.
+     * [setRemoteDescription] (répondeur). Rend `true` quand la vidéo demandée n'a pas pu démarrer ([videoFallback]).
+     * @throws WebRtcError.ConfigureFailed si la fabrique ne rend pas de pair.
      */
-    fun createConnection(iceServers: List<SocketIceServer>, enableVideo: Boolean = false) {
+    fun createConnection(iceServers: List<SocketIceServer>, enableVideo: Boolean = false): Boolean {
         close()
         val config = rtcConfiguration(iceServers, ICE_CANDIDATE_POOL_SIZE)
         val peer = stack.value.factory.createPeerConnection(config, engineEvents.observer)
@@ -134,7 +136,43 @@ class WebRtcEngine internal constructor(
         configuration = config
         activityGate.setActive(true)
         media.prepareAudio()
-        if (enableVideo) media.prepareVideo()
+        videoFallback = if (enableVideo) media.prepareVideo() else null
+        return videoFallback != null
+    }
+
+    /**
+     * Pourquoi la vidéo demandée à l'ouverture n'a pas démarré (`null` : elle tourne, ou n'était pas demandée).
+     * [createConnection] rend `true` dans ce cas : l'appel continue en audio seul, jamais coupé.
+     */
+    var videoFallback: CallVideoFallback? = null
+        private set
+
+    /**
+     * Audio vers vidéo en plein appel : la caméra est acquise, sa piste prend l'émetteur vidéo du pair et une offre
+     * est demandée au négociateur ([renegotiationRequests]). `null` : c'est fait (ou rien à faire pendant un partage
+     * d'écran, qui tient l'émetteur) ; sinon la raison pour laquelle l'appel reste en audio.
+     */
+    fun upgradeToVideo(): CallVideoFallback? {
+        val peer = peerConnection ?: return CallVideoFallback.NoCamera
+        if (screenShare.isSharing) return null
+        return when (val outcome = media.upgradeToVideo(peer)) {
+            VideoUpgrade.Attached -> {
+                applyCameraEncoding()
+                renegotiations.tryEmit(Unit)
+                null
+            }
+            VideoUpgrade.AlreadyAttached -> null
+            is VideoUpgrade.Failed -> outcome.reason
+        }
+    }
+
+    /** Vidéo vers audio : la caméra est libérée et le pair en est informé par une offre. `false` : rien à retirer. */
+    fun downgradeFromVideo(): Boolean {
+        val peer = peerConnection ?: return false
+        if (screenShare.isSharing) return false
+        val detached = media.downgradeFromVideo(peer)
+        if (detached) renegotiations.tryEmit(Unit)
+        return detached
     }
 
     /**
