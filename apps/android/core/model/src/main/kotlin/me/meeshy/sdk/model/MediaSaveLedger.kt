@@ -76,6 +76,7 @@ public object MediaFingerprint {
 public class MediaSaveLedger(
     private val store: MediaSaveLedgerStore,
     private val probe: MediaStoreProbe,
+    private val lookup: MediaStoreNameLookup = MediaStoreNameLookup { null },
 ) {
     private val mutex = Mutex()
 
@@ -84,19 +85,46 @@ public class MediaSaveLedger(
      * d'échec — sauf s'il est déjà dans la galerie.
      */
     public suspend fun saveOnce(fingerprint: String, write: suspend () -> String?): MediaSaveOutcome =
-        mutex.withLock {
-            if (isAlreadyInGallery(fingerprint)) return@withLock MediaSaveOutcome.ALREADY_PRESENT
-            val uri = try {
-                write()
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                null
-            }
-            if (uri == null) return@withLock MediaSaveOutcome.FAILED
-            store.record(fingerprint, uri)
-            MediaSaveOutcome.SAVED
+        saveOnce(fingerprint, entry = null) { write()?.let { MediaStoreWrite.Written(it) } ?: MediaStoreWrite.Failed }
+
+    /**
+     * Comme [saveOnce], pour un média rangé sous un nom dérivé de son contenu ([entry], #14651) : le registre
+     * vide (réinstallation), la galerie est encore interrogée sur ce nom avant d'écrire, et une écriture que
+     * MediaStore a dû renommer ([MediaStoreWrite.NameTaken]) dit que le média y était déjà.
+     */
+    public suspend fun saveOnce(
+        fingerprint: String,
+        entry: GalleryEntryName?,
+        write: suspend () -> MediaStoreWrite,
+    ): MediaSaveOutcome = mutex.withLock {
+        if (isAlreadyInGallery(fingerprint)) return@withLock MediaSaveOutcome.ALREADY_PRESENT
+        val known = entry?.let(::findQuietly)
+        if (known != null) {
+            store.record(fingerprint, known)
+            return@withLock MediaSaveOutcome.ALREADY_PRESENT
         }
+        val written = try {
+            write()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            MediaStoreWrite.Failed
+        }
+        when (written) {
+            is MediaStoreWrite.Written -> {
+                store.record(fingerprint, written.uri)
+                MediaSaveOutcome.SAVED
+            }
+            MediaStoreWrite.NameTaken -> MediaSaveOutcome.ALREADY_PRESENT
+            MediaStoreWrite.Failed -> MediaSaveOutcome.FAILED
+        }
+    }
+
+    private fun findQuietly(entry: GalleryEntryName): String? = try {
+        lookup.find(entry)
+    } catch (_: Exception) {
+        null
+    }
 
     /** L'empreinte désigne-t-elle une entrée de la galerie ? Sans rien écrire. */
     public fun isAlreadyInGallery(fingerprint: String): Boolean {

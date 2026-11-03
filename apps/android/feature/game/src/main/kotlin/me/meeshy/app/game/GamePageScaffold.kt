@@ -1,5 +1,6 @@
-package me.meeshy.app.game.progression
+package me.meeshy.app.game
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,10 +34,28 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
+/** Ce que montre l'en-tête d'une page du jeu selon le défilement : le grand titre au repos, la barre compacte dès qu'on défile. */
+internal enum class GamePageHeaderMode {
+    Expanded,
+    Compact;
+
+    internal companion object {
+        /** Au-delà de la moitié de la course de repli (30 dp), le titre est celui de la barre compacte. */
+        fun of(scrollPx: Int, density: Float): GamePageHeaderMode {
+            val progress = CollapsibleHeaderMetrics.progress(CollapsibleHeaderPageProgress.scrollOffsetDp(scrollPx, density))
+            return if (progress >= COMPACT_FROM) Compact else Expanded
+        }
+
+        private const val COMPACT_FROM = 0.5f
+    }
+}
+
 /**
- * Le gabarit que toutes les pages de Progression partagent (iOS `GamePageScaffold`) : grand titre au repos, barre
- * compacte en défilant, retour en disque de verre, tirer pour rafraîchir. Le défilement ne recompose RIEN : le
- * décalage de l'en-tête est un état dérivé lu par l'en-tête seul, la colonne ne bouge qu'en mise en page.
+ * Le gabarit que toutes les pages du jeu partagent (iOS `GamePageScaffold`) : grand titre au repos, barre compacte et
+ * translucide en défilant (le contenu passe SOUS l'en-tête), retour en disque de verre, retour système, tirer pour
+ * rafraîchir branché sur la relecture forcée, fond du thème. Le défilement ne recompose RIEN : le décalage de l'en-tête
+ * est un état dérivé lu par l'en-tête seul, la colonne ne bouge qu'en mise en page. [trailing] : l'emplacement à droite
+ * du titre ; [onRefresh] nul : la page ne relit rien et ne se tire pas.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,6 +69,7 @@ internal fun GamePageScaffold(
     scroll: ScrollState = rememberScrollState(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    BackHandler(onBack = onBack)
     MeeshyBackground {
         val density = LocalDensity.current.density
         val offsetDp by remember(scroll, density) {

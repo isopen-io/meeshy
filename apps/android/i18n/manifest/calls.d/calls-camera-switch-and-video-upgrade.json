@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.video.permission.denied",
+          "androidName": "call_video_permission_denied",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

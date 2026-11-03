@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_header_remove">Retirar</string>
+    <string name="stories_header_remove_title">¿Retirar esta story?</string>
+    <string name="stories_header_remove_hint">Motivo (obligatorio, mínimo 3 caracteres)</string>
+    <string name="stories_header_report_details">Detalles (opcional)</string>
+    <string name="stories_header_report_send">Enviar</string>
+    <string name="stories_header_remove_failed">No se pudo retirar la story.</string>
+</resources>

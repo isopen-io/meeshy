@@ -11,10 +11,15 @@ import me.meeshy.sdk.model.security.SecureStore
  * namespace as soon as [userId] is set (and once per process for an install that
  * predates namespacing), the bare original always being removed.
  *
+ * [profileStore] est le coffre où vit le profil du compte (`meeshy_user_<id>`, un AUTRE fichier que celui des jetons) :
+ * quel que soit l'appelant de [clear] — déconnexion, refus 401, session révoquée — le profil du compte actif part avec
+ * ses jetons, sans dépendre d'un écouteur de l'interface (#14840).
+ *
  * Reads are lazy: nothing opens the Keystore before the first token access.
  */
 class EncryptedTokenStore(
     private val store: SecureStore,
+    private val profileStore: SecureStore? = null,
     private val nowMillis: () -> Long = System::currentTimeMillis,
 ) : TokenStore {
 
@@ -65,7 +70,7 @@ class EncryptedTokenStore(
     override fun clear() {
         store.get(KEY_USER_ID)?.let {
             vault.remove(it)
-            store.remove(AuthStorageKeys.user(it), it)
+            profileStore?.remove(AuthStorageKeys.user(it), it)
         }
         EncryptedAccountTokenVault.TOKEN_KEYS.forEach { store.remove(it) }
         store.remove(KEY_USER_ID)

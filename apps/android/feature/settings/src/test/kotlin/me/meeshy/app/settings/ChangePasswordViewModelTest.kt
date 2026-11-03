@@ -13,6 +13,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.model.ChangePasswordResponse
 import me.meeshy.sdk.model.PasswordStrengthLevel
 import me.meeshy.sdk.net.ApiError
@@ -43,8 +44,13 @@ class ChangePasswordViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun vm(repository: UserRepository = mockk(relaxed = true)) =
-        ChangePasswordViewModel(repository)
+    private fun auth(hasPassword: NetworkResult<Boolean?> = NetworkResult.Success(true)): AuthRepository =
+        mockk<AuthRepository>().also { coEvery { it.hasPassword() } returns hasPassword }
+
+    private fun vm(
+        repository: UserRepository = mockk(relaxed = true),
+        authRepository: AuthRepository = auth(),
+    ) = ChangePasswordViewModel(repository, authRepository)
 
     /** Fills every buffer with a submit-ready set of values. */
     private fun ChangePasswordViewModel.fillValid() {
@@ -186,5 +192,56 @@ class ChangePasswordViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { repository.changePassword(any(), any()) }
+    }
+
+    @Test
+    fun `un compte sans mot de passe masque le champ actuel et soumet une valeur nulle`() = runTest(dispatcher) {
+        val repository = mockk<UserRepository>()
+        coEvery { repository.changePassword(any(), any()) } returns
+            NetworkResult.Success(ChangePasswordResponse())
+        val sut = vm(repository, auth(NetworkResult.Success(false)))
+        advanceUntilIdle()
+        assertThat(sut.state.value.asksCurrentPassword).isFalse()
+
+        sut.onNewPasswordChange("newpass12")
+        sut.onConfirmPasswordChange("newpass12")
+        assertThat(sut.state.value.canSubmit).isTrue()
+        sut.submit()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.changePassword(null, "newpass12") }
+        assertThat(sut.state.value.isSuccess).isTrue()
+    }
+
+    @Test
+    fun `un compte avec mot de passe garde le champ actuel`() = runTest(dispatcher) {
+        val sut = vm(authRepository = auth(NetworkResult.Success(true)))
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.asksCurrentPassword).isTrue()
+        sut.onNewPasswordChange("newpass12")
+        sut.onConfirmPasswordChange("newpass12")
+        assertThat(sut.state.value.canSubmit).isFalse()
+    }
+
+    @Test
+    fun `un echec de lecture de hasPassword retombe sur le champ demande`() = runTest(dispatcher) {
+        val failure = NetworkResult.Failure(ApiError(message = "offline", code = "NETWORK"))
+        val sut = vm(authRepository = auth(failure))
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.hasPassword).isNull()
+        assertThat(sut.state.value.asksCurrentPassword).isTrue()
+        sut.onNewPasswordChange("newpass12")
+        sut.onConfirmPasswordChange("newpass12")
+        assertThat(sut.state.value.canSubmit).isFalse()
+    }
+
+    @Test
+    fun `une passerelle qui ne sert pas le resume garde le champ demande`() = runTest(dispatcher) {
+        val sut = vm(authRepository = auth(NetworkResult.Success(null)))
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.asksCurrentPassword).isTrue()
     }
 }

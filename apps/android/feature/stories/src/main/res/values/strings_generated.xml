@@ -147,12 +147,15 @@
     <string name="my_stories_viewers">Views list</string>
     <string name="share_story_text">🔗 Story by %1$s: %2$s</string>
     <string name="stories_action_delete">Delete</string>
+    <string name="stories_action_mute">Mute</string>
     <string name="stories_action_react">React</string>
     <string name="stories_action_reply">Reply</string>
     <string name="stories_action_report">Report</string>
     <string name="stories_action_repost">Repost</string>
+    <string name="stories_action_save">Save</string>
     <string name="stories_action_send">Send</string>
     <string name="stories_action_share">Share</string>
+    <string name="stories_action_sound">Sound</string>
     <string name="stories_action_translations">Translations</string>
     <string name="stories_action_views">Views</string>
     <string name="stories_add">Add</string>

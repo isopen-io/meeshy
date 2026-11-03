@@ -97,6 +97,8 @@ enum UnsentPublicationsCopy {
         String(localized: "feed.unsent.delete.message", defaultValue: "Elle n'a pas été publiée : son texte et ses médias quitteront cet appareil.", bundle: .main)
     }
     static var cancel: String { String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main) }
+    static var cancelSend: String { String(localized: "story.mine.waiting.cancel", defaultValue: "Annuler l'envoi", bundle: .main) }
+    static var close: String { String(localized: "common.close", defaultValue: "Fermer", bundle: .main) }
     static var deleted: String { String(localized: "feed.post.pending.withdrawn", defaultValue: "Envoi annulé", bundle: .main) }
     static var alreadySent: String {
         String(localized: "feed.post.pending.alreadySent", defaultValue: "Cette publication vient de partir. Supprimez-la une fois en ligne.", bundle: .main)
@@ -196,5 +198,33 @@ nonisolated enum UnsentPublicationFailureReason: Equatable {
         case .other:
             return String(localized: "feed.unsent.reason.other", defaultValue: "L'envoi a échoué.", bundle: .main)
         }
+    }
+}
+
+/// **« Annuler l'envoi » d'une publication encore dans la file** (#10331) —
+/// l'UNIQUE action, que le détail d'un post et la pastille de synchronisation
+/// empruntent. Rien n'existe côté serveur sous un cmid : la ligne `.createPost`
+/// est retirée (ou marquée si elle est en vol), l'auteur lit le verdict, et
+/// `withdrawn` prévient les fils ouverts que leur carte optimiste n'a plus de
+/// ligne pour la réconcilier.
+@MainActor
+enum PendingPublicationCancel {
+    static let withdrawn = PassthroughSubject<String, Never>()
+
+    @discardableResult
+    static func run(
+        _ cmid: String,
+        queue: OfflineQueueing = OfflineQueue.shared,
+        toasts: FeedbackToastSurfacing = FeedbackToastManager.shared
+    ) async -> Bool {
+        let stopped = PendingSendNotice.announce(await queue.cancelPendingPublication(clientMutationId: cmid), toasts: toasts)
+        if stopped { withdrawn.send(cmid) }
+        return stopped
+    }
+
+    /// Le geste d'une vue : l'accusé tombe dès que la file a répondu.
+    static func start(_ cmid: String) {
+        HapticFeedback.light()
+        Task { await run(cmid) }
     }
 }

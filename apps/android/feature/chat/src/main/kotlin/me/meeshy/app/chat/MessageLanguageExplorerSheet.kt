@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.bubble.LanguageExplorerRow
 import me.meeshy.ui.component.bubble.MessageLanguageExplorer
+import me.meeshy.ui.component.bubble.RowFailure
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -132,6 +133,20 @@ internal fun MessageLanguageExplorerSheet(
                     onSelect = { onSelectLanguage(row.code) },
                     onRetranslate = { onRetranslate(row.code) },
                 )
+                row.failure?.let { failure ->
+                    Text(
+                        text = stringResource(
+                            if (failure == RowFailure.SERVER_REFUSED) {
+                                R.string.message_translation_e2ee_serverRefused
+                            } else {
+                                R.string.chat_explorer_request_failed
+                            },
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.textMuted,
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.sm),
+                    )
+                }
             }
         }
     }
