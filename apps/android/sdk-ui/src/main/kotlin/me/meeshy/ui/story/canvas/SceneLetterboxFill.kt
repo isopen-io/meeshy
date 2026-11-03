@@ -55,7 +55,6 @@ private fun BlurredFill(painter: androidx.compose.ui.graphics.painter.Painter, m
         painter = painter,
         contentDescription = null,
         contentScale = ContentScale.Crop,
-        filterQuality = FilterQuality.Low,
         modifier = modifier.fillMaxSize().alpha(SceneBackdropChoice.FILL_OPACITY).testTag(SCENE_LETTERBOX_TAG),
     )
 }
