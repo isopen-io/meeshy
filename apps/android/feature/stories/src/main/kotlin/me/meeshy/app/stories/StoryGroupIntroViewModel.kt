@@ -35,7 +35,7 @@ class StoryGroupIntroViewModel @Inject constructor(
 
     /** Pré-résout les groupes voisins pas encore connus : au changement, l'interlude est complet dès sa première image. */
     suspend fun prefetch(groups: List<StoryGroupSlides>) {
-        groups.filter { it.userId !in resolved }.forEach { resolve(it) }
+        groups.filter { !resolved.containsKey(it.userId) }.forEach { resolve(it) }
     }
 
     /** Présence AU changement : la carte temps réel d'abord (la plus fraîche), sinon celle servie avec les stories. */
