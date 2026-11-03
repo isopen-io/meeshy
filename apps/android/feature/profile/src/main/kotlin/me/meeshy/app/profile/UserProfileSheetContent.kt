@@ -144,7 +144,7 @@ internal fun ProfileSheetLoadedContent(
                     )
                 }
                 if (postsEmit != null) {
-                    postsEmit()
+                    postsEmit.invoke(this)
                     return@LazyColumn
                 }
                 item(key = "tab-content", contentType = "tab-content") {

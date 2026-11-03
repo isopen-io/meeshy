@@ -87,7 +87,7 @@ class ProfilePostsViewModel @Inject constructor(
 
     private var userId: String? = null
     private var loadJob: Job? = null
-    private val internal = MutableStateFlow(ProfilePostsInternal())
+    private val model = MutableStateFlow(ProfilePostsInternal())
     private val _state = MutableStateFlow(ProfilePostsUiState())
     val state: StateFlow<ProfilePostsUiState> = _state.asStateFlow()
     private val effectChannel = Channel<ProfilePostsEffect>(Channel.BUFFERED)
@@ -97,7 +97,7 @@ class ProfilePostsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            combine(internal, sessionRepository.currentUser) { data, user -> project(data, user) }
+            combine(model, sessionRepository.currentUser) { data, user -> project(data, user) }
                 .collect { _state.value = it }
         }
     }
@@ -108,14 +108,14 @@ class ProfilePostsViewModel @Inject constructor(
         this.userId = userId
         loadJob?.cancel()
         projections.clear()
-        internal.value = ProfilePostsInternal()
+        model.value = ProfilePostsInternal()
         loadJob = viewModelScope.launch { loadInitial(userId) }
         viewModelScope.launch { loadStats(userId) }
     }
 
     fun onEvent(event: ProfilePostsEvent) {
         when (event) {
-            is ProfilePostsEvent.SelectFilter -> internal.update {
+            is ProfilePostsEvent.SelectFilter -> model.update {
                 val next = it.filter.toggled(event.tapped)
                 it.copy(filter = next, window = it.window.reset())
             }
@@ -136,15 +136,15 @@ class ProfilePostsViewModel @Inject constructor(
             is CacheResult.Stale -> { apply(cached.value, loaded = true); fetch(userId, cursor = null) }
             is CacheResult.Syncing -> { cached.value?.let { apply(it, loaded = true) }; fetch(userId, cursor = null) }
             CacheResult.Empty -> {
-                internal.update { it.copy(isLoading = true) }
+                model.update { it.copy(isLoading = true) }
                 fetch(userId, cursor = null)
-                internal.update { it.copy(isLoading = false) }
+                model.update { it.copy(isLoading = false) }
             }
         }
     }
 
     private fun apply(snapshot: UserPostsSnapshot, loaded: Boolean) {
-        internal.update {
+        model.update {
             it.copy(posts = snapshot.posts, nextCursor = snapshot.nextCursor, hasMore = snapshot.hasMore, hasLoaded = loaded)
         }
     }
@@ -152,7 +152,7 @@ class ProfilePostsViewModel @Inject constructor(
     private suspend fun loadStats(userId: String) {
         try {
             val result = userRepository.getUserStats(userId)
-            if (result is NetworkResult.Success) internal.update { it.copy(stats = result.data) }
+            if (result is NetworkResult.Success) model.update { it.copy(stats = result.data) }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -176,7 +176,7 @@ class ProfilePostsViewModel @Inject constructor(
             return false
         }
         val page = result.data
-        internal.update { current ->
+        model.update { current ->
             val known = current.posts.mapTo(HashSet()) { it.id }
             val merged = if (cursor == null) {
                 val fetchedIds = page.posts.mapTo(HashSet()) { it.id }
@@ -192,44 +192,44 @@ class ProfilePostsViewModel @Inject constructor(
                 hasLoaded = true,
             )
         }
-        val after = internal.value
+        val after = model.value
         runCatching { cache.persist(userId, UserPostsSnapshot(after.posts, after.nextCursor, after.hasMore), ticket) }
         return true
     }
 
     private fun onCardAppeared(postId: String) {
-        val data = internal.value
+        val data = model.value
         val visible = data.filtered.take(data.window.visibleCount(data.filtered.size))
         val index = visible.indexOfFirst { it.id == postId }
         if (index < 0 || !data.window.isNearTail(index, visible.size)) return
         val armed = data.window.schedulingReveal() ?: return
-        internal.update { it.copy(window = armed) }
+        model.update { it.copy(window = armed) }
         viewModelScope.launch {
             try {
                 revealOrLoadMore()
             } finally {
-                internal.update { it.copy(window = it.window.revealSettled()) }
+                model.update { it.copy(window = it.window.revealSettled()) }
             }
         }
     }
 
     private suspend fun revealOrLoadMore() {
-        val data = internal.value
+        val data = model.value
         if (data.window.hasMoreToRender(data.filtered.size)) {
-            internal.update { it.copy(window = it.window.grown(it.filtered.size)) }
+            model.update { it.copy(window = it.window.grown(it.filtered.size)) }
             return
         }
         val uid = userId ?: return
         if (!data.hasMore || data.isLoading || data.isLoadingMore) return
-        internal.update { it.copy(isLoadingMore = true) }
+        model.update { it.copy(isLoadingMore = true) }
         val before = data.posts.size
         try {
             val ok = fetch(uid, data.nextCursor)
-            if (ok && internal.value.hasMore && internal.value.posts.size == before) {
-                internal.update { it.copy(hasMore = false) }
+            if (ok && model.value.hasMore && model.value.posts.size == before) {
+                model.update { it.copy(hasMore = false) }
             }
         } finally {
-            internal.update { it.copy(isLoadingMore = false, window = it.window.grown(it.filtered.size)) }
+            model.update { it.copy(isLoadingMore = false, window = it.window.grown(it.filtered.size)) }
         }
     }
 
