@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "bubble.reply.you", "androidName": "bubble_reply_you", "status": "adopted"},
+        {"catalog": "app", "iosKey": "bubble.reply.mood", "androidName": "bubble_reply_mood", "status": "adopted"},
+        {"catalog": "app", "iosKey": "bubble.reply.media", "androidName": "bubble_reply_media", "status": "adopted"},
+        {"catalog": "app", "iosKey": "bubble.reply.open_media", "androidName": "bubble_reply_open_media", "status": "adopted"},
+        {"catalog": "app", "iosKey": "bubble.reply.author_hint", "androidName": "bubble_reply_author_hint", "status": "adopted"}
+      ]
+    }
+  }
+}

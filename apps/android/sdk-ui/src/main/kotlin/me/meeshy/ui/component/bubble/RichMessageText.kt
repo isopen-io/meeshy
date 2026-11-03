@@ -11,6 +11,7 @@ import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -55,6 +56,8 @@ public fun RichMessageText(
     rainbowSeed: String? = null,
     onHashtagClick: ((String) -> Unit)? = null,
     onMentionClick: ((String) -> Unit)? = null,
+    /** Budget de lignes du texte simple (la citation plate en offre deux) ; les blocs structurés ne le portent pas. */
+    maxLines: Int = Int.MAX_VALUE,
 ) {
     val rich = RichTextSpec(
         look = RichTextLook(
@@ -76,7 +79,14 @@ public fun RichMessageText(
         RichTextBlocks(text = text, spec = rich, style = style, modifier = modifier)
     } else {
         val annotated = rememberRichAnnotated(text, rich)
-        Text(text = annotated, color = color, style = style, modifier = modifier)
+        Text(
+            text = annotated,
+            color = color,
+            style = style,
+            modifier = modifier,
+            maxLines = maxLines,
+            overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis,
+        )
     }
 }
 

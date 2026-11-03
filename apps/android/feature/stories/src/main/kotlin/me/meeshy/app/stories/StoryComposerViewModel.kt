@@ -31,7 +31,6 @@ import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
-import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.SceneObjectMenu
@@ -421,24 +420,6 @@ class StoryComposerViewModel @Inject constructor(
 
     /** Glisser, pincer et tourner un même objet sont UN geste : une seule entrée d'annulation. */
     private fun transformGesture(id: String) = "transform:$id"
-
-    /** Enters the drawing tool (closes the band, clears selections). */
-    fun onEnterDrawingMode() = reduce { StoryComposerDrawingReducer.entered(it) }
-
-    fun onExitDrawingMode() = reduce { StoryComposerDrawingReducer.exited(it) }
-
-    fun onDrawColorSelected(colorHex: String) = reduce { StoryComposerDrawingReducer.colorSelected(it, colorHex) }
-
-    fun onDrawWidthSelected(widthDesign: Double) = reduce { StoryComposerDrawingReducer.widthSelected(it, widthDesign) }
-
-    /** Commits a captured freehand stroke (design-space [points]); a tap is dropped. */
-    fun onStrokeCaptured(points: List<StoryDrawingStrokePoint>) {
-        val id = newStrokeId()
-        val now = Instant.now().epochSecond.toDouble()
-        reduce { StoryComposerDrawingReducer.captured(it, points, id, now) }
-    }
-
-    fun onDrawUndo() = reduce { StoryComposerDrawingReducer.undone(it) }
 
     fun onVisibilityChange(visibility: StoryVisibility) = _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
 

@@ -187,6 +187,10 @@
         <item quantity="other">Ver %1$d respuestas</item>
     </plurals>
     <string name="post_detail_back">Volver</string>
+    <string name="post_detail_media_image">Imagen compartida</string>
+    <string name="post_detail_media_more">Ver los %1$d archivos multimedia</string>
+    <string name="post_detail_media_open_hint">Abrir en pantalla completa</string>
+    <string name="post_detail_media_video">Vídeo compartido</string>
     <string name="post_detail_title">Publicación</string>
     <string name="post_detail_viewers">Visualizaciones</string>
     <string name="status_bubble_republish">Volver a publicar</string>

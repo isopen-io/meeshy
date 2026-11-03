@@ -266,6 +266,7 @@ public object BubbleContentBuilder {
             exitOffer = message.exitOffer(),
             replyToIsMe = !replyToDeleted && currentUserId != null &&
                 message.replyTo?.senderId == currentUserId,
+            replyToAuthor = quotedAuthorProfile(message.replyTo, quoted?.senderName, currentUserId),
             isSlowSend = isOutgoing && isSlowSend,
             sticker = if (isDeleted || isEndToEndSealed || viewOnceSealed) null else stickerOf(message, visibleAttachments, attachments.images),
             videos = attachments.videos,

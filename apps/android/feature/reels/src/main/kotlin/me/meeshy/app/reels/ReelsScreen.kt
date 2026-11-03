@@ -84,6 +84,7 @@ fun ReelsScreen(
     onEditPost: ((String) -> Unit)? = null,
     authorHasStory: (String) -> Boolean = { false },
     viewModel: ReelsViewModel = hiltViewModel(),
+    preloadViewModel: ReelPreloadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -169,6 +170,7 @@ fun ReelsScreen(
                     pagerState = pagerState,
                     reels = state.reels,
                     viewModel = viewModel,
+                    preloadViewModel = preloadViewModel,
                     muted = muted,
                     onSoundProbed = { id, hasTrack -> probedAudio[id] = hasTrack },
                     chromeHidden = chromeOff,
@@ -227,6 +229,7 @@ private fun ReelsPager(
     pagerState: PagerState,
     reels: List<ReelPresentation>,
     viewModel: ReelsViewModel,
+    preloadViewModel: ReelPreloadViewModel,
     muted: Boolean,
     onSoundProbed: (String, Boolean) -> Unit,
     chromeHidden: Boolean,
@@ -244,19 +247,24 @@ private fun ReelsPager(
     // qui est une nouvelle liste a chaque like optimiste.
     val reelIds = reels.map { it.id }
     val currentOnSettled by rememberUpdatedState(onSettled)
+    val reelsNow by rememberUpdatedState(reels)
     // Hors premier plan (ON_STOP), aucun lecteur ne vit : les décodeurs sont rendus au système,
     // la page affichée reprend à sa position au retour (voir ReelPage).
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
+    val election by rememberReelElection(pagerState, reelIds)
     LaunchedEffect(pagerState, reelIds) {
-        snapshotFlow { pagerState.currentPage }
+        snapshotFlow { pagerState.settledPage }
             .distinctUntilChanged()
             .collect { page ->
                 viewModel.setCurrentReel(reelIds.getOrNull(page))
                 // Infinite scroll: fetch the next cursor page a few reels before
                 // the pager runs out, so the fetch lands before the user does.
                 if (page >= reelIds.size - LOAD_MORE_THRESHOLD) viewModel.loadMore()
+                // Le suivant ET le précédent se préparent, la fenêtre suit l'usage et les contraintes de l'appareil.
+                preloadViewModel.onSettled(page, reelsNow.map { it.prepTarget() })
             }
     }
+    DisposableEffect(preloadViewModel) { onDispose { preloadViewModel.releaseAll() } }
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }
             .distinctUntilChanged()
@@ -272,8 +280,11 @@ private fun ReelsPager(
         key = { index -> reels.getOrNull(index)?.id ?: index },
     ) { page ->
         val reel = reels[page]
-        val isElected by remember(pagerState, page) { derivedStateOf { pagerState.currentPage == page } }
-        val isSettled by remember(pagerState, page) { derivedStateOf { pagerState.settledPage == page } }
+        val pageKey by remember(reel.id, chromeHidden) {
+            derivedStateOf { ReelPageKey.of(reel.id, election, chromeHidden) }
+        }
+        val isElected = pageKey.isElected
+        val isSettled = pageKey.isSettled
         val loadsMedia by remember(pagerState, page) {
             derivedStateOf {
                 ReelPreload.loads(
@@ -292,7 +303,7 @@ private fun ReelsPager(
             isCallActive = isCallActive,
             muted = muted,
             onSoundProbed = { hasTrack -> onSoundProbed(reel.id, hasTrack) },
-            chromeHidden = chromeHidden,
+            chromeHidden = pageKey.chromeHidden,
             isOwn = viewModel.isOwn(reel),
             quickEmojis = quickEmojis,
             railActions = railActions,
@@ -308,3 +319,11 @@ private fun ReelPresentation.shareCard(context: android.content.Context): ShareC
     val sentence = authorName?.takeIf { it.isNotBlank() }?.let { context.getString(R.string.share_reel_text, it, link) } ?: link
     return ShareCards.reel(id, title = caption.orEmpty(), authorId = authorId, messageText = sentence)
 }
+
+/** Ce qu'un réel voisin offre au préchargeur : son fichier vidéo, son poster, les sons qu'il jouera. */
+private fun ReelPresentation.prepTarget(): ReelPrepTarget = ReelPrepTarget(
+    id = id,
+    videoUrl = videoUrl.takeIf { stage.showsVideoSurface },
+    posterUrl = posterUrl ?: imageUrls.firstOrNull(),
+    audioUrls = listOfNotNull(audioUrl, scene?.backgroundAudioUrl, scene?.foregroundAudioUrl).distinct(),
+)

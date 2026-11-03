@@ -2,10 +2,9 @@ package me.meeshy.ui.story.canvas
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableDoubleState
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -32,6 +31,8 @@ public data class SceneRootTransitionSpec(
     val closing: StoryTransitionEffect? = null,
     val totalDurationSeconds: Double = 0.0,
     val restartKey: Any? = null,
+    /** Faux : la slide est en pause (ou pas encore montrée) — l'ouverture n'avance pas. */
+    val playing: Boolean = true,
 )
 
 /** Le masque circulaire de la révélation : rayon d'un point à la demi-diagonale, centré sur le canvas. */
@@ -57,26 +58,60 @@ public fun Modifier.sceneRootTransition(pose: SceneRootPose): Modifier =
 
 /**
  * La pose courante : l'ouverture s'anime seule depuis l'entrée en lecture (temps écoulé échantillonné à chaque
- * image), la fermeture suit la tête de lecture [playbackSeconds]. « Réduire les animations » ne garde aucune transition.
+ * image), la fermeture suit la tête de lecture [playbackSeconds]. « Réduire les animations » remplace tout effet par un
+ * fondu simple.
  */
 @Composable
 public fun rememberSceneRootPose(spec: SceneRootTransitionSpec?, playbackSeconds: Double?): SceneRootPose {
     val reduce = LocalReduceMotion.current
-    var openingElapsed by remember(spec?.restartKey, spec?.opening) { mutableDoubleStateOf(0.0) }
+    val elapsed = rememberOpeningElapsed(spec, reduce)
+    if (spec == null) return SceneRootPose.NEUTRAL
+    return SceneRootTransitionPose.poseAt(
+        spec.opening, spec.closing, spec.totalDurationSeconds, elapsed.doubleValue, playbackSeconds ?: 0.0, reduce,
+    )
+}
+
+/**
+ * Le même effet, lu à la PEINTURE : la tête de lecture ([playbackSeconds]) change à chaque image, et la lire en
+ * composition recomposerait toute la scène 60 fois par seconde. Ici seule la couche graphique est invalidée.
+ */
+@Composable
+public fun Modifier.sceneRootTransition(spec: SceneRootTransitionSpec?, playbackSeconds: () -> Double): Modifier {
+    if (spec == null) return this
+    val reduce = LocalReduceMotion.current
+    val elapsed = rememberOpeningElapsed(spec, reduce)
+    return graphicsLayer {
+        val pose = SceneRootTransitionPose.poseAt(
+            spec.opening, spec.closing, spec.totalDurationSeconds, elapsed.doubleValue, playbackSeconds(), reduce,
+        )
+        if (pose.isNeutral) return@graphicsLayer
+        alpha = pose.opacity.toFloat()
+        scaleX = pose.scale.toFloat()
+        scaleY = pose.scale.toFloat()
+        translationX = (pose.translateXFraction * size.width).toFloat()
+        val coverage = pose.revealCoverage
+        shape = if (coverage == null) RectangleShape else SceneRevealShape(coverage)
+        clip = coverage != null
+    }
+}
+
+/** Le temps écoulé de l'ouverture : il avance image par image tant que la slide joue ([SceneRootTransitionSpec.playing]). */
+@Composable
+private fun rememberOpeningElapsed(spec: SceneRootTransitionSpec?, reduce: Boolean): MutableDoubleState {
+    val elapsed = remember(spec?.restartKey, spec?.opening) { mutableDoubleStateOf(0.0) }
     val opening = spec?.opening
-    LaunchedEffect(spec?.restartKey, opening, reduce) {
-        if (opening == null || reduce) return@LaunchedEffect
-        var start = -1L
-        while (openingElapsed < SceneRootTransitionPose.DURATION_SECONDS) {
+    val playing = spec?.playing ?: false
+    LaunchedEffect(spec?.restartKey, opening, playing) {
+        if (opening == null || !playing) return@LaunchedEffect
+        var last = -1L
+        while (elapsed.doubleValue < SceneRootTransitionPose.DURATION_SECONDS) {
             withFrameNanos { now ->
-                if (start < 0) start = now
-                openingElapsed = (now - start) / NANOS_PER_SECOND
+                if (last >= 0) elapsed.doubleValue += (now - last) / NANOS_PER_SECOND
+                last = now
             }
         }
     }
-    if (spec == null || reduce) return SceneRootPose.NEUTRAL
-    val closing = SceneRootTransitionPose.closing(spec.closing, spec.totalDurationSeconds, playbackSeconds ?: 0.0)
-    return if (!closing.isNeutral) closing else SceneRootTransitionPose.opening(opening, openingElapsed)
+    return elapsed
 }
 
 private const val NANOS_PER_SECOND: Double = 1_000_000_000.0

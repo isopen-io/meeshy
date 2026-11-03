@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.PostReactionPaletteState
 import me.meeshy.sdk.model.PostReactionPick
 import me.meeshy.ui.component.reaction.PostReactionPalette
@@ -386,6 +387,16 @@ internal fun PostDetailContent(
                         if (scenes != null) {
                             Spacer(Modifier.height(MeeshySpacing.md))
                             PostDetailScenes(scenes = scenes)
+                        } else if (post.media.isNotEmpty() && !post.isReel) {
+                            Spacer(Modifier.height(MeeshySpacing.md))
+                            PostDetailMedia(
+                                media = post.media,
+                                owner = DetailMediaAuthor.of(post),
+                                accentHex = post.accentHex,
+                                onOpenVisual = { index ->
+                                    gallery = FeedMediaGallery.ofVisuals(post, index).takeUnless(FeedGallery::isEmpty)
+                                },
+                            )
                         } else if (post.images.isNotEmpty()) {
                             Spacer(Modifier.height(MeeshySpacing.md))
                             PostImageLayout(
@@ -408,6 +419,19 @@ internal fun PostDetailContent(
                                 onOpenProfile = onOpenProfile,
                             )
                         } ?: FeedPostQuoteAndReel(post = post, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
+
+                        post.repostEmbed?.takeIf(::showsQuotedDetailMedia)?.let { embed ->
+                            Spacer(Modifier.height(MeeshySpacing.md))
+                            PostDetailMedia(
+                                media = embed.media.filterNot { it.type == FeedMediaType.IMAGE },
+                                owner = DetailMediaAuthor.of(embed),
+                                accentHex = post.accentHex,
+                                onOpenVisual = { index ->
+                                    gallery = FeedMediaGallery.ofQuotedVisuals(embed.copy(media = embed.media.filterNot { it.type == FeedMediaType.IMAGE }), index)
+                                        .takeUnless(FeedGallery::isEmpty)
+                                },
+                            )
+                        }
 
                         Spacer(Modifier.height(MeeshySpacing.md))
                         DetailStatsRow(
@@ -433,6 +457,10 @@ internal fun PostDetailContent(
 }
 
 private const val DETAIL_CAPTION_LINES = 6
+
+/** La citation d'un post ordinaire porte, dans le détail, ses vidéos, audios et documents (l'image a déjà son aperçu dans la citation). */
+private fun showsQuotedDetailMedia(embed: RepostEmbedPresentation): Boolean =
+    !embed.isStory && !embed.isReel && !embed.isUnavailable && embed.media.any { it.type != FeedMediaType.IMAGE }
 
 /** « Vues » : l'entrée de la liste de qui a vu (ADMIN/BIGBOSS), même libellé qu'iOS. */
 @Composable
