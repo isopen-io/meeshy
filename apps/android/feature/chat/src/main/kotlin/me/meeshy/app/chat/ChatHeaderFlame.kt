@@ -216,7 +216,7 @@ private fun FlameButton(
 
 /** La flamme : dégradé jaune → ambre → rouge ; à l'allumage elle grossit, vacille et s'éclaire. */
 @Composable
-private fun FlameGlyph(phase: () -> Float, animates: Boolean) {
+internal fun FlameGlyph(phase: () -> Float, animates: Boolean) {
     Icon(
         imageVector = MeeshyIcons.FlameFilled,
         contentDescription = null,
@@ -243,7 +243,7 @@ private fun FlameGlyph(phase: () -> Float, animates: Boolean) {
 
 /** Un compte rouge cerclé de blanc (lisible sur n'importe quel fond), chiffres tabulaires. */
 @Composable
-private fun FlameCount(text: String) {
+internal fun FlameCount(text: String) {
     val style = TextStyle(
         fontSize = 10.sp,
         fontWeight = FontWeight.ExtraBold,

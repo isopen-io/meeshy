@@ -669,6 +669,11 @@ internal class ChatComposerController(
         persistDraft(composerText.text, state.value.replyingToMessageId)
     }
 
+    fun clearPanelEffects() {
+        state.update { it.copy(pendingEffects = MessageEffectsEditor.clearPanelFlags(it.pendingEffects)) }
+        persistDraft(composerText.text, state.value.replyingToMessageId)
+    }
+
     fun startEdit(messageId: String) {
         val message = messages.value.firstOrNull {
             it.message.id == messageId && it.sendState == LocalSendState.SYNCED

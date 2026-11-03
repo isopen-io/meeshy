@@ -19,6 +19,7 @@ import me.meeshy.ui.component.StoryRingState
  * - [onOpenConversation] : la conversation directe ouverte par « Envoyer un message ».
  * - [onReport] : le signalement de la personne.
  * - [onViewPosts] : le fil de ses postes, quand [postsContent] n'est pas fourni.
+ * - [onOpenPost] : un post touché dans [postsContent] : la feuille se ferme, puis le détail s'empile.
  * - [onCall] : un appel ; `null` = aucun bouton d'appel.
  * - [onViewStory] : sa story ; `null` = l'anneau n'ouvre rien.
  * - [postsContent] : le contenu riche de l'onglet Postes (cartes du fil), reçu avec l'id résolu.
@@ -30,6 +31,7 @@ data class ProfileSheetEnvironment(
     val onOpenConversation: (conversationId: String) -> Unit = {},
     val onReport: (userId: String, username: String) -> Unit = { _, _ -> },
     val onViewPosts: (userId: String) -> Unit = {},
+    val onOpenPost: (postId: String) -> Unit = {},
     val onCall: ((ProfileCallRequest) -> Unit)? = null,
     val onViewStory: ((userId: String) -> Unit)? = null,
     val postsContent: (@Composable (userId: String) -> Unit)? = null,

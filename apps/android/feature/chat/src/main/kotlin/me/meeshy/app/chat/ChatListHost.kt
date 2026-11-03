@@ -132,7 +132,7 @@ internal fun ChatListHost(
     // dies with the screen (its cache is discarded on logout/leave — nothing leaks to the next
     // user). Each bubble projects a pure outcome from this collected cache.
     val linkPreviewStore = remember { LinkPreviewStore(scope) }
-    val audioPlayer = rememberChatAudioPlayer(state.conversationTitle)
+    val audioPlayer = rememberChatAudioPlayer(state.conversationTitle, state.conversationId)
     val linkPreviewCache by linkPreviewStore.cache.collectAsStateWithLifecycle()
     // [ChatListOrientation.BottomUp]: the list is rendered bottom-anchored
     // (`LazyColumn(reverseLayout = true)` below fed the REVERSED item order)
@@ -289,7 +289,7 @@ internal fun ChatListHost(
     val openMessageMenu: (String) -> Unit = { id ->
         MessageMenuKeyboard.open(id, { focusManager.clearFocus(force = true); keyboardController?.hide() }, actions.onMessageLongPress)
     }
-    val rowActions = remember(actions, bubbleFrames, profileTap, haptics, capReachedMessage, host.navigation, media) {
+    val rowActions = remember(actions, bubbleFrames, profileTap, haptics, capReachedMessage, host.navigation, media, state.quickReactions) {
         ChatMessageRowActions(
             onReply = { messageId -> actions.startReply(messageId) },
             onForward = { messageId -> actions.openForward(messageId) },
@@ -325,7 +325,11 @@ internal fun ChatListHost(
             onReplyCountLongPress = { messageId -> actions.openReplyThread(messageId) },
             onRetry = { messageId -> actions.retryMessage(messageId) },
             onSenderTap = { bubble -> bubble.senderProfile?.let(profileTap) },
-            onAddReaction = { messageId -> actions.openEmojiPicker(messageId) },
+            onAddReaction = { messageId ->
+                val quick = state.quickReactions.firstOrNull()
+                if (quick == null) actions.openEmojiPicker(messageId) else actions.toggleReaction(messageId, quick)
+            },
+            onOpenReactPicker = { messageId -> actions.openEmojiPicker(messageId) },
             onTranslationDetail = { messageId -> actions.openLanguageExplorer(messageId) },
             onBubbleFramed = { messageId, frame -> bubbleFrames[messageId] = frame },
             onStoryCitationOpen = { postId -> host.navigation.onOpenCitedPost(postId) },

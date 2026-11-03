@@ -156,6 +156,7 @@
     <string name="nearby_back">رجوع</string>
     <string name="nearby_retry">إعادة المحاولة</string>
     <string name="nearby_title">بالقرب مني</string>
+    <string name="post_bookmark_removed">تمت الإزالة من المفضلة</string>
     <string name="post_comments_cancel_reply">إلغاء الرد</string>
     <string name="post_comments_composer_hint">تعليق…</string>
     <string name="post_comments_composer_reply_hint">رد…</string>
