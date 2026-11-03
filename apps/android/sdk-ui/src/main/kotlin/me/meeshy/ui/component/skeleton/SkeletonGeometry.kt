@@ -3,7 +3,7 @@ package me.meeshy.ui.component.skeleton
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Dimensions des squelettes, 1:1 avec `Skeletons/*.swift` (iOS) : le passage au contenu reel ne saute pas. */
+/** Dimensions des squelettes, 1:1 avec `Skeletons/….swift` (iOS) : le passage au contenu reel ne saute pas. */
 public object SkeletonGeometry {
     public object FeedPost {
         public val avatar: Dp = 40.dp
