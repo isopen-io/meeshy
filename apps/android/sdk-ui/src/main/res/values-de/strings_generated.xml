@@ -36,6 +36,14 @@
     <string name="audio_editor_tool_transcribe">Transkribieren</string>
     <string name="audio_editor_tool_trim">Zuschneiden</string>
     <string name="audio_editor_tool_volume">Lautstärke</string>
+    <string name="audio_editor_transcription_denied">Zugriff auf die Spracherkennung verweigert. Aktiviere ihn in den Einstellungen.</string>
+    <string name="audio_editor_transcription_empty">Die Aufnahme ist leer.</string>
+    <string name="audio_editor_transcription_failed">Transkription fehlgeschlagen.</string>
+    <string name="audio_editor_transcription_filemissing">Audiodatei nicht gefunden.</string>
+    <string name="audio_editor_transcription_nospeech">Keine Sprache erkannt.</string>
+    <string name="audio_editor_transcription_retry">Erneut transkribieren</string>
+    <string name="audio_editor_transcription_running">Transkription läuft…</string>
+    <string name="audio_editor_transcription_start">Transkribieren</string>
     <string name="audio_editor_trim_hint">Ziehe die Griffe, um einen Ausschnitt zu behalten.</string>
     <string name="audio_editor_undo">Rückgängig</string>
     <string name="audio_editor_use">Audio verwenden</string>

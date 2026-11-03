@@ -36,6 +36,14 @@
     <string name="audio_editor_tool_transcribe">Transcribe</string>
     <string name="audio_editor_tool_trim">Trim</string>
     <string name="audio_editor_tool_volume">Volume</string>
+    <string name="audio_editor_transcription_denied">Speech recognition access denied. Enable it in Settings.</string>
+    <string name="audio_editor_transcription_empty">The recording is empty.</string>
+    <string name="audio_editor_transcription_failed">Transcription failed.</string>
+    <string name="audio_editor_transcription_filemissing">Audio file not found.</string>
+    <string name="audio_editor_transcription_nospeech">No speech detected.</string>
+    <string name="audio_editor_transcription_retry">Transcribe again</string>
+    <string name="audio_editor_transcription_running">Transcribing…</string>
+    <string name="audio_editor_transcription_start">Transcribe</string>
     <string name="audio_editor_trim_hint">Drag the handles to keep a portion.</string>
     <string name="audio_editor_undo">Undo</string>
     <string name="audio_editor_use">Use audio</string>

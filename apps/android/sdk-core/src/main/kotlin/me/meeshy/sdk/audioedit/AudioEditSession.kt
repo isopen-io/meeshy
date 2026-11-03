@@ -30,6 +30,7 @@ public data class AudioEditResult(
     val durationSeconds: Double,
     val trimStartSeconds: Double = 0.0,
     val trimEndSeconds: Double = durationSeconds,
+    val transcription: me.meeshy.sdk.model.audioedit.AudioEditTranscription? = null,
 )
 
 /**
