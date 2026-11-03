@@ -28,7 +28,7 @@ object RootCoverage {
     @Suppress("UNUSED_PARAMETER")
     fun toastsStayOnTop(cover: RootCover): Boolean = true
 
-    /** Le session est verifiee quand elle est resolue OU qu'aucune restauration n'est plus en vol. */
+    /** La session est verifiee quand elle est resolue OU qu'aucune restauration n'est plus en vol. */
     fun hasCheckedSession(hasResolvedStoredSession: Boolean, isRestoringSession: Boolean): Boolean =
         hasResolvedStoredSession || !isRestoringSession
 }
