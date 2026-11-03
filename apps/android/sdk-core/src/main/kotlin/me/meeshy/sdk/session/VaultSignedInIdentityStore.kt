@@ -69,6 +69,7 @@ class VaultSignedInIdentityStore(
     private fun write(user: MeeshyUser) {
         if (user.id.isBlank() || tokens.userId != user.id) return
         vault.save(user)
+        if (tokens.userId == null) vault.clear(user.id)
     }
 }
 

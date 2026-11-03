@@ -1,18 +1,23 @@
 package me.meeshy.sdk.session
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.security.InMemorySecureStore
+import me.meeshy.sdk.model.security.SecureStore
 import me.meeshy.sdk.net.InMemoryTokenStore
 import org.junit.After
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
 
 class VaultSignedInIdentityStoreTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -21,7 +26,7 @@ class VaultSignedInIdentityStoreTest {
     @After fun tearDown() = scope.cancel()
 
     private fun store(
-        secure: InMemorySecureStore = InMemorySecureStore(),
+        secure: SecureStore = InMemorySecureStore(),
         tokens: InMemoryTokenStore = InMemoryTokenStore(userId = "u1"),
         legacy: SignedInIdentityStore = SignedInIdentityStore.NONE,
     ) = VaultSignedInIdentityStore(AuthProfileVault(secure), tokens, legacy, scope)
@@ -73,17 +78,45 @@ class VaultSignedInIdentityStoreTest {
         assertThat(AuthProfileVault(profileVault).load("u2")).isEqualTo(bob)
     }
 
+    private class GatedSecureStore(private val inner: InMemorySecureStore) : SecureStore by inner {
+        val writing = CompletableDeferred<Unit>()
+        val release = CountDownLatch(1)
+
+        override fun put(key: String, value: String, account: String?): Boolean {
+            writing.complete(Unit)
+            release.await()
+            return inner.put(key, value, account)
+        }
+    }
+
     @Test
-    fun `une ecriture tardive, apres le depart des jetons, ne reecrit pas le profil`() = runBlocking {
-        val profileVault = InMemorySecureStore()
-        val tokens = InMemoryTokenStore(userId = "u1")
-        val identities = store(profileVault, tokens)
-        tokens.userId = null
+    fun `une ecriture suspendue apres le controle d'identite ne survit pas a forget`() = runBlocking {
+        val inner = InMemorySecureStore()
+        val gated = GatedSecureStore(inner)
+        val identities = store(gated, InMemoryTokenStore(userId = "u1"))
 
         identities.remember(alice)
-        identities.forget("u1")
-        delay(300)
+        withTimeout(5_000) { gated.writing.await() }
+        val forgetting = scope.launch { identities.forget("u1") }
+        gated.release.countDown()
+        withTimeout(5_000) { forgetting.join() }
 
-        assertThat(AuthProfileVault(profileVault).load("u1")).isNull()
+        assertThat(AuthProfileVault(inner).load("u1")).isNull()
+    }
+
+    @Test
+    fun `une ecriture suspendue pendant que les jetons partent est effacee a la fin`() = runBlocking {
+        val inner = InMemorySecureStore()
+        val gated = GatedSecureStore(inner)
+        val tokens = InMemoryTokenStore(userId = "u1")
+        val identities = store(gated, tokens)
+
+        identities.remember(alice)
+        withTimeout(5_000) { gated.writing.await() }
+        tokens.userId = null
+        gated.release.countDown()
+        identities.forget("other")
+
+        assertThat(AuthProfileVault(inner).load("u1")).isNull()
     }
 }
