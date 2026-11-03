@@ -1,5 +1,6 @@
 package me.meeshy.app.reels
 
+import me.meeshy.sdk.model.trackedLinkMap
 import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.util.resolveServedImageUrl
 import me.meeshy.sdk.model.ApiPost
@@ -36,6 +37,8 @@ data class ReelPresentation(
     val captionOriginalLanguage: String? = null,
     val captionOriginal: String? = null,
     val captionTranslations: Map<String, String> = emptyMap(),
+    /** `adresse écrite -> jeton` servi avec la légende : l'adresse s'ouvre par le lien suivi. */
+    val trackedLinks: Map<String, String> = emptyMap(),
     val createdAtIso: String? = null,
     /** Compteurs de portée : servis par la passerelle à l'auteur seul. */
     val viewCount: Int = 0,
@@ -107,6 +110,7 @@ object ReelBuilder {
                     captionTranslations = post.translations.orEmpty()
                         .mapNotNull { (language, entry) -> entry.text.takeIf { it.isNotBlank() }?.let { language to it } }
                         .toMap(),
+                    trackedLinks = post.trackedLinkMap,
                     createdAtIso = post.createdAt,
                     viewCount = post.viewCount ?: 0,
                     impressionCount = post.impressionCount ?: 0,

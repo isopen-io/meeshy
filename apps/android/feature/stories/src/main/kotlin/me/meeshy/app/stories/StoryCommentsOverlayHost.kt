@@ -4,6 +4,11 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
@@ -21,15 +26,23 @@ internal fun BoxScope.StoryCommentsOverlayHost(
     composerPinned: Boolean,
     onComposerHeight: (Int) -> Unit,
 ) {
+    var composerHeightPx by remember { mutableIntStateOf(0) }
+    if (slide != null && slide.text.isNotBlank()) {
+        StoryCaptionOverlay(
+            text = slide.text,
+            storyId = slide.id,
+            bottomInset = with(LocalDensity.current) { composerHeightPx.toDp() },
+        )
+    }
     Column(Modifier.align(Alignment.BottomStart).fillMaxWidth()) {
-        if (slide != null && slide.text.isNotBlank()) {
-            StoryCaptionOverlay(text = slide.text, storyId = slide.id)
-        }
         // #14313 — le composeur de commentaire épinglé sous la story d'autrui (iOS `composerLayer`).
         if (composerPinned && commentThread != null) {
             StoryPinnedCommentComposer(
                 thread = commentThread,
-                modifier = Modifier.onSizeChanged { onComposerHeight(it.height) },
+                modifier = Modifier.onSizeChanged {
+                    composerHeightPx = it.height
+                    onComposerHeight(it.height)
+                },
             )
             StoryCommentSentFeedback(thread = commentThread)
         }

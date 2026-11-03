@@ -102,6 +102,10 @@
     <string name="location_fullscreen_mapStyle">Stile mappa</string>
     <string name="location_fullscreen_sharedPosition">Posizione condivisa</string>
     <string name="media_audio_transcribe">Trascrivi</string>
+    <string name="media_caption_see_less">mostra meno</string>
+    <string name="media_caption_see_less_hint">Comprime la didascalia</string>
+    <string name="media_caption_see_more">mostra di più</string>
+    <string name="media_caption_see_more_hint">Mostra la didascalia completa</string>
     <string name="media_crop_a11y_handle_bottom">Bordo inferiore</string>
     <string name="media_crop_a11y_handle_bottomLeft">Angolo in basso a sinistra</string>
     <string name="media_crop_a11y_handle_bottomRight">Angolo in basso a destra</string>

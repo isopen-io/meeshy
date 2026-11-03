@@ -102,6 +102,10 @@
     <string name="location_fullscreen_mapStyle">Map style</string>
     <string name="location_fullscreen_sharedPosition">Shared position</string>
     <string name="media_audio_transcribe">Transcribe</string>
+    <string name="media_caption_see_less">see less</string>
+    <string name="media_caption_see_less_hint">Collapses the caption</string>
+    <string name="media_caption_see_more">see more</string>
+    <string name="media_caption_see_more_hint">Shows the full caption</string>
     <string name="media_crop_a11y_handle_bottom">Bottom edge</string>
     <string name="media_crop_a11y_handle_bottomLeft">Bottom left corner</string>
     <string name="media_crop_a11y_handle_bottomRight">Bottom right corner</string>

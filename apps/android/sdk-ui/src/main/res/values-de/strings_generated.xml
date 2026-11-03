@@ -102,6 +102,10 @@
     <string name="location_fullscreen_mapStyle">Kartenstil</string>
     <string name="location_fullscreen_sharedPosition">Geteilter Standort</string>
     <string name="media_audio_transcribe">Transkribieren</string>
+    <string name="media_caption_see_less">weniger anzeigen</string>
+    <string name="media_caption_see_less_hint">Klappt die Bildunterschrift ein</string>
+    <string name="media_caption_see_more">mehr anzeigen</string>
+    <string name="media_caption_see_more_hint">Zeigt die vollständige Bildunterschrift</string>
     <string name="media_crop_a11y_handle_bottom">Untere Kante</string>
     <string name="media_crop_a11y_handle_bottomLeft">Untere linke Ecke</string>
     <string name="media_crop_a11y_handle_bottomRight">Untere rechte Ecke</string>

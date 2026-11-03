@@ -102,6 +102,10 @@
     <string name="location_fullscreen_mapStyle">Style de carte</string>
     <string name="location_fullscreen_sharedPosition">Position partagée</string>
     <string name="media_audio_transcribe">Transcrire</string>
+    <string name="media_caption_see_less">voir moins</string>
+    <string name="media_caption_see_less_hint">Replie la légende</string>
+    <string name="media_caption_see_more">voir plus</string>
+    <string name="media_caption_see_more_hint">Affiche la légende entière</string>
     <string name="media_crop_a11y_handle_bottom">Bord inférieur</string>
     <string name="media_crop_a11y_handle_bottomLeft">Coin inférieur gauche</string>
     <string name="media_crop_a11y_handle_bottomRight">Coin inférieur droit</string>

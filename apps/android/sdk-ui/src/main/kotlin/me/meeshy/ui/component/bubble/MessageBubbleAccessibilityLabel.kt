@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.bubble
 
+import me.meeshy.sdk.model.text.PlainText
 import java.util.Locale
 
 /**
@@ -97,7 +98,7 @@ public object MessageBubbleAccessibilityLabel {
         }
 
         if (content.text.isNotBlank() && !content.isBlurred) {
-            parts += content.text
+            parts += PlainText.of(content.text)
         }
 
         if (content.images.isNotEmpty()) {

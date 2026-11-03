@@ -102,6 +102,10 @@
     <string name="location_fullscreen_mapStyle">Estilo do mapa</string>
     <string name="location_fullscreen_sharedPosition">Posição compartilhada</string>
     <string name="media_audio_transcribe">Transcrever</string>
+    <string name="media_caption_see_less">ver menos</string>
+    <string name="media_caption_see_less_hint">Recolhe a legenda</string>
+    <string name="media_caption_see_more">ver mais</string>
+    <string name="media_caption_see_more_hint">Mostra a legenda completa</string>
     <string name="media_crop_a11y_handle_bottom">Borda inferior</string>
     <string name="media_crop_a11y_handle_bottomLeft">Canto inferior esquerdo</string>
     <string name="media_crop_a11y_handle_bottomRight">Canto inferior direito</string>
