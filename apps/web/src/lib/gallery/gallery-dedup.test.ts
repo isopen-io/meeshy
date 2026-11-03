@@ -17,22 +17,35 @@ import { isInGallery, saveToGallery } from './save-to-gallery';
  * soit le nom ou la porte (visionneuse, menu d'une pièce, réception).
  */
 
-type NativeCall = { readonly methode: string; readonly options: Record<string, unknown> };
+type NativeCall = { readonly plugin: string; readonly methode: string; readonly options: Record<string, unknown> };
 
-function shellWithAlbum() {
+/** Ce que la galerie de l'appareil répond pour un chemin : présent, supprimé, ou pas de réponse. */
+type GalleryProbe = (path: string) => boolean | 'reject';
+
+function shellWithAlbum(params: { readonly probe?: GalleryProbe } = {}) {
   const calls: NativeCall[] = [];
+  const { probe } = params;
   const shell: CoqueNative = {
     getPlatform: () => 'android',
-    PluginHeaders: [{ name: 'Media', methods: ['getAlbums', 'createAlbum', 'savePhoto', 'saveVideo'].map((name) => ({ name })) }],
-    nativePromise: async (_plugin, methode, opts) => {
+    PluginHeaders: [
+      { name: 'Media', methods: ['getAlbums', 'createAlbum', 'savePhoto', 'saveVideo'].map((name) => ({ name })) },
+      ...(probe === undefined ? [] : [{ name: 'MeeshyGallery', methods: [{ name: 'exists' }] }]),
+    ],
+    nativePromise: async (plugin, methode, opts) => {
       const options = opts as Record<string, unknown>;
-      calls.push({ methode, options });
+      calls.push({ plugin, methode, options });
+      if (plugin === 'MeeshyGallery') {
+        const answer = probe?.(String(options.path));
+        if (answer === 'reject' || answer === undefined) throw new Error('outside-gallery');
+        return { exists: answer };
+      }
       if (methode === 'getAlbums') return { albums: [{ name: GALLERY_ALBUM, identifier: '/p/Meeshy' }] };
       return { filePath: `/p/Meeshy/${String(options.fileName)}.jpg` };
     },
   };
   const writes = () => calls.filter((call) => call.methode === 'savePhoto' || call.methode === 'saveVideo');
-  return { shell, writes };
+  const probes = () => calls.filter((call) => call.plugin === 'MeeshyGallery').map((call) => String(call.options.path));
+  return { shell, writes, probes };
 }
 
 const photo = (bytes: string, fileName = 'a.jpg') => ({ blob: new Blob([bytes], { type: 'image/jpeg' }), fileName, mimeType: 'image/jpeg' });
@@ -112,6 +125,74 @@ describe('le saver de la coque ne réécrit jamais un média déjà enregistré'
     expect(await shellGallerySaver(shell, { saved: idbGallerySavedRegistry(idb.factory) }).save(photo('pixels'))).toBe('saved');
     expect(await shellGallerySaver(shell, { saved: idbGallerySavedRegistry(undefined) }).save(photo('pixels'))).toBe('saved');
     expect(writes()).toHaveLength(2);
+  });
+});
+
+describe('un média supprimé de la galerie peut être réenregistré (#14654)', () => {
+  test('entrée du registre dont le fichier a disparu → réenregistrement permis, et l’entrée suit le nouveau fichier', async () => {
+    const deleted = new Set<string>();
+    const { shell, writes, probes } = shellWithAlbum({ probe: (path) => !deleted.has(path) });
+    const saver = shellGallerySaver(shell, { saved: memoryGallerySavedRegistry() });
+    expect(await saver.save(photo('pixels'))).toBe('saved');
+    const first = `/p/Meeshy/${String(writes()[0]?.options.fileName)}.jpg`;
+    deleted.add(first);
+    expect(await saver.save(photo('pixels'))).toBe('saved');
+    expect(writes()).toHaveLength(2);
+    expect(probes()).toEqual([first]);
+    const second = `/p/Meeshy/${String(writes()[1]?.options.fileName)}.jpg`;
+    expect(await saver.save(photo('pixels'))).toBe('already-saved');
+    expect(probes()).toEqual([first, second]);
+    expect(writes()).toHaveLength(2);
+  });
+
+  test('le fichier est toujours là → « déjà enregistré », rien n’est réécrit', async () => {
+    const { shell, writes, probes } = shellWithAlbum({ probe: () => true });
+    const saver = shellGallerySaver(shell, { saved: memoryGallerySavedRegistry() });
+    expect(await saver.save(photo('pixels'))).toBe('saved');
+    expect(await saver.save(photo('pixels'))).toBe('already-saved');
+    expect(writes()).toHaveLength(1);
+    expect(probes()).toHaveLength(1);
+  });
+
+  test('la galerie ne répond pas (refus, chemin hors album) → le registre fait foi, aucun doublon', async () => {
+    const { shell, writes } = shellWithAlbum({ probe: () => 'reject' });
+    const saver = shellGallerySaver(shell, { saved: memoryGallerySavedRegistry() });
+    expect(await saver.save(photo('pixels'))).toBe('saved');
+    expect(await saver.save(photo('pixels'))).toBe('already-saved');
+    expect(writes()).toHaveLength(1);
+  });
+
+  test('une coque construite avant la vérification (pas de `MeeshyGallery`) → le registre fait foi', async () => {
+    const { shell, writes } = shellWithAlbum();
+    const saver = shellGallerySaver(shell, { saved: memoryGallerySavedRegistry() });
+    expect(await saver.save(photo('pixels'))).toBe('saved');
+    expect(await saver.save(photo('pixels'))).toBe('already-saved');
+    expect(writes()).toHaveLength(1);
+  });
+
+  test('IndexedDB garde le chemin du fichier écrit, et l’oublie quand il a disparu', async () => {
+    const idb = fakeIndexedDb();
+    const deleted = new Set<string>();
+    const first = shellWithAlbum({ probe: (path) => !deleted.has(path) });
+    expect(await shellGallerySaver(first.shell, { saved: idbGallerySavedRegistry(idb.factory) }).save(photo('pixels'))).toBe('saved');
+    const digest = await galleryDigest(new Blob(['pixels']));
+    const path = `/p/Meeshy/${String(first.writes()[0]?.options.fileName)}.jpg`;
+    expect(idb.rowsOf(GALLERY_SAVED_DB_NAME, GALLERY_SAVED_STORE_NAME).get(digest)).toMatchObject({ path });
+    deleted.add(path);
+    const second = shellWithAlbum({ probe: (candidate) => !deleted.has(candidate) });
+    expect(await shellGallerySaver(second.shell, { saved: idbGallerySavedRegistry(idb.factory) }).save(photo('pixels'))).toBe('saved');
+    const rewritten = `/p/Meeshy/${String(second.writes()[0]?.options.fileName)}.jpg`;
+    expect(idb.rowsOf(GALLERY_SAVED_DB_NAME, GALLERY_SAVED_STORE_NAME).get(digest)).toMatchObject({ path: rewritten });
+  });
+
+  test('une entrée ANCIENNE, sans chemin (#14641), reste « déjà enregistré » : rien ne permet de la vérifier, et réécrire doublerait chaque média encore présent', async () => {
+    const idb = fakeIndexedDb();
+    const digest = await galleryDigest(new Blob(['pixels']));
+    idb.put(GALLERY_SAVED_DB_NAME, GALLERY_SAVED_STORE_NAME, digest, 1_762_000_000_000);
+    const { shell, writes, probes } = shellWithAlbum({ probe: () => false });
+    expect(await shellGallerySaver(shell, { saved: idbGallerySavedRegistry(idb.factory) }).save(photo('pixels'))).toBe('already-saved');
+    expect(writes()).toHaveLength(0);
+    expect(probes()).toHaveLength(0);
   });
 });
 
