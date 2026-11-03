@@ -108,6 +108,17 @@ class EmailVerificationViewModel @Inject constructor(
         )
     }
 
+    /**
+     * Un nouvel envoi à la même adresse (« Renvoyer ») a un nouveau jeton d'attente : la veille repart avec lui, et
+     * l'adresse déjà confirmée ailleurs ne le reste pas pour le nouvel envoi (iOS `pendingSessionToken` réassigné).
+     */
+    fun refreshPendingSessionToken(token: String?) {
+        if (token == pendingSessionToken) return
+        pendingSessionToken = token
+        ui.update { it.copy(provenElsewhere = false) }
+        if (watchJob?.isActive == true) startWatching()
+    }
+
     fun onEvent(event: EmailVerificationEvent) {
         when (event) {
             is EmailVerificationEvent.CodeChanged -> onCodeChanged(event.raw)

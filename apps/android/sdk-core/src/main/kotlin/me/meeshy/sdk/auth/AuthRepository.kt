@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.AvailabilityResult
 import me.meeshy.sdk.model.LoginRequest
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RegisterRequest
+import me.meeshy.sdk.model.auth.EmailCodeDispatch
 import me.meeshy.sdk.model.auth.EmailVerificationRequest
 import me.meeshy.sdk.model.auth.EmailVerificationWatchStatus
 import me.meeshy.sdk.model.auth.LoginOutcome
@@ -55,6 +56,7 @@ class AuthRepository @Inject constructor(
     private val accountShelf: AccountShelf = NoAccountShelf,
     private val sessionClosing: me.meeshy.sdk.session.SessionClosing? = null,
     private val serverLogout: ServerLogout? = null,
+    private val linkDevice: LinkDeviceBindingProviding = NoLinkDeviceBinding,
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
 
@@ -125,9 +127,9 @@ class AuthRepository @Inject constructor(
      * basculerait et démonterait l'écran en cours (#8288).
      */
     suspend fun confirmEmail(request: EmailVerificationRequest): NetworkResult<LoginOutcome> =
-        when (val result = apiCall { authApi.verifyEmail(request) }) {
+        when (val result = apiCall { authApi.verifyEmail(request.presenting(linkDevice.presentedSecret())) }) {
             is NetworkResult.Failure -> result
-            is NetworkResult.Success -> result.data.asOutcome(typedIdentifier = request.email)
+            is NetworkResult.Success -> result.data.asOutcome(typedIdentifier = request.email).also { if (request.token != null) forgetLinkSecretIfSettled(it) }
         }
 
     /**
@@ -155,15 +157,29 @@ class AuthRepository @Inject constructor(
                 authApi.validateMagicLink(
                     me.meeshy.sdk.net.api.MagicLinkValidateRequest(
                         token = token,
-                        linkDeviceSecret = linkDeviceSecret?.takeIf { it.isNotBlank() },
+                        linkDeviceSecret = (linkDeviceSecret ?: linkDevice.presentedSecret())?.takeIf { it.isNotBlank() },
                         confirm = if (confirmed) true else null,
                     ),
                 )
             }
         ) {
             is NetworkResult.Failure -> result
-            is NetworkResult.Success -> result.data.asOutcome()
+            is NetworkResult.Success -> result.data.asOutcome().also { forgetLinkSecretIfSettled(it) }
         }
+
+    /**
+     * Le secret ne sert qu'une fois : il s'oublie dès que la preuve a rendu une session ou un défi de second
+     * facteur. Une demande de confirmation le garde (le jeton n'est pas consommé) ; un refus aussi, car un lien plus
+     * ancien qui échoue ne doit pas délier le lien en cours (iOS `forgetLinkSecretIfSettled`).
+     */
+    private fun forgetLinkSecretIfSettled(result: NetworkResult<LoginOutcome>) {
+        val outcome = (result as? NetworkResult.Success)?.data ?: return
+        forgetLinkSecretIfSettled(outcome)
+    }
+
+    private fun forgetLinkSecretIfSettled(outcome: LoginOutcome) {
+        if (outcome is LoginOutcome.Authenticated || outcome is LoginOutcome.TwoFactorRequired) linkDevice.forget()
+    }
 
     /**
      * Ferme côté passerelle une session prouvée qu'on n'a pas posée (refusée, hors fenêtre,
@@ -261,6 +277,23 @@ class AuthRepository @Inject constructor(
             .map { it.expiresInSeconds ?: DEFAULT_MAGIC_LINK_VALIDITY_SECONDS }
 
     /**
+     * Demande l'e-mail « code + lien » de la connexion sans mot de passe (iOS `requestEmailCode`) : le lien est LIÉ À
+     * CET APPAREIL — la demande ne porte que l'EMPREINTE d'un secret tiré ici et gardé au coffre
+     * ([LinkDeviceBindingProviding]). Rend la durée de validité et le jeton d'attente de cet appareil.
+     */
+    suspend fun requestEmailCode(email: String): NetworkResult<EmailCodeDispatch> =
+        apiCall {
+            authApi.requestMagicLink(
+                me.meeshy.sdk.net.api.MagicLinkRequestBody(email, linkDeviceHash = linkDevice.issueHash()),
+            )
+        }.map {
+            EmailCodeDispatch(
+                expiresInSeconds = it.expiresInSeconds ?: EmailCodeDispatch.DEFAULT_EXPIRES_IN_SECONDS,
+                pendingSessionToken = it.pendingSessionToken,
+            )
+        }
+
+    /**
      * Echange le token du magic link contre une session complete — le pendant
      * passwordless de [login] : memes effets (tokens persistes, session hydratee).
      * L'appelant est responsable du logout PREALABLE si un compte est deja ouvert
@@ -290,14 +323,14 @@ class AuthRepository @Inject constructor(
                 authApi.validateMagicLink(
                     me.meeshy.sdk.net.api.MagicLinkValidateRequest(
                         token = token,
-                        linkDeviceSecret = linkDeviceSecret?.takeIf { it.isNotBlank() },
+                        linkDeviceSecret = (linkDeviceSecret ?: linkDevice.presentedSecret())?.takeIf { it.isNotBlank() },
                         confirm = if (confirmed) true else null,
                     ),
                 )
             }
         ) {
             is NetworkResult.Failure -> result
-            is NetworkResult.Success -> result.data.openIfAuthenticated()
+            is NetworkResult.Success -> result.data.openIfAuthenticated().also { forgetLinkSecretIfSettled(it) }
         }
 
     /** Renvoie le code / lien de vérification ; la passerelle répond succès même sans compte (anti-énumération). */
