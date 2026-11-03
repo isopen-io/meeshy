@@ -10,7 +10,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.model.settings.LogoutPhase
 import me.meeshy.sdk.socket.RealtimeSessionCoordinator
@@ -56,12 +58,16 @@ class SignOutViewModel @Inject constructor(
         if (_phase.value != LogoutPhase.Confirming) return
         _phase.value = LogoutPhase.InProgress
         viewModelScope.launch {
-            try {
-                authRepository.logout()
-                realtimeCoordinator.onAuthenticatedChanged(false)
-            } finally {
-                _phase.update { it.finished() }
-                _effects.send(SignOutEffect.SignedOut)
+            // La purge vide le jeton, ce qui fait basculer la racine sur la connexion et détruit cet écran :
+            // elle ne doit pas être coupée en route par l'annulation de viewModelScope.
+            withContext(NonCancellable) {
+                try {
+                    authRepository.logout()
+                    realtimeCoordinator.onAuthenticatedChanged(false)
+                } finally {
+                    _phase.update { it.finished() }
+                    _effects.trySend(SignOutEffect.SignedOut)
+                }
             }
         }
     }
