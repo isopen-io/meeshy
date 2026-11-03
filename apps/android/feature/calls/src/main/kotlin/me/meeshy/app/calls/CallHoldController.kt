@@ -135,7 +135,10 @@ class CallHoldController @Inject constructor(
         if (!active) reset()
     }
 
-    override fun onCleared() = reset()
+    override fun onCleared() {
+        reset()
+        host = null
+    }
 
     private fun reset() {
         telecomHeld = false
