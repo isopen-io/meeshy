@@ -138,6 +138,31 @@ final class APIRequestPipelineTests: XCTestCase {
         XCTAssertEqual(rejection.field, "username")
     }
 
+    /// #14708 — un refus typé ne se lit comme une décision de la passerelle
+    /// que s'il porte son enveloppe (`success: false`) : un intermédiaire peut
+    /// servir un JSON qui ressemble au refus sans être elle.
+    func test_classify_structuredRejection_saysWhetherTheGatewayEnvelopeServedIt() {
+        let served = #"{"success":false,"error":"Introuvable","code":"CONVERSATION_NOT_FOUND"}"#
+        let foreign = #"{"error":"Introuvable","code":"CONVERSATION_NOT_FOUND"}"#
+        let html = "<html>404 page not found</html>"
+
+        let verdicts = [served, foreign, html].map { body -> Bool? in
+            guard case MeeshyError.rejected(let rejection)? = thrown(classify(status: 404, body: body, rejection: .structured))
+            else { return nil }
+            return rejection.isGatewayEnvelope
+        }
+
+        XCTAssertEqual(verdicts, [true, false, false])
+    }
+
+    func test_gatewayRefusal_requiresTheEnvelopeAndACode() {
+        let served = Data(#"{"success":false,"error":"Refusé","code":"CONVERSATION_ACCESS_DENIED"}"#.utf8)
+        let foreign = Data(#"{"error":"Refusé","code":"CONVERSATION_ACCESS_DENIED"}"#.utf8)
+
+        XCTAssertEqual(APIRejection.gatewayRefusal(statusCode: 403, body: served)?.isGatewayEnvelope, true)
+        XCTAssertNil(APIRejection.gatewayRefusal(statusCode: 403, body: foreign))
+    }
+
     func test_classify_opaquePolicy_keepsA422AsAServerError() {
         let error = thrown(classify(status: 422, body: #"{"error":"Pseudo pris","code":"USERNAME_TAKEN"}"#))
         XCTAssertEqual(serverParts(error)?.status, 422)

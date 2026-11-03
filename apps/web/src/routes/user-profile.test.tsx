@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { authorPostsQueryKey } from '@/lib/api/author-posts';
 import { BLOCKED_USERS_QUERY_KEY } from '@/lib/api/blocks';
 import { VIEWER_ID } from '@/lib/api/fixtures';
+import { resetFixtureFriendsForTests } from '@/lib/api/fixtures-friends';
 import { friendRequestsQueryKey } from '@/lib/api/friend-requests';
 import { fixtureAuthorPosts } from '@/lib/api/fixtures-rich-text';
 import { sharedConversationsQueryKey } from '@/lib/api/shared-conversations';
@@ -48,6 +49,7 @@ afterEach(() => {
   mounted?.container.remove();
   mounted = null;
   appQueryClient.clear();
+  resetFixtureFriendsForTests();
   presenceStore.getState().clear();
   /* LE RÉSEAU SE REMET ICI, jamais en fin de corps de témoin : une assertion
      qui casse avant la ligne de restauration laisserait l'`onlineManager` de

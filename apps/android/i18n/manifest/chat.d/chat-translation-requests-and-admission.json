@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "message.translation.e2ee.serverRefused",
+          "androidName": "message_translation_e2ee_serverRefused",
+          "status": "adopted"
+        },
+        {
+          "androidName": "chat_explorer_request_failed",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

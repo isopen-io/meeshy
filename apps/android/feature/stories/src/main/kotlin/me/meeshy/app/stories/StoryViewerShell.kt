@@ -46,6 +46,8 @@ internal fun StoryViewerShell(
     slideDurationMs: Int,
     progress: Animatable<Float, AnimationVector1D>,
     playing: Boolean,
+    lap: Int,
+    waiting: Boolean,
     composing: Boolean,
     railPlan: StoryRailPlan,
     commentThread: PostCommentsViewModel?,
@@ -100,8 +102,10 @@ internal fun StoryViewerShell(
                 .onGloballyPositioned { rail.boxOriginInRoot = it.positionInRoot() },
         ) {
             if (slide != null) {
-                StoryViewerCanvas(slide, progress, slideDurationMs, playing, state.isMuted, viewModel)
+                StoryViewerCanvas(slide, progress, slideDurationMs, playing, state.isMuted, lap, viewModel)
             }
+
+            StoryStallIndicator(waiting = waiting, modifier = Modifier.align(Alignment.Center))
 
             val composerPinned = commentThread != null && railPlan.pinsCommentComposer && slide != null &&
                 !state.isDismissed && (!state.isPaused || composing)

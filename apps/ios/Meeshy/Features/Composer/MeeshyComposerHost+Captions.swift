@@ -63,11 +63,17 @@ extension MeeshyComposerHost {
         let altsDuComposer = documentMediaAlts.filter {
             !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
-        guard !duComposer.isEmpty || !altsDuComposer.isEmpty else { return base }
+        // Le choix de la reprise du son (#4756) part par la MÊME greffe, sur
+        // les deux bouches de l'entonnoir ; sans lui, celui de l'atelier.
+        let son = soundExtractionChoice ?? base.allowSoundExtraction
+        guard !duComposer.isEmpty || !altsDuComposer.isEmpty else {
+            return ComposerMediaAccessibility(mediaAlt: base.mediaAlt, mediaCaption: base.mediaCaption,
+                                              allowSoundExtraction: son, alsoAsReel: base.alsoAsReel)
+        }
         return ComposerMediaAccessibility(
             mediaAlt: (base.mediaAlt ?? [:]).merging(altsDuComposer) { _, composer in composer },
             mediaCaption: (base.mediaCaption ?? [:]).merging(duComposer) { _, composer in composer },
-            allowSoundExtraction: base.allowSoundExtraction,
+            allowSoundExtraction: son,
             alsoAsReel: base.alsoAsReel
         )
     }

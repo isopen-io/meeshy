@@ -25,6 +25,9 @@ class PushMessageDispatcherTest {
             firstArg<Map<String, String>>()["type"] == NotificationRevocationParser.TYPE
         } }
         val messagePresenter: MessageNotificationPresenter = mockk(relaxed = true)
+        val freshness: me.meeshy.sdk.call.CallFreshnessChecker = mockk {
+            io.mockk.coEvery { check(any()) } returns me.meeshy.sdk.model.call.CallFreshness.Live
+        }
         val dispatcher = PushMessageDispatcher(
             ringStore = IncomingCallRingStore(),
             session = session,
@@ -32,6 +35,7 @@ class PushMessageDispatcherTest {
             callPresenter = callPresenter,
             revocationHandler = revocationHandler,
             messagePresenter = messagePresenter,
+            freshness = freshness,
             observers = observers,
         )
     }
@@ -46,6 +50,26 @@ class PushMessageDispatcherTest {
             log += label
             failure?.let { throw it }
         }
+    }
+
+    @Test
+    fun `un appel deja fini ne sonne pas`() {
+        val fixture = Fixture()
+        io.mockk.coEvery { fixture.freshness.check("call-1") } returns me.meeshy.sdk.model.call.CallFreshness.Finished
+
+        fixture.dispatcher.dispatch(callPush, nowMillis = 100)
+
+        verify(exactly = 0) { fixture.callPresenter.show(any()) }
+    }
+
+    @Test
+    fun `une erreur de verification retombe sur sonner`() {
+        val fixture = Fixture()
+        io.mockk.coEvery { fixture.freshness.check(any()) } throws java.io.IOException("offline")
+
+        fixture.dispatcher.dispatch(callPush, nowMillis = 100)
+
+        verify { fixture.callPresenter.show(any()) }
     }
 
     private fun push(vararg pairs: Pair<String, String>) = IncomingPush.of(mapOf(*pairs))

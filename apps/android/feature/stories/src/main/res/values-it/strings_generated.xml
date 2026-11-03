@@ -300,6 +300,8 @@
     <string name="story_composer_grabber">Maniglia della barra strumenti</string>
     <string name="story_composer_grabber_hint_dismiss">Trascina verso il basso per ridurre o chiudere.</string>
     <string name="story_composer_grabber_hint_resize">Trascina verso l\'alto per ingrandire, verso il basso per ridurre o chiudere.</string>
+    <string name="story_composer_loadingImage">Caricamento dell\'immagine...</string>
+    <string name="story_composer_loadingVideo">Caricamento del video...</string>
     <string name="story_composer_redo">Ripristina</string>
     <string name="story_composer_soundLibrary">Libreria</string>
     <string name="story_composer_undo">Annulla</string>
@@ -322,6 +324,7 @@
     <string name="story_media_soundExtraction_a11yHint">Altre persone potranno riutilizzare la colonna sonora dei video di questo post nelle proprie pubblicazioni.</string>
     <string name="story_media_soundExtraction_caption">Altre persone potranno riutilizzare la colonna sonora dei video di questo post.</string>
     <string name="story_media_soundExtraction_label">Consenti il riutilizzo dell\'audio</string>
+    <string name="story_reader_buffering">Caricamento della storia in corso</string>
     <string name="story_repost_error_forbidden">Questa storia non può essere ricondivisa</string>
     <string name="story_repost_error_generic">Ripubblicazione non riuscita</string>
     <string name="story_repost_error_unavailable">Questa storia non è più disponibile</string>

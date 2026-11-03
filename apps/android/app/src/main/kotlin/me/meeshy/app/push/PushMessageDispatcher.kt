@@ -1,5 +1,9 @@
 package me.meeshy.app.push
 
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
+import me.meeshy.sdk.call.CallFreshnessChecker
+import me.meeshy.sdk.model.call.CallFreshness
 import me.meeshy.sdk.model.call.IncomingCallPushRoute
 import me.meeshy.sdk.model.push.PushRecipient
 import me.meeshy.sdk.net.TokenStore
@@ -29,6 +33,7 @@ class PushMessageDispatcher @Inject constructor(
     private val callPresenter: IncomingCallNotificationPresenter,
     private val revocationHandler: RevocationPushHandler,
     private val messagePresenter: MessageNotificationPresenter,
+    private val freshness: CallFreshnessChecker,
     observers: Set<@JvmSuppressWildcards PushObserver>,
 ) {
     private val observers: List<PushObserver> =
@@ -71,12 +76,29 @@ class PushMessageDispatcher @Inject constructor(
 
     private fun render(push: IncomingPush, nowMillis: Long) {
         when (val route = ringStore.route(push.data, nowMillis, selfUserId = session.currentUserId)) {
-            is IncomingCallPushRoute.Ring -> callPresenter.show(route.push)
+            is IncomingCallPushRoute.Ring -> if (isStillLive(route.push.callId)) {
+                callPresenter.show(route.push)
+            } else {
+                ringStore.remember(route.push.callId, nowMillis)
+                Timber.d("Call push for an already finished call: no ring")
+            }
             is IncomingCallPushRoute.StopRing -> callPresenter.cancel(route.push)
             is IncomingCallPushRoute.Suppress -> Timber.d("Suppressed call push: ${route.reason}")
             IncomingCallPushRoute.NotACallPush -> {
                 if (!revocationHandler.handle(push.data)) messagePresenter.present(push)
             }
         }
+    }
+
+    /** Contrôle de fraîcheur borné : push livrée après la fin de l'appel = pas de sonnerie ; doute = sonner. */
+    private fun isStillLive(callId: String): Boolean {
+        val verdict = runCatching {
+            runBlocking { withTimeoutOrNull(FRESHNESS_TIMEOUT_MS) { freshness.check(callId) } }
+        }.getOrNull()
+        return verdict != CallFreshness.Finished
+    }
+
+    private companion object {
+        const val FRESHNESS_TIMEOUT_MS = 3_000L
     }
 }
