@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="a11y_floating_menu_unread">
+        <item quantity="zero">لا إشعارات معلّقة</item>
+        <item quantity="one">إشعار واحد معلّق</item>
+        <item quantity="two">إشعاران معلّقان</item>
+        <item quantity="few">%1$d إشعارات معلّقة</item>
+        <item quantity="many">%1$d إشعارًا معلّقًا</item>
+        <item quantity="other">%1$d إشعار معلّق</item>
+    </plurals>
+</resources>

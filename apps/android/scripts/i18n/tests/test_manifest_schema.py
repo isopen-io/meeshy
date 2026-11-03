@@ -41,7 +41,7 @@ class VocabularyTests(unittest.TestCase):
     def test_catalogs_cover_the_app_the_ui_kit_and_the_extensions(self):
         self.assertEqual(
             set(CATALOGS),
-            {"app", "ui", "widgets", "nse", "nce", "infoplist"},
+            {"app", "ui", "widgets", "nse", "nce", "infoplist", "share"},
         )
 
     def test_catalog_paths_point_at_the_ios_sources(self):

@@ -56,7 +56,7 @@ class CallPreviewViewsTest {
         var toggles = 0
         incomingScreen(CallPreviewUi(offersSound = true)) { toggles += 1 }
 
-        rule.onNodeWithContentDescription("Turn on sound")
+        rule.onNodeWithContentDescription("Turn sound on")
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, false))
             .performClick()
 
@@ -67,14 +67,14 @@ class CallPreviewViewsTest {
     fun `le bouton du son offre une cible de 48 dp au moins`() {
         rule.setContent { MeeshyTheme { CallPreviewSoundButton(isAudible = false, onToggle = {}) } }
 
-        rule.onNodeWithContentDescription("Turn on sound").assertHeightIsAtLeast(48.dp)
+        rule.onNodeWithContentDescription("Turn sound on").assertHeightIsAtLeast(48.dp)
     }
 
     @Test
     fun `le son active se lit selectionne et propose de le couper`() {
         incomingScreen(CallPreviewUi(offersSound = true, isAudible = true))
 
-        rule.onNodeWithContentDescription("Mute sound")
+        rule.onNodeWithContentDescription("Turn sound off")
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true))
     }
 
@@ -82,7 +82,7 @@ class CallPreviewViewsTest {
     fun `sans apercu propose l'ecran entrant reste celui d'avant`() {
         incomingScreen(CallPreviewUi())
 
-        rule.onNodeWithContentDescription("Turn on sound").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Turn sound on").assertDoesNotExist()
     }
 
     @Test
@@ -105,8 +105,8 @@ class CallPreviewViewsTest {
             }
         }
 
-        rule.onNodeWithText("Bob sees you before answering").assertExists()
-        rule.onNodeWithContentDescription("Mic before answering", substring = true).assertIsOff().performClick()
+        rule.onNodeWithText("Bob can see you before answering").assertExists()
+        rule.onNodeWithContentDescription("Microphone before answering", substring = true).assertIsOff().performClick()
         rule.onNodeWithContentDescription("Camera before answering", substring = true).assertIsOn().performClick()
         assertThat(audio).isEqualTo(1)
         assertThat(video).isEqualTo(1)
@@ -120,6 +120,6 @@ class CallPreviewViewsTest {
             }
         }
 
-        rule.onNodeWithContentDescription("Mic before answering", substring = true).assertDoesNotExist()
+        rule.onNodeWithContentDescription("Microphone before answering", substring = true).assertDoesNotExist()
     }
 }
