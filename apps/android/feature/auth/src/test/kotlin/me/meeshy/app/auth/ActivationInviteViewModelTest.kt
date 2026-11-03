@@ -77,7 +77,7 @@ class ActivationInviteViewModelTest {
         assertThat(rig.viewModel.state.value.isPresented).isTrue()
 
         rig.viewModel.onEvent(ActivationInviteEvent.Dismiss)
-        rig.users.value = user()
+        rig.users.value = user(missing = listOf(Channel.EMAIL))
         advanceUntilIdle()
         assertThat(rig.viewModel.state.value.isPresented).isFalse()
 
