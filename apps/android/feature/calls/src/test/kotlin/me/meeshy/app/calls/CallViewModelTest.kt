@@ -194,7 +194,7 @@ class CallViewModelTest {
         CallPeerIndicatorsController(signalManager, qualityResetTimer, screenRecordingDetector),
         CallWaitingController(signalManager, waitingTimer, mockk(relaxed = true)),
         CallWatchdogsController(signalManager, heartbeatTicker, reconnectBudget, connectingWatchdog),
-        CallAnalyticsController(signalManager, clock, InMemoryCallQualitySummaryStore()),
+        CallAnalyticsController(signalManager, clock, InMemoryCallQualitySummaryStore(), silentAnalyticsSnapshots),
         extensions,
         mockk(relaxed = true),
         CallPeerVisualSource { kotlinx.coroutines.flow.emptyFlow() },

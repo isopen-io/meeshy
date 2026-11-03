@@ -51,6 +51,7 @@
     <string name="route_title_starred">Starred messages</string>
     <string name="route_title_story">Story</string>
     <string name="route_title_tracking_links">Tracking links</string>
+    <string name="share_sending">Sending…</string>
     <string name="upgrade_required_action">Update</string>
     <string name="upgrade_required_message">This version of Meeshy can no longer talk to the server. Install the latest version to continue.</string>
     <string name="upgrade_required_min_version">Minimum version: %1$s</string>
