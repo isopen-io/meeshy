@@ -66,11 +66,11 @@ public class InterruptionResumeAdapter(
         apply(signal)
     }
 
-    public fun onUserPaused() = apply(InterruptionResumeLedger.Signal.UserPaused)
+    public fun onUserPaused(): Unit = apply(InterruptionResumeLedger.Signal.UserPaused)
 
-    public fun onUserStarted() = apply(InterruptionResumeLedger.Signal.UserStartedPlayback)
+    public fun onUserStarted(): Unit = apply(InterruptionResumeLedger.Signal.UserStartedPlayback)
 
-    public fun onContentReleased() = apply(InterruptionResumeLedger.Signal.ContentReleased)
+    public fun onContentReleased(): Unit = apply(InterruptionResumeLedger.Signal.ContentReleased)
 
     private fun apply(signal: InterruptionResumeLedger.Signal) {
         when (ledger.handle(signal)) {
