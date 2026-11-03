@@ -183,6 +183,20 @@ class NotificationRepository @Inject constructor(
         _notificationsSyncedAt.value = clock.nowMillis()
     }
 
+    /**
+     * Applique [transform] à la liste « all » ET à chaque liste de portée chargée dans la session : un marquage « lu » se
+     * lit dans TOUTES les vues montées (cloche, onglets, non lues seulement), pas seulement dans la liste complète.
+     */
+    fun patchEverywhere(transform: (List<ApiNotification>) -> List<ApiNotification>) {
+        _notificationsCache.update { current -> current?.let(transform) }
+        scopedLists.replaceAll { _, current -> transform(current) }
+    }
+
+    /** Corrige le compteur de non-lues d'un [delta] relatif (jamais en dessous de zéro) : atomique, contrairement à lire puis écrire. */
+    fun adjustUnreadCount(delta: Int) {
+        _unreadCount.update { (it + delta).coerceAtLeast(0) }
+    }
+
     /** La liste en mémoire d'une portée autre que « all » ; `null` tant qu'elle n'a pas été chargée dans cette session. */
     fun cachedItems(scope: NotificationScope): List<ApiNotification>? =
         if (scope.isAll) _notificationsCache.value else scopedLists[scope]
