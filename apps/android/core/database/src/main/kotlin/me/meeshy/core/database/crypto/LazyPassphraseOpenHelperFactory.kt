@@ -7,7 +7,9 @@ import java.lang.reflect.Proxy
 
 /**
  * Remet à Room une aide d'ouverture dont la phrase secrète n'est lue qu'au premier accès à la base
- * (`writableDatabase` / `readableDatabase`), sur le thread qui ouvre — jamais à la construction du singleton Hilt.
+ * (`writableDatabase` / `readableDatabase`), sur le thread qui ouvre. En production, `DatabaseOpener` a déjà exécuté
+ * la préparation (clé, migration) et ouvert la base dans le `@Provides` : la paresse ne déplace donc rien hors du
+ * thread qui construit le singleton, elle garantit seulement qu'aucune aide n'est créée sans phrase prête.
  * [delegateFor] fabrique la vraie fabrique (SQLCipher) pour la phrase lue. Le drapeau WAL demandé avant l'ouverture est
  * rejoué sur l'aide réelle. Un proxy évite de recopier la surface de `SupportSQLiteOpenHelper`, qui change de langue
  * d'une version d'androidx.sqlite à l'autre.

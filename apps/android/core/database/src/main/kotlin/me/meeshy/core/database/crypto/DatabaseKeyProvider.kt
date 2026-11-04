@@ -51,7 +51,8 @@ public open class DatabaseEncryptionException(message: String, cause: Throwable?
 public class DatabaseKeyUnavailableException(message: String) : DatabaseEncryptionException(message)
 
 /**
- * La clé aléatoire de la base, gardée dans le coffre Keystore (`SecureStore`, AES-GCM adossé à l'Android Keystore).
+ * La clé aléatoire de la base, gardée dans son propre coffre Keystore (`@DatabaseKeyVault`, AES-GCM adossé à l'Android
+ * Keystore), qui ne se recrée que sur un échec durable prouvé : une panne passagère du Keystore ne le vide jamais.
  * Créée une seule fois, relue à l'identique ensuite. Une clé n'est créée que dans deux cas, qui prouvent que l'ancienne
  * n'existe plus : le coffre la dit ABSENTE ([KeyOrigin.CREATED]), ou il a été RECRÉÉ (Keystore invalidé, réinstallation,
  * changement biométrique) et, la reprise acquittée, il la dit absente ([KeyOrigin.REGENERATED]) — la base chiffrée par
@@ -66,6 +67,22 @@ public class DatabaseKeyProvider(
     @Volatile private var cached: DatabaseKey? = null
 
     public fun obtain(): DatabaseKey = cached ?: synchronized(this) { cached ?: load().also { cached = it } }
+
+    /**
+     * La clé déjà en mémoire, ou celle que le coffre rend telle quelle ; `null` sinon. Une LECTURE seule : ni création,
+     * ni acquittement de reprise, ni écriture d'aucune sorte (le sauvetage d'une base ne doit rien changer au coffre).
+     */
+    public fun existingOrNull(): DatabaseKey? = cached ?: when (val read = store.read(KEY, ACCOUNT)) {
+        is SecureRead.Present -> DatabaseKey.fromHex(read.value, KeyOrigin.EXISTING)
+        SecureRead.Absent, SecureRead.Unreadable -> null
+    }
+
+    /**
+     * Remplace une clé que le coffre ne rend pas ([DatabaseKeyUnavailableException]) par une clé neuve. Réservé à
+     * l'appelant qui a prouvé qu'AUCUN fichier ne dépend de l'ancienne (base en clair ou absente) : la remplacer ne
+     * perd alors rien, et la garder laisserait la base en clair sur le disque, lancement après lancement.
+     */
+    public fun replaceUnusable(): DatabaseKey = synchronized(this) { create(KeyOrigin.REGENERATED).also { cached = it } }
 
     /** Détruit la clé : la base chiffrée devient irrécupérable (déconnexion complète, effacement). */
     public fun destroyKey() {

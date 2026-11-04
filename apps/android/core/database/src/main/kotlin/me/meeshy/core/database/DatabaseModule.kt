@@ -35,7 +35,7 @@ import me.meeshy.core.database.crypto.EncryptedDatabaseBootstrap
 import me.meeshy.core.database.crypto.EncryptionEventSink
 import me.meeshy.core.database.crypto.PlaintextDatabaseMigrator
 import me.meeshy.core.database.crypto.SqlCipherRuntime
-import me.meeshy.core.datastore.SecretVault
+import me.meeshy.core.datastore.DatabaseKeyVault
 import me.meeshy.core.database.migration.MeeshyMigrations
 import me.meeshy.sdk.model.security.SecureStore
 import me.meeshy.core.database.search.SearchIndexSchema
@@ -93,7 +93,7 @@ internal object DatabaseModule {
     @Singleton
     fun providesEncryptedDatabaseBootstrap(
         @ApplicationContext context: Context,
-        @SecretVault vault: SecureStore,
+        @DatabaseKeyVault vault: SecureStore,
         diagnostics: DatabaseInitDiagnostics,
         health: StorageHealth,
     ): EncryptedDatabaseBootstrap = EncryptedDatabaseBootstrap(

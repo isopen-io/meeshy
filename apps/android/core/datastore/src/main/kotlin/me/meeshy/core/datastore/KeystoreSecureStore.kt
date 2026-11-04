@@ -28,6 +28,10 @@ import me.meeshy.sdk.model.security.SecureStore
  *   [recoveryLedger], a plain (non-secret) file written BEFORE the vault file is deleted, so the
  *   next launch still reads [SecureRead.Unreadable] instead of "absent". An unreadable ledger keeps
  *   every account unreadable; a ledger that cannot be written leaves the vault file in place.
+ * - Gated recreation: deleting the file destroys every secret it held, so [recreation] decides first. The default
+ *   recreates on the first failure; the database-key vault ([DurableFailureGate]) recreates only after a durable
+ *   failure, proven over several launches — a transient failure leaves the file in place and the store unreadable
+ *   for this launch.
  * - Silent: no value (and no key) is ever logged.
  *
  * [open] is injected so tests substitute real `SharedPreferences` for the
@@ -38,6 +42,7 @@ class KeystoreSecureStore(
     private val reset: () -> Unit = {},
     private val io: CoroutineDispatcher = Dispatchers.IO,
     private val recoveryLedger: () -> SharedPreferences? = { null },
+    private val recreation: VaultRecreationGate = VaultRecreationGate.Always,
 ) : SecureStore {
 
     private val lock = Any()
@@ -59,13 +64,18 @@ class KeystoreSecureStore(
         cached ?: if (gaveUp) null else openOrRecreate().also { cached = it; gaveUp = it == null }
     }
 
-    private fun openOrRecreate(): SharedPreferences? =
-        attempt(open) ?: run {
-            recreated = true
-            if (!markRecreated()) return null
-            attempt(reset)
-            attempt(open)
+    private fun openOrRecreate(): SharedPreferences? {
+        val failure = try {
+            return open().also { attempt(recreation::opened) }
+        } catch (failure: Exception) {
+            failure
         }
+        if (attempt { recreation.mayRecreate(failure) } != true) return null
+        recreated = true
+        if (!markRecreated()) return null
+        attempt(reset)
+        return attempt(open)?.also { attempt(recreation::opened) }
+    }
 
     private fun markRecreated(): Boolean {
         val ledger = ledger ?: return !ledgerBroken
@@ -165,7 +175,11 @@ class KeystoreSecureStore(
         private const val ACKNOWLEDGED = "acknowledged"
 
         /** Opens (or reopens, unchanged) the Keystore-encrypted file [fileName]. */
-        fun create(context: Context, fileName: String): KeystoreSecureStore {
+        fun create(
+            context: Context,
+            fileName: String,
+            recreation: (Context) -> VaultRecreationGate = { VaultRecreationGate.Always },
+        ): KeystoreSecureStore {
             val app = context.applicationContext
             return KeystoreSecureStore(
                 open = {
@@ -182,6 +196,7 @@ class KeystoreSecureStore(
                 },
                 reset = { app.deleteSharedPreferences(fileName) },
                 recoveryLedger = { app.getSharedPreferences("$fileName.recovery", Context.MODE_PRIVATE) },
+                recreation = recreation(app),
             )
         }
     }

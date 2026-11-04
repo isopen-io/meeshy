@@ -248,10 +248,10 @@ E2EE protocol questions are escalated to dedicated, reviewable ADRs.
 
 **Amendment (2026-11, #15880 — SQLCipher shipped).** `meeshy.db` is a SQLCipher
 database (`net.zetetic:sqlcipher-android`). The key is 32 random bytes held in the
-Keystore-backed `SecureStore` (`@SecretVault`, account `meeshy.database`) and handed
-to SQLCipher as a raw key (`x'<hex>'`, no PBKDF2 per open). It is read on the first
-open on Room's thread (`LazyPassphraseOpenHelperFactory`), never while the Hilt
-singleton is built. An existing plaintext install is migrated at that first open by
+Keystore-backed `SecureStore` (`@DatabaseKeyVault`, account `meeshy.database`) and handed
+to SQLCipher as a raw key (`x'<hex>'`, no PBKDF2 per open). It is read by
+`DatabaseOpener` before the first open, on the thread that builds the `MeeshyDatabase`
+singleton (see the counter-audit amendment below). An existing plaintext install is migrated then by
 `sqlcipher_export` into `meeshy.db.enc.tmp`, verified (user_version + row counts of
 the durable tables: outbox, media_blob, tus_upload_checkpoint, ...), then swapped in;
 the plaintext copy (`.plain.bak`) is deleted last, and an interrupted run resumes from
@@ -284,6 +284,28 @@ key never appears in SQL text. Bootstrap events reach `DatabaseInitDiagnostics`,
 purge degrades `StorageHealth` (`key-lost`). Limits: no JVM build of SQLCipher exists
 (the AAR ships bionic `.so` only), so the unit tests use a stand-in engine; the real
 format is proved only by a manual or instrumented run.
+
+**Amendment (2026-11, #15880 — counter-audit).** The key lives in its own vault,
+`meeshy_database_key` (`@DatabaseKeyVault`), whose file is deleted and recreated only
+after a durable failure proven over three consecutive launches carrying a permanent
+signature (`AEADBadTagException`, `KeyPermanentlyInvalidatedException`) —
+`DurableFailureGate`. Before this, one transient `open()` failure of the shared
+`@SecretVault` (a `KeyStoreException` at boot) deleted the vault, the key read back
+absent, and `KeyLossPolicy` purged the database, outbox included. A key the vault does
+not return (malformed, entry that throws) is replaced only when no file depends on it
+(plaintext or absent database, no encrypted copy awaiting verification): the plaintext
+database is then encrypted instead of staying on disk forever; in front of an encrypted
+file it is kept and the launch opens in memory. The salvage never creates nor writes a
+key (`DatabaseKeyProvider.existingOrNull`). A verification that throws deletes the
+encrypted copy, so the next launch restarts from the plaintext backup instead of
+replaying the same failure. **Known limit, not solved here:** the bootstrap (Keystore
+read and, on the first launch after the update, the full `sqlcipher_export` plus its
+verification) runs inside the `@Provides` of `MeeshyDatabase`, on whichever thread first
+injects it — the main thread when `MeeshyApplication` field injection reaches it — so
+the migration of a large plaintext database is an ANR risk. Moving the first
+construction off the main thread, a consented reset for an encrypted database whose key
+is unusable, and an instrumented run of the real engine (raw-key `ATTACH … KEY ?`) are
+tracked as follow-up issues.
 
 ---
 

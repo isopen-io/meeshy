@@ -13,8 +13,9 @@ public class DatabaseStorageUnavailableException(file: File) :
 
 /**
  * Prépare le fichier `meeshy.db` avant la première ouverture : relit (ou crée) la clé, migre une base en clair,
- * purge un fichier que la clé ne déverrouille plus. Exécuté une seule fois par process, à la première ouverture de
- * Room (jamais à la construction du singleton Hilt, [LazyPassphraseOpenHelperFactory]). Tout échec lève, et
+ * purge un fichier que la clé ne déverrouille plus. Exécuté une seule fois par process, par `DatabaseOpener` AVANT
+ * toute ouverture, donc sur le thread qui construit le singleton `MeeshyDatabase` (le `@Provides` de Hilt) : la
+ * lecture du Keystore et, au premier lancement d'une base en clair, l'export intégral s'y paient. Tout échec lève, et
  * `DatabaseOpener` le traite : une base en clair abîmée part en quarantaine, toute autre panne ouvre la base EN MÉMOIRE
  * pour ce lancement — jamais un repli en clair, jamais un plantage en boucle. Un échec n'est pas mémorisé : l'appel
  * suivant (recréation, ou lancement suivant) rejoue la préparation.
@@ -35,17 +36,20 @@ public class EncryptedDatabaseBootstrap(
 
     /**
      * La clé, pour relire une base qu'on met de côté, sans rejouer une migration qui vient d'échouer ; `null` si le coffre
-     * ne la rend pas (le sauvetage ne lit alors rien d'un fichier chiffré, et n'écrit rien).
+     * ne la rend pas telle quelle. Une lecture seule : le sauvetage ne crée ni n'écrit jamais de clé, et face à une clé
+     * perdue il ne lit rien d'un fichier chiffré (la purge le signale `key-lost`).
      */
-    public fun salvageKey(): DatabaseKey? = key ?: try {
-        keys.obtain()
-    } catch (_: DatabaseEncryptionException) {
-        null
-    }
+    public fun salvageKey(): DatabaseKey? = key ?: keys.existingOrNull()
 
     private fun run(): DatabaseKey {
-        val current = keys.obtain()
-        val state = migrator.facts(databaseFile).main
+        val facts = migrator.facts(databaseFile)
+        val current = try {
+            keys.obtain()
+        } catch (unusable: DatabaseKeyUnavailableException) {
+            if (dependsOnKey(facts)) throw unusable
+            replace(unusable, facts.main)
+        }
+        val state = facts.main
         when (KeyLossPolicy.decide(current.origin, state)) {
             StartupAction.DEFER -> throw DatabaseStorageUnavailableException(databaseFile)
             StartupAction.PURGE_THEN_OPEN -> purge(current.origin, state)
@@ -54,6 +58,29 @@ public class EncryptedDatabaseBootstrap(
         val executed = migrator.migrate(databaseFile, current.passphrase())
         if (executed.isNotEmpty()) onEvent("$MIGRATION${executed.joinToString(",")}")
         return current
+    }
+
+    /**
+     * Un fichier peut avoir été chiffré par la clé que le coffre ne rend plus : base chiffrée (ou tronquée, ou illisible
+     * sur le disque), ou copie chiffrée en attente de vérification à côté de la sauvegarde en clair. Sinon (base en clair,
+     * absente), aucune donnée ne dépend de l'ancienne clé.
+     */
+    private fun dependsOnKey(facts: MigrationFacts): Boolean = when (facts.main) {
+        DatabaseFileState.PLAINTEXT -> false
+        DatabaseFileState.ABSENT -> facts.tempExists && facts.backupExists
+        DatabaseFileState.ENCRYPTED, DatabaseFileState.TRUNCATED, DatabaseFileState.UNAVAILABLE -> true
+    }
+
+    /** Un coffre qui refuse aussi l'écriture laisse l'échec d'origine remonter : ce lancement s'ouvre en mémoire. */
+    private fun replace(unusable: DatabaseKeyUnavailableException, state: DatabaseFileState): DatabaseKey {
+        val fresh = try {
+            keys.replaceUnusable()
+        } catch (refused: DatabaseEncryptionException) {
+            unusable.addSuppressed(refused)
+            throw unusable
+        }
+        onEvent("${KEY_REPLACED}state=$state")
+        return fresh
     }
 
     private fun purge(origin: KeyOrigin, state: DatabaseFileState) {
@@ -65,5 +92,6 @@ public class EncryptedDatabaseBootstrap(
     public companion object {
         public const val PURGE: String = "purge:"
         public const val MIGRATION: String = "migration:"
+        public const val KEY_REPLACED: String = "key-replaced:"
     }
 }

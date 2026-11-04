@@ -49,9 +49,19 @@ public class PlaintextDatabaseMigrator(private val engine: PlaintextExportEngine
         }
     }
 
+    /**
+     * Une copie qui ne se vérifie pas est supprimée, que la vérification rende `false` ou qu'elle LÈVE : gardée, elle
+     * ferait rejouer la même vérification à chaque lancement sans jamais repartir de la base en clair.
+     */
     private fun verifyTemp(main: File, temp: File, backup: File, passphrase: ByteArray) {
         val source = listOf(main, backup).firstOrNull { DatabaseFileStates.of(it) == DatabaseFileState.PLAINTEXT }
-        if (!engine.verify(source, temp, passphrase.copyOf())) {
+        val verified = try {
+            engine.verify(source, temp, passphrase.copyOf())
+        } catch (failure: Exception) {
+            deleteWithSides(temp)
+            throw PlaintextMigrationException("encrypted copy could not be verified", failure)
+        }
+        if (!verified) {
             deleteWithSides(temp)
             throw PlaintextMigrationException("encrypted copy failed verification")
         }
