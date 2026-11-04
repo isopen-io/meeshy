@@ -28,6 +28,9 @@ import me.meeshy.sdk.model.appearance.ConversationAppearance
 import me.meeshy.sdk.model.appearance.ConversationBackground
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.TokenStore
+import me.meeshy.sdk.packs.PackShopRepository
+import me.meeshy.sdk.model.packs.PackInstallationUpdatedEvent
+import kotlinx.coroutines.flow.MutableSharedFlow
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -41,7 +44,7 @@ class ConversationAppearanceViewModelTest {
 
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private class Fixture(val stream: MutableStateFlow<ApiConversation?>, val repository: ConversationRepository, val photos: ConversationBackgroundPhotos, val vm: ConversationAppearanceViewModel)
+    private class Fixture(val stream: MutableStateFlow<ApiConversation?>, val repository: ConversationRepository, val photos: ConversationBackgroundPhotos, val vm: ConversationAppearanceViewModel, val installations: MutableSharedFlow<PackInstallationUpdatedEvent>, val packs: WallpaperPackRepository)
 
     private fun fixture(appearanceJson: String? = null, writes: Boolean = true): Fixture {
         val conversation = ApiConversation(
@@ -59,11 +62,14 @@ class ConversationAppearanceViewModelTest {
         val packs = mockk<WallpaperPackRepository>()
         every { packs.cached } returns null
         coEvery { packs.refresh() } returns null
+        val installations = MutableSharedFlow<PackInstallationUpdatedEvent>(extraBufferCapacity = 4)
+        val shop = mockk<PackShopRepository>()
+        every { shop.installations } returns installations
         val photos = ConversationBackgroundPhotos(ConversationMediaHubIndex(null))
         val tokens = mockk<TokenStore>()
         every { tokens.jwt } returns "jwt-1"
         every { tokens.sessionToken } returns null
-        return Fixture(stream, repository, photos, ConversationAppearanceViewModel(repository, loader, packs, photos, tokens, MeeshyConfig()))
+        return Fixture(stream, repository, photos, ConversationAppearanceViewModel(repository, loader, packs, shop, photos, tokens, MeeshyConfig()), installations, packs)
     }
 
     @Test
@@ -166,5 +172,29 @@ class ConversationAppearanceViewModelTest {
 
         assertThat(f.vm.state.value.appearance.isDefault).isTrue()
         coVerify { f.repository.setAppearanceOptimistic("c1", ConversationAppearance.DEFAULT) }
+    }
+
+    @Test
+    fun `une installation de fond faite dans la boutique relit les packs du selecteur`() = runTest(dispatcher) {
+        val f = fixture()
+        f.vm.start("c1")
+        advanceUntilIdle()
+
+        f.installations.emit(PackInstallationUpdatedEvent(domain = "wallpaper", slug = "aurores", installed = true))
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { f.packs.refresh() }
+    }
+
+    @Test
+    fun `l installation d un autre domaine ne relit pas les fonds`() = runTest(dispatcher) {
+        val f = fixture()
+        f.vm.start("c1")
+        advanceUntilIdle()
+
+        f.installations.emit(PackInstallationUpdatedEvent(domain = "avatar-ring", slug = "halo", installed = true))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { f.packs.refresh() }
     }
 }
