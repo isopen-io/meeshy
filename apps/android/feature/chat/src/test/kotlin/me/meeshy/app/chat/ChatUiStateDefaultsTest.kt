@@ -19,13 +19,13 @@ import org.junit.Test
 class ChatUiStateDefaultsTest {
 
     @Test
-    fun `the state keeps exactly its fifty-two stored fields`() {
+    fun `the state keeps exactly its fifty stored fields`() {
         val stored = ChatUiState::class.java.declaredFields
             .filterNot { it.isSynthetic || Modifier.isStatic(it.modifiers) }
             .map { it.name }
 
         assertThat(stored).containsExactlyElementsIn(STORED_FIELDS)
-        assertThat(stored).hasSize(52)
+        assertThat(stored).hasSize(50)
     }
 
     @Test
@@ -126,7 +126,6 @@ class ChatUiStateDefaultsTest {
             "imageViewer",
             "scrollToMessageId",
             "firstUnreadMessageId",
-            "unreadAtOpening",
             "unreadBoundaryResolved",
             "encryptionMode",
             "search",
@@ -147,7 +146,6 @@ class ChatUiStateDefaultsTest {
             "composerPermissions",
             "slowModeSeconds",
             "slowModeExempt",
-            "viewerRole",
             "lastSelfSentAtMillis",
             "directPeerUserId",
             "endToEndAvailable",
