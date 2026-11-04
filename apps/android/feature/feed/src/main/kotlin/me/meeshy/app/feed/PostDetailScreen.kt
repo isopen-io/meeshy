@@ -290,6 +290,13 @@ internal fun PostDetailContent(
     onAuthorChipReveal: (Boolean) -> Unit = {},
 ) {
     var viewportTop by remember { mutableFloatStateOf(0f) }
+    var viewportBottom by remember { mutableFloatStateOf(0f) }
+    val pageScroll = rememberScrollState()
+    val keyboardInsets = WindowInsets.ime
+    val pageDensity = androidx.compose.ui.platform.LocalDensity.current
+    val sceneViewport: () -> PostDetailViewport = {
+        PostDetailViewport(viewportTop, viewportBottom, pageScroll.value.toFloat(), keyboardInsets.getBottom(pageDensity) > 0)
+    }
     val revealChip by rememberUpdatedState(onAuthorChipReveal)
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     var gallery by remember(post.id) { mutableStateOf<FeedGallery?>(null) }
@@ -304,11 +311,14 @@ internal fun PostDetailContent(
     }
     gallery?.let { opened -> FeedImageViewerHost(gallery = opened, onDismiss = { gallery = null }) }
     Column(Modifier.fillMaxSize()) {
-        Box(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { viewportTop = it.positionInRoot().y }) {
+        Box(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned {
+            viewportTop = it.positionInRoot().y
+            viewportBottom = viewportTop + it.size.height
+        }) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(pageScroll)
                     .padding(MeeshySpacing.lg),
             ) {
                 MeeshyGlassSurface(
@@ -386,7 +396,7 @@ internal fun PostDetailContent(
                         val scenes = post.scenes
                         if (scenes != null) {
                             Spacer(Modifier.height(MeeshySpacing.md))
-                            PostDetailScenes(scenes = scenes)
+                            PostDetailSceneSection(scenes = scenes, viewport = sceneViewport)
                         } else if (post.media.isNotEmpty() && !post.isReel) {
                             Spacer(Modifier.height(MeeshySpacing.md))
                             PostDetailMedia(
