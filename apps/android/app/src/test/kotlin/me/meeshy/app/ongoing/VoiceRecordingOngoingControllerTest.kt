@@ -38,6 +38,35 @@ class VoiceRecordingOngoingControllerTest {
     }
 
     @Test
+    fun `the notification carries the conversation title and wakes for the level at most once a second`() = runTest {
+        val started = MutableStateFlow<Long?>(null)
+        val title = MutableStateFlow("Famille")
+        val levels = MutableStateFlow<List<Float>>(emptyList())
+        var now = 0L
+        val shown = mutableListOf<VoiceRecordingSnapshot>()
+        val sink = object : OngoingNotificationSink<VoiceRecordingSnapshot> {
+            override fun show(snapshot: VoiceRecordingSnapshot) { shown += snapshot }
+            override fun conclude(snapshot: VoiceRecordingSnapshot, dismissAfterMs: Long) = Unit
+            override fun cancel() = Unit
+        }
+        VoiceRecordingOngoingController(started, sink, title, levels, { now }) { VoiceRecordingActivityLaw.Wording("Recording") }
+            .start(backgroundScope)
+        runCurrent()
+
+        started.value = 500L
+        runCurrent()
+        now = 400L
+        levels.value = listOf(1f)
+        runCurrent()
+        now = 1_000L
+        levels.value = listOf(1f, 1f)
+        runCurrent()
+
+        assertThat(shown.map { it.title }.toSet()).containsExactly("Famille")
+        assertThat(shown.map { it.level }).containsExactly(0, 4).inOrder()
+    }
+
+    @Test
     fun `a bridge relays the stop button and forgets the take when retired`() = runTest {
         val bridge = VoiceRecordingActivityBridge()
         val stops = mutableListOf<Unit>()
@@ -50,7 +79,11 @@ class VoiceRecordingOngoingControllerTest {
         assertThat(bridge.startedAt.value).isEqualTo(7L)
         assertThat(stops).hasSize(1)
 
+        bridge.updateTake("Famille", listOf(0.5f))
+        assertThat(bridge.title.value).isEqualTo("Famille")
         bridge.retire()
         assertThat(bridge.startedAt.value).isNull()
+        assertThat(bridge.title.value).isEmpty()
+        assertThat(bridge.levels.value).isEmpty()
     }
 }

@@ -402,12 +402,13 @@ def cmd_import(run, fichier):
     reg = charger(run)
     for l in data.get('lots', []):
         if valider(l, reg['lots']) is None:
-            reg['lots'][l['key']] = dict(l, source='cartographie')
+            ancien = reg['lots'].get(l['key'], {})
+            reg['lots'][l['key']] = dict(l, source='cartographie', **{c: ancien[c] for c in ('issue', 'pr', 'statut_manuel', 'note') if c in ancien and c not in l})
     for k, motif in data.get('exclusions', {}).items():
         if k in reg['lots']:
             reg['lots'][k]['excluded'] = motif
     for k, n in data.get('issues', {}).items():
-        if k in reg['lots']:
+        if k in reg['lots'] and not reg['lots'][k].get('issue'):
             reg['lots'][k]['issue'] = n
     for champ in ('deps_extra', 'criteres_ajoutes'):
         for k, v in data.get(champ, {}).items():
