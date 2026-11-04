@@ -81,11 +81,14 @@ public object SearchIndexSchema {
         db.execSQL("INSERT INTO `$MESSAGE_TABLE`(`$MESSAGE_TABLE`) VALUES ('rebuild')")
     }
 
+    /** The statements that drop the index; its triggers go first. The cache tables are not touched. */
+    public val dropStatements: List<String> =
+        triggerNames.map { "DROP TRIGGER IF EXISTS `$it`" } +
+            listOf("DROP TABLE IF EXISTS `$MESSAGE_TABLE`", "DROP TABLE IF EXISTS `$CONVERSATION_TABLE`")
+
     /** Drops the index; its triggers go with it. The cache tables are not touched. */
     public fun drop(db: SupportSQLiteDatabase) {
-        triggerNames.forEach { db.execSQL("DROP TRIGGER IF EXISTS `$it`") }
-        db.execSQL("DROP TABLE IF EXISTS `$MESSAGE_TABLE`")
-        db.execSQL("DROP TABLE IF EXISTS `$CONVERSATION_TABLE`")
+        dropStatements.forEach(db::execSQL)
     }
 
     /** Creates what is missing and re-reads the cache when the message index had to be created. */

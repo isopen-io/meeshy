@@ -231,7 +231,8 @@ public object DatabaseRecovery {
     /** `SQLITE_CORRUPT` (et ses codes étendus) ou `SQLITE_NOTADB`, quelle que soit la classe qui les porte. */
     private fun isCorruption(failure: Throwable): Boolean =
         failure is SQLiteDatabaseCorruptException ||
-            (failure is SQLiteException && CORRUPTION_CODES.any { failure.message.orEmpty().contains(it) })
+            failure.javaClass.simpleName == "SQLiteDatabaseCorruptException" ||
+            (isSqliteFailure(failure) && CORRUPTION_CODES.any { failure.message.orEmpty().contains(it, ignoreCase = true) })
 
     private fun isUnavailable(failure: Throwable): Boolean =
         failure is SQLiteFullException ||
@@ -240,7 +241,13 @@ public object DatabaseRecovery {
             failure is SQLiteReadOnlyDatabaseException ||
             failure is SQLiteAccessPermException ||
             failure is SQLiteDatabaseLockedException ||
-            failure is java.io.IOException
+            failure is java.io.IOException ||
+            (isCipherException(failure) && failure.javaClass.simpleName in CIPHER_UNAVAILABLE)
+
+    /** SQLCipher lève ses propres exceptions (`net.zetetic.database.sqlcipher`), sans lien avec celles du framework. */
+    private fun isCipherException(failure: Throwable): Boolean = failure.javaClass.name.startsWith(CIPHER_PACKAGE)
+
+    private fun isSqliteFailure(failure: Throwable): Boolean = failure is SQLiteException || isCipherException(failure)
 
     private class Row(private val cursor: Cursor) {
         fun text(name: String): String? =
@@ -316,5 +323,12 @@ public object DatabaseRecovery {
 
     private const val MAX_CAUSES = 8
 
-    private val CORRUPTION_CODES = listOf("SQLITE_CORRUPT", "SQLITE_NOTADB")
+    private val CORRUPTION_CODES = listOf("SQLITE_CORRUPT", "SQLITE_NOTADB", "file is not a database")
+
+    private const val CIPHER_PACKAGE = "net.zetetic.database"
+
+    private val CIPHER_UNAVAILABLE = setOf(
+        "SQLiteFullException", "SQLiteDiskIOException", "SQLiteCantOpenDatabaseException",
+        "SQLiteReadOnlyDatabaseException", "SQLiteAccessPermException", "SQLiteDatabaseLockedException",
+    )
 }

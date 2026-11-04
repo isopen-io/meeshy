@@ -30,7 +30,13 @@ import me.meeshy.core.database.dao.StoryDao
 import me.meeshy.core.database.dao.SuggestionDao
 import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.core.database.dao.TusUploadCheckpointDao
+import me.meeshy.core.database.crypto.DatabaseKeyProvider
+import me.meeshy.core.database.crypto.EncryptedDatabaseBootstrap
+import me.meeshy.core.database.crypto.PlaintextDatabaseMigrator
+import me.meeshy.core.database.crypto.SqlCipherRuntime
+import me.meeshy.core.datastore.SecretVault
 import me.meeshy.core.database.migration.MeeshyMigrations
+import me.meeshy.sdk.model.security.SecureStore
 import me.meeshy.core.database.search.SearchIndexSchema
 import java.io.File
 import javax.inject.Singleton
@@ -46,6 +52,7 @@ internal object DatabaseModule {
         diagnostics: DatabaseInitDiagnostics,
         health: StorageHealth,
         leftovers: DatabaseLeftovers,
+        encryption: EncryptedDatabaseBootstrap,
     ): MeeshyDatabase =
         DatabaseOpener(
             context = context,
@@ -54,8 +61,36 @@ internal object DatabaseModule {
             primaryName = DATABASE_NAME,
             secondaryFile = secondaryFile(context),
             leftovers = leftovers,
-            build = { ctx, location -> meeshyDatabaseBuilder(ctx, location).build() },
+            readable = { file -> SqlCipherRuntime.isReadable(file, encryption) },
+            build = { ctx, location -> encrypted(meeshyDatabaseBuilder(ctx, location), location, encryption).build() },
         ).open()
+
+    /**
+     * Seule la base principale est chiffrée (SQLCipher, ADR-013) ; la base de repli d'un disque qui refuse et la base en
+     * mémoire d'un lancement dégradé restent celles du framework, que la reprise sait relire. Un échec de chiffrement
+     * lève : il n'y a jamais de repli en clair de la base principale.
+     */
+    private fun encrypted(
+        builder: RoomDatabase.Builder<MeeshyDatabase>,
+        location: DatabaseLocation,
+        encryption: EncryptedDatabaseBootstrap,
+    ): RoomDatabase.Builder<MeeshyDatabase> =
+        if (location == DatabaseLocation.Named(DATABASE_NAME)) {
+            builder.openHelperFactory(SqlCipherRuntime.openHelperFactory(encryption))
+        } else {
+            builder
+        }
+
+    @Provides
+    @Singleton
+    fun providesEncryptedDatabaseBootstrap(
+        @ApplicationContext context: Context,
+        @SecretVault vault: SecureStore,
+    ): EncryptedDatabaseBootstrap = EncryptedDatabaseBootstrap(
+        databaseFile = context.getDatabasePath(DATABASE_NAME),
+        keys = DatabaseKeyProvider(vault),
+        migrator = PlaintextDatabaseMigrator(SqlCipherRuntime.Engine),
+    )
 
     @Provides
     @Singleton
