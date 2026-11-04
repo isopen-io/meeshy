@@ -115,6 +115,36 @@ final class SendFailureRecoveryTests: XCTestCase {
         XCTAssertEqual(fixture.coordinator.callLog, ["recordFailure", "enqueueForRetry"])
     }
 
+    // MARK: - #16053 — le droit de pièce jointe refusé par la passerelle
+
+    private var attachmentRightRefusal: MeeshyError {
+        let body = #"{"success":false,"error":"Vous n'êtes pas autorisé à envoyer ce type de pièce jointe","code":"ATTACHMENT_RIGHT_NOT_PERMITTED"}"#
+        return .forbidden(reason: "Vous n'êtes pas autorisé à envoyer ce type de pièce jointe", body: Data(body.utf8))
+    }
+
+    /// Le refus est DÉFINITIF : rejouer par le socket ou par l'outbox
+    /// rencontrerait le même droit. La bulle reste en échec avec sa raison.
+    func test_recover_attachmentRightNotPermitted_marksFailedWithReason_neitherFallbackNorOutbox() async {
+        let fixture = makeSUT()
+
+        let result = await recover(attachmentRightRefusal, using: fixture)
+
+        XCTAssertEqual(result, .failure(.attachmentRightRefused))
+        XCTAssertEqual(fixture.coordinator.callLog, ["markFailed"], "ni emitSocketFallback, ni enqueueForRetry")
+        XCTAssertEqual(fixture.coordinator.markFailedReasons, [AttachmentRightRefusal.userMessage])
+        XCTAssertEqual(fixture.toast.errorMessages, [AttachmentRightRefusal.userMessage])
+        XCTAssertTrue(fixture.log.entries.isEmpty)
+    }
+
+    func test_recover_forbiddenWithoutAttachmentRightCode_staysOnTheGenericPath() async {
+        let fixture = makeSUT()
+        let other = MeeshyError.forbidden(reason: "x", body: Data(#"{"success":false,"code":"WRITE_NOT_PERMITTED"}"#.utf8))
+
+        _ = await recover(other, fallbackEligible: false, using: fixture)
+
+        XCTAssertEqual(fixture.coordinator.callLog, ["recordFailure", "enqueueForRetry"])
+    }
+
     // MARK: - #11379 — le refus serveur d'une conversation chiffrée
 
     private var plaintextRefusal: MeeshyError {

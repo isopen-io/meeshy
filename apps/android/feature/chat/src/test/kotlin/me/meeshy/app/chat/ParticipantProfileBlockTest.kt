@@ -10,6 +10,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.plus
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -42,7 +43,7 @@ class ParticipantProfileBlockTest {
     }
 
     private fun kotlinx.coroutines.test.TestScope.watch(rig: Rig) {
-        rig.viewModel.state.launchIn(backgroundScope)
+        rig.viewModel.state.launchIn(backgroundScope + dispatcher)
     }
 
     @Test
@@ -100,7 +101,7 @@ class ParticipantProfileBlockTest {
         val rig = Rig().also { watch(it) }
         rig.viewModel.bind("u2", isAnonymous = false)
         val seen = mutableListOf<ParticipantBlockEffect>()
-        rig.viewModel.effectFlow.onEach { seen += it }.launchIn(backgroundScope)
+        rig.viewModel.effectFlow.onEach { seen += it }.launchIn(backgroundScope + dispatcher)
 
         rig.failures.emit(BlockFailure("other", wasBlocking = true))
         rig.failures.emit(BlockFailure("u2", wasBlocking = true))
