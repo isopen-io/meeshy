@@ -2,6 +2,7 @@ package me.meeshy.sdk.lang
 
 import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.ApiAttachmentTranslation
+import me.meeshy.sdk.model.EffectiveAudioTrack
 
 /**
  * LA TRANSCRIPTION SERVIE d'une pièce audio ou vidéo, selon le Prisme (famille AUDIO du `CLAUDE.md` racine) — le site
@@ -69,6 +70,73 @@ object AttachmentTranscriptPrism {
         val track = track(transcription, translations, preferences) ?: return null
         val text = served(transcription, translations, preferences) ?: return track
         return track.takeIf { text.isTranslated && text.language.equals(it.language, ignoreCase = true) }
+    }
+
+    /**
+     * **Ce qu'un vocal sert, d'UNE descente** : le texte, la piste jouée et la langue des segments partent ensemble, de
+     * sorte qu'aucune surface ne peut montrer un karaoké en langue B sous une voix en langue A. Sans bascule
+     * ([manualOverride] nul ou blanc) ce sont exactement [served] et [playedTrack]. Avec une bascule, la langue est élue
+     * par [EffectiveAudioTrack.resolve] : l'origine de CETTE pièce (sa transcription) vaut l'original, une langue sans
+     * piste retombe sur l'original, jamais sur la première traduction ; la transcription d'une piste blanche laisse le
+     * texte d'origine, sans les horodatages d'une autre voix.
+     */
+    fun servedVoice(
+        transcription: ApiAttachmentTranscription?,
+        translations: Map<String, ApiAttachmentTranslation>?,
+        preferences: LanguageResolver.ContentLanguagePreferences,
+        manualOverride: String?,
+    ): ServedVoice {
+        val override = manualOverride?.trim()?.lowercase()?.ifEmpty { null }
+        if (override == null) {
+            val text = served(transcription, translations, preferences)
+            return ServedVoice(
+                text = text?.text,
+                textLanguage = text?.language,
+                isTranslated = text?.isTranslated == true,
+                track = playedTrack(transcription, translations, preferences),
+                segmentsLanguage = text?.language?.takeIf { text.isTranslated },
+            )
+        }
+        val playable = translations.orEmpty().mapNotNull { (language, entry) ->
+            entry.url?.trim()?.ifBlank { null }?.let { url -> language.trim() to entry.copy(url = url) }
+        }
+        val elected = EffectiveAudioTrack.resolve(
+            manualOverride = override,
+            originalLanguage = EffectiveAudioTrack.originLanguage(transcription?.language, messageOriginal = ""),
+            preferredLanguages = ReaderPrism.resolve(preferences),
+            availableLanguages = playable.map { it.first },
+        )
+        val picked = elected?.let { language -> playable.firstOrNull { it.first.equals(language, ignoreCase = true) } }
+        val originalLanguage = transcription?.language?.trim()?.ifBlank { null }
+        val originalText = originalText(transcription)
+        if (picked == null) {
+            return ServedVoice(originalText, originalLanguage.takeIf { originalText != null }, isTranslated = false, track = null, segmentsLanguage = null)
+        }
+        val (language, entry) = picked
+        val track = Track(url = entry.url.orEmpty(), language = language, durationMs = entry.durationMs)
+        val translatedText = entry.transcription?.trim()?.ifBlank { null }
+            ?: return ServedVoice(originalText, originalLanguage.takeIf { originalText != null }, isTranslated = false, track = track, segmentsLanguage = null)
+        return ServedVoice(translatedText, language, isTranslated = true, track = track, segmentsLanguage = language)
+    }
+
+    /**
+     * Le vocal servi : [text] dans [textLanguage], la voix [track] (`null` ⇒ l'original) et la langue dont les segments
+     * décrivent [text] ([segmentsLanguage], `null` ⇒ la transcription d'origine).
+     */
+    data class ServedVoice(
+        val text: String?,
+        val textLanguage: String?,
+        val isTranslated: Boolean,
+        val track: Track?,
+        val segmentsLanguage: String?,
+    ) {
+        /**
+         * Les horodatages des segments ne valent que sur la piste qu'ils décrivent : la voix d'origine pour la
+         * transcription d'origine, la voix traduite pour sa propre transcription. Ailleurs le karaoké avance à la
+         * progression plutôt que d'allumer un mot à contretemps.
+         */
+        val segmentsDescribeTrack: Boolean
+            get() = segmentsLanguage.equals(track?.language, ignoreCase = true)
     }
 
     /** Le texte d'origine, `transcribedText` d'abord (forme du serveur), `text` ensuite ; un blanc n'en est pas un. */
