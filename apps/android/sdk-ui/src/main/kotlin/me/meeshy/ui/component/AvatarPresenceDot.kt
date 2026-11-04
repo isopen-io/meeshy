@@ -110,6 +110,7 @@ internal fun AvatarPresenceDotGlyph(
         if (arrives && !reduceMotion) PresenceArrivalRipple(color, diameter)
         Box(
             Modifier
+                .then(if (dot is AvatarPresenceDot.Presence) Modifier.testTag(presenceDotTag(dot.state)) else Modifier)
                 .size(diameter)
                 .then(if (pulses && !reduceMotion) Modifier.pulse(0.12f) else Modifier)
                 .background(color, CircleShape)
