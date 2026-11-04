@@ -24,12 +24,19 @@ struct PostEditComposerSession: Identifiable {
         let story = StoryItem(id: post.id, content: nil, media: post.media, storyEffects: post.storyEffects,
                               createdAt: post.timestamp, visibility: post.visibility,
                               visibilityUserIds: post.visibilityUserIds, mentions: post.mentions)
-        composer = StoryComposerViewModel(editing: story)
+        composer = PublicationEditComposer.composer(editing: story)
         baseline = PostEditBaseline(post: post, defaultLanguage: defaultLanguage)
         openedSlides = composer.slides
         seed = ComposerPublicationEditSeed(text: post.content, visibility: baseline.visibility.rawValue,
                                            visibilityUserIds: baseline.visibilityUserIds,
-                                           language: baseline.language, location: post.location)
+                                           language: baseline.language, location: post.location,
+                                           baseline: baseline)
+    }
+
+    /// La porte que le meuble lit : un repost l'y déclare, et l'éventail se
+    /// referme sur son seul format.
+    var origin: ComposerOrigin {
+        .edit(postId: baseline.postId, documentFormat: baseline.format, isRepost: baseline.isRepost)
     }
 }
 
@@ -67,8 +74,7 @@ struct PostEditComposerDoor: View {
 
     private var composerHost: some View {
         MeeshyComposerHost(
-            intent: ComposerIntent(origin: .edit(postId: session.baseline.postId,
-                                                 documentFormat: session.baseline.format)),
+            intent: ComposerIntent(origin: session.origin),
             initialVisibility: session.seed.visibility,
             hydration: .editingPublication(session.composer, session.seed),
             // La scène ne publie pas ici : l'éventail n'offre ni story ni
