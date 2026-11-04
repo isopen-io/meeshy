@@ -178,4 +178,105 @@ final class HashtagResultsViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.posts.map(\.id), ["p1", "p2"])
     }
+
+    // MARK: - #15934 — « Repartager » republie depuis un hashtag
+
+    /// Une page servie telle quelle : la carte `card` repartage `mid`, dont la
+    /// racine est `root` — la chaîne que `RepostTargeting` doit remonter.
+    private static func repostChainPage(repostCount: Int = 3, isRepostedByMe: Bool = false) -> PaginatedAPIResponse<[APIPost]> {
+        JSONStub.decode(#"""
+        {"success":true,"data":[{"id":"card","type":"POST","content":"#paris","createdAt":"2026-01-15T12:00:00.000Z",
+        "likeCount":0,"commentCount":0,"repostCount":\#(repostCount),"isRepostedByMe":\#(isRepostedByMe),
+        "author":{"id":"author-1","username":"alice"},
+        "repostOf":{"id":"mid","createdAt":"2026-01-14T12:00:00.000Z","author":{"id":"author-2","username":"bob"},"originalRepostOfId":"root"}}],
+        "pagination":null,"error":null}
+        """#)
+    }
+
+    private func makeRepostSUT(
+        service: MockPostService = MockPostService(),
+        queue: MockOfflineQueue = MockOfflineQueue(),
+        toasts: MockFeedbackToast = MockFeedbackToast(),
+        offline: Bool = false
+    ) -> HashtagResultsViewModel {
+        HashtagResultsViewModel(
+            tag: "paris", service: service,
+            reposter: ListedPostReposter(
+                publisher: RepostPublisher(postService: service, offlineQueue: queue, isOffline: { offline }),
+                toasts: toasts
+            )
+        )
+    }
+
+    func test_toggleRepost_publishesTheRootAtTheCardFormat_andFlipsIconAndCounterAtOnce() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.repostChainPage(repostCount: 3))
+        service.holdRepost(for: 5)
+        let toasts = MockFeedbackToast()
+        let sut = makeRepostSUT(service: service, toasts: toasts)
+        await sut.load()
+
+        let task = Task { await sut.toggleRepost("card") }
+        for _ in 0..<100 where !sut.posts[0].isRepostedByMe { await Task.yield() }
+        XCTAssertTrue(sut.posts[0].isRepostedByMe, "l'icône bascule AVANT la réponse du réseau")
+        XCTAssertEqual(sut.posts[0].repostCount, 4, "le compteur bouge avec l'icône")
+        service.releaseRepost()
+        await task.value
+
+        XCTAssertEqual(service.repostCallCount, 1)
+        XCTAssertEqual(service.lastRepostPostId, "root", "la référence remonte à la RACINE de la chaîne")
+        XCTAssertEqual(service.lastRepostTargetType, .post, "le format reste celui de la carte")
+        XCTAssertFalse(service.lastRepostIsQuote ?? true, "Repartager n'est pas Citer")
+        XCTAssertNil(service.lastRepostVisibility, "l'audience est héritée de l'original")
+        XCTAssertTrue(sut.posts[0].isRepostedByMe)
+        XCTAssertEqual(sut.posts[0].repostCount, 4)
+        XCTAssertEqual(toasts.successMessages.count, 1, "le repartage se confirme à l'utilisateur")
+    }
+
+    func test_toggleRepost_whenTheServerRefuses_rollsBackTheRepostOnly() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.repostChainPage(repostCount: 3))
+        service.repostResult = .failure(URLError(.badServerResponse))
+        let toasts = MockFeedbackToast()
+        let sut = makeRepostSUT(service: service, toasts: toasts)
+        await sut.load()
+        await sut.toggleLike("card")
+
+        await sut.toggleRepost("card")
+
+        XCTAssertEqual(toasts.errorMessages.count, 1, "l'échec se dit")
+        XCTAssertTrue(toasts.successMessages.isEmpty)
+
+        XCTAssertFalse(sut.posts[0].isRepostedByMe, "l'échec défait la bascule")
+        XCTAssertEqual(sut.posts[0].repostCount, 3, "et le compteur revient")
+        XCTAssertTrue(sut.posts[0].isLiked, "le retour arrière ne défait pas un like voisin")
+    }
+
+    func test_toggleRepost_offline_queuesTheRepostInTheOutbox_andKeepsTheCardReposted() async throws {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.repostChainPage())
+        let queue = MockOfflineQueue()
+        let sut = makeRepostSUT(service: service, queue: queue, offline: true)
+        await sut.load()
+
+        await sut.toggleRepost("card")
+
+        XCTAssertEqual(service.repostCallCount, 0, "hors ligne, rien ne part sur le réseau")
+        let call = try XCTUnwrap(queue.enqueueCalls.first)
+        XCTAssertEqual(call.kind, .repostPost)
+        XCTAssertEqual((call.payload as? RepostPostPayload)?.postId, "root")
+        XCTAssertTrue(sut.posts[0].isRepostedByMe, "la ligne enfilée partira au retour du réseau")
+    }
+
+    func test_toggleRepost_onACardAlreadyReposted_sendsNothing() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.repostChainPage(repostCount: 1, isRepostedByMe: true))
+        let sut = makeRepostSUT(service: service)
+        await sut.load()
+
+        await sut.toggleRepost("card")
+
+        XCTAssertEqual(service.repostCallCount, 0, "le repartage est append-only : un second toucher n'envoie rien")
+        XCTAssertEqual(sut.posts[0].repostCount, 1)
+    }
 }

@@ -14,6 +14,9 @@ final class HashtagResultsViewModel: ObservableObject {
 
     private let service: PostServiceProviding
     private let languageProvider: LanguageProviding
+    /// « Repartager » d'une carte (#15934) : l'écrivain unique, construit sur
+    /// le service injecté, et le retour à l'utilisateur.
+    private let reposter: ListedPostReposter
     /// La file des impressions de CE listing — la carte y situe son
     /// apparition et y relaie sa visibilité (#10501).
     let impressions: ReachImpressionRecording
@@ -28,11 +31,13 @@ final class HashtagResultsViewModel: ObservableObject {
         tag: String,
         service: PostServiceProviding = PostService.shared,
         languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
-        impressions: ReachImpressionRecording? = nil
+        impressions: ReachImpressionRecording? = nil,
+        reposter: ListedPostReposter? = nil
     ) {
         self.tag = tag
         self.service = service
         self.languageProvider = languageProvider
+        self.reposter = reposter ?? ListedPostReposter(publisher: RepostPublisher(postService: service))
         if let impressions {
             self.impressions = impressions
         } else {
@@ -108,6 +113,20 @@ final class HashtagResultsViewModel: ObservableObject {
             }
             FeedbackToastManager.shared.showError(String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main))
         }
+    }
+
+    /// **« Repartager » ne faisait rien depuis un hashtag** (#15934) : la vue
+    /// montait la carte sans `onRepost`, et le choix appelait un rappel absent.
+    /// Même règle que le profil — bascule optimiste de l'icône et du compteur,
+    /// retour arrière à l'échec — par `PostRepostMutation`.
+    func toggleRepost(_ postId: String) async {
+        guard let index = posts.firstIndex(where: { $0.id == postId }),
+              let reposted = PostRepostMutation.reposted(posts[index]) else { return }
+        let shown = posts[index]
+        posts[index] = reposted
+        guard await !reposter.repost(shown),
+              let current = posts.firstIndex(where: { $0.id == postId }) else { return }
+        posts[current] = PostRepostMutation.withdrawn(posts[current])
     }
 
     func loadMore() async {

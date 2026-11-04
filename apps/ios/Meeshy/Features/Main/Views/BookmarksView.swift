@@ -119,8 +119,13 @@ struct BookmarksView: View {
                     ForEach(visiblePosts) { post in
                         FeedPostCard(
                             post: post,
+                            displayRepostCount: post.repostCount,
+                            isReposted: post.isRepostedByMe,
                             onLike: { postId in
                                 Task { await viewModel.toggleLike(postId) }
+                            },
+                            onRepost: { postId in
+                                Task { await viewModel.toggleRepost(postId) }
                             },
                             onQuote: quoteHost == nil ? nil : { _ in quotedPost = post },
                             onBookmark: { postId in
