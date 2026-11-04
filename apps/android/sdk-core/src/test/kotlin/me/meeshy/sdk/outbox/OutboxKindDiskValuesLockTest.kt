@@ -55,6 +55,10 @@ class OutboxKindDiskValuesLockTest {
         "MARK_STORY_VIEWED",
         "DELETE_COMMENT",
         "TOGGLE_LIKE_COMMENT",
+        "UPDATE_PREFERENCE_CATEGORY",
+        "LEAVE_CONVERSATION",
+        "DELETE_CONVERSATION_FOR_ME",
+        "DELETE_CONVERSATION_FOR_ALL",
     )
 
     @Test

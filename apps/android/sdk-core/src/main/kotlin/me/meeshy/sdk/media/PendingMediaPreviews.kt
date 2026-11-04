@@ -37,6 +37,10 @@ public data class PendingMediaPreview(
  *
  * Une pièce à vue unique ou floutée n'écrit AUCUN aperçu en clair : la bulle de l'auteur la montre par sa protection.
  * L'aperçu part avec la bulle — à l'accusé du serveur, à l'annulation, au retrait — et au changement de compte.
+ *
+ * Un vocal en attente se LIT depuis l'appareil (#15428, iOS lit l'enregistrement local) : sa copie jouable, nommée par
+ * le même `cmid`, devient le `fileUrl` `file://` de la pièce optimiste. À l'accusé, [MediaAdoption] la range sous
+ * l'adresse canonique dans le cache AUDIO : la lecture suivante ne retélécharge pas ce qui vient de partir.
  */
 public interface PendingMediaPreviewing {
     /** Garde la vignette déjà préparée par le plateau ; `null` pour une pièce protégée ou sans vignette lisible. */
@@ -45,7 +49,10 @@ public interface PendingMediaPreviewing {
     /** Prépare l'aperçu depuis le fichier lui-même (partage reçu) ; `null` pour une pièce protégée ou tenue en mémoire. */
     public suspend fun render(cmid: String, item: MediaUploadItem, effects: MessageEffects): PendingMediaPreview?
 
-    /** Supprime les aperçus que [attachments] référencent — seulement les siens. */
+    /** Garde une copie jouable d'un SON en attente ; `null` pour une pièce protégée ou qui n'est pas un son. */
+    public suspend fun keepPlayable(cmid: String, item: MediaUploadItem, effects: MessageEffects): String? = null
+
+    /** Supprime les aperçus et copies jouables que [attachments] référencent — seulement les siens. */
     public suspend fun release(attachments: List<ApiMessageAttachment>)
 
     public companion object {
@@ -92,8 +99,19 @@ public class PendingMediaPreviews internal constructor(
         )
     }
 
+    override suspend fun keepPlayable(cmid: String, item: MediaUploadItem, effects: MessageEffects): String? {
+        if (isMasked(effects) || PendingAttachmentType.forMime(item.mimeType) != PendingAttachmentType.AUDIO) return null
+        return withContext(io) {
+            runCatching {
+                val target = File(dir.apply { mkdirs() }, "$cmid$PLAYABLE_SUFFIX.${extensionOf(item.fileName)}")
+                item.source.open().use { input -> target.outputStream().use { output -> input.copyTo(output) } }
+                fileUrlOf(target)
+            }.getOrNull()
+        }
+    }
+
     override suspend fun release(attachments: List<ApiMessageAttachment>) {
-        val owned = attachments.mapNotNull { it.thumbnailUrl?.let(::ownedFile) }
+        val owned = attachments.flatMap { listOfNotNull(it.thumbnailUrl, it.fileUrl) }.mapNotNull(::ownedFile)
         if (owned.isEmpty()) return
         withContext(io) { owned.forEach { it.delete() } }
     }
@@ -112,11 +130,17 @@ public class PendingMediaPreviews internal constructor(
     /** La forme `file://` que la bulle reconnaît pour un fichier de l'appareil — jamais `file:/` de `File.toURI`. */
     private fun fileUrlOf(file: File): String = "file://" + file.absolutePath
 
+    private fun extensionOf(fileName: String): String =
+        fileName.substringAfterLast('.', "").lowercase().takeIf { it.matches(EXTENSION) } ?: DEFAULT_AUDIO_EXTENSION
+
     private fun isMasked(effects: MessageEffects): Boolean = (effects.flags and AttachmentProtection.MASKING_FLAGS) != 0L
 
     internal companion object {
         const val DIRECTORY = "pending-previews"
         const val SUFFIX = ".preview.jpg"
+        const val PLAYABLE_SUFFIX = ".voice"
+        const val DEFAULT_AUDIO_EXTENSION = "m4a"
+        val EXTENSION = Regex("[a-z0-9]{1,5}")
     }
 }
 

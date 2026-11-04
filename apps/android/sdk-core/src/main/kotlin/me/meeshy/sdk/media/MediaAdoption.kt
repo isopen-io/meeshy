@@ -17,7 +17,8 @@ import javax.inject.Singleton
 
 /**
  * **À l'accusé du serveur, le fichier local d'un média envoyé rejoint le cache typé** (miroir de l'adoption SDK iOS) :
- * quand le `fileUrl` d'une pièce passe de `file://` (bulle optimiste) à `https://` (adresse canonique), les octets déjà
+ * quand le `fileUrl` d'une pièce passe de `file://` (bulle optimiste) à son adresse servie — absolue, ou relative comme la
+ * passerelle la rend (`/api/v1/static/…`, résolue sur la même base que la bulle, #15428) —, les octets déjà
  * sur l'appareil sont rangés sous la clé canonique — la lecture suivante est un hit disque instantané, sans retélécharger
  * ce qu'on vient d'envoyer. Le fichier de la file est supprimé après adoption (s'il appartient à l'app, [owned]).
  *
@@ -55,10 +56,11 @@ class MediaAdoption internal constructor(
     private suspend fun adoptOne(local: ApiMessageAttachment, server: ApiMessageAttachment): Boolean {
         val previous = local.fileUrl.orEmpty()
         val canonical = server.fileUrl.orEmpty()
-        if (!LocalFileUrl.isLocal(previous) || !(canonical.startsWith("http://") || canonical.startsWith("https://"))) return false
+        if (!LocalFileUrl.isLocal(previous) || canonical.isEmpty() || LocalFileUrl.isLocal(canonical)) return false
+        val key = resolveMediaUrl(canonical, apiBaseUrl())
+        if (!(key.startsWith("http://") || key.startsWith("https://"))) return false
         val category = categoryOf(server.mimeType ?: local.mimeType) ?: return false
         val source = LocalFileUrl.pathOf(previous)?.let(::File) ?: return false
-        val key = resolveMediaUrl(canonical, apiBaseUrl())
         return withContext(io) {
             if (!source.isFile || source.length() <= 0L) return@withContext false
             if (cache.contains(category, key)) {

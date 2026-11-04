@@ -17,6 +17,8 @@ import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.conversation.ConversationObsoleting
+import me.meeshy.sdk.conversation.ConversationRemoval
+import me.meeshy.sdk.conversation.ConversationRemovalWrite
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.feedback.HapticKind
@@ -72,6 +74,7 @@ class ConversationListDialogsTest {
         val controller: ConversationListDialogController,
         val state: MutableStateFlow<ConversationListUiState>,
         val obsoleter: FakeObsoleter,
+        val remover: FakeConversationRemover,
         val repo: ConversationRepository,
         val blocker: FakeBlocker,
         val reporter: FakeReporter,
@@ -97,6 +100,7 @@ class ConversationListDialogsTest {
         reporter: FakeReporter = FakeReporter(),
         webOrigin: String = "",
         obsoleter: FakeObsoleter = FakeObsoleter(),
+        remover: FakeConversationRemover = FakeConversationRemover(),
     ): Harness {
         val repo = mockk<ConversationRepository>(relaxed = true)
         val state = MutableStateFlow(ConversationListUiState(currentUserId = user?.id, currentUser = user))
@@ -111,6 +115,7 @@ class ConversationListDialogsTest {
             draftStore = InMemoryConversationDraftStore(),
             workManager = mockk<WorkManager>(relaxed = true),
             obsoleter = obsoleter,
+            remover = remover,
         )
         val lock = ConversationListLockCoordinator(state, lockStore) {}
         val controller = ConversationListDialogController(
@@ -119,13 +124,13 @@ class ConversationListDialogsTest {
             conversationOf = { id -> conversations.firstOrNull { it.id == id } },
             actions = actions,
             repository = repo,
-            deps = ConversationListDialogDeps(blocker, reporter, obsoleter = obsoleter, webOrigin = webOrigin),
+            deps = ConversationListDialogDeps(blocker, reporter, obsoleter = obsoleter, webOrigin = webOrigin, remover = remover),
             lock = lock,
             lockStore = lockStore,
         )
         val effects = mutableListOf<ConversationListDialogEffect>()
         backgroundScope.launch { controller.effects.collect { effects += it } }
-        return Harness(controller, state, obsoleter, repo, blocker, reporter, effects)
+        return Harness(controller, state, obsoleter, remover, repo, blocker, reporter, effects)
     }
 
     // ── État scellé ──
@@ -238,7 +243,7 @@ class ConversationListDialogsTest {
 
         assertThat(h.controller.dialog.value).isNull()
         assertThat(h.effects).containsExactly(ConversationListDialogEffect.Haptic(HapticKind.HEAVY))
-        coVerify { h.repo.deleteForMe("g1") }
+        assertThat(h.remover.calls).containsExactly("g1" to ConversationRemoval.DELETE_FOR_ME)
     }
 
     @Test
@@ -373,7 +378,7 @@ class ConversationListDialogsTest {
     @Test
     fun `a failed leave says so with a toast`() = runTest(StandardTestDispatcher()) {
         val h = harness(group())
-        coEvery { h.repo.leave("g1") } returns NetworkResult.Failure(ApiError("boom"))
+        h.remover.write = ConversationRemovalWrite.Failed("boom")
 
         h.controller.requestLeave("g1")
         h.controller.confirmLeave()
@@ -528,5 +533,46 @@ class ConversationListDialogsTest {
         assertThat(member.effects).isEmpty()
         assertThat(noOrigin.effects).isEmpty()
         assertThat(noOrigin.controller.canOpenAdminConsole).isFalse()
+    }
+
+    // ── Retraits hors ligne ──
+
+    @Test
+    fun `a leave goes through the offline queue and says nothing while it holds`() = runTest(StandardTestDispatcher()) {
+        val h = harness(group())
+
+        h.controller.requestLeave("g1")
+        h.controller.confirmLeave()
+        runCurrent()
+
+        assertThat(h.remover.calls).containsExactly("g1" to ConversationRemoval.LEAVE)
+        assertThat(h.effects.filterIsInstance<ConversationListDialogEffect.Toast>()).isEmpty()
+    }
+
+    @Test
+    fun `a removal the gateway refuses for good warns with an error toast`() = runTest(StandardTestDispatcher()) {
+        val h = harness(group())
+        runCurrent()
+
+        h.remover.refuse("g1", ConversationRemoval.DELETE_FOR_ME)
+        runCurrent()
+
+        assertThat(h.effects).containsExactly(
+            ConversationListDialogEffect.Haptic(HapticKind.ERROR),
+            ConversationListDialogEffect.Toast(FeedbackToastRequest(R.string.conversation_removal_refused_delete, FeedbackKind.Error)),
+        ).inOrder()
+    }
+
+    @Test
+    fun `a refused leave brings back the leave error text`() = runTest(StandardTestDispatcher()) {
+        val h = harness(group())
+        runCurrent()
+
+        h.remover.refuse("g1", ConversationRemoval.LEAVE)
+        runCurrent()
+
+        assertThat(h.effects.last()).isEqualTo(
+            ConversationListDialogEffect.Toast(FeedbackToastRequest(R.string.dialogs_leave_error, FeedbackKind.Error)),
+        )
     }
 }

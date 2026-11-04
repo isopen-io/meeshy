@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Meeshy
 
 /// **Sur iPhone, un réel se cite depuis son bouton Repost, comme un post** (#15869).
@@ -92,7 +93,84 @@ final class ReelRepostOffersQuoteTests: XCTestCase {
         }
     }
 
+    // MARK: - Hors du fil : profil, détail, hashtag, favoris (#15911)
+
+    func test_lesPostsDUnProfil_remettentCiterAuxDeuxCartes_etCiterNOuvrePlusLeDetail() throws {
+        let path = "Meeshy/Features/Profile/Views/ProfileUserPostsList.swift"
+        let source = try sourceWithoutComments(path)
+        for card in ["ReelFeedCard(", "FeedPostCard("] {
+            XCTAssertTrue(try callArguments(of: card, in: source, path: path).contains("onQuote:"),
+                          "Les posts d'un profil doivent remettre « Citer » à \(card)), comme le fil.")
+        }
+        XCTAssertFalse(source.contains("onQuote: { _ in openPost"),
+                       "« Citer » ouvrait le détail du post au lieu de la porte de citation.")
+        XCTAssertTrue(source.contains("QuoteComposerCover("),
+                      "« Citer » depuis un profil doit ouvrir QuoteComposerDoor.")
+    }
+
+    func test_leDetailDUnPost_presenteLeChoixPartage_etCiterOuvreLaPorte() throws {
+        let source = try sourceWithoutComments("Meeshy/Features/Main/Views/PostDetailView.swift")
+        XCTAssertTrue(source.contains("RepostChoiceDialog("),
+                      "Le détail doit présenter le choix Repartager / Citer partagé.")
+        XCTAssertFalse(source.contains(#".alert(String(localized: "feed.post.repost""#),
+                       "Le détail ne doit plus écrire sa propre alerte de repost.")
+        XCTAssertFalse(source.contains("declaredQuote"),
+                       "« Citer » publiait une citation sans commentaire au lieu d'ouvrir la porte.")
+        let presentations = try sourceWithoutComments("Meeshy/Features/Main/Views/PostDetailView+Presentations.swift")
+        XCTAssertTrue(presentations.contains("QuoteComposerCover("),
+                      "« Citer » du détail doit ouvrir QuoteComposerDoor.")
+    }
+
+    func test_lesResultatsDUnHashtag_etLesFavoris_remettentCiterALaCarte() throws {
+        for path in [
+            "Meeshy/Features/Main/Views/HashtagResultsView.swift",
+            "Meeshy/Features/Main/Views/BookmarksView.swift"
+        ] {
+            let source = try sourceWithoutComments(path)
+            XCTAssertTrue(try callArguments(of: "FeedPostCard(", in: source, path: path).contains("onQuote:"),
+                          "\(path) doit remettre « Citer » à FeedPostCard.")
+            XCTAssertTrue(source.contains("QuoteComposerCover("),
+                          "\(path) : « Citer » doit ouvrir QuoteComposerDoor.")
+        }
+    }
+
+    func test_lesTroisRacines_posentLaPorteDeCitationAuDessusDeLeursFeuilles() throws {
+        for path in [
+            "Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
+            "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift",
+            "Meeshy/Features/Main/Views/AdaptiveRootView.swift"
+        ] {
+            let source = try sourceWithoutComments(path)
+                .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            XCTAssertTrue(
+                source.contains(#".environment(\.meeshyQuoteComposerHost, quoteHost) .environment(\.presentedSurfaceScope, router.surfaceScope)"#),
+                "\(path) doit poser la porte de citation sur sa couche la plus EXTERNE, à côté de la portée de fenêtre : une feuille hérite de l'environnement de son point d'attache."
+            )
+        }
+    }
+
+    @MainActor
+    func test_sansRacine_aucunePorteNEstOfferte() {
+        XCTAssertNil(EnvironmentValues().meeshyQuoteComposerHost,
+                     "Hors racine (aperçus, tests), « Citer » est absent plutôt qu'inerte.")
+    }
+
     // MARK: - Outils
+
+    private func callArguments(of call: String, in source: String, path: String) throws -> Substring {
+        let start = try XCTUnwrap(source.range(of: call), "\(path) monte \(call))")
+        var depth = 1
+        var index = start.upperBound
+        while index < source.endIndex, depth > 0 {
+            switch source[index] {
+            case "(": depth += 1
+            case ")": depth -= 1
+            default: break
+            }
+            index = source.index(after: index)
+        }
+        return source[start.upperBound..<index]
+    }
 
     private func sourceWithoutComments(_ path: String) throws -> String {
         let url = URL(fileURLWithPath: #filePath)

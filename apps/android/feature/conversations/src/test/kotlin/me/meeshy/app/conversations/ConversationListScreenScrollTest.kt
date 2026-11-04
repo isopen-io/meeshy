@@ -51,6 +51,7 @@ class ConversationListScreenScrollTest {
         val viewModel = mockk<ConversationListViewModel>(relaxed = true) {
             every { this@mockk.state } returns MutableStateFlow(state)
             every { rowSignals } returns MutableStateFlow(ConversationRowSignals())
+            every { rememberedSections } returns MutableStateFlow<Set<String>?>(null)
             every { messageSearch } returns MutableStateFlow(ListMessageSearchState.Idle)
             every { pullRefreshSucceeded } returns emptyFlow()
             every { openConversation } returns emptyFlow()

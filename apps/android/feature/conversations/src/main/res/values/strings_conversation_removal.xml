@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_removal_refused_delete">Couldn\'t delete the conversation. It is back in your list.</string>
+</resources>

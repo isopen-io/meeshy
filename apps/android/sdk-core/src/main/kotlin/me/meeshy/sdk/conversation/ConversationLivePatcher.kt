@@ -11,6 +11,7 @@ import me.meeshy.core.database.dao.SearchIndexDao
 import me.meeshy.core.database.entity.ConversationEntity
 import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.BridgeAnnouncement
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MessageDeletedEvent
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
@@ -155,8 +156,8 @@ class ConversationLivePatcher @Inject constructor(
     }
 
     /** `conversation:unread-updated` : le compteur absolu du serveur. */
-    suspend fun applyUnread(conversationId: String, unreadCount: Int) {
-        mutate(conversationId) { row -> ConversationLivePatch.applyUnread(row, unreadCount) ?: row }
+    suspend fun applyUnread(conversationId: String, unreadCount: Int, bridge: BridgeAnnouncement = BridgeAnnouncement.NotComputed) {
+        mutate(conversationId) { row -> ConversationLivePatch.applyUnread(row, unreadCount, bridge) ?: row }
     }
 
     /** Un membre arrive : +1 (soi ignoré), l'effectif absolu du serveur prime. */

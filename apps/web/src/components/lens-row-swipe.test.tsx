@@ -207,19 +207,25 @@ describe('LensRow — les deux bords', () => {
 describe('LensRow — rendre obsolète en un geste (#14645)', () => {
   const ADMIN_LYON = { ...LYON, currentUserRole: 'admin' } as Conversation;
 
-  test('administrateur : « Rendre obsolète » se révèle au bord de début et demande la confirmation', async () => {
+  test('administrateur : « Rendre obsolète » se révèle en dernier au bord de fin et demande la confirmation', async () => {
     const { row } = await monter({ conversations: [ADMIN_LYON, PARIS] });
-    await versLaDroite(row('c-lyon'), 120);
-    expect(labelsOf(row('c-lyon'))).toEqual(['Épingler', 'Silence', 'Rendre obsolète']);
-    expect(offsetOf(row('c-lyon'))).toBe('228px');
+    await versLaGauche(row('c-lyon'), 120);
+    expect(labelsOf(row('c-lyon'))).toEqual(['Archiver', 'Supprimer', 'Rendre obsolète']);
+    expect(offsetOf(row('c-lyon'))).toBe('-228px');
     await act(async () => actionOf(row('c-lyon'), 'Rendre obsolète').click());
     expect(departureStore.getState().request).toEqual({ conversationId: 'c-lyon', kind: 'obsolete', returnToList: false });
   });
 
-  test('simple membre d’un groupe : rien de plus que épingler et sourdine', async () => {
-    const { row } = await monter({ conversations: [{ ...LYON, currentUserRole: 'member' } as Conversation, PARIS] });
+  test('administrateur : le bord de début reste épingler et sourdine', async () => {
+    const { row } = await monter({ conversations: [ADMIN_LYON, PARIS] });
     await versLaDroite(row('c-lyon'), 80);
     expect(labelsOf(row('c-lyon'))).toEqual(['Épingler', 'Silence']);
+  });
+
+  test('simple membre d’un groupe : le bord de fin garde archiver, lu / non lu, supprimer', async () => {
+    const { row } = await monter({ conversations: [{ ...LYON, currentUserRole: 'member' } as Conversation, PARIS] });
+    await versLaGauche(row('c-lyon'), 100);
+    expect(labelsOf(row('c-lyon'))).toEqual(['Archiver', 'Non lu', 'Supprimer']);
   });
 });
 

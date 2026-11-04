@@ -1,6 +1,8 @@
 package me.meeshy.sdk.model
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import org.junit.Test
 
 class ConversationEventDeltasTest {
@@ -160,6 +162,69 @@ class ConversationEventDeltasTest {
         assertThat(purged.attachments.single().fileUrl).isNull()
         assertThat(purged.attachments.single().thumbnailUrl).isNull()
         assertThat(ConversationEventDeltas.viewOncePurged(purged)).isSameInstanceAs(purged)
+    }
+
+    private fun richViewOnce() = message(
+        attachments = listOf(
+            photo().copy(alt = "ma clé", originalName = "passeport.jpg", fileName = "f_123.jpg", latitude = 48.85, longitude = 2.35),
+        ),
+    ).copy(
+        isViewOnce = true,
+        encryptedContent = "ciphertext==",
+        location = SharedPlace(latitude = 48.85, longitude = 2.35, name = "Chez moi"),
+        sticker = MessageSticker(emoji = "🔥"),
+        trackingLinks = listOf(TrackedLink(url = "https://x.example/secret", token = "t1")),
+        metadata = buildJsonObject { put("location", JsonPrimitive("Chez moi")) },
+    )
+
+    @Test
+    fun `a view-once purge also drops the ciphertext, place, sticker, links, metadata and each piece's naming and coordinates`() {
+        val purged = ConversationEventDeltas.viewOncePurged(richViewOnce())
+
+        assertThat(purged.encryptedContent).isNull()
+        assertThat(purged.location).isNull()
+        assertThat(purged.sticker).isNull()
+        assertThat(purged.trackingLinks).isNull()
+        assertThat(purged.metadata).isNull()
+        val piece = purged.attachments.single()
+        assertThat(piece.id).isEqualTo("a1")
+        assertThat(piece.alt).isNull()
+        assertThat(piece.originalName).isNull()
+        assertThat(piece.fileName).isNull()
+        assertThat(piece.latitude).isNull()
+        assertThat(piece.longitude).isNull()
+        assertThat(purged.isViewOnce).isTrue()
+        assertThat(ConversationEventDeltas.viewOncePurged(purged)).isSameInstanceAs(purged)
+    }
+
+    @Test
+    fun `sealing as opened by the reader drops the same side channels`() {
+        val sealed = ConversationEventDeltas.sealedAsOpened(richViewOnce())
+
+        assertThat(sealed.consumedByMe).isTrue()
+        assertThat(sealed.content).isEmpty()
+        assertThat(sealed.encryptedContent).isNull()
+        assertThat(sealed.location).isNull()
+        assertThat(sealed.sticker).isNull()
+        assertThat(sealed.trackingLinks).isNull()
+        assertThat(sealed.metadata).isNull()
+        assertThat(sealed.attachments.single().originalName).isNull()
+        assertThat(ConversationEventDeltas.sealedAsOpened(sealed)).isSameInstanceAs(sealed)
+    }
+
+    @Test
+    fun `only a view-once opened by the reader is sealed on write`() {
+        val ordinary = message(attachments = listOf(photo())).copy(consumedByMe = true)
+        val byFlag = message().copy(isViewOnce = true, consumedByMe = true)
+        val byEffect = message().copy(effectFlags = MessageEffectFlags.VIEW_ONCE.toInt())
+        val byPiece = message(attachments = listOf(photo().copy(effectFlags = MessageEffectFlags.VIEW_ONCE)))
+        val notOpened = message().copy(isViewOnce = true, consumedByMe = false)
+
+        assertThat(ConversationEventDeltas.sealedIfOpened(ordinary, openedHere = true)).isSameInstanceAs(ordinary)
+        assertThat(ConversationEventDeltas.sealedIfOpened(byFlag, openedHere = false).content).isEmpty()
+        assertThat(ConversationEventDeltas.sealedIfOpened(byEffect, openedHere = true).content).isEmpty()
+        assertThat(ConversationEventDeltas.sealedIfOpened(byPiece, openedHere = true).attachments.single().fileUrl).isNull()
+        assertThat(ConversationEventDeltas.sealedIfOpened(notOpened, openedHere = false)).isSameInstanceAs(notOpened)
     }
 
     @Test
