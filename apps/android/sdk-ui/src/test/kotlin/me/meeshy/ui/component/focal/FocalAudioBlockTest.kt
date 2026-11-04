@@ -18,8 +18,9 @@ class FocalAudioBlockTest {
         files: Int = 0,
         replyToText: String? = null,
         consentMissing: Boolean = false,
+        isOutgoing: Boolean = false,
     ) = BubbleContent(
-        messageId = "m1", text = text, isOutgoing = false, isTranslated = false, originalText = null,
+        messageId = "m1", text = text, isOutgoing = isOutgoing, isTranslated = false, originalText = null,
         senderName = null, showSenderName = false, isEdited = false, isDeleted = false, createdAtIso = null,
         audios = List(audios) { BubbleAudio(attachmentId = "a$it", url = "https://x/a$it.m4a") },
         images = List(images) { BubbleImage(attachmentId = "i$it", url = "https://x/i$it.jpg") },
@@ -56,9 +57,10 @@ class FocalAudioBlockTest {
         assertThat(content(audios = 1, images = 1, text = "voir").focalAudioMode()).isEqualTo(FocalAudioMode.Standalone)
     }
 
-    @Test fun `le consentement vocal ne se propose que sous un audio`() {
-        assertThat(content(audios = 1, consentMissing = true).showsVoiceConsentNotice()).isTrue()
-        assertThat(content(consentMissing = true, text = "x").showsVoiceConsentNotice()).isFalse()
-        assertThat(content(audios = 1).showsVoiceConsentNotice()).isFalse()
+    @Test fun `le consentement vocal ne se propose que sous mon audio`() {
+        assertThat(content(audios = 1, consentMissing = true, isOutgoing = true).showsVoiceConsentNotice()).isTrue()
+        assertThat(content(consentMissing = true, text = "x", isOutgoing = true).showsVoiceConsentNotice()).isFalse()
+        assertThat(content(audios = 1, isOutgoing = true).showsVoiceConsentNotice()).isFalse()
+        assertThat(content(audios = 1, consentMissing = true, isOutgoing = false).showsVoiceConsentNotice()).isFalse()
     }
 }
