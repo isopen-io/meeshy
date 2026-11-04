@@ -74,11 +74,19 @@ enum ComposerHydration {
     /// d'attribution VERROUILLÉ — le republieur ne peut pas le retirer.
     case repostingStory(StoryItem, authorHandle: String)
 
+    /// Un POST ou un RÉEL publié qu'on rouvre pour le MODIFIER (#9333).
+    ///
+    /// Même asymétrie que `.editingStory`, pour la même raison : la porte relit
+    /// la scène du ViewModel à l'enregistrement — c'est elle qui dit quel média
+    /// l'auteur a retiré. La graine porte ce que le DOCUMENT montre à côté de la
+    /// scène : le texte, l'audience, la langue et le lieu de la publication.
+    case editingPublication(StoryComposerViewModel, ComposerPublicationEditSeed)
+
     /// La story SOURCE d'une republication — `nil` pour une édition, dont le
     /// contenu vit dans le ViewModel et non dans un `StoryItem` à part.
     var repostSource: StoryItem? {
         switch self {
-        case .editingStory: return nil
+        case .editingStory, .editingPublication: return nil
         case .repostingStory(let story, _): return story
         }
     }
@@ -97,7 +105,7 @@ enum ComposerHydration {
     /// inexpliqué au moment de publier.
     var allowedVisibilities: [PostVisibility]? {
         switch self {
-        case .editingStory:
+        case .editingStory, .editingPublication:
             return nil
         case .repostingStory(let story, _):
             return StoryRepostAudience.allowed(fromRawValue: story.visibility)
@@ -123,6 +131,8 @@ enum ComposerHydration {
         switch self {
         case .editingStory:
             return nil
+        case .editingPublication(_, let graine):
+            return graine.visibility
         case .repostingStory(let story, _):
             return story.visibility ?? PostVisibility.private.rawValue
         }
@@ -135,8 +145,62 @@ enum ComposerHydration {
         switch self {
         case .editingStory:
             return []
+        case .editingPublication(_, let graine):
+            return graine.visibilityUserIds
         case .repostingStory(let story, _):
             return story.visibilityUserIds ?? []
         }
+    }
+
+    /// Ce que le DOCUMENT rouvre — `nil` pour toute hydratation qui n'en a pas.
+    var publicationSeed: ComposerPublicationEditSeed? {
+        guard case .editingPublication(_, let graine) = self else { return nil }
+        return graine
+    }
+}
+
+/// Les champs du document d'une publication rouverte.
+nonisolated struct ComposerPublicationEditSeed: Equatable {
+    let text: String
+    let visibility: String
+    let visibilityUserIds: [String]
+    let language: String
+    let location: SharedPlace?
+}
+
+/// **Ce que le document montre à l'ouverture** : l'audience — publication
+/// rouverte, plafond d'une republication ou mémoire du format —, le texte, la
+/// langue et le lieu. Une seule lecture pour toutes les portes, faite hors du
+/// meuble : son `init` n'a qu'à la poser.
+struct ComposerDocumentOpening {
+    let visibility: PostVisibility
+    let visibilityUserIds: [String]
+    let text: String
+    let language: String
+    let location: SharedPlace?
+
+    /// **Une hydratation PLAFONNÉE gagne sur la mémoire** : republier une
+    /// story privée en la voyant ouverte sur « Amis » offrirait une faute que
+    /// le serveur refuserait ensuite (403 `REPOST_AUDIENCE_WIDENING`). Une
+    /// publication rouverte s'ouvre sur SON audience. L'édition d'une story
+    /// rend `nil` : son ViewModel porte `editingInitialVisibility`, que
+    /// l'atelier réassigne en priorité absolue. La mémoire est donc lue
+    /// seulement quand aucune hydratation n'impose d'audience, et l'audience
+    /// passe toujours par le validateur commun (`selectable`, dans `seed`).
+    static func of(hydration: ComposerHydration?, format: ComposerFormat, doorVisibility: String,
+                   defaults: UserDefaults = .standard) -> ComposerDocumentOpening {
+        let imposee = hydration?.initialVisibility
+        let graine = hydration?.publicationSeed
+        return ComposerDocumentOpening(
+            visibility: ComposerAudienceMemory.seed(
+                rememberedRaw: imposee == nil
+                    ? ComposerAudienceMemory.key(for: format).flatMap { defaults.string(forKey: $0) }
+                    : nil,
+                doorRaw: imposee ?? doorVisibility),
+            visibilityUserIds: graine?.visibilityUserIds ?? [],
+            text: graine?.text ?? "",
+            language: graine?.language ?? DefaultComposerLanguage.resolve(),
+            location: graine?.location
+        )
     }
 }
