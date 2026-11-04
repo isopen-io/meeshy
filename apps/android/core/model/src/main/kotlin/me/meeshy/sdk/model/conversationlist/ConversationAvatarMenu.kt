@@ -34,4 +34,14 @@ object ConversationAvatarMenu {
         if (isDirectConversationType(conversationType)) return directRoles()
         return groupRoles(canShare = canShare && conversationType in SHAREABLE_TYPES)
     }
+
+    /**
+     * Les entrées d'une ligne, d'après ce qu'ouvre son avatar (#15887) : un direct sans profil à montrer —
+     * pair bloqué, compte fermé, anonyme, conversation verrouillée — n'offre pas un « Voir le profil » qui ne
+     * mène nulle part. Le menu et TalkBack lisent la même liste.
+     */
+    fun roles(type: String?, opensProfile: Boolean, hasShareAction: Boolean): List<AvatarMenuRole> {
+        if (!isDirectConversationType(type)) return groupRoles(canShare = hasShareAction && type in SHAREABLE_TYPES)
+        return if (opensProfile) directRoles() else listOf(AvatarMenuRole.CONVERSATION_INFO)
+    }
 }

@@ -41,14 +41,21 @@ class ConversationAudioCoordinatorTest {
             return true
         }
 
-        override fun playLocal(attachmentId: String, fileUri: String, origin: PlaybackCommandOrigin) =
-            play(attachmentId, fileUri, origin, false)
+        val locals = mutableListOf<String>()
+        override fun playLocal(attachmentId: String, fileUri: String, origin: PlaybackCommandOrigin): Boolean {
+            if (!allow) return false
+            locals += fileUri
+            played += attachmentId
+            mutable.value = AudioPlaybackState(attachmentId = attachmentId, isPlaying = true, speed = mutable.value.speed)
+            return true
+        }
 
         override fun togglePlayPause(origin: PlaybackCommandOrigin) = Unit
         override fun pause() = Unit
         override fun resumeFromInterruption() = Unit
         override fun stop() { stops += 1; mutable.value = AudioPlaybackState(speed = mutable.value.speed) }
-        override fun seek(fraction: Double) = Unit
+        val fractions = mutableListOf<Double>()
+        override fun seek(fraction: Double) { fractions += fraction }
         override fun seekToMs(positionMs: Long) { seeks += positionMs }
         val skips = mutableListOf<Double>()
         override fun skip(seconds: Double) { skips += seconds }
@@ -57,6 +64,11 @@ class ConversationAudioCoordinatorTest {
         override fun setLoop(loop: Boolean) = Unit
         override fun setServedConsumption(attachmentId: String, consumption: MeeshyMediaConsumption?) = Unit
         override fun setConsumedLanguageProvider(provider: (() -> String?)?) = Unit
+        val follows = mutableListOf<List<Any>>()
+        override fun follow(fromAttachmentId: String, toAttachmentId: String, servedUrl: String, isProtected: Boolean) {
+            follows += listOf(fromAttachmentId, toAttachmentId, servedUrl, isProtected)
+            if (mutable.value.attachmentId == fromAttachmentId) mutable.value = mutable.value.copy(attachmentId = toAttachmentId)
+        }
     }
 
     private fun item(id: String, message: String = "m$id") = QueuedAudio(
@@ -378,5 +390,67 @@ class ConversationAudioCoordinatorTest {
         coordinator.next()
 
         assertThat(coordinator.graceContext.value?.conversationName).isEqualTo("Famille")
+    }
+
+    @Test fun `un vocal pas encore envoye se joue depuis son fichier local`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = coordinator(this, engine)
+        runCurrent()
+
+        coordinator.play(item("a").copy(fileUrl = "file:///data/voice/a.m4a"), emptyList(), "Famille", null)
+
+        assertThat(engine.locals).containsExactly("file:///data/voice/a.m4a")
+        assertThat(coordinator.snapshot.value.queue.current?.attachmentId).isEqualTo("a")
+    }
+
+    @Test fun `l'enchainement vers un vocal local passe aussi par le fichier`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = coordinator(this, engine)
+        runCurrent()
+        coordinator.play(item("a"), listOf(item("b").copy(fileUrl = "file:///data/voice/b.m4a")), "Famille", null)
+
+        engine.mutableEvents.tryEmit(AudioEngineEvent.Finished("a", completed = true))
+        runCurrent()
+
+        assertThat(engine.locals).containsExactly("file:///data/voice/b.m4a")
+        assertThat(engine.played).containsExactly("a", "b").inOrder()
+    }
+
+    @Test fun `glisser sur l'onde place le vocal en cours a la fraction choisie`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine)
+
+        coordinator.seek(0.4)
+
+        assertThat(engine.fractions).containsExactly(0.4)
+    }
+
+    @Test fun `le vocal accuse prend son id serveur dans la file et le moteur, et sa fin le marque ecoute sous ce nom`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = coordinator(this, engine)
+        runCurrent()
+        coordinator.play(item("cmid").copy(fileUrl = "file:///pending/cmid.m4a", isProtected = true), listOf(item("b")), "Famille", null)
+        val finished = mutableListOf<AttachmentFinishedEvent>()
+        backgroundScope.launchCollect(coordinator.attachmentFinished, finished)
+        runCurrent()
+
+        coordinator.follow("cmid", "att_server", "https://gate/voice.m4a")
+        engine.mutableEvents.tryEmit(AudioEngineEvent.Finished("att_server", completed = true))
+        runCurrent()
+
+        assertThat(engine.follows.single()).containsExactly("cmid", "att_server", "https://gate/voice.m4a", true).inOrder()
+        assertThat(finished.map { it.attachmentId }).containsExactly("att_server")
+        assertThat(engine.played.last()).isEqualTo("b")
+    }
+
+    @Test fun `suivre une piece que le moteur ne tient pas ne change rien`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine, "b")
+
+        coordinator.follow("b", "att_b", "https://gate/b.m4a")
+
+        assertThat(engine.follows).isEmpty()
+        assertThat(coordinator.snapshot.value.queue.upcoming.map { it.attachmentId }).containsExactly("b")
+        assertThat(coordinator.snapshot.value.queue.current?.attachmentId).isEqualTo("a")
     }
 }

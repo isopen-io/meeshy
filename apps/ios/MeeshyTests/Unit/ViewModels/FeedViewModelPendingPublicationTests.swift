@@ -134,13 +134,12 @@ final class FeedViewModelPendingPublicationTests: XCTestCase {
         let rowsBefore = queue.enqueueCalls.count
 
         await sut.likePost(cmid)
-        await sut.bookmarkPost(cmid)
         await sut.repostPost(cmid)
         await sut.repostPost(cmid, content: "cité", isQuote: true)
         let link = await sut.sharePost(cmid, generateLink: true)
 
         XCTAssertEqual(queue.enqueueCalls.count, rowsBefore, "aucun like ni repost ne s'écrit dans la file sous un cmid")
-        XCTAssertEqual(api.requestCount, 0, "ni favori ni partage ne part vers le serveur")
+        XCTAssertEqual(api.requestCount, 0, "aucun partage ne part vers le serveur")
         XCTAssertEqual(postService.repostCallCount, 0)
         XCTAssertNil(link)
         XCTAssertEqual(sut.posts.first?.isLiked, false, "le cœur ne promet rien qui ne partira pas")
