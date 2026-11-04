@@ -9,7 +9,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.changedToUp
 import me.meeshy.sdk.model.NotificationBannerSwipe
 
@@ -19,7 +20,9 @@ import me.meeshy.sdk.model.NotificationBannerSwipe
  * seulement, [onLift]) puis se décide par [NotificationBannerSwipe.outcome] ; le tap reste à la carte.
  *
  * Les événements sont observés en passe `Initial` et jamais consommés tant qu'aucun geste n'est
- * reconnu : le clic de la carte garde son tap, et un appui long ou un tirage reconnu l'annule.
+ * reconnu : le clic de la carte garde son tap, et un appui long ou un tirage reconnu l'annule. Le seuil
+ * de toucher se mesure lui aussi en passe `Initial` : en passe principale, l'appui que le clic de la carte
+ * vient de consommer passerait pour une annulation, et ni le tirage ni l'appui long ne naîtraient.
  */
 fun Modifier.bannerGestures(
     onLift: (Float) -> Unit,
@@ -34,7 +37,7 @@ fun Modifier.bannerGestures(
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             var rested = false
             val slop = withTimeoutOrNull(NotificationBannerSwipe.LONG_PRESS_MILLIS) {
-                awaitTouchSlopOrCancellation(down.id) { _, _ -> }
+                awaitInitialTouchSlop(down, viewConfiguration.touchSlop)
                     .also { if (it == null) rested = true }
             }
             when {
@@ -73,5 +76,14 @@ fun Modifier.bannerGestures(
                 }
             }
         }
+    }
+}
+
+/** Le premier mouvement du doigt [down] au-delà de [touchSlop], consommé puisqu'il ouvre un tirage ; `null` s'il se lève avant. */
+private suspend fun AwaitPointerEventScope.awaitInitialTouchSlop(down: PointerInputChange, touchSlop: Float): PointerInputChange? {
+    while (true) {
+        val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: return null
+        if (change.changedToUp() || !change.pressed) return null
+        if ((change.position - down.position).getDistance() > touchSlop) return change.also { it.consume() }
     }
 }

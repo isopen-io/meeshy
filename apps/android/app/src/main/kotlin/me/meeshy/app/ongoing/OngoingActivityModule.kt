@@ -79,6 +79,8 @@ internal class OngoingActivityInitializer @Inject constructor(
             startedAt = recordingBridge.startedAt,
             sink = recordingNotifications,
             wording = { VoiceRecordingActivityLaw.Wording(context.getString(R.string.voice_recording_activity_title)) },
+            title = recordingBridge.title,
+            levels = recordingBridge.levels,
         ).start(scope)
     }
 

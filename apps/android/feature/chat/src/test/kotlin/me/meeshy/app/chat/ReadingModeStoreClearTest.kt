@@ -1,5 +1,8 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.reading.ReadingModeFlags
+import me.meeshy.sdk.reading.ReadingModePreferenceStoring
+import me.meeshy.sdk.reading.SharedPreferencesReadingModeStore
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat

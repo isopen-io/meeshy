@@ -836,7 +836,8 @@ final class ComposerIntentTests: XCTestCase {
 
     func test_formatAnnonce_desPortesQuiPortentLeurFormat_estLeFormatPorte() {
         XCTAssertEqual(profil(.repost(ofPostId: "p", sourceFormat: .story)).initialFormat, .story)
-        XCTAssertEqual(profil(.edit(postId: "d", documentFormat: .reel)).initialFormat, .reel)
+        XCTAssertEqual(ComposerProfile.profile(for: .edit(postId: "d", documentFormat: .reel),
+                                               compositionQualifiesAsReel: true).initialFormat, .reel)
     }
 
     /// **Sentinelle LEVÉE le 2026-08-23 (C2), et transformée — pas supprimée.**
@@ -923,8 +924,8 @@ final class ComposerIntentTests: XCTestCase {
             "Le format d'une source n'est pas une graine : il change le composer."
         )
         XCTAssertNotEqual(
-            profil(.edit(postId: "a", documentFormat: .post)),
-            profil(.edit(postId: "a", documentFormat: .reel))
+            ComposerProfile.profile(for: .edit(postId: "a", documentFormat: .post), compositionQualifiesAsReel: true),
+            ComposerProfile.profile(for: .edit(postId: "a", documentFormat: .reel), compositionQualifiesAsReel: true)
         )
     }
 
@@ -1071,7 +1072,8 @@ final class ComposerIntentTests: XCTestCase {
 
     func test_edit_ouvreAuFormatDuDocument() {
         XCTAssertEqual(profil(.edit(postId: "d", documentFormat: .story)).initialFormat, .story)
-        XCTAssertEqual(profil(.edit(postId: "d", documentFormat: .reel)).initialFormat, .reel)
+        XCTAssertEqual(ComposerProfile.profile(for: .edit(postId: "d", documentFormat: .reel),
+                                               compositionQualifiesAsReel: true).initialFormat, .reel)
     }
 
     /// L'édition ne convertit qu'entre POST et RÉEL : `UpdatePostSchema.type`
@@ -1083,7 +1085,9 @@ final class ComposerIntentTests: XCTestCase {
     }
 
     func test_edit_convertitEntrePostEtReel() {
-        XCTAssertEqual(eventail(.edit(postId: "d", documentFormat: .reel)), [.reel, .post])
+        XCTAssertEqual(eventail(.edit(postId: "d", documentFormat: .reel), reel: true), [.reel, .post])
+        XCTAssertEqual(eventail(.edit(postId: "d", documentFormat: .reel), reel: false), [.post],
+                       "Un réel que plus rien ne qualifie repasse en post : le gateway le refuserait (422)")
         XCTAssertEqual(eventail(.edit(postId: "d", documentFormat: .post), reel: true), [.post, .reel])
         XCTAssertEqual(eventail(.edit(postId: "d", documentFormat: .post), reel: false), [.post])
     }

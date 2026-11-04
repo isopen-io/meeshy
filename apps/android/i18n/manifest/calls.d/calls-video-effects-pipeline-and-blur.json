@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.backgroundBlur",
+          "androidName": "video_filter_backgroundBlur",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.brightness",
+          "androidName": "video_filter_brightness",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.contrast",
+          "androidName": "video_filter_contrast",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.exposure",
+          "androidName": "video_filter_exposure",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.naturalComplexion",
+          "androidName": "video_filter_naturalComplexion",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.naturalComplexion.hint",
+          "androidName": "video_filter_naturalComplexion_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.performanceDegraded",
+          "androidName": "video_filter_performanceDegraded",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.cool",
+          "androidName": "video_filter_preset_cool",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.muted",
+          "androidName": "video_filter_preset_muted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.natural",
+          "androidName": "video_filter_preset_natural",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.vivid",
+          "androidName": "video_filter_preset_vivid",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.warm",
+          "androidName": "video_filter_preset_warm",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.radius",
+          "androidName": "video_filter_radius",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.reinit",
+          "androidName": "video_filter_reinit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.reset",
+          "androidName": "video_filter_reset",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.saturation",
+          "androidName": "video_filter_saturation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.skinSmoothing",
+          "androidName": "video_filter_skinSmoothing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.temperature",
+          "androidName": "video_filter_temperature",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.title",
+          "androidName": "video_filter_title",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "feed.post.publish.error", "androidName": "feed_post_publish_error", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.publish.format.unsupported", "androidName": "composer_publish_format_unsupported", "status": "adopted" }
+      ]
+    }
+  }
+}

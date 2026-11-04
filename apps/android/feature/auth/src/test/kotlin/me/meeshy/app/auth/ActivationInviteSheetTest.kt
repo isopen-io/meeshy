@@ -4,7 +4,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.performSemanticsAction
 import me.meeshy.sdk.model.UserActivation
 import me.meeshy.sdk.model.UserActivation.Channel
 import me.meeshy.sdk.model.auth.ActivationInviteState
@@ -60,8 +61,8 @@ class ActivationInviteSheetTest {
     fun `recevoir le code et ajouter le numero emettent leurs evenements`() {
         val events = mutableListOf<ActivationInviteEvent>()
         show(state(), events)
-        compose.onNodeWithTag(ActivationInviteSheetTags.SEND_CODE).performClick()
-        compose.onNodeWithTag(ActivationInviteSheetTags.ADD_PHONE).performClick()
+        compose.onNodeWithTag(ActivationInviteSheetTags.SEND_CODE).tap()
+        compose.onNodeWithTag(ActivationInviteSheetTags.ADD_PHONE).tap()
         assertEquals(listOf(ActivationInviteEvent.SendCode, ActivationInviteEvent.AddPhone), events)
     }
 
@@ -80,10 +81,17 @@ class ActivationInviteSheetTest {
         compose.onNodeWithText("Your account is verified. Thank you!").assertIsDisplayed()
         compose.onNodeWithText("Email verified ✓").assertIsDisplayed()
         compose.onNodeWithText("Number verified ✓").assertIsDisplayed()
-        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithText("Close").tap()
         assertEquals(listOf<ActivationInviteEvent>(ActivationInviteEvent.Dismiss), events)
     }
 }
 
 private fun androidx.compose.ui.test.SemanticsNodeInteraction.assertDoesNotExistCompat() =
     assertDoesNotExist()
+
+/**
+ * La feuille est une `ModalBottomSheet` : sous Robolectric, un toucher injecté n'atteint pas les enfants de sa fenêtre
+ * (le geste n'est pas en cause, la feuille vit dans une autre fenêtre). Le témoin déclenche donc l'action sémantique
+ * `OnClick` — celle que TalkBack déclenche aussi — plutôt qu'un toucher.
+ */
+private fun androidx.compose.ui.test.SemanticsNodeInteraction.tap() = performSemanticsAction(SemanticsActions.OnClick)
