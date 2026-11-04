@@ -1,17 +1,20 @@
 package me.meeshy.app.conversations
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.assertContentDescriptionContains
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.PackOrigin
 import me.meeshy.sdk.model.ServedProfileDecor
 import me.meeshy.sdk.model.ServedProfileDecorItem
+import me.meeshy.sdk.model.appearance.AvatarRingDesign
+import me.meeshy.sdk.model.appearance.AvatarRingStroke
+import me.meeshy.sdk.model.appearance.RingStrokeStyle
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.appearance.AvatarRingResolver
 import me.meeshy.ui.appearance.LocalAvatarRingResolver
@@ -39,6 +42,10 @@ class ConversationRowAvatarContourTest {
 
     private val perle = ServedProfileDecorItem(pack = "contours-essentiels", item = "perle", origin = PackOrigin.BUILTIN)
     private val decor = ServedProfileDecor(avatarRing = perle)
+    private val perleDessin = AvatarRingDesign(
+        key = "perle",
+        stroke = AvatarRingStroke(style = RingStrokeStyle.SOLID, width = 0.08, colors = listOf("#FF00AA")),
+    )
 
     private fun conversation(type: String, peerDecor: ServedProfileDecor?) = ApiConversation(
         id = "c1",
@@ -51,7 +58,7 @@ class ConversationRowAvatarContourTest {
     )
 
     private fun show(conversation: ApiConversation, seen: MutableList<ServedProfileDecorItem?>, withGestures: Boolean = false) {
-        val resolver = AvatarRingResolver { item -> seen += item; null }
+        val resolver = AvatarRingResolver { item -> seen += item; perleDessin.takeIf { item == perle } }
         compose.setContent {
             CompositionLocalProvider(LocalReduceMotion provides true, LocalAvatarRingResolver provides resolver) {
                 MeeshyTheme {
@@ -118,12 +125,16 @@ class ConversationRowAvatarContourTest {
     }
 
     @Test
-    fun `le contour est muet pour TalkBack, l'avatar garde un seul nom lu`() {
+    fun `le contour dessine est muet pour TalkBack, l'avatar garde un seul nom lu`() {
         val seen = mutableListOf<ServedProfileDecorItem?>()
 
         show(conversation("direct", decor), seen, withGestures = true)
+        compose.waitForIdle()
 
+        assertThat(seen).contains(perle)
         compose.onAllNodesWithTag(ROW_AVATAR_TEST_TAG).assertCountEquals(1)
-        compose.onNodeWithTag(ROW_AVATAR_TEST_TAG).assertContentDescriptionContains("Ali")
+        val spoken = compose.onNodeWithTag(ROW_AVATAR_TEST_TAG).fetchSemanticsNode().config[SemanticsProperties.ContentDescription]
+        assertThat(spoken.first()).isEqualTo("View profile of Ali")
+        assertThat(spoken.joinToString()).doesNotContain("perle")
     }
 }
