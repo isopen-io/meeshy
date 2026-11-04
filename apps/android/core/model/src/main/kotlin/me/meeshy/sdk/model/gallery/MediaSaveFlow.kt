@@ -28,7 +28,7 @@ public object MediaSaveFlow {
             if (write(destination)) MediaSaveOutcome.Saved(destination) else MediaSaveOutcome.Failed(destination)
         } catch (c: CancellationException) {
             throw c
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
             MediaSaveOutcome.Failed(destination)
         }
 }
