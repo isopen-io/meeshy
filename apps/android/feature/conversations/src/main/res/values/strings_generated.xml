@@ -20,6 +20,8 @@
     <string name="context_report">Report</string>
     <string name="context_search">Search</string>
     <string name="conversationCard_expired">Link expired</string>
+    <string name="conversation_row_avatar_a11y_details">Details of %1$s</string>
+    <string name="conversation_row_avatar_a11y_profile">View profile of %1$s</string>
     <string name="conversations_action_archive">Archive</string>
     <string name="conversations_action_create_category">Create \"%1$s\"</string>
     <string name="conversations_action_delete_for_all">Delete for everyone</string>
