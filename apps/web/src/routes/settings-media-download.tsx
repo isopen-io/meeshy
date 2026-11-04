@@ -56,7 +56,7 @@ export function MediaDownloadRows({ language, store = mediaDownloadStore() }: { 
               const next = event.currentTarget.value;
               if (isPolicy(next)) store.setPolicy(kind, next);
             }}
-            className="shrink-0 rounded-chip bg-transparent px-2 text-caption font-semibold focus-visible:outline-2"
+            className="shrink-0 rounded-chip bg-transparent px-2 text-body font-semibold focus-visible:outline-2"
             style={{ minHeight: 44, color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
           >
             {AUTO_DOWNLOAD_POLICIES.map((policy) => (

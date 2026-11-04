@@ -166,3 +166,36 @@ describe('#14690 — un refus de la passerelle retire « Rendre obsolète » de 
     departureStore.setState({ obsoleteRefused: [] });
   });
 });
+
+describe('#14690 — la capacité servie au lecteur décide seule ; absente, la règle locale reste', () => {
+  const served = (canMakeObsolete: boolean) => ({ viewerCapabilities: { canMakeObsolete } });
+  const direct = (overrides: Partial<Conversation> = {}) => conversationOf({ type: 'direct', currentUserRole: 'member', ...overrides });
+
+  test('servie fausse, l’expéditeur d’une demande ne se voit jamais proposer l’action, au menu comme à la fiche', () => {
+    departureStore.setState({ obsoleteRefused: [] });
+    expect(rowConversationActions({ conversation: direct(served(false)), viewer: viewerOf() }).obsolete).toBe(false);
+    expect(idsFor(direct(served(false)), viewerOf())).not.toContain('obsolete');
+    expect(rowConversationActions({ conversation: conversationOf({ currentUserRole: 'admin', ...served(false) }), viewer: viewerOf() }).obsolete).toBe(false);
+  });
+
+  test('servie vraie, elle l’ouvre là où la règle locale le refusait', () => {
+    departureStore.setState({ obsoleteRefused: [] });
+    expect(rowConversationActions({ conversation: conversationOf({ currentUserRole: 'member', ...served(true) }), viewer: viewerOf() }).obsolete).toBe(true);
+    expect(idsFor(conversationOf({ currentUserRole: 'member', ...served(true) }), viewerOf())).toContain('obsolete');
+  });
+
+  test('absente ou illisible, la règle locale d’avant s’applique, jamais un « faux » implicite', () => {
+    departureStore.setState({ obsoleteRefused: [] });
+    const unreadable = { viewerCapabilities: { canMakeObsolete: 'oui' } } as unknown as Partial<Conversation>;
+    expect(rowConversationActions({ conversation: direct(), viewer: viewerOf() }).obsolete).toBe(true);
+    expect(rowConversationActions({ conversation: direct(unreadable), viewer: viewerOf() }).obsolete).toBe(true);
+    expect(rowConversationActions({ conversation: conversationOf({ currentUserRole: 'member', ...unreadable }), viewer: viewerOf() }).obsolete).toBe(false);
+  });
+
+  test('un refus mesuré de la route l’emporte sur un instantané vrai', () => {
+    departureStore.setState({ obsoleteRefused: [] });
+    markObsoleteRefused('c-lyon');
+    expect(rowConversationActions({ conversation: conversationOf({ currentUserRole: 'admin', ...served(true) }), viewer: viewerOf() }).obsolete).toBe(false);
+    departureStore.setState({ obsoleteRefused: [] });
+  });
+});

@@ -154,3 +154,21 @@ describe('viewerWriteRestriction — ce qui survit à la sérialisation (#9927)'
     expect(serializeDetail({ ...detailFromHandler, viewerWriteRestriction: 'minor-global' }).viewerWriteRestriction).toBe('minor-global');
   });
 });
+
+describe('viewerCapabilities — ce qui survit à la sérialisation (#14690)', () => {
+  it('la liste sert la capacité du lecteur', () => {
+    expect(serializeList({ ...listRowFromHandler, viewerCapabilities: { canMakeObsolete: false } }).viewerCapabilities).toEqual({
+      canMakeObsolete: false,
+    });
+  });
+
+  it('le détail sert la capacité du lecteur', () => {
+    expect(serializeDetail({ ...detailFromHandler, viewerCapabilities: { canMakeObsolete: true } }).viewerCapabilities).toEqual({
+      canMakeObsolete: true,
+    });
+  });
+
+  it("absente quand le handler ne l'a pas calculée", () => {
+    expect(serializeList(listRowFromHandler)).not.toHaveProperty('viewerCapabilities');
+  });
+});

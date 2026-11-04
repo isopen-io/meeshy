@@ -119,6 +119,14 @@ public interface MessageDao {
     @Query("SELECT * FROM messages WHERE expiresAt IS NOT NULL AND expiresAt <= :nowMillis")
     public suspend fun expiredBefore(nowMillis: Long): List<MessageEntity>
 
+    /**
+     * The rows that may hold a view-once THIS reader opened: the opening column is set, or the payload says
+     * `consumedByMe` (rows written before the column was derived on every write). The caller decides from the decoded
+     * payload; a row stays a candidate after it is sealed, so the pass that reads this must be idempotent.
+     */
+    @Query("SELECT * FROM messages WHERE viewOnceOpenedAt IS NOT NULL OR payload LIKE '%\"consumedByMe\":true%'")
+    public suspend fun openedViewOnceCandidates(): List<MessageEntity>
+
     /** The reader opened a view-once message: permanent, and invisible to a REST refresh. */
     @Query(
         "UPDATE messages SET viewOnceOpenedAt = :openedAt, changeVersion = changeVersion + 1 " +

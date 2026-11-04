@@ -71,6 +71,7 @@ final class NewConversationViewModel: ObservableObject {
     /// every new search attempt.
     @Published private(set) var searchFailed = false
     @Published private(set) var isCreating = false
+    @Published private(set) var openingUserId: String?
     @Published private(set) var errorMessage: String?
     /// Set after a successful `createConversation` so the view can dismiss
     /// itself and trigger navigation. Cleared back to `nil` by `consume…`.
@@ -319,7 +320,24 @@ final class NewConversationViewModel: ObservableObject {
             participantIds: selectedUsers.map(\.id),
             encryptionMode: encryptionMode(isGroup: isGroup)
         )
+        await submit(body)
+    }
 
+    func openDirect(with user: SearchedUser) async {
+        guard !isCreating else { return }
+        isCreating = true
+        openingUserId = user.id
+        errorMessage = nil
+        await submit(CreateConversationRequest(
+            type: "direct",
+            title: nil,
+            participantIds: [user.id],
+            encryptionMode: encryptionMode(isGroup: false)
+        ))
+    }
+
+    private func submit(_ body: CreateConversationRequest) async {
+        defer { openingUserId = nil }
         do {
             let response: APIResponse<APIConversation> = try await api.post(
                 ConversationsEndpoint.root,

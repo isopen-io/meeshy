@@ -113,6 +113,31 @@ final class ConversationRowMenuCapabilitiesTests: XCTestCase {
         XCTAssertFalse(capabilities(makeConversation(currentUserRole: "member"), user: makeUser()).obsolete)
     }
 
+    // MARK: - La capacité servie au lecteur (#14690) décide seule ; absente, la règle locale reste
+
+    private func served(_ conversation: MeeshyConversation, canMakeObsolete: Bool) -> MeeshyConversation {
+        var copy = conversation
+        copy.viewerCapabilities = ConversationViewerCapabilities(canMakeObsolete: canMakeObsolete)
+        return copy
+    }
+
+    func test_make_servedFalse_hidesObsoleteFromPendingRequestSender() {
+        XCTAssertFalse(capabilities(served(openDirect(), canMakeObsolete: false), user: makeUser()).obsolete,
+                       "L'expéditeur d'une demande non acceptée ne se voit plus proposer l'action.")
+        XCTAssertFalse(capabilities(served(makeConversation(currentUserRole: "admin"), canMakeObsolete: false), user: makeUser()).obsolete)
+    }
+
+    func test_make_servedTrue_opensObsoleteWhereLocalRuleRefused() {
+        XCTAssertTrue(capabilities(served(makeConversation(currentUserRole: "member"), canMakeObsolete: true), user: makeUser()).obsolete)
+    }
+
+    func test_make_capabilityAbsent_keepsLocalRule() {
+        XCTAssertTrue(capabilities(openDirect(), user: makeUser()).obsolete)
+        var unreadable = openDirect()
+        unreadable.viewerCapabilities = ConversationViewerCapabilities(canMakeObsolete: nil)
+        XCTAssertTrue(capabilities(unreadable, user: makeUser()).obsolete, "Une capacité illisible n'est jamais un « non ».")
+    }
+
     // MARK: - Inviter et lien de partage
 
     func test_make_groupCreator_hasInviteAndShareLink() {
