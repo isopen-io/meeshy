@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.app.chat.studioCanEdit
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.DirectConversationResolution
@@ -432,7 +433,8 @@ class ShareSheetViewModelTest {
         h.vm.bindIncoming(null, emptyList())
         advanceUntilIdle()
 
-        h.vm.toggle(h.model().sections.recents.first())
+        assertThat(h.vm.state.value.subject).isNull()
+        h.model().sections.recents.firstOrNull()?.let(h.vm::toggle)
         h.vm.send()
         advanceUntilIdle()
 
