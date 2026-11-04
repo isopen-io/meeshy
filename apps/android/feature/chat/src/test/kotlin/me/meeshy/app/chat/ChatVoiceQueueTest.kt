@@ -54,6 +54,18 @@ class ChatVoiceQueueTest {
     }
 
     @Test
+    fun `une voix d'origine sous un texte traduit porte la langue d'origine, celle qu'on entend`() {
+        val heard = voice("o1").copy(audioLanguage = "fr", isAudioTranslated = false, originalLanguage = "en")
+        val bubble = voiceMessage("m6", "2026-11-04T08:05:00Z", voice("o0"), heard)
+        val start = ChatVoiceQueue.start(bubble.audios[0], bubble, listOf(bubble), "c1", emptySet())!!
+
+        assertThat(start.tail.single().trackLanguage).isEqualTo("en")
+        assertThat(start.tail.single().isTranslatedTrack).isFalse()
+        assertThat(ChatVoiceQueue.start(heard, bubble, listOf(bubble), "c1", emptySet())!!.current.trackLanguage).isEqualTo("en")
+        assertThat(ChatVoiceQueue.lone(heard, "m6", "Nour", 0L, "c1")!!.trackLanguage).isEqualTo("en")
+    }
+
+    @Test
     fun `toucher mon propre message a plusieurs pieces enchaine ses pieces suivantes`() {
         val mine = voiceMessage("m9", "2026-11-04T09:00:00Z", voice("x1"), voice("x2"), isOutgoing = true)
         val start = ChatVoiceQueue.start(mine.audios[0], mine, listOf(mine), "c1", emptySet())!!
