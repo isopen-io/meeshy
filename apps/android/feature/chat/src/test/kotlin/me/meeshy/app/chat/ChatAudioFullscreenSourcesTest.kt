@@ -90,12 +90,30 @@ class ChatAudioFullscreenSourcesTest {
         assertThat(page.authorRing).isNull()
     }
 
+    private val halo = ServedProfileDecorItem(pack = "contours-animes", item = "halo", origin = PackOrigin.BUILTIN)
+
     @Test
-    fun `les pages du fil gardent le contour servi avec leur bulle`() {
+    fun `une page du fil garde le contour servi avec sa bulle et jamais celui d un autre auteur`() {
+        val served = thread.map {
+            when (it.messageId) {
+                "m1" -> it.copy(senderId = "sam")
+                "m2" -> it.copy(senderRing = halo)
+                "m4" -> it.copy(senderRing = onde)
+                else -> it
+            }
+        }
+
+        val pages = ChatAudioFullscreenSources.of("a", served, "conv", "Famille")!!
+
+        assertThat(pages.associate { it.id to it.authorRing }).containsExactly("a", null, "b", halo, "c", onde)
+    }
+
+    @Test
+    fun `une page du fil sans contour prend celui que le fil sert pour le meme auteur`() {
         val served = thread.map { if (it.messageId == "m4") it.copy(senderRing = onde) else it }
 
         val pages = ChatAudioFullscreenSources.of("a", served, "conv", "Famille")!!
 
-        assertThat(pages.associate { it.id to it.authorRing }).containsExactly("a", null, "b", null, "c", onde)
+        assertThat(pages.associate { it.id to it.authorRing }).containsExactly("a", onde, "b", onde, "c", onde)
     }
 }
