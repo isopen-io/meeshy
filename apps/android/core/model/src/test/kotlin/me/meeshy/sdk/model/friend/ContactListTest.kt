@@ -304,10 +304,11 @@ class ContactListTest {
     }
 
     @Test
-    fun `forFilter treats the pass-through filters as the whole roster`() {
-        val counts = ContactList.counts(roster, query = "")
+    fun `forFilter counts the phonebook and affiliates views from the injected numbers, zero by default`() {
+        assertThat(ContactList.counts(roster, query = "").forFilter(ContactFilter.Phonebook)).isEqualTo(0)
+        val counts = ContactList.counts(roster, query = "", phonebook = 3, affiliates = 5)
         assertThat(counts.forFilter(ContactFilter.Phonebook)).isEqualTo(3)
-        assertThat(counts.forFilter(ContactFilter.Affiliates)).isEqualTo(3)
+        assertThat(counts.forFilter(ContactFilter.Affiliates)).isEqualTo(5)
     }
 
     // MARK: - fromAcceptedRequests — one `direction=any` listing
