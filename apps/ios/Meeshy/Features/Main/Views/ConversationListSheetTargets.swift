@@ -77,4 +77,12 @@ struct ConversationListSheetTargets {
     /// La recherche demandée sur une conversation verrouillée, armée seulement
     /// une fois le PIN franchi (`ConversationOpenRoute.searchesAfterUnlock`).
     var searchAfterUnlock: Bool = false
+
+    /// Le toucher d'avatar d'une conversation verrouillée (#15887) : le PIN
+    /// franchi, la feuille de verrou montre les DÉTAILS, jamais le fil.
+    var infoAfterUnlock: Bool = false
+
+    /// Les détails admis par le PIN, présentés une fois la feuille de verrou
+    /// fermée — jamais une feuille par-dessus une autre.
+    @Indirect var unlockedInfo: Conversation? = nil
 }
