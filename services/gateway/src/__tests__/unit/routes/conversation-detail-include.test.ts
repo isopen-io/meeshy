@@ -73,6 +73,7 @@ describe('conversationDetailInclude (F1 participants cap + F8 strict select)', (
       'equippedAvatarRing',
       'firstName',
       'id',
+      'isActive',
       'lastName',
       'username'
     ]);
