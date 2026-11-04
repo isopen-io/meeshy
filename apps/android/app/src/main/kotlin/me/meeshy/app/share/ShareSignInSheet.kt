@@ -20,8 +20,9 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * **Sans session : « Connectez-vous pour envoyer »** (iOS : `ShareSignInPrompt`, fragment 3 de la planche). Les copies ne sont
- * pas perdues : elles restent dans l'espace du partage jusqu'au balayage de sept jours, et « Ouvrir Meeshy » mène à la connexion.
+ * **Sans session : « Connectez-vous pour envoyer »** (iOS : `ShareSignInPrompt`, fragment 3 de la planche). Android n'a pas de
+ * reprise après connexion : rien n'est copié sans session, la feuille le dit (« partagez à nouveau »), et « Ouvrir Meeshy » mène
+ * à la connexion.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +43,7 @@ fun ShareSignInSheet(onOpenApp: () -> Unit, onDismiss: () -> Unit, modifier: Mod
             )
             Spacer(Modifier.height(MeeshySpacing.sm))
             Text(
-                text = stringResource(R.string.share_sheet_sign_in_body),
+                text = stringResource(R.string.share_sheet_sign_in_body_reshare),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MeeshyTheme.tokens.textSecondary,
             )
