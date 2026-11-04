@@ -80,6 +80,7 @@ internal fun AudioFullscreenPage(
     pageCount: Int,
     playback: AudioPlaybackState,
     player: AudioFullscreenPlayer,
+    heardPositionMs: Long?,
     upcoming: () -> List<QueuedAudio>,
     accent: Color,
     chromeVisible: Boolean,
@@ -92,7 +93,8 @@ internal fun AudioFullscreenPage(
     onPrevious: (() -> Unit)?,
 ) {
     val isLoaded = playback.attachmentId == source.id
-    val resting = remember(source.id) { player.restingPositionMs(source.id) }
+    val stored = remember(source.id) { player.restingPositionMs(source.id) }
+    val resting = heardPositionMs ?: stored
     val progress = AudioFullscreenPageProgress.fraction(source.id, playback, resting, source.servedConsumption, source.durationMs)
     val totalMs = if (isLoaded && playback.durationMs > 0L) playback.durationMs else source.durationMs
     val samples by remember(source.id) { player.samples(source) }.collectAsState()

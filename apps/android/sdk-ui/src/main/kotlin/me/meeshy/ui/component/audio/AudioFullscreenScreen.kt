@@ -20,6 +20,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -115,6 +116,7 @@ public fun AudioFullscreenScreen(
     val latestTail by rememberUpdatedState(conversationTail)
     val pagerState = rememberPagerState(initialPage = AudioFullscreenPaging.index(startAttachmentId, ids) ?: 0) { ordered.size }
     val memory = remember { AudioFullscreenTurnMemory() }
+    val heard = remember { mutableStateMapOf<String, Long>() }
     val scope = rememberCoroutineScope()
     val playback by player.playback.collectAsState()
     var chrome by remember { mutableStateOf(FullscreenChromeState.Initial) }
@@ -128,14 +130,15 @@ public fun AudioFullscreenScreen(
 
     LaunchedEffect(pagerState) {
         var entry = true
-        snapshotFlow { latestIds.getOrNull(pagerState.settledPage) }
+        snapshotFlow { if (pagerState.isScrollInProgress) null else latestIds.getOrNull(pagerState.settledPage) }
             .distinctUntilChanged()
             .collectLatest { pageId ->
                 if (pageId == null) return@collectLatest
                 val turned = !entry
                 entry = false
                 delay(AudioFullscreenPaging.playbackDelayMillis(turnedTo = turned))
-                if (AudioFullscreenPaging.isStale(pageId, latestIds.getOrNull(pagerState.settledPage))) return@collectLatest
+                val posed = if (pagerState.isScrollInProgress) null else latestIds.getOrNull(pagerState.settledPage)
+                if (AudioFullscreenPaging.isStale(pageId, posed)) return@collectLatest
                 val source = latestOrdered.firstOrNull { it.id == pageId } ?: return@collectLatest
                 memory.requested = pageId
                 latestPlayer.start(source, upcomingAfter(pageId))
@@ -152,6 +155,13 @@ public fun AudioFullscreenScreen(
             ) ?: return@collect
             val index = latestIds.indexOf(target)
             if (index >= 0) pagerState.animateScrollToPage(index)
+        }
+    }
+
+    LaunchedEffect(player) {
+        player.playback.collect { state ->
+            val id = state.attachmentId ?: return@collect
+            if (state.isPlaying && state.durationMs > 0L && id in latestIds) heard[id] = state.currentTimeMs
         }
     }
 
@@ -221,6 +231,7 @@ public fun AudioFullscreenScreen(
                 pageCount = ordered.size,
                 playback = playback,
                 player = player,
+                heardPositionMs = heard[source.id],
                 upcoming = { upcomingAfter(source.id) },
                 accent = accent,
                 chromeVisible = chrome.showsChrome,
