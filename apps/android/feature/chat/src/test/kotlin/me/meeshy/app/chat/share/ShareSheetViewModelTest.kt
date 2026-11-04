@@ -48,6 +48,10 @@ import me.meeshy.sdk.outbox.OutOfThreadSendGate
 import me.meeshy.sdk.model.PostShareTarget
 import me.meeshy.sdk.post.PostShareLinkService
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.model.share.ShareRecipient
+import me.meeshy.sdk.share.ShareDeliveryOutcome
+import me.meeshy.sdk.share.ShareDurableRequest
+import me.meeshy.sdk.share.ShareDurableSending
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
@@ -101,7 +105,7 @@ class ShareSheetViewModelTest {
         outOfThread: OutOfThreadSendGate = OutOfThreadSendGate { OutOfThreadAdmission.SEND },
         trackedLink: String? = null,
         previews: PendingMediaPreviewing = PendingMediaPreviewing.None,
-        durable: me.meeshy.sdk.share.ShareDurableSending = me.meeshy.sdk.share.ShareDurableSending.None,
+        durable: ShareDurableSending = ShareDurableSending.None,
     ): Harness {
         val links = mockk<PostShareLinkService>()
         coEvery { links.resolve(any(), any()) } returns
@@ -713,16 +717,16 @@ class ShareSheetViewModelTest {
 
     @Test
     fun a_text_share_goes_through_the_durable_sender_when_it_is_available_and_never_through_the_direct_path() = runTest(dispatcher) {
-        val requests = mutableListOf<me.meeshy.sdk.share.ShareDurableRequest>()
-        val durable = object : me.meeshy.sdk.share.ShareDurableSending {
+        val requests = mutableListOf<ShareDurableRequest>()
+        val durable = object : ShareDurableSending {
             override val isAvailable = true
             override suspend fun send(
-                request: me.meeshy.sdk.share.ShareDurableRequest,
+                request: ShareDurableRequest,
                 recipients: List<ShareRecipient>,
-                onOutcome: suspend (ShareRecipient, me.meeshy.sdk.share.ShareDeliveryOutcome) -> Unit,
-            ): Map<String, me.meeshy.sdk.share.ShareDeliveryOutcome> {
+                onOutcome: suspend (ShareRecipient, ShareDeliveryOutcome) -> Unit,
+            ): Map<String, ShareDeliveryOutcome> {
                 requests += request
-                recipients.forEach { onOutcome(it, me.meeshy.sdk.share.ShareDeliveryOutcome.Queued("c1")) }
+                recipients.forEach { onOutcome(it, ShareDeliveryOutcome.Queued("c1")) }
                 return emptyMap()
             }
         }
