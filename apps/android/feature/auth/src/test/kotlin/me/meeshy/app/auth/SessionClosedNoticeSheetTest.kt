@@ -1,11 +1,14 @@
 package me.meeshy.app.auth
 
+import android.content.res.Configuration
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import java.util.Locale
 import me.meeshy.sdk.model.auth.SessionRevocationReason
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -27,32 +30,61 @@ class SessionClosedNoticeSheetTest {
             MeeshyTheme { SessionClosedNoticeContent(reason = reason, onContinue = onContinue, onContact = onContact) }
         }
 
-    private val expectedCopy = mapOf(
-        SessionRevocationReason.ADMIN_REVOKE to (me.meeshy.feature.auth.R.string.session_closed_admin_title to true),
-        SessionRevocationReason.USER_REVOKE to (me.meeshy.feature.auth.R.string.session_closed_user_revoke_title to false),
-        SessionRevocationReason.PASSWORD_CHANGED to (me.meeshy.feature.auth.R.string.session_closed_password_title to true),
-        SessionRevocationReason.LOGOUT_ALL_DEVICES to (me.meeshy.feature.auth.R.string.session_closed_signed_out_title to false),
-        SessionRevocationReason.SESSION_EXPIRED to (me.meeshy.feature.auth.R.string.session_closed_expired_title to false),
-        SessionRevocationReason.ACTIVATION_REQUIRED to (me.meeshy.feature.auth.R.string.session_closed_activation_title to false),
-        SessionRevocationReason.LOGOUT to (me.meeshy.feature.auth.R.string.session_closed_signed_out_title to false),
-    )
+    private val locales = listOf("en", "fr", "de", "es", "it", "pt", "ar")
 
-    @Test
-    fun `chaque motif a son titre et son contact seulement pour admin et mot de passe`() {
-        expectedCopy.forEach { (reason, expected) ->
-            val (titleRes, contact) = expected
-            val copy = SessionClosedNoticeCopy.of(reason)
-            assertThat(copy.title).isEqualTo(titleRes)
-            assertThat(copy.offersContact).isEqualTo(contact)
-        }
-        assertThat(SessionClosedNoticeCopy.of(SessionRevocationReason.UNKNOWN).title)
-            .isEqualTo(SessionClosedNoticeCopy.of(SessionRevocationReason.LOGOUT).title)
+    private fun stringIn(tag: String, id: Int): String {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val configuration = Configuration(context.resources.configuration).apply { setLocale(Locale.forLanguageTag(tag)) }
+        return context.createConfigurationContext(configuration).getString(id)
     }
 
     @Test
-    fun `la variante admin affiche son titre sans nommer d'administrateur et offre le contact`() {
+    fun `seuls l'equipe et le mot de passe change offrent d'ecrire au support`() {
+        val offering = SessionRevocationReason.entries.filter { SessionClosedNoticeCopy.of(it).offersContact }.toSet()
+        assertThat(offering).containsExactly(SessionRevocationReason.ADMIN_REVOKE, SessionRevocationReason.PASSWORD_CHANGED)
+    }
+
+    @Test
+    fun `un motif inconnu se lit comme une deconnexion generique`() {
+        assertThat(SessionClosedNoticeCopy.of(SessionRevocationReason.UNKNOWN))
+            .isEqualTo(SessionClosedNoticeCopy.of(SessionRevocationReason.LOGOUT))
+    }
+
+    @Test
+    fun `chaque motif explicite a son propre titre, distinct de la deconnexion generique`() {
+        val explicit = listOf(
+            SessionRevocationReason.ADMIN_REVOKE,
+            SessionRevocationReason.USER_REVOKE,
+            SessionRevocationReason.PASSWORD_CHANGED,
+            SessionRevocationReason.SESSION_EXPIRED,
+            SessionRevocationReason.ACTIVATION_REQUIRED,
+        )
+        val generic = SessionClosedNoticeCopy.of(SessionRevocationReason.LOGOUT).title
+        val titles = explicit.map { SessionClosedNoticeCopy.of(it).title }
+        assertThat(titles.toSet()).hasSize(explicit.size)
+        assertThat(titles).doesNotContain(generic)
+    }
+
+    @Test
+    fun `aucun texte de l'avis n'attend une donnee a inserer, dans aucune des sept langues`() {
+        // L'avis ne reçoit que le motif : rien (ni nom d'administrateur, ni appareil, ni date) ne peut y être injecté.
+        SessionRevocationReason.entries.forEach { reason ->
+            val copy = SessionClosedNoticeCopy.of(reason)
+            locales.forEach { tag ->
+                listOf(copy.title, copy.message).forEach { id ->
+                    val text = stringIn(tag, id)
+                    assertThat(text).isNotEmpty()
+                    assertThat(text).doesNotContainMatch("%(\\d+\\$)?[sdf]|\\{|\\}")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `la variante admin affiche exactement ses textes, sans nommer d'administrateur, et offre le contact`() {
         show(SessionRevocationReason.ADMIN_REVOKE)
-        compose.onNodeWithTag(SESSION_CLOSED_TITLE_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(SESSION_CLOSED_TITLE_TAG).assertTextEquals(string(me.meeshy.feature.auth.R.string.session_closed_admin_title))
+        compose.onNodeWithTag(SESSION_CLOSED_MESSAGE_TAG).assertTextEquals(string(me.meeshy.feature.auth.R.string.session_closed_admin_message))
         compose.onNodeWithTag(SESSION_CLOSED_CONTACT_TAG).assertIsDisplayed()
         assertThat(string(me.meeshy.feature.auth.R.string.session_closed_admin_title)).contains("Meeshy")
     }
