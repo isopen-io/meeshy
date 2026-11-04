@@ -211,7 +211,16 @@ public class OutboxDrainer(
                     continue
                 }
             }
-            when (val result = sendUnder(ticket, sender, row) ?: return blocked(delivered, exhausted)) {
+            val sent = sendUnder(ticket, sender, row)
+            val result = when (sent) {
+                Attempt.Closed -> return blocked(delivered, exhausted)
+                Attempt.Claimed -> {
+                    if (!independent) return DrainReport(delivered, exhausted, stoppedOnTransientFailure = false)
+                    continue
+                }
+                is Attempt.Sent -> sent.result
+            }
+            when (result) {
                 SendResult.Success -> {
                     outbox.markSucceeded(row.cmid)
                     delivered++
@@ -286,14 +295,24 @@ public class OutboxDrainer(
         }
     }
 
-    /** The send, under [ticket]'s account when fenced; `null` once that account closed (the send was cancelled, or its outcome is moot). */
-    private suspend fun sendUnder(ticket: AccountTicket?, sender: MutationSender, row: OutboxEntity): SendResult? {
-        val send: suspend () -> SendResult = {
+    /**
+     * The send, under [ticket]'s account when fenced. [Attempt.Closed] once that account closed (the send was cancelled, or
+     * its outcome is moot); [Attempt.Claimed] when an overlapping pass already holds the row (#15677) — nothing left.
+     */
+    private suspend fun sendUnder(ticket: AccountTicket?, sender: MutationSender, row: OutboxEntity): Attempt {
+        val send: suspend () -> Attempt = {
             outbox.sendingLive(row.cmid) { withMutationId(row.cmid) { sender.send(row) } }
+                ?.let(Attempt::Sent) ?: Attempt.Claimed
         }
         val fence = fence
         if (fence == null || ticket == null) return send()
-        return fence.guard(ticket, send)?.takeIf { fence.isCurrent(ticket) }
+        return fence.guard(ticket, send)?.takeIf { fence.isCurrent(ticket) } ?: Attempt.Closed
+    }
+
+    private sealed interface Attempt {
+        data class Sent(val result: SendResult) : Attempt
+        data object Claimed : Attempt
+        data object Closed : Attempt
     }
 
     private fun blocked(delivered: Int, exhausted: Int) = DrainReport(
