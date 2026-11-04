@@ -27,7 +27,3 @@ public data class PostAuthorDecor(
 
 internal object TolerantPostAuthorDecorSerializer :
     TolerantSerializer<PostAuthorDecor>(PostAuthorDecor.serializer())
-
-/** Le contour servi avec un post, sous la forme que l'avatar résout par le catalogue (`ProfileDecorResolver.ring`). */
-public fun PostServedRing.toServedItem(): ServedProfileDecorItem =
-    ServedProfileDecorItem(pack = pack, item = item, origin = PackOrigin.from(origin), contract = contract)
