@@ -10,7 +10,7 @@ import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.hexColor
 
 /**
- * L'avatar d'une personne dans une liste (iOS `MeeshyAvatar(context: .userListItem)`). La présence est celle
+ * L'avatar d'une personne dans une liste (iOS : le contexte `.userListItem` de l'avatar commun). La présence est celle
  * DÉJÀ résolue par la loi unique (`UserPresence.state` → `meeshyPresenceDotColor`) : en ligne vert, absent
  * orange, inactif gris, hors ligne ou donnée absente = aucun point. L'humeur remplace le point. Photo et
  * contour passent par l'avatar commun ; sans photo, initiales sur la couleur déterministe du nom.
