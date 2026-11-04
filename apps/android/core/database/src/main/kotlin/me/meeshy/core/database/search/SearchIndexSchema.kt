@@ -52,13 +52,14 @@ public object SearchIndexSchema {
             "BEGIN DELETE FROM `$CONVERSATION_TABLE` WHERE `conversationId` = old.`id`; END",
     )
 
-    private val triggerNames: List<String> = listOf(
+    private val messageTriggerNames: List<String> = listOf(
         "message_fts_before_update",
         "message_fts_before_delete",
         "message_fts_after_update",
         "message_fts_after_insert",
-        "conversation_fts_after_delete",
     )
+
+    private val triggerNames: List<String> = messageTriggerNames + "conversation_fts_after_delete"
 
     /** Whether [table] belongs to the index (the virtual tables and their FTS shadow tables). */
     public fun owns(table: String): Boolean =
@@ -81,11 +82,22 @@ public object SearchIndexSchema {
         db.execSQL("INSERT INTO `$MESSAGE_TABLE`(`$MESSAGE_TABLE`) VALUES ('rebuild')")
     }
 
+    /** The statements that drop the index; its triggers go first. The cache tables are not touched. */
+    public val dropStatements: List<String> =
+        triggerNames.map { "DROP TRIGGER IF EXISTS `$it`" } +
+            listOf("DROP TABLE IF EXISTS `$MESSAGE_TABLE`", "DROP TABLE IF EXISTS `$CONVERSATION_TABLE`")
+
+    /**
+     * Drops the message index only, triggers first. A copy made row by row (`sqlcipher_export`) renumbers the implicit
+     * `rowid` of `messages`, which `message_fts` is keyed on, so that index must be rebuilt ([ensure] does it on open);
+     * `conversation_fts` keeps its own `docid` and survives the copy as is.
+     */
+    public val messageIndexDropStatements: List<String> =
+        messageTriggerNames.map { "DROP TRIGGER IF EXISTS `$it`" } + "DROP TABLE IF EXISTS `$MESSAGE_TABLE`"
+
     /** Drops the index; its triggers go with it. The cache tables are not touched. */
     public fun drop(db: SupportSQLiteDatabase) {
-        triggerNames.forEach { db.execSQL("DROP TRIGGER IF EXISTS `$it`") }
-        db.execSQL("DROP TABLE IF EXISTS `$MESSAGE_TABLE`")
-        db.execSQL("DROP TABLE IF EXISTS `$CONVERSATION_TABLE`")
+        dropStatements.forEach(db::execSQL)
     }
 
     /** Creates what is missing and re-reads the cache when the message index had to be created. */
