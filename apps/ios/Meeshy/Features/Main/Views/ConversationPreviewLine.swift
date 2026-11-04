@@ -207,24 +207,14 @@ struct ConversationPreviewLine: View {
     nonisolated static func spokenFileSize(_ text: String, locale: Locale) -> String? {
         let parts = text.components(separatedBy: " ")
         guard parts.count == 2, let unit = Self.storageUnit(parts[1]), let value = weight(parts[0]) else { return nil }
-        return weightFormatter(locale).string(from: Measurement(value: value, unit: unit))
-    }
-
-    private nonisolated(unsafe) static let weightFormatters = NSCache<NSString, MeasurementFormatter>()
-
-    /// Un formateur par locale, construit une fois : le libellé VoiceOver de
-    /// chaque rangée se recalcule à chaque rendu de la liste. `NSCache` est
-    /// sûr entre fils, et un formateur que plus personne ne modifie l'est aussi.
-    private nonisolated static func weightFormatter(_ locale: Locale) -> MeasurementFormatter {
-        let key = locale.identifier as NSString
-        if let cached = weightFormatters.object(forKey: key) { return cached }
-        let formatter = MeasurementFormatter()
-        formatter.locale = locale
-        formatter.unitStyle = .long
-        formatter.unitOptions = .providedUnit
-        formatter.numberFormatter.maximumFractionDigits = 1
-        weightFormatters.setObject(formatter, forKey: key)
-        return formatter
+        return Measurement(value: value, unit: unit).formatted(
+            .measurement(
+                width: .wide,
+                usage: .asProvided,
+                numberFormatStyle: FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0...1))
+            )
+            .locale(locale)
+        )
     }
 
     private nonisolated static func storageUnit(_ symbol: String) -> UnitInformationStorage? {
