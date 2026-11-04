@@ -13,6 +13,7 @@ import androidx.navigation.NavHostController
 import me.meeshy.app.feed.MoodBubble
 import me.meeshy.app.feed.MoodBubbleModel
 import me.meeshy.app.feed.MoodLookup
+import me.meeshy.app.feed.MoodQueuedToast
 import me.meeshy.app.feed.MoodReactFailureToast
 import me.meeshy.app.feed.MoodRepostRefusedToast
 import me.meeshy.app.feed.StatusComposerDraft
@@ -64,6 +65,7 @@ internal fun MeeshyStoryRail(
     )
     MoodReactFailureToast(statusesViewModel.reactFailed)
     MoodRepostRefusedToast(statusesViewModel.repostAudienceRefused)
+    MoodQueuedToast(statusesViewModel.moodQueued)
 
     val shown = bubbleUserId?.let(moods::entryOf)
     if (shown != null) {
@@ -97,6 +99,8 @@ internal fun MeeshyStoryRail(
                     audioUrl = request.audioUrl,
                     repostOfId = request.repostOfId,
                     viaUsername = request.viaUsername,
+                    visibilityUserIds = request.visibilityUserIds,
+                    mentions = request.mentions,
                 )
                 republishSeed = null
             },

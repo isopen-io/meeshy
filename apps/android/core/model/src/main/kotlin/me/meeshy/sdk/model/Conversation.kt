@@ -169,6 +169,17 @@ fun ApiConversation.currentUserRole(currentUserId: String?): MemberRole =
     MemberRole.from(participants.firstOrNull { it.userId == currentUserId }?.role)
 
 /**
+ * Le rôle du lecteur quand il est CONNU — celui que la passerelle a calculé, sinon celui du roster servi — et `null`
+ * quand rien ne le dit. À la différence de [currentUserRole], l'inconnu ne se replie pas sur [MemberRole.MEMBER] : la
+ * garde de rôle du cache de la fiche d'un participant (ADR-032) ne lit aucune copie sous un rôle qu'elle ignore.
+ */
+fun ApiConversation.knownUserRole(currentUserId: String?): MemberRole? {
+    if (currentUserId == null) return null
+    val raw = currentUserRole ?: participants.firstOrNull { it.userId == currentUserId }?.role ?: return null
+    return MemberRole.from(raw)
+}
+
+/**
  * Le lecteur est-il un membre ACTIF de cette conversation ? La passerelle ne sert
  * [ApiConversation.currentUserRole] qu'à un participant actif (`resolveCallerParticipant`) ;
  * à défaut, sa présence dans le roster servi le prouve aussi. Rien de cela ⇒ `false` :

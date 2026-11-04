@@ -11,6 +11,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import javax.inject.Inject
+import me.meeshy.app.audio.MiniPlayerDisplay
 import me.meeshy.app.calls.ActiveCallSnapshotHolder
 import me.meeshy.app.startup.AppOverlay
 import me.meeshy.sdk.model.chrome.TopChromeTint
@@ -18,22 +19,24 @@ import me.meeshy.ui.component.chrome.TopChromeBand
 
 /**
  * Peint la bande de la barre d'etat de la couleur de la barre active : appel > audio > banniere.
- * L'appel est branche sur [ActiveCallSnapshotHolder] ; le lecteur audio et la banniere du joueur
- * n'ont pas encore de signal global : ils restent derriere cette couture inerte ([audioIsActive], [bannerArgb]).
+ * L'appel est branche sur [ActiveCallSnapshotHolder], le lecteur audio sur [MiniPlayerDisplay] (ce que la barre
+ * AFFICHE, grace comprise, jamais ce que le moteur joue) ; la banniere du joueur n'a pas encore de signal global
+ * et reste derriere la couture inerte [bannerArgb].
  */
 class TopChromeBandOverlay @Inject constructor(
     private val callHolder: ActiveCallSnapshotHolder,
+    private val miniPlayer: MiniPlayerDisplay,
 ) : AppOverlay {
     override val order: Int = 100
 
     @Composable
     override fun Content(navController: NavHostController) {
         val call by callHolder.snapshot.collectAsState()
+        val audioIsActive by miniPlayer.shown.collectAsState()
         val tint = TopChromeTint.resolve(callIsActive = call != null, audioIsActive = audioIsActive, bannerArgb = bannerArgb)
         TopChromeBand(tint = tint, modifier = Modifier)
     }
 
-    private val audioIsActive: Boolean = false
     private val bannerArgb: Long? = null
 }
 

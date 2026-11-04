@@ -63,6 +63,9 @@ import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.post.PostShareLinkService
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.session.asCoroutineContext
+import me.meeshy.sdk.share.ShareDeliveryOutcome
+import me.meeshy.sdk.share.ShareDurableRequest
+import me.meeshy.sdk.share.ShareDurableSending
 import me.meeshy.sdk.share.ShareRecipientDirectory
 
 /**
@@ -102,6 +105,7 @@ internal class ShareSheetViewModel @Inject constructor(
     private val outOfThread: OutOfThreadSendGate,
     private val trackedLinks: PostShareLinkService,
     private val previews: PendingMediaPreviewing = PendingMediaPreviewing.None,
+    private val durable: ShareDurableSending = ShareDurableSending.None,
 ) : ViewModel() {
 
     private val effectChannel = Channel<ShareSheetEffect>(Channel.BUFFERED)
@@ -313,6 +317,7 @@ internal class ShareSheetViewModel @Inject constructor(
     }
 
     private suspend fun deliverAll(pending: List<ShareRecipient>, subject: ShareSubject, posts: List<OutgoingShare>, caption: String, user: MeeshyUser) {
+        if (durable.isAvailable && travelsDurably(subject, posts)) return deliverDurably(pending, subject, posts, caption, user)
         val destinations = pending.associateWith { destinationOf(it, user) }
         val admissions = admissionsOf(destinations.values.filterIsInstance<Destination.Ready>().map { it.conversationId })
         pending.forEach { recipient ->
@@ -322,6 +327,42 @@ internal class ShareSheetViewModel @Inject constructor(
                 is Outcome.Served -> _state.update { it.copy(sheet = it.sheet.served(recipient, outcome.conversationId, outcome.queued)) }
                 is Outcome.Refused -> mark(recipient, ShareDelivery.Failed(outcome.failure))
             }
+        }
+        workManager.enqueue(OutboxFlushWorker.buildRequest())
+        settle()
+    }
+
+    /** Un texte, un lien, une carte ou des fichiers reçus : un seul message sans marque de transfert, porté par la fiche de reprise. */
+    private fun travelsDurably(subject: ShareSubject, posts: List<OutgoingShare>): Boolean =
+        subject !is ShareSubject.Messages && subject !is ShareSubject.Piece && posts.size <= 1 &&
+            posts.all { it.forwardedFromId == null && it.forwardedAttachmentIds == null }
+
+    /**
+     * L'envoi durable (#15791) : la fiche s'écrit avant le premier octet, les pièces partent une fois et les autres
+     * destinataires les copient côté serveur ; une cible non servie est reprise par le travail, app fermée ou réseau coupé.
+     */
+    private suspend fun deliverDurably(pending: List<ShareRecipient>, subject: ShareSubject, posts: List<OutgoingShare>, caption: String, user: MeeshyUser) {
+        val incoming = subject as? ShareSubject.Incoming
+        val request = ShareDurableRequest(
+            shareId = java.util.UUID.randomUUID().toString(),
+            content = incoming?.composedText(caption) ?: posts.firstOrNull()?.content,
+            files = incoming?.let { orderedFiles(it) }.orEmpty(),
+            sender = user,
+            previews = previews,
+        )
+        try {
+            durable.send(request, pending) { recipient, outcome ->
+                inFlight -= recipient.id
+                when (outcome) {
+                    is ShareDeliveryOutcome.Sent -> _state.update { it.copy(sheet = it.sheet.served(recipient, outcome.conversationId, queued = false)) }
+                    is ShareDeliveryOutcome.Queued -> _state.update { it.copy(sheet = it.sheet.served(recipient, outcome.conversationId, queued = true)) }
+                    is ShareDeliveryOutcome.Failed -> mark(recipient, ShareDelivery.Failed(outcome.failure))
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (e: Exception) {
+            pending.forEach { inFlight -= it.id; mark(it, ShareDelivery.Failed(ShareFailure.GENERIC)) }
         }
         workManager.enqueue(OutboxFlushWorker.buildRequest())
         settle()

@@ -128,4 +128,28 @@ class SharePendingShareTest {
         val text = SharePendingShareCodec.encode(share()).replaceFirst("{", """{"future":1,""")
         assertThat(SharePendingShareCodec.decode(text)).isInstanceOf(SharePendingShareCodec.Decoded.Readable::class.java)
     }
+
+    @Test
+    fun `a refused target leaves the share and the origin follows the first target kept`() {
+        val made = share(conversations = listOf("c1", "c2", "c3"), media = listOf(media()))
+        val kept = made.withoutTarget("c1")
+        assertThat(kept.targets.map { it.conversationId }).containsExactly("c2", "c3").inOrder()
+        assertThat(kept.originTargetIndex).isEqualTo(0)
+    }
+
+    @Test
+    fun `removing a target before the origin shifts the origin index`() {
+        val made = share(conversations = listOf("c1", "c2", "c3"), media = listOf(media())).copy(originTargetIndex = 2)
+        val kept = made.withoutTarget("c1")
+        assertThat(kept.originTargetIndex).isEqualTo(1)
+        assertThat(kept.targets[kept.originTargetIndex!!].conversationId).isEqualTo("c3")
+    }
+
+    @Test
+    fun `removing every target leaves a fully served share that the store deletes`() {
+        val kept = share(conversations = listOf("c1")).withoutTarget("c1")
+        assertThat(kept.targets).isEmpty()
+        assertThat(kept.isFullyServed).isTrue()
+        assertThat(kept.originTargetIndex).isNull()
+    }
 }

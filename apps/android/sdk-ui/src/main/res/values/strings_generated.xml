@@ -321,6 +321,12 @@
     <string name="media_voice_recording">Voice message (%1$s)</string>
     <string name="message_long_collapse">Show less</string>
     <string name="message_long_read_more">Read more</string>
+    <string name="mini_player_a11y_now_playing">Audio from %1$s, %2$s</string>
+    <string name="mini_player_a11y_open_hint">Open the conversation</string>
+    <string name="mini_player_close">Close the player</string>
+    <string name="mini_player_next">Next</string>
+    <string name="mini_player_pause">Pause</string>
+    <string name="mini_player_play">Playback</string>
     <string name="notification_date_ago">%1$s ago</string>
     <string name="notification_date_hours">%1$d h</string>
     <string name="notification_date_minutes">%1$d min</string>

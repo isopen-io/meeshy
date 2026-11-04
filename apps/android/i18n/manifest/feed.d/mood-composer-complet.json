@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "status.queuedOffline", "androidName": "status_queued_offline", "status": "adopted" },
+        { "catalog": "app", "iosKey": "a11y.status.publish.disabled.hint", "androidName": "status_composer_publish_disabled_hint", "status": "adopted" }
+      ]
+    }
+  }
+}

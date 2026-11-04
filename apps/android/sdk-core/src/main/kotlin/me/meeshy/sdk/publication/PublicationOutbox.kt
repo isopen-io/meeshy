@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.media.MediaUploadProgressLedger
@@ -15,6 +16,7 @@ import me.meeshy.sdk.model.PostComposerDraftSnapshot
 import me.meeshy.sdk.model.PublicationCancelOutcome
 import me.meeshy.sdk.model.PublicationCancelRule
 import me.meeshy.sdk.model.PublicationRowState
+import me.meeshy.sdk.model.StuckPublicationRecovery
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.CreatePostRequest
@@ -174,6 +176,43 @@ public class PublicationOutbox @Inject constructor(
     }
 
     /**
+     * Reprise d'un envoi bloqué (iOS `recoverUnsentPost`) : la dernière publication restée en file plus d'une minute
+     * redevient le brouillon du composer, ses médias sous les ids qu'ils ont reçus — ils restent à l'appareil, le renvoi
+     * les attend, rien n'est resélectionné. Rien ne bouge si le composer porte déjà quelque chose (jamais par-dessus ce
+     * que l'auteur écrit), si la ligne est en vol (la retirer ne l'arrêterait plus) ou si un vocal l'accompagne.
+     * La ligne quitte la file : le renvoi la remplace sans doublon.
+     */
+    public suspend fun recoverStuckPost(nowMillis: Long = System.currentTimeMillis()): PostComposerDraftSnapshot? {
+        if (!StuckPublicationRecovery.isComposerBlank(postDraftStore.loadEditing(), storyDraftStore.load())) return null
+        val owner = ownerSource.currentOwnerId() ?: return null
+        val rows = outboxRepository.observeAll().first().filter { it.ownerId == owner && it.kindEnum == OutboxKind.CREATE_POST }
+        val candidates = rows.mapNotNull { stuckCandidate(it) }
+        val picked = StuckPublicationRecovery.pick(candidates, nowMillis) ?: return null
+        if (picked.state != PublicationRowState.Pending) return null
+        val request = candidates.firstOrNull { it.first.cmid == picked.cmid }?.second ?: return null
+        val removed = outboxRepository.withdrawUnlessInflight(picked.cmid) as? OutboxWithdrawal.Removed ?: return null
+        outboxRepository.cancelHeldFor(removed.row.targetId)
+        val kept = postDraftStore.parked(picked.cmid) ?: request.toDraft()
+        val draft = kept.withServedIds(request.mediaIds.orEmpty())
+            .copy(forcePlainPost = StuckPublicationRecovery.forcePlainPost(request.type))
+        postDraftStore.saveEditing(draft)
+        postDraftStore.release(picked.cmid)
+        return draft
+    }
+
+    private suspend fun stuckCandidate(row: OutboxEntity): Pair<StuckPublicationRecovery.Candidate, CreatePostRequest>? {
+        val request = runCatching { MeeshyApi.json.decodeFromString(CreatePostRequest.serializer(), row.payload) }.getOrNull() ?: return null
+        val state = when (row.stateEnum) {
+            OutboxState.PENDING -> PublicationRowState.Pending
+            OutboxState.INFLIGHT -> PublicationRowState.InFlight
+            else -> PublicationRowState.Exhausted
+        }
+        val media = (postDraftStore.parked(row.cmid) ?: request.toDraft()).media
+        val voice = media.any { it.mimeType.startsWith(AUDIO_MIME_PREFIX) }
+        return StuckPublicationRecovery.Candidate(row.cmid, state, row.createdAt, request.type, voice) to request
+    }
+
+    /**
      * « Rouvrir » on a failed story (#13500): the draft kept until confirmation — slides, audience,
      * mentions, alternative texts, captions — stops awaiting its publication and becomes the composer's
      * own again, its media under the ids they have since received; the failed publications leave the
@@ -234,3 +273,4 @@ public class PublicationOutbox @Inject constructor(
 public enum class PublicationNotice { QUEUED, FAILED }
 
 private const val NOTICE_BUFFER = 8
+private const val AUDIO_MIME_PREFIX = "audio/"

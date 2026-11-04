@@ -8,7 +8,9 @@ import android.os.Trace
 import android.provider.Settings
 import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.effects.CallVideoDegradation
+import me.meeshy.sdk.model.call.LowLightBoost
 import me.meeshy.sdk.model.call.effects.CallVideoEffectsPlan
+import me.meeshy.sdk.model.call.effects.CallVideoLowLight
 import me.meeshy.sdk.model.composer.look.CallFaceLandmarks
 import org.webrtc.ThreadUtils
 import org.webrtc.VideoFrame
@@ -51,6 +53,9 @@ internal class CallVideoEffectsProcessor(
     private val tracker = CallFaceTracker(faces)
     private var tracking = false
     private var faceBroken = false
+    private var probeBroken = false
+    private var framesSinceProbe = CallVideoLowLight.PROBE_EVERY_FRAMES
+    private var lastBrightness: Float? = null
     private val originNanos = clock()
 
     fun setConfig(next: VideoFilterConfig) {
@@ -67,8 +72,9 @@ internal class CallVideoEffectsProcessor(
 
     override fun onFrameCaptured(frame: VideoFrame) {
         val out = sink ?: return
-        val plan = if (broken) null else CallVideoEffectsPlan.make(config, ladder, isConstrained())
         val input = frame.buffer as? VideoFrame.TextureBuffer
+        val constrained = isConstrained()
+        val plan = if (broken) null else CallVideoEffectsPlan.make(config, ladder, constrained, lowLightFor(input, constrained))
         if (plan == null || input == null) {
             ladder = ladder.recording(0.0, blurActive = false)
             forgetMaskWhenBlurStops(blurOn = false)
@@ -82,6 +88,31 @@ internal class CallVideoEffectsProcessor(
         } finally {
             Trace.endSection()
         }
+    }
+
+    /**
+     * The automatic lift of a dark scene (#8695). The brightness is read from the GPU about twice a second and
+     * only while the lift could be paid for: a device that protects itself, or an exhausted ladder, reads
+     * nothing and costs nothing. A failing readback switches the lift off for the call; the camera still goes out.
+     */
+    private fun lowLightFor(input: VideoFrame.TextureBuffer?, constrained: Boolean): LowLightBoost? {
+        if (input == null || broken || probeBroken || constrained || ladder.isExhausted) return null
+        if (++framesSinceProbe >= CallVideoLowLight.PROBE_EVERY_FRAMES) {
+            framesSinceProbe = 0
+            lastBrightness = try {
+                rendererOrCreate().averageLuma(input)
+            } catch (failure: RuntimeException) {
+                Timber.w(failure, "call low-light probe failed, the dark scene is no longer lifted")
+                probeBroken = true
+                null
+            }
+        }
+        return CallVideoLowLight.boost(lastBrightness, constrained, ladder)
+    }
+
+    private fun rendererOrCreate(): CallEffectsGlRenderer = renderer ?: CallEffectsGlRenderer(handler).also {
+        renderer = it
+        hasRenderer = true
     }
 
     private fun processEffects(frame: VideoFrame, input: VideoFrame.TextureBuffer, plan: CallVideoEffectsPlan, out: VideoSink) {
@@ -134,10 +165,7 @@ internal class CallVideoEffectsProcessor(
     }
 
     private fun process(frame: VideoFrame, input: VideoFrame.TextureBuffer, plan: CallVideoEffectsPlan, face: CallFaceLandmarks?): VideoFrame? {
-        val gl = renderer ?: CallEffectsGlRenderer(handler).also {
-            renderer = it
-            hasRenderer = true
-        }
+        val gl = rendererOrCreate()
         val rung = plan.blur
         forgetMaskWhenBlurStops(blurOn = rung != null)
         if (rung != null) {

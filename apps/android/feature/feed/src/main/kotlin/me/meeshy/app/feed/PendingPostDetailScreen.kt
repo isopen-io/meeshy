@@ -50,15 +50,16 @@ fun PendingPostDetailScreen(
         if (held != null && card == null) onBack()
     }
     val context = LocalContext.current
-    val withdrawn = stringResource(R.string.feed_pending_withdrawn)
+    LaunchedEffect(viewModel) {
+        viewModel.feedback.collect { Toast.makeText(context, context.getString(it.messageRes), Toast.LENGTH_SHORT).show() }
+    }
     card?.let { shown ->
         PendingPostDetailContent(
             card = shown,
             offline = offline,
             onBack = onBack,
             onCancel = {
-                viewModel.discard(shown.post.id)
-                Toast.makeText(context, withdrawn, Toast.LENGTH_SHORT).show()
+                viewModel.cancelSend(shown.post.id)
             },
         )
     }

@@ -99,6 +99,7 @@
     <string name="composer_publish_as_reel">نشر الريل</string>
     <string name="composer_publish_as_story">نشر القصة</string>
     <string name="composer_publish_as_storyAndReel">نشر القصة والريل</string>
+    <string name="composer_publish_format_unsupported">لا يمكن نشر هذا التنسيق من هنا بعد</string>
     <string name="composer_rail_object_exit">مغادرة العنصر</string>
     <string name="composer_slide_rail">مشاهد المنشور</string>
     <string name="composer_slide_rail_capReached">عشرة مشاهد كحد أقصى — احذف واحدًا لإنشاء آخر</string>
@@ -114,6 +115,7 @@
     <string name="composer_text_frame_rectangle">مربّع</string>
     <string name="composer_text_frame_rounded">مستدير</string>
     <string name="composer_text_frame_speech">فقاعة حوار</string>
+    <string name="feed_post_publish_error">خطأ أثناء النشر</string>
     <string name="my_stories_archive_empty_subtitle">ستنضم قصصك المنتهية الصلاحية إلى هذا الأرشيف.</string>
     <string name="my_stories_archive_empty_title">لا يوجد أرشيف</string>
     <string name="my_stories_back">رجوع</string>

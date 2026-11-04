@@ -323,6 +323,12 @@
     <string name="media_voice_recording">Message vocal (%1$s)</string>
     <string name="message_long_collapse">Réduire</string>
     <string name="message_long_read_more">Lire la suite</string>
+    <string name="mini_player_a11y_now_playing">Lecture audio de %1$s, %2$s</string>
+    <string name="mini_player_a11y_open_hint">Ouvrir la conversation</string>
+    <string name="mini_player_close">Fermer le lecteur</string>
+    <string name="mini_player_next">Suivant</string>
+    <string name="mini_player_pause">Mettre en pause</string>
+    <string name="mini_player_play">Lecture</string>
     <string name="notification_date_ago">il y a %1$s</string>
     <string name="notification_date_hours">%1$d h</string>
     <string name="notification_date_minutes">%1$d min</string>
