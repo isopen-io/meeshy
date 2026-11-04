@@ -28,8 +28,8 @@ class GameRulesScreenComposeTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
 
-    private fun show(focused: GameRulesSection?) {
-        compose.setContent { MeeshyTheme { GameRulesScreen(onBack = {}, focused = focused) } }
+    private fun show(focused: GameRulesSection?, focusedRule: Int? = null) {
+        compose.setContent { MeeshyTheme { GameRulesScreen(onBack = {}, focused = focused, focusedRule = focusedRule) } }
         compose.waitForIdle()
     }
 
@@ -62,5 +62,13 @@ class GameRulesScreenComposeTest {
         compose.waitUntil(timeoutMillis = 5_000) { medals.isDisplayed() }
         medals.assertIsDisplayed()
         compose.onNodeWithText(context.getString(R.string.game_rules_1_title)).assertIsNotDisplayed()
+    }
+
+    @Test
+    fun `opened at a rule, the book scrolls down to it`() {
+        show(focused = null, focusedRule = 8)
+        val rule = compose.onNodeWithTag(rulesRuleTag(8))
+        compose.waitUntil(timeoutMillis = 5_000) { rule.isDisplayed() }
+        compose.onNodeWithText(context.getString(R.string.game_rules_intro)).assertIsNotDisplayed()
     }
 }
