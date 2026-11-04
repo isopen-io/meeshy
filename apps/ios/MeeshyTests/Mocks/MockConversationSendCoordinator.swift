@@ -16,6 +16,7 @@ final class MockConversationSendCoordinator: ConversationSendCoordinatorProvidin
     private(set) var recordedFailures: [String] = []
     private(set) var acknowledged: [String] = []
     private(set) var markedFailed: [String] = []
+    private(set) var markFailedReasons: [String] = []
     private(set) var withdrawn: [String] = []
     private(set) var exhausted: [String] = []
     private(set) var retrying: [String] = []
@@ -60,6 +61,7 @@ final class MockConversationSendCoordinator: ConversationSendCoordinatorProvidin
     func markFailed(localId: String, reason: String) async {
         callLog.append("markFailed")
         markedFailed.append(localId)
+        markFailedReasons.append(reason)
     }
 
     func markRetrying(localId: String) async {
