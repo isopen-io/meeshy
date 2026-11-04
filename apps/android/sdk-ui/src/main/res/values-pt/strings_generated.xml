@@ -275,6 +275,7 @@
     <string name="media_audio_play">Reproduzir áudio</string>
     <string name="media_audio_speed_cycle">Velocidade de reprodução %1$s</string>
     <string name="media_audio_transcribe">Transcrever</string>
+    <string name="media_audio_transcribing">Transcrevendo</string>
     <string name="media_caption_see_less">ver menos</string>
     <string name="media_caption_see_less_hint">Recolhe a legenda</string>
     <string name="media_caption_see_more">ver mais</string>

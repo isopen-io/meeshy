@@ -273,6 +273,7 @@
     <string name="media_audio_play">Play audio</string>
     <string name="media_audio_speed_cycle">Playback speed %1$s</string>
     <string name="media_audio_transcribe">Transcribe</string>
+    <string name="media_audio_transcribing">Transcribing</string>
     <string name="media_caption_see_less">see less</string>
     <string name="media_caption_see_less_hint">Collapses the caption</string>
     <string name="media_caption_see_more">see more</string>
