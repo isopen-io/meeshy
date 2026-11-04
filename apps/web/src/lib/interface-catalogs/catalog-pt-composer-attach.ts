@@ -102,6 +102,7 @@ const ptComposerAttach = {
   'composer.guest.refused.kind': '“{name}” não é aceito aqui: só passam {kinds}.',
   'composer.guest.refused.size': '“{name}” é grande demais: no máximo {max}.',
   'send.failure.guestKind': 'este arquivo não é aceito aqui',
+  'send.failure.attachmentRight': 'você ainda não pode enviar este tipo de anexo nesta conversa',
   'send.failure.guestTooLarge': 'este arquivo é grande demais aqui (no máximo {max})',
   'send.failure.formatRefused': 'este formato de foto (HEIC) ainda não é aceito',
   'profile.image.formatRefused': 'Este formato de foto (HEIC) ainda não é aceito. Escolha uma foto JPEG ou PNG.',

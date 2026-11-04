@@ -102,6 +102,7 @@ const arComposerAttach = {
   'composer.guest.refused.kind': '«{name}» غير مقبول هنا: لا يمر إلا {kinds}.',
   'composer.guest.refused.size': '«{name}» كبير جدًا: {max} كحد أقصى.',
   'send.failure.guestKind': 'هذا الملف غير مقبول هنا',
+  'send.failure.attachmentRight': 'لا يمكنك بعد إرسال هذا النوع من المرفقات في هذه المحادثة',
   'send.failure.guestTooLarge': 'هذا الملف كبير جدًا هنا ({max} كحد أقصى)',
   'send.failure.formatRefused': 'تنسيق الصورة هذا (HEIC) غير مقبول بعد',
   'profile.image.formatRefused': 'تنسيق الصورة هذا (HEIC) غير مقبول بعد. اختر صورة JPEG أو PNG.',
