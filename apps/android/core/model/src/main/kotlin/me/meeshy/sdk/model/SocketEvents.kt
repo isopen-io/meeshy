@@ -149,6 +149,9 @@ data class TranscriptionPayload(
     val confidence: Double? = null,
     val durationMs: Long? = null,
     val source: String? = null,
+    /** Les segments servis (`segments[].startMs/endMs` ou secondes) : le karaoké et les locuteurs de la fiche. */
+    val segments: List<TranscriptionSegment>? = null,
+    val speakerCount: Int? = null,
 )
 
 /**
@@ -184,6 +187,8 @@ data class TranslatedAudioPayload(
     val quality: Double? = null,
     val voiceModelId: String? = null,
     val ttsModel: String? = null,
+    val segments: List<TranscriptionSegment>? = null,
+    val speakerCount: Int? = null,
 )
 
 @Serializable

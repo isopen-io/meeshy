@@ -287,4 +287,34 @@ class AttachmentAudioMetadataTest {
 
         assertThat(second).isEmpty()
     }
+
+    // ── attachmentIdMap ───────────────────────────────────────────────────────────────
+
+    private fun voice(id: String) = ApiMessageAttachment(id = id, mimeType = "audio/m4a")
+
+    private fun image(id: String) = ApiMessageAttachment(id = id, mimeType = "image/png")
+
+    @Test
+    fun `placeholders follow the served audio attachments by rank`() {
+        val map = AttachmentAudioMetadata.attachmentIdMap(
+            local = listOf(image("up_img"), voice("up_1"), voice("up_2")),
+            served = listOf(voice("att1"), image("att_img"), voice("att2")),
+        )
+
+        assertThat(map).containsExactly("up_1", "att1", "up_2", "att2")
+    }
+
+    @Test
+    fun `an id the server kept needs no entry`() {
+        val map = AttachmentAudioMetadata.attachmentIdMap(local = listOf(voice("a1")), served = listOf(voice("a1")))
+
+        assertThat(map).isEmpty()
+    }
+
+    @Test
+    fun `without as many served audios nothing is guessed`() {
+        val map = AttachmentAudioMetadata.attachmentIdMap(local = listOf(voice("up_1"), voice("up_2")), served = listOf(voice("att1")))
+
+        assertThat(map).isEmpty()
+    }
 }
