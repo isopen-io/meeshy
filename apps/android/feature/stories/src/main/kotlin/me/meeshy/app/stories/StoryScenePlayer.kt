@@ -139,11 +139,13 @@ internal fun StorySceneAudio(
     elapsedSeconds: () -> Double,
     lap: Int = 0,
     editPreview: Boolean = false,
+    mutedTracks: Set<String> = emptySet(),
     onAudioFocusLost: () -> Unit = {},
     onAudioFocusGained: () -> Unit = {},
     onAudioFocusLostForGood: () -> Unit = {},
 ) {
     val gain = LocalStoryAudioGain.current
+    StoryUnresolvedAudioLog(slide.id, slide.unresolvedAudioIds)
     val tracks = slide.audioTracks.ifEmpty { legacyTracks(slide) }
     if (tracks.isEmpty()) return
     val scope = remember { Any() }
@@ -153,6 +155,7 @@ internal fun StorySceneAudio(
         elapsedSeconds = elapsedSeconds,
         playing = playing,
         muted = muted,
+        mutedTrackIds = mutedTracks,
         gain = gain,
         // Une vidéo de la scène tient déjà le focus UNE fois : le mixeur n'en redemande pas (sinon la vidéo se met en pause).
         holdsAudioFocus = StorySceneAudioFocus.holder(slide) == null,
