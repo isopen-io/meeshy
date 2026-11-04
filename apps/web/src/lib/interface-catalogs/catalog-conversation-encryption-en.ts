@@ -63,6 +63,7 @@ const en = {
   'conversationEncryption.switch.held': 'A message in this thread uses encryption this browser does not recognise: the mode cannot be changed from here.',
   'conversationEncryption.switch.regimeChanged': 'Encryption was just changed by another member: the status has been refreshed.',
   'conversationEncryption.switch.restricted': 'During the testing phase, only a member with a Meeshy team role (analyst or above) can change the encryption mode.',
+  'conversationEncryption.switch.forbidden': 'You are not allowed to change the encryption mode of this conversation: in a group, you must be one of its moderators.',
   'conversationEncryption.switch.unavailable': 'Encryption on our servers is temporarily unavailable. Try again later.',
   'conversationEncryption.switch.failed': 'The mode could not be changed. Try again.',
   'conversationEncryption.switch.offline': 'Offline: reconnect to change the encryption mode.',

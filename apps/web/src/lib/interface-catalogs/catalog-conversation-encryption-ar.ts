@@ -63,6 +63,7 @@ const ar = {
   'conversationEncryption.switch.held': 'تستخدم رسالة في هذه المحادثة تشفيرًا لا يتعرّف عليه هذا المتصفح: لا يمكن تغيير الوضع من هنا.',
   'conversationEncryption.switch.regimeChanged': 'غيّر عضو آخر التشفير للتو: تم تحديث الحالة.',
   'conversationEncryption.switch.restricted': 'خلال مرحلة الاختبار، لا يستطيع تغيير وضع التشفير إلا عضو لديه دور في فريق Meeshy (محلل أو أعلى).',
+  'conversationEncryption.switch.forbidden': 'لا يحق لك تغيير وضع التشفير لهذه المحادثة: في المجموعة، يجب أن تكون أحد مشرفيها.',
   'conversationEncryption.switch.unavailable': 'التشفير على خوادمنا غير متاح مؤقتًا. حاول مرة أخرى لاحقًا.',
   'conversationEncryption.switch.failed': 'تعذّر تغيير الوضع. حاول مرة أخرى.',
   'conversationEncryption.switch.offline': 'غير متصل: أعد الاتصال لتغيير وضع التشفير.',

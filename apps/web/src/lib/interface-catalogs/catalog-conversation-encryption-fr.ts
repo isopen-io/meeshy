@@ -72,6 +72,7 @@ const fr = {
   'conversationEncryption.switch.held': 'Un message de ce fil utilise un chiffrement que ce navigateur ne reconnaît pas : le mode ne peut pas être changé d’ici.',
   'conversationEncryption.switch.regimeChanged': 'Le chiffrement vient d’être modifié par un autre membre : l’état est actualisé.',
   'conversationEncryption.switch.restricted': 'Pendant la phase de test, seul un membre ayant un rôle d’équipe Meeshy (analyste ou plus) peut changer le mode de chiffrement.',
+  'conversationEncryption.switch.forbidden': 'Vous n’avez pas le droit de changer le mode de chiffrement de cette conversation : dans un groupe, il faut en être modérateur.',
   'conversationEncryption.switch.unavailable': 'Le chiffrement sur nos serveurs est momentanément indisponible. Réessayez plus tard.',
   'conversationEncryption.switch.failed': 'Le mode n’a pas pu être changé. Réessayez.',
   'conversationEncryption.switch.offline': 'Hors connexion : reconnectez-vous pour changer le mode de chiffrement.',
