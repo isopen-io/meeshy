@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -39,6 +38,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.util.Locale
+import me.meeshy.app.game.BadgeStage
 import me.meeshy.app.game.reveal.AchievementRevealScreen
 import me.meeshy.app.game.reveal.RevealCopy
 import me.meeshy.app.game.reveal.rarityRim
@@ -58,8 +58,6 @@ import me.meeshy.ui.component.game.gameBounce
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.component.game.GameMedalFamily
 import me.meeshy.ui.component.game.GameMedalGlyph
-import me.meeshy.ui.component.game.GameMedalState
-import me.meeshy.ui.component.game.GameMedalView
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -263,16 +261,16 @@ private fun BadgeShelfRow(entry: BadgeShelfEntry, onOpen: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            GameMedalView(
+            BadgeStage(
                 family = GameMedalFamily.of(entry.axis.family),
                 glyph = GameMedalGlyph.of(entry.axis),
                 material = entry.material.toGameMaterial(),
-                state = if (entry.lit) GameMedalState.Lit else GameMedalState.Imprint,
+                lit = entry.lit,
                 progress = entry.progress,
                 label = if (entry.lit) GameNumberFormat.formatCount(entry.threshold, locale) else "−" + GameNumberFormat.formatCount(entry.missing, locale),
                 surface = tokens.backgroundSecondary,
                 muted = tokens.textMuted,
-                modifier = Modifier.width(MEDAL_WIDTH),
+                modifier = Modifier.size(width = MEDAL_WIDTH, height = MEDAL_HEIGHT),
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs)) {
                 Text(axis, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = tokens.textPrimary)
@@ -318,6 +316,7 @@ internal fun RowDivider() {
 }
 
 private val MEDAL_WIDTH = 64.dp
+private val MEDAL_HEIGHT = 72.dp
 private const val HERO_FILL_ALPHA = 0.12f
 private const val HERO_STROKE_ALPHA = 0.28f
 private const val HERO_ICON_ALPHA = 0.22f
