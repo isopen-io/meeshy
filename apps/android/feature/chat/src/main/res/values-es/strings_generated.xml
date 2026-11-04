@@ -172,6 +172,11 @@
     <string name="chat_selection_count">%1$d seleccionados</string>
     <string name="chat_selection_toggle_message">Mensaje</string>
     <string name="chat_send">Enviar</string>
+    <string name="chat_thread_discussion_title">Conversación</string>
+    <string name="chat_thread_reply_placeholder">Responder…</string>
+    <string name="chat_thread_send_error">Error de envío</string>
+    <string name="chat_thread_send_label">Enviar el mensaje</string>
+    <string name="chat_thread_sending">Enviando</string>
     <string name="chat_title">Mensajes</string>
     <string name="chat_typing_one">%1$s está escribiendo</string>
     <string name="chat_typing_two">%1$s y %2$s están escribiendo</string>

@@ -190,6 +190,11 @@
     <string name="chat_selection_count">تم تحديد %1$d</string>
     <string name="chat_selection_toggle_message">رسالة</string>
     <string name="chat_send">إرسال</string>
+    <string name="chat_thread_discussion_title">النقاش</string>
+    <string name="chat_thread_reply_placeholder">رد…</string>
+    <string name="chat_thread_send_error">خطأ في الإرسال</string>
+    <string name="chat_thread_send_label">إرسال الرسالة</string>
+    <string name="chat_thread_sending">جارٍ الإرسال</string>
     <string name="chat_title">الرسائل</string>
     <string name="chat_typing_one">%1$s يكتب</string>
     <string name="chat_typing_two">%1$s و%2$s يكتبان</string>
