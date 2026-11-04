@@ -42,7 +42,7 @@ internal fun rememberStorySoundButtonShown(slide: StorySlideView?, effects: Stor
     var failed by remember(slide?.id) { mutableStateOf<Set<String>>(emptySet()) }
     val videos = StoryAudioAvailability.videosNeedingAudioProbe(effects).mapNotNull { video ->
         slide?.foregroundMedia?.firstOrNull { it.id == video.id && it.isVideo }?.let { video.id to it.url }
-    }
+    } + listOfNotNull(slide?.backgroundVideoUrl?.let { BACKGROUND_VIDEO_KEY to it })
     LaunchedEffect(slide?.id, videos) {
         videos.forEach { (id, url) ->
             if (id in probed) return@forEach
@@ -59,5 +59,9 @@ internal fun rememberStorySoundButtonShown(slide: StorySlideView?, effects: Stor
     val declared = StoryVideoAudioProbeLaw.showsSoundButton(effects, probed, failed, announced)
     val legacyTrack = !announced && effects?.audioPlayerObjects.isNullOrEmpty() && effects?.backgroundAudioId == null &&
         (slide?.backgroundAudioUrl != null || slide?.foregroundAudioUrl != null)
-    return declared || legacyTrack
+    val backgroundVideoSounds = BACKGROUND_VIDEO_KEY in failed || probed[BACKGROUND_VIDEO_KEY] == true
+    return declared || legacyTrack || backgroundVideoSounds
 }
+
+/** La vidéo de fond n'est pas une pièce du premier plan : une clé à part la porte dans la table de sondage. */
+private const val BACKGROUND_VIDEO_KEY = "\u0000background-video"
