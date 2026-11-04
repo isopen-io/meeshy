@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_repost_from">Geteilt von</string>
+    <string name="feed_repost_original">Original</string>
+    <string name="feed_repost_show_language">Auf %1$s anzeigen</string>
+</resources>
