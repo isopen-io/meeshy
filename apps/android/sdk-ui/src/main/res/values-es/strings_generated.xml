@@ -139,6 +139,7 @@
     <string name="code_viewer_more_lines">%1$d líneas más</string>
     <string name="common_cancel">Cancelar</string>
     <string name="common_clearSearch">Borrar búsqueda</string>
+    <string name="common_clear_search">Borrar la búsqueda</string>
     <string name="common_close">Cerrar</string>
     <string name="common_done">Listo</string>
     <string name="common_selected">Seleccionado</string>
@@ -159,6 +160,10 @@
     <string name="connection_toast_request_declined">Solicitud rechazada</string>
     <string name="connection_toast_request_send_failed">No se pudo enviar la solicitud</string>
     <string name="connection_toast_request_sent">Solicitud enviada</string>
+    <string name="contacts_phonebook_invite">Invitar</string>
+    <string name="contacts_phonebook_write">Enviar mensaje</string>
+    <string name="contacts_skeleton_loading">Cargando</string>
+    <string name="contacts_tab_prefix">Pestaña</string>
     <string name="content_failure_network_body">Comprueba tu conexión e inténtalo de nuevo.</string>
     <string name="content_failure_retry">Reintentar</string>
     <string name="content_failure_server_body">El problema es de nuestra parte. Inténtalo de nuevo en un momento.</string>

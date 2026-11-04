@@ -20,6 +20,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
+import me.meeshy.sdk.model.ServedProfileDecorItem
 import me.meeshy.sdk.model.avatar.AvatarAccessibilityLabel
 import me.meeshy.sdk.model.avatar.AvatarContext
 import me.meeshy.sdk.model.avatar.ConversationHere
@@ -53,6 +54,9 @@ internal val ROW_AVATAR_MIN_TARGET = 48.dp
  * La bande d'au moins 48 dp qui le porte prend toucher et appui long : ni l'un ni l'autre n'atteint la ligne.
  * Pour TalkBack, l'avatar est un bouton à part, « Voir le profil de X » ou « Détails de Y », dont le menu et
  * la story sont des actions.
+ *
+ * [decorRing] est le contour que le PAIR a équipé (#15984, direct seulement, `null` pour un groupe) : décoratif, posé
+ * par l'atome sous l'anneau de story, figé sous « Réduire les animations », muet pour TalkBack.
  */
 @Composable
 internal fun ConversationRowAvatar(
@@ -66,6 +70,7 @@ internal fun ConversationRowAvatar(
     here: ConversationHere,
     modifier: Modifier = Modifier,
     imageUrl: String? = null,
+    decorRing: ServedProfileDecorItem? = null,
     gestures: ConversationRowAvatarGestures? = null,
 ) {
     val presence = ConversationRowPrecedence.presence(rememberPresence(peerUserId), isTyping)
@@ -101,6 +106,7 @@ internal fun ConversationRowAvatar(
                 onMoodTap = gestures?.onMoodTap,
                 onDotTap = if (touchable) lastSeen::show else null,
                 imageUrl = imageUrl,
+                decorRing = decorRing,
                 gestures = gestures?.let { rememberAvatarGestures(it, storyRing) },
                 modifier = gestures?.let { avatarSpeech(it, name, moodEmoji, here, storyRing) } ?: Modifier,
             )

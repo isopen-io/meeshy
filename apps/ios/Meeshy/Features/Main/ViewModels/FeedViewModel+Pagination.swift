@@ -100,15 +100,8 @@ extension FeedViewModel {
                 // curseur reste le bon, celui de la page 1 les redemanderait.
                 let keepsLoadedTail = merged.count > head.count
                 posts = merged
-                // grdb-03 (volet mémoire) — réappliquer les likes et les favoris
-                // encore en attente d'outbox par-dessus le snapshot serveur périmé.
-                if let persistence = feedPersistence {
-                    let pendingLikes = await persistence.pendingLikeFlags()
-                    if !pendingLikes.isEmpty {
-                        posts = Self.reapplyPendingLikes(posts: posts, pendingLikes: pendingLikes)
-                    }
-                    posts = PostBookmarkMutation.reapplying(posts, pending: await persistence.pendingBookmarkFlags())
-                }
+                let pending = await FeedPendingEngagement.load(from: feedPersistence)
+                posts = pending.reapplied(to: posts)
                 if !keepsLoadedTail {
                     nextCursor = response.pagination?.nextCursor
                     hasMore = response.pagination?.hasMore ?? false
@@ -321,5 +314,24 @@ extension FeedViewModel {
     /// and reset the counter.
     func acknowledgeNewPosts() {
         newPostsCount = 0
+    }
+}
+
+/// grdb-03 (volet mémoire) — les likes et les favoris encore en attente
+/// d'outbox, réappliqués par-dessus un snapshot serveur périmé : le cœur et le
+/// favori ne se défont pas sous les yeux de l'auteur pendant la relecture.
+struct FeedPendingEngagement {
+    let likes: [String: Bool]
+    let bookmarks: [String: Bool]
+
+    static func load(from persistence: FeedPersistenceActor?) async -> FeedPendingEngagement {
+        guard let persistence else { return FeedPendingEngagement(likes: [:], bookmarks: [:]) }
+        return FeedPendingEngagement(likes: await persistence.pendingLikeFlags(),
+                                     bookmarks: await persistence.pendingBookmarkFlags())
+    }
+
+    func reapplied(to posts: [FeedPost]) -> [FeedPost] {
+        let liked = likes.isEmpty ? posts : FeedViewModel.reapplyPendingLikes(posts: posts, pendingLikes: likes)
+        return PostBookmarkMutation.reapplying(liked, pending: bookmarks)
     }
 }

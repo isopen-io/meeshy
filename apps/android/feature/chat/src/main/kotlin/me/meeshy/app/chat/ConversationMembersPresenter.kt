@@ -19,5 +19,6 @@ fun ConversationMembersPresenter(
         conversationId = conversationId,
         accentColor = accentColor,
         onDismiss = onDismiss,
+        onLeft = onDismiss,
     )
 }

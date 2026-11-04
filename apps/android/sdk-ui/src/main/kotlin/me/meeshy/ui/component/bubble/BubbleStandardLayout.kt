@@ -233,7 +233,7 @@ private fun BubbleBody(
                 Column(
                     modifier = Modifier.padding(horizontal = MeeshySpacing.mdPlus, vertical = MeeshySpacing.smPlus),
                 ) {
-                    BubbleReplySection(content, onColor, callbacks.onReplyPreviewClick)
+                    BubbleReplySection(content, onColor, callbacks.onReplyPreviewClick, callbacks.onQuotedAudioClick)
                     if (content.storyReply?.isMood == true) {
                         StoryReplyPreview(
                             story = content.storyReply,
