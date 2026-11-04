@@ -1,5 +1,7 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.scene.StoryReaderWindow
+
 /**
  * Pure planner deciding which upcoming slide images to warm into the shared
  * image cache so the next slide paints instantly (the Instant-App rule: never
@@ -13,7 +15,7 @@ package me.meeshy.app.stories
  */
 object StoryPrefetchPlanner {
 
-    const val DEFAULT_LOOKAHEAD: Int = 2
+    const val DEFAULT_LOOKAHEAD: Int = StoryReaderWindow.AHEAD
 
     /** The next up-to-[lookahead] distinct image URLs ahead of the current slide, in viewing order. */
     fun plan(playback: StoryPlayback, lookahead: Int = DEFAULT_LOOKAHEAD): List<String> {
@@ -22,6 +24,25 @@ object StoryPrefetchPlanner {
             .mapNotNull { it.imageUrl }
             .distinct()
             .take(lookahead)
+    }
+
+    /**
+     * The video backgrounds to prepare (paused) for the upcoming slides, same window and order as [plan] — a video
+     * slide must not wait for a player to be created when the viewer lands on it.
+     */
+    fun planVideos(playback: StoryPlayback, lookahead: Int = DEFAULT_LOOKAHEAD): List<String> {
+        if (playback.isDismissed || lookahead <= 0) return emptyList()
+        return upcomingSlides(playback)
+            .mapNotNull { it.backgroundVideoUrl }
+            .distinct()
+            .take(lookahead)
+    }
+
+    /** The slide just BEHIND the current one (the back-swipe side of the `[N-1, N, N+1, N+2]` window): its image and video. */
+    fun planBehind(playback: StoryPlayback): StoryBehindMedia {
+        if (playback.isDismissed) return StoryBehindMedia()
+        val previous = playback.groups.getOrNull(playback.groupIndex)?.slides?.getOrNull(playback.slideIndex - StoryReaderWindow.BEHIND)
+        return StoryBehindMedia(imageUrl = previous?.imageUrl, videoUrl = previous?.backgroundVideoUrl)
     }
 
     /** Slides strictly after the current position, flattened in forward viewing order. */
@@ -35,3 +56,6 @@ object StoryPrefetchPlanner {
         return remainingInCurrent + laterGroups
     }
 }
+
+/** The media of the slide behind the current one, to keep warm for a back-swipe. */
+data class StoryBehindMedia(val imageUrl: String? = null, val videoUrl: String? = null)
