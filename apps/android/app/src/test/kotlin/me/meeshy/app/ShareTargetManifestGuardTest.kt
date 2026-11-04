@@ -39,6 +39,13 @@ class ShareTargetManifestGuardTest {
     }
 
     @Test
+    fun `the usual types are named for single and multiple shares`() {
+        val usual = listOf("text/plain", "image/*", "video/*", "audio/*", "application/pdf", "text/vcard", "*/*")
+        assertThat(mimeTypesFor("android.intent.action.SEND")).containsAtLeastElementsIn(usual)
+        assertThat(mimeTypesFor("android.intent.action.SEND_MULTIPLE")).containsAtLeastElementsIn(usual - "text/plain")
+    }
+
+    @Test
     fun `every share filter is a default-category filter and the activity stays a recents-free relay`() {
         val activity = shareActivity()
         val filters = Regex("<intent-filter>[\\s\\S]*?</intent-filter>").findAll(activity).map { it.value }.toList()
