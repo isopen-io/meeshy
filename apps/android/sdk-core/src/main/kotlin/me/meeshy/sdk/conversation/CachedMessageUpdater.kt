@@ -5,6 +5,7 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ConversationEventDeltas
 import me.meeshy.sdk.model.QuotePropagation
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.session.AccountFence
@@ -35,19 +36,23 @@ internal class CachedMessageUpdater(
     /**
      * Applies [transform] to the cached message and writes it back. Returns the transformed
      * message, or `null` when the row is unknown or — with [requireSynced] — still an
-     * optimistic local row the gateway does not know yet.
+     * optimistic local row the gateway does not know yet. [openedAt] is the instant (from the caller's clock) stamped on
+     * `viewOnceOpenedAt` when the transform leaves a view-once opened by this reader and the row has none yet (#15897);
+     * without it the row's `cachedAt` stands in, which is only a marker.
      */
     suspend fun update(
         messageId: String,
         requireSynced: Boolean,
+        openedAt: Long? = null,
         transform: (ApiMessage) -> ApiMessage,
-    ): ApiMessage? = update(ticket(), messageId, requireSynced, transform)
+    ): ApiMessage? = update(ticket(), messageId, requireSynced, openedAt, transform)
 
     /** [update] sous [ticket], pris AVANT la requête dont la réponse écrit la ligne (#13560) : rien n'atterrit chez B. */
     suspend fun update(
         ticket: AccountTicket?,
         messageId: String,
         requireSynced: Boolean,
+        openedAt: Long? = null,
         transform: (ApiMessage) -> ApiMessage,
     ): ApiMessage? {
         return fence.commitOrWrite(ticket) {
@@ -55,11 +60,12 @@ internal class CachedMessageUpdater(
                 val row = MessageIdReconciliation.locate(database, messageId) ?: return@withTransaction null
                 if (requireSynced && row.sendState != null) return@withTransaction null
                 val current = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
-                val updated = transform(current)
+                val updated = sealed(row, current, transform(current))
                 // A transform that returns its input unchanged (an inert socket update, e.g.
                 // a duplicate translation) skips the redundant Room write + re-encode.
                 if (updated !== current) {
-                    messageDao.upsertAll(listOf(MessageEntityFactory.refreshed(row, updated).bumped()))
+                    val stamped = row.copy(viewOnceOpenedAt = row.viewOnceOpenedAt ?: openedAt?.takeIf { updated.isViewOnceOpenedByMe })
+                    messageDao.upsertAll(listOf(MessageEntityFactory.refreshed(stamped, updated).bumped()))
                     if (DedicatedTranslationRows.outlived(current, updated)) {
                         DedicatedTranslationRows.drop(database, DedicatedTranslationRows.keysOf(row, current, updated))
                     }
@@ -105,7 +111,7 @@ internal class CachedMessageUpdater(
             val written = select().mapNotNull { row ->
                 val current = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull()
                     ?: return@mapNotNull null
-                val updated = transform(current)
+                val updated = sealed(row, current, transform(current))
                 if (updated !== current && DedicatedTranslationRows.outlived(current, updated)) {
                     outlived += DedicatedTranslationRows.keysOf(row, current, updated)
                 }
@@ -138,12 +144,23 @@ internal class CachedMessageUpdater(
                     val current = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull()
                         ?: return@mapNotNull null
                     if (!QuotePropagation.quotes(current, parentIds)) return@mapNotNull null
-                    val updated = transform(current)
+                    val updated = sealed(row, current, transform(current))
                     if (updated === current) null else MessageEntityFactory.refreshed(row, updated).bumped()
                 }
                 if (rewritten.isNotEmpty()) messageDao.upsertAll(rewritten)
             }
         }
+    }
+
+    /**
+     * Ce qu'une écriture de [row] a le droit de poser : une vue unique ouverte par ce lecteur reste scellée, quoi que la
+     * transformation y ait remis (une traduction, une transcription, une piste audio arrivées après la fermeture,
+     * #15897). Rend [current] — donc aucune écriture — quand la transformation ne change rien, scellement compris.
+     */
+    private fun sealed(row: MessageEntity, current: ApiMessage, updated: ApiMessage): ApiMessage {
+        if (updated === current) return current
+        val next = ConversationEventDeltas.sealedIfOpened(updated, openedHere = row.viewOnceOpenedAt != null)
+        return if (next == current) current else next
     }
 
     /** Retire les lignes nommées (par l'une ou l'autre de leurs deux clés) et leurs versions antérieures. */
