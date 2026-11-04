@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.AudioQueueAttachment
 import me.meeshy.sdk.model.AudioQueueBuilder
 import me.meeshy.sdk.model.AudioQueueMessage
 import me.meeshy.sdk.model.QueuedAudio
+import me.meeshy.sdk.model.playback.MediaConsumptionSeed
 import me.meeshy.ui.component.bubble.BubbleAudio
 import me.meeshy.ui.component.bubble.BubbleContent
 
@@ -55,6 +56,7 @@ internal object ChatVoiceQueue {
             trackLanguage = audio.playedLanguage,
             isTranslatedTrack = audio.isAudioTranslated,
             isProtected = audio.isProtected,
+            servedConsumption = MediaConsumptionSeed.of(audio.lastPlayPositionMs, audio.listenedComplete),
         )
     }
 
@@ -86,6 +88,7 @@ internal object ChatVoiceQueue {
                 listenedComplete = audio.listenedComplete,
                 trackLanguage = audio.playedLanguage,
                 isTranslatedTrack = audio.isAudioTranslated,
+                lastPlayPositionMs = audio.lastPlayPositionMs,
             )
         },
         attachmentIds = audios.map { it.attachmentId },
@@ -103,6 +106,7 @@ internal object ChatVoiceQueue {
         trackLanguage = audio.playedLanguage,
         isTranslatedTrack = audio.isAudioTranslated,
         isProtected = isProtected(this, audio),
+        servedConsumption = MediaConsumptionSeed.of(audio.lastPlayPositionMs, audio.listenedComplete),
     )
 
     private fun epochMs(iso: String?): Long = iso?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() } ?: 0L
