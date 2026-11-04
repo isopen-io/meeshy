@@ -68,7 +68,7 @@ class TranslationSocketRequesterTest {
     }
 
     @Test
-    fun `la meme demande deux fois n'est rejouee qu'une fois`() = runBlocking {
+    fun `la meme demande deux fois n'est rejouee qu'une fois`() = runBlocking<Unit> {
         val link = FakeLink(connected = false)
         val requester = requester(link)
         requester.request("m1", "fr")
