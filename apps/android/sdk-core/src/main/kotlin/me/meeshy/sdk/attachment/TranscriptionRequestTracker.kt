@@ -37,7 +37,7 @@ import me.meeshy.sdk.sync.TranslationFailureStore
  */
 @Singleton
 class TranscriptionRequestTracker internal constructor(
-    private val request: suspend (attachmentId: String) -> NetworkResult<ApiAttachmentTranscription?>,
+    private val fetch: suspend (attachmentId: String) -> NetworkResult<ApiAttachmentTranscription?>,
     private val apply: suspend (messageId: String, attachmentId: String, transcription: ApiAttachmentTranscription) -> Unit,
     private val failures: TranslationFailureStore,
     private val nowMillis: () -> Long,
@@ -50,7 +50,7 @@ class TranscriptionRequestTracker internal constructor(
         failures: TranslationFailureStore,
         clock: CacheClock,
     ) : this(
-        request = media::requestTranscription,
+        fetch = media::requestTranscription,
         apply = { messageId, attachmentId, done ->
             val text = AttachmentTranscriptPrism.originalText(done)
             if (text != null) {
@@ -81,7 +81,7 @@ class TranscriptionRequestTracker internal constructor(
         requested.update { it + (attachmentId to now) }
         failures.transcribed(messageId, attachmentId)
         try {
-            when (val result = request(attachmentId)) {
+            when (val result = fetch(attachmentId)) {
                 is NetworkResult.Failure -> fail(messageId, attachmentId)
                 is NetworkResult.Success -> result.data?.let { done ->
                     apply(messageId, attachmentId, done)

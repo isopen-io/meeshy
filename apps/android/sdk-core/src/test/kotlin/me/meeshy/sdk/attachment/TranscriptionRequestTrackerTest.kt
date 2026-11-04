@@ -27,7 +27,7 @@ class TranscriptionRequestTrackerTest {
         val requested = mutableListOf<String>()
         val applied = mutableListOf<Triple<String, String, String>>()
         val tracker = TranscriptionRequestTracker(
-            request = { attachmentId ->
+            fetch = { attachmentId ->
                 requested += attachmentId
                 CompletableDeferred<NetworkResult<ApiAttachmentTranscription?>>().also { answers.addLast(it) }.await()
             },
