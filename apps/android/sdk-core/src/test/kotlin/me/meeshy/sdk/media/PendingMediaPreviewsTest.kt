@@ -153,4 +153,64 @@ class PendingMediaPreviewsTest {
 
         assertThat(pathOf(url).exists()).isFalse()
     }
+
+    private fun recordedVoice(): File = folder.newFile("take.m4a").apply { writeBytes(byteArrayOf(7, 7, 7, 7)) }
+
+    @Test
+    fun `a voice note keeps a playable local copy named by its upload`() = runBlocking {
+        val take = recordedVoice()
+
+        val url = previews.keepPlayable("cmid_1", MediaUploadItem.onDisk(take, "take.m4a", "audio/mp4"), MessageEffects())
+
+        val kept = pathOf(url)
+        assertThat(url).startsWith("file:///")
+        assertThat(kept.parentFile?.canonicalPath).isEqualTo(dir.canonicalPath)
+        assertThat(kept.name).startsWith("cmid_1")
+        assertThat(kept.name).endsWith(".m4a")
+        assertThat(kept.readBytes()).isEqualTo(byteArrayOf(7, 7, 7, 7))
+        take.delete()
+        assertThat(kept.isFile).isTrue()
+    }
+
+    @Test
+    fun `a voice note held in memory is kept playable too`() = runBlocking {
+        val url = previews.keepPlayable("cmid_1", MediaUploadItem(byteArrayOf(5, 6), "v.ogg", "audio/ogg"), MessageEffects())
+
+        assertThat(pathOf(url).readBytes()).isEqualTo(byteArrayOf(5, 6))
+    }
+
+    @Test
+    fun `a view-once or blurred voice note writes no copy in clear`() = runBlocking {
+        val item = MediaUploadItem.onDisk(recordedVoice(), "take.m4a", "audio/mp4")
+
+        assertThat(previews.keepPlayable("cmid_1", item, viewOnce)).isNull()
+        assertThat(previews.keepPlayable("cmid_2", item, blurred)).isNull()
+        assertThat(dir.listFiles().orEmpty()).isEmpty()
+    }
+
+    @Test
+    fun `only a sound is kept playable — a video is never duplicated`() = runBlocking {
+        val clip = folder.newFile("clip.mp4").apply { writeBytes(ByteArray(64)) }
+
+        assertThat(previews.keepPlayable("cmid_1", MediaUploadItem.onDisk(clip, "clip.mp4", "video/mp4"), MessageEffects())).isNull()
+        assertThat(dir.listFiles().orEmpty()).isEmpty()
+    }
+
+    @Test
+    fun `releasing a bubble deletes its playable copy`() = runBlocking {
+        val url = previews.keepPlayable("cmid_1", MediaUploadItem.onDisk(recordedVoice(), "take.m4a", "audio/mp4"), MessageEffects())
+
+        previews.release(listOf(ApiMessageAttachment(id = "cmid_1", mimeType = "audio/mp4", fileUrl = url)))
+
+        assertThat(pathOf(url).exists()).isFalse()
+    }
+
+    @Test
+    fun `releasing never deletes a local original the bubble does not own`() = runBlocking {
+        val sticker = folder.newFile("sticker.webp")
+
+        previews.release(listOf(ApiMessageAttachment(id = "s1", mimeType = "image/webp", fileUrl = "file://" + sticker.absolutePath)))
+
+        assertThat(sticker.exists()).isTrue()
+    }
 }

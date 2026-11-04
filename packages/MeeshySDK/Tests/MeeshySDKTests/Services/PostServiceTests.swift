@@ -129,7 +129,7 @@ final class PostServiceTests: XCTestCase {
     // MARK: - like
 
     func testLikeCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "liked"], error: nil)
+        let response = APIResponse<DiscardedResponseBody>(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/posts/\(postId)/like", result: response)
 
         try await service.like(postId: postId)
@@ -155,7 +155,7 @@ final class PostServiceTests: XCTestCase {
     // MARK: - bookmark
 
     func testBookmarkCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "bookmarked"], error: nil)
+        let response = APIResponse<DiscardedResponseBody>(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/posts/\(postId)/bookmark", result: response)
 
         try await service.bookmark(postId: postId)
@@ -215,7 +215,7 @@ final class PostServiceTests: XCTestCase {
     // MARK: - likeComment
 
     func testLikeCommentCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "liked"], error: nil)
+        let response = APIResponse<DiscardedResponseBody>(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/posts/\(postId)/comments/comment1/like", result: response)
 
         try await service.likeComment(postId: postId, commentId: "comment1")
@@ -340,7 +340,7 @@ final class PostServiceTests: XCTestCase {
     // MARK: - share
 
     func testShareCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "shared"], error: nil)
+        let response = APIResponse<DiscardedResponseBody>(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/posts/\(postId)/share", result: response)
 
         try await service.share(postId: postId)

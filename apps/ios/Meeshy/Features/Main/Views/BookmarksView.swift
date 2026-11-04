@@ -31,6 +31,8 @@ struct BookmarksView: View {
     /// Publication citée depuis son bouton Repost (#15911).
     @State private var quotedPost: FeedPost?
     @Environment(\.meeshyQuoteComposerHost) private var quoteHost
+    /// Lien présenté par « Partager » du menu ⋯ (#15994).
+    @State private var shareableLink: ShareableLink?
 
     @StateObject private var impressions = ImpressionBatcher(source: "profile", surface: .bookmarks)
 
@@ -85,6 +87,10 @@ struct BookmarksView: View {
             }
         ))
         .modifier(QuoteComposerCover(quoted: $quotedPost, host: quoteHost))
+        .sheet(item: $shareableLink) { link in
+            ShareSheet(activityItems: link.activityItems)
+                .presentationDetents([.medium, .large])
+        }
     }
 
     /// En-tête partagé, FIXE (`scrollOffset: 0`) — même raison que la liste des
@@ -119,10 +125,20 @@ struct BookmarksView: View {
                     ForEach(visiblePosts) { post in
                         FeedPostCard(
                             post: post,
+                            // Une carte des favoris EST enregistrée : la toucher retire le favori.
+                            isBookmarked: true,
+                            displayRepostCount: post.repostCount,
+                            isReposted: post.isRepostedByMe,
                             onLike: { postId in
                                 Task { await viewModel.toggleLike(postId) }
                             },
+                            onRepost: { postId in
+                                Task { await viewModel.toggleRepost(postId) }
+                            },
                             onQuote: quoteHost == nil ? nil : { _ in quotedPost = post },
+                            onShare: { postId in
+                                Task { shareableLink = await viewModel.shareLink(for: postId) }
+                            },
                             onBookmark: { postId in
                                 Task { await viewModel.removeBookmark(postId) }
                             },

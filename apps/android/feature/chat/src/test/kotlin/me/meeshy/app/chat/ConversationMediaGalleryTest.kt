@@ -754,4 +754,104 @@ class ConversationMediaGalleryTest {
 
         assertThat(gallery.authorIdentities).containsExactly(null as ImageViewerAuthor?)
     }
+
+    private object French : me.meeshy.sdk.lang.LanguageResolver.ContentLanguagePreferences {
+        override val systemLanguage: String? = "fr"
+        override val regionalLanguage: String? = null
+        override val customDestinationLanguage: String? = null
+    }
+
+    private fun pendingPhoto(preview: String?, effectFlags: Long) = me.meeshy.ui.component.bubble.BubbleContentBuilder.build(
+        message = me.meeshy.sdk.model.ApiMessage(
+            id = "cid-1",
+            conversationId = "c1",
+            senderId = "me",
+            attachments = listOf(
+                me.meeshy.sdk.model.ApiMessageAttachment(
+                    id = "upload-0",
+                    mimeType = "image/jpeg",
+                    thumbnailUrl = preview,
+                    effectFlags = effectFlags,
+                ),
+            ),
+        ),
+        currentUserId = "me",
+        preferences = French,
+        mediaBaseUrl = "https://gate.staging.meeshy.me/api/v1",
+        displayDensity = me.meeshy.ui.component.bubble.BubbleContentBuilder.DEFAULT_DISPLAY_DENSITY,
+    )
+
+    @Test
+    fun a_pending_photo_opens_the_viewer_on_its_local_preview() {
+        val preview = "file:///data/user/0/me.meeshy.app.debug/cache/pending-previews/upload-0.preview.jpg"
+
+        val gallery = ConversationMediaGallery.of(listOf(pendingPhoto(preview, effectFlags = 0L)), messageId = "cid-1", imageIndex = 0)
+
+        assertThat(gallery.imageUrls).containsExactly(preview)
+        assertThat(gallery.startIndex).isEqualTo(0)
+    }
+
+    @Test
+    fun a_pending_view_once_photo_keeps_the_viewer_closed() {
+        val viewOnce = me.meeshy.sdk.model.MessageEffectFlags.VIEW_ONCE
+
+        val gallery = ConversationMediaGallery.of(listOf(pendingPhoto(preview = null, effectFlags = viewOnce)), messageId = "cid-1", imageIndex = 0)
+
+        assertThat(gallery.isEmpty).isTrue()
+    }
+
+    private val pendingPreview = "file:///data/cache/pending-previews/cmid_p.preview.jpg"
+    private val sharpCopy = "file:///data/cache/pending-previews/cmid_p.sharp.jpg"
+
+    @Test
+    fun a_pending_photo_opens_on_its_sanitized_sharp_copy_over_its_preview() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", images = listOf(img("cmid_p", pendingPreview, thumbnailUrl = pendingPreview)), isOutgoing = true)),
+            messageId = "m1",
+            imageIndex = 0,
+            sharpOf = { if (it == "cmid_p") sharpCopy else null },
+        )
+
+        assertThat(gallery.imageUrls).containsExactly(sharpCopy)
+        assertThat(gallery.thumbnailUrls).containsExactly(pendingPreview)
+    }
+
+    @Test
+    fun a_pending_photo_whose_copy_is_not_ready_opens_on_its_preview() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", images = listOf(img("cmid_p", pendingPreview, thumbnailUrl = pendingPreview)))),
+            messageId = "m1",
+            imageIndex = 0,
+            sharpOf = { null },
+        )
+
+        assertThat(gallery.imageUrls).containsExactly(pendingPreview)
+    }
+
+    @Test
+    fun a_protected_pending_photo_never_asks_for_a_sharp_copy() {
+        val asked = mutableListOf<String>()
+        ConversationMediaGallery.of(
+            listOf(bubble("m1", images = listOf(img("cmid_p", pendingPreview)), isViewOnce = true)),
+            messageId = "m1",
+            imageIndex = 0,
+            sharpOf = { asked += it; sharpCopy },
+        )
+
+        assertThat(asked).isEmpty()
+    }
+
+    @Test
+    fun a_served_photo_never_asks_for_a_sharp_copy() {
+        val asked = mutableListOf<String>()
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", images = listOf(img("att_1", "https://gate.meeshy.me/a.jpg")))),
+            messageId = "m1",
+            imageIndex = 0,
+            sharpOf = { asked += it; sharpCopy },
+        )
+
+        assertThat(asked).isEmpty()
+        assertThat(gallery.imageUrls).containsExactly("https://gate.meeshy.me/a.jpg")
+    }
 }

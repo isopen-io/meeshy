@@ -1,15 +1,6 @@
 package me.meeshy.app.feed
 
-import android.content.Context
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.ClipboardManager
-import androidx.compose.ui.text.AnnotatedString
-import me.meeshy.sdk.feedback.FeedbackToastCenter
-import me.meeshy.sdk.model.feedback.FeedbackToastKind
-import me.meeshy.sdk.model.share.ShareCard
-import me.meeshy.sdk.model.share.ShareSubject
-import me.meeshy.ui.share.ShareLauncher
-import me.meeshy.ui.share.open
 
 /**
  * Le dialogue en attente du menu d'une carte du profil : la suppression ET le signalement attendent une
@@ -20,6 +11,11 @@ sealed interface ProfilePostDialog {
 
     data class ConfirmDelete(override val postId: String) : ProfilePostDialog
     data class ChooseReport(override val postId: String) : ProfilePostDialog
+
+    /** « Citer » (#12234) : le compositeur de citation, ouvert sur la racine de la carte touchée. */
+    data class Quote(val composer: QuoteComposerState) : ProfilePostDialog {
+        override val postId: String get() = composer.postId
+    }
 }
 
 /**
@@ -47,33 +43,12 @@ internal fun ProfilePostDialogs(dialog: ProfilePostDialog?, onEvent: (ProfilePos
             onDismiss = { onEvent(ProfilePostsEvent.DismissDialog) },
             onReport = { reason -> onEvent(ProfilePostsEvent.ConfirmReport(reason)) },
         )
+        is ProfilePostDialog.Quote -> QuoteComposerSheet(
+            composer = dialog.composer,
+            onTextChange = { onEvent(ProfilePostsEvent.QuoteTextChanged(it)) },
+            onSubmit = { onEvent(ProfilePostsEvent.SubmitQuote) },
+            onDismiss = { onEvent(ProfilePostsEvent.DismissDialog) },
+        )
         null -> Unit
     }
-}
-
-/** Les gestes de partage et de copie d'une carte du profil, rassemblés pour que la liste n'en porte aucun détail. */
-internal class ProfilePostCardActions(
-    private val clipboard: ClipboardManager,
-    private val shareLauncher: ShareLauncher?,
-    private val shareOut: (ShareCard) -> Unit,
-    private val linkCopier: (String, (String) -> Unit) -> Unit,
-    private val linkCopied: String,
-    private val toasts: FeedbackToastCenter,
-    private val context: Context,
-) {
-    fun share(post: FeedPostPresentation) = shareOut(post.shareCard(context))
-
-    fun send(post: FeedPostPresentation) {
-        val card = post.shareCard(context)
-        shareLauncher?.open(ShareSubject.Card(card)) ?: shareOut(card)
-    }
-
-    fun copyLink(post: FeedPostPresentation) {
-        linkCopier(post.id) { url ->
-            clipboard.setText(AnnotatedString(url))
-            toasts.show(linkCopied, FeedbackToastKind.SUCCESS)
-        }
-    }
-
-    fun copyText(post: FeedPostPresentation) = clipboard.setText(AnnotatedString(post.content))
 }
