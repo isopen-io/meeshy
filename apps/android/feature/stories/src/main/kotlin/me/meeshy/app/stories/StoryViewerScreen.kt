@@ -115,7 +115,7 @@ fun StoryViewerScreen(
     )
 
     val playback = rememberStoryPlayback(state, slideDurationMs, cover, rail, cardMotion.dragging, viewModel)
-    StoryViewerLifecycleEffects(state, onClose)
+    StoryViewerLifecycleEffects(state, viewModel.prefetch.collectAsStateWithLifecycle().value, onClose)
 
     CompositionLocalProvider(LocalStoryAudioGain provides { StoryViewerCardTransform.audioGain(cardMotion.dismissal.value) }) {
     StoryViewerShell(
