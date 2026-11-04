@@ -56,7 +56,11 @@ class PostCommentsViewModelOfflineTest {
         override suspend fun suggest(query: String, context: MentionContext?): List<MentionCandidate> = emptyList()
     }
 
-    private fun viewModel(online: Boolean = false, drafts: CommentDraftStore? = null): PostCommentsViewModel {
+    private fun viewModel(
+        online: Boolean = false,
+        drafts: CommentDraftStore? = null,
+        served: List<ApiPostComment> = emptyList(),
+    ): PostCommentsViewModel {
         every { session.currentUser } returns MutableStateFlow(MeeshyUser(id = "me", username = "me"))
         every { socialSocket.commentAdded } returns commentAdded
         every { socialSocket.commentUpdated } returns MutableSharedFlow()
@@ -65,7 +69,7 @@ class PostCommentsViewModelOfflineTest {
         every { socialSocket.commentReactionRemoved } returns MutableSharedFlow()
         every { socialSocket.commentTranslationUpdated } returns MutableSharedFlow()
         every { unsent.observe("p1") } returns queue
-        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(emptyList())
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(served)
         return PostCommentsViewModel(
             repository, session, socialSocket, MeeshyConfig(), NoMentions,
             SavedStateHandle(mapOf("postId" to "p1")),
@@ -137,10 +141,12 @@ class PostCommentsViewModelOfflineTest {
 
     @Test
     fun `une reponse en file ouvre le fil de son parent et en incremente le compteur`() = runTest {
-        val vm = viewModel()
+        // Le parent est à l'écran : on ne répond qu'à un commentaire affiché, et le fil d'un parent absent n'a pas de ligne.
+        val vm = viewModel(served = listOf(ApiPostComment(id = "root", content = "Question", replyCount = 1)))
         queue.value = listOf(waiting("cmid_2", parentId = "root"))
 
         assertThat(vm.state.value.replyThreads["root"]?.replies.orEmpty().map { it.id }).contains("cmid_2")
+        assertThat(vm.state.value.comments.single { it.id == "root" }.replyCount).isEqualTo(2)
     }
 
     @Test
