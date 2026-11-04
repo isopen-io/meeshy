@@ -295,7 +295,7 @@ class StoryComposerViewModelTest {
         vm.onMediaPicked(emptyList())
 
         coVerify(exactly = 0) { media.upload(any(), any()) }
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.attachments).isEmpty()
     }
 
@@ -309,7 +309,7 @@ class StoryComposerViewModelTest {
         coVerify(exactly = 1) { media.upload(any(), any()) }
         assertThat(vm.state.value.attachments.map { it.id }).containsExactly("m1")
         assertThat(vm.state.value.draft.mediaIds).containsExactly("m1")
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.canPublish).isTrue()
     }
 
@@ -335,11 +335,11 @@ class StoryComposerViewModelTest {
 
         vm.onMediaPicked(listOf(item()))
 
-        assertThat(vm.state.value.isUploadingMedia).isTrue()
+        assertThat(vm.state.value.isPreparingMedia).isTrue()
         assertThat(vm.state.value.canPublish).isFalse()
 
         gate.complete(NetworkResult.Success(listOf(uploaded("m1"))))
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.canPublish).isTrue()
     }
 
@@ -364,7 +364,7 @@ class StoryComposerViewModelTest {
 
         vm.onMediaPicked(listOf(item()))
 
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.draft.mediaIds).containsExactly("cmid_refused")
     }
 
@@ -376,7 +376,7 @@ class StoryComposerViewModelTest {
         vm.onMediaPicked(listOf(item()))
 
         assertThat(vm.state.value.errorMessage).isNotNull()
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.draft.mediaIds).isEmpty()
     }
 
@@ -388,7 +388,7 @@ class StoryComposerViewModelTest {
         vm.onMediaPicked(listOf(item()))
 
         assertThat(vm.state.value.errorMessage).isNotNull()
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.draft.mediaIds).isEmpty()
     }
 
@@ -684,7 +684,7 @@ class StoryComposerViewModelTest {
         coVerify(exactly = 1) { uploadQueue.enqueue(any(), any()) }
         assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
         assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1")
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.errorMessage).isNull()
         assertThat(vm.state.value.canPublish).isTrue()
     }
@@ -980,7 +980,7 @@ class StoryComposerViewModelTest {
 
         assertThat(vm.state.value.pendingUploads).isEmpty()
         assertThat(vm.state.value.errorMessage).isNotNull()
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.draft.mediaIds).isEmpty()
     }
 
@@ -995,7 +995,7 @@ class StoryComposerViewModelTest {
         assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
         assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1")
         assertThat(vm.state.value.errorMessage).isNotNull()
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
     }
 
     @Test

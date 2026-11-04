@@ -194,7 +194,7 @@ class ComposerIncomingMediaComposeTest {
 
         compose.onNodeWithContentDescription(adding).assertDoesNotExist()
         compose.onNodeWithContentDescription("Text").assertExists()
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.deck.selectedSlide.mediaIds).isEmpty()
     }
 
@@ -233,7 +233,7 @@ class ComposerIncomingMediaComposeTest {
 
         val waiting = string(me.meeshy.feature.stories.R.string.story_composer_incoming_waiting)
         assertThat(compose.onAllNodesWithText(waiting).fetchSemanticsNodes()).hasSize(2)
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         compose.onNodeWithTag(EDITING_RAIL_TAG).assertExists()
         compose.runOnIdle { vm.onSceneBackgroundTap() }
         compose.onNodeWithText("Publish story").assertExists()

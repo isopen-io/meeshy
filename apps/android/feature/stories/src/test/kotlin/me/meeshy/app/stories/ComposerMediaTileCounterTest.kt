@@ -32,7 +32,7 @@ class ComposerMediaTileCounterTest {
                     filterIntensity = 1f,
                     selectedBackground = null,
                     canAddText = true,
-                    isUploadingMedia = false,
+                    isPreparingMedia = false,
                     uploadingMedia = emptyList(),
                     isMediaFull = false,
                     onDismiss = {},

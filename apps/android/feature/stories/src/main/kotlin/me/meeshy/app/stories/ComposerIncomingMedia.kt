@@ -68,7 +68,7 @@ internal data class IncomingMediaPlaceholder(
 
 /** L'espace réservé de la sélection en cours d'envoi, ou `null` quand rien n'entre : il part dans l'image où l'envoi s'achève. */
 internal fun StoryComposerUiState.incomingPlaceholder(): IncomingMediaPlaceholder? {
-    if (!isUploadingMedia) return null
+    if (!isPreparingMedia) return null
     val first = mediaLandings.firstOrNull() ?: return null
     val at = deck.nextObjectPosition().takeIf { first.role == ComposerMediaRole.FOREGROUND }
     val item = incomingMedia.firstOrNull()
@@ -184,7 +184,7 @@ internal fun IncomingCancel(onCancel: () -> Unit, modifier: Modifier = Modifier)
  * « Envoi… » quand il repart, « Échec — Réessayer » quand son dernier essai a échoué — jamais une attente figée en ligne.
  */
 @Composable
-internal fun IncomingWaitingBadge(phase: PendingUploadPhase = PendingUploadPhase.OFFLINE, modifier: Modifier = Modifier) {
+internal fun IncomingWaitingBadge(phase: PendingUploadPhase = PendingUploadPhase.OFFLINE, modifier: Modifier = Modifier, fraction: Float? = null) {
     Row(
         modifier = modifier
             .background(PREVIEW_VEIL, RoundedCornerShape(MeeshyRadius.sm))
@@ -193,17 +193,52 @@ internal fun IncomingWaitingBadge(phase: PendingUploadPhase = PendingUploadPhase
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
     ) {
         when (phase) {
-            PendingUploadPhase.SENDING ->
+            PendingUploadPhase.SENDING -> if (fraction == null) {
                 CircularProgressIndicator(color = Color.White, strokeWidth = BADGE_STROKE, modifier = Modifier.size(BADGE_ICON))
+            } else {
+                CircularProgressIndicator(progress = { fraction }, color = Color.White, strokeWidth = BADGE_STROKE, modifier = Modifier.size(BADGE_ICON))
+            }
             PendingUploadPhase.OFFLINE ->
                 Icon(MeeshyIcons.Hourglass, contentDescription = null, tint = Color.White, modifier = Modifier.size(BADGE_ICON))
             PendingUploadPhase.FAILED -> Unit
         }
-        val text = when (phase) {
-            PendingUploadPhase.OFFLINE -> stringResource(R.string.story_composer_incoming_waiting)
+        val text = when {
+            phase == PendingUploadPhase.OFFLINE -> stringResource(R.string.story_composer_incoming_waiting)
+            phase == PendingUploadPhase.SENDING && fraction != null -> stringResource(R.string.story_composer_incoming_sending, (fraction * PERCENT).roundToInt())
             else -> phase.label()
         }
         Text(text, color = Color.White, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+/**
+ * L'espace réservé d'un sticker image qui entre (#15597) : posé sur le sticker, à son échelle, son anneau annoncé à
+ * TalkBack et ✕ pour annuler — le reste de l'écran est voilé par l'hôte tant qu'il est là.
+ */
+@Composable
+internal fun IncomingStickerPlaceholderLayer(placeholder: IncomingStickerPlaceholder, onCancel: () -> Unit) {
+    val label = stringResource(R.string.story_composer_incoming_sticker_a11y)
+    val status = stringResource(R.string.story_composer_incoming_preparing)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val widthPx = constraints.maxWidth.toFloat()
+        val heightPx = constraints.maxHeight.toFloat()
+        val sidePx = StickerArtMetrics.sidePx(widthPx) * placeholder.scale
+        val side = with(LocalDensity.current) { sidePx.toDp() }
+        Box(
+            Modifier
+                .offset { IntOffset((placeholder.x * widthPx - sidePx / 2).roundToInt(), (placeholder.y * heightPx - sidePx / 2).roundToInt()) }
+                .size(side)
+                .background(PREVIEW_VEIL, RoundedCornerShape(MeeshyRadius.md))
+                .semantics(mergeDescendants = true) {
+                    contentDescription = label
+                    stateDescription = status
+                    liveRegion = LiveRegionMode.Polite
+                    progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+                },
+        ) {
+            CircularProgressIndicator(color = Color.White, strokeWidth = RING_STROKE, modifier = Modifier.align(Alignment.Center).size(RING))
+            IncomingCancel(onCancel, Modifier.align(Alignment.TopEnd).offset(x = TARGET / 2, y = -TARGET / 2))
+        }
     }
 }
 

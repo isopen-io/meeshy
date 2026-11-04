@@ -72,7 +72,7 @@ class StoryComposerUploadProgressViewModelTest {
 
         vm.onMediaPicked(listOf(photo("a.jpg"), photo("b.jpg")))
 
-        assertThat(vm.state.value.isUploadingMedia).isTrue()
+        assertThat(vm.state.value.isPreparingMedia).isTrue()
         assertThat(vm.state.value.uploadingMedia).containsExactly(
             MediaUploadProgress.Uploading(50L, 100L), MediaUploadProgress.Idle,
         ).inOrder()
@@ -89,7 +89,7 @@ class StoryComposerUploadProgressViewModelTest {
         vm.onMediaPicked(listOf(photo("a.jpg")))
 
         assertThat(vm.state.value.uploadingMedia).isEmpty()
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.errorMessage).isEqualTo(StoryComposerViewModel.MEDIA_FAILED)
     }
 

@@ -74,7 +74,6 @@ class StoryComposerStickerIntakeTest {
         val state = vm.state.value
         val placeholder = state.incomingSticker()
         assertThat(placeholder).isNotNull()
-        assertThat(placeholder?.failed).isFalse()
         assertThat(placeholder?.stickerId).isEqualTo(vm.stickers().single().id)
         assertThat(state.intakeBlocks).isTrue()
         assertThat(state.canPublish).isFalse()

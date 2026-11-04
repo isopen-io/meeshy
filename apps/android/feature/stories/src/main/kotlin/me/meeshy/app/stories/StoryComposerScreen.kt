@@ -20,7 +20,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -31,7 +30,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.flowWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.composer.ComposerOpening
 import me.meeshy.ui.theme.MeeshyTheme
@@ -247,17 +245,14 @@ private class StoryMediaPickers(
 @Composable
 private fun rememberStoryMediaPickers(mode: StoryMediaPickMode, viewModel: StoryComposerViewModel): StoryMediaPickers {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     var replacing by remember { mutableStateOf<String?>(null) }
     fun dispatchPicked(uris: List<Uri>, asBackground: Boolean = false) {
         val replaced = replacing.takeIf { asBackground }
         replacing = null
         if (uris.isEmpty()) return
-        scope.launch {
-            val items = withContext(Dispatchers.IO) {
-                uris.mapNotNull { context.readMediaUploadItem(it) }
-            }
-            if (items.isNotEmpty()) viewModel.onMediaPicked(items, asBackground = asBackground, replacing = replaced)
+        val app = context.applicationContext
+        viewModel.onMediaChosen(uris.size, asBackground = asBackground, replacing = replaced) {
+            withContext(Dispatchers.IO) { uris.mapNotNull { app.readMediaUploadItem(it) } }
         }
     }
     val pickSingle = rememberLauncherForActivityResult(

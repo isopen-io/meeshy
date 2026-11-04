@@ -142,7 +142,11 @@ internal fun StoryComposerScene(
                 ComposerRepositionedBanner(state.repositionedCount, Modifier.align(Alignment.TopCenter).padding(top = WAITING_BADGE_TOP))
             }
             state.selectedSlideBackdropPendingPhase?.let { phase ->
-                IncomingWaitingBadge(phase, Modifier.align(Alignment.TopCenter).padding(top = WAITING_BADGE_TOP))
+                IncomingWaitingBadge(
+                    phase,
+                    Modifier.align(Alignment.TopCenter).padding(top = WAITING_BADGE_TOP),
+                    state.selectedSlideBackdropMediaId?.let(state::sendingFraction),
+                )
             }
             zoom?.let { ViewportZoomResetButton(it, Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 12.dp)) }
             armsCapture?.offer?.let { offer -> StorySceneCaptureHint(offer) }
@@ -267,6 +271,7 @@ internal fun sceneNotice(state: StoryComposerUiState): String? = when (val error
     StoryComposerUploadReducer.SLIDES_FULL -> stringResource(R.string.composer_slide_rail_capReached)
     StoryComposerViewModel.MEDIA_FAILED -> stringResource(R.string.story_composer_incoming_failed)
     StoryComposerViewModel.STICKER_IMAGE_FAILED -> stringResource(R.string.story_sticker_image_failed)
+    StoryComposerViewModel.SOUND_FAILED -> stringResource(R.string.story_sound_sheet_upload_failed)
     StoryEditErrors.FAILED -> stringResource(R.string.story_edit_error)
     StoryEditErrors.OFFLINE -> stringResource(R.string.story_edit_offline)
     StoryEditErrors.ONE_SLIDE -> stringResource(R.string.story_edit_one_slide)
@@ -330,7 +335,7 @@ internal fun StoryComposerPanel(
                 filterIntensity = state.selectedSlideFilterIntensity,
                 selectedBackground = state.selectedSlideBackground,
                 canAddText = state.deck.selectedCanAddTextElement,
-                isUploadingMedia = state.isUploadingMedia,
+                isPreparingMedia = state.isPreparingMedia,
                 uploadingMedia = state.uploadingMedia,
                 isMediaFull = !state.deck.selectedCanAddMedia,
                 onDismiss = viewModel::onBandDismiss,

@@ -62,8 +62,15 @@ class MediaUploadQueue @Inject constructor(
      * the octets are being sealed, neither is kept and [AccountClosedException] is thrown — a media picked by A never
      * leaves as B, however long the write took.
      */
-    suspend fun enqueue(item: MediaUploadItem, context: TusUploadContext? = null, conversationId: String? = null): String {
-        val cmid = OutboxIds.cmid()
+    suspend fun enqueue(item: MediaUploadItem, context: TusUploadContext? = null, conversationId: String? = null): String =
+        OutboxIds.cmid().also { enqueueAs(it, item, context, conversationId) }
+
+    /**
+     * [enqueue] under a [cmid] the caller already gave the media: the story composer names a media the moment it lands,
+     * sends it in the background, and only hands it to the queue when that send fails or a publication must wait on it —
+     * the placeholder already riding in the slide stays its dependency key.
+     */
+    suspend fun enqueueAs(cmid: String, item: MediaUploadItem, context: TusUploadContext? = null, conversationId: String? = null) {
         val ticket = blobStore.currentTicket()
         blobStore.put(cmid, item, ticket)
         try {
@@ -72,7 +79,6 @@ class MediaUploadQueue @Inject constructor(
             withContext(NonCancellable) { blobStore.remove(cmid) }
             throw failure
         }
-        return cmid
     }
 
     private suspend fun enqueueRow(cmid: String, context: TusUploadContext?, conversationId: String?, ticket: AccountTicket?) {
