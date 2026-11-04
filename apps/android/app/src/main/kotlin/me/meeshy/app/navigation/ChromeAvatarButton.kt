@@ -50,7 +50,7 @@ internal const val CHROME_AVATAR_SIZE_DP: Float = 38f
 
 /**
  * Le contour équipé par l'utilisateur, posé DANS l'avatar de 38 dp : le disque dégradé reste, comme iOS
- * (`MeeshyAvatar(context: .custom(38), ring: currentUser.profileDecor.avatarRing)` dans l'anneau).
+ * (iOS `RootFloatingChrome` : l'avatar `.custom(38)` reçoit `ring: currentUser.profileDecor.avatarRing` dans l'anneau).
  */
 internal fun chromeAvatarDecorRing(user: MeeshyUser?): ServedProfileDecorItem? = user?.profileDecor?.avatarRing
 
