@@ -164,6 +164,7 @@ internal fun LazyListScope.profilePostsItems(
             onCopyText = { actions.copyText(post) },
             onOpenProfile = onOpenProfile,
             onRepost = { onEvent(ProfilePostsEvent.Repost(post.id)) },
+            onQuote = { onEvent(ProfilePostsEvent.BeginQuote(post.id)) },
             onPin = { onEvent(ProfilePostsEvent.Pin(post.id)) },
             onReport = { onEvent(ProfilePostsEvent.RequestReport(post.id)) },
             onDelete = { onEvent(ProfilePostsEvent.RequestDelete(post.id)) },

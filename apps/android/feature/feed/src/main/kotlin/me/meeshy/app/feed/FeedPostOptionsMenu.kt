@@ -44,8 +44,8 @@ internal fun PostOptionsButton(
     onShare: () -> Unit,
     onCopyLink: () -> Unit,
     onCopyText: () -> Unit,
-    onRepost: () -> Unit,
-    onQuote: () -> Unit,
+    onRepost: (() -> Unit)?,
+    onQuote: (() -> Unit)?,
     onBookmarkToggle: () -> Unit,
     onPin: () -> Unit,
     onReport: () -> Unit,
@@ -80,8 +80,9 @@ internal fun PostOptionsButton(
                     PostAction.Share -> stringResource(R.string.feed_action_share) to { haptics.light(); onShare() }
                     PostAction.CopyLink -> stringResource(R.string.feed_action_copy_link) to { haptics.success(); onCopyLink() }
                     PostAction.CopyText -> stringResource(R.string.feed_action_copy_text) to { haptics.success(); onCopyText() }
-                    PostAction.Repost -> stringResource(R.string.feed_action_repost) to onRepost
-                    PostAction.Quote -> stringResource(R.string.feed_action_quote) to onQuote
+                    // Sans écrivain, « Repartager » / « Citer » sont absents, jamais inertes (#12234).
+                    PostAction.Repost -> (onRepost ?: return@forEach).let { stringResource(R.string.feed_action_repost) to it }
+                    PostAction.Quote -> (onQuote ?: return@forEach).let { stringResource(R.string.feed_action_quote) to it }
                     PostAction.Bookmark -> stringResource(R.string.feed_action_bookmark) to { haptics.light(); onBookmarkToggle() }
                     PostAction.Unbookmark -> stringResource(R.string.feed_action_unbookmark) to { haptics.light(); onBookmarkToggle() }
                     PostAction.Imager -> stringResource(R.string.feed_comment_imagine) to (onImager ?: {})

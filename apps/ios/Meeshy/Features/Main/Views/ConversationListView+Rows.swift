@@ -127,11 +127,9 @@ struct ConversationRowItem: View {
             if #available(iOS 26.0, *) {
                 // Menu contextuel NATIF (Liquid Glass) : le système possède le
                 // long-press, la preview et l'exposition VoiceOver ; l'avatar
-                // garde son propre `.contextMenu` (interaction la plus
-                // profonde), donc un appui maintenu dessus n'ouvre PAS le menu
-                // de la ligne (feedback user 2026-07-08). Le tap d'ouverture
-                // reste un `.onTapGesture` plein-ligne : les gestes internes
-                // de l'avatar (story/profil/mood) restent prioritaires.
+                // garde son propre `.contextMenu`, donc un appui maintenu dessus
+                // n'ouvre PAS le menu de la ligne (feedback user 2026-07-08). Le
+                // tap plein-ligne laisse la priorité aux gestes de l'avatar.
                 countedRowCore
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -235,6 +233,7 @@ struct ConversationRowItem: View {
                     }
             }
         }
+        .overlay(alignment: .leading) { avatarAccessibilityProxy }
     }
 
     /// « Rejoindre » depuis la ligne (#7548) — la MÊME revalidation que la
@@ -262,6 +261,47 @@ struct ConversationRowItem: View {
     /// portillon `.equatable()` ci-dessous laisse passer la rangée.
     private var isContentLocked: Bool {
         ConversationLockManager.shared.hidesContent(of: conversation.id)
+    }
+
+    /// #15887 — ce qu'ouvre le toucher de l'avatar, relu à chaque rendu
+    /// (verrou et blocage, comme `isContentLocked`) par la MÊME loi pour les
+    /// deux rangs ET l'élément VoiceOver : ils disent la même chose.
+    private var avatarRoute: ConversationAvatarRoute {
+        ConversationOpenRoute.avatarRoute(for: conversation)
+    }
+
+    /// L'avatar, bouton À PART pour VoiceOver : un élément frère posé sur la
+    /// RACINE de la ligne, après toute sa chaîne d'accessibilité (fusion,
+    /// indice, action par défaut « ouvrir », menu), qui sinon s'appliquerait à
+    /// lui. Le doigt le traverse jusqu'à l'avatar dessiné.
+    private var avatarAccessibilityProxy: some View {
+        let route = avatarRoute
+        let isDirect = conversation.type == .direct
+        let roles = ConversationAvatarMenu.roles(
+            type: conversation.type, opensProfile: route.opensProfile, hasShareAction: onCreateShareLink != nil
+        )
+        return ConversationRowAvatarAccessibilityProxy(
+            label: ConversationAvatarSpeech.label(
+                route: route,
+                name: conversation.name,
+                moodEmoji: moodStatus?.moodEmoji,
+                isHere: isDirect && isPeerHere.isHere
+            ),
+            actions: ConversationAvatarSpeech.actions(roles: roles, hasStory: isDirect && storyRingState != .none),
+            bandWidth: ConversationRowMetrics.avatarBandWidth(isLentille: LentilleFeatureFlag.isLentilleListEnabled),
+            onActivate: route.opensProfile ? onViewProfile : onViewConversationInfo,
+            perform: { performAvatarAction($0) }
+        )
+    }
+
+    private func performAvatarAction(_ action: ConversationAvatarA11yAction) {
+        let perform: (() -> Void)? = switch action {
+        case .menu(.conversationInfo): onViewConversationInfo
+        case .menu(.profile): onViewProfile
+        case .menu(.shareLink): onCreateShareLink
+        case .viewStory: onViewStory
+        }
+        perform?()
     }
 
     /// Coeur visuel de la ligne, commun aux deux chemins de menu.
@@ -328,6 +368,7 @@ struct ConversationRowItem: View {
                     isSelected: isSelected,
                     draftSummary: draftSummary,
                     isContentLocked: isContentLocked,
+                    avatarRoute: avatarRoute,
                     preferredContentLanguages: preferredContentLanguages,
                     deviceText: deviceText,
                     onJoinLiveCall: { joinLiveCall() },
@@ -354,6 +395,7 @@ struct ConversationRowItem: View {
                 isSelected: isSelected,
                 draftSummary: draftSummary,
                 isContentLocked: isContentLocked,
+                avatarRoute: avatarRoute,
                 preferredContentLanguages: preferredContentLanguages,
                 deviceText: deviceText,
                 onJoinLiveCall: { joinLiveCall() }
@@ -402,6 +444,15 @@ struct ConversationRowPassContext {
 enum ConversationRowMetrics {
     static let avatarInteractionExclusionWidth: CGFloat =
         MeeshySpacing.md + AvatarContext.conversationList.ringSize
+
+    /// La bande de l'élément VoiceOver de l'avatar (#15887) : celle de
+    /// l'avatar du rang rendu, jamais sous une cible tactile de 44 pt.
+    static func avatarBandWidth(isLentille: Bool) -> CGFloat {
+        let band = isLentille
+            ? LentilleMetrics.Row.paddingHorizontal + LentilleMetrics.Avatar.size + LentilleMetrics.Avatar.ringWidth * 2
+            : avatarInteractionExclusionWidth
+        return max(band, MeeshyControlSize.tapTarget)
+    }
 
     /// Bound for the opportunistic preview auto-load (`enableAutoPreviewLoad`
     /// above) — matches the ViewModel's own top-conversations batch prefetch

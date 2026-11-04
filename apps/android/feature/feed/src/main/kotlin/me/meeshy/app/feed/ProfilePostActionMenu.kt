@@ -20,6 +20,11 @@ sealed interface ProfilePostDialog {
 
     data class ConfirmDelete(override val postId: String) : ProfilePostDialog
     data class ChooseReport(override val postId: String) : ProfilePostDialog
+
+    /** « Citer » (#12234) : le compositeur de citation, ouvert sur la racine de la carte touchée. */
+    data class Quote(val composer: QuoteComposerState) : ProfilePostDialog {
+        override val postId: String get() = composer.postId
+    }
 }
 
 /**
@@ -46,6 +51,12 @@ internal fun ProfilePostDialogs(dialog: ProfilePostDialog?, onEvent: (ProfilePos
         is ProfilePostDialog.ChooseReport -> ReportPostDialog(
             onDismiss = { onEvent(ProfilePostsEvent.DismissDialog) },
             onReport = { reason -> onEvent(ProfilePostsEvent.ConfirmReport(reason)) },
+        )
+        is ProfilePostDialog.Quote -> QuoteComposerSheet(
+            composer = dialog.composer,
+            onTextChange = { onEvent(ProfilePostsEvent.QuoteTextChanged(it)) },
+            onSubmit = { onEvent(ProfilePostsEvent.SubmitQuote) },
+            onDismiss = { onEvent(ProfilePostsEvent.DismissDialog) },
         )
         null -> Unit
     }

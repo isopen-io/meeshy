@@ -16,8 +16,8 @@ internal fun FeedPostCardFooter(
     onLike: () -> Unit,
     onBookmark: () -> Unit,
     onComments: () -> Unit,
-    onRepost: () -> Unit,
-    onQuote: () -> Unit,
+    onRepost: (() -> Unit)?,
+    onQuote: (() -> Unit)?,
     onSend: (() -> Unit)? = null,
 ) {
     Spacer(Modifier.height(MeeshySpacing.sm))
