@@ -1,7 +1,15 @@
 import { sharedPlaceFromMetadata } from '../../../services/location/sharedPlace';
 import { truncateMessagePreview } from './last-message-preview';
-import { resolveLastMessageNature, summarizeAttachments, type NatureSource, type SummarizableAttachment } from './last-message-nature';
-import { previewAltOf, previewAttachmentProtection, previewStickerOf, type PreviewAltAttachment } from './last-message-media';
+import { isPreviewWithheld, resolveLastMessageNature, type NatureSource, type SummarizableAttachment } from './last-message-nature';
+import {
+  previewAltOf,
+  previewAttachmentProtection,
+  previewStickerOf,
+  servedAttachmentSummary,
+  servedPreviewAttachment,
+  type PreviewAltAttachment,
+} from './last-message-media';
+import type { PreviewProtection } from '@meeshy/shared/types/conversation-preview';
 
 /**
  * Le CORPS de `lastMessage` servi par `GET /conversations` — tout sauf
@@ -9,7 +17,7 @@ import { previewAltOf, previewAttachmentProtection, previewStickerOf, type Previ
  *
  * Extrait de `core-list.ts` (au plafond de taille) quand #7591 / #7594 y ont
  * ajouté le sticker, le texte alternatif et la vue unique ouverte. Tout ici est
- * pur : la protection (`withheld`), l'échéance servie et la consommation du
+ * pur : la protection (`protection`), l'échéance servie et la consommation du
  * lecteur sont résolues par la route.
  */
 
@@ -26,24 +34,32 @@ export interface ListLastMessageRow extends NatureSource {
 }
 
 export interface ListLastMessageContext {
-  /** Message à vue unique, flouté, chiffré ou expiré (`isPreviewWithheld`). */
-  readonly withheld: boolean;
+  /**
+   * La protection qui qualifie l'aperçu (`resolvePreviewProtection`), `null` hors
+   * protection. Retenu (`isPreviewWithheld`) : vue unique, flou, chiffré, expiré.
+   * `'ephemeral'` ne retient pas le texte mais retient les détails des pièces.
+   */
+  readonly protection: PreviewProtection | null;
   /** L'échéance servie à ce lecteur (#7451) ; `undefined` = hors éphémère, rien à surcharger. */
   readonly servedExpiresAt: Date | null | undefined;
   /** Ce lecteur a déjà ouvert ce message à vue unique (`MessageStatusEntry.viewedOnceAt`). */
   readonly viewOnceConsumed: boolean;
 }
 
-function servedAttachment<A extends ListPreviewAttachmentRow>(attachment: A, withheld: boolean) {
-  return {
-    ...attachment,
-    ...previewAttachmentProtection(attachment),
-    alt: previewAltOf(attachment, withheld),
-  };
+function servedAttachment<A extends ListPreviewAttachmentRow>(attachment: A, protection: PreviewProtection | null) {
+  return servedPreviewAttachment(
+    {
+      ...attachment,
+      ...previewAttachmentProtection(attachment),
+      alt: previewAltOf(attachment, isPreviewWithheld(protection)),
+    },
+    protection,
+  );
 }
 
 export function projectListLastMessageBody<M extends ListLastMessageRow>(msg: M, context: ListLastMessageContext) {
-  const { withheld, servedExpiresAt, viewOnceConsumed } = context;
+  const { protection, servedExpiresAt, viewOnceConsumed } = context;
+  const withheld = isPreviewWithheld(protection);
   // `translations` (JSON brut, potentiellement chiffré) et `originalLanguage`
   // sont servis au niveau CONVERSATION sous forme de carte d'aperçu ; les
   // laisser fuiter dans le spread renverrait le blob complet à chaque ligne.
@@ -57,8 +73,8 @@ export function projectListLastMessageBody<M extends ListLastMessageRow>(msg: M,
     // #7545 — la NATURE et le RÉSUMÉ de toutes les pièces jointes ; la liste
     // n'en SERT que la première en détail.
     ...resolveLastMessageNature(msg),
-    attachments: attachments.slice(0, 1).map((attachment) => servedAttachment(attachment, withheld)),
-    attachmentSummary: withheld ? null : summarizeAttachments(attachments, msg._count?.attachments),
+    attachments: attachments.slice(0, 1).map((attachment) => servedAttachment(attachment, protection)),
+    attachmentSummary: servedAttachmentSummary(attachments, msg._count?.attachments, protection),
     content: withheld ? '' : truncateMessagePreview(msg.content),
     ...(servedExpiresAt !== undefined ? { expiresAt: servedExpiresAt } : {}),
     // Identité, horloge, type et drapeaux (déjà dans `rest`) continuent de

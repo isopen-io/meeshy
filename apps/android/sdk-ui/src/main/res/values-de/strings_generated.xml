@@ -83,6 +83,7 @@
     <string name="bubble_a11y_reactions">Reaktionen: %1$s</string>
     <string name="bubble_a11y_reply_to">Auf %1$s antworten</string>
     <string name="bubble_attachment_file_fallback">Datei</string>
+    <string name="bubble_audio_stack_position">Sprachnachricht %1$d von %2$d</string>
     <string name="bubble_blur_view_once">Einmal ansehen</string>
     <string name="bubble_contact_card_a11y_on_meeshy">Auf Meeshy: %1$s</string>
     <string name="bubble_contact_card_on_meeshy">Auf Meeshy</string>
@@ -136,6 +137,7 @@
     <string name="code_viewer_more_lines">%1$d weitere Zeilen</string>
     <string name="common_cancel">Abbrechen</string>
     <string name="common_clearSearch">Suche löschen</string>
+    <string name="common_clear_search">Suche löschen</string>
     <string name="common_close">Schließen</string>
     <string name="common_done">Fertig</string>
     <string name="common_selected">Ausgewählt</string>
@@ -156,6 +158,10 @@
     <string name="connection_toast_request_declined">Anfrage abgelehnt</string>
     <string name="connection_toast_request_send_failed">Anfrage konnte nicht gesendet werden</string>
     <string name="connection_toast_request_sent">Anfrage gesendet</string>
+    <string name="contacts_phonebook_invite">Einladen</string>
+    <string name="contacts_phonebook_write">Nachricht senden</string>
+    <string name="contacts_skeleton_loading">Wird geladen</string>
+    <string name="contacts_tab_prefix">Tab</string>
     <string name="content_failure_network_body">Prüfe deine Verbindung und versuche es erneut.</string>
     <string name="content_failure_retry">Erneut versuchen</string>
     <string name="content_failure_server_body">Das Problem liegt bei uns. Versuche es gleich noch einmal.</string>

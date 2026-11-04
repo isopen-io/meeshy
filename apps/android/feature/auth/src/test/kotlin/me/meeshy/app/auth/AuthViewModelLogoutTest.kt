@@ -29,14 +29,13 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
-/** iOS `SettingsView` (voile « Déconnexion en cours… ») et `SessionClosedNoticeView`. */
+/** iOS `SettingsView` (voile « Déconnexion en cours… ») et la racine alignée sur une session fermée par le SDK. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AuthViewModelLogoutTest {
 
     private val dispatcher = StandardTestDispatcher()
 
-    private fun viewModel(api: AuthApi): AuthViewModel {
-        val tokens = InMemoryTokenStore(jwt = "jwt", sessionToken = "s")
+    private fun viewModel(api: AuthApi, tokens: InMemoryTokenStore = InMemoryTokenStore(jwt = "jwt", sessionToken = "s")): AuthViewModel {
         return AuthViewModel(
             AuthRepository(api, tokens, SessionRepository(api, tokens), mockk<SessionTeardown>(relaxed = true), SyncSeqTracker()),
             mockk<RealtimeSessionCoordinator>(relaxed = true),
@@ -77,31 +76,28 @@ class AuthViewModelLogoutTest {
         coVerify(exactly = 1) { api.logout(any(), any()) }
         assertThat(vm.state.value.isLoggingOut).isFalse()
         assertThat(vm.state.value.isAuthenticated).isFalse()
-        assertThat(vm.state.value.sessionClosedNotice).isFalse()
     }
 
     @Test
-    fun `a session refused by the server comes back to sign-in with an explanation`() = runTest(dispatcher) {
-        val gate = CompletableDeferred(Unit)
-        val vm = viewModel(slowLogoutApi(gate))
-
-        vm.logout(closedByServer = true)
+    fun `a session the sdk closed brings the root back to sign-in`() = runTest(dispatcher) {
+        val tokens = InMemoryTokenStore(jwt = "jwt", sessionToken = "s")
+        val vm = viewModel(slowLogoutApi(CompletableDeferred(Unit)), tokens)
         advanceUntilIdle()
+        assertThat(vm.state.value.isAuthenticated).isTrue()
 
-        assertThat(vm.state.value.sessionClosedNotice).isTrue()
-        vm.dismissSessionClosedNotice()
-        assertThat(vm.state.value.sessionClosedNotice).isFalse()
+        tokens.clear()
+        vm.onSessionClosedBySdk()
+
+        assertThat(vm.state.value.isAuthenticated).isFalse()
     }
 
     @Test
-    fun `a refusal arriving once already signed out explains nothing`() = runTest(dispatcher) {
+    fun `a stale sdk closure never signs out a session reopened since`() = runTest(dispatcher) {
         val vm = viewModel(slowLogoutApi(CompletableDeferred(Unit)))
-        vm.logout()
         advanceUntilIdle()
 
-        vm.logout(closedByServer = true)
-        advanceUntilIdle()
+        vm.onSessionClosedBySdk()
 
-        assertThat(vm.state.value.sessionClosedNotice).isFalse()
+        assertThat(vm.state.value.isAuthenticated).isTrue()
     }
 }

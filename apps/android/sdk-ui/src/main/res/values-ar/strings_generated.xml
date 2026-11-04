@@ -91,6 +91,7 @@
     <string name="bubble_a11y_reactions">التفاعلات: %1$s</string>
     <string name="bubble_a11y_reply_to">الرد على %1$s</string>
     <string name="bubble_attachment_file_fallback">ملف</string>
+    <string name="bubble_audio_stack_position">الرسالة الصوتية %1$d من %2$d</string>
     <string name="bubble_blur_view_once">عرض مرة واحدة</string>
     <string name="bubble_contact_card_a11y_on_meeshy">على Meeshy: %1$s</string>
     <string name="bubble_contact_card_on_meeshy">على Meeshy</string>
@@ -144,6 +145,7 @@
     <string name="code_viewer_more_lines">%1$d أسطر إضافية</string>
     <string name="common_cancel">إلغاء</string>
     <string name="common_clearSearch">مسح البحث</string>
+    <string name="common_clear_search">مسح البحث</string>
     <string name="common_close">إغلاق</string>
     <string name="common_done">تم</string>
     <string name="common_selected">محدَّد</string>
@@ -164,6 +166,10 @@
     <string name="connection_toast_request_declined">تم رفض الطلب</string>
     <string name="connection_toast_request_send_failed">تعذر إرسال الطلب</string>
     <string name="connection_toast_request_sent">تم إرسال الطلب</string>
+    <string name="contacts_phonebook_invite">دعوة</string>
+    <string name="contacts_phonebook_write">إرسال رسالة</string>
+    <string name="contacts_skeleton_loading">جارٍ التحميل</string>
+    <string name="contacts_tab_prefix">تبويب</string>
     <string name="content_failure_network_body">تحقّق من اتصالك ثم أعد المحاولة.</string>
     <string name="content_failure_retry">إعادة المحاولة</string>
     <string name="content_failure_server_body">المشكلة من جهتنا. أعد المحاولة بعد قليل.</string>

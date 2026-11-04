@@ -309,6 +309,28 @@ describe('la montée est optimiste, et revient en arrière sur un refus (#14648)
     expect(regime()).toBe('server');
   });
 
+  test('le mode visé d’une conversation ne se montre jamais sur une autre', async () => {
+    const pending = await deferredMount({ id: 'c1', type: 'direct', encryptionMode: 'server' });
+    const gesture: EncryptionModeSwitchGesture = {
+      readStatus: async () => ({ mode: 'server', canToggleEncryption: true }),
+      switchTo: async () => ({ kind: 'failed' }),
+    };
+    await act(async () => {
+      target('hybrid')?.click();
+    });
+    expect(regime()).toBe('hybrid');
+    act(() => {
+      root.render(<ConversationEncryptionSection conversation={{ id: 'c2', type: 'direct', encryptionMode: 'server' }} modeSwitch={gesture} />);
+    });
+    await settle();
+    expect(regime()).toBe('server');
+    await act(async () => {
+      pending.resolve({ kind: 'switched', mode: 'hybrid' });
+    });
+    await settle();
+    expect(regime()).toBe('server');
+  });
+
   test('un refus remet le mode d’avant et le dit', async () => {
     const pending = await deferredMount({ id: 'c1', type: 'direct', encryptionMode: 'server' });
     await act(async () => {

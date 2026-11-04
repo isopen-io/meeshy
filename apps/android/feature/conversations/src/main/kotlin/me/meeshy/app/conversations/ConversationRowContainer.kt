@@ -95,6 +95,8 @@ internal fun ConversationRowContainer(
     val capabilities = remember(conversation, model.currentUserPrefs) {
         ConversationRowMenuCapabilities.make(conversation, model.currentUserPrefs)
     }
+    val avatarGestures = rememberRowAvatarGestures(model, actions, capabilities)
+    MoodImpressionOnAppearance(conversation.id, model.moodEmoji, actions.onMoodShown)
     val palette = conversation.displayPaletteInTheme()
     val accent = hexColor(palette.primary)
     val secondary = hexColor(palette.secondary)
@@ -166,6 +168,7 @@ internal fun ConversationRowContainer(
                 timeLabel = timeLabel,
                 onJoinCall = actions.onJoinCall.takeIf { showsJoin },
                 engagement = engagement,
+                avatarGestures = avatarGestures,
             )
             if (model.isSelected) {
                 Box(

@@ -61,6 +61,12 @@ public sealed interface AudioPlaybackAction {
 
     /** Arrêt : plus aucun vocal chargé. La vitesse choisie survit. */
     public data object Stopped : AudioPlaybackAction
+
+    /**
+     * #15969 — le vocal chargé a été accusé : il s'appelle désormais [attachmentId] (id serveur). Lecture, position et
+     * durée restent telles quelles ; sans vocal chargé, rien ne change.
+     */
+    public data class Relabeled(val attachmentId: String) : AudioPlaybackAction
 }
 
 public object AudioPlaybackReducer {
@@ -119,6 +125,8 @@ public object AudioPlaybackReducer {
         AudioPlaybackAction.Failed -> state.copy(isLoading = false, isPlaying = false)
 
         AudioPlaybackAction.Stopped -> AudioPlaybackState(speed = state.speed)
+
+        is AudioPlaybackAction.Relabeled -> if (state.hasTrack) state.copy(attachmentId = action.attachmentId) else state
     }
 
     private fun clamp(positionMs: Long, durationMs: Long): Long =

@@ -73,11 +73,32 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         stubs[endpoint] = result
     }
 
+    /// La charge telle que la passerelle la SERT, décodée par le décodeur de
+    /// `APIClient` dans le type que le SERVICE demande (#15996). Un stub typé
+    /// fabrique la valeur déjà décodée et ne peut donc pas voir qu'un service
+    /// demande `[String: String]` là où la passerelle met un booléen.
+    private var wireStubs: [String: Data] = [:]
+
+    func stubWire(_ endpoint: String, json: String) {
+        wireStubs[endpoint] = Data(json.utf8)
+    }
+
+    private func stubbed<T: Decodable>(_ endpoint: String, as type: T.Type) async throws -> T {
+        if let wire = wireStubs[endpoint] {
+            return try await APIClient.decodeOffMain(T.self, from: wire)
+        }
+        guard let result = stubs[endpoint] as? T else {
+            throw NoStubError.missing(endpoint: endpoint, type: "\(T.self)", available: Array(stubs.keys))
+        }
+        return result
+    }
+
     // MARK: - Reset
 
     func reset() {
         recorded.mutate { $0.removeAll() }
         stubs.removeAll()
+        wireStubs.removeAll()
         errorToThrow = nil
         endpointErrors.removeAll()
         authToken = nil
@@ -100,10 +121,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         recordRequest(endpoint: endpoint, rejectionPolicy: typedEndpoint.rejectionPolicy, method: method, bodyData: body, queryItems: queryItems)
         if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
-        guard let result = stubs[endpoint] as? T else {
-            throw NoStubError.missing(endpoint: endpoint, type: "\(T.self)", available: Array(stubs.keys))
-        }
-        return result
+        return try await stubbed(endpoint, as: T.self)
     }
 
     /// Overrides the protocol's default (header-dropping) fallback so tests
@@ -124,10 +142,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         if let last = requests.last, let error = errorForRequest?(last) { throw error }
         if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
-        guard let result = stubs[endpoint] as? T else {
-            throw NoStubError.missing(endpoint: endpoint, type: "\(T.self)", available: Array(stubs.keys))
-        }
-        return result
+        return try await stubbed(endpoint, as: T.self)
     }
 
     func paginatedRequest<T: Decodable>(
@@ -165,10 +180,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         recordRequest(endpoint: endpoint, rejectionPolicy: typedEndpoint.rejectionPolicy, method: "POST", encodableBody: body)
         if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
-        guard let result = stubs[endpoint] as? APIResponse<T> else {
-            throw NoStubError.missing(endpoint: endpoint, type: "APIResponse<\(T.self)>", available: Array(stubs.keys))
-        }
-        return result
+        return try await stubbed(endpoint, as: APIResponse<T>.self)
     }
 
     func put<T: Decodable, U: Encodable>(
@@ -181,10 +193,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         let endpoint = legacyPath(for: typedEndpoint)
         recordRequest(endpoint: endpoint, rejectionPolicy: typedEndpoint.rejectionPolicy, method: "PUT", encodableBody: body)
         if let error = errorToThrow { throw error }
-        guard let result = stubs[endpoint] as? APIResponse<T> else {
-            throw NoStubError.missing(endpoint: endpoint, type: "APIResponse<\(T.self)>", available: Array(stubs.keys))
-        }
-        return result
+        return try await stubbed(endpoint, as: APIResponse<T>.self)
     }
 
     func patch<T: Decodable, U: Encodable>(
@@ -197,10 +206,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         let endpoint = legacyPath(for: typedEndpoint)
         recordRequest(endpoint: endpoint, rejectionPolicy: typedEndpoint.rejectionPolicy, method: "PATCH", encodableBody: body)
         if let error = errorToThrow { throw error }
-        guard let result = stubs[endpoint] as? APIResponse<T> else {
-            throw NoStubError.missing(endpoint: endpoint, type: "APIResponse<\(T.self)>", available: Array(stubs.keys))
-        }
-        return result
+        return try await stubbed(endpoint, as: APIResponse<T>.self)
     }
 
     func delete(_ typedEndpoint: any MeeshyEndpoint) async throws -> APIResponse<[String: Bool]> {
@@ -221,10 +227,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         let endpoint = legacyPath(for: typedEndpoint)
         recordRequest(endpoint: endpoint, rejectionPolicy: typedEndpoint.rejectionPolicy, method: "DELETE", encodableBody: body)
         if let error = errorToThrow { throw error }
-        guard let result = stubs[endpoint] as? APIResponse<T> else {
-            throw NoStubError.missing(endpoint: endpoint, type: "APIResponse<\(T.self)>", available: Array(stubs.keys))
-        }
-        return result
+        return try await stubbed(endpoint, as: APIResponse<T>.self)
     }
 
     // MARK: - Internal recording helpers

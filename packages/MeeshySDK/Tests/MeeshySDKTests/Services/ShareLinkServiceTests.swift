@@ -150,8 +150,7 @@ final class ShareLinkServiceTests: XCTestCase {
     // MARK: - toggleLink
 
     func test_toggleLink_callsCorrectEndpoint() async throws {
-        let link = makeMyShareLink()
-        let response = APIResponse<MyShareLink>(success: true, data: link, error: nil)
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/links/lk1", result: response)
 
         try await service.toggleLink(linkId: "lk1", isActive: false)
@@ -288,7 +287,7 @@ final class ShareLinkServiceTests: XCTestCase {
     // MARK: - leaveAnonymousSession
 
     func test_leaveAnonymousSession_callsGuestSessionsMeWithSessionTokenHeader() async throws {
-        let response = APIResponse<[String: String]>(success: true, data: ["message": "Session fermée avec succès"], error: nil)
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/guest-sessions/me", result: response)
 
         try await service.leaveAnonymousSession(sessionToken: "anon_abc123")

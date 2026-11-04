@@ -89,6 +89,7 @@ import {
   noteEphemeralDelivery,
 } from './realtime-ephemeral';
 import { catchUpFirstAuthentication, catchUpThreadMessage, createUnknownRowCatchUp } from './realtime-thread-catch-up';
+import { viewerRoleUpdatedListener } from './realtime-viewer-role';
 import { STARRED_MESSAGES_QUERY_ROOT, applyStarredEvent } from './starred-messages-cache';
 import { STORY_TRAY_QUERY_KEY } from './stories';
 import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
@@ -1021,6 +1022,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     if (isEncryptionChanged(payload)) applyEncryptionChanged(deps.queryClient, endToEndRegimeLedger, payload);
   };
 
+  const onViewerRoleUpdated = viewerRoleUpdatedListener(deps.queryClient, deps.viewerId); /* #15987 — `realtime-viewer-role.ts` */
   socket.on<unknown>(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_NEW, onMessageNew);
   socket.on<unknown>(SERVER_EVENTS.TYPING_START, onTypingStart);
@@ -1028,6 +1030,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, onUnreadUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, onEncryptionChanged);
+  socket.on<unknown>(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, onViewerRoleUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
@@ -1125,6 +1128,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, onUnreadUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, onEncryptionChanged);
+      socket.off<unknown>(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, onViewerRoleUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);

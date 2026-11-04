@@ -196,14 +196,13 @@ internal object BubbleAttachmentBuilder {
      * attachment carries no explicit `duration`, matching the gateway's two sources.
      * Both are milliseconds (`MessageAttachment.duration`, packages/shared/prisma/schema.prisma).
      */
-    private fun buildAudio(
+    internal fun buildAudio(
         attachment: ApiMessageAttachment,
         preferences: LanguageResolver.ContentLanguagePreferences,
         mediaBaseUrl: String?,
     ): BubbleAudio {
         val resolved = resolveTranscription(attachment, preferences)
         val translatedAudio = resolveTranslatedAudio(attachment, preferences)
-            ?.takeIf { track -> resolved == null || (resolved.isTranslated && resolved.language.equals(track.language, ignoreCase = true)) }
         val playableUrl = translatedAudio?.url ?: attachment.fileUrl
         val durationSeconds = translatedAudio?.durationMs?.let { it / 1000 }
             ?: attachment.duration?.let { it / 1000 }
@@ -219,6 +218,12 @@ internal object BubbleAttachmentBuilder {
             isAudioTranslated = translatedAudio != null,
             audioLanguage = translatedAudio?.language ?: resolved?.language,
             transcriptionSegments = servedSegments(attachment, resolved, playedLanguage = translatedAudio?.language),
+            lastPlayPositionMs = attachment.currentUserConsumption?.lastPlayPositionMs,
+            listenedComplete = attachment.currentUserConsumption?.listenedComplete == true,
+            originalLanguage = attachment.transcription?.language?.trim()?.ifBlank { null },
+            translatedLanguages = attachment.translations.orEmpty()
+                .filter { (_, track) -> !track.url.isNullOrBlank() }
+                .keys.map { it.trim() }.filter { it.isNotEmpty() },
         )
     }
 
@@ -252,15 +257,15 @@ internal object BubbleAttachmentBuilder {
     }
 
     /**
-     * The played voice: [AttachmentTranscriptPrism.track], the SAME single Prisme descent as the
-     * transcription line next to it, so the voice and the text are always in one language. Null
-     * means the original voice note.
+     * The played voice: [AttachmentTranscriptPrism.playedTrack], the SAME single Prisme descent as the
+     * transcription line next to it, so the voice and the text are always in one language — the coupling
+     * lives in `:core:model`, where the voice queue reads it too. Null means the original voice note.
      */
     private fun resolveTranslatedAudio(
         attachment: ApiMessageAttachment,
         preferences: LanguageResolver.ContentLanguagePreferences,
     ): AttachmentTranscriptPrism.Track? =
-        AttachmentTranscriptPrism.track(attachment.transcription, attachment.translations, preferences)
+        AttachmentTranscriptPrism.playedTrack(attachment.transcription, attachment.translations, preferences)
 
     /** The Prisme-served transcription line — [AttachmentTranscriptPrism], the site the transcription fiche reads too. */
     private fun resolveTranscription(

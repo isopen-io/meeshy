@@ -150,6 +150,11 @@ public data class BubbleContent(
     val replyToIsMe: Boolean = false,
     /** La fiche de l'auteur cité (tap sur son nom dans la citation) ; `null` : soi, supprimé ou sans compte. */
     val replyToAuthor: me.meeshy.sdk.model.profile.ProfileSheetUser? = null,
+    /**
+     * Le vocal CITÉ, jouable depuis la citation (iOS `ConversationViewModel+QuotedAudio`), avec sa piste servie par le Prisme.
+     * Jamais posé pour un cité protégé (vue unique, flouté, chiffré), éphémère ou supprimé : rien de lui ne voyage.
+     */
+    val replyToAudio: BubbleAudio? = null,
     /** True when an outgoing message has been in flight long enough to be called slow. */
     val isSlowSend: Boolean = false,
     /** True when a failed send was refused because a file's location cannot be removed (#13550): told, and removed on tap. */

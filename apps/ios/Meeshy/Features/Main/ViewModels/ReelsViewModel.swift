@@ -97,7 +97,7 @@ final class ReelsViewModel: ObservableObject {
     /// `feed` reste celle du compteur historique. Groupée et persistée.
     private lazy var impressions = ImpressionBatcher(source: "feed", surface: .reels, postService: service)
     /// « Enregistrer » (#15994) : l'écrivain du fil — cache des favoris et toasts compris.
-    private lazy var bookmarker = PostBookmarkWriter(service: service)
+    private lazy var bookmarker = PostBookmarkWriter()
     /// #10501 — l'impression du réel actuellement à l'écran.
     private var listedImpression: String?
     /// #10483 — l'entrée du lecteur : le PREMIER réel compté porte la marque
@@ -464,8 +464,8 @@ final class ReelsViewModel: ObservableObject {
         }
         HapticFeedback.light()
         Task {
-            if !(await bookmarker.write(bookmarked: !wasBookmarked, postId: id, post: post)) {
-                // Rollback both the icon and the optimistic count.
+            await bookmarker.write(bookmarked: !wasBookmarked, postId: id, post: post, onRejected: { [weak self] in
+                guard let self else { return }
                 if wasBookmarked {
                     bookmarkedIds.insert(id)
                     bookmarkDelta[id] = (bookmarkDelta[id] ?? 0) + 1
@@ -473,7 +473,7 @@ final class ReelsViewModel: ObservableObject {
                     bookmarkedIds.remove(id)
                     bookmarkDelta[id] = (bookmarkDelta[id] ?? 0) - 1
                 }
-            }
+            })
             bookmarkInFlight.remove(id)
         }
     }
