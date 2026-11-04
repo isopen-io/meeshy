@@ -25,14 +25,15 @@ class LazyPassphraseOpenHelperFactoryTest {
 
     private class Recorder {
         val calls = mutableListOf<String>()
-        val factory = SupportSQLiteOpenHelper.Factory {
-            Proxy.newProxyInstance(
-                SupportSQLiteOpenHelper::class.java.classLoader,
-                arrayOf(SupportSQLiteOpenHelper::class.java),
-            ) { _, method, args ->
-                calls += method.name + (args?.firstOrNull()?.let { ":$it" } ?: "")
-                null
-            } as SupportSQLiteOpenHelper
+        val factory = object : SupportSQLiteOpenHelper.Factory {
+            override fun create(configuration: SupportSQLiteOpenHelper.Configuration): SupportSQLiteOpenHelper =
+                Proxy.newProxyInstance(
+                    SupportSQLiteOpenHelper::class.java.classLoader,
+                    arrayOf(SupportSQLiteOpenHelper::class.java),
+                ) { _, method, args ->
+                    calls += method.name + (args?.firstOrNull()?.let { ":$it" } ?: "")
+                    null
+                } as SupportSQLiteOpenHelper
         }
     }
 

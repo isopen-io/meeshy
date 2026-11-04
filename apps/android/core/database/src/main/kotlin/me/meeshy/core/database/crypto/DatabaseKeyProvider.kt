@@ -52,7 +52,7 @@ public class DatabaseEncryptionException(message: String, cause: Throwable? = nu
  */
 public class DatabaseKeyProvider(
     private val store: SecureStore,
-    private val random: () -> ByteArray = ::secureRandomKey,
+    private val random: () -> ByteArray = { secureRandomKey() },
 ) {
     @Volatile private var cached: DatabaseKey? = null
 

@@ -246,6 +246,23 @@ key-distribution channels still need defence in depth).
 **Consequences.** At-rest hygiene is correct from the first commit; the hard
 E2EE protocol questions are escalated to dedicated, reviewable ADRs.
 
+**Amendment (2026-11, #15880 — SQLCipher shipped).** `meeshy.db` is a SQLCipher
+database (`net.zetetic:sqlcipher-android`). The key is 32 random bytes held in the
+Keystore-backed `SecureStore` (`@SecretVault`, account `meeshy.database`) and handed
+to SQLCipher as a raw key (`x'<hex>'`, no PBKDF2 per open). It is read on the first
+open on Room's thread (`LazyPassphraseOpenHelperFactory`), never while the Hilt
+singleton is built. An existing plaintext install is migrated at that first open by
+`sqlcipher_export` into `meeshy.db.enc.tmp`, verified (user_version + row counts of
+the durable tables: outbox, media_blob, tus_upload_checkpoint, ...), then swapped in;
+the plaintext copy (`.plain.bak`) is deleted last, and an interrupted run resumes from
+what the disk shows (`PlaintextMigrationPlan`). The FTS projection is dropped before
+the export and rebuilt by `SearchIndexSchema.ensure` on open. Any encryption failure
+throws: there is no plaintext fallback of the primary database. Key loss (Keystore
+invalidated, reinstall, biometric change, data cleared) is detected (`KeyLossPolicy`:
+encrypted file + new key, or a file SQLCipher reports as "not a database") and the
+file is purged: a cold start, never a crash. The disk-full fallback database and the
+in-memory database stay on the framework (the salvage of `DatabaseOpener` reads them).
+
 ---
 
 ## ADR-014 — `kotlinx.serialization` with lenient, forward-compatible decoding
