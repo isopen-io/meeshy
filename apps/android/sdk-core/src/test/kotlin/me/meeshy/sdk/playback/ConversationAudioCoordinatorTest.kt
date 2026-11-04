@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -300,5 +302,71 @@ class ConversationAudioCoordinatorTest {
 
         assertThat(engine.seeks).containsExactly(9_000L)
         assertThat(engine.skips).containsExactly(-15.0)
+    }
+
+    @Test fun `suivant sur le dernier vocal garde la grace comme la fin de file`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine)
+
+        coordinator.next()
+
+        assertThat(engine.stops).isEqualTo(1)
+        assertThat(coordinator.snapshot.value.context).isNull()
+        assertThat(coordinator.graceContext.value?.conversationName).isEqualTo("Famille")
+
+        testScheduler.advanceTimeBy(5_100L)
+        runCurrent()
+        assertThat(coordinator.graceContext.value).isNull()
+    }
+
+    @Test fun `la croix pendant la grace du dernier suivant ferme sur le champ`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine)
+        coordinator.next()
+
+        coordinator.stop()
+
+        assertThat(coordinator.graceContext.value).isNull()
+    }
+
+    /** Un observateur qui lit les deux flux voit chaque pas : jamais « ni actif ni grace » entre deux etats qui se tiennent. */
+    private fun TestScope.observeBothStates(coordinator: ConversationAudioCoordinator): MutableList<Pair<Boolean, Boolean>> {
+        val seen = mutableListOf<Pair<Boolean, Boolean>>()
+        var active = false
+        var grace = false
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            coordinator.graceContext.collect { grace = it != null; seen += active to grace }
+        }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            coordinator.snapshot.collect { active = it.context != null; seen += active to grace }
+        }
+        return seen
+    }
+
+    @Test fun `la fin de file ne passe jamais par un etat sans contexte ni grace`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = coordinator(this, engine)
+        runCurrent()
+        val seen = observeBothStates(coordinator)
+        coordinator.play(item("a"), emptyList(), "Famille", null)
+
+        engine.mutableEvents.tryEmit(AudioEngineEvent.Finished("a", completed = true))
+        runCurrent()
+
+        assertThat(seen.dropWhile { it != (true to false) }).doesNotContain(false to false)
+    }
+
+    @Test fun `rejouer pendant la grace ne passe jamais par un etat sans contexte ni grace`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = coordinator(this, engine)
+        runCurrent()
+        coordinator.play(item("a"), emptyList(), "Famille", null)
+        engine.mutableEvents.tryEmit(AudioEngineEvent.Finished("a", completed = true))
+        runCurrent()
+        val seen = observeBothStates(coordinator)
+
+        coordinator.play(item("z"), emptyList(), "Autre", null)
+
+        assertThat(seen).doesNotContain(false to false)
     }
 }
