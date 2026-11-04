@@ -81,7 +81,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
     /// relance) portés par `ImpressionBatcher`.
     private lazy var impressions = ImpressionBatcher(source: "profile", surface: .profile, postService: postService)
     /// « Enregistrer » (#15994) : l'écrivain du fil — cache des favoris et toasts compris.
-    private lazy var bookmarker = PostBookmarkWriter(service: postService)
+    private lazy var bookmarker = PostBookmarkWriter()
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -373,8 +373,9 @@ final class ProfileUserPostsViewModel: ObservableObject {
         guard let post = posts.first(where: { $0.id == postId }) else { return }
         let current = isBookmarked(post)
         bookmarkedOverrides[postId] = !current
-        guard await !bookmarker.write(bookmarked: !current, postId: postId, post: post) else { return }
-        bookmarkedOverrides[postId] = current
+        await bookmarker.write(bookmarked: !current, postId: postId, post: post, onRejected: { [weak self] in
+            self?.bookmarkedOverrides[postId] = current
+        })
     }
 
     /// Reposts are append-only on the backend — the optimistic flip only

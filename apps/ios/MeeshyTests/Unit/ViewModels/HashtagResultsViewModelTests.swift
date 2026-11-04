@@ -293,43 +293,48 @@ final class HashtagResultsViewModelTests: XCTestCase {
 
     private final class NoFavoritesCache: FavoritesCacheMirroring {
         private(set) var inserted: [FeedPost] = []
-        func insert(_ post: FeedPost) async -> [FeedPost] { inserted.append(post); return [] }
+        func insert(_ post: FeedPost) async { inserted.append(post) }
         func remove(postId: String) async {}
-        func restore(_ previous: [FeedPost]) async {}
     }
 
     private func makeBookmarkSUT(
         service: MockPostService,
-        favorites: NoFavoritesCache = NoFavoritesCache(),
+        queue: MockOfflineQueue = MockOfflineQueue(),
+        favorites: FavoritesCacheMirroring = NoFavoritesCache(),
         toasts: MockFeedbackToast = MockFeedbackToast()
     ) -> HashtagResultsViewModel {
         HashtagResultsViewModel(
             tag: "paris", service: service,
-            bookmarker: PostBookmarkWriter(service: service, favorites: favorites, toasts: toasts)
+            bookmarker: PostBookmarkWriter(queue: queue, favorites: favorites, toasts: toasts)
         )
+    }
+
+    private static func bookmarkRows(_ queue: MockOfflineQueue) -> [ToggleBookmarkPostPayload] {
+        queue.enqueueCalls.filter { $0.kind == .toggleBookmarkPost }.compactMap { $0.payload as? ToggleBookmarkPostPayload }
     }
 
     func test_toggleBookmark_flipsIconAndCounterAtOnce_thenWritesThroughTheSharedWriter() async {
         let service = MockPostService()
         service.getPostsByHashtagResult = .success(Self.bookmarkPage(bookmarkCount: 2))
+        let queue = MockOfflineQueue()
         let favorites = NoFavoritesCache()
         let toasts = MockFeedbackToast()
-        let sut = makeBookmarkSUT(service: service, favorites: favorites, toasts: toasts)
+        let sut = makeBookmarkSUT(service: service, queue: queue, favorites: favorites, toasts: toasts)
         await sut.load()
 
         await sut.toggleBookmark("card")
 
         XCTAssertTrue(sut.posts[0].isBookmarkedByMe)
         XCTAssertEqual(sut.posts[0].bookmarkCount, 3)
-        XCTAssertEqual(service.bookmarkCallCount, 1)
-        XCTAssertEqual(service.lastBookmarkPostId, "card")
+        XCTAssertEqual(Self.bookmarkRows(queue).map(\.postId), ["card"])
+        XCTAssertEqual(Self.bookmarkRows(queue).first?.bookmarked, true)
         XCTAssertEqual(favorites.inserted.map(\.id), ["card"], "le post rejoint l'onglet Favoris")
         XCTAssertEqual(favorites.inserted.first?.isBookmarkedByMe, true, "et y arrive marqué enregistré")
         XCTAssertEqual(toasts.successMessages.count, 1, "même toast que le fil")
         XCTAssertFalse(sut.isBookmarkInFlight("card"))
     }
 
-    func test_toggleBookmark_isOptimistic_theCardFlipsBeforeTheNetworkAnswers() async {
+    func test_toggleBookmark_isOptimistic_theCardFlipsBeforeTheQueueAnswers() async {
         let service = MockPostService()
         service.getPostsByHashtagResult = .success(Self.bookmarkPage(bookmarkCount: 2))
         let sut = makeBookmarkSUT(service: service)
@@ -342,33 +347,36 @@ final class HashtagResultsViewModelTests: XCTestCase {
         await task.value
     }
 
-    func test_toggleBookmark_whenTheServerRefuses_rollsBackTheBookmarkOnly() async {
+    func test_toggleBookmark_whenTheServerRefusesTheReplay_rollsBackTheBookmarkOnly() async throws {
         let service = MockPostService()
         service.getPostsByHashtagResult = .success(Self.bookmarkPage(bookmarkCount: 2))
-        service.bookmarkResult = .failure(URLError(.badServerResponse))
+        let queue = MockOfflineQueue()
         let toasts = MockFeedbackToast()
-        let sut = makeBookmarkSUT(service: service, toasts: toasts)
+        let sut = makeBookmarkSUT(service: service, queue: queue, toasts: toasts)
         await sut.load()
         await sut.toggleLike("card")
-
         await sut.toggleBookmark("card")
+        let cmid = try XCTUnwrap(Self.bookmarkRows(queue).first?.clientMutationId)
+        try await waitForCondition(timeout: 2) { queue.outcomeContinuations[cmid] != nil }
 
-        XCTAssertFalse(sut.posts[0].isBookmarkedByMe, "l'échec défait la bascule")
+        queue.emitOutcome(.exhausted(cmid: cmid), for: cmid)
+
+        try await waitForCondition(timeout: 2) { !sut.posts[0].isBookmarkedByMe }
         XCTAssertEqual(sut.posts[0].bookmarkCount, 2, "et le compteur revient")
         XCTAssertTrue(sut.posts[0].isLiked, "le retour arrière ne défait pas un like voisin")
         XCTAssertEqual(toasts.errorMessages.count, 1, "l'échec se dit")
     }
 
-    func test_toggleBookmark_onASavedCard_removesTheBookmark() async {
+    func test_toggleBookmark_onASavedCard_queuesTheRemoval() async {
         let service = MockPostService()
         service.getPostsByHashtagResult = .success(Self.bookmarkPage(bookmarkCount: 1, isBookmarkedByMe: true))
-        let sut = makeBookmarkSUT(service: service)
+        let queue = MockOfflineQueue()
+        let sut = makeBookmarkSUT(service: service, queue: queue)
         await sut.load()
 
         await sut.toggleBookmark("card")
 
-        XCTAssertEqual(service.removeBookmarkCallCount, 1)
-        XCTAssertEqual(service.bookmarkCallCount, 0)
+        XCTAssertEqual(Self.bookmarkRows(queue).map(\.bookmarked), [false])
         XCTAssertFalse(sut.posts[0].isBookmarkedByMe)
         XCTAssertEqual(sut.posts[0].bookmarkCount, 0)
     }
@@ -376,11 +384,9 @@ final class HashtagResultsViewModelTests: XCTestCase {
     func test_toggleBookmark_aSecondTapWhileTheFirstIsInFlight_sendsNothing() async {
         let service = MockPostService()
         service.getPostsByHashtagResult = .success(Self.bookmarkPage())
+        let queue = MockOfflineQueue()
         let gate = GatedFavoritesCache()
-        let sut = HashtagResultsViewModel(
-            tag: "paris", service: service,
-            bookmarker: PostBookmarkWriter(service: service, favorites: gate, toasts: MockFeedbackToast())
-        )
+        let sut = makeBookmarkSUT(service: service, queue: queue, favorites: gate)
         await sut.load()
 
         let first = Task { await sut.toggleBookmark("card") }
@@ -390,7 +396,7 @@ final class HashtagResultsViewModelTests: XCTestCase {
         gate.release()
         await first.value
 
-        XCTAssertEqual(service.bookmarkCallCount + service.removeBookmarkCallCount, 1,
+        XCTAssertEqual(Self.bookmarkRows(queue).count, 1,
                        "un double toucher n'envoie pas deux écritures contradictoires")
         XCTAssertTrue(sut.posts[0].isBookmarkedByMe)
         XCTAssertFalse(sut.isBookmarkInFlight("card"))
@@ -402,14 +408,12 @@ final class HashtagResultsViewModelTests: XCTestCase {
         private(set) var isHolding = false
         private var continuation: CheckedContinuation<Void, Never>?
 
-        func insert(_ post: FeedPost) async -> [FeedPost] {
+        func insert(_ post: FeedPost) async {
             await withCheckedContinuation { continuation = $0; isHolding = true }
-            return []
         }
 
         func release() { continuation?.resume(); continuation = nil }
         func remove(postId: String) async {}
-        func restore(_ previous: [FeedPost]) async {}
     }
 
     // MARK: - #15994 — « Partager » du menu ⋯ partage depuis un hashtag

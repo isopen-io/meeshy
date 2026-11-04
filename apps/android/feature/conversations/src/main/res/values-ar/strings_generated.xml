@@ -20,6 +20,8 @@
     <string name="context_report">إبلاغ</string>
     <string name="context_search">بحث</string>
     <string name="conversationCard_expired">انتهت صلاحية الرابط</string>
+    <string name="conversation_row_avatar_a11y_details">تفاصيل %1$s</string>
+    <string name="conversation_row_avatar_a11y_profile">عرض الملف الشخصي لـ %1$s</string>
     <string name="conversations_action_archive">أرشفة</string>
     <string name="conversations_action_create_category">إنشاء «%1$s»</string>
     <string name="conversations_action_delete_for_all">الحذف للجميع</string>

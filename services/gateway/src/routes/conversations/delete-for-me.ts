@@ -10,8 +10,12 @@ import { invalidateParticipantLookup } from '../../utils/participant-lookup-cach
 import { announceConversationClosed } from '../../socketio/announceConversationClosed'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
 import { resoudreSuccessionDuCreateur } from '../../services/conversations/creatorSuccession'
+import { announceParticipantRoleWithCapabilities } from '../../services/conversations/obsoleteCapability'
+import { enhancedLogger } from '../../utils/logger-enhanced.js'
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure'
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges'
+
+const logger = enhancedLogger.child({ module: 'ConversationDeleteForMe' })
 
 /** Ce que rend un « delete-for-me » réussi — identique sur les deux adresses qui le servent. */
 export type ConversationDeleteForMeResult = {
@@ -229,19 +233,20 @@ export async function performConversationDeleteForMe(
     // successeur que le 500 démentait, et que la transaction annule
     // désormais.
     //
-    // La room de conversation seule est CONSERVÉE ici : contrairement à la
-    // clôture, un rang ne se rend sur aucun écran de liste — le cycle 67 l'a
-    // vérifié plutôt que déduit sur ce même événement.
-    if (promotedSuccessor) {
-      io.to(ROOMS.conversation(conversationId)).emit(
-        SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED,
-        {
+    // La salle l'apprend telle quelle ; le successeur, dans sa room
+    // personnelle, avec sa capacité recalculée pour son rang de créateur
+    // (#15987) — ses gestes de liste suivent son nouveau rang.
+    if (promotedSuccessor?.userId) {
+      announceParticipantRoleWithCapabilities(prisma, {
+        io,
+        payload: {
           conversationId,
           userId: promotedSuccessor.userId,
           newRole: 'creator',
           updatedBy: userId,
-        }
-      )
+        },
+        onError: (error) => logger.warn('viewerCapabilities unreadable for the promoted successor', { conversationId, error }),
+      }).catch((error: unknown) => logger.warn('participant:role-updated emission failed', { error }))
     }
 
   }

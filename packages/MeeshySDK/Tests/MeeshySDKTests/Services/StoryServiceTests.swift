@@ -95,7 +95,7 @@ final class StoryServiceTests: XCTestCase {
     // MARK: - react
 
     func testReactCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "liked"], error: nil)
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/posts/\(storyId)/like", result: response)
 
         try await service.react(storyId: storyId, emoji: "heart")
@@ -124,7 +124,7 @@ final class StoryServiceTests: XCTestCase {
     // MARK: - repost
 
     func testRepostCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "reposted"], error: nil)
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/posts/\(storyId)/repost", result: response)
 
         try await service.repost(storyId: storyId)
