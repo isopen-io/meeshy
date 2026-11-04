@@ -708,6 +708,11 @@
     <string name="share_action_copy_text">نسخ النص</string>
     <string name="share_action_save">حفظ</string>
     <string name="share_action_share_out">مشاركة خارج Meeshy</string>
+    <string name="share_blocked_after_read">تختفي بعد القراءة: لا يمكن إعادة توجيهها أو حفظها أو مشاركتها.</string>
+    <string name="share_blocked_title">هذه الرسالة لا تغادر Meeshy</string>
+    <string name="share_blocked_unavailable">لم يعد هذا المحتوى متاحًا.</string>
+    <string name="share_blocked_understood">حسنًا</string>
+    <string name="share_blocked_view_once">إنها للعرض مرة واحدة: لا يمكن إعادة توجيهها أو حفظها أو مشاركتها. تبقى في المحادثة حتى تُشاهَد.</string>
     <string name="share_button_a11y">إرسال إلى %1$d من المستلمين</string>
     <string name="share_button_forward">إعادة توجيه · %1$d</string>
     <string name="share_button_send">إرسال · %1$d</string>
@@ -758,6 +763,7 @@
     <string name="share_section_people">الأشخاص</string>
     <string name="share_status_queued">في قائمة الانتظار</string>
     <string name="share_status_retry">إعادة المحاولة</string>
+    <string name="share_status_retry_all">إعادة محاولة الكل</string>
     <string name="share_status_sending">جارٍ الإرسال…</string>
     <string name="share_status_sent">تم الإرسال</string>
     <string name="share_target_cancel">إلغاء</string>
@@ -770,6 +776,7 @@
     <string name="share_title_forward">إعادة توجيه</string>
     <string name="share_title_send">إرسال</string>
     <string name="share_toast_open">فتح</string>
+    <string name="share_toast_published">تم النشر</string>
     <string name="share_toast_sent_to">أُرسل إلى %1$s</string>
     <string name="share_withdrawn_after_read">تبقى الرسالة التي تختفي بعد القراءة في هذه المحادثة.</string>
     <string name="share_withdrawn_others_leave">تُرسَل الرسائل الـ %1$d الأخرى.</string>

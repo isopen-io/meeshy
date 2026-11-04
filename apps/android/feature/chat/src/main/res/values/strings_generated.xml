@@ -676,6 +676,11 @@
     <string name="share_action_copy_text">Copy text</string>
     <string name="share_action_save">Save</string>
     <string name="share_action_share_out">Share outside Meeshy</string>
+    <string name="share_blocked_after_read">It disappears after reading: it can’t be forwarded, saved or shared.</string>
+    <string name="share_blocked_title">This message stays in Meeshy</string>
+    <string name="share_blocked_unavailable">This content is no longer available.</string>
+    <string name="share_blocked_understood">Got it</string>
+    <string name="share_blocked_view_once">It’s view-once: it can’t be forwarded, saved or shared. It stays in the conversation until it’s seen.</string>
     <string name="share_button_a11y">Send to %1$d recipients</string>
     <string name="share_button_forward">Forward · %1$d</string>
     <string name="share_button_send">Send · %1$d</string>
@@ -726,6 +731,7 @@
     <string name="share_section_people">People</string>
     <string name="share_status_queued">Queued</string>
     <string name="share_status_retry">Retry</string>
+    <string name="share_status_retry_all">Retry all</string>
     <string name="share_status_sending">Sending…</string>
     <string name="share_status_sent">Sent</string>
     <string name="share_target_cancel">Cancel</string>
@@ -738,6 +744,7 @@
     <string name="share_title_forward">Forward</string>
     <string name="share_title_send">Send</string>
     <string name="share_toast_open">Open</string>
+    <string name="share_toast_published">Published</string>
     <string name="share_toast_sent_to">Sent to %1$s</string>
     <string name="share_withdrawn_after_read">A message that disappears after reading stays in this conversation.</string>
     <string name="share_withdrawn_others_leave">The other %1$d messages are sent.</string>
