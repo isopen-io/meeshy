@@ -3,6 +3,7 @@ package me.meeshy.sdk.conversation
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.entity.ConversationEntity
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ConversationMergeRules
 import me.meeshy.sdk.model.UserUpdatedEvent
 import me.meeshy.sdk.model.repainted
 import me.meeshy.sdk.net.MeeshyApi
@@ -43,7 +44,7 @@ internal class SenderRepaint(
     private fun repainted(row: ConversationEntity, event: UserUpdatedEvent): ConversationEntity? {
         val conversation = runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(row.payload) }.getOrNull()
             ?: return null
-        val next = event.repainted(conversation) ?: return null
+        val next = ConversationMergeRules.userUpdated(conversation, event) ?: return null
         return row.copy(payload = MeeshyApi.json.encodeToString(ApiConversation.serializer(), next))
     }
 

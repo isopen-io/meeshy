@@ -1,5 +1,20 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="activation_close">Close</string>
+    <string name="activation_complete">Your account is verified. Thank you!</string>
+    <string name="activation_email_done">Email verified ✓</string>
+    <string name="activation_email_label">Confirm your email address</string>
+    <string name="activation_email_send">Get the code</string>
+    <string name="activation_email_sending">Sending…</string>
+    <string name="activation_email_sent">Code sent to %1$s. Enter it below.</string>
+    <string name="activation_invite_days_left">You have %1$d days left to verify your account. After that, signing in will require a code.</string>
+    <string name="activation_invite_days_left_one">You have 1 day left to verify your account. After that, signing in will require a code.</string>
+    <string name="activation_invite_lead">Verify your account to keep using it without interruption.</string>
+    <string name="activation_invite_title">Verify your account</string>
+    <string name="activation_later">Later</string>
+    <string name="activation_phone_add">Add my number</string>
+    <string name="activation_phone_done">Number verified ✓</string>
+    <string name="activation_phone_label">Add a phone number to secure and recover your account</string>
     <string name="ageGate_body">This account can\'t use Meeshy yet. You can join us when you turn 13.</string>
     <string name="arrival_celebration_lead">Getting your conversations ready…</string>
     <string name="arrival_celebration_skip">Continue</string>

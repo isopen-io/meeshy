@@ -2042,6 +2042,12 @@
    "reason": "Icons.Filled.GraphicEq; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
   },
   {
+   "symbol": "wifi",
+   "status": "mapped",
+   "role": "Wifi",
+   "reason": "Icons.Filled.Wifi ; iOS le pose par iconName (ConnectionBanner, « En ligne »), hors du motif littéral de l'extracteur"
+  },
+  {
    "symbol": "wifi.exclamationmark",
    "status": "mapped",
    "role": "WifiProblem",
@@ -3316,6 +3322,10 @@
    "directional": false
   },
   "TabletAndroid": {
+   "origin": "material",
+   "directional": false
+  },
+  "Wifi": {
    "origin": "material",
    "directional": false
   }

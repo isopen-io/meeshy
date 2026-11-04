@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -100,7 +101,9 @@ private fun LazyListScope.populatedItems(
     if (!ConversationSections.showsHeaders(sections)) {
         sections.forEach { section ->
             items(section.items, key = { "row-${it.id}" }, contentType = { ROW_CONTENT_TYPE }) { conversation ->
-                ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
+                Box(Modifier.animateItem()) {
+                    ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
+                }
             }
         }
         messages()
