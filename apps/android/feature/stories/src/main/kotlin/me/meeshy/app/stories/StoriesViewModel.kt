@@ -42,6 +42,8 @@ data class StoriesUiState(
     val failedPublishes: List<StoryPublishFailures.Item> = emptyList(),
     /** Au moins une story à moi, active ou expirée : l'appui sur « Moi » mène alors à « Mes stories ». */
     val hasStoryHistory: Boolean = false,
+    /** Le chargement a échoué : distinct de « aucune story » — le plateau propose Réessayer (iOS `loadFailure`). */
+    val loadFailed: Boolean = false,
 )
 
 /**
@@ -78,7 +80,7 @@ class StoriesViewModel @Inject constructor(
             combine(
                 storyRepository.storiesStream(
                     onSyncError = {
-                        _state.update { it.copy(showSkeleton = false, isSyncing = false) }
+                        _state.update { it.copy(showSkeleton = false, isSyncing = false, loadFailed = true) }
                     },
                 ),
                 storyRepository.publishQueue(),
@@ -91,7 +93,7 @@ class StoriesViewModel @Inject constructor(
                 // Le registre durable des vues est une source DISTINCTE du cache : réinjecté à chaque reconstruction.
                 viewedLedger.observe(),
             ) { result, queue, user, _, viewed -> TrayInputs(result, queue, user, viewed) }
-                .catch { _state.update { it.copy(showSkeleton = false, isSyncing = false) } }
+                .catch { _state.update { it.copy(showSkeleton = false, isSyncing = false, loadFailed = true) } }
                 .collectEachSafely { (result, queue, user, viewed) ->
                     val pending = queue.pending
                     val failed = queue.failed
@@ -119,6 +121,7 @@ class StoriesViewModel @Inject constructor(
                             tray = tray,
                             isSyncing = flags.isSyncing,
                             showSkeleton = flags.showSkeleton,
+                            loadFailed = it.loadFailed && result !is me.meeshy.sdk.cache.CacheResult.Fresh,
                             failedPublishes = StoryPublishFailures.from(failed),
                             hasStoryHistory = currentUserId != null &&
                                 groups.any { g -> g.id == currentUserId && g.stories.isNotEmpty() },
@@ -126,9 +129,86 @@ class StoriesViewModel @Inject constructor(
                     }
                 }
         }
+        subscribeToSocialEvents()
+    }
+
+    private var socialSubscribed = false
+
+    /**
+     * Abonnement unique aux événements sociaux du plateau (iOS `subscribeToSocketEvents`) : un second appel
+     * (relance du composable racine) n'ajoute aucune souscription — les handlers à ±1 compteraient double.
+     */
+    fun subscribeToSocialEvents() {
+        if (socialSubscribed) return
+        socialSubscribed = true
         observeStoryDeletions()
         observeStoryUpdates()
         observeStoryCreations()
+        observeStoryEngagement()
+        observeReconnection()
+    }
+
+    /**
+     * Reconnexion sociale : des stories ont pu être créées ou supprimées pendant la coupure (aucun rejeu côté
+     * serveur). Le rattrapage est la revalidation par delta — curseur pris au moment de l'événement.
+     */
+    private fun observeReconnection() {
+        viewModelScope.launch {
+            socialSocket.reconnected.collectEachSafely { refreshQuietly() }
+        }
+    }
+
+    /**
+     * Les compteurs de la story tenue bougent en direct (iOS `story:viewed`, `story:reacted/unreacted`,
+     * `comment:added/deleted`, `post:translation-updated`) : l'auteur voit son compteur de vues monter sans rafraîchir.
+     */
+    private fun observeStoryEngagement() {
+        viewModelScope.launch {
+            socialSocket.storyViewed.collectEachArrivedSafely { storyRepository.applyStoryViewed(it.storyId, it.viewCount) }
+        }
+        viewModelScope.launch {
+            socialSocket.storyReacted.collectEachArrivedSafely {
+                storyRepository.applyStoryReaction(it.storyId, it.emoji, it.userId, sessionRepository.currentUserId, 1)
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.storyUnreacted.collectEachArrivedSafely {
+                storyRepository.applyStoryReaction(it.storyId, it.emoji, it.userId, sessionRepository.currentUserId, -1)
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.commentAdded.collectEachArrivedSafely { storyRepository.applyStoryCommentCount(it.postId, it.commentCount) }
+        }
+        viewModelScope.launch {
+            socialSocket.commentDeleted.collectEachArrivedSafely { storyRepository.applyStoryCommentCount(it.postId, it.commentCount) }
+        }
+        viewModelScope.launch {
+            socialSocket.postTranslationUpdated.collectEachArrivedSafely {
+                storyRepository.applyStoryTranslation(it.postId, it.language, it.translation)
+            }
+        }
+    }
+
+    /** Balayage d'expiration (appelé chaque minute tant que le plateau est à l'écran) : les stories mortes sortent du cache. */
+    fun sweepExpired() {
+        viewModelScope.launch {
+            try {
+                storyRepository.sweepExpired()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private suspend fun refreshQuietly() {
+        try {
+            storyRepository.refresh()
+            _state.update { it.copy(loadFailed = false) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
     }
 
     /**
@@ -228,10 +308,11 @@ class StoriesViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 storyRepository.refresh()
+                _state.update { it.copy(loadFailed = false) }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                _state.update { it.copy(showSkeleton = false, isSyncing = false) }
+                _state.update { it.copy(showSkeleton = false, isSyncing = false, loadFailed = true) }
             }
         }
     }

@@ -65,6 +65,9 @@ import me.meeshy.sdk.model.story.StoryTrayActionResolver
  * et non dans une barre de pastilles à part. L'humeur d'un anneau ([moodIdOf]) est annoncée à [onMoodShown] à CHAQUE
  * apparition à l'écran et à chaque nouvelle humeur, jamais à une recomposition — iOS `countsImpression` (#13662).
  */
+/** Le balayage d'expiration du plateau : chaque minute, comme iOS. */
+internal const val TRAY_SWEEP_INTERVAL_MILLIS: Long = 60_000L
+
 @Composable
 fun StoryTray(
     onOpenStory: (String) -> Unit,
@@ -85,12 +88,19 @@ fun StoryTray(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val tray = state.tray
     val failures = state.failedPublishes
+    LaunchedEffect(viewModel) {
+        while (true) {
+            kotlinx.coroutines.delay(TRAY_SWEEP_INTERVAL_MILLIS)
+            viewModel.sweepExpired()
+        }
+    }
     if (tray.isEmpty && failures.isEmpty() && state.showSkeleton) {
         StoryTraySkeleton(modifier)
         return
     }
 
     Column(modifier = modifier) {
+        if (state.loadFailed && tray.isEmpty) StoryTrayLoadFailure(onRetry = viewModel::refresh)
         if (failures.isNotEmpty()) {
             StoryFailedStrip(
                 failures = failures,
