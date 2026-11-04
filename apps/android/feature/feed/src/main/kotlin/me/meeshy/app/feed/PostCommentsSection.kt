@@ -1,6 +1,10 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.CommentQuotedMedia
 import me.meeshy.sdk.model.CommentThreadLayout
+import me.meeshy.ui.component.comments.CommentQuotationChip
+import me.meeshy.ui.component.comments.CommentQuotedMediaBanner
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -206,6 +210,9 @@ fun PostCommentsComposerBar(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val editPiece = rememberCommentPieceRetouch(onReplace = viewModel::replaceMedia)
+    val quotation by viewModel.quotation.collectAsStateWithLifecycle()
+    val haptics = rememberMeeshyHaptics()
+    LaunchedEffect(viewModel) { viewModel.attachmentRefusals.collect { haptics.warning() } }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onComposerStop() }
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     FoldableCommentBar(
@@ -236,6 +243,8 @@ fun PostCommentsComposerBar(
             onToggleEffect = viewModel::toggleCommentEffect,
             onClearEffects = viewModel::clearCommentEffects,
             place = CommentPlaceDoor(state.place, viewModel::attachPlace, viewModel::removePlace),
+            quotation = quotation,
+            onRemoveQuotation = viewModel::removeQuotation,
         )
     }
 }
@@ -304,6 +313,7 @@ private fun CommentRow(
             }
             }
             CommentBody(commentId = comment.id, effects = comment.effects, isBlurred = comment.isBlurred) {
+                comment.quotedMedia?.let { CommentQuotedMediaBanner(it, accent = MeeshyPalette.Indigo500, modifier = Modifier.padding(bottom = MeeshySpacing.xs)) }
                 if (comment.hasBody) {
                     SelectionContainer {
                         RichMessageText(
@@ -587,6 +597,8 @@ private fun CommentComposer(
     onToggleEffect: (Long) -> Unit,
     onClearEffects: () -> Unit,
     place: CommentPlaceDoor,
+    quotation: CommentQuotedMedia?,
+    onRemoveQuotation: () -> Unit,
 ) {
     val composer = LocalUniversalComposer.current ?: return
     val intake = rememberComposerMediaIntake(onAttach)
@@ -619,6 +631,7 @@ private fun CommentComposer(
             topSlot = {
                 MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected)
                 if (replyTarget != null) ReplyTargetBanner(target = replyTarget, onCancelReply = onCancelReply)
+                CommentQuotationChip(quotation, accent = MeeshyPalette.Indigo500, onRemove = onRemoveQuotation)
                 CommentAttachmentBar(tray = attachments, onEdit = onEditPiece, onRemove = onRemovePiece)
             },
         ),

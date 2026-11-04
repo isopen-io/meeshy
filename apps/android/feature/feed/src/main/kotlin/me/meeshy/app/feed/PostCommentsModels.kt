@@ -1,5 +1,7 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.ApiAuthor
+import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.CommentLikeState
 import me.meeshy.sdk.model.CommentRepliesState
 import me.meeshy.sdk.model.CommentThreadState
@@ -36,7 +38,7 @@ internal data class ComposerDraft(
 )
 
 /** Ce qui part avec un commentaire en plus de son texte et de ses pièces (#14385, #14387). */
-internal data class CommentExtras(val effectFlags: Int?, val place: SharedPlace?)
+internal data class CommentExtras(val effectFlags: Int?, val place: SharedPlace?, val quotedPostMediaId: String? = null)
 
 /** The projection inputs accumulated before the final [translatingLanguages] fold, threaded
  *  through as one value so the chained `combine` stays within its 5-arg cap. */
@@ -55,3 +57,11 @@ internal data class ProjectionInputs(
     val likes: CommentLikeState,
     val replies: CommentRepliesState,
 )
+
+/** La ligne optimiste d'un commentaire en vol : son [tempId], son texte et [me] pour auteur, le temps que le serveur confirme. */
+internal fun optimisticCommentRow(tempId: String, content: String, me: MeeshyUser?): ApiPostComment =
+    ApiPostComment(
+        id = tempId,
+        content = content,
+        author = me?.let { ApiAuthor(id = it.id, username = it.username, displayName = it.displayName, avatar = it.avatar) },
+    )

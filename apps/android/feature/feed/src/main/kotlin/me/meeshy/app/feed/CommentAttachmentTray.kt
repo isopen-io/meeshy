@@ -5,6 +5,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.TusUploadRepository
+import me.meeshy.sdk.model.CommentAttachmentIntake
 import me.meeshy.sdk.model.CommentPieceKind
 import me.meeshy.sdk.model.MAX_POST_MEDIA
 import me.meeshy.sdk.model.UploadedMedia
@@ -69,6 +70,14 @@ data class CommentAttachmentTray(val pieces: List<CommentPendingPiece> = emptyLi
     fun replacing(id: String, item: MediaUploadItem, retouch: CommentPieceRetouch? = null): CommentAttachmentTray =
         copy(pieces = pieces.map { if (it.id == id) CommentPendingPiece(id, item, retouch = retouch) else it })
 
+    /** Ce que la zone dit d'une pièce qui frappe à la porte : le plafond du serveur et ce qui n'est pas une pièce (iOS `CommentAttachmentIntake.admit`). */
+    fun admission(item: MediaUploadItem, nextPieceId: String): CommentAttachmentIntake.Outcome =
+        CommentAttachmentIntake.admit(
+            incoming = listOf(CommentAttachmentIntake.Candidate(nextPieceId, item.mimeType, item.fileName, isReady = false)),
+            staged = pieces.map { CommentAttachmentIntake.Candidate(it.id, it.item.mimeType, it.item.fileName, isReady = it.uploaded != null) },
+            limit = MAX_PIECES,
+        )
+
     fun piece(id: String): CommentPendingPiece? = pieces.firstOrNull { it.id == id }
 
     companion object {
@@ -81,4 +90,16 @@ data class CommentAttachmentTray(val pieces: List<CommentPendingPiece> = emptyLi
 @Singleton
 class CommentMediaUploader @Inject constructor(private val tus: TusUploadRepository) {
     suspend fun upload(item: MediaUploadItem): NetworkResult<List<UploadedMedia>> = tus.uploadAll(listOf(item), TusUploadContext.COMMENT)
+}
+
+/** La première pièce téléversée, ou `null` : sans téléverseur, sur échec ou sur exception (l'annulation, elle, se propage). */
+internal suspend fun CommentMediaUploader?.firstUploaded(item: MediaUploadItem): UploadedMedia? {
+    val result = try {
+        this?.upload(item)
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
+    }
+    return (result as? NetworkResult.Success)?.data?.firstOrNull()
 }

@@ -138,6 +138,14 @@
     <string name="code_viewer_loading">Chargement...</string>
     <string name="code_viewer_loading_file">Chargement du fichier...</string>
     <string name="code_viewer_more_lines">%1$d lignes de plus</string>
+    <string name="comment_quote_a11y">À propos de : %1$s</string>
+    <string name="comment_quote_about">À propos de</string>
+    <string name="comment_quote_kind_audio">Un audio</string>
+    <string name="comment_quote_kind_file">Une pièce jointe</string>
+    <string name="comment_quote_kind_image">Une photo</string>
+    <string name="comment_quote_kind_location">Un lieu</string>
+    <string name="comment_quote_kind_video">Une vidéo</string>
+    <string name="comment_quote_remove">Retirer la citation</string>
     <string name="common_cancel">Annuler</string>
     <string name="common_clearSearch">Effacer la recherche</string>
     <string name="common_clear_search">Effacer la recherche</string>

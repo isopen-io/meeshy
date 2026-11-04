@@ -3,6 +3,7 @@ package me.meeshy.app.feed
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.model.CommentLikeState
+import me.meeshy.sdk.model.CommentQuotedMedia
 import me.meeshy.sdk.model.CommentSendGate
 import me.meeshy.sdk.model.CommentReactionLaw
 import me.meeshy.sdk.model.mediaRewritten
@@ -16,7 +17,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
@@ -34,7 +38,6 @@ import me.meeshy.sdk.model.card.PostCommentCardComposition
 import me.meeshy.sdk.model.card.PostCommentCardLabels
 import me.meeshy.sdk.model.card.PostCommentCardPost
 import me.meeshy.sdk.model.card.PostCommentCardSubject
-import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ComposerLanguage
 import me.meeshy.sdk.model.ComposerLanguageState
 import me.meeshy.sdk.model.CommentEffects
@@ -57,6 +60,7 @@ import me.meeshy.sdk.model.comment.echoReconciled
 import me.meeshy.sdk.model.comment.echoReconciledReply
 import me.meeshy.sdk.model.comment.isOwnQueuedEcho
 import me.meeshy.sdk.post.CommentDraftStore
+import me.meeshy.sdk.post.CommentQuotationStore
 import me.meeshy.sdk.post.UnsentComments
 import me.meeshy.sdk.post.CommentGestureQueue
 import me.meeshy.sdk.post.CommentGestureRollback
@@ -156,9 +160,13 @@ class PostCommentsViewModel @Inject constructor(
     private val gestureQueue: CommentGestureQueue? = null,
     unsentQueue: UnsentComments? = null,
     private val commentDrafts: CommentDraftStore? = null,
+    commentQuotations: CommentQuotationStore? = null,
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
+
+    private val quotes = CommentQuotationBinding(commentQuotations, postId, viewModelScope)
+    private val refusals = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     private val offline = MutableStateFlow(false)
 
@@ -469,6 +477,7 @@ class PostCommentsViewModel @Inject constructor(
     override fun onCleared() {
         if (postId.isNotBlank()) socialSocket.leavePostRoom(postId)
         attachments.value.pieces.forEach { MediaIntake.release(it.item) }
+        quotes.clear()
         super.onCleared()
     }
 
@@ -633,25 +642,26 @@ class PostCommentsViewModel @Inject constructor(
         val pill = composerDraft.value.language
         val effectFlags = CommentEffects.wire(composerDraft.value.effects)
         val place = composerDraft.value.place
+        val quoted = quotes.consume()
         attachments.value = CommentAttachmentTray()
         tray.pieces.flatMap { it.owned }.forEach(MediaIntake::release)
         if (offline.value && outbox != null) {
-            queueOffline(content, attachmentIds, pill, CommentExtras(effectFlags, place))
+            queueOffline(content, attachmentIds, pill, CommentExtras(effectFlags, place, quoted))
             return
         }
         composer.value?.let { target ->
             clearDraft()
-            sendReply(target.parentId, content, attachmentIds, pill, CommentExtras(effectFlags, place))
+            sendReply(target.parentId, content, attachmentIds, pill, CommentExtras(effectFlags, place, quoted))
             return
         }
         val tempId = "pending-${pendingSeq++}"
-        thread.update { it.optimistic(optimisticRow(tempId, content).copy(effectFlags = effectFlags, location = place)) }
+        thread.update { it.optimistic(optimisticCommentRow(tempId, content, sessionRepository.currentUser.value).copy(effectFlags = effectFlags, location = place)) }
         clearDraft()
         status.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             try {
                 val language = languageAtSend(pill, content)
-                when (val result = postRepository.addComment(postId, content, effectFlags = effectFlags, originalLanguage = language, attachmentIds = attachmentIds, location = place)) {
+                when (val result = postRepository.addComment(postId, content, effectFlags = effectFlags, originalLanguage = language, attachmentIds = attachmentIds, location = place, quotedPostMediaId = quoted)) {
                     is NetworkResult.Success -> {
                         thread.update { it.confirmed(tempId, result.data) }
                         status.update { it.copy(isSubmitting = false, error = null) }
@@ -679,7 +689,7 @@ class PostCommentsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val language = languageAtSend(pill, content)
-                val cmid = postRepository.queueComment(postId, content, parentId, language, attachmentIds, extras.effectFlags, extras.place)
+                val cmid = postRepository.queueComment(postId, content, parentId, language, attachmentIds, extras.effectFlags, extras.place, extras.quotedPostMediaId)
                 if (cmid == null) sendFailed(null, content, CommentNotice.SEND_FAILED, extras.place)
             } catch (e: CancellationException) {
                 throw e
@@ -689,9 +699,22 @@ class PostCommentsViewModel @Inject constructor(
         }
     }
 
+    /** Le média du post dont le prochain commentaire parle (« Commenter ce média », #6578), et sa croix. */
+    val quotation: StateFlow<CommentQuotedMedia?> = quotes.quotation
+    fun removeQuotation() = quotes.clear()
+
+    /** Une pièce n'est pas entrée (pas un média, ou plafond atteint) : l'écran avertit par l'haptique. */
+    val attachmentRefusals: SharedFlow<Unit> = refusals.asSharedFlow()
+
     /** Joint une photo ou une vidéo (#12972) : elle entre au bandeau et se téléverse aussitôt. */
     fun attachMedia(item: MediaUploadItem) {
-        if (attachments.value.isFull) return
+        val outcome = attachments.value.admission(item, nextPieceId = "piece-$pieceSeq")
+        if (outcome.shouldWarn) refusals.tryEmit(Unit)
+        if (outcome.accepted.isEmpty()) {
+            MediaIntake.release(item)
+            status.update { it.copy(notice = CommentNotice.MEDIA_FAILED) }
+            return
+        }
         val id = "piece-${pieceSeq++}"
         attachments.update { it.adding(id, item) }
         upload(id, item)
@@ -717,14 +740,7 @@ class PostCommentsViewModel @Inject constructor(
     /** Une réponse ne s'applique qu'à la pièce qu'elle téléversait : une pièce retouchée ou retirée entre-temps l'ignore. */
     private fun upload(id: String, item: MediaUploadItem) {
         viewModelScope.launch {
-            val result = try {
-                mediaUploader?.upload(item)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                null
-            }
-            val media = (result as? NetworkResult.Success)?.data?.firstOrNull()
+            val media = mediaUploader.firstUploaded(item)
             attachments.update { tray ->
                 when {
                     tray.piece(id)?.item !== item -> tray
@@ -841,7 +857,7 @@ class PostCommentsViewModel @Inject constructor(
 
     private fun sendReply(parentId: String, content: String, attachmentIds: List<String>?, pill: ComposerLanguageState, extras: CommentExtras) {
         val tempId = "pending-${pendingSeq++}"
-        val row = optimisticRow(tempId, content).copy(parentId = parentId, effectFlags = extras.effectFlags, location = extras.place)
+        val row = optimisticCommentRow(tempId, content, sessionRepository.currentUser.value).copy(parentId = parentId, effectFlags = extras.effectFlags, location = extras.place)
         replies.update { it.optimisticReply(parentId, row) }
         thread.update { it.bumpReplyCount(parentId, 1) }
         composer.value = null
@@ -849,7 +865,7 @@ class PostCommentsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val language = languageAtSend(pill, content)
-                when (val result = postRepository.addComment(postId, content, parentId, effectFlags = extras.effectFlags, originalLanguage = language, attachmentIds = attachmentIds, location = extras.place)) {
+                when (val result = postRepository.addComment(postId, content, parentId, effectFlags = extras.effectFlags, originalLanguage = language, attachmentIds = attachmentIds, location = extras.place, quotedPostMediaId = extras.quotedPostMediaId)) {
                     is NetworkResult.Success -> {
                         replies.update { it.confirmedReply(parentId, tempId, result.data) }
                         status.update { it.copy(isSubmitting = false, error = null) }
@@ -1087,15 +1103,6 @@ class PostCommentsViewModel @Inject constructor(
                 replies.update { it.failed(commentId) }
             }
         }
-    }
-
-    private fun optimisticRow(tempId: String, content: String): ApiPostComment {
-        val me = sessionRepository.currentUser.value
-        return ApiPostComment(
-            id = tempId,
-            content = content,
-            author = me?.let { ApiAuthor(id = it.id, username = it.username, displayName = it.displayName, avatar = it.avatar) },
-        )
     }
 
     private fun project(

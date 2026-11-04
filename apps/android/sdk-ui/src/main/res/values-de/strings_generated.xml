@@ -136,6 +136,14 @@
     <string name="code_viewer_loading">Laden...</string>
     <string name="code_viewer_loading_file">Datei wird geladen...</string>
     <string name="code_viewer_more_lines">%1$d weitere Zeilen</string>
+    <string name="comment_quote_a11y">Zu: %1$s</string>
+    <string name="comment_quote_about">Zu</string>
+    <string name="comment_quote_kind_audio">Eine Audiodatei</string>
+    <string name="comment_quote_kind_file">Ein Anhang</string>
+    <string name="comment_quote_kind_image">Ein Foto</string>
+    <string name="comment_quote_kind_location">Ein Ort</string>
+    <string name="comment_quote_kind_video">Ein Video</string>
+    <string name="comment_quote_remove">Zitat entfernen</string>
     <string name="common_cancel">Abbrechen</string>
     <string name="common_clearSearch">Suche löschen</string>
     <string name="common_clear_search">Suche löschen</string>
