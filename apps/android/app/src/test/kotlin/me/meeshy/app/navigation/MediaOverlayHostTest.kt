@@ -87,8 +87,9 @@ class MediaOverlayHostTest {
         override fun setConsumedLanguageProvider(provider: (() -> String?)?) = Unit
     }
 
-    private val coordinator = ConversationAudioCoordinator(FakeEngine(), UnconfinedTestDispatcher())
-    private val viewModel = MiniPlayerViewModel(coordinator, MiniPlayerDisplay())
+    // Construits au premier usage, APRES le setMain du @Before : le viewModelScope se lie au dispatcher principal courant.
+    private val coordinator by lazy { ConversationAudioCoordinator(FakeEngine(), UnconfinedTestDispatcher()) }
+    private val viewModel by lazy { MiniPlayerViewModel(coordinator, MiniPlayerDisplay()) }
     private lateinit var controller: NavHostController
 
     private fun str(id: Int, vararg args: Any) =
