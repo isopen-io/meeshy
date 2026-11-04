@@ -222,16 +222,10 @@ private const val SCRUB_LIVE_MAX = 0.999f
 
 private const val MAX_FRAME_DELTA_MS = 100L
 
-/** Les images des slides voisines se préchargent ; une pile épuisée ferme le lecteur. */
+/** Le voisinage se prépare (N±2, groupes voisins) ; une pile épuisée ferme le lecteur. */
 @Composable
-internal fun StoryViewerLifecycleEffects(state: StoryViewerUiState, onClose: () -> Unit) {
-    val context = LocalContext.current
-    LaunchedEffect(state.prefetchUrls) {
-        val loader = context.imageLoader
-        state.prefetchUrls.forEach { url ->
-            loader.enqueue(ImageRequest.Builder(context).data(url).build())
-        }
-    }
+internal fun StoryViewerLifecycleEffects(state: StoryViewerUiState, prefetch: StoryPrefetchPlan, onClose: () -> Unit) {
+    StoryNeighborPrefetchEffect(prefetch.images)
     LaunchedEffect(state.isDismissed) {
         if (state.isDismissed) onClose()
     }
