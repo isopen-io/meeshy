@@ -78,7 +78,8 @@ class PostCommentsThreadSheetComposeTest {
         val spec = mounted.last()
         assertThat(spec.effectiveConfiguration.offers(ComposerCapability.LANGUAGE)).isTrue()
         assertThat(spec.effectiveConfiguration.offers(ComposerCapability.QUICK_EMOJIS)).isTrue()
-        assertThat(spec.foldable).isTrue()
+        // Le ⌄ est celui de la barre de commentaire (FoldableCommentBar), pas celui du composeur universel.
+        assertThat(spec.foldable).isFalse()
 
         compose.runOnIdle { spec.onPickLanguage?.invoke("es") }
         compose.waitForIdle()

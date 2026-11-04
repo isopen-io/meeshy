@@ -553,6 +553,17 @@ class PostCommentsViewModelTest {
     }
 
     @Test
+    fun `beginReply remembers the targeted comment id for the scroll anchor`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(authored("r1", parentId = "c1", name = "Bob")))
+        val vm = viewModel()
+        vm.toggleReplies("c1")
+        vm.beginReply("r1")
+        vm.state.test { assertThat(awaitItem().replyTarget?.commentId).isEqualTo("r1") }
+    }
+
+    @Test
     fun `beginReply expands and loads the parent thread for context`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
         coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
