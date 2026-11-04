@@ -64,6 +64,11 @@ class ConversationAudioCoordinatorTest {
         override fun setLoop(loop: Boolean) = Unit
         override fun setServedConsumption(attachmentId: String, consumption: MeeshyMediaConsumption?) = Unit
         override fun setConsumedLanguageProvider(provider: (() -> String?)?) = Unit
+        val follows = mutableListOf<List<Any>>()
+        override fun follow(fromAttachmentId: String, toAttachmentId: String, servedUrl: String, isProtected: Boolean) {
+            follows += listOf(fromAttachmentId, toAttachmentId, servedUrl, isProtected)
+            if (mutable.value.attachmentId == fromAttachmentId) mutable.value = mutable.value.copy(attachmentId = toAttachmentId)
+        }
     }
 
     private fun item(id: String, message: String = "m$id") = QueuedAudio(
@@ -418,5 +423,34 @@ class ConversationAudioCoordinatorTest {
         coordinator.seek(0.4)
 
         assertThat(engine.fractions).containsExactly(0.4)
+    }
+
+    @Test fun `le vocal accuse prend son id serveur dans la file et le moteur, et sa fin le marque ecoute sous ce nom`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = coordinator(this, engine)
+        runCurrent()
+        coordinator.play(item("cmid").copy(fileUrl = "file:///pending/cmid.m4a", isProtected = true), listOf(item("b")), "Famille", null)
+        val finished = mutableListOf<AttachmentFinishedEvent>()
+        backgroundScope.launchCollect(coordinator.attachmentFinished, finished)
+        runCurrent()
+
+        coordinator.follow("cmid", "att_server", "https://gate/voice.m4a")
+        engine.mutableEvents.tryEmit(AudioEngineEvent.Finished("att_server", completed = true))
+        runCurrent()
+
+        assertThat(engine.follows.single()).containsExactly("cmid", "att_server", "https://gate/voice.m4a", true).inOrder()
+        assertThat(finished.map { it.attachmentId }).containsExactly("att_server")
+        assertThat(engine.played.last()).isEqualTo("b")
+    }
+
+    @Test fun `suivre une piece que le moteur ne tient pas ne change rien`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine, "b")
+
+        coordinator.follow("b", "att_b", "https://gate/b.m4a")
+
+        assertThat(engine.follows).isEmpty()
+        assertThat(coordinator.snapshot.value.queue.upcoming.map { it.attachmentId }).containsExactly("b")
+        assertThat(coordinator.snapshot.value.queue.current?.attachmentId).isEqualTo("a")
     }
 }
