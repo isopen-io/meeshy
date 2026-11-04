@@ -28,9 +28,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -64,6 +61,7 @@ import me.meeshy.sdk.model.thread.ThreadReplyStatus
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -186,7 +184,7 @@ private fun ThreadHeader(count: Int, accentColor: Color, onBack: () -> Unit) {
     ) {
         IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                imageVector = MeeshyIcons.Back,
                 contentDescription = stringResource(R.string.chat_back),
                 tint = accentColor,
             )
@@ -383,7 +381,7 @@ private fun ReplyComposer(state: ReplyThreadUiState, accentColor: Color, onEvent
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = accentColor)
                 } else {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        imageVector = MeeshyIcons.Send,
                         contentDescription = sendLabel,
                         tint = if (state.canSend) accentColor else tokens.textMuted,
                     )

@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -159,7 +157,7 @@ private fun LikesRow(likes: Int) {
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = label },
     ) {
-        Icon(Icons.Filled.Favorite, contentDescription = null, tint = MeeshyPalette.Indigo500.copy(alpha = 0.7f), modifier = Modifier.size(12.dp))
+        Icon(MeeshyIcons.HeartFilled, contentDescription = null, tint = MeeshyPalette.Indigo500.copy(alpha = 0.7f), modifier = Modifier.size(12.dp))
         Text(
             text = likes.toString(),
             style = MaterialTheme.typography.labelSmall,
