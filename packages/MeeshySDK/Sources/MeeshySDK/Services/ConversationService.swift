@@ -403,7 +403,7 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
     /// `update` sur la ligne résolue : une expulsion qui ne trouve pas sa cible
     /// échoue au lieu de mentir.
     public func removeParticipant(conversationId: String, key: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(
             ConversationsEndpoint.byIdParticipantsByUserId(id: conversationId, userId: key),
             method: "DELETE"
         )
@@ -422,7 +422,7 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
     /// promouvable : ses droits passent par `updateParticipantRights`.
     public func updateParticipantRole(conversationId: String, userId: String, role: String) async throws {
         struct RoleBody: Encodable { let role: String }
-        let _: APIResponse<[String: String]> = try await api.patch(
+        let _: APIResponse<DiscardedResponseBody> = try await api.patch(
             ConversationsEndpoint.byIdParticipantsByUserIdRole(id: conversationId, userId: userId),
             body: RoleBody(role: role.lowercased())
         )
@@ -498,7 +498,7 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
     ///
     /// `key` : `User.id` OU `Participant.id` — voir `removeParticipant`.
     public func banParticipant(conversationId: String, key: String) async throws {
-        let _: APIResponse<BanParticipantResponse> = try await api.request(
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(
             ConversationsEndpoint.byIdParticipantsByUserIdBan(id: conversationId, userId: key),
             method: "PATCH"
         )
@@ -509,7 +509,7 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
     ///
     /// `key` : `User.id` OU `Participant.id` — voir `removeParticipant`.
     public func unbanParticipant(conversationId: String, key: String) async throws {
-        let _: APIResponse<UnbanParticipantResponse> = try await api.request(
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(
             ConversationsEndpoint.byIdParticipantsByUserIdUnban(id: conversationId, userId: key),
             method: "PATCH"
         )
@@ -569,11 +569,3 @@ struct LeaveConversationResponse: Decodable {
     let leftAt: String
 }
 
-struct BanParticipantResponse: Decodable {
-    let userId: String
-    let bannedAt: String
-}
-
-struct UnbanParticipantResponse: Decodable {
-    let userId: String
-}

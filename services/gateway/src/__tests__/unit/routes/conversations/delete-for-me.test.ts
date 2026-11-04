@@ -108,6 +108,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
 function makeMockIO() {
   return {
     to: jest.fn().mockReturnThis(),
+    except: jest.fn().mockReturnThis(),
     emit: jest.fn(),
     in: jest.fn().mockReturnThis(),
     fetchSockets: jest.fn<any>().mockResolvedValue([{ leave: jest.fn() }]),

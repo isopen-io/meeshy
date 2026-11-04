@@ -15,19 +15,34 @@ import XCTest
 final class PostBookmarkWriterTests: XCTestCase {
 
     private final class RecordingFavorites: FavoritesCacheMirroring {
-        var previous: [FeedPost] = []
         private(set) var inserted: [String] = []
         private(set) var removed: [String] = []
-        private(set) var restored: [[String]] = []
 
-        func insert(_ post: FeedPost) async -> [FeedPost] {
-            inserted.append(post.id)
-            return previous
-        }
+        func insert(_ post: FeedPost) async { inserted.append(post.id) }
 
         func remove(postId: String) async { removed.append(postId) }
+    }
 
-        func restore(_ previous: [FeedPost]) async { restored.append(previous.map(\.id)) }
+    @MainActor
+    private final class RejectionCounter {
+        private(set) var count = 0
+        func reject() { count += 1 }
+    }
+
+    @MainActor
+    private struct Rig {
+        let sut: PostBookmarkWriter
+        let queue: MockOfflineQueue
+        let favorites: RecordingFavorites
+        let toasts: MockFeedbackToast
+        let rejections: RejectionCounter
+
+        func write(bookmarked: Bool, postId: String = "p1", post: FeedPost?) async {
+            let rejections = rejections
+            await sut.write(bookmarked: bookmarked, postId: postId, post: post, onRejected: { rejections.reject() })
+        }
+
+        var payload: ToggleBookmarkPostPayload? { queue.lastPayload as? ToggleBookmarkPostPayload }
     }
 
     private static func post(_ id: String = "p1", bookmarked: Bool = false, count: Int = 2) -> FeedPost {
@@ -37,91 +52,131 @@ final class PostBookmarkWriterTests: XCTestCase {
         return post
     }
 
-    private func makeSUT(
-        service: MockPostService = MockPostService(),
-        favorites: RecordingFavorites = RecordingFavorites(),
-        toasts: MockFeedbackToast = MockFeedbackToast()
-    ) -> PostBookmarkWriter {
-        PostBookmarkWriter(service: service, favorites: favorites, toasts: toasts)
-    }
-
-    // MARK: - Enregistrer
-
-    func test_write_bookmarking_sendsTheBookmark_putsThePostInFavorites_andSaysSo() async {
-        let service = MockPostService()
+    private func makeRig(queue: MockOfflineQueue = MockOfflineQueue()) -> Rig {
         let favorites = RecordingFavorites()
         let toasts = MockFeedbackToast()
-
-        let ok = await makeSUT(service: service, favorites: favorites, toasts: toasts)
-            .write(bookmarked: true, postId: "p1", post: Self.post())
-
-        XCTAssertTrue(ok)
-        XCTAssertEqual(service.bookmarkCallCount, 1)
-        XCTAssertEqual(service.lastBookmarkPostId, "p1")
-        XCTAssertEqual(service.removeBookmarkCallCount, 0)
-        XCTAssertEqual(favorites.inserted, ["p1"], "le post rejoint les favoris en cache avant la réponse du réseau")
-        XCTAssertEqual(toasts.successMessages, [String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main)])
-        XCTAssertTrue(toasts.errorMessages.isEmpty)
+        return Rig(
+            sut: PostBookmarkWriter(queue: queue, favorites: favorites, toasts: toasts),
+            queue: queue, favorites: favorites, toasts: toasts, rejections: RejectionCounter()
+        )
     }
 
-    func test_write_bookmarkingRefused_restoresTheFavoritesCache_andSaysTheFailure() async {
-        let service = MockPostService()
-        service.bookmarkResult = .failure(URLError(.notConnectedToInternet))
-        let favorites = RecordingFavorites()
-        favorites.previous = [Self.post("older")]
-        let toasts = MockFeedbackToast()
+    private static let added = String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main)
+    private static let removed = String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main)
+    private static let failed = String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main)
 
-        let ok = await makeSUT(service: service, favorites: favorites, toasts: toasts)
-            .write(bookmarked: true, postId: "p1", post: Self.post())
+    // MARK: - Enregistrer : la ligne durable
 
-        XCTAssertFalse(ok, "l'appelant doit défaire sa bascule")
-        XCTAssertEqual(favorites.restored, [["older"]], "le cache des favoris revient à ce qu'il était")
-        XCTAssertEqual(toasts.errorMessages, [String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main)])
-        XCTAssertTrue(toasts.successMessages.isEmpty)
+    func test_write_bookmarking_queuesTheWantedState_underTheCard() async {
+        let rig = makeRig()
+
+        await rig.write(bookmarked: true, post: Self.post())
+
+        XCTAssertEqual(rig.queue.enqueueCalls.map(\.kind), [.toggleBookmarkPost],
+                       "le favori part par la file durable, comme le like : hors ligne il attend au lieu d'échouer")
+        XCTAssertEqual(rig.queue.enqueueCalls.first?.conversationId, "p1", "ancré sur la carte : la dernière intention gagne")
+        XCTAssertEqual(rig.payload?.postId, "p1")
+        XCTAssertEqual(rig.payload?.bookmarked, true)
+        XCTAssertEqual(rig.payload?.clientMutationId.isEmpty, false, "le rejeu voyage sous un X-Client-Mutation-Id")
     }
 
-    func test_write_bookmarkingWithoutTheCard_stillSends_butLeavesTheFavoritesCacheAlone() async {
-        let service = MockPostService()
-        service.bookmarkResult = .failure(URLError(.badServerResponse))
-        let favorites = RecordingFavorites()
+    func test_write_bookmarking_putsThePostInFavorites_andSaysSo_withoutWaitingForTheNetwork() async {
+        let rig = makeRig()
 
-        _ = await makeSUT(service: service, favorites: favorites).write(bookmarked: true, postId: "p1", post: nil)
+        await rig.write(bookmarked: true, post: Self.post())
 
-        XCTAssertEqual(service.bookmarkCallCount, 1)
-        XCTAssertTrue(favorites.inserted.isEmpty, "rien à ranger sans la carte")
-        XCTAssertTrue(favorites.restored.isEmpty, "et surtout pas de cache vidé à l'échec")
+        XCTAssertEqual(rig.favorites.inserted, ["p1"])
+        XCTAssertEqual(rig.toasts.successMessages, [Self.added])
+        XCTAssertTrue(rig.toasts.errorMessages.isEmpty)
+        XCTAssertEqual(rig.rejections.count, 0)
+    }
+
+    /// **Le témoin hors ligne** : la ligne attend le réseau. Rien ne revient
+    /// de la file — ni « appliqué » ni « épuisé » — et la bascule tient.
+    func test_write_offline_theQueuedBookmarkStaysOn_untilTheQueueAnswers() async throws {
+        let rig = makeRig()
+
+        await rig.write(bookmarked: true, post: Self.post())
+        let cmid = try XCTUnwrap(rig.payload?.clientMutationId)
+        try await waitForCondition(timeout: 2) { rig.queue.outcomeContinuations[cmid] != nil }
+
+        XCTAssertEqual(rig.rejections.count, 0, "hors ligne, « Enregistrer » ne se défait pas")
+        XCTAssertTrue(rig.favorites.removed.isEmpty)
+        XCTAssertTrue(rig.toasts.errorMessages.isEmpty)
+    }
+
+    func test_write_replayApplied_changesNothingMore() async throws {
+        let rig = makeRig()
+        await rig.write(bookmarked: true, post: Self.post())
+        let cmid = try XCTUnwrap(rig.payload?.clientMutationId)
+        try await waitForCondition(timeout: 2) { rig.queue.outcomeContinuations[cmid] != nil }
+
+        rig.queue.emitOutcome(.applied(cmid: cmid), for: cmid)
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(rig.rejections.count, 0)
+        XCTAssertTrue(rig.toasts.errorMessages.isEmpty)
+    }
+
+    func test_write_serverRefusesTheReplay_undoesOnlyThisBookmark_andSaysTheFailure() async throws {
+        let rig = makeRig()
+        await rig.write(bookmarked: true, post: Self.post())
+        let cmid = try XCTUnwrap(rig.payload?.clientMutationId)
+        try await waitForCondition(timeout: 2) { rig.queue.outcomeContinuations[cmid] != nil }
+
+        rig.queue.emitOutcome(.exhausted(cmid: cmid), for: cmid)
+
+        try await waitForCondition(timeout: 2) { rig.rejections.count == 1 }
+        XCTAssertEqual(rig.favorites.removed, ["p1"], "le post quitte les favoris en cache — lui seul, pas une photo du cache")
+        XCTAssertEqual(rig.toasts.errorMessages, [Self.failed])
+    }
+
+    func test_write_queueRefusesTheRow_undoesAtOnce() async {
+        let queue = MockOfflineQueue()
+        queue.enqueueResult = .failure(OfflineQueueError.poolNotConfigured)
+        let rig = makeRig(queue: queue)
+
+        await rig.write(bookmarked: true, post: Self.post())
+
+        XCTAssertEqual(rig.rejections.count, 1, "l'appelant défait sa bascule")
+        XCTAssertEqual(rig.favorites.removed, ["p1"])
+        XCTAssertEqual(rig.toasts.errorMessages, [Self.failed])
+        XCTAssertTrue(rig.toasts.successMessages.isEmpty)
+    }
+
+    func test_write_bookmarkingWithoutTheCard_stillQueues_butLeavesTheFavoritesCacheAlone() async {
+        let rig = makeRig()
+
+        await rig.write(bookmarked: true, post: nil)
+
+        XCTAssertEqual(rig.queue.enqueueCalls.count, 1)
+        XCTAssertTrue(rig.favorites.inserted.isEmpty, "rien à ranger sans la carte")
     }
 
     // MARK: - Retirer
 
-    func test_write_unbookmarking_removesFromFavorites_afterTheServerConfirms() async {
-        let service = MockPostService()
-        let favorites = RecordingFavorites()
-        let toasts = MockFeedbackToast()
+    func test_write_unbookmarking_queuesTheRemoval_andLeavesFavoritesAtOnce() async {
+        let rig = makeRig()
 
-        let ok = await makeSUT(service: service, favorites: favorites, toasts: toasts)
-            .write(bookmarked: false, postId: "p1", post: Self.post(bookmarked: true))
+        await rig.write(bookmarked: false, post: Self.post(bookmarked: true))
 
-        XCTAssertTrue(ok)
-        XCTAssertEqual(service.removeBookmarkCallCount, 1)
-        XCTAssertEqual(service.bookmarkCallCount, 0)
-        XCTAssertTrue(favorites.inserted.isEmpty)
-        XCTAssertEqual(favorites.removed, ["p1"])
-        XCTAssertEqual(toasts.successMessages, [String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main)])
+        XCTAssertEqual(rig.payload?.bookmarked, false)
+        XCTAssertEqual(rig.favorites.removed, ["p1"], "retiré hors ligne, le post quitte l'onglet Favoris tout de suite")
+        XCTAssertTrue(rig.favorites.inserted.isEmpty)
+        XCTAssertEqual(rig.toasts.successMessages, [Self.removed])
     }
 
-    func test_write_unbookmarkingRefused_keepsTheFavoritesCache_andSaysTheFailure() async {
-        let service = MockPostService()
-        service.removeBookmarkResult = .failure(URLError(.badServerResponse))
-        let favorites = RecordingFavorites()
-        let toasts = MockFeedbackToast()
+    func test_write_removalRefused_putsThePostBackInFavorites() async throws {
+        let rig = makeRig()
+        await rig.write(bookmarked: false, post: Self.post(bookmarked: true))
+        let cmid = try XCTUnwrap(rig.payload?.clientMutationId)
+        try await waitForCondition(timeout: 2) { rig.queue.outcomeContinuations[cmid] != nil }
 
-        let ok = await makeSUT(service: service, favorites: favorites, toasts: toasts)
-            .write(bookmarked: false, postId: "p1", post: Self.post(bookmarked: true))
+        rig.queue.emitOutcome(.exhausted(cmid: cmid), for: cmid)
 
-        XCTAssertFalse(ok)
-        XCTAssertTrue(favorites.removed.isEmpty, "un retrait refusé laisse le post dans les favoris")
-        XCTAssertEqual(toasts.errorMessages.count, 1)
+        try await waitForCondition(timeout: 2) { rig.rejections.count == 1 }
+        XCTAssertEqual(rig.favorites.inserted, ["p1"])
+        XCTAssertEqual(rig.toasts.errorMessages, [Self.failed])
     }
 
     // MARK: - La bascule optimiste
@@ -156,5 +211,24 @@ final class PostBookmarkWriterTests: XCTestCase {
 
         XCTAssertTrue(next.isLiked)
         XCTAssertEqual(next.likes, 4)
+    }
+
+    // MARK: - Un fil relu ne défait pas un favori en route (#15997)
+
+    func test_reapplying_aFavoriteStillInTheQueue_survivesTheServerSnapshot() {
+        let relu = [Self.post("p1", bookmarked: false, count: 2), Self.post("p2", bookmarked: true, count: 1)]
+
+        let fil = PostBookmarkMutation.reapplying(relu, pending: ["p1": true, "p2": false])
+
+        XCTAssertEqual(fil.map(\.isBookmarkedByMe), [true, false])
+        XCTAssertEqual(fil.map(\.bookmarkCount), [3, 0])
+    }
+
+    func test_reapplying_aSnapshotThatAlreadyCarriesTheFavorite_countsItOnce() {
+        let relu = [Self.post("p1", bookmarked: true, count: 3), Self.post("p3", count: 7)]
+
+        let fil = PostBookmarkMutation.reapplying(relu, pending: ["p1": true])
+
+        XCTAssertEqual(fil.map(\.bookmarkCount), [3, 7], "le serveur l'a déjà reçu : rien à reposer")
     }
 }

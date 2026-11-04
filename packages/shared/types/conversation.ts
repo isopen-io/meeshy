@@ -475,9 +475,11 @@ export interface Conversation {
    * Ce que le LECTEUR peut faire de cette conversation (#14690), calculé serveur
    * par la décision même qui garde la route. ABSENT = serveur antérieur, ou
    * lecture impossible : le client garde son comportement d'avant. C'est un
-   * INSTANTANÉ : après `participant:role-updated` le concernant, le client le
-   * relit (`GET /conversations/:id?fields=viewerCapabilities`) ; la route
-   * reste seule juge.
+   * INSTANTANÉ : `participant:role-updated` le concernant porte sa nouvelle
+   * valeur (#15987), que le client applique ; s'il ne la porte pas (serveur
+   * antérieur, lecture impossible), le client la relit
+   * (`GET /conversations/:id?fields=viewerCapabilities`). La route reste seule
+   * juge.
    */
   readonly viewerCapabilities?: ConversationViewerCapabilities;
 

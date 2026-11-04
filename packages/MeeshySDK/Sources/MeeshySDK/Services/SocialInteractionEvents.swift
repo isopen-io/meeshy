@@ -96,6 +96,10 @@ public enum SocialInteractionEvents {
             guard let payload = try? decoder.decode(ToggleLikePostPayload.self, from: record.payload) else { return nil }
             return interaction(payload.liked ? .react : .unreact, on: SocialTarget(kind: .post, id: payload.postId),
                                mutationId: payload.clientMutationId, occurredAt: record.createdAt)
+        case .toggleBookmarkPost:
+            guard let payload = try? decoder.decode(ToggleBookmarkPostPayload.self, from: record.payload) else { return nil }
+            return interaction(payload.bookmarked ? .save : .unsave, on: SocialTarget(kind: .post, id: payload.postId),
+                               mutationId: payload.clientMutationId, occurredAt: record.createdAt)
         case .repostPost:
             guard let payload = try? decoder.decode(RepostPostPayload.self, from: record.payload) else { return nil }
             return interaction(payload.isQuote ? .quote : .repost, on: SocialTarget(kind: .post, id: payload.postId),

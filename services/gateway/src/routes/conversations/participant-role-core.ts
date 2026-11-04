@@ -1,6 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { isMemberCreator, MemberRole } from '@meeshy/shared/types/role-types';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
@@ -12,6 +11,7 @@ import { participantActionRefusal } from './utils/participant-authority';
 import { participantListUserSelect } from './utils/participant-projection';
 import { accorder, refuser, type VerdictDeGeste } from './utils/participant-geste-verdict';
 import type { PasserelleSocketDeConversation } from './utils/participant-geste-socket';
+import { announceParticipantRoleWithCapabilities } from '../../services/conversations/obsoleteCapability';
 
 const logger = enhancedLogger.child({ module: 'ConversationParticipantRoleCore' });
 
@@ -86,12 +86,15 @@ const RANGS_ACCEPTES: readonly string[] = ['admin', 'moderator', 'member'];
  * `participant` reçu peut donc avoir été gaté pour le DEMANDEUR — ils sont
  * retirés ici, quel qu'en soit l'état.
  *
- * Thread-only À JUSTE TITRE, vérifié plutôt que déduit : aucune ligne de liste
- * ne rend un rôle ; les seuls consommateurs sont les écrans de participants,
- * tous ouverts DANS la conversation.
+ * Thread-only pour la SALLE, vérifié plutôt que déduit : aucune ligne de liste
+ * ne rend le rôle d'un AUTRE. La cible, elle, le reçoit dans sa room
+ * personnelle avec sa capacité recalculée (#15987) : ses gestes de liste
+ * (« Rendre obsolète ») suivent son nouveau rang.
  */
 export function announceParticipantRoleUpdated(params: {
   readonly manager: ReturnType<PasserelleSocketDeConversation['getManager']>;
+  /** Relit la capacité de la cible pour son nouveau rang (#15987). */
+  readonly prisma: Pick<PrismaClient, 'participant' | 'user'>;
   readonly conversationId: string;
   /** La cible RÉSOLUE, jamais le segment d'URL (qui peut porter un `Participant.id`). */
   readonly targetUserId: string;
@@ -99,7 +102,7 @@ export function announceParticipantRoleUpdated(params: {
   readonly updatedBy: string;
   readonly participant: ReturnType<typeof serializeConversationParticipant> | null;
 }): void {
-  const { manager, conversationId, targetUserId, newRole, updatedBy, participant } = params;
+  const { manager, prisma, conversationId, targetUserId, newRole, updatedBy, participant } = params;
   if (!manager) return;
   const participantForBroadcast = participant
     ? (() => {
@@ -107,13 +110,17 @@ export function announceParticipantRoleUpdated(params: {
         return rest;
       })()
     : null;
-  manager.getIO().to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, {
-    conversationId,
-    userId: targetUserId,
-    newRole,
-    updatedBy,
-    participant: participantForBroadcast,
-  });
+  announceParticipantRoleWithCapabilities(prisma, {
+    io: manager.getIO(),
+    payload: {
+      conversationId,
+      userId: targetUserId,
+      newRole,
+      updatedBy,
+      participant: participantForBroadcast,
+    },
+    onError: (error) => logger.warn('viewerCapabilities unreadable for participant:role-updated', { conversationId, error }),
+  }).catch((error: unknown) => logger.warn('participant:role-updated emission failed', { error }));
   // Le cache d'identifiants de participant (5 min) servirait sinon l'ancien
   // rang au prochain `message:send` de la cible.
   manager.invalidateParticipantCache?.(targetUserId, conversationId);
@@ -270,6 +277,7 @@ export async function changerRangDeParticipant(
     : null;
   announceParticipantRoleUpdated({
     manager: demande.socketIO?.getManager(),
+    prisma,
     conversationId,
     targetUserId,
     newRole,

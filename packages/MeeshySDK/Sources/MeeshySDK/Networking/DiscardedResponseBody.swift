@@ -8,8 +8,9 @@ import Foundation
 /// A 2xx IS the acknowledgement for these calls. Typing their payload as
 /// `[String: String]` turned every success whose values were not all strings
 /// into a thrown error — the reactions first, then the like, bookmark and
-/// share of a post (#15994).
-struct DiscardedResponseBody: Decodable {
-    init() {}
-    init(from decoder: Decoder) throws {}
+/// share of a post (#15994), then every other write acknowledgement of the
+/// SDK and of the app, including the durable queue's replays (#15996).
+public struct DiscardedResponseBody: Decodable, Sendable {
+    public init() {}
+    public init(from decoder: Decoder) throws {}
 }

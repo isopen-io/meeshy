@@ -95,7 +95,7 @@ extension PostService {
     public func requestTranslation(postId: String, targetLanguage: String) async throws {
         let body = ["targetLanguage": targetLanguage]
         let bodyData = try JSONSerialization.data(withJSONObject: body)
-        let _: APIResponse<[String: String]> = try await api.request(
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(
             PostsEndpoint.byPostIdTranslate(postId: postId),
             method: "POST",
             body: bodyData
