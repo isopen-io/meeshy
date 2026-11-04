@@ -224,11 +224,13 @@
     <string name="status_composer_emoji_more">Mais emojis</string>
     <string name="status_composer_mood_question">Como você está se sentindo?</string>
     <string name="status_composer_publish">Publicar</string>
+    <string name="status_composer_publish_disabled_hint">Escolha um emoji para publicar seu status</string>
     <string name="status_composer_title">Status</string>
     <string name="status_composer_visibility_community">Comunidades</string>
     <string name="status_composer_visibility_friends">Amigos</string>
     <string name="status_composer_visibility_private">Privado</string>
     <string name="status_composer_visibility_public">Público</string>
+    <string name="status_queued_offline">Humor aguardando envio</string>
     <string name="status_react_error">Erro ao reagir ao status</string>
     <string name="user_posts_back">Voltar</string>
     <string name="user_posts_empty">Nenhuma publicação</string>
