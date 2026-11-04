@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -21,6 +19,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -43,7 +42,7 @@ internal fun RetranscribeButton(onColor: Color, enabled: Boolean, onClick: () ->
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
         Icon(
-            imageVector = Icons.Filled.Refresh,
+            imageVector = MeeshyIcons.Refresh,
             contentDescription = null,
             tint = onColor.copy(alpha = if (enabled) 0.6f else 0.3f),
             modifier = Modifier.size(14.dp),

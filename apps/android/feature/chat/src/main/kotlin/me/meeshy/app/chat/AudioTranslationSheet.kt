@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -43,6 +40,7 @@ import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.translation.AudioTranslationRequestState
 import me.meeshy.ui.component.audio.AudioConsentNotice
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -158,10 +156,10 @@ private fun RowTrailing(state: AudioTranslationRequestState, accent: Color) {
         is AudioTranslationRequestState.InFlight ->
             CircularProgressIndicator(color = accent, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
         AudioTranslationRequestState.Ready ->
-            Icon(Icons.Filled.Check, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+            Icon(MeeshyIcons.Check, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
         AudioTranslationRequestState.Failed ->
             Icon(
-                Icons.Filled.Refresh,
+                MeeshyIcons.Refresh,
                 contentDescription = stringResource(R.string.chat_explorer_retranslate),
                 tint = accent.copy(alpha = 0.8f),
                 modifier = Modifier.size(18.dp),
