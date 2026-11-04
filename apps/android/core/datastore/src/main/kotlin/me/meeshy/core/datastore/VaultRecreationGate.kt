@@ -23,9 +23,9 @@ fun interface VaultRecreationGate {
 /**
  * La porte d'un coffre dont la perte coûte une base entière (la clé de `meeshy.db`) : le fichier n'est recréé que sur
  * un échec DURABLE prouvé, c'est-à-dire une signature de clé définitivement perdue (`AEADBadTagException`,
- * `KeyPermanentlyInvalidatedException`) constatée sur [launches] lancements consécutifs. Un échec passager
- * (`KeyStoreException` au démarrage, disque) ne compte pas et ne supprime rien : le lancement suit sans le coffre,
- * le suivant réessaie. Le décompte vit dans [ledger], un fichier en clair qui ne porte qu'un entier ; s'il ne s'écrit
+ * `KeyPermanentlyInvalidatedException`, blob de clé refusé, clé maîtresse inutilisable, keyset Tink illisible)
+ * constatée sur [launches] lancements consécutifs. Un échec passager (`KeyStoreException` au démarrage, disque) ne
+ * compte pas et ne supprime rien : le lancement suit sans le coffre, le suivant réessaie. Le décompte vit dans [ledger], un fichier en clair qui ne porte qu'un entier ; s'il ne s'écrit
  * pas, rien n'est prouvé et rien n'est supprimé.
  */
 class DurableFailureGate(
@@ -58,12 +58,22 @@ class DurableFailureGate(
         const val DEFAULT_LAUNCHES: Int = 3
         private const val FAILED_LAUNCHES = "failedLaunches"
         private const val MAX_CAUSES = 16
-        private val PERMANENT_NAMES = setOf("KeyPermanentlyInvalidatedException")
+        private val PERMANENT_NAMES = setOf("KeyPermanentlyInvalidatedException", "InvalidProtocolBufferException")
+        private val PERMANENT_MESSAGES = listOf("invalid key blob", "invalid_key_blob", "exists but is unusable")
 
-        /** Une clé de coffre qui ne déchiffre plus (tag invalide) ou que le Keystore a invalidée pour de bon. */
+        /**
+         * Une clé de coffre qui ne déchiffre plus (tag invalide), que le Keystore a invalidée pour de bon ou dont il refuse
+         * le blob, une clé maîtresse qui existe mais est inutilisable, ou un keyset Tink qui ne se décode plus : rien de
+         * tout cela ne se répare en relançant.
+         */
         fun isPermanent(failure: Throwable): Boolean =
             generateSequence(failure) { current -> current.cause?.takeIf { it !== current } }
                 .take(MAX_CAUSES)
-                .any { it is AEADBadTagException || it.javaClass.simpleName in PERMANENT_NAMES }
+                .any { it is AEADBadTagException || it.javaClass.simpleName in PERMANENT_NAMES || hasPermanentMessage(it) }
+
+        private fun hasPermanentMessage(failure: Throwable): Boolean {
+            val message = failure.message?.lowercase() ?: return false
+            return PERMANENT_MESSAGES.any { marker -> message.contains(marker) }
+        }
     }
 }

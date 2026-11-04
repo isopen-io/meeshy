@@ -242,6 +242,24 @@ public object DatabaseRecovery {
         return byStamp.keys.sortedDescending().drop(keep).flatMap(byStamp::getValue).filter { it.delete() }
     }
 
+    /**
+     * Supprime les quarantaines EN CLAIR de [primary] (copie d'une base d'avant le chiffrement, ou d'une base en clair
+     * abîmée que la migration n'a pas pu exporter) avec leurs fichiers compagnons : elles portent l'historique en clair, et
+     * le chiffrement au repos ne vaut rien tant qu'elles restent. Un groupe sans copie principale (journal orphelin) part
+     * aussi : rien ne le relit, et un journal WAL en clair porte des pages en clair. Les quarantaines chiffrées restent.
+     */
+    public fun deletePlaintextQuarantines(primary: File): List<File> {
+        val prefix = "${primary.name}.corrupted."
+        val byStamp = quarantined(primary).groupBy { it.name.removePrefix(prefix).takeWhile(Char::isDigit) }
+        return byStamp.values
+            .filter { group ->
+                val copy = group.firstOrNull { it.name.removePrefix(prefix).all(Char::isDigit) }
+                copy == null || DatabaseFileStates.of(copy) == DatabaseFileState.PLAINTEXT
+            }
+            .flatten()
+            .filter { it.delete() }
+    }
+
     /** Supprime la base de repli et ses fichiers compagnons. */
     public fun deleteFallback(secondary: File): List<File> = fallbackFiles(secondary).filter { it.delete() }
 

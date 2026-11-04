@@ -33,7 +33,7 @@ public sealed interface DatabaseLocation {
  * l'outbox), [prepare] met en place le chiffrement (clé, migration de la base en clair). S'il échoue : une base encore EN
  * CLAIR qu'une corruption empêche d'exporter suit le chemin 1 (sauvetage, quarantaine, recréation chiffrée) ; toute
  * autre panne (disque, coffre qui ne rend pas la clé, bibliothèque native absente) ouvre la base EN MÉMOIRE pour ce
- * lancement, sans toucher au fichier, et le lancement suivant réessaie. Jamais de repli en clair, jamais de plantage en
+ * lancement, sans toucher au fichier (son outbox y est relue en lecture seule), et le lancement suivant réessaie. Jamais de repli en clair, jamais de plantage en
  * boucle. [salvageOpener] relit la base principale pour le sauvetage : en production, l'ouvreur SQLCipher qui détient la
  * clé.
  * Un échec qui relève du CODE ([OpenFailureKind.DEFECT] : migration absente ou fautive, schéma incohérent) REMONTE : rien
@@ -106,7 +106,22 @@ public class DatabaseOpener(
         val corruptPlaintext = DatabaseRecovery.classify(failure) == OpenFailureKind.CORRUPTION &&
             DatabaseFileStates.of(primaryFile) == DatabaseFileState.PLAINTEXT
         if (corruptPlaintext) return recreate(primaryFile)
-        return inMemory(DatabaseSalvage(), encryptionUnavailable(failure))
+        return inMemory(salvageInPlace(primaryFile), encryptionUnavailable(failure))
+    }
+
+    /**
+     * Ce que la base sur disque garde d'irremplaçable (outbox, ponts d'identifiants, clairs E2EE à effacer), relu en
+     * lecture seule pour la base en mémoire : un envoi en attente reste visible, et il repart avec son identifiant
+     * d'origine, que le serveur déduplique quand la base sur disque le rejouera. Le fichier n'est ni déplacé ni écrit. Un
+     * ouvreur qui lève (bibliothèque native absente, clé indisponible) ne rend rien, sans empêcher la base en mémoire.
+     */
+    private fun salvageInPlace(primaryFile: File): DatabaseSalvage = try {
+        DatabaseRecovery.salvage(primaryFile, salvageOpener)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failure: Throwable) {
+        if (failure is VirtualMachineError) throw failure
+        DatabaseSalvage()
     }
 
     /** `encryption-unavailable:key` quand le coffre n'a pas rendu la clé, sinon la nature de l'échec (`unavailable`, `defect`…). */

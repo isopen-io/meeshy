@@ -11,6 +11,8 @@ android {
 
     defaultConfig {
         minSdk = 26
+        // Le seul banc du vrai SQLCipher (bibliothèque native) : `connectedDebugAndroidTest`, job émulateur d'android.yml.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -58,4 +60,9 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
     testImplementation(libs.truth)
+
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.truth)
 }

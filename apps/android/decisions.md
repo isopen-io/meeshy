@@ -256,10 +256,12 @@ singleton (see the counter-audit amendment below). An existing plaintext install
 the durable tables: outbox, media_blob, tus_upload_checkpoint, ...), then swapped in;
 the plaintext copy (`.plain.bak`) is deleted last, and an interrupted run resumes from
 what the disk shows (`PlaintextMigrationPlan`). The FTS projection is dropped before
-the export and rebuilt by `SearchIndexSchema.ensure` on open. Key loss (Keystore
-invalidated, reinstall, biometric change, data cleared) is detected (`KeyLossPolicy`:
-encrypted file + new key, or a file SQLCipher reports as "not a database") and the
-file is purged: a cold start, never a crash.
+the export and rebuilt by `SearchIndexSchema.ensure` on open (superseded below: only
+`message_fts` is dropped, from the copy). Key loss (Keystore invalidated, reinstall,
+biometric change, data cleared) is detected: an encrypted file in front of a new key
+(`KeyLossPolicy`) is purged; a file SQLCipher reports as "not a database" with the key
+it has (`isReadable`) is salvaged then quarantined like any corruption (at most two
+`.corrupted.<ts>` copies, encrypted, removed at logout). A cold start, never a crash.
 
 **Amendment (2026-11, #15880 — adversarial audit of PR #15908).** SQLCipher is pinned
 at **4.6.1 or later**: its native libraries are 16 KB-aligned (`LOAD` 0x4000; 4.5.6 was
@@ -306,6 +308,48 @@ the migration of a large plaintext database is an ANR risk. Moving the first
 construction off the main thread, a consented reset for an encrypted database whose key
 is unusable, and an instrumented run of the real engine (raw-key `ATTACH … KEY ?`) are
 tracked as follow-up issues.
+
+**Amendment (2026-11-04, #15880 — second counter-audit).** (1) **The real engine is
+exercised on a device.** `SqlCipherOnDeviceTest` (`core:database` androidTest) runs the
+production opener (`DatabaseModule.encryptedOpener`) against the native SQLCipher 4.6.1:
+a current-version plaintext database with a pending outbox row is exported (`ATTACH …
+KEY ?` with the raw key bound as text, `sqlcipher_export`), verified, swapped, then
+reopened by Room's helper (byte-array key) with an identical outbox; a wrong key yields
+`SQLITE_NOTADB`, classified as a corruption. It runs on an x86_64 emulator in the
+`android-sqlcipher-device.yml` workflow (kept apart from `android.yml`, which stays the
+exact mirror of `meeshy.sh check`). (2) **A nearly full disk no longer costs the
+database.** The export doubles the database's footprint; when the free space is below
+`requiredFreeBytes` (database + WAL + max(10 %, 4 MiB)), the migration is deferred and
+the file, ALREADY plaintext on disk, opens as is through the SQLCipher helper with an
+empty passphrase (no codec) — nothing new is written in plaintext, the cache and the
+outbox stay usable, and the next launch retries (`encryption-deferred:disk-full` in the
+diagnostics). This is the single, narrow exception to "never a plaintext fallback". A
+lone plaintext backup is moved back first, so Room never creates an empty database next
+to it. (3) **No plaintext copy survives a prepare.** Plaintext quarantines (left by a
+build before encryption, or by a corrupt plaintext file the export could not read) are
+deleted with their side files at every bootstrap run; encrypted quarantines stay.
+(4) **The search index of conversations survives the migration.** The plaintext source
+is never modified any more: `sqlcipher_export` copies rows with `INSERT … SELECT`, which
+renumbers the implicit `rowid` of `messages` that the external-content `message_fts` is
+keyed on, so only that index (and its triggers) is dropped, from the encrypted COPY on a
+fresh connection, and rebuilt by `ensure`; `conversation_fts`, standalone, is kept.
+(5) **An in-memory launch shows the pending outbox.** When the encryption cannot be set
+up, the outbox, `pending_ids` and `e2ee_plaintext_erasures` of the file on disk are read
+read-only into the in-memory database: a pending send stays visible and leaves with its
+original `cmid`, which the gateway deduplicates (`conversationId` + `clientMessageId`)
+when the on-disk row is replayed after a later successful migration. (6) **More durable
+vault failures are recognised** by `DurableFailureGate` (still over three consecutive
+launches): a Tink keyset that no longer decodes (`InvalidProtocolBufferException`), a
+key blob the Keystore refuses (`Invalid key blob`, `INVALID_KEY_BLOB`) and a master key
+that "exists but is unusable". (7) **Corrections.** `DatabaseKeyProvider.destroyKey()` has
+no production caller: logout clears the tables and the leftovers, it does not change the
+key. A key written as REGENERATED before its purge, if the process dies in between,
+makes the next launch read it as EXISTING in front of a file encrypted by the old one:
+`isReadable` sees "not a database" and the file is quarantined (encrypted, at most two
+copies) rather than purged as `key-lost` — the outcome (cold start) is the same.
+**Still open:** a vault failure that no signature recognises still leaves an encrypted
+database in memory until the consented reset (follow-up), and the degraded screen does
+not yet name the cause of an in-memory launch.
 
 ---
 

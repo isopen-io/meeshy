@@ -54,40 +54,53 @@ internal object DatabaseModule {
         health: StorageHealth,
         leftovers: DatabaseLeftovers,
         encryption: EncryptedDatabaseBootstrap,
-    ): MeeshyDatabase =
-        DatabaseOpener(
-            context = context,
-            diagnostics = diagnostics,
-            health = health,
-            primaryName = DATABASE_NAME,
-            secondaryFile = secondaryFile(context),
-            leftovers = leftovers,
-            readable = { file -> SqlCipherRuntime.isReadable(file, encryption) },
-            prepare = {
-                SqlCipherRuntime.ensureLoaded()
-                encryption.prepare()
-            },
-            salvageOpener = SqlCipherRuntime.salvageOpener(encryption),
-            allowsSecondary = false,
-            build = { ctx, location -> encrypted(meeshyDatabaseBuilder(ctx, location), location, encryption).build() },
-        ).open()
+    ): MeeshyDatabase = encryptedOpener(
+        context = context,
+        primaryName = DATABASE_NAME,
+        diagnostics = diagnostics,
+        health = health,
+        encryption = encryption,
+        secondaryFile = secondaryFile(context),
+        leftovers = leftovers,
+    ).open()
 
     /**
-     * Seule la base principale est sur disque, et elle est chiffrée (SQLCipher, ADR-013). Aucune base de repli n'est
-     * écrite (`allowsSecondary = false`) : elle serait en clair ; un disque qui refuse mène à la base EN MÉMOIRE, qui ne
-     * laisse rien sur l'appareil. Une base de repli laissée par une version antérieure est reprise puis supprimée. Un échec
-     * du chiffrement n'est jamais un repli en clair : [DatabaseOpener] ouvre alors la base en mémoire.
+     * L'ouvreur de production, partagé avec le test instrumenté qui fait tourner le vrai SQLCipher. Seule la base
+     * principale est sur disque, et elle est chiffrée (SQLCipher, ADR-013). Aucune base de repli n'est écrite
+     * (`allowsSecondary = false`) : elle serait en clair ; un disque qui refuse mène à la base EN MÉMOIRE, qui ne laisse
+     * rien sur l'appareil. Une base de repli laissée par une version antérieure est reprise puis supprimée. Un échec du
+     * chiffrement n'est jamais un repli en clair : [DatabaseOpener] ouvre alors la base en mémoire. Seule exception, une
+     * base DÉJÀ en clair que le disque ne peut pas encore exporter s'ouvre telle quelle
+     * ([EncryptedDatabaseBootstrap.plaintextDeferred]).
      */
-    private fun encrypted(
-        builder: RoomDatabase.Builder<MeeshyDatabase>,
-        location: DatabaseLocation,
+    fun encryptedOpener(
+        context: Context,
+        primaryName: String,
+        diagnostics: DatabaseInitDiagnostics,
+        health: StorageHealth,
         encryption: EncryptedDatabaseBootstrap,
-    ): RoomDatabase.Builder<MeeshyDatabase> =
-        if (location == DatabaseLocation.Named(DATABASE_NAME)) {
-            builder.openHelperFactory(SqlCipherRuntime.openHelperFactory(encryption))
-        } else {
-            builder
-        }
+        secondaryFile: File,
+        leftovers: DatabaseLeftovers? = null,
+    ): DatabaseOpener = DatabaseOpener(
+        context = context,
+        diagnostics = diagnostics,
+        health = health,
+        primaryName = primaryName,
+        secondaryFile = secondaryFile,
+        leftovers = leftovers,
+        readable = { file -> SqlCipherRuntime.isReadable(file, encryption) },
+        prepare = {
+            SqlCipherRuntime.ensureLoaded()
+            encryption.prepare()
+        },
+        salvageOpener = SqlCipherRuntime.salvageOpener(encryption),
+        allowsSecondary = false,
+        build = { ctx, location ->
+            val builder = meeshyDatabaseBuilder(ctx, location)
+            val onDisk = location == DatabaseLocation.Named(primaryName)
+            (if (onDisk) builder.openHelperFactory(SqlCipherRuntime.openHelperFactory(encryption)) else builder).build()
+        },
+    )
 
     @Provides
     @Singleton

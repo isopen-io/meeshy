@@ -149,7 +149,7 @@ class DatabaseOpenerEncryptionTest {
 
         val database = opener(name, diagnostics, health, prepare = { encryption.prepare() }).open()
 
-        assertThat(corruptedCopies(file)).contains("$name.corrupted.42")
+        assertThat(corruptedCopies(file)).isEmpty()
         assertThat(database.outboxDao().pendingCount()).isEqualTo(1)
         assertThat(database.pendingIdDao().byLocalId("cid_1")?.serverId).isEqualTo("srv-1")
         assertThat(diagnostics.events.value.map { it.stage }).containsAtLeast(
@@ -233,6 +233,67 @@ class DatabaseOpenerEncryptionTest {
 
         assertThat(health.isEphemeral).isTrue()
         assertThat(secondary(name).exists()).isFalse()
+        database.close()
+    }
+
+    @Test
+    fun `une base en memoire faute de chiffrement montre l'outbox du disque, avec ses identifiants d'origine`() = runBlocking {
+        val name = "memory-keeps-outbox.db"
+        val file = seeded(name)
+        val before = file.readBytes()
+        val encryption = bootstrap(file, FailingEngine { SQLiteFullException("database or disk is full (code 13 SQLITE_FULL)") })
+        val health = StorageHealth()
+
+        val database = opener(name, DatabaseInitDiagnostics(), health, prepare = { encryption.prepare() }).open()
+
+        assertThat(health.isEphemeral).isTrue()
+        assertThat(database.outboxDao().pendingCount()).isEqualTo(1)
+        assertThat(database.pendingIdDao().byLocalId("cid_1")?.serverId).isEqualTo("srv-1")
+        assertThat(database.plaintextErasureDao().all().map { it.itemId }).containsExactly("m1")
+        assertThat(file.readBytes()).isEqualTo(before)
+        database.close()
+    }
+
+    @Test
+    fun `un ouvreur de sauvetage qui leve une erreur native n'empeche pas la base en memoire`() = runBlocking {
+        val name = "memory-native-missing.db"
+        val file = seeded(name).also(::encryptInPlace)
+        val vault = GaveUpVault()
+        val encryption = bootstrap(file, FailingEngine { error("no export expected") }, vault)
+        val health = StorageHealth()
+        val nativeMissing = SalvageOpener { throw UnsatisfiedLinkError("dlopen failed: libsqlcipher.so") }
+
+        val database = opener(
+            name, DatabaseInitDiagnostics(), health, prepare = { encryption.prepare() },
+            salvageOpener = DatabaseRecovery.byFileState(nativeMissing),
+        ).open()
+
+        assertThat(health.isEphemeral).isTrue()
+        assertThat(database.outboxDao().pendingCount()).isEqualTo(0)
+        database.close()
+    }
+
+    @Test
+    fun `une migration differee faute de place ouvre la base en clair sur le disque, cache et outbox compris`() = runBlocking {
+        val name = "plain-deferred.db"
+        val file = seeded(name)
+        val engine = FailingEngine { error("no export expected when the disk cannot hold the copy") }
+        val encryption = EncryptedDatabaseBootstrap(
+            databaseFile = file,
+            keys = DatabaseKeyProvider(InMemorySecureStore()),
+            migrator = PlaintextDatabaseMigrator(engine),
+            freeBytes = { 0L },
+        )
+        val health = StorageHealth()
+        val built = mutableListOf<DatabaseLocation>()
+
+        val database = opener(name, DatabaseInitDiagnostics(), health, prepare = { encryption.prepare() }, built = built).open()
+
+        assertThat(built).containsExactly(DatabaseLocation.Named(name))
+        assertThat(health.isEphemeral).isFalse()
+        assertThat(database.outboxDao().pendingCount()).isEqualTo(1)
+        assertThat(engine.exports).isEqualTo(0)
+        assertThat(DatabaseFileStates.of(file)).isEqualTo(DatabaseFileState.PLAINTEXT)
         database.close()
     }
 

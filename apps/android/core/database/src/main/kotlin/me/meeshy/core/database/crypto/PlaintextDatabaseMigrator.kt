@@ -29,6 +29,12 @@ public class PlaintextDatabaseMigrator(private val engine: PlaintextExportEngine
         return steps
     }
 
+    /** Remet en place une sauvegarde en clair restée seule (main absente, aucune copie chiffrée à côté). */
+    public fun restoreBackup(main: File) {
+        if (main.exists() || temp(main).exists() || !backup(main).exists()) return
+        run(MigrationStep.RESTORE_BACKUP, main, ByteArray(0))
+    }
+
     private fun run(step: MigrationStep, main: File, passphrase: ByteArray) {
         val temp = temp(main)
         val backup = backup(main)

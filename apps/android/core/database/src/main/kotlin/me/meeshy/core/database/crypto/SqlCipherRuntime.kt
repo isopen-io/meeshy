@@ -106,14 +106,19 @@ internal object SqlCipherRuntime {
     private fun open(file: File, phrase: String, flags: Int): SQLiteDatabase =
         SQLiteDatabase.openDatabase(file.path, phrase, null, flags, null, null)
 
-    /** `sqlcipher_export` : copie intégrale, schéma et `user_version` compris, vers un fichier chiffré neuf. */
+    /**
+     * `sqlcipher_export` : copie intégrale, schéma et `user_version` compris, vers un fichier chiffré neuf. La base en clair
+     * s'ouvre en écriture (une base attachée hérite des drapeaux de la connexion) mais rien n'y est écrit : elle reste la
+     * source de la vérification et de la reprise. L'index des messages est retiré de la COPIE, sur une connexion neuve
+     * qui en relit le schéma : la copie renumérote les `rowid` de `messages`, sur lesquels il est indexé, et
+     * [SearchIndexSchema.ensure] le reconstruit à l'ouverture. L'index des conversations, autonome, est gardé.
+     */
     object Engine : PlaintextExportEngine {
         override fun export(plain: File, target: File, passphrase: ByteArray) {
             ensureLoaded()
             val phrase = String(passphrase, Charsets.US_ASCII)
             val db = open(plain, "", SQLiteDatabase.OPEN_READWRITE)
             try {
-                SearchIndexSchema.dropStatements.forEach(db::rawExecSQL)
                 val version = db.compileStatement("PRAGMA user_version").simpleQueryForLong()
                 db.rawExecSQL("ATTACH DATABASE ? AS encrypted KEY ?", target.path, phrase)
                 db.rawExecSQL("SELECT sqlcipher_export('encrypted')")
@@ -121,6 +126,12 @@ internal object SqlCipherRuntime {
                 db.rawExecSQL("DETACH DATABASE encrypted")
             } finally {
                 db.close()
+            }
+            val copy = open(target, phrase, SQLiteDatabase.OPEN_READWRITE)
+            try {
+                SearchIndexSchema.messageIndexDropStatements.forEach(copy::rawExecSQL)
+            } finally {
+                copy.close()
             }
         }
 

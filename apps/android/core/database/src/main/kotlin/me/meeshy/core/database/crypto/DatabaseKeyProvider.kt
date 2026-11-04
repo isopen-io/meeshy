@@ -84,7 +84,10 @@ public class DatabaseKeyProvider(
      */
     public fun replaceUnusable(): DatabaseKey = synchronized(this) { create(KeyOrigin.REGENERATED).also { cached = it } }
 
-    /** Détruit la clé : la base chiffrée devient irrécupérable (déconnexion complète, effacement). */
+    /**
+     * Détruit la clé : la base chiffrée devient irrécupérable. Aucun appelant en production : la déconnexion vide les
+     * tables et les copies laissées par une reprise, elle ne change pas la clé.
+     */
     public fun destroyKey() {
         synchronized(this) {
             store.remove(KEY, ACCOUNT)
