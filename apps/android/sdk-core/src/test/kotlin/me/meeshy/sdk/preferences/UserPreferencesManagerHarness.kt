@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
 import me.meeshy.sdk.audio.InMemoryAudioPreferencesStore
 import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.PreferencesCategoryApi
 import me.meeshy.sdk.notification.InMemoryNotificationPreferencesStore
 import me.meeshy.sdk.outbox.OutboxEnqueueResult
@@ -40,7 +41,9 @@ internal class UserPreferencesHarness(
         coEvery { hasDeliverable(any(), any()) } returns false
     }
     val readApi: PreferencesCategoryApi = mockk(relaxed = true)
-    val consents: ConsentsRepository = mockk(relaxed = true)
+    val consents: ConsentsRepository = mockk(relaxed = true) {
+        coEvery { refresh() } returns NetworkResult.Success(emptySet())
+    }
     val coordinator: PreferencesSyncCoordinator = mockk(relaxed = true)
     val socket: SocketManager = mockk { every { connectionState } returns connection }
     val notificationStore = InMemoryNotificationPreferencesStore()
