@@ -577,7 +577,6 @@
     <string name="media_hub_tile_video">فيديو من %1$s، %2$s</string>
     <string name="media_hub_title">الوسائط والروابط والمستندات</string>
     <string name="message_action_copyAddress">نسخ العنوان</string>
-    <string name="message_detail_a11y_retranslate">إعادة الترجمة</string>
     <string name="message_detail_edits_current">الحالي</string>
     <string name="message_detail_edits_empty">يظهر سجل التعديلات هنا</string>
     <string name="message_detail_edits_history_title">السجل</string>
@@ -611,7 +610,6 @@
     <string name="message_detail_sentiment_a11y_label">المشاعر</string>
     <string name="message_detail_sentiment_a11y_value">%1$s، النتيجة %2$.2f</string>
     <string name="message_detail_sentiment_score">النتيجة: %1$.2f</string>
-    <string name="message_detail_translate">ترجمة</string>
     <string name="message_detail_views_delivered">تم التسليم</string>
     <string name="message_detail_views_delivered_all">تم التسليم للجميع</string>
     <string name="message_detail_views_delivered_empty">لا يوجد تأكيد تسليم</string>

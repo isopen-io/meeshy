@@ -62,6 +62,8 @@ internal fun MessageLanguageExplorerSheet(
     onSelectLanguage: (String) -> Unit,
     onRetranslate: (String) -> Unit,
     onDismiss: () -> Unit,
+    /** Ouvre la feuille « Traduire l'audio » ; nul pour un message sans vocal ouvert (jamais un vocal protégé). */
+    onTranslateAudio: (() -> Unit)? = null,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -125,6 +127,12 @@ internal fun MessageLanguageExplorerSheet(
             }
 
             HorizontalDivider(color = MeeshyTheme.tokens.backgroundTertiary)
+
+            onTranslateAudio?.let { open ->
+                Button(onClick = open, modifier = Modifier.fillMaxWidth()) {
+                    Text(text = stringResource(R.string.audio_fullscreen_language_choose))
+                }
+            }
 
             explorer.rows.forEach { row ->
                 LanguageExplorerRowView(

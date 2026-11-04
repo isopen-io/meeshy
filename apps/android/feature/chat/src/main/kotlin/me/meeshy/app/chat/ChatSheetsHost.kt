@@ -426,13 +426,36 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         },
         languages = { route ->
             state.languageExplorer?.let { explorer ->
+                val voiceBubble = state.messages.firstOrNull { it.messageId == route.messageId }
+                val audioInput = remember(voiceBubble, explorer, state.encryptionMode, state.isEndToEnd) {
+                    voiceBubble?.let {
+                        AudioTranslationInputs.of(
+                            bubble = it,
+                            attachments = actions.attachmentsOf(route.messageId),
+                            explorerLanguages = explorer.rows.map { row -> row.code },
+                            conversationEncryptionMode = state.encryptionMode,
+                            conversationShownSealed = state.isEndToEnd,
+                        )
+                    }
+                }
+                var audioSheetOpen by rememberSaveable(route.messageId) { mutableStateOf(false) }
                 MessageLanguageExplorerSheet(
                     explorer = explorer,
                     accentColor = accentColor,
                     onSelectLanguage = { code -> actions.onFlagTap(route.messageId, code) },
                     onRetranslate = { code -> actions.onExplorerRetranslate(route.messageId, code) },
                     onDismiss = actions.dismissLanguageExplorer,
+                    onTranslateAudio = audioInput?.let { { audioSheetOpen = true } },
                 )
+                if (audioSheetOpen && audioInput != null) {
+                    AudioTranslationSheet(
+                        input = audioInput,
+                        accentColor = accentColor,
+                        onPlayTrack = actions.onAudioLanguage,
+                        onOpenConsent = null,
+                        onDismiss = { audioSheetOpen = false },
+                    )
+                }
             }
         },
         report = {

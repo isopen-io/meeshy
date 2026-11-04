@@ -15,7 +15,11 @@ import org.junit.Test
  */
 class BubbleAudioLanguageOverrideTest {
 
-    private class Prefs(override val systemLanguage: String?) : LanguageResolver.ContentLanguagePreferences
+    private class Prefs(
+        override val systemLanguage: String?,
+        override val regionalLanguage: String? = null,
+        override val customDestinationLanguage: String? = null,
+    ) : LanguageResolver.ContentLanguagePreferences
 
     private val french = Prefs("fr")
 

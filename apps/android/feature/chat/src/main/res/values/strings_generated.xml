@@ -549,7 +549,6 @@
     <string name="media_hub_tile_video">Video from %1$s, %2$s</string>
     <string name="media_hub_title">Media, links and documents</string>
     <string name="message_action_copyAddress">Copy address</string>
-    <string name="message_detail_a11y_retranslate">Translate again</string>
     <string name="message_detail_edits_current">Current</string>
     <string name="message_detail_edits_empty">The edit history appears here</string>
     <string name="message_detail_edits_history_title">History</string>
@@ -579,7 +578,6 @@
     <string name="message_detail_sentiment_a11y_label">Sentiment</string>
     <string name="message_detail_sentiment_a11y_value">%1$s, score %2$.2f</string>
     <string name="message_detail_sentiment_score">Score: %1$.2f</string>
-    <string name="message_detail_translate">Translate</string>
     <string name="message_detail_views_delivered">Delivered</string>
     <string name="message_detail_views_delivered_all">Delivered to everyone</string>
     <string name="message_detail_views_delivered_empty">No delivery confirmation</string>

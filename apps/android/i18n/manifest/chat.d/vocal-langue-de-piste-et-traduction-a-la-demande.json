@@ -13,16 +13,6 @@
           "catalog": "app",
           "iosKey": "translation.audio.error",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "message-detail.translate",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "message-detail.a11y.retranslate",
-          "status": "adopted"
         }
       ]
     }

@@ -556,7 +556,6 @@
     <string name="media_hub_tile_video">Video di %1$s, %2$s</string>
     <string name="media_hub_title">Media, link e documenti</string>
     <string name="message_action_copyAddress">Copia indirizzo</string>
-    <string name="message_detail_a11y_retranslate">Traduci di nuovo</string>
     <string name="message_detail_edits_current">Attuale</string>
     <string name="message_detail_edits_empty">La cronologia delle modifiche appare qui</string>
     <string name="message_detail_edits_history_title">Cronologia</string>
@@ -587,7 +586,6 @@
     <string name="message_detail_sentiment_a11y_label">Sentiment</string>
     <string name="message_detail_sentiment_a11y_value">%1$s, punteggio %2$.2f</string>
     <string name="message_detail_sentiment_score">Punteggio: %1$.2f</string>
-    <string name="message_detail_translate">Traduci</string>
     <string name="message_detail_views_delivered">Consegnato</string>
     <string name="message_detail_views_delivered_all">Consegnato a tutti</string>
     <string name="message_detail_views_delivered_empty">Nessuna conferma di consegna</string>
