@@ -143,7 +143,7 @@ internal fun CallEffectsCompanionStrip(
 private fun arrangement(tiles: List<GroupCallStageTile>, widthDp: Float, heightDp: Float): StripArrangement {
     val everyone = CallEffectsCompanionRule.layout(tiles, featuredId = null, capacity = 0)
     val tileSize = CallEffectsCompanionRule.tileSize(everyone.overflow, heightDp - 2 * INSET.value)
-        ?: return StripArrangement(everyone, CallTileSize(0f, 0f))
+        ?: return StripArrangement(everyone.copy(companions = emptyList(), overflow = 0), CallTileSize(0f, 0f))
     val capacity = CallEffectsCompanionRule.capacity(
         availableWidth = widthDp - 2 * (MARGIN.value + INSET.value),
         tileWidth = tileSize.widthDp,
