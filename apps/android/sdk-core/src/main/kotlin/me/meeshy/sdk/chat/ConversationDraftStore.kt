@@ -9,8 +9,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.Json
+import me.meeshy.core.datastore.BlobCodec
+import me.meeshy.sdk.cache.SealedBlobPreferences
 import me.meeshy.sdk.model.ConversationDraft
 
 /**
@@ -79,15 +82,20 @@ public class InMemoryConversationDraftStore(
 public class DataStoreConversationDraftStore(
     private val dataStore: DataStore<Preferences>,
     private val json: Json,
+    codec: BlobCodec = BlobCodec.Passthrough,
 ) : ConversationDraftStore {
 
-    override suspend fun load(conversationId: String): ConversationDraft? =
-        dataStore.data.map { prefs -> decode(prefs[keyFor(conversationId)]) }.first()
+    private val blobs = SealedBlobPreferences(dataStore, codec) { it.startsWith(KEY_PREFIX) }
+
+    override suspend fun load(conversationId: String): ConversationDraft? {
+        blobs.sealLegacy()
+        return dataStore.data.map { prefs -> decode(conversationId, prefs[keyFor(conversationId)]) }.first()
+    }
 
     override suspend fun save(draft: ConversationDraft) {
-        dataStore.edit { prefs ->
-            prefs[keyFor(draft.conversationId)] = json.encodeToString(ConversationDraft.serializer(), draft)
-        }
+        blobs.sealLegacy()
+        val sealed = blobs.seal(json.encodeToString(ConversationDraft.serializer(), draft), keyFor(draft.conversationId).name)
+        dataStore.edit { prefs -> prefs[keyFor(draft.conversationId)] = sealed }
     }
 
     override suspend fun clear(conversationId: String) {
@@ -102,14 +110,15 @@ public class DataStoreConversationDraftStore(
         dataStore.data.map { prefs ->
             prefs.asMap().entries
                 .filter { (key, value) -> key.name.startsWith(KEY_PREFIX) && value is String }
-                .mapNotNull { (_, value) -> decode(value as String) }
+                .mapNotNull { (key, value) -> decode(key.name.removePrefix(KEY_PREFIX), value as String) }
                 .associateBy { it.conversationId }
-        }
+        }.onStart { blobs.sealLegacy() }
 
     private fun keyFor(conversationId: String) = stringPreferencesKey("$KEY_PREFIX$conversationId")
 
-    private fun decode(raw: String?): ConversationDraft? =
-        raw?.let { runCatching { json.decodeFromString(ConversationDraft.serializer(), it) }.getOrNull() }
+    private fun decode(conversationId: String, raw: String?): ConversationDraft? =
+        blobs.open(raw, keyFor(conversationId).name)
+            ?.let { runCatching { json.decodeFromString(ConversationDraft.serializer(), it) }.getOrNull() }
 
     private companion object {
         private const val KEY_PREFIX = "draft:"

@@ -9,7 +9,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.serialization.json.Json
+import me.meeshy.core.datastore.BlobCodec
+import me.meeshy.sdk.cache.SealedBlobPreferences
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 
 /**
@@ -65,18 +68,23 @@ public class InMemoryStoryComposerDraftStore(
 public class DataStoreStoryComposerDraftStore(
     private val dataStore: DataStore<Preferences>,
     private val json: Json,
+    codec: BlobCodec = BlobCodec.Passthrough,
 ) : StoryComposerDraftStore {
 
-    override suspend fun load(): StoryComposerDraftSnapshot? =
-        dataStore.data.map { prefs -> decode(prefs[KEY]) }.first()
+    private val blobs = SealedBlobPreferences(dataStore, codec) { it == KEY.name }
+
+    override suspend fun load(): StoryComposerDraftSnapshot? {
+        blobs.sealLegacy()
+        return dataStore.data.map { prefs -> decode(prefs[KEY]) }.first()
+    }
 
     override fun observe(): Flow<StoryComposerDraftSnapshot?> =
-        dataStore.data.map { prefs -> decode(prefs[KEY]) }.distinctUntilChanged()
+        dataStore.data.map { prefs -> decode(prefs[KEY]) }.distinctUntilChanged().onStart { blobs.sealLegacy() }
 
     override suspend fun save(snapshot: StoryComposerDraftSnapshot) {
-        dataStore.edit { prefs ->
-            prefs[KEY] = json.encodeToString(StoryComposerDraftSnapshot.serializer(), snapshot)
-        }
+        blobs.sealLegacy()
+        val sealed = blobs.seal(json.encodeToString(StoryComposerDraftSnapshot.serializer(), snapshot), KEY.name)
+        dataStore.edit { prefs -> prefs[KEY] = sealed }
     }
 
     override suspend fun clear() {
@@ -84,7 +92,8 @@ public class DataStoreStoryComposerDraftStore(
     }
 
     private fun decode(raw: String?): StoryComposerDraftSnapshot? =
-        raw?.let { runCatching { json.decodeFromString(StoryComposerDraftSnapshot.serializer(), it) }.getOrNull() }
+        blobs.open(raw, KEY.name)
+            ?.let { runCatching { json.decodeFromString(StoryComposerDraftSnapshot.serializer(), it) }.getOrNull() }
 
     private companion object {
         private val KEY = stringPreferencesKey("story_composer_draft")

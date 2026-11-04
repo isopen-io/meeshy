@@ -18,6 +18,7 @@ import me.meeshy.sdk.auth.SharedPrefsSavedAccountsStore
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.category.CategorySnapshotStore
+import me.meeshy.core.datastore.BlobCodec
 import me.meeshy.sdk.category.DataStoreCategorySnapshotStore
 import me.meeshy.sdk.preferences.PreferenceSnapshotStore
 import me.meeshy.sdk.chat.ConversationDraftStore
@@ -236,12 +237,13 @@ object SdkModule {
     fun providesCategorySnapshotStore(
         @ApplicationContext context: Context,
         json: Json,
+        blobCodec: BlobCodec,
     ): CategorySnapshotStore {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
             context.preferencesDataStoreFile("meeshy_categories")
         }
-        return DataStoreCategorySnapshotStore(dataStore, json)
+        return DataStoreCategorySnapshotStore(dataStore, json, blobCodec)
     }
 
     @Provides
@@ -249,12 +251,13 @@ object SdkModule {
     fun providesConversationDraftStore(
         @ApplicationContext context: Context,
         json: Json,
+        blobCodec: BlobCodec,
     ): ConversationDraftStore {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
             context.preferencesDataStoreFile("meeshy_conversation_drafts")
         }
-        return DataStoreConversationDraftStore(dataStore, json)
+        return DataStoreConversationDraftStore(dataStore, json, blobCodec)
     }
 
     @Provides
@@ -262,12 +265,13 @@ object SdkModule {
     fun providesStoryComposerDraftStore(
         @ApplicationContext context: Context,
         json: Json,
+        blobCodec: BlobCodec,
     ): StoryComposerDraftStore {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
             context.preferencesDataStoreFile("meeshy_story_composer_draft")
         }
-        return DataStoreStoryComposerDraftStore(dataStore, json)
+        return DataStoreStoryComposerDraftStore(dataStore, json, blobCodec)
     }
 
     @Provides

@@ -34,6 +34,7 @@ android {
 
 dependencies {
     api(project(":core:model"))
+    implementation(project(":core:crypto"))
 
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.security.crypto)

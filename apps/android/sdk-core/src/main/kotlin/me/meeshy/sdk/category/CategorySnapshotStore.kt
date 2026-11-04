@@ -10,8 +10,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.onStart
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import me.meeshy.core.datastore.BlobCodec
+import me.meeshy.sdk.cache.SealedBlobPreferences
 import me.meeshy.sdk.model.CategoryOption
 
 /**
@@ -75,7 +78,10 @@ public class InMemoryCategorySnapshotStore(
 public class DataStoreCategorySnapshotStore(
     private val dataStore: DataStore<Preferences>,
     private val json: Json,
+    codec: BlobCodec = BlobCodec.Passthrough,
 ) : CategorySnapshotStore {
+
+    private val blobs = SealedBlobPreferences(dataStore, codec) { it == SNAPSHOT.name }
 
     private val serializer = ListSerializer(CategoryOption.serializer())
 
@@ -84,14 +90,16 @@ public class DataStoreCategorySnapshotStore(
             // Cold until the first sync stamps SYNCED_AT — a missing snapshot with a
             // stamp is a real empty catalogue, not a cold cache.
             if (prefs[SYNCED_AT] == null) null else decode(prefs[SNAPSHOT])
-        }
+        }.onStart { blobs.sealLegacy() }
 
     override fun lastSyncedAt(): Flow<Long?> =
         dataStore.data.map { prefs -> prefs[SYNCED_AT] }
 
     override suspend fun save(categories: List<CategoryOption>, syncedAtMillis: Long) {
+        blobs.sealLegacy()
+        val sealed = blobs.seal(json.encodeToString(serializer, categories), SNAPSHOT.name)
         dataStore.edit { prefs ->
-            prefs[SNAPSHOT] = json.encodeToString(serializer, categories)
+            prefs[SNAPSHOT] = sealed
             prefs[SYNCED_AT] = syncedAtMillis
         }
     }
@@ -101,7 +109,8 @@ public class DataStoreCategorySnapshotStore(
     }
 
     private fun decode(raw: String?): List<CategoryOption> =
-        raw?.let { runCatching { json.decodeFromString(serializer, it) }.getOrNull() } ?: emptyList()
+        blobs.open(raw, SNAPSHOT.name)
+            ?.let { runCatching { json.decodeFromString(serializer, it) }.getOrNull() } ?: emptyList()
 
     private companion object {
         private val SNAPSHOT = stringPreferencesKey("categories_snapshot")
