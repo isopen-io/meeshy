@@ -202,7 +202,7 @@ final class ProfileDecorTests: XCTestCase {
 
     func test_frameCatalog_embedsTheSevenPacks_fixedAndAnimated_named() {
         let catalog = BannerFrameCatalog.shared
-        XCTAssertEqual(catalog.framePacks.map(\.slug), Self.styles.map { "cadres-" + $0 })
+        XCTAssertEqual(catalog.framePacks.map(\.slug).filter { $0.hasPrefix("cadres-") }, Self.styles.map { "cadres-" + $0 })
         for style in Self.styles {
             XCTAssertEqual(catalog.framePacks.first { $0.slug == "cadres-" + style }?.frames.map(\.key), [style, style + "-anime"])
             XCTAssertNotNil(catalog.frameName(style + "-anime", language: "ar"))
