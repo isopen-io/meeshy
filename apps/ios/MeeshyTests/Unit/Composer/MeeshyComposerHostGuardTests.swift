@@ -1525,9 +1525,14 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // image ou d'une vidéo passe partout par la retouche de la caméra
             // (`ConversationPieceRetouch`), qui ne monte pas le meuble. La porte
             // de scène a quitté le dépôt avec son dernier appelant.
+            //
+            // **Une porte de plus** (#9333) : « Modifier » un post ou un réel
+            // (`PostEditComposerDoor`) rouvre le meuble sur la publication. Elle
+            // passe les trois canaux ; son canal de document ENREGISTRE la
+            // modification au lieu de publier.
             ["StoryTrayActions.swift", "MoodComposerDoor.swift", "DocumentComposerDoor.swift",
              "MediaComposerDoor.swift", "ShareComposeDoor.swift",
-             "StoryEditComposer.swift", "StoryRepublishComposer.swift"],
+             "StoryEditComposer.swift", "StoryRepublishComposer.swift", "PostEditComposerDoor.swift"],
             "Les sites qui montent le MEUBLE lui-même sont écrits en toutes lettres, et ce sont des PORTES : "
                 + "un montage de plus, posé directement dans une feuille de présentation, recopierait l'envoi "
                 + "et la reprise hors-ligne que `MoodComposerDoor` et `DocumentComposerDoor` tiennent une "
