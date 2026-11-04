@@ -137,6 +137,7 @@ internal fun MessageActionsSheet(
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     var confirmingDelete by remember { mutableStateOf(false) }
+    var showAllActions by remember { mutableStateOf(false) }
     val nowMillis = remember(bubble.messageId) { System.currentTimeMillis() }
     val ctx = bubble.actionContext(
         canWrite = canWrite,
@@ -217,7 +218,11 @@ internal fun MessageActionsSheet(
 
             // The action grid is composed by the pure [MessageActionMenu] SSOT; this
             // block is a dumb renderer mapping each resolved action to its row.
-            MessageActionMenu.actions(ctx).forEach { action ->
+            val tiers = remember(ctx, bubble.isViewOnce, bubble.isDeleted) {
+                MessageActionResolver.split(MessageActionMenu.actions(ctx), contentHidden = bubble.isViewOnce || bubble.isDeleted)
+            }
+            val shownActions = if (showAllActions) tiers.primary + tiers.more else tiers.primary
+            shownActions.forEach { action ->
                 when (action) {
                     MessageAction.Reply -> SheetAction(
                         icon = Icons.AutoMirrored.Filled.Reply,
@@ -395,6 +400,13 @@ internal fun MessageActionsSheet(
                         onClick = onReport,
                     )
                 }
+            }
+            if (!showAllActions && tiers.more.isNotEmpty()) {
+                SheetAction(
+                    icon = MeeshyIcons.MoreHorizontal,
+                    label = stringResource(R.string.action_more),
+                    onClick = { showAllActions = true },
+                )
             }
             if (MessageMenuEntries.saysServerFeaturesAbsent(entryFacts)) {
                 EndToEndMenuNotice(R.string.chat_menu_e2ee_notice)
