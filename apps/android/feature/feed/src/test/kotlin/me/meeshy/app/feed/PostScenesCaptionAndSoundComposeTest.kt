@@ -38,6 +38,7 @@ class PostScenesCaptionAndSoundComposeTest {
         accentHex = "6366F1",
         captions = captions,
         offersSound = offersSound,
+        moving = captions.map { true },
     )
 
     private fun showCard(scenes: FeedPostScenes) {
