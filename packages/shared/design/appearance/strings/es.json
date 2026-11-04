@@ -168,6 +168,14 @@
       "name": "Taller de Papá Noel",
       "description": "Dos contornos animados recién salidos del taller: un gorro rojo con un pompón que se balancea y un bastón de caramelo que gira, atado con una cinta verde."
     },
+    "fonds-noel": {
+      "name": "Fondos de Navidad",
+      "description": "Tres fondos de conversación a juego con los packs de Navidad: copos de cristal, guirnalda estrellada y rayas de bastón de caramelo, discretos para que cada burbuja se lea bien."
+    },
+    "fonds-noel-vivants": {
+      "name": "Navidad viva",
+      "description": "Tres fondos animados a juego con los packs de Navidad: nieve de cristales, una guirnalda cuyas bombillas se encienden por turnos y las chispas del taller. Con movimiento reducido: un degradado fijo."
+    },
     "bannieres-illustrees": {
       "name": "Marcos ilustrados",
       "description": "Los marcos de portada a juego con «Marcos ilustrados»: Máscara felina, Telaraña, Alas de ángel, Círculo rúnico, Garras de hueso y Alas de demonio, en el borde para que tu foto siga a la vista."
@@ -251,7 +259,13 @@
     "lucioles": "Luciérnagas",
     "voile-aurore": "Velo de aurora",
     "neige-douce": "Nieve suave",
-    "ondes": "Ondas"
+    "ondes": "Ondas",
+    "flocons-cristal": "Copos de cristal",
+    "guirlande-etoilee": "Guirnalda estrellada",
+    "sucre-d-orge-raye": "Rayas de caramelo",
+    "neige-de-noel": "Nieve de Navidad",
+    "ampoules-de-noel": "Bombillas de Navidad",
+    "etincelles-atelier": "Chispas del taller"
   },
   "rings": {
     "filet": "Filete",

@@ -168,6 +168,14 @@
       "name": "Laboratorio di Babbo Natale",
       "description": "Due contorni animati appena usciti dal laboratorio: un berretto rosso con il pompon che dondola e un bastoncino di zucchero che gira, legato da un nastro verde."
     },
+    "fonds-noel": {
+      "name": "Sfondi di Natale",
+      "description": "Tre sfondi di conversazione abbinati ai pacchetti di Natale: fiocchi di cristallo, ghirlanda stellata e strisce di bastoncino di zucchero, discreti perché ogni fumetto resti leggibile."
+    },
+    "fonds-noel-vivants": {
+      "name": "Natale vivo",
+      "description": "Tre sfondi animati abbinati ai pacchetti di Natale: neve di cristalli, una ghirlanda le cui lampadine si accendono a turno e le scintille del laboratorio. Con movimento ridotto: una sfumatura fissa."
+    },
     "bannieres-illustrees": {
       "name": "Cornici illustrate",
       "description": "Le cornici per il banner abbinate a «Cornici illustrate»: Maschera felina, Ragnatela, Ali d’angelo, Cerchio runico, Artigli d’osso e Ali di demone, al bordo perché la tua foto resti visibile."
@@ -251,7 +259,13 @@
     "lucioles": "Lucciole",
     "voile-aurore": "Velo d’aurora",
     "neige-douce": "Neve leggera",
-    "ondes": "Onde"
+    "ondes": "Onde",
+    "flocons-cristal": "Fiocchi di cristallo",
+    "guirlande-etoilee": "Ghirlanda stellata",
+    "sucre-d-orge-raye": "Strisce di zucchero",
+    "neige-de-noel": "Neve di Natale",
+    "ampoules-de-noel": "Lampadine di Natale",
+    "etincelles-atelier": "Scintille del laboratorio"
   },
   "rings": {
     "filet": "Filetto",

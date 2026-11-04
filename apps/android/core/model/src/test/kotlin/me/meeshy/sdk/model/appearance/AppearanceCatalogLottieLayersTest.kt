@@ -9,14 +9,14 @@ class AppearanceCatalogLottieLayersTest {
     private val catalog = AppearanceCatalog.decode(AppearanceFixtures.embeddedCatalogText())
 
     @Test
-    fun `the embedded catalog references the nine animated layers, the 72 illustrated films, the 12 Christmas films and the 13 living Meeshy layers, each once`() {
+    fun `the embedded catalog references the nine animated layers, the 72 illustrated films, the 12 Christmas ring films, the 3 Christmas wallpaper films and the 13 living Meeshy layers, each once`() {
         val layers = catalog.lottieLayers
-        assertThat(layers).hasSize(106)
-        assertThat(layers.map { it.sha256 }.toSet()).hasSize(106)
+        assertThat(layers).hasSize(109)
+        assertThat(layers.map { it.sha256 }.toSet()).hasSize(109)
     }
 
     @Test
-    fun `the layers are the animated packs' rings, banners and wallpapers, then both films of each illustrated frame, showcase, cultural families and Christmas, then the living Meeshy collections`() {
+    fun `the layers are the animated packs' rings, banners and wallpapers, then both films of each illustrated frame, showcase, cultural families and Christmas, the Christmas wallpapers, then the living Meeshy collections`() {
         val rings = listOf("halo-or", "prisme-vivant", "onde").map { catalog.ring("contours-animes", it)?.lottie }
         val banners = listOf("aurore-vive", "maree", "braises").map { catalog.bannerDesign("bannieres-animees", it)?.lottie }
         val wallpapers = listOf("brume-vivante", "bulles-legeres", "pluie-de-petales").map {
@@ -27,10 +27,12 @@ class AppearanceCatalogLottieLayersTest {
         val christmas = listOf("noel-enneige", "lumieres-de-noel", "atelier-du-pere-noel")
             .flatMap { slug -> catalog.ringPacks.single { it.slug == slug }.rings.flatMap { listOf(it.decor?.back, it.decor?.front) } }
         assertThat(christmas).hasSize(12)
+        val christmasWallpapers = catalog.wallpaperPacks.single { it.slug == "fonds-noel-vivants" }.designs.map { it.lottie }
+        assertThat(christmasWallpapers).hasSize(3)
         val meeshy = catalog.wallpaperPacks.single { it.slug == "meeshy-fonds-vivants" }.designs.map { it.lottie } +
             catalog.ringPacks.single { it.slug == "meeshy-vivants" }.rings.flatMap { listOfNotNull(it.lottie, it.decor?.back, it.decor?.front) }
         assertThat(meeshy).hasSize(13)
-        val expected = rings + banners + wallpapers + films + christmas + meeshy
+        val expected = rings + banners + wallpapers + films + christmas + christmasWallpapers + meeshy
         assertThat(expected).doesNotContain(null)
         assertThat(catalog.lottieLayers).containsExactlyElementsIn(expected)
     }

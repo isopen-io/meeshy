@@ -168,6 +168,14 @@
       "name": "Oficina do Pai Natal",
       "description": "Dois contornos animados acabados de sair da oficina: um gorro vermelho cujo pompom balança e um bastão de doce que gira, atado com uma fita verde."
     },
+    "fonds-noel": {
+      "name": "Fundos de Natal",
+      "description": "Três fundos de conversa a condizer com os packs de Natal: flocos de cristal, grinalda estrelada e riscas de bastão de doce, discretos para que cada balão se leia bem."
+    },
+    "fonds-noel-vivants": {
+      "name": "Natal vivo",
+      "description": "Três fundos animados a condizer com os packs de Natal: neve de cristais, uma grinalda cujas lâmpadas se acendem à vez e as faíscas da oficina. Com movimento reduzido: um degradê fixo."
+    },
     "bannieres-illustrees": {
       "name": "Molduras ilustradas",
       "description": "As molduras de capa a condizer com «Molduras ilustradas»: Máscara felina, Teia de aranha, Asas de anjo, Círculo rúnico, Garras de osso e Asas de demônio, na borda para que a tua foto fique à vista."
@@ -251,7 +259,13 @@
     "lucioles": "Pirilampos",
     "voile-aurore": "Véu de aurora",
     "neige-douce": "Neve suave",
-    "ondes": "Ondas"
+    "ondes": "Ondas",
+    "flocons-cristal": "Flocos de cristal",
+    "guirlande-etoilee": "Grinalda estrelada",
+    "sucre-d-orge-raye": "Riscas de bastão de doce",
+    "neige-de-noel": "Neve de Natal",
+    "ampoules-de-noel": "Lâmpadas de Natal",
+    "etincelles-atelier": "Faíscas da oficina"
   },
   "rings": {
     "filet": "Filete",

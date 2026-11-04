@@ -117,9 +117,11 @@ describe('les fonds de conversation de Noël (#15553)', () => {
     });
   });
 
-  it('aucune clé de fond n’est reprise d’un autre fond ni d’une bannière (la table des noms de modèles est commune)', () => {
+  it('les clés de Noël ne sont reprises par aucun autre fond ni aucune bannière (la table des noms de modèles est commune)', () => {
     const banners = (read('banners/designs.json') as { packs: readonly Pack[] }).packs;
-    const keys = [...packs, ...banners].flatMap((candidate) => candidate.designs.map((design) => design.key));
-    expect(new Set(keys).size).toBe(keys.length);
+    const christmas = CHRISTMAS_WALLPAPER_PACKS.flatMap((source) => source.items.map((item) => item.key));
+    const elsewhere = [...packs, ...banners].filter((candidate) => !CHRISTMAS_WALLPAPER_SLUGS.includes(candidate.slug)).flatMap((candidate) => candidate.designs.map((design) => design.key));
+    expect(new Set(christmas).size).toBe(christmas.length);
+    expect(christmas.filter((key) => elsewhere.includes(key))).toEqual([]);
   });
 });

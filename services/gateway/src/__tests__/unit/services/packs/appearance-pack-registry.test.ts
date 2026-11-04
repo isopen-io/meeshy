@@ -39,7 +39,8 @@ const ASSORTED: readonly (readonly [string, string])[] = [
   ['lumieres-de-noel', 'bannieres-lumieres-noel'],
   ['atelier-du-pere-noel', 'bannieres-atelier-noel'],
 ];
-const LATER = [...COLLECTIONS, ...CHRISTMAS, ...ASSORTED.map(([, banner]) => banner)];
+const CHRISTMAS_WALLPAPERS = ['fonds-noel', 'fonds-noel-vivants'];
+const LATER = [...COLLECTIONS, ...CHRISTMAS, ...CHRISTMAS_WALLPAPERS, ...ASSORTED.map(([, banner]) => banner)];
 const beforeCollections = <T extends { readonly slug: string }>(entries: readonly T[]): readonly T[] => entries.filter((entry) => !LATER.includes(entry.slug));
 
 describe('registres d’apparence générés', () => {
@@ -243,6 +244,24 @@ describe('registres d’apparence générés', () => {
     CHRISTMAS.forEach((slug) => {
       const pack = rings.find((entry) => entry.slug === slug);
       expect([pack?.installedByDefault, pack?.removable, pack?.usage]).toEqual([false, true, { kind: 'free', surfaces: ['avatar'] }]);
+    });
+  });
+
+  it('les fonds de Noël, fixe et animé, sont proposés par la boutique en sept langues, et chaque film animé est servi par le magasin (#15553)', () => {
+    const wallpapers = index.entries('wallpaper');
+    const packs = CHRISTMAS_WALLPAPERS.map((slug) => wallpapers.find((entry) => entry.slug === slug));
+    expect(packs.map((pack) => pack?.slug)).toEqual(CHRISTMAS_WALLPAPERS);
+    packs.forEach((pack) => {
+      expect([pack!.installedByDefault, pack!.removable]).toEqual([false, true]);
+      expect(index.itemKeys(pack!)).toHaveLength(3);
+      expect(Object.values(pack!.names).filter((names) => (names?.name.length ?? 0) > 0)).toHaveLength(7);
+    });
+    const contract = JSON.parse(readFileSync(join(ASSETS, packs[1]!.contract.src), 'utf8')) as { readonly designs: readonly { readonly lottie?: { readonly src: string; readonly sha256: string } }[] };
+    const films = contract.designs.flatMap((design) => (design.lottie ? [design.lottie] : []));
+    expect(films).toHaveLength(3);
+    films.forEach((ref) => {
+      expect(createHash('sha256').update(readFileSync(join(ASSETS, ref.src))).digest('hex')).toBe(ref.sha256);
+      expect(index.isServedAsset(ref.src)).toBe(true);
     });
   });
 });

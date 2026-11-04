@@ -465,11 +465,197 @@
     }
   },
   {
-    "slug": "meeshy-fonds",
+    "slug": "fonds-noel",
     "domain": "wallpaper",
     "origin": "builtin",
     "version": 1,
     "order": 5,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "1dc845ad72f8765d.webp",
+      "bytes": 868,
+      "sha256": "1dc845ad72f8765de86aba13800920a33942fe8850ec155c8a5fd7234394d18e"
+    },
+    "preview": null,
+    "contract": {
+      "src": "d937a1ec3f58d803.json",
+      "bytes": 2819,
+      "sha256": "d937a1ec3f58d8032e56d694896689342d1f56d05b8903bb1b2ab8907789e6e6"
+    },
+    "strings": {
+      "fr": {
+        "src": "3cdf28bb60c7be0e.json",
+        "bytes": 138,
+        "sha256": "3cdf28bb60c7be0ee4108b55fb793503694b8d87d78596f96ee385ce607aa3c5"
+      },
+      "en": {
+        "src": "5e9a2e2163da7d2e.json",
+        "bytes": 129,
+        "sha256": "5e9a2e2163da7d2e57a0b84689779c4eb01acd6db70308ce6f167c71d9b01df6"
+      },
+      "es": {
+        "src": "5c86c8a14a0cec1b.json",
+        "bytes": 132,
+        "sha256": "5c86c8a14a0cec1bb5100b80acd82fcb85a2d184201d94aab5aa6cb2d916e6dd"
+      },
+      "pt": {
+        "src": "da444d0ff6320a45.json",
+        "bytes": 139,
+        "sha256": "da444d0ff6320a451e45f6f234aa052698aa7b424703775f7880e059f1a1deb6"
+      },
+      "de": {
+        "src": "53b8e81e70aa8fc2.json",
+        "bytes": 130,
+        "sha256": "53b8e81e70aa8fc2bb0af7a344255da9c17dfee2b65d7bf3b5761b63000137e0"
+      },
+      "it": {
+        "src": "a55d0dbde042a535.json",
+        "bytes": 136,
+        "sha256": "a55d0dbde042a535aa35cb71c73d799d84aed066f5acbe71c2d7d7db79d1d3ca"
+      },
+      "ar": {
+        "src": "90c5f838279ef941.json",
+        "bytes": 149,
+        "sha256": "90c5f838279ef941336dc257a529c8b742c3731320e6ca7032727a8cf1e7a30a"
+      }
+    },
+    "downloadBytes": {
+      "story": 2819,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Fonds de Noël",
+        "description": "Trois fonds de conversation assortis aux packs de Noël : flocons de cristal, guirlande étoilée et rayures de sucre d’orge, assez discrets pour laisser lire chaque bulle."
+      },
+      "en": {
+        "name": "Christmas backgrounds",
+        "description": "Three chat backgrounds to match the Christmas packs: crystal snowflakes, a starry garland and candy-cane stripes, subtle enough to keep every bubble readable."
+      },
+      "es": {
+        "name": "Fondos de Navidad",
+        "description": "Tres fondos de conversación a juego con los packs de Navidad: copos de cristal, guirnalda estrellada y rayas de bastón de caramelo, discretos para que cada burbuja se lea bien."
+      },
+      "pt": {
+        "name": "Fundos de Natal",
+        "description": "Três fundos de conversa a condizer com os packs de Natal: flocos de cristal, grinalda estrelada e riscas de bastão de doce, discretos para que cada balão se leia bem."
+      },
+      "de": {
+        "name": "Weihnachtshintergründe",
+        "description": "Drei Chat-Hintergründe passend zu den Weihnachtspaketen: Kristallflocken, Sternengirlande und Zuckerstangenstreifen, dezent genug, damit jede Blase lesbar bleibt."
+      },
+      "it": {
+        "name": "Sfondi di Natale",
+        "description": "Tre sfondi di conversazione abbinati ai pacchetti di Natale: fiocchi di cristallo, ghirlanda stellata e strisce di bastoncino di zucchero, discreti perché ogni fumetto resti leggibile."
+      },
+      "ar": {
+        "name": "خلفيات الميلاد",
+        "description": "ثلاث خلفيات للمحادثة تُناسب حزم الميلاد: ندف بلورية وإكليل النجوم وخطوط عصا الحلوى، هادئة بما يكفي لتبقى كل فقاعة مقروءة."
+      }
+    }
+  },
+  {
+    "slug": "fonds-noel-vivants",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 6,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "43784115e51ea1f9.webp",
+      "bytes": 568,
+      "sha256": "43784115e51ea1f9f806870dcc8ebfab0afd4a5c6671124ab0313f7009537f6f"
+    },
+    "preview": null,
+    "contract": {
+      "src": "824d79a0bb105c16.json",
+      "bytes": 2238,
+      "sha256": "824d79a0bb105c163b317e078a2f294a773995f03e47aa204781aeeca1c4d9fa"
+    },
+    "strings": {
+      "fr": {
+        "src": "2aa411040b4238ac.json",
+        "bytes": 134,
+        "sha256": "2aa411040b4238acc9cb84b8d6aac982a9d3d90de122a9a1779b0addf4a0ca99"
+      },
+      "en": {
+        "src": "754d00175b7e7667.json",
+        "bytes": 121,
+        "sha256": "754d00175b7e7667d374e3c4182c395de0691d313359c44b7319a862741022e0"
+      },
+      "es": {
+        "src": "b9c2fd58f4ba3fba.json",
+        "bytes": 131,
+        "sha256": "b9c2fd58f4ba3fbaab895574617724f4436c9295f709029df34c5da1cd5350d2"
+      },
+      "pt": {
+        "src": "916b0922ce7d623b.json",
+        "bytes": 127,
+        "sha256": "916b0922ce7d623b3362197a817ac91bcbf67cdc33a3d46a5dedfe678de3260b"
+      },
+      "de": {
+        "src": "d42f40809ca44945.json",
+        "bytes": 125,
+        "sha256": "d42f40809ca44945faf593107b86bbbe8a462470f026b1c23b112ef5b88f4fd9"
+      },
+      "it": {
+        "src": "6abe34e6322fcc51.json",
+        "bytes": 135,
+        "sha256": "6abe34e6322fcc513b301c9acd429f59789b1fdc4b1d3eeb12d71c795b424d5e"
+      },
+      "ar": {
+        "src": "d0c2d8c3b9058bdc.json",
+        "bytes": 150,
+        "sha256": "d0c2d8c3b9058bdcd2c73845d19cd3471cb8a19f27d4e29c80f55dad5f91b5a5"
+      }
+    },
+    "downloadBytes": {
+      "story": 2238,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Noël vivant",
+        "description": "Trois fonds animés assortis aux packs de Noël : une neige de cristaux, une guirlande dont les ampoules s’allument tour à tour et les étincelles de l’atelier. Animations réduites : un dégradé fixe."
+      },
+      "en": {
+        "name": "Living Christmas",
+        "description": "Three animated backgrounds to match the Christmas packs: falling crystal snow, a garland whose bulbs light up in turn, and sparks from the workshop. With reduced motion: a still gradient."
+      },
+      "es": {
+        "name": "Navidad viva",
+        "description": "Tres fondos animados a juego con los packs de Navidad: nieve de cristales, una guirnalda cuyas bombillas se encienden por turnos y las chispas del taller. Con movimiento reducido: un degradado fijo."
+      },
+      "pt": {
+        "name": "Natal vivo",
+        "description": "Três fundos animados a condizer com os packs de Natal: neve de cristais, uma grinalda cujas lâmpadas se acendem à vez e as faíscas da oficina. Com movimento reduzido: um degradê fixo."
+      },
+      "de": {
+        "name": "Lebendige Weihnacht",
+        "description": "Drei animierte Hintergründe passend zu den Weihnachtspaketen: fallender Kristallschnee, eine Lichterkette, deren Birnen nacheinander leuchten, und Funken aus der Werkstatt. Bei reduzierter Bewegung: ein ruhiger Verlauf."
+      },
+      "it": {
+        "name": "Natale vivo",
+        "description": "Tre sfondi animati abbinati ai pacchetti di Natale: neve di cristalli, una ghirlanda le cui lampadine si accendono a turno e le scintille del laboratorio. Con movimento ridotto: una sfumatura fissa."
+      },
+      "ar": {
+        "name": "ميلاد حي",
+        "description": "ثلاث خلفيات متحركة تُناسب حزم الميلاد: ثلج من البلورات، وإكليل تضيء مصابيحه بالتناوب، وشرارات الورشة. مع تقليل الحركة: تدرّج ثابت."
+      }
+    }
+  },
+  {
+    "slug": "meeshy-fonds",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 7,
     "installedByDefault": false,
     "removable": true,
     "hidden": false,
@@ -562,7 +748,7 @@
     "domain": "wallpaper",
     "origin": "builtin",
     "version": 1,
-    "order": 6,
+    "order": 8,
     "installedByDefault": false,
     "removable": true,
     "hidden": false,

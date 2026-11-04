@@ -17,10 +17,10 @@ describe('la copie iOS du catalogue d’apparence (#10631, § 8.2)', () => {
     expect(read(IOS_CATALOG_SWIFT_PATH)).toContain(renderAppearanceCatalog().trimEnd());
   });
 
-  it('porte la gamme de 16 couleurs, les 27 fonds des 7 packs, 9 bannières, 77 contours, 66 cadres de bannière (collections Meeshy de #15158, packs de Noël et bannières assorties de #15553 compris) et les 7 langues', () => {
+  it('porte la gamme de 16 couleurs, les 33 fonds des 9 packs, 9 bannières, 77 contours, 66 cadres de bannière (collections Meeshy de #15158, packs de Noël — contours, fonds — et bannières assorties de #15553 compris) et les 7 langues', () => {
     const catalog = buildAppearanceCatalog();
     expect(catalog.gamut.map((entry) => entry.key)).toEqual([...GAMUT_KEYS]);
-    expect(catalog.wallpapers.flatMap((pack) => pack.designs)).toHaveLength(27);
+    expect(catalog.wallpapers.flatMap((pack) => pack.designs)).toHaveLength(33);
     expect(catalog.banners.flatMap((pack) => pack.designs)).toHaveLength(9);
     expect(catalog.rings.flatMap((pack) => pack.rings)).toHaveLength(77);
     expect(catalog.bannerFrames.flatMap((pack) => pack.frames)).toHaveLength(66);

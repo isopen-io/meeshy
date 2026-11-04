@@ -168,6 +168,14 @@
       "name": "Werkstatt des Weihnachtsmanns",
       "description": "Zwei animierte Rahmen frisch aus der Werkstatt: eine rote Mütze mit schaukelndem Bommel und eine kreisende Zuckerstange mit grüner Schleife."
     },
+    "fonds-noel": {
+      "name": "Weihnachtshintergründe",
+      "description": "Drei Chat-Hintergründe passend zu den Weihnachtspaketen: Kristallflocken, Sternengirlande und Zuckerstangenstreifen, dezent genug, damit jede Blase lesbar bleibt."
+    },
+    "fonds-noel-vivants": {
+      "name": "Lebendige Weihnacht",
+      "description": "Drei animierte Hintergründe passend zu den Weihnachtspaketen: fallender Kristallschnee, eine Lichterkette, deren Birnen nacheinander leuchten, und Funken aus der Werkstatt. Bei reduzierter Bewegung: ein ruhiger Verlauf."
+    },
     "bannieres-illustrees": {
       "name": "Illustrierte Rahmen",
       "description": "Bannerrahmen passend zu „Illustrierte Rahmen“: Katzenmaske, Spinnennetz, Engelsflügel, Runenkreis, Knochenkrallen und Dämonenflügel, nur am Rand, damit dein Foto sichtbar bleibt."
@@ -251,7 +259,13 @@
     "lucioles": "Glühwürmchen",
     "voile-aurore": "Polarlichtschleier",
     "neige-douce": "Sanfter Schnee",
-    "ondes": "Wellenringe"
+    "ondes": "Wellenringe",
+    "flocons-cristal": "Kristallflocken",
+    "guirlande-etoilee": "Sternengirlande",
+    "sucre-d-orge-raye": "Zuckerstangenstreifen",
+    "neige-de-noel": "Weihnachtsschnee",
+    "ampoules-de-noel": "Christbaumlichter",
+    "etincelles-atelier": "Werkstattfunken"
   },
   "rings": {
     "filet": "Haarlinie",

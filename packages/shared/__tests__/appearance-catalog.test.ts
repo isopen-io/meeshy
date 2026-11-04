@@ -10,13 +10,18 @@ import { parsePackIndex } from '../types/content-pack-index';
 import { GAMUT_KEYS } from '../design/appearance/gamut';
 import { validateLottie } from '../utils/lottie-validate';
 import { MEESHY_COLLECTION_SLUGS } from '../scripts/compose-meeshy-collections';
+import { CHRISTMAS_WALLPAPER_SLUGS } from '../scripts/compose-assorted-banners';
 
 const DIR = join(__dirname, '../design/appearance');
 const read = (file: string): unknown => JSON.parse(readFileSync(join(DIR, file), 'utf8')) as unknown;
 
 type PackFile = { readonly packs: readonly { readonly slug: string; readonly order: number; readonly installedByDefault: boolean; readonly removable: boolean; readonly usage?: unknown; readonly designs?: readonly unknown[]; readonly rings?: readonly unknown[] }[] };
-/** Les collections Meeshy de #15158 ont leur propre témoin (`meeshy-collections-catalog.test.ts`) : ce fichier compte le catalogue qui les précède. */
-const beforeCollections = (file: PackFile): PackFile => ({ packs: file.packs.filter((pack) => !MEESHY_COLLECTION_SLUGS.includes(pack.slug)) });
+/**
+ * Les collections Meeshy de #15158 et les fonds de Noël de #15553 ont leur propre témoin (`meeshy-collections-catalog.test.ts`,
+ * `christmas-wallpapers.test.ts`) : ce fichier compte le catalogue qui les précède.
+ */
+const OWN_WITNESS = [...MEESHY_COLLECTION_SLUGS, ...CHRISTMAS_WALLPAPER_SLUGS];
+const beforeCollections = (file: PackFile): PackFile => ({ packs: file.packs.filter((pack) => !OWN_WITNESS.includes(pack.slug)) });
 const allWallpapers = read('wallpapers/designs.json') as PackFile;
 const wallpapers = beforeCollections(allWallpapers);
 const banners = read('banners/designs.json') as PackFile;

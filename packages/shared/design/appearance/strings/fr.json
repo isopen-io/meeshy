@@ -168,6 +168,14 @@
       "name": "Atelier du Père Noël",
       "description": "Deux contours animés tout droit sortis de l’atelier : un bonnet rouge dont le pompon se balance, et un sucre d’orge qui tourne, noué d’un ruban vert."
     },
+    "fonds-noel": {
+      "name": "Fonds de Noël",
+      "description": "Trois fonds de conversation assortis aux packs de Noël : flocons de cristal, guirlande étoilée et rayures de sucre d’orge, assez discrets pour laisser lire chaque bulle."
+    },
+    "fonds-noel-vivants": {
+      "name": "Noël vivant",
+      "description": "Trois fonds animés assortis aux packs de Noël : une neige de cristaux, une guirlande dont les ampoules s’allument tour à tour et les étincelles de l’atelier. Animations réduites : un dégradé fixe."
+    },
     "bannieres-illustrees": {
       "name": "Cadres illustrés",
       "description": "Les cadres de bannière assortis à « Cadres illustrés » : Masque félin, Toile d’araignée, Ailes d’ange, Cercle runique, Griffes d’os et Ailes de démon, posés en bordure pour laisser voir votre photo."
@@ -251,7 +259,13 @@
     "lucioles": "Lucioles",
     "voile-aurore": "Voile d’aurore",
     "neige-douce": "Neige douce",
-    "ondes": "Ondes"
+    "ondes": "Ondes",
+    "flocons-cristal": "Flocons de cristal",
+    "guirlande-etoilee": "Guirlande étoilée",
+    "sucre-d-orge-raye": "Rayures sucre d’orge",
+    "neige-de-noel": "Neige de Noël",
+    "ampoules-de-noel": "Ampoules de Noël",
+    "etincelles-atelier": "Étincelles de l’atelier"
   },
   "rings": {
     "filet": "Filet",

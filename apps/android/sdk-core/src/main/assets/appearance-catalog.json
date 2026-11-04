@@ -1281,8 +1281,276 @@
       ]
     },
     {
-      "slug": "meeshy-fonds",
+      "slug": "fonds-noel",
       "order": 5,
+      "installedByDefault": false,
+      "removable": true,
+      "designs": [
+        {
+          "key": "flocons-cristal",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#F6F9FC",
+              "ink": "#1E3A8A",
+              "soft": "#E6EEF6"
+            },
+            "dark": {
+              "base": "#0A0F1A",
+              "ink": "#BFDBFE",
+              "soft": "#121A2A"
+            }
+          },
+          "tile": {
+            "width": 64,
+            "height": 64,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M18 26L18 10M11.07 22L24.93 14M11.07 14L24.93 22M24.48 19.78L22.16 20.4L22.78 22.72M19.7 24.5L18 22.8L16.3 24.5M13.22 22.72L13.84 20.4L11.52 19.78M11.52 16.22L13.84 15.6L13.22 13.28M16.3 11.5L18 13.2L19.7 11.5M22.78 13.28L22.16 15.6L24.48 16.22",
+                "role": "ink",
+                "opacity": 0.07,
+                "width": 0.7
+              },
+              {
+                "d": "M50 53.5L50 42.5M45.24 50.75L54.76 45.25M45.24 45.25L54.76 50.75M54.45 49.22L52.86 49.65L53.28 51.24M51.17 52.47L50 51.3L48.83 52.47M46.72 51.24L47.14 49.65L45.55 49.22M45.55 46.78L47.14 46.35L46.72 44.76M48.83 43.53L50 44.7L51.17 43.53M53.28 44.76L52.86 46.35L54.45 46.78",
+                "role": "ink",
+                "opacity": 0.06,
+                "width": 0.6
+              },
+              {
+                "d": "M49.2 14A0.8 0.8 0 1 0 50.8 14A0.8 0.8 0 1 0 49.2 14ZM13.2 50A0.8 0.8 0 1 0 14.8 50A0.8 0.8 0 1 0 13.2 50Z",
+                "role": "ink",
+                "opacity": 0.08
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "guirlande-etoilee",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#FBF8F1",
+              "ink": "#92400E",
+              "soft": "#F3ECDD"
+            },
+            "dark": {
+              "base": "#100D08",
+              "ink": "#FCD34D",
+              "soft": "#1B160E"
+            }
+          },
+          "tile": {
+            "width": 80,
+            "height": 56,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M0 8C13 20 27 20 40 8C53 20 67 20 80 8",
+                "role": "ink",
+                "opacity": 0.07,
+                "width": 0.6
+              },
+              {
+                "d": "M17.4 20.5A2.6 2.6 0 1 0 22.6 20.5A2.6 2.6 0 1 0 17.4 20.5ZM57.4 20.5A2.6 2.6 0 1 0 62.6 20.5A2.6 2.6 0 1 0 57.4 20.5Z",
+                "role": "ink",
+                "opacity": 0.08
+              },
+              {
+                "d": "M40 33.5L40.99 37.01L44.5 38L40.99 38.99L40 42.5L39.01 38.99L35.5 38L39.01 37.01Z",
+                "role": "ink",
+                "opacity": 0.07
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "sucre-d-orge-raye",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#FCF7F7",
+              "ink": "#B91C1C",
+              "soft": "#F4E6E6"
+            },
+            "dark": {
+              "base": "#120A0B",
+              "ink": "#FCA5A5",
+              "soft": "#1E1213"
+            }
+          },
+          "tile": {
+            "width": 32,
+            "height": 32,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M-4 4L4 -4M0 32L32 0M28 36L36 28",
+                "role": "ink",
+                "opacity": 0.06,
+                "width": 3
+              },
+              {
+                "d": "M0 16L16 0M16 32L32 16",
+                "role": "ink",
+                "opacity": 0.08,
+                "width": 0.6
+              }
+            ]
+          },
+          "fit": "fill"
+        }
+      ]
+    },
+    {
+      "slug": "fonds-noel-vivants",
+      "order": 6,
+      "installedByDefault": false,
+      "removable": true,
+      "designs": [
+        {
+          "key": "neige-de-noel",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#F3F7FC",
+              "ink": "#D7E3F1",
+              "soft": "#E7EEF7"
+            },
+            "dark": {
+              "base": "#0A1020",
+              "ink": "#16223D",
+              "soft": "#0E1730"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 0,
+                "r": 0.9,
+                "role": "ink",
+                "opacity": 0.45
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "76356c212acf9bf9.json",
+            "bytes": 30773,
+            "sha256": "76356c212acf9bf941f1aca7dbac0d522d6e1b0530667ab180d8d661705cf4ae"
+          }
+        },
+        {
+          "key": "ampoules-de-noel",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#FBF8F1",
+              "ink": "#F3E3BC",
+              "soft": "#F1EBDD"
+            },
+            "dark": {
+              "base": "#0F0D0A",
+              "ink": "#2A2010",
+              "soft": "#17140F"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 0.05,
+                "r": 0.8,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "3f315eaf529d3947.json",
+            "bytes": 19538,
+            "sha256": "3f315eaf529d394789b9c6feb418258ac2a2d9ec98caaaf60bbb05ca8dff7ca1"
+          }
+        },
+        {
+          "key": "etincelles-atelier",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#FCF8F6",
+              "ink": "#F6DCD5",
+              "soft": "#EFEDE4"
+            },
+            "dark": {
+              "base": "#110B0B",
+              "ink": "#2B1414",
+              "soft": "#121611"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 1,
+                "r": 0.85,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "cf5704f84d5d73bb.json",
+            "bytes": 22882,
+            "sha256": "cf5704f84d5d73bbb0e4c20a2b91707663a9fc9a140e0ee8452c314d9dd9652e"
+          }
+        }
+      ]
+    },
+    {
+      "slug": "meeshy-fonds",
+      "order": 7,
       "installedByDefault": false,
       "removable": true,
       "designs": [
@@ -1550,7 +1818,7 @@
     },
     {
       "slug": "meeshy-fonds-vivants",
-      "order": 6,
+      "order": 8,
       "installedByDefault": false,
       "removable": true,
       "designs": [
@@ -21603,6 +21871,14 @@
           "name": "Atelier du Père Noël",
           "description": "Deux contours animés tout droit sortis de l’atelier : un bonnet rouge dont le pompon se balance, et un sucre d’orge qui tourne, noué d’un ruban vert."
         },
+        "fonds-noel": {
+          "name": "Fonds de Noël",
+          "description": "Trois fonds de conversation assortis aux packs de Noël : flocons de cristal, guirlande étoilée et rayures de sucre d’orge, assez discrets pour laisser lire chaque bulle."
+        },
+        "fonds-noel-vivants": {
+          "name": "Noël vivant",
+          "description": "Trois fonds animés assortis aux packs de Noël : une neige de cristaux, une guirlande dont les ampoules s’allument tour à tour et les étincelles de l’atelier. Animations réduites : un dégradé fixe."
+        },
         "bannieres-illustrees": {
           "name": "Cadres illustrés",
           "description": "Les cadres de bannière assortis à « Cadres illustrés » : Masque félin, Toile d’araignée, Ailes d’ange, Cercle runique, Griffes d’os et Ailes de démon, posés en bordure pour laisser voir votre photo."
@@ -21686,7 +21962,13 @@
         "lucioles": "Lucioles",
         "voile-aurore": "Voile d’aurore",
         "neige-douce": "Neige douce",
-        "ondes": "Ondes"
+        "ondes": "Ondes",
+        "flocons-cristal": "Flocons de cristal",
+        "guirlande-etoilee": "Guirlande étoilée",
+        "sucre-d-orge-raye": "Rayures sucre d’orge",
+        "neige-de-noel": "Neige de Noël",
+        "ampoules-de-noel": "Ampoules de Noël",
+        "etincelles-atelier": "Étincelles de l’atelier"
       },
       "rings": {
         "filet": "Filet",
@@ -22030,6 +22312,14 @@
           "name": "Santa’s workshop",
           "description": "Two animated rings straight from the workshop: a red hat with a swinging pompom, and a spinning candy cane tied with a green ribbon."
         },
+        "fonds-noel": {
+          "name": "Christmas backgrounds",
+          "description": "Three chat backgrounds to match the Christmas packs: crystal snowflakes, a starry garland and candy-cane stripes, subtle enough to keep every bubble readable."
+        },
+        "fonds-noel-vivants": {
+          "name": "Living Christmas",
+          "description": "Three animated backgrounds to match the Christmas packs: falling crystal snow, a garland whose bulbs light up in turn, and sparks from the workshop. With reduced motion: a still gradient."
+        },
         "bannieres-illustrees": {
           "name": "Illustrated frames",
           "description": "Banner frames to match “Illustrated frames”: Feline mask, Spider web, Angel wings, Runic circle, Bone claws and Demon wings, kept to the edge so your photo stays in view."
@@ -22113,7 +22403,13 @@
         "lucioles": "Fireflies",
         "voile-aurore": "Aurora veil",
         "neige-douce": "Soft snow",
-        "ondes": "Ripples"
+        "ondes": "Ripples",
+        "flocons-cristal": "Crystal snowflakes",
+        "guirlande-etoilee": "Starry garland",
+        "sucre-d-orge-raye": "Candy-cane stripes",
+        "neige-de-noel": "Christmas snow",
+        "ampoules-de-noel": "Christmas bulbs",
+        "etincelles-atelier": "Workshop sparks"
       },
       "rings": {
         "filet": "Hairline",
@@ -22457,6 +22753,14 @@
           "name": "Taller de Papá Noel",
           "description": "Dos contornos animados recién salidos del taller: un gorro rojo con un pompón que se balancea y un bastón de caramelo que gira, atado con una cinta verde."
         },
+        "fonds-noel": {
+          "name": "Fondos de Navidad",
+          "description": "Tres fondos de conversación a juego con los packs de Navidad: copos de cristal, guirnalda estrellada y rayas de bastón de caramelo, discretos para que cada burbuja se lea bien."
+        },
+        "fonds-noel-vivants": {
+          "name": "Navidad viva",
+          "description": "Tres fondos animados a juego con los packs de Navidad: nieve de cristales, una guirnalda cuyas bombillas se encienden por turnos y las chispas del taller. Con movimiento reducido: un degradado fijo."
+        },
         "bannieres-illustrees": {
           "name": "Marcos ilustrados",
           "description": "Los marcos de portada a juego con «Marcos ilustrados»: Máscara felina, Telaraña, Alas de ángel, Círculo rúnico, Garras de hueso y Alas de demonio, en el borde para que tu foto siga a la vista."
@@ -22540,7 +22844,13 @@
         "lucioles": "Luciérnagas",
         "voile-aurore": "Velo de aurora",
         "neige-douce": "Nieve suave",
-        "ondes": "Ondas"
+        "ondes": "Ondas",
+        "flocons-cristal": "Copos de cristal",
+        "guirlande-etoilee": "Guirnalda estrellada",
+        "sucre-d-orge-raye": "Rayas de caramelo",
+        "neige-de-noel": "Nieve de Navidad",
+        "ampoules-de-noel": "Bombillas de Navidad",
+        "etincelles-atelier": "Chispas del taller"
       },
       "rings": {
         "filet": "Filete",
@@ -22884,6 +23194,14 @@
           "name": "Oficina do Pai Natal",
           "description": "Dois contornos animados acabados de sair da oficina: um gorro vermelho cujo pompom balança e um bastão de doce que gira, atado com uma fita verde."
         },
+        "fonds-noel": {
+          "name": "Fundos de Natal",
+          "description": "Três fundos de conversa a condizer com os packs de Natal: flocos de cristal, grinalda estrelada e riscas de bastão de doce, discretos para que cada balão se leia bem."
+        },
+        "fonds-noel-vivants": {
+          "name": "Natal vivo",
+          "description": "Três fundos animados a condizer com os packs de Natal: neve de cristais, uma grinalda cujas lâmpadas se acendem à vez e as faíscas da oficina. Com movimento reduzido: um degradê fixo."
+        },
         "bannieres-illustrees": {
           "name": "Molduras ilustradas",
           "description": "As molduras de capa a condizer com «Molduras ilustradas»: Máscara felina, Teia de aranha, Asas de anjo, Círculo rúnico, Garras de osso e Asas de demônio, na borda para que a tua foto fique à vista."
@@ -22967,7 +23285,13 @@
         "lucioles": "Pirilampos",
         "voile-aurore": "Véu de aurora",
         "neige-douce": "Neve suave",
-        "ondes": "Ondas"
+        "ondes": "Ondas",
+        "flocons-cristal": "Flocos de cristal",
+        "guirlande-etoilee": "Grinalda estrelada",
+        "sucre-d-orge-raye": "Riscas de bastão de doce",
+        "neige-de-noel": "Neve de Natal",
+        "ampoules-de-noel": "Lâmpadas de Natal",
+        "etincelles-atelier": "Faíscas da oficina"
       },
       "rings": {
         "filet": "Filete",
@@ -23311,6 +23635,14 @@
           "name": "Werkstatt des Weihnachtsmanns",
           "description": "Zwei animierte Rahmen frisch aus der Werkstatt: eine rote Mütze mit schaukelndem Bommel und eine kreisende Zuckerstange mit grüner Schleife."
         },
+        "fonds-noel": {
+          "name": "Weihnachtshintergründe",
+          "description": "Drei Chat-Hintergründe passend zu den Weihnachtspaketen: Kristallflocken, Sternengirlande und Zuckerstangenstreifen, dezent genug, damit jede Blase lesbar bleibt."
+        },
+        "fonds-noel-vivants": {
+          "name": "Lebendige Weihnacht",
+          "description": "Drei animierte Hintergründe passend zu den Weihnachtspaketen: fallender Kristallschnee, eine Lichterkette, deren Birnen nacheinander leuchten, und Funken aus der Werkstatt. Bei reduzierter Bewegung: ein ruhiger Verlauf."
+        },
         "bannieres-illustrees": {
           "name": "Illustrierte Rahmen",
           "description": "Bannerrahmen passend zu „Illustrierte Rahmen“: Katzenmaske, Spinnennetz, Engelsflügel, Runenkreis, Knochenkrallen und Dämonenflügel, nur am Rand, damit dein Foto sichtbar bleibt."
@@ -23394,7 +23726,13 @@
         "lucioles": "Glühwürmchen",
         "voile-aurore": "Polarlichtschleier",
         "neige-douce": "Sanfter Schnee",
-        "ondes": "Wellenringe"
+        "ondes": "Wellenringe",
+        "flocons-cristal": "Kristallflocken",
+        "guirlande-etoilee": "Sternengirlande",
+        "sucre-d-orge-raye": "Zuckerstangenstreifen",
+        "neige-de-noel": "Weihnachtsschnee",
+        "ampoules-de-noel": "Christbaumlichter",
+        "etincelles-atelier": "Werkstattfunken"
       },
       "rings": {
         "filet": "Haarlinie",
@@ -23738,6 +24076,14 @@
           "name": "Laboratorio di Babbo Natale",
           "description": "Due contorni animati appena usciti dal laboratorio: un berretto rosso con il pompon che dondola e un bastoncino di zucchero che gira, legato da un nastro verde."
         },
+        "fonds-noel": {
+          "name": "Sfondi di Natale",
+          "description": "Tre sfondi di conversazione abbinati ai pacchetti di Natale: fiocchi di cristallo, ghirlanda stellata e strisce di bastoncino di zucchero, discreti perché ogni fumetto resti leggibile."
+        },
+        "fonds-noel-vivants": {
+          "name": "Natale vivo",
+          "description": "Tre sfondi animati abbinati ai pacchetti di Natale: neve di cristalli, una ghirlanda le cui lampadine si accendono a turno e le scintille del laboratorio. Con movimento ridotto: una sfumatura fissa."
+        },
         "bannieres-illustrees": {
           "name": "Cornici illustrate",
           "description": "Le cornici per il banner abbinate a «Cornici illustrate»: Maschera felina, Ragnatela, Ali d’angelo, Cerchio runico, Artigli d’osso e Ali di demone, al bordo perché la tua foto resti visibile."
@@ -23821,7 +24167,13 @@
         "lucioles": "Lucciole",
         "voile-aurore": "Velo d’aurora",
         "neige-douce": "Neve leggera",
-        "ondes": "Onde"
+        "ondes": "Onde",
+        "flocons-cristal": "Fiocchi di cristallo",
+        "guirlande-etoilee": "Ghirlanda stellata",
+        "sucre-d-orge-raye": "Strisce di zucchero",
+        "neige-de-noel": "Neve di Natale",
+        "ampoules-de-noel": "Lampadine di Natale",
+        "etincelles-atelier": "Scintille del laboratorio"
       },
       "rings": {
         "filet": "Filetto",
@@ -24165,6 +24517,14 @@
           "name": "ورشة بابا نويل",
           "description": "إطاران متحركان من الورشة مباشرة: قبعة حمراء تتأرجح كرتها، وعصا حلوى تدور معقودة بشريط أخضر."
         },
+        "fonds-noel": {
+          "name": "خلفيات الميلاد",
+          "description": "ثلاث خلفيات للمحادثة تُناسب حزم الميلاد: ندف بلورية وإكليل النجوم وخطوط عصا الحلوى، هادئة بما يكفي لتبقى كل فقاعة مقروءة."
+        },
+        "fonds-noel-vivants": {
+          "name": "ميلاد حي",
+          "description": "ثلاث خلفيات متحركة تُناسب حزم الميلاد: ثلج من البلورات، وإكليل تضيء مصابيحه بالتناوب، وشرارات الورشة. مع تقليل الحركة: تدرّج ثابت."
+        },
         "bannieres-illustrees": {
           "name": "إطارات مرسومة",
           "description": "أطر لافتة تُناسب «إطارات مرسومة»: قناع سنّوري، شبكة عنكبوت، جناحا ملاك، دائرة الرموز، مخالب العظم وجناحا شيطان، عند الحافة كي تبقى صورتك ظاهرة."
@@ -24248,7 +24608,13 @@
         "lucioles": "يراعات",
         "voile-aurore": "ستار الشفق",
         "neige-douce": "ثلج ناعم",
-        "ondes": "تموّجات"
+        "ondes": "تموّجات",
+        "flocons-cristal": "ندف بلورية",
+        "guirlande-etoilee": "إكليل النجوم",
+        "sucre-d-orge-raye": "خطوط عصا الحلوى",
+        "neige-de-noel": "ثلج الميلاد",
+        "ampoules-de-noel": "مصابيح الميلاد",
+        "etincelles-atelier": "شرارات الورشة"
       },
       "rings": {
         "filet": "خط رفيع",

@@ -121,6 +121,9 @@ const BUILTIN: Readonly<Record<string, () => Promise<unknown>>> = {
   'cc561ef06ac41fd8.json': () => import('@meeshy/shared/design/appearance/lottie/cc561ef06ac41fd8.json'),
   '9f7c18dac8531b5e.json': () => import('@meeshy/shared/design/appearance/lottie/9f7c18dac8531b5e.json'),
   '5d822e86d44d6ca9.json': () => import('@meeshy/shared/design/appearance/lottie/5d822e86d44d6ca9.json'),
+  '76356c212acf9bf9.json': () => import('@meeshy/shared/design/appearance/lottie/76356c212acf9bf9.json'),
+  '3f315eaf529d3947.json': () => import('@meeshy/shared/design/appearance/lottie/3f315eaf529d3947.json'),
+  'cf5704f84d5d73bb.json': () => import('@meeshy/shared/design/appearance/lottie/cf5704f84d5d73bb.json'),
 };
 
 /** Les adresses intégrées : le témoin du catalogue exige que toute couche des packs `builtin` y figure. */

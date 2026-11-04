@@ -168,6 +168,14 @@
       "name": "Santa’s workshop",
       "description": "Two animated rings straight from the workshop: a red hat with a swinging pompom, and a spinning candy cane tied with a green ribbon."
     },
+    "fonds-noel": {
+      "name": "Christmas backgrounds",
+      "description": "Three chat backgrounds to match the Christmas packs: crystal snowflakes, a starry garland and candy-cane stripes, subtle enough to keep every bubble readable."
+    },
+    "fonds-noel-vivants": {
+      "name": "Living Christmas",
+      "description": "Three animated backgrounds to match the Christmas packs: falling crystal snow, a garland whose bulbs light up in turn, and sparks from the workshop. With reduced motion: a still gradient."
+    },
     "bannieres-illustrees": {
       "name": "Illustrated frames",
       "description": "Banner frames to match “Illustrated frames”: Feline mask, Spider web, Angel wings, Runic circle, Bone claws and Demon wings, kept to the edge so your photo stays in view."
@@ -251,7 +259,13 @@
     "lucioles": "Fireflies",
     "voile-aurore": "Aurora veil",
     "neige-douce": "Soft snow",
-    "ondes": "Ripples"
+    "ondes": "Ripples",
+    "flocons-cristal": "Crystal snowflakes",
+    "guirlande-etoilee": "Starry garland",
+    "sucre-d-orge-raye": "Candy-cane stripes",
+    "neige-de-noel": "Christmas snow",
+    "ampoules-de-noel": "Christmas bulbs",
+    "etincelles-atelier": "Workshop sparks"
   },
   "rings": {
     "filet": "Hairline",
