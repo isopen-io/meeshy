@@ -19,6 +19,7 @@ import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversat
 import { isMemberCreator } from '@meeshy/shared/types/role-types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
+import { emitWithViewerCapabilities } from './obsoleteCapability';
 
 const logger = enhancedLogger.child({ module: 'AnnounceStartedGroup' });
 
@@ -35,7 +36,7 @@ export type StartedGroupInviteNotifier = {
 };
 
 export type AnnounceStartedGroupDeps = {
-  readonly prisma: Pick<PrismaClient, 'conversation'>;
+  readonly prisma: Pick<PrismaClient, 'conversation' | 'participant' | 'user'>;
   readonly io: ServerEmitIO | null | undefined;
   readonly notificationService: StartedGroupInviteNotifier | null | undefined;
 };
@@ -97,8 +98,15 @@ export async function announceStartedGroup(deps: AnnounceStartedGroupDeps, conve
     participantIds: members.map((participant) => participant.userId),
     createdAt: conversation.createdAt.toISOString(),
   };
-  for (const invitee of invitees) {
-    deps.io?.to(ROOMS.user(invitee.userId)).emit(SERVER_EVENTS.CONVERSATION_NEW, payload);
+  const io = deps.io;
+  if (io) {
+    await emitWithViewerCapabilities(deps.prisma, {
+      conversationId: conversation.id,
+      recipientIds: invitees.map((invitee) => invitee.userId),
+      payload,
+      emit: (recipientId, served) => io.to(ROOMS.user(recipientId)).emit(SERVER_EVENTS.CONVERSATION_NEW, served),
+      onError: (error) => logger.warn('conversation:new emission failed', { conversationId: conversation.id, error }),
+    });
   }
 
   const notifier = deps.notificationService;

@@ -2509,6 +2509,7 @@ describe('registerCoreRoutes', () => {
       const reply = makeReply();
 
       await getCreateHandler(fastify)(req, reply);
+      await new Promise((resolve) => setImmediate(resolve));
 
       expect(mockSendSuccess).toHaveBeenCalled();
       expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:new', expect.any(Object));
@@ -2590,6 +2591,7 @@ describe('registerCoreRoutes', () => {
       });
 
       await getCreateHandler(fastify)(makeRequest({ body: {} }), makeReply());
+      await new Promise((resolve) => setImmediate(resolve));
 
       // `createMockFastify()` (ligne 208) route tout `io.to(room).emit(...)` à
       // travers UN SEUL `mockTo`/`mockEmit` partagé (`fastify._mockTo`/

@@ -59,6 +59,16 @@ export interface TranslationStatsData {
 }
 
 /**
+ * Les capacités du LECTEUR sur une conversation (#14690). `canMakeObsolete` :
+ * `DELETE /conversations/:id/obsolete` l'accepterait pour lui (administrateur,
+ * membre d'un tête-à-tête, destinataire — jamais expéditeur — d'une demande non
+ * acceptée). Source : `obsoleteVerdict` (gateway, `obsoleteCapability.ts`).
+ */
+export type ConversationViewerCapabilities = {
+  readonly canMakeObsolete: boolean;
+};
+
+/**
  * Statistiques d'une conversation
  */
 export interface ConversationStats {
@@ -467,6 +477,16 @@ export interface Conversation {
    * Source : `viewerWriteRestrictionOf` (`utils/global-minor-restriction.ts`).
    */
   readonly viewerWriteRestriction?: ViewerWriteRestriction | null;
+
+  /**
+   * Ce que le LECTEUR peut faire de cette conversation (#14690), calculé serveur
+   * par la décision même qui garde la route. ABSENT = serveur antérieur, ou
+   * lecture impossible : le client garde son comportement d'avant. C'est un
+   * INSTANTANÉ : après `participant:role-updated` le concernant, le client le
+   * relit (`GET /conversations/:id?fields=viewerCapabilities`) ; la route
+   * reste seule juge.
+   */
+  readonly viewerCapabilities?: ConversationViewerCapabilities;
 
   /** Date d'adhésion du lecteur — borne son historique visible. */
   readonly currentUserJoinedAt?: Date | string;
