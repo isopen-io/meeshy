@@ -154,8 +154,9 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
         case publicationChoices(cmid: String, retryOutboxId: String?)
         case retry(outboxId: String)
         case navigate(OutboxUIItem.Source)
-        /// Ligne de statut pure (hors ligne, reconnexion, synchronisation) :
-        /// le tap fait juste avancer la rotation.
+        /// Ligne de statut pure (hors ligne, reconnexion, synchronisation), ou
+        /// entrée sans destination (`.unknown`) : le tap fait juste avancer la
+        /// rotation, et VoiceOver ne promet aucune ouverture.
         case advance
     }
 
@@ -164,7 +165,7 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
             return .publicationChoices(cmid: pendingPublicationId, retryOutboxId: retryOutboxId)
         }
         if let retryOutboxId { return .retry(outboxId: retryOutboxId) }
-        if let source { return .navigate(source) }
+        if let source, source != .unknown { return .navigate(source) }
         return .advance
     }
 }
@@ -238,8 +239,9 @@ nonisolated enum SyncPillVisibility {
 struct SyncPill: View {
     let entries: [SyncPillEntry]
     /// Invoked when the user taps the pill and the currently visible
-    /// entry has a non-nil `source`. The caller is expected to push onto
-    /// the navigation stack (`Router.push(.conversation/.postDetail/...)`).
+    /// entry has a navigable `source`. The caller applies
+    /// `SyncPillDestination` and returns `false` when nothing was opened —
+    /// the pill then advances its rotation instead of staying inert.
     let onTap: ((OutboxUIItem.Source) -> Bool)?
     /// Invoked when the user taps an entry carrying a `retryOutboxId` — a
     /// publication or a send that has definitively failed. Prioritaire sur
