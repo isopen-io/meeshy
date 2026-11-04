@@ -38,7 +38,15 @@ public interface MessageTranslationDao {
     @Query("DELETE FROM message_audio_translations WHERE messageId IN (:messageIds)")
     public suspend fun deleteAudioFor(messageIds: List<String>)
 
-    /** Les messages dont une traduction a été reçue le plus récemment : de quoi pré-hydrater le L1 au démarrage. */
-    @Query("SELECT messageId FROM message_translations GROUP BY messageId ORDER BY MAX(updatedAt) DESC LIMIT :limit")
+    /**
+     * Les messages ENCORE EN CACHE dont une traduction a été reçue le plus récemment : de quoi pré-hydrater le L1 au
+     * démarrage. Une ligne dont le message est parti n'est jamais rechargée.
+     */
+    @Query(
+        "SELECT t.messageId FROM message_translations t " +
+            "WHERE EXISTS (SELECT 1 FROM messages m WHERE m.id = t.messageId) " +
+            "OR EXISTS (SELECT 1 FROM messages m WHERE m.serverId = t.messageId) " +
+            "GROUP BY t.messageId ORDER BY MAX(t.updatedAt) DESC LIMIT :limit",
+    )
     public suspend fun recentTranslatedMessageIds(limit: Int): List<String>
 }

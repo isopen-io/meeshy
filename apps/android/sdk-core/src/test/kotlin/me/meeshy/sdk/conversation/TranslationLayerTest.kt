@@ -252,6 +252,40 @@ class TranslationLayerTest {
     }
 
     @Test
+    fun `une traduction socket en retard pour l'ancien texte ne l'emporte pas sur la charge REST du texte edite`() = runHarnessTest { harness ->
+        harness.seedSynced(message().copy(content = "RDV 14h"))
+        val edited = message().copy(content = "RDV 16h", isEdited = true, editedAt = "2026-06-01T11:00:00Z")
+        MessageIngestPipeline(harness.database).ingest(listOf(edited), harness.clock.now)
+        writer(harness).applyTranslation("m1", "fr", "RDV 14h fr")
+
+        val served = edited.copy(translations = listOf(ApiTextTranslation(targetLanguage = "fr", translatedContent = "RDV 16h fr")))
+        MessageIngestPipeline(harness.database).ingest(listOf(served), harness.clock.now)
+
+        assertThat(harness.shown().translations.single { it.targetLanguage == "fr" }.translatedContent).isEqualTo("RDV 16h fr")
+    }
+
+    @Test
+    fun `une retraduction servie au meme texte l'emporte sur la ligne retenue`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
+        writer(harness).applyTranslation("m1", "fr", "Bonjour")
+
+        val retranslated = message().copy(translations = listOf(ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour à vous")))
+        MessageIngestPipeline(harness.database).ingest(listOf(retranslated), harness.clock.now)
+
+        assertThat(harness.shown().translations.single { it.targetLanguage == "fr" }.translatedContent).isEqualTo("Bonjour à vous")
+    }
+
+    @Test
+    fun `quitter une conversation emporte les traductions de tous ses messages`() = runHarnessTest { harness ->
+        harness.seedSynced(audioMessage())
+        harness.enrichFully()
+
+        harness.database.messageDao().clearConversation("c1")
+
+        assertThat(harness.retained("m1")).isEqualTo(0)
+    }
+
+    @Test
     fun `la fin de session vide le L1 et le compte suivant relit son propre disque`() = runHarnessTest { harness ->
         harness.seedSynced(message())
         writer(harness).applyTranslation("m1", "fr", "Bonjour de A")
