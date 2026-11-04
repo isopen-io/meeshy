@@ -100,13 +100,14 @@ extension FeedViewModel {
                 // curseur reste le bon, celui de la page 1 les redemanderait.
                 let keepsLoadedTail = merged.count > head.count
                 posts = merged
-                // grdb-03 (volet mémoire) — réappliquer les likes encore en
-                // attente d'outbox par-dessus le snapshot serveur périmé.
+                // grdb-03 (volet mémoire) — réappliquer les likes et les favoris
+                // encore en attente d'outbox par-dessus le snapshot serveur périmé.
                 if let persistence = feedPersistence {
                     let pendingLikes = await persistence.pendingLikeFlags()
                     if !pendingLikes.isEmpty {
                         posts = Self.reapplyPendingLikes(posts: posts, pendingLikes: pendingLikes)
                     }
+                    posts = PostBookmarkMutation.reapplying(posts, pending: await persistence.pendingBookmarkFlags())
                 }
                 if !keepsLoadedTail {
                     nextCursor = response.pagination?.nextCursor
