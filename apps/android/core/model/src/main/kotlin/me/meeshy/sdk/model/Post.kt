@@ -137,6 +137,8 @@ data class ApiRepostOf(
     val mentions: List<PostReference>? = null,
     @Serializable(with = TolerantPostServedRingSerializer::class)
     val authorRing: PostServedRing? = null,
+    /** Échéance du post SOURCE (statut, story éphémère) ; `null` = ne s'éteint pas. Miroir de `RepostContent.expiresAt`. */
+    val expiresAt: String? = null,
 )
 
 /** A comment on a post — port of APIPostComment (PostModels.swift). */
@@ -300,6 +302,21 @@ fun ApiPost.isTranslated(prefs: LanguageResolver.ContentLanguagePreferences): Bo
  */
 fun ApiRepostOf.displayContent(prefs: LanguageResolver.ContentLanguagePreferences): String =
     translations.preferredEntry(prefs, originalLanguage)?.text ?: content.orEmpty()
+
+/**
+ * La langue dans laquelle [displayContent] est servi : celle de la traduction élue par le Prisme, sinon la langue d'origine du
+ * post cité. Le drapeau actif de l'embed se lit ici, jamais sur le post extérieur.
+ */
+fun ApiRepostOf.servedLanguage(prefs: LanguageResolver.ContentLanguagePreferences): String? {
+    val translations = translations?.takeIf { it.isNotEmpty() } ?: return originalLanguage
+    val served = PrismTranslationResolver.resolve(
+        originalLanguage = originalLanguage,
+        candidates = translations.map { (language, entry) -> PrismCandidate(language = language, value = entry) },
+        preferredLanguages = ReaderPrism.resolve(prefs),
+        isServable = { it.text.isNotBlank() },
+    )
+    return served?.language ?: originalLanguage
+}
 
 /** True when the reposted post's displayed content is a translation, not the original. */
 fun ApiRepostOf.isTranslated(prefs: LanguageResolver.ContentLanguagePreferences): Boolean =
