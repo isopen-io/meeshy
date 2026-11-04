@@ -8,7 +8,7 @@ import me.meeshy.sdk.model.fullscreen.ImageViewerDismissLaw
  */
 public object ImageViewerTransform {
     public const val MIN_SCALE: Float = 1f
-    public const val MAX_SCALE: Float = 5f
+    public const val MAX_SCALE: Float = 4f
     public const val DOUBLE_TAP_SCALE: Float = 2.5f
 
     public fun clampScale(scale: Float): Float = scale.coerceIn(MIN_SCALE, MAX_SCALE)
