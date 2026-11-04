@@ -74,6 +74,9 @@ internal interface ChatVoicePlayback {
     /** Toucher un vocal : pause/reprise s'il est le courant, sinon la file démarre depuis lui. */
     fun tap(audio: BubbleAudio, bubble: BubbleContent)
 
+    /** La pastille de retour en bas : jouer le vocal [attachmentId] du fil lié (pause/reprise s'il est le courant, sinon la file). */
+    fun tapAttachment(attachmentId: String)
+
     /** Un vocal du hub média, joué seul. */
     fun tapLone(audio: BubbleAudio, messageId: String, senderName: String, sentAtEpochMs: Long)
 
@@ -161,6 +164,11 @@ internal class ChatAudioViewModel @Inject constructor(
                 coordinator.play(start.current, start.tail, bound?.conversationName.orEmpty(), bound?.artworkUrl, bound?.accentHex)
             }
         }
+    }
+
+    override fun tapAttachment(attachmentId: String) {
+        val bubble = thread?.messages?.firstOrNull { message -> message.audios.any { it.attachmentId == attachmentId } } ?: return
+        tap(bubble.audios.first { it.attachmentId == attachmentId }, bubble)
     }
 
     override fun tapLone(audio: BubbleAudio, messageId: String, senderName: String, sentAtEpochMs: Long) {
