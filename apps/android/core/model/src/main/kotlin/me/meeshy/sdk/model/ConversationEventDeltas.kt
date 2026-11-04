@@ -81,15 +81,24 @@ object ConversationEventDeltas {
     }
 
     /**
-     * Le CONTENU d'une vue unique est purgé (#7578) : texte, traductions, média, vignette,
-     * transcription et traductions audio disparaissent ; la bulle et son état « ouvert » restent.
+     * Le CONTENU d'une vue unique est purgé (#7578) : texte, traductions, cryptogramme, lieu, sticker, liens suivis,
+     * métadonnées, et par pièce le média, la vignette, la transcription, les traductions audio, le texte alternatif, le
+     * nom de fichier et les coordonnées — tout ce que le serveur retient à un lecteur qui l'a ouverte
+     * (`viewOnceAudience.ts` `WITHHELD_CONTENT`, iso iOS `sealAsOpenedViewOnce`, #15897). La bulle, son type, ses
+     * drapeaux de protection et son état « ouvert » restent.
      */
     fun viewOncePurged(message: ApiMessage): ApiMessage {
-        val purgedAttachments = message.attachments.map { it.purgedContent() }
-        if (message.content.isEmpty() && message.translations.isEmpty() && purgedAttachments == message.attachments) {
-            return message
-        }
-        return message.copy(content = "", translations = emptyList(), attachments = purgedAttachments)
+        val purged = message.copy(
+            content = "",
+            translations = emptyList(),
+            attachments = message.attachments.map { it.purgedContent() },
+            encryptedContent = null,
+            location = null,
+            sticker = null,
+            trackingLinks = null,
+            metadata = null,
+        )
+        return if (purged == message) message else purged
     }
 
     /**
@@ -152,6 +161,11 @@ object ConversationEventDeltas {
             imageVariants = null,
             transcription = null,
             translations = null,
+            alt = null,
+            originalName = null,
+            fileName = null,
+            latitude = null,
+            longitude = null,
         )
         return if (purged == this) this else purged
     }

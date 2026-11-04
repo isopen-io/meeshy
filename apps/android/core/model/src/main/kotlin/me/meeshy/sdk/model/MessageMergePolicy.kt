@@ -53,6 +53,10 @@ data class MessageMergeOutcome(
  *     absent de la charge reçue garde la valeur en cache au lieu de la vider.
  *  3. **L'outbox a le dernier mot** tant qu'elle n'a pas livré : édition, suppression, réaction et
  *     épinglage en file gardent leur valeur locale ([MessageMergeGuards]).
+ *  4. **Une vue unique ouverte par ce lecteur reste scellée** : dès que le fusionné porte `consumedByMe`
+ *     (gardé du cache ou servi), il sort par [ConversationEventDeltas.sealedAsOpened] — une page partie
+ *     avant l'ouverture ne remet rien du contenu, et un cache rempli avant une ouverture faite ailleurs
+ *     ne survit pas à la page qui la sert (iso iOS `APIMessageUpsert+Merge`, #15897).
  *
  * Restent faisant autorité dans la charge servie, parce qu'ils se vident légitimement : le
  * résumé des réactions et l'épinglage (hors garde).
@@ -73,6 +77,7 @@ object MessageMergePolicy {
         next = mergedPin(next, existing, guards)
         next = mergedLightFields(next, existing, incoming)
         next = next.copy(attachments = mergedAttachments(existing.attachments, incoming.attachments))
+        if (next.consumedByMe == true) next = ConversationEventDeltas.sealedAsOpened(next)
         return MessageMergeOutcome(message = next, changed = next != existing)
     }
 

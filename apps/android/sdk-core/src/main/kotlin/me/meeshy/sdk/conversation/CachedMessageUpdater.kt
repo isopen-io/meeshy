@@ -35,19 +35,23 @@ internal class CachedMessageUpdater(
     /**
      * Applies [transform] to the cached message and writes it back. Returns the transformed
      * message, or `null` when the row is unknown or — with [requireSynced] — still an
-     * optimistic local row the gateway does not know yet.
+     * optimistic local row the gateway does not know yet. [openedAt] is the instant (from the caller's clock) stamped on
+     * `viewOnceOpenedAt` when the transform leaves a view-once opened by this reader and the row has none yet (#15897);
+     * without it the row's `cachedAt` stands in, which is only a marker.
      */
     suspend fun update(
         messageId: String,
         requireSynced: Boolean,
+        openedAt: Long? = null,
         transform: (ApiMessage) -> ApiMessage,
-    ): ApiMessage? = update(ticket(), messageId, requireSynced, transform)
+    ): ApiMessage? = update(ticket(), messageId, requireSynced, openedAt, transform)
 
     /** [update] sous [ticket], pris AVANT la requête dont la réponse écrit la ligne (#13560) : rien n'atterrit chez B. */
     suspend fun update(
         ticket: AccountTicket?,
         messageId: String,
         requireSynced: Boolean,
+        openedAt: Long? = null,
         transform: (ApiMessage) -> ApiMessage,
     ): ApiMessage? {
         return fence.commitOrWrite(ticket) {
@@ -59,7 +63,8 @@ internal class CachedMessageUpdater(
                 // A transform that returns its input unchanged (an inert socket update, e.g.
                 // a duplicate translation) skips the redundant Room write + re-encode.
                 if (updated !== current) {
-                    messageDao.upsertAll(listOf(MessageEntityFactory.refreshed(row, updated).bumped()))
+                    val stamped = row.copy(viewOnceOpenedAt = row.viewOnceOpenedAt ?: openedAt?.takeIf { updated.isViewOnceOpenedByMe })
+                    messageDao.upsertAll(listOf(MessageEntityFactory.refreshed(stamped, updated).bumped()))
                     if (DedicatedTranslationRows.outlived(current, updated)) {
                         DedicatedTranslationRows.drop(database, DedicatedTranslationRows.keysOf(row, current, updated))
                     }
