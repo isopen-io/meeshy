@@ -118,9 +118,15 @@ class ParticipantProfileViewModel @Inject constructor(
     private val _state = MutableStateFlow(ParticipantProfileUiState())
     val state: StateFlow<ParticipantProfileUiState> = _state.asStateFlow()
 
-    private var conversationId: String? = null
-    private var participantId: String? = null
-    private var readerRole: String? = null
+    /**
+     * La fiche que l'écran montre — conversation, participant et rôle du lecteur. Chaque coroutine capture la
+     * sienne et ne pose rien si elle n'est plus la courante : sans cette garde, la réponse tardive de A se peignait
+     * et se mettait en cache sous B, et l'interrupteur écrivait sur B les droits de A (audit #15733).
+     */
+    private data class Target(val conversationId: String, val participantId: String, val readerRole: String?)
+
+    private var target: Target? = null
+    private var loadJob: Job? = null
     private var liveJob: Job? = null
 
     /**
@@ -129,75 +135,91 @@ class ParticipantProfileViewModel @Inject constructor(
      * qui n'a aucune ligne `User`. Les gestes voisins de l'écran des membres
      * (promouvoir, retirer, bannir) prennent l'autre colonne — la ressemblance
      * des deux chemins est un piège, pas une symétrie.
+     *
+     * Sans [readerRole], la copie n'est ni lue ni écrite : la garde de rôle du cache (ADR-032) ne peut pas jouer,
+     * et les champs réservés aux hôtes attendent la synchro.
      */
     fun load(conversationId: String, participantId: String, readerRole: String? = null) {
-        this.conversationId = conversationId
-        this.participantId = participantId
-        this.readerRole = readerRole
-        val cached = cacheKey()?.let { cache.get(it, readerRole) }
+        val next = Target(conversationId, participantId, readerRole)
+        val sameTarget = next == target
+        target = next
+        loadJob?.cancel()
+        val cached = cacheKey(next)?.let { cache.get(it, readerRole) }
         // Cache-first : une fiche en cache est peinte tout de suite ; le chargement n'apparaît que sur cache vide.
         _state.update {
-            if (cached != null) it.copy(status = ProfileLoadStatus.Loaded, profile = cached)
-            else it.copy(status = ProfileLoadStatus.Loading)
+            val base = if (sameTarget) it else ParticipantProfileUiState()
+            if (cached != null) base.copy(status = ProfileLoadStatus.Loaded, profile = cached)
+            else base.copy(status = ProfileLoadStatus.Loading)
         }
-        observeLive(conversationId, participantId)
-        viewModelScope.launch {
-            when (val result = conversationRepository.participantProfile(conversationId, participantId)) {
+        observeLive(next)
+        loadJob = viewModelScope.launch {
+            val result = conversationRepository.participantProfile(conversationId, participantId)
+            if (target != next) return@launch
+            when (result) {
                 is NetworkResult.Success -> {
-                    remember(result.data)
+                    remember(next, result.data)
                     _state.update { it.copy(status = ProfileLoadStatus.Loaded, profile = result.data) }
                 }
-                is NetworkResult.Failure -> onSyncFailure(result.error.httpStatus)
+                is NetworkResult.Failure -> onSyncFailure(next, result.error.httpStatus)
             }
         }
     }
 
-    private fun onSyncFailure(httpStatus: Int?) {
-        if (httpStatus == 404) {
-            cacheKey()?.let(cache::evict)
-            _state.update { it.copy(status = ProfileLoadStatus.Left, profile = null) }
+    /**
+     * 404 : la personne a quitté la conversation. 401/403 : ce lecteur n'a plus le droit de la voir — la copie et
+     * ses champs réservés aux hôtes partent. Seule une panne de transport ou un 5xx garde la fiche peinte.
+     */
+    private fun onSyncFailure(of: Target, httpStatus: Int?) {
+        if (httpStatus == 404 || httpStatus == 401 || httpStatus == 403) {
+            cacheKey(of)?.let(cache::evict)
+            val status = if (httpStatus == 404) ProfileLoadStatus.Left else ProfileLoadStatus.Error
+            _state.update { it.copy(status = status, profile = null) }
             return
         }
-        // Un échec de synchro ne retire pas la fiche déjà peinte.
         _state.update {
             if (it.profile != null) it else it.copy(status = ProfileLoadStatus.Error)
         }
     }
 
-    private fun cacheKey(): ParticipantProfileKey? {
+    private fun cacheKey(of: Target): ParticipantProfileKey? {
+        if (of.readerRole == null) return null
         val reader = session.currentUserId?.takeIf { it.isNotBlank() } ?: return null
-        val conversation = conversationId ?: return null
-        val participant = participantId ?: return null
-        return ParticipantProfileKey(reader, conversation, participant)
+        return ParticipantProfileKey(reader, of.conversationId, of.participantId)
     }
 
-    private fun remember(profile: ApiParticipantProfile) {
-        cacheKey()?.let { cache.put(it, readerRole, profile) }
+    private fun remember(of: Target, profile: ApiParticipantProfile) {
+        cacheKey(of)?.let { cache.put(it, of.readerRole, profile) }
     }
 
-    private fun observeLive(conversationId: String, participantId: String) {
+    /** Une écriture lancée sur une autre fiche que la courante : sa copie est périmée, la prochaine ouverture relit. */
+    private fun forgetStale(of: Target) {
+        cacheKey(of)?.let(cache::evict)
+    }
+
+    private fun observeLive(of: Target) {
         liveJob?.cancel()
         liveJob = viewModelScope.launch {
             launch {
                 conversationEvents.events
                     .filterIsInstance<ParticipantRightsUpdatedEvent>()
-                    .filter { it.conversationId == conversationId && it.participantId == participantId }
-                    .collect { event -> mutateProfile { ParticipantProfileLive.applying(event, it) } }
+                    .filter { it.conversationId == of.conversationId && it.participantId == of.participantId }
+                    .collect { event -> mutateProfile(of) { ParticipantProfileLive.applying(event, it) } }
             }
             launch {
                 messageSocket.userUpdated.collect { event ->
-                    mutateProfile { ParticipantProfileLive.repainted(it, event) ?: it }
+                    mutateProfile(of) { ParticipantProfileLive.repainted(it, event) ?: it }
                 }
             }
         }
     }
 
-    private fun mutateProfile(transform: (ApiParticipantProfile) -> ApiParticipantProfile) {
+    private fun mutateProfile(of: Target, transform: (ApiParticipantProfile) -> ApiParticipantProfile) {
+        if (target != of) return
         val current = _state.value.profile ?: return
         val next = transform(current)
         if (next == current) return
         _state.update { it.copy(profile = next) }
-        remember(next)
+        remember(of, next)
     }
 
     /**
@@ -205,8 +227,7 @@ class ParticipantProfileViewModel @Inject constructor(
      * et le droit d'avant rendu si le serveur refuse.
      */
     fun toggleRight(capability: ParticipantCapability) {
-        val conversation = conversationId ?: return
-        val participant = participantId ?: return
+        val of = target ?: return
         val current = _state.value
         if (!current.canEditRights || current.rightsWriteInFlight) return
         val before = current.profile?.entryCapabilities ?: return
@@ -220,9 +241,16 @@ class ParticipantProfileViewModel @Inject constructor(
             )
         }
         viewModelScope.launch {
-            when (val result = conversationRepository.updateParticipantRight(conversation, participant, capability, value)) {
+            val result = conversationRepository.updateParticipantRight(
+                of.conversationId, of.participantId, capability, value,
+            )
+            if (target != of) {
+                forgetStale(of)
+                return@launch
+            }
+            when (result) {
                 is NetworkResult.Success -> {
-                    mutateProfile { p -> result.data.rights?.let { ParticipantProfileLive.withRights(p, it) } ?: p }
+                    mutateProfile(of) { p -> result.data.rights?.let { ParticipantProfileLive.withRights(p, it) } ?: p }
                     _state.update { it.copy(rightsWriteInFlight = false) }
                 }
                 is NetworkResult.Failure -> {
@@ -241,9 +269,8 @@ class ParticipantProfileViewModel @Inject constructor(
     fun dismissRightsError() = _state.update { it.copy(rightsFailed = false) }
 
     fun retry() {
-        val conversation = conversationId ?: return
-        val participant = participantId ?: return
-        load(conversation, participant, readerRole)
+        val of = target ?: return
+        load(of.conversationId, of.participantId, of.readerRole)
     }
 
     /** Pose l'octroi à [isoDate]. */
@@ -259,8 +286,7 @@ class ParticipantProfileViewModel @Inject constructor(
     fun dismissGrantError() = _state.update { it.copy(grantFailed = false) }
 
     private fun writeHistoryGrant(isoDate: String?) {
-        val conversation = conversationId ?: return
-        val participant = participantId ?: return
+        val of = target ?: return
         val current = _state.value
         // Le droit d'écrire est celui que le SERVEUR a annoncé. Sans cette
         // garde, la vue pourrait proposer un geste qui n'aboutira jamais.
@@ -276,10 +302,15 @@ class ParticipantProfileViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            when (conversationRepository.updateHistoryGrant(conversation, participant, isoDate)) {
+            val result = conversationRepository.updateHistoryGrant(of.conversationId, of.participantId, isoDate)
+            if (target != of) {
+                forgetStale(of)
+                return@launch
+            }
+            when (result) {
                 is NetworkResult.Success -> {
                     _state.update { it.copy(grantWriteInFlight = false) }
-                    _state.value.profile?.let(::remember)
+                    _state.value.profile?.let { remember(of, it) }
                 }
                 is NetworkResult.Failure ->
                     // On REND la valeur d'avant : un octroi qui resterait

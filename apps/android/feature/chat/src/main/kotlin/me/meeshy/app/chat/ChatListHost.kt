@@ -91,7 +91,7 @@ internal fun ChatListHost(
     val listState = rememberLazyListState()
     val expansionHost = rememberLongMessageExpansionHost(listState)
     // La fiche de l'auteur ouverte depuis l'avatar du pied d'identité (iOS `selectedProfileUser`).
-    val profileTap = rememberProfileTap(state.conversationId, accentColor)
+    val profileTap = rememberProfileTap(state.conversationId, accentColor, state.viewerRole)
     // L'en-tête efface sa grappe d'actions pendant le défilement (iOS `hiddenWhileScrolling`).
     LaunchedEffect(listState) {
         try {

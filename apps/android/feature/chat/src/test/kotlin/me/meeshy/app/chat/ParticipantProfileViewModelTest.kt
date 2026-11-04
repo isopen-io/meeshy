@@ -5,6 +5,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -290,9 +291,9 @@ class ParticipantProfileViewModelTest {
 
     @Test
     fun `a cached profile is painted at once and a failed sync keeps it`() = runTest {
-        cache.put(ParticipantProfileKey("reader", "c1", "p1"), null, profile(canGrantHistory = true))
+        cache.put(ParticipantProfileKey("reader", "c1", "p1"), "ADMIN", profile(canGrantHistory = true))
         val vm = viewModel(repo(NetworkResult.Failure(ApiError("boom", code = "NETWORK"))))
-        vm.load("c1", "p1")
+        vm.load("c1", "p1", "ADMIN")
         assertThat(vm.state.value.status).isEqualTo(ProfileLoadStatus.Loaded)
         advanceUntilIdle()
         assertThat(vm.state.value.status).isEqualTo(ProfileLoadStatus.Loaded)
@@ -302,12 +303,12 @@ class ParticipantProfileViewModelTest {
     @Test
     fun `a 404 says the person left and wipes the copy`() = runTest {
         val key = ParticipantProfileKey("reader", "c1", "p1")
-        cache.put(key, null, profile())
+        cache.put(key, "ADMIN", profile())
         val vm = viewModel(repo(NetworkResult.Failure(ApiError("gone", httpStatus = 404))))
-        vm.load("c1", "p1")
+        vm.load("c1", "p1", "ADMIN")
         advanceUntilIdle()
         assertThat(vm.state.value.status).isEqualTo(ProfileLoadStatus.Left)
-        assertThat(cache.get(key, null)).isNull()
+        assertThat(cache.get(key, "ADMIN")).isNull()
     }
 
     @Test
@@ -378,5 +379,165 @@ class ParticipantProfileViewModelTest {
         advanceUntilIdle()
         assertThat(vm.state.value.isGranted(ParticipantCapability.CAN_SEND_LINKS)).isFalse()
         coVerify(exactly = 1) { repository.participantProfile(any(), any()) }
+    }
+
+    // ── Une fiche par participant : rien de A ne se pose sous B (audit #15733) ──
+
+    private fun hostView(participantId: String, email: String) =
+        editableProfile().copy(participantId = participantId, email = email)
+
+    @Test
+    fun `a late answer for A is neither shown nor cached under B`() = runTest {
+        val answerA = CompletableDeferred<NetworkResult<ApiParticipantProfile>>()
+        val answerB = CompletableDeferred<NetworkResult<ApiParticipantProfile>>()
+        val repository = repo()
+        coEvery { repository.participantProfile("c1", "A") } coAnswers { answerA.await() }
+        coEvery { repository.participantProfile("c1", "B") } coAnswers { answerB.await() }
+        val vm = viewModel(repository)
+
+        vm.load("c1", "A", "ADMIN")
+        advanceUntilIdle()
+        vm.load("c1", "B", "ADMIN")
+        advanceUntilIdle()
+        answerB.complete(NetworkResult.Success(hostView("B", "b@x.io")))
+        advanceUntilIdle()
+        answerA.complete(NetworkResult.Success(hostView("A", "a@x.io")))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.profile?.email).isEqualTo("b@x.io")
+        assertThat(cache.get(ParticipantProfileKey("reader", "c1", "B"), "ADMIN")?.email).isEqualTo("b@x.io")
+    }
+
+    @Test
+    fun `a late 404 for A neither wipes B nor says B left`() = runTest {
+        val answerA = CompletableDeferred<NetworkResult<ApiParticipantProfile>>()
+        val repository = repo()
+        coEvery { repository.participantProfile("c1", "A") } coAnswers { answerA.await() }
+        coEvery { repository.participantProfile("c1", "B") } returns NetworkResult.Success(hostView("B", "b@x.io"))
+        val vm = viewModel(repository)
+
+        vm.load("c1", "A", "ADMIN")
+        advanceUntilIdle()
+        vm.load("c1", "B", "ADMIN")
+        advanceUntilIdle()
+        answerA.complete(NetworkResult.Failure(ApiError("gone", httpStatus = 404)))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.status).isEqualTo(ProfileLoadStatus.Loaded)
+        assertThat(cache.get(ParticipantProfileKey("reader", "c1", "B"), "ADMIN")).isNotNull()
+    }
+
+    @Test
+    fun `opening B without a copy never shows the header of A while loading`() = runTest {
+        val answerB = CompletableDeferred<NetworkResult<ApiParticipantProfile>>()
+        val repository = repo()
+        coEvery { repository.participantProfile("c1", "A") } returns NetworkResult.Success(hostView("A", "a@x.io"))
+        coEvery { repository.participantProfile("c1", "B") } coAnswers { answerB.await() }
+        val vm = viewModel(repository)
+
+        vm.load("c1", "A", "ADMIN")
+        advanceUntilIdle()
+        vm.load("c1", "B", "ADMIN")
+
+        assertThat(vm.state.value.status).isEqualTo(ProfileLoadStatus.Loading)
+        assertThat(vm.state.value.profile).isNull()
+    }
+
+    @Test
+    fun `a right written on A that lands after B opened never touches B`() = runTest {
+        val writeA = CompletableDeferred<NetworkResult<ParticipantRightsUpdateResult>>()
+        val repository = repo()
+        coEvery { repository.participantProfile("c1", "A") } returns NetworkResult.Success(hostView("A", "a@x.io"))
+        coEvery { repository.participantProfile("c1", "B") } returns NetworkResult.Success(hostView("B", "b@x.io"))
+        coEvery { repository.updateParticipantRight("c1", "A", any(), any()) } coAnswers { writeA.await() }
+        val vm = viewModel(repository)
+
+        vm.load("c1", "A", "ADMIN")
+        advanceUntilIdle()
+        vm.toggleRight(ParticipantCapability.CAN_SEND_LINKS)
+        advanceUntilIdle()
+        vm.load("c1", "B", "ADMIN")
+        advanceUntilIdle()
+        writeA.complete(NetworkResult.Success(ParticipantRightsUpdateResult(rights = allowAll().copy(canSendLinks = false))))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.isGranted(ParticipantCapability.CAN_SEND_LINKS)).isTrue()
+        assertThat(vm.state.value.rightsWriteInFlight).isFalse()
+        assertThat(cache.get(ParticipantProfileKey("reader", "c1", "B"), "ADMIN")?.entryCapabilities?.canSendLinks)
+            .isTrue()
+    }
+
+    @Test
+    fun `a toggle on B writes B from the rights of B`() = runTest {
+        val repository = repo()
+        coEvery { repository.participantProfile("c1", "A") } returns
+            NetworkResult.Success(hostView("A", "a@x.io").copy(entryCapabilities = allowAll().copy(canSendLinks = false)))
+        coEvery { repository.participantProfile("c1", "B") } returns NetworkResult.Success(hostView("B", "b@x.io"))
+        coEvery { repository.updateParticipantRight(any(), any(), any(), any()) } returns
+            NetworkResult.Success(ParticipantRightsUpdateResult())
+        val vm = viewModel(repository)
+
+        vm.load("c1", "A", "ADMIN")
+        advanceUntilIdle()
+        vm.load("c1", "B", "ADMIN")
+        advanceUntilIdle()
+        vm.toggleRight(ParticipantCapability.CAN_SEND_LINKS)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.updateParticipantRight("c1", "B", ParticipantCapability.CAN_SEND_LINKS, false) }
+    }
+
+    // ── Le rôle du lecteur garde la copie ; un refus la retire ──────────────
+
+    @Test
+    fun `without the reader role no copy is painted before the sync`() = runTest {
+        cache.put(ParticipantProfileKey("reader", "c1", "p1"), null, hostView("p1", "a@x.io"))
+        val answer = CompletableDeferred<NetworkResult<ApiParticipantProfile>>()
+        val repository = repo()
+        coEvery { repository.participantProfile("c1", "p1") } coAnswers { answer.await() }
+        val vm = viewModel(repository)
+
+        vm.load("c1", "p1")
+
+        assertThat(vm.state.value.profile).isNull()
+        assertThat(vm.state.value.status).isEqualTo(ProfileLoadStatus.Loading)
+    }
+
+    @Test
+    fun `a 403 wipes the copy and every host-only field`() = runTest {
+        val key = ParticipantProfileKey("reader", "c1", "p1")
+        cache.put(key, "ADMIN", hostView("p1", "a@x.io"))
+        val vm = viewModel(repo(NetworkResult.Failure(ApiError("forbidden", httpStatus = 403))))
+
+        vm.load("c1", "p1", "ADMIN")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.profile).isNull()
+        assertThat(vm.state.value.status).isEqualTo(ProfileLoadStatus.Error)
+        assertThat(cache.get(key, "ADMIN")).isNull()
+    }
+
+    @Test
+    fun `a 401 wipes the copy too`() = runTest {
+        val key = ParticipantProfileKey("reader", "c1", "p1")
+        cache.put(key, "ADMIN", hostView("p1", "a@x.io"))
+        val vm = viewModel(repo(NetworkResult.Failure(ApiError("expired", httpStatus = 401))))
+
+        vm.load("c1", "p1", "ADMIN")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.profile).isNull()
+        assertThat(cache.get(key, "ADMIN")).isNull()
+    }
+
+    @Test
+    fun `a 5xx keeps the copy on screen`() = runTest {
+        cache.put(ParticipantProfileKey("reader", "c1", "p1"), "ADMIN", hostView("p1", "a@x.io"))
+        val vm = viewModel(repo(NetworkResult.Failure(ApiError("down", httpStatus = 503))))
+
+        vm.load("c1", "p1", "ADMIN")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.profile?.email).isEqualTo("a@x.io")
     }
 }

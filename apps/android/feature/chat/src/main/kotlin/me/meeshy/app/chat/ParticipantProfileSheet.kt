@@ -79,7 +79,8 @@ internal fun ParticipantProfileSheet(
     displayName: String,
     accentColor: Color,
     onDismiss: () -> Unit,
-    viewModel: ParticipantProfileViewModel = hiltViewModel(),
+    // Un ViewModel PAR fiche : partagé, il peignait la réponse tardive de A sous B (audit #15733).
+    viewModel: ParticipantProfileViewModel = hiltViewModel(key = "participant-profile/$conversationId/$participantId"),
     avatarUrl: String? = null,
     readerRole: String? = null,
 ) {

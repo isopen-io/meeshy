@@ -745,3 +745,9 @@ et est jetée dès qu'il change ; (3) un 404 l'efface (« Cette personne a quitt
 pas la fiche. Le droit d'écrire reste le signal du serveur (la présence de `entryLink`), jamais recalculé, et chaque
 écriture ne porte qu'UN droit. `participant:rights-updated` (clé `historyVisibleFrom` présente = pose ou efface, absente
 = rien) et `user:updated` mettent la fiche ouverte et sa copie à jour sans relecture.
+
+Amendement (audit #15733) : un ViewModel PAR fiche (`hiltViewModel(key = conversation/participant)`), et chaque
+coroutine capture sa fiche — une réponse, un 404 ou une écriture qui revient pour une autre fiche que la courante n'est
+ni peint ni mis en cache (l'écriture tardive efface la copie de SA fiche). Sans rôle du lecteur, la copie n'est ni lue
+ni écrite : les deux points d'entrée (`ConversationMembersSheet`, `rememberProfileTap`) le passent. 401 et 403
+effacent la copie comme le 404 ; seul un échec de transport ou un 5xx garde la fiche peinte.
