@@ -31,7 +31,7 @@ object StoryReaderWindow {
      */
     fun plan(ids: List<String>, current: Int, warm: Set<String>, extraWarm: List<String> = emptyList()): Plan {
         val window = indices(current, ids.size)
-        if (window.isEmpty()) return Plan(emptySet(), emptyList(), warm)
+        if (window.isEmpty()) return Plan(emptySet(), emptyList(), warm.toSet())
         val ordered = (listOf(ids[current]) + window.map { ids[it] } + extraWarm).distinct()
         val desired = ordered.toSet()
         return Plan(desired = desired, prepare = ordered.filter { it !in warm }, evict = warm - desired)
