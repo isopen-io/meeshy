@@ -16,6 +16,7 @@
     <string name="contacts_discover_email_send">إرسال</string>
     <string name="contacts_discover_email_send_a11y">إرسال الدعوة بالبريد الإلكتروني</string>
     <string name="contacts_discover_email_title">دعوة بالبريد الإلكتروني</string>
+    <string name="contacts_discover_invite_sent">تم إرسال الدعوة إلى %1$s</string>
     <string name="contacts_discover_no_results">لم يتم العثور على مستخدم</string>
     <string name="contacts_discover_pending">في الانتظار</string>
     <string name="contacts_discover_search_hint">البحث عن مستخدم في Meeshy</string>
@@ -23,6 +24,8 @@
     <string name="contacts_discover_sms_send">إرسال</string>
     <string name="contacts_discover_sms_send_a11y">إرسال الدعوة برسالة نصية</string>
     <string name="contacts_discover_sms_title">دعوة برسالة نصية</string>
+    <string name="contacts_discover_sms_unavailable">الرسائل النصية غير متاحة</string>
+    <string name="contacts_discover_view_profile">عرض الملف الشخصي</string>
     <string name="contacts_filter_all">الكل</string>
     <string name="contacts_filter_offline">غير متصل</string>
     <string name="contacts_filter_online">متصل</string>

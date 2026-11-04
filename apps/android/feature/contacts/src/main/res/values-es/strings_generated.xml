@@ -16,6 +16,7 @@
     <string name="contacts_discover_email_send">Enviar</string>
     <string name="contacts_discover_email_send_a11y">Enviar invitación por correo</string>
     <string name="contacts_discover_email_title">Invitar por correo</string>
+    <string name="contacts_discover_invite_sent">Invitación enviada a %1$s</string>
     <string name="contacts_discover_no_results">No se encontró ningún usuario</string>
     <string name="contacts_discover_pending">Pendiente</string>
     <string name="contacts_discover_search_hint">Buscar un usuario de Meeshy</string>
@@ -23,6 +24,8 @@
     <string name="contacts_discover_sms_send">Enviar</string>
     <string name="contacts_discover_sms_send_a11y">Enviar invitación por SMS</string>
     <string name="contacts_discover_sms_title">Invitar por SMS</string>
+    <string name="contacts_discover_sms_unavailable">SMS no disponible</string>
+    <string name="contacts_discover_view_profile">Ver el perfil</string>
     <string name="contacts_filter_all">Todos</string>
     <string name="contacts_filter_offline">Sin conexión</string>
     <string name="contacts_filter_online">En línea</string>
