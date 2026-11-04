@@ -343,7 +343,6 @@
     <string name="session_closed_continue">Volver a iniciar sesión</string>
     <string name="session_closed_expired_message">Vuelve a iniciar sesión para continuar.</string>
     <string name="session_closed_expired_title">Tu sesión caducó</string>
-    <string name="session_closed_password_message">Inicia sesión con la nueva contraseña. Si no hiciste este cambio, restablécela de inmediato.</string>
     <string name="session_closed_password_title">Tu contraseña cambió</string>
     <string name="session_closed_signed_out_message">Esta sesión se cerró. Vuelve a iniciar sesión para continuar.</string>
     <string name="session_closed_signed_out_title">Se cerró tu sesión</string>

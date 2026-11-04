@@ -343,7 +343,6 @@
     <string name="session_closed_continue">Accedi di nuovo</string>
     <string name="session_closed_expired_message">Accedi di nuovo per continuare.</string>
     <string name="session_closed_expired_title">La tua sessione è scaduta</string>
-    <string name="session_closed_password_message">Accedi con la nuova password. Se non hai fatto tu questa modifica, reimpostala subito.</string>
     <string name="session_closed_password_title">La tua password è stata cambiata</string>
     <string name="session_closed_signed_out_message">Questa sessione è stata chiusa. Accedi di nuovo per continuare.</string>
     <string name="session_closed_signed_out_title">Sei stato disconnesso</string>

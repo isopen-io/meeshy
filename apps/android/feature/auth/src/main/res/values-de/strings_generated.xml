@@ -338,7 +338,6 @@
     <string name="session_closed_continue">Erneut anmelden</string>
     <string name="session_closed_expired_message">Melde dich erneut an, um fortzufahren.</string>
     <string name="session_closed_expired_title">Deine Sitzung ist abgelaufen</string>
-    <string name="session_closed_password_message">Melde dich mit dem neuen Passwort an. Wenn du die Änderung nicht vorgenommen hast, setze es sofort zurück.</string>
     <string name="session_closed_password_title">Dein Passwort wurde geändert</string>
     <string name="session_closed_signed_out_message">Diese Sitzung wurde beendet. Melde dich erneut an, um fortzufahren.</string>
     <string name="session_closed_signed_out_title">Du wurdest abgemeldet</string>

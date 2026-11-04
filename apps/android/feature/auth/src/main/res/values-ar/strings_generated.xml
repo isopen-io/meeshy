@@ -358,7 +358,6 @@
     <string name="session_closed_continue">تسجيل الدخول مجددًا</string>
     <string name="session_closed_expired_message">سجّل الدخول مجددًا للمتابعة.</string>
     <string name="session_closed_expired_title">انتهت صلاحية جلستك</string>
-    <string name="session_closed_password_message">سجّل الدخول بكلمة المرور الجديدة. إن لم تكن أنت من غيّرها، أعد تعيينها فورًا.</string>
     <string name="session_closed_password_title">تم تغيير كلمة المرور</string>
     <string name="session_closed_signed_out_message">أُغلقت هذه الجلسة. سجّل الدخول مجددًا للمتابعة.</string>
     <string name="session_closed_signed_out_title">تم تسجيل خروجك</string>

@@ -338,7 +338,6 @@
     <string name="session_closed_continue">Sign in again</string>
     <string name="session_closed_expired_message">Sign in again to continue.</string>
     <string name="session_closed_expired_title">Your session expired</string>
-    <string name="session_closed_password_message">Sign in with the new password. If you didn’t make this change, reset it right away.</string>
     <string name="session_closed_password_title">Your password was changed</string>
     <string name="session_closed_signed_out_message">This session was closed. Sign in again to continue.</string>
     <string name="session_closed_signed_out_title">You were signed out</string>

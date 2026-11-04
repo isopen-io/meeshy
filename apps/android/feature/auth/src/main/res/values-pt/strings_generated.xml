@@ -343,7 +343,6 @@
     <string name="session_closed_continue">Entrar novamente</string>
     <string name="session_closed_expired_message">Entre novamente para continuar.</string>
     <string name="session_closed_expired_title">Sua sessão expirou</string>
-    <string name="session_closed_password_message">Entre com a nova senha. Se não foi você quem fez a alteração, redefina-a imediatamente.</string>
     <string name="session_closed_password_title">Sua senha foi alterada</string>
     <string name="session_closed_signed_out_message">Esta sessão foi encerrada. Entre novamente para continuar.</string>
     <string name="session_closed_signed_out_title">Você foi desconectado</string>

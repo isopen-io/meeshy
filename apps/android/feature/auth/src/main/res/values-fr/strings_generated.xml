@@ -343,7 +343,6 @@
     <string name="session_closed_continue">Se reconnecter</string>
     <string name="session_closed_expired_message">Reconnectez-vous pour continuer.</string>
     <string name="session_closed_expired_title">Votre session a expiré</string>
-    <string name="session_closed_password_message">Reconnectez-vous avec le nouveau mot de passe. Si vous n\'êtes pas à l\'origine de ce changement, réinitialisez-le tout de suite.</string>
     <string name="session_closed_password_title">Votre mot de passe a changé</string>
     <string name="session_closed_signed_out_message">Cette session a été fermée. Reconnectez-vous pour continuer.</string>
     <string name="session_closed_signed_out_title">Vous avez été déconnecté</string>
