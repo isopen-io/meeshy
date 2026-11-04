@@ -4,7 +4,9 @@
     <string name="encryption_irreversible_refused">La crittografia end-to-end non si disattiva. Per chattare senza, crea una nuova conversazione.</string>
     <string name="encryption_action_failed">Non è stato possibile applicare la modifica. Riprova.</string>
     <string name="encryption_offline">Sei offline: riconnettiti per leggere o modificare la crittografia.</string>
-    <string name="encryption_toggle_forbidden">Il tuo ruolo non consente di attivare o disattivare qui la crittografia. Decide il server.</string>
+    <string name="encryption_toggle_forbidden">Non hai il permesso di cambiare la modalità di crittografia di questa conversazione: in un gruppo bisogna esserne moderatore.</string>
+    <string name="encryption_activation_restricted">Durante la fase di test, solo un membro con un ruolo del team Meeshy (analista o superiore) può cambiare la modalità di crittografia.</string>
+    <string name="encryption_already_enabled">Questa modalità di crittografia è già quella della conversazione: lo stato è stato aggiornato.</string>
     <string name="encryption_read_failed">Impossibile leggere lo stato della crittografia. Riprova.</string>
     <string name="encryption_retry">Riprova</string>
     <string name="security_verify_description">I messaggi con %1$s sono crittografati end-to-end.</string>

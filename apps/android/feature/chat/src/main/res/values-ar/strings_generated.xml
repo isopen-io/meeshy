@@ -382,10 +382,13 @@
     <string name="dashboard_stat_links">الروابط</string>
     <string name="dashboard_tone">النبرة: %1$s</string>
     <string name="encryption_close">إغلاق</string>
+    <string name="encryption_confirm_cancel">إلغاء</string>
     <string name="encryption_detail_activate">تفعيل التشفير</string>
     <string name="encryption_detail_activation_footer_final">لا يُوقَف التشفير التام بين الطرفين أبدًا، ولا التشفير على خوادمنا. يمكنك دائمًا فتح محادثة أخرى، دون تشفير تام بين الطرفين، مع الأشخاص أنفسهم.</string>
     <string name="encryption_detail_active_label">التشفير النشط</string>
     <string name="encryption_detail_details_header">التفاصيل</string>
+    <string name="encryption_detail_direct_already_end_to_end">لديك بالفعل محادثة مشفّرة تمامًا بين الطرفين مع هذا الشخص: افتحها للدردشة فيها. تبقى هذه المحادثة مشفّرة على خوادمنا.</string>
+    <string name="encryption_detail_direct_not_a_pair">لا تضم هذه المحادثة الثنائية عضوين مسجّلين بالضبط: التشفير التام بين الطرفين غير ممكن هنا.</string>
     <string name="encryption_detail_enabled_on">فُعّل في</string>
     <string name="encryption_detail_inactive_label">محادثة غير مشفّرة</string>
     <string name="encryption_detail_inactive_subtitle">محادثة أُنشئت قبل التشفير المنهجي: رسائلها غير مشفّرة.</string>
@@ -394,6 +397,8 @@
     <string name="encryption_detail_mode_label">الوضع</string>
     <string name="encryption_detail_regime_changed">عدّل عضو آخر التشفير للتو: تم تحديث الحالة.</string>
     <string name="encryption_detail_served_gap">يعرض الخادم هذه المحادثة دون تشفير تام بين الطرفين، لكن هذا الجهاز رآها مشفّرة تمامًا بين الطرفين: تبقى كذلك هنا. يمكنك دائمًا فتح محادثة أخرى، دون تشفير تام بين الطرفين، مع الأشخاص أنفسهم.</string>
+    <string name="encryption_detail_switch_to_end_to_end_confirm">التبديل إلى التشفير التام</string>
+    <string name="encryption_detail_switch_to_end_to_end_confirm_title">التبديل إلى التشفير التام بين الطرفين؟</string>
     <string name="encryption_detail_title">التشفير</string>
     <string name="encryption_detail_translation">الترجمة</string>
     <string name="encryption_detail_translation_available">متاح</string>
@@ -440,6 +445,7 @@
     <string name="encryption_summary_hybrid">مشفّرة على خوادمنا، مع التحقق بين الأجهزة المتوافقة</string>
     <string name="encryption_summary_none">محادثة أُنشئت قبل التشفير المنهجي: رسائلها غير مشفّرة</string>
     <string name="encryption_summary_server">مشفّرة على خوادمنا</string>
+    <string name="encryption_switch_end_to_end_final">لا يُوقَف التشفير التام بين الطرفين أبدًا. يمكنك دائمًا فتح محادثة أخرى، دون تشفير تام بين الطرفين، مع الأشخاص أنفسهم.</string>
     <string name="encryption_topic_absent">غير متاح في هذا الوضع</string>
     <string name="encryption_topic_available">ما الذي يعمل</string>
     <string name="encryption_topic_devices">أجهزتك</string>

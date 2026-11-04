@@ -55,7 +55,8 @@ import { revealAtRest, SERVER_AT_REST_CIPHERTEXT_REFUSED, SERVER_AT_REST_UNAVAIL
 const CONV_ID = '507f1f77bcf86cd799439011';
 const SENDER_ID = '507f1f77bcf86cd799439022';
 const MSG_ID = '507f1f77bcf86cd799439033';
-const SECRET = 'Code de la porte : 4471, ne le dis à personne';
+const SECRET = 'Code de la porte zébrée : 4471, ne le dis à personne';
+const SECRET_MARK = 'porte zébrée';
 const MASTER = Buffer.alloc(32, 3).toString('base64');
 const savedKey = process.env.ENCRYPTION_MASTER_KEY;
 
@@ -122,7 +123,7 @@ describe.each(['server', 'hybrid'] as const)('envoi en mode %s', (mode) => {
     const row = h.created[0].data;
     expect(row.content).toBe('');
     expect(row).toMatchObject({ isEncrypted: true, encryptionMode: mode });
-    expect(JSON.stringify({ row, keys: [...h.keys.values()] })).not.toContain('4471');
+    expect(JSON.stringify({ row, keys: [...h.keys.values()] })).not.toContain(SECRET_MARK);
   });
 
   it('l’expéditeur et `message:new` reçoivent le clair, servi comme un message non chiffré', async () => {
@@ -142,7 +143,7 @@ describe.each(['server', 'hybrid'] as const)('envoi en mode %s', (mode) => {
   it('aucun journal ne voit le texte', async () => {
     const h = harness(regime());
     await send(new MessageProcessor(h.prisma));
-    expect(JSON.stringify(logged)).not.toContain('4471');
+    expect(JSON.stringify(logged)).not.toContain(SECRET_MARK);
   });
 
   it('sans clé maîtresse, l’envoi est REFUSÉ explicitement et rien n’est écrit', async () => {
@@ -264,7 +265,7 @@ describe('une clé maîtresse ERRONÉE (bonne longueur) au déploiement', () => 
     expect(journal).not.toContain(WRONG_MASTER);
     expect(journal).not.toContain(MASTER);
     expect(journal).not.toContain(String(live.keys.get(designated)?.encryptedKey));
-    expect(journal).not.toContain('4471');
+    expect(journal).not.toContain(SECRET_MARK);
   });
 
   it('sans désignation, une clé de conversation du coffre illisible ne se remplace pas non plus', async () => {
@@ -288,7 +289,7 @@ describe('un messageType déclaré « system » ne dispense jamais du scellement
       conversationId: CONV_ID, senderId: SENDER_ID, content: SECRET, originalLanguage: 'fr', messageType: 'system',
     });
     expect(h.created[0].data).toMatchObject({ content: '', isEncrypted: true, encryptionMode: mode });
-    expect(JSON.stringify(h.created[0].data)).not.toContain('4471');
+    expect(JSON.stringify(h.created[0].data)).not.toContain(SECRET_MARK);
     expect(served.content).toBe(SECRET);
   });
 });

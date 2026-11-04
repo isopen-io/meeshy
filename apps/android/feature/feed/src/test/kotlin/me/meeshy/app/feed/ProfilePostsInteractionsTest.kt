@@ -22,6 +22,8 @@ import me.meeshy.sdk.model.SocketPostLikedData
 import me.meeshy.sdk.model.SocketPostRepostedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.model.ApiPostTranslationEntry
+import me.meeshy.sdk.model.SocketPostTranslationUpdatedData
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -61,8 +63,8 @@ class ProfilePostsInteractionsTest {
 
     private fun ok() = NetworkResult.Success(Unit)
 
-    private fun viewModel(vararg served: ApiPost): ProfilePostsViewModel {
-        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
+    private fun viewModel(vararg served: ApiPost, reader: MeeshyUser? = null): ProfilePostsViewModel {
+        every { session.currentUser } returns MutableStateFlow(reader)
         every { session.currentUserId } returns "me"
         coEvery { cache.cached(any()) } returns CacheResult.Empty
         coEvery { cache.ticket() } returns null
@@ -151,6 +153,49 @@ class ProfilePostsInteractionsTest {
         vm.onEvent(ProfilePostsEvent.Repost("p1"))
         vm.onEvent(ProfilePostsEvent.Repost("p1"))
         coVerify(exactly = 1) { posts.repost(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `Citer ouvre le compositeur de citation, sans rien envoyer`() = runTest {
+        val vm = viewModel(post("p1"))
+        vm.onEvent(ProfilePostsEvent.BeginQuote("p1"))
+        val dialog = vm.state.value.dialog as ProfilePostDialog.Quote
+        assertThat(dialog.composer.postId).isEqualTo("p1")
+        coVerify(exactly = 0) { posts.repost(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `Citer un repost montre sa racine`() = runTest {
+        val share = post("p1").copy(
+            repostOf = me.meeshy.sdk.model.ApiRepostOf(id = "root", content = "L'original", author = ApiAuthor(id = "c", displayName = "Chloé")),
+        )
+        val vm = viewModel(share)
+        vm.onEvent(ProfilePostsEvent.BeginQuote("p1"))
+        val composer = (vm.state.value.dialog as ProfilePostDialog.Quote).composer
+        assertThat(composer.sourceAuthorName).isEqualTo("Chloé")
+        assertThat(composer.sourceContentPreview).isEqualTo("L'original")
+    }
+
+    @Test
+    fun `une citation publiee part vers la racine avec son commentaire et marque la carte`() = runTest {
+        val share = post("p1").copy(repostOf = me.meeshy.sdk.model.ApiRepostOf(id = "root"))
+        val vm = viewModel(share)
+        coEvery { posts.repost(any(), any(), any(), any(), any()) } returns NetworkResult.Success(post("r1"))
+        vm.onEvent(ProfilePostsEvent.BeginQuote("p1"))
+        vm.onEvent(ProfilePostsEvent.QuoteTextChanged("à lire"))
+        vm.onEvent(ProfilePostsEvent.SubmitQuote)
+        coVerify(exactly = 1) { posts.repost("root", any(), "à lire", true, any()) }
+        assertThat(vm.state.value.dialog).isNull()
+        assertThat(vm.card("p1").isReposted).isTrue()
+    }
+
+    @Test
+    fun `fermer la citation n'envoie rien`() = runTest {
+        val vm = viewModel(post("p1"))
+        vm.onEvent(ProfilePostsEvent.BeginQuote("p1"))
+        vm.onEvent(ProfilePostsEvent.DismissDialog)
+        assertThat(vm.state.value.dialog).isNull()
+        coVerify(exactly = 0) { posts.repost(any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -285,5 +330,28 @@ class ProfilePostsInteractionsTest {
         coVerify(exactly = 0) { engagement.deliver(any()) }
         vm.flushImpressions()
         coVerify(exactly = 1, timeout = 3_000) { engagement.deliver(match { it.size == 3 }) }
+    }
+
+    @Test
+    fun `Citer depuis le profil montre le texte que la carte sert (#16001)`() = runTest {
+        val vm = viewModel(QuotePrism.post("p1"), QuotePrism.share("s1"), reader = QuotePrism.reader)
+
+        vm.onEvent(ProfilePostsEvent.BeginQuote("p1"))
+        assertThat((vm.state.value.dialog as ProfilePostDialog.Quote).composer.sourceContentPreview).isEqualTo(QuotePrism.SERVED)
+        vm.onEvent(ProfilePostsEvent.BeginQuote("s1"))
+        assertThat((vm.state.value.dialog as ProfilePostDialog.Quote).composer.sourceContentPreview).isEqualTo(QuotePrism.SERVED)
+    }
+
+    @Test
+    fun `une traduction poussee arrive dans SA carte de l onglet Publications et seulement elle (#16004)`() = runTest {
+        val vm = viewModel(post("p1").copy(content = "Hello", originalLanguage = "en"), post("p2"),
+            reader = MeeshyUser(id = "me", username = "moi", systemLanguage = "fr"))
+        val other = vm.card("p2")
+        assertThat(vm.card("p1").content).isEqualTo("Hello")
+
+        social.translatedFlow.tryEmit(SocketPostTranslationUpdatedData("p1", "fr", ApiPostTranslationEntry(text = "Bonjour")))
+
+        assertThat(vm.card("p1").content).isEqualTo("Bonjour")
+        assertThat(vm.card("p2")).isEqualTo(other)
     }
 }

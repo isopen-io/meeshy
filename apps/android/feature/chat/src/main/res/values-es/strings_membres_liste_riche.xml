@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Feuille des membres, version riche (#15966) : clés propres à Android. -->
+<resources>
+    <string name="members_sheet_leave">Salir del grupo</string>
+    <string name="members_sheet_leave_title">¿Salir del grupo?</string>
+    <string name="members_sheet_leave_message">Ya no podrás ver los mensajes de este grupo.</string>
+    <string name="members_sheet_leave_confirm">Salir</string>
+    <string name="members_sheet_role_title">¿Cambiar el rol?</string>
+    <string name="members_sheet_role_message">¿Pasar a este miembro a %1$s?</string>
+    <string name="members_sheet_role_confirm">Confirmar</string>
+    <string name="members_sheet_since">Desde %1$s</string>
+    <plurals name="members_sheet_title_capped">
+        <item quantity="one">%1$s+ miembro</item>
+        <item quantity="many">%1$s+ de miembros</item>
+        <item quantity="other">%1$s+ miembros</item>
+    </plurals>
+    <string name="members_sheet_error_title">Error</string>
+    <string name="members_sheet_error_ok">OK</string>
+    <string name="members_sheet_swipe_remove">Quitar</string>
+    <string name="add_participant_failed">No se pudo añadir a este miembro.</string>
+    <string name="add_participant_search_failed">La búsqueda falló. Inténtalo de nuevo.</string>
+    <string name="add_participant_add_a11y">Añadir a %1$s</string>
+    <string name="add_participant_searching_a11y">Buscando</string>
+</resources>

@@ -343,14 +343,10 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
     // adresse. Deux fonctions au nom quasi identique, une seule qui marche :
     // c'est ce qui rend ce défaut invisible à la relecture.
 
-    public func resendEmailVerification() async throws {
-        let response: SimpleAPIResponse = try await api.request(
-            AuthEndpoint.resendVerification, method: "POST"
-        )
-        guard response.success else {
-            throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Resend failed")
-        }
-    }
+    // `resendEmailVerification()` a été RETIRÉE (#16009). Elle postait
+    // `/auth/resend-verification` SANS corps, quand la route exige `{ email }` :
+    // un 400 à coup sûr, et aucun appelant. Le renvoi vit dans
+    // `resendVerificationEmail(email:)`, que l'écran de vérification appelle.
 
     // MARK: - Me
 
@@ -363,7 +359,7 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
 
     public func logout() async {
         do {
-            let _: APIResponse<[String: Bool]> = try await api.request(AuthEndpoint.logout, method: "POST")
+            let _: APIResponse<DiscardedResponseBody> = try await api.request(AuthEndpoint.logout, method: "POST")
         } catch {
             // Best-effort assumé : la déconnexion locale doit aboutir même hors
             // ligne. `logoutThrowing()` est la variante à utiliser quand
@@ -380,7 +376,7 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
     /// silently left the session live on the gateway when the device was
     /// offline at the moment of logout.
     public func logoutThrowing() async throws {
-        let _: APIResponse<[String: Bool]> = try await api.request(AuthEndpoint.logout, method: "POST")
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(AuthEndpoint.logout, method: "POST")
     }
 
     /// D5.hygiene — ferme la session de `token`, jamais celle du jeton courant
@@ -392,7 +388,7 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
     /// qu'on quitte, dont la fermeture recevait un 401 faisait alors fermer
     /// côté serveur la session du compte actif. Un 401 est rendu tel quel.
     public func logoutThrowing(token: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await pinned.requestPinned(
+        let _: APIResponse<DiscardedResponseBody> = try await pinned.requestPinned(
             AuthEndpoint.logout,
             method: "POST",
             body: nil,

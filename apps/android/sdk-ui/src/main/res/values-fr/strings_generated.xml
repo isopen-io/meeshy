@@ -48,6 +48,7 @@
     <string name="audio_editor_undo">Annuler</string>
     <string name="audio_editor_use">Utiliser l\'audio</string>
     <string name="audio_editor_volume_normal">Normal</string>
+    <string name="audio_fullscreen_airplay">Diffuser sur un appareil</string>
     <string name="audio_fullscreen_dial">Position dans le vocal</string>
     <string name="audio_recorder_micDenied">Permission micro refusée</string>
     <string name="audio_recorder_micDeniedSettings">Micro refusé — autorisez-le dans Réglages</string>
@@ -85,6 +86,7 @@
     <string name="bubble_a11y_reactions">Réactions : %1$s</string>
     <string name="bubble_a11y_reply_to">Répondre à %1$s</string>
     <string name="bubble_attachment_file_fallback">Fichier</string>
+    <string name="bubble_audio_stack_position">Vocal %1$d sur %2$d</string>
     <string name="bubble_blur_view_once">Voir une fois</string>
     <string name="bubble_contact_card_a11y_on_meeshy">Sur Meeshy : %1$s</string>
     <string name="bubble_contact_card_on_meeshy">Sur Meeshy</string>
@@ -138,6 +140,7 @@
     <string name="code_viewer_more_lines">%1$d lignes de plus</string>
     <string name="common_cancel">Annuler</string>
     <string name="common_clearSearch">Effacer la recherche</string>
+    <string name="common_clear_search">Effacer la recherche</string>
     <string name="common_close">Fermer</string>
     <string name="common_done">Terminé</string>
     <string name="common_selected">Sélectionné</string>
@@ -158,6 +161,10 @@
     <string name="connection_toast_request_declined">Demande refusée</string>
     <string name="connection_toast_request_send_failed">Impossible d\'envoyer la demande</string>
     <string name="connection_toast_request_sent">Demande envoyée</string>
+    <string name="contacts_phonebook_invite">Inviter</string>
+    <string name="contacts_phonebook_write">Lui écrire</string>
+    <string name="contacts_skeleton_loading">Chargement en cours</string>
+    <string name="contacts_tab_prefix">Onglet</string>
     <string name="content_failure_network_body">Vérifiez votre connexion, puis réessayez.</string>
     <string name="content_failure_retry">Réessayer</string>
     <string name="content_failure_server_body">Le problème vient de notre côté. Réessayez dans un instant.</string>
@@ -187,6 +194,8 @@
     <string name="engagement_pill_a11y_streak_days_other">%1$d jours</string>
     <string name="engagement_pill_a11y_total_one">%1$s étincelle gagnée dans cette conversation</string>
     <string name="engagement_pill_a11y_total_other">%1$s étincelles gagnées dans cette conversation</string>
+    <string name="feed_carousel_next">Média suivant</string>
+    <string name="feed_carousel_previous">Média précédent</string>
     <string name="focal_call_audio">Appel audio</string>
     <string name="focal_call_audio_failed">Appel audio interrompu</string>
     <string name="focal_call_audio_missed">Appel audio manqué</string>
@@ -274,6 +283,7 @@
     <string name="media_audio_play">Lire l\'audio</string>
     <string name="media_audio_speed_cycle">Vitesse de lecture %1$s</string>
     <string name="media_audio_transcribe">Transcrire</string>
+    <string name="media_audio_transcribing">Transcription en cours</string>
     <string name="media_caption_see_less">voir moins</string>
     <string name="media_caption_see_less_hint">Replie la légende</string>
     <string name="media_caption_see_more">voir plus</string>
@@ -293,11 +303,13 @@
     <string name="media_crop_a11y_move_up">Déplacer vers le haut</string>
     <string name="media_crop_a11y_position">Horizontal %1$s, vertical %2$s</string>
     <string name="media_crop_a11y_size">Largeur %1$s, hauteur %2$s</string>
+    <string name="media_download">Télécharger</string>
     <string name="media_label_audio">Audio</string>
     <string name="media_label_file">Fichier</string>
     <string name="media_label_location">Position</string>
     <string name="media_label_photo">Photo</string>
     <string name="media_label_video">Vidéo</string>
+    <string name="media_pauseAudio">Mettre en pause</string>
     <string name="media_permission_camera_denied_message">Caméra refusée — toucher pour ouvrir les Réglages</string>
     <string name="media_permission_camera_denied_title">Accès à la caméra refusé</string>
     <string name="media_permission_close">Fermer</string>
@@ -309,6 +321,9 @@
     <string name="media_permission_photos_add_denied_message">Enregistrement dans Photos refusé — toucher pour ouvrir les Réglages</string>
     <string name="media_permission_photos_denied_message">Accès aux photos refusé — toucher pour ouvrir les Réglages</string>
     <string name="media_permission_photos_denied_title">Accès aux photos refusé</string>
+    <string name="media_playAudio">Lire l\'audio</string>
+    <string name="media_skipBack10s">Reculer de 10 secondes</string>
+    <string name="media_skipForward10s">Avancer de 10 secondes</string>
     <string name="media_summary_file">📎 Fichier</string>
     <string name="media_summary_location">📍 Position</string>
     <string name="media_summary_photo">📷 Photo</string>

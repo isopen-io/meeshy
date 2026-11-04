@@ -80,6 +80,8 @@ final class ProfileUserPostsViewModel: ObservableObject {
     /// Groupement, persistance et flush (sortie d'écran / arrière-plan /
     /// relance) portés par `ImpressionBatcher`.
     private lazy var impressions = ImpressionBatcher(source: "profile", surface: .profile, postService: postService)
+    /// « Enregistrer » (#15994) : l'écrivain du fil — cache des favoris et toasts compris.
+    private lazy var bookmarker = PostBookmarkWriter()
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -371,16 +373,9 @@ final class ProfileUserPostsViewModel: ObservableObject {
         guard let post = posts.first(where: { $0.id == postId }) else { return }
         let current = isBookmarked(post)
         bookmarkedOverrides[postId] = !current
-        do {
-            if current {
-                try await postService.removeBookmark(postId: postId)
-            } else {
-                try await postService.bookmark(postId: postId)
-            }
-        } catch {
-            bookmarkedOverrides[postId] = current
-            FeedbackToastManager.shared.showError(String(localized: "profile.posts.bookmarkError", defaultValue: "Erreur", bundle: .main))
-        }
+        await bookmarker.write(bookmarked: !current, postId: postId, post: post, onRejected: { [weak self] in
+            self?.bookmarkedOverrides[postId] = current
+        })
     }
 
     /// Reposts are append-only on the backend — the optimistic flip only

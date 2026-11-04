@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="participant_block_confirm_title">Block this user</string>
+    <string name="participant_block_confirm_message">You\'ll no longer receive messages from %1$s. You can unblock them in Settings.</string>
+    <string name="participant_block_confirm_action">Block</string>
+    <string name="participant_block_cancel">Cancel</string>
+    <string name="participant_block_fallback_name">this person</string>
+    <string name="participant_block_failed">Unable to block this user</string>
+    <string name="participant_unblock_failed">Unable to unblock this user</string>
+    <string name="participant_block_entry">Block</string>
+    <string name="participant_unblock_entry">Unblock</string>
+    <string name="participant_block_entry_a11y">Block %1$s</string>
+    <string name="participant_unblock_entry_a11y">Unblock %1$s</string>
+</resources>

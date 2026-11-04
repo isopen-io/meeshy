@@ -98,8 +98,24 @@ class ComposerSameNamesAsIosTest {
         StoryPublishTitle.StoryPostAndReel to "composer.publish.as.storyPostAndReel",
     ).map { (title, key) -> "Publier $title" to publishLabelRes(title) to key }
 
+    private val announcements = listOf(
+        SceneObjectFamily.TEXT to "composer.selection.selected.text",
+        SceneObjectFamily.IMAGE to "composer.selection.selected.image",
+        SceneObjectFamily.VIDEO to "composer.selection.selected.video",
+        SceneObjectFamily.SOUND to "composer.selection.selected.audio",
+        SceneObjectFamily.STICKER to "composer.selection.selected.sticker",
+        SceneObjectFamily.PLACE to "composer.selection.selected.place",
+    ).map { (family, key) -> "annonce $family sélectionné" to family.selectedAnnouncementRes() to key } + listOf(
+        "annonce fond sélectionné" to BACKGROUND_SELECTED_ANNOUNCEMENT to "composer.selection.selected.background",
+        "annonce sélection retirée" to SELECTION_CLEARED_ANNOUNCEMENT to "composer.selection.deselected",
+        "conteneur de la colonne" to SCENE_TOOL_COLUMN_LABEL to "composer.rest.column",
+    )
+
     @Test
     fun `la colonne du compositeur nomme chaque outil comme iOS`() = assertAdopted(column)
+
+    @Test
+    fun `TalkBack annonce la sélection et nomme la colonne comme VoiceOver`() = assertAdopted(announcements)
 
     @Test
     fun `les rails libellés affichent le mot court d'iOS`() = assertAdopted(railTitles)

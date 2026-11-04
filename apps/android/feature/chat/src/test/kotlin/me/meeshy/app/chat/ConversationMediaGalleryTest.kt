@@ -799,4 +799,59 @@ class ConversationMediaGalleryTest {
 
         assertThat(gallery.isEmpty).isTrue()
     }
+
+    private val pendingPreview = "file:///data/cache/pending-previews/cmid_p.preview.jpg"
+    private val sharpCopy = "file:///data/cache/pending-previews/cmid_p.sharp.jpg"
+
+    @Test
+    fun a_pending_photo_opens_on_its_sanitized_sharp_copy_over_its_preview() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", images = listOf(img("cmid_p", pendingPreview, thumbnailUrl = pendingPreview)), isOutgoing = true)),
+            messageId = "m1",
+            imageIndex = 0,
+            sharpOf = { if (it == "cmid_p") sharpCopy else null },
+        )
+
+        assertThat(gallery.imageUrls).containsExactly(sharpCopy)
+        assertThat(gallery.thumbnailUrls).containsExactly(pendingPreview)
+    }
+
+    @Test
+    fun a_pending_photo_whose_copy_is_not_ready_opens_on_its_preview() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", images = listOf(img("cmid_p", pendingPreview, thumbnailUrl = pendingPreview)))),
+            messageId = "m1",
+            imageIndex = 0,
+            sharpOf = { null },
+        )
+
+        assertThat(gallery.imageUrls).containsExactly(pendingPreview)
+    }
+
+    @Test
+    fun a_protected_pending_photo_never_asks_for_a_sharp_copy() {
+        val asked = mutableListOf<String>()
+        ConversationMediaGallery.of(
+            listOf(bubble("m1", images = listOf(img("cmid_p", pendingPreview)), isViewOnce = true)),
+            messageId = "m1",
+            imageIndex = 0,
+            sharpOf = { asked += it; sharpCopy },
+        )
+
+        assertThat(asked).isEmpty()
+    }
+
+    @Test
+    fun a_served_photo_never_asks_for_a_sharp_copy() {
+        val asked = mutableListOf<String>()
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", images = listOf(img("att_1", "https://gate.meeshy.me/a.jpg")))),
+            messageId = "m1",
+            imageIndex = 0,
+            sharpOf = { asked += it; sharpCopy },
+        )
+
+        assertThat(asked).isEmpty()
+        assertThat(gallery.imageUrls).containsExactly("https://gate.meeshy.me/a.jpg")
+    }
 }

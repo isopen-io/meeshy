@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageSticker
 import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.TranscriptionSegment
 import me.meeshy.sdk.model.search.ConversationSearchResults
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.TranslationApi
@@ -110,6 +111,10 @@ class MessageRepository internal constructor(
      */
     suspend fun refreshMessage(conversationId: String, messageId: String): Boolean =
         history.refreshMessage(conversationId, messageId)
+
+    /** [refreshMessage] over the [limit] messages around [messageId] (the single transcription refetch). */
+    suspend fun refreshAround(conversationId: String, messageId: String, limit: Int): Boolean =
+        history.refreshMessage(conversationId, messageId, limit)
 
     /**
      * Cache-only read of a conversation's [limit] most recent messages, oldest first — a "peek"
@@ -262,7 +267,9 @@ class MessageRepository internal constructor(
         language: String?,
         confidence: Double?,
         durationMs: Long?,
-    ) = enrichment.applyTranscription(messageId, attachmentId, text, language, confidence, durationMs)
+        segments: List<TranscriptionSegment>? = null,
+        speakerCount: Int? = null,
+    ) = enrichment.applyTranscription(messageId, attachmentId, text, language, confidence, durationMs, segments, speakerCount)
 
     /**
      * Applies an `audio:translation-ready` socket update (the cloned-voice translation) to the
@@ -280,6 +287,7 @@ class MessageRepository internal constructor(
         quality: Double?,
         voiceModelId: String?,
         ttsModel: String?,
+        segments: List<TranscriptionSegment>? = null,
     ) = enrichment.applyAudioTranslation(
         messageId,
         attachmentId,
@@ -292,6 +300,7 @@ class MessageRepository internal constructor(
         quality,
         voiceModelId,
         ttsModel,
+        segments,
     )
 
     /**

@@ -102,6 +102,8 @@ describe('POST /conversations/:id/messages — statut du refus (#4855)', () => {
 
     expect(res.statusCode).toBe(403);
     expect(res.json().error).toContain('autorisé');
+    // #16053 — le motif STABLE voyage : un client l'explique au lieu de rejouer l'envoi.
+    expect(res.json()).toMatchObject({ code: 'ATTACHMENT_RIGHT_NOT_PERMITTED' });
   });
 
   // #10001 — un invité d'un lien à familles (World Wide) qui rattache une pièce

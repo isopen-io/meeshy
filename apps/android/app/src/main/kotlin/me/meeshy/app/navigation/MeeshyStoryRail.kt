@@ -2,26 +2,17 @@ package me.meeshy.app.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
-import me.meeshy.app.feed.MoodBubble
-import me.meeshy.app.feed.MoodBubbleModel
 import me.meeshy.app.feed.MoodLookup
-import me.meeshy.app.feed.MoodQueuedToast
-import me.meeshy.app.feed.MoodReactFailureToast
-import me.meeshy.app.feed.MoodRepostRefusedToast
-import me.meeshy.app.feed.StatusComposerDraft
-import me.meeshy.app.feed.StatusComposerSheet
 import me.meeshy.app.feed.StatusesViewModel
 import me.meeshy.app.stories.StoriesViewModel
 import me.meeshy.app.stories.StoryTray
 import me.meeshy.sdk.model.composer.ComposerOrigin
+import me.meeshy.sdk.status.StatusBubbleController
 
 /**
  * LE rail de stories de l'application — iOS `StoryTrayView`, monté à l'identique en tête du fil et de la
@@ -37,11 +28,10 @@ internal fun MeeshyStoryRail(
     storiesViewModel: StoriesViewModel,
     modifier: Modifier = Modifier,
     statusesViewModel: StatusesViewModel = hiltViewModel(),
+    bubbleController: StatusBubbleController = rememberStatusBubbleController(),
 ) {
     val statuses by statusesViewModel.state.collectAsStateWithLifecycle()
     val moods = remember(statuses.statuses, statuses.myStatus) { MoodLookup.from(statuses) }
-    var bubbleUserId by rememberSaveable { mutableStateOf<String?>(null) }
-    var republishSeed by remember { mutableStateOf<StatusComposerDraft?>(null) }
 
     StoryTray(
         modifier = modifier,
@@ -53,58 +43,9 @@ internal fun MeeshyStoryRail(
         moodEmojiOf = moods::emojiOf,
         myMoodEmoji = moods.myEmoji,
         onAddStatus = { Routes.composer(ComposerOrigin.MoodChip)?.let(navController::navigate) },
-        onMoodTap = { userId ->
-            moods.entryOf(userId)?.let { entry ->
-                bubbleUserId = userId
-                statusesViewModel.markStatusViewed(entry.id)
-            }
-        },
+        onMoodTap = { userId -> moods.entryOf(userId)?.let(bubbleController::show) },
         moodIdOf = moods::statusIdOf,
         onMoodShown = statusesViewModel::trackImpression,
         viewModel = storiesViewModel,
     )
-    MoodReactFailureToast(statusesViewModel.reactFailed)
-    MoodRepostRefusedToast(statusesViewModel.repostAudienceRefused)
-    MoodQueuedToast(statusesViewModel.moodQueued)
-
-    val shown = bubbleUserId?.let(moods::entryOf)
-    if (shown != null) {
-        MoodBubble(
-            model = MoodBubbleModel.of(shown, statuses.myStatus?.userId),
-            onReact = { emoji ->
-                statusesViewModel.react(shown.id, emoji)
-                bubbleUserId = null
-            },
-            onRepublish = {
-                bubbleUserId = null
-                republishSeed = StatusComposerDraft.republish(shown)
-            },
-            onReply = {
-                bubbleUserId = null
-                navController.navigate(Routes.moodSpotlight(shown.id))
-            },
-            onDismiss = { bubbleUserId = null },
-            onDwellEnd = statusesViewModel::endStatusDwell,
-        )
-    }
-
-    republishSeed?.let { seed ->
-        StatusComposerSheet(
-            initialDraft = seed,
-            onPublish = { request ->
-                statusesViewModel.setStatus(
-                    emoji = request.emoji,
-                    content = request.content,
-                    visibility = request.visibility,
-                    audioUrl = request.audioUrl,
-                    repostOfId = request.repostOfId,
-                    viaUsername = request.viaUsername,
-                    visibilityUserIds = request.visibilityUserIds,
-                    mentions = request.mentions,
-                )
-                republishSeed = null
-            },
-            onDismiss = { republishSeed = null },
-        )
-    }
 }

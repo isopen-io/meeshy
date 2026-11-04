@@ -119,7 +119,10 @@ internal fun ChatListHost(
     // dies with the screen (its cache is discarded on logout/leave — nothing leaks to the next
     // user). Each bubble projects a pure outcome from this collected cache.
     val linkPreviewStore = remember { LinkPreviewStore(scope) }
-    val audioPlayer = rememberChatAudioPlayer(state.conversationTitle, state.conversationId)
+    val audioPlayer = LocalChatVoicePlayback.current
+    androidx.compose.runtime.SideEffect {
+        audioPlayer?.bind(ChatVoiceThread(state.conversationId, state.conversationTitle.orEmpty(), host.header.avatarUrl, accentColor.voiceHex(), state.messages))
+    }
     val linkPreviewCache by linkPreviewStore.cache.collectAsStateWithLifecycle()
     // [ChatListOrientation.BottomUp]: the list is rendered bottom-anchored
     // (`LazyColumn(reverseLayout = true)` below fed the REVERSED item order)
@@ -257,6 +260,7 @@ internal fun ChatListHost(
     val metaAlpha = remember(metaAlphaState) { { metaAlphaState.value } }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
     val media = rememberChatMediaHost(actions.dismissImageViewer)
+    LaunchedEffect(audioPlayer, media) { audioPlayer?.fullscreenRequests?.collect { id -> media.open(MediaPresentation.Audio(id)) } }
     LaunchedEffect(state.imageViewer == null) { if (state.imageViewer == null) media.onImageViewerClosed() }
     BackHandler(enabled = media.active != null && media.active !is MediaPresentation.Image) { media.close() }
     var pieceOverlay by remember { mutableStateOf<PieceOverlayModel?>(null) }
@@ -308,9 +312,13 @@ internal fun ChatListHost(
             onQuotedAuthorTap = { bubble -> bubble.replyToAuthor?.let(profileTap) },
             onQuotedMediaTap = { messageId, quotedId ->
                 val quoted = currentMessages.firstOrNull { it.messageId == quotedId }
+                val quotedVoice = ChatAudioFullscreenSources.quotedVoiceId(currentMessages.firstOrNull { it.messageId == messageId }, quoted)
+                    ?.takeIf { id -> ChatAudioFullscreenSources.of(id, currentMessages, state.conversationId, state.conversationTitle.orEmpty()) != null }
                 if (quoted?.images?.isNotEmpty() == true && !quoted.isBlurred && quoted.blurReveal == null) {
                     media.open(MediaPresentation.Image(quotedId, 0))
                     actions.openImageViewer(quotedId, 0)
+                } else if (quotedVoice != null) {
+                    media.open(MediaPresentation.Audio(quotedVoice))
                 } else {
                     actions.onReplyPreviewTap(messageId)
                 }
@@ -423,6 +431,15 @@ internal fun ChatListHost(
             place = presented.place,
             accentColor = state.accentColorHex ?: DEFAULT_PLACE_ACCENT,
             senderName = state.messages.firstOrNull { it.messageId == presented.messageId }?.senderName,
+            onDismiss = media::close,
+        )
+        is MediaPresentation.Audio -> ChatAudioFullscreen(
+            attachmentId = presented.attachmentId,
+            thread = state.messages,
+            conversationId = state.conversationId,
+            conversationName = state.conversationTitle.orEmpty(),
+            voice = audioPlayer,
+            accent = accentColor,
             onDismiss = media::close,
         )
         else -> Unit

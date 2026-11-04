@@ -109,6 +109,13 @@ data class ApiConversation(
     /** Pourquoi le lecteur ne peut pas écrire ici (#9927) ; une valeur illisible vaut « aucune ». */
     @Serializable(with = ConversationWriteRestrictionSerializer::class)
     val viewerWriteRestriction: ConversationWriteRestriction? = null,
+    /**
+     * Ce que la passerelle accorde au LECTEUR sur cette conversation (#14690), calculé par la décision
+     * même qui garde la route. `null` = serveur antérieur, lecture ratée ou charge illisible : la règle
+     * locale décide, jamais un « non » implicite.
+     */
+    @Serializable(with = TolerantViewerCapabilitiesSerializer::class)
+    val viewerCapabilities: ConversationViewerCapabilities? = null,
     /** Pont ✦ précalculé serveur ; absent quand il n'y a rien de non lu. */
     @Serializable(with = TolerantConversationBridgeSerializer::class)
     val bridge: ConversationBridge? = null,
@@ -205,6 +212,13 @@ data class ApiParticipant(
      */
     val isOnline: Boolean? = null,
     val lastActiveAt: String? = null,
+    /** Servi `true` seulement quand le compte est supprimé ou désactivé (#15717). */
+    val accountClosed: Boolean? = null,
+    /** `user` ou `anonymous` (`ParticipantType`) ; absent d'une vieille passerelle. */
+    val type: String? = null,
+    /** Le décor équipé du participant (#10713, ne sert que son contour ici) ; absent d'une vieille passerelle ou ligne Room. */
+    @Serializable(with = TolerantServedProfileDecorSerializer::class)
+    val profileDecor: ServedProfileDecor? = null,
 )
 
 /**
@@ -274,6 +288,15 @@ internal object LossyTagListSerializer : KSerializer<List<String>> by LossyListS
 
 internal object LossyRecentMessagesSerializer :
     KSerializer<List<ApiConversationLastMessage>> by LossyListSerializer(ApiConversationLastMessage.serializer())
+
+/** `viewerCapabilities` (#14690) : `canMakeObsolete` — `DELETE /conversations/:id/obsolete` accepterait ce lecteur. */
+@Serializable
+data class ConversationViewerCapabilities(
+    val canMakeObsolete: Boolean,
+)
+
+internal object TolerantViewerCapabilitiesSerializer :
+    KSerializer<ConversationViewerCapabilities?> by TolerantSerializer(ConversationViewerCapabilities.serializer())
 
 internal object TolerantEngagementSerializer :
     KSerializer<ConversationEngagementSnapshot?> by TolerantSerializer(ConversationEngagementSnapshot.serializer())

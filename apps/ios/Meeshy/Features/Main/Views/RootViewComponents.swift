@@ -67,7 +67,6 @@ struct ThemedFeedOverlay: View {
     @State private var editingPost: FeedPost?
 
     private struct LikeRESTPayload: Decodable { let liked: Bool? }
-    private struct BookmarkRESTPayload: Decodable { let bookmarked: Bool? }
 
     @MainActor
     private func togglePostHeart(post: FeedPost) {
@@ -167,73 +166,22 @@ struct ThemedFeedOverlay: View {
             postBookmarkDelta[postId, default: 0] += 1
         }
         postBookmarkInFlightIds.insert(postId)
+        // L'écrivain unique (#15994) : envoi, cache des favoris, toasts. La
+        // carte se lit DANS le `Task`, sur le MainActor : un `post:updated`
+        // peut l'avoir remplacée entre le toucher et l'écriture du cache.
         Task {
-            defer { Task { @MainActor in postBookmarkInFlightIds.remove(postId) } }
-            // Capture inside the Task to avoid a race where a `post:updated`
-            // socket mutates viewModel.posts between tap and cache save.
-            let postSnapshot = await MainActor.run { viewModel.posts.first(where: { $0.id == postId }) }
-            // Pre-populate the bookmarks cache so the Favoris tab reflects
-            // the add instantly. Mirror the pre-fix FeedViewModel logic.
-            let snapshotCache: [FeedPost]? = await {
-                if wasBookmarked { return nil }
-                guard let p = postSnapshot else { return [] }
-                let key = "bookmarks"
-                let r = await CacheCoordinator.shared.feed.load(for: key)
-                let current: [FeedPost]
-                switch r {
-                case .fresh(let v, _), .stale(let v, _): current = v
-                case .expired, .empty: current = []
-                }
-                if !current.contains(where: { $0.id == postId }) {
-                    var updated = current
-                    updated.insert(p, at: 0)
-                    await bestEffort("rootViewComponents.feed.insertBookmark", category: .cache) { try await CacheCoordinator.shared.feed.save(updated, for: key) }
-                }
-                return current
-            }()
-
-            let ok: Bool = await {
-                do {
-                    let _: APIResponse<BookmarkRESTPayload> = try await APIClient.shared.request(
-                        PostsEndpoint.byPostIdBookmark(postId: postId),
-                        method: wasBookmarked ? "DELETE" : "POST"
-                    )
-                    return true
-                } catch { return false }
-            }()
-            if !ok {
+            defer { postBookmarkInFlightIds.remove(postId) }
+            let shown = viewModel.posts.first(where: { $0.id == postId })
+            await PostBookmarkWriter().write(bookmarked: !wasBookmarked, postId: postId, post: shown, onRejected: {
                 if wasBookmarked {
                     postBookmarkedIds.insert(postId)
                     postBookmarkDelta[postId, default: 0] += 1
                 } else {
                     postBookmarkedIds.remove(postId)
                     postBookmarkDelta[postId, default: 0] -= 1
-                    if let snap = snapshotCache {
-                        await bestEffort("rootViewComponents.feed.restoreBookmarks", category: .cache) { try await CacheCoordinator.shared.feed.save(snap, for: "bookmarks") }
-                    }
                 }
-                FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
-            } else {
-                if wasBookmarked {
-                    await pruneBookmarkFromCache(postId: postId)
-                }
-                FeedbackToastManager.shared.showSuccess(wasBookmarked
-                    ? String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main)
-                    : String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main))
-            }
+            })
         }
-    }
-
-    private func pruneBookmarkFromCache(postId: String) async {
-        let key = "bookmarks"
-        let result = await CacheCoordinator.shared.feed.load(for: key)
-        let current: [FeedPost]
-        switch result {
-        case .fresh(let v, _), .stale(let v, _): current = v
-        case .expired, .empty: return
-        }
-        let updated = current.filter { $0.id != postId }
-        await bestEffort("rootViewComponents.feed.pruneBookmark", category: .cache) { try await CacheCoordinator.shared.feed.save(updated, for: key) }
     }
 
     @MainActor

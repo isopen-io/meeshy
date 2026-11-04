@@ -72,6 +72,10 @@ sealed interface ProfilePostsEvent {
     data class ToggleLike(val postId: String) : ProfilePostsEvent
     data class ToggleBookmark(val postId: String) : ProfilePostsEvent
     data class Repost(val postId: String) : ProfilePostsEvent
+    /** « Citer » (#12234) : ouvre le compositeur de citation sur la carte touchée. */
+    data class BeginQuote(val postId: String) : ProfilePostsEvent
+    data class QuoteTextChanged(val text: String) : ProfilePostsEvent
+    data object SubmitQuote : ProfilePostsEvent
     data class Shared(val postId: String) : ProfilePostsEvent
     data class Pin(val postId: String) : ProfilePostsEvent
     data class RequestDelete(val postId: String) : ProfilePostsEvent
@@ -191,7 +195,16 @@ class ProfilePostsViewModel @Inject constructor(
             is ProfilePostsEvent.Impression -> impressions.record(event.postId)
             is ProfilePostsEvent.ToggleLike -> toggleLike(event.postId)
             is ProfilePostsEvent.ToggleBookmark -> toggleBookmark(event.postId)
-            is ProfilePostsEvent.Repost -> repost(event.postId)
+            is ProfilePostsEvent.Repost -> repost(event.postId, quote = false, commentary = null)
+            is ProfilePostsEvent.BeginQuote -> postOf(event.postId)?.let { post ->
+                model.update { it.copy(dialog = ProfilePostDialog.Quote(QuoteComposerState.quoting(post, sessionRepository.currentUser.value))) }
+            }
+            is ProfilePostsEvent.QuoteTextChanged -> model.update { st ->
+                (st.dialog as? ProfilePostDialog.Quote)?.let { st.copy(dialog = it.copy(composer = it.composer.copy(text = event.text))) } ?: st
+            }
+            ProfilePostsEvent.SubmitQuote -> confirmDialog {
+                (it as? ProfilePostDialog.Quote)?.let { d -> repost(d.postId, quote = true, commentary = d.composer.text) }
+            }
             is ProfilePostsEvent.Shared -> shared(event.postId)
             is ProfilePostsEvent.Pin -> pin(event.postId)
             is ProfilePostsEvent.RequestDelete -> model.update { it.copy(dialog = ProfilePostDialog.ConfirmDelete(event.postId)) }
@@ -249,12 +262,15 @@ class ProfilePostsViewModel @Inject constructor(
         }
     }
 
-    /** Append-only : la surcharge ne persiste que si le serveur confirme ; sinon elle est retirée. */
-    private fun repost(postId: String) {
+    /**
+     * Append-only : la surcharge ne persiste que si le serveur confirme ; sinon elle est retirée. Une citation suit la
+     * même règle, avec son commentaire (vers la RACINE, au format de la carte — [RepostCommand]).
+     */
+    private fun repost(postId: String, quote: Boolean, commentary: String?) {
         val post = postOf(postId) ?: return
         if (!model.value.overlay.canRepost(post)) return
         model.update { it.copy(overlay = it.overlay.withRepost(postId)) }
-        val command = RepostCommand.of(postId, post.repostOf, quote = false, commentary = null, cardType = post.type)
+        val command = RepostCommand.of(postId, post.repostOf, quote = quote, commentary = commentary, cardType = post.type)
         viewModelScope.launch {
             val result = attempt {
                 postRepository.repost(command.targetId, targetType = command.targetType, content = command.content, isQuote = command.isQuote)

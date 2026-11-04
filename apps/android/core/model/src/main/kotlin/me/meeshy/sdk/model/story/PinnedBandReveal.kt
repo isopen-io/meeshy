@@ -23,6 +23,12 @@ data class PinnedBandReveal(val fraction: Float) {
         const val MATERIALIZE_ABOVE: Float = 0.001f
         const val TOUCH_ABOVE: Float = 0.6f
 
+        /** Six cellules au plus (iOS : la bande tient dans la fente du titre) : l'utilisateur, puis cinq anneaux. */
+        const val MAX_ENTRIES: Int = 6
+        const val MAX_OTHER_ENTRIES: Int = MAX_ENTRIES - 1
+
+        fun <T> visibleOthers(others: List<T>): List<T> = others.take(MAX_OTHER_ENTRIES)
+
         fun of(scrollOffsetDp: Float): PinnedBandReveal =
             PinnedBandReveal(CollapsibleHeaderMetrics.inlineAccessoryReveal(scrollOffsetDp))
 

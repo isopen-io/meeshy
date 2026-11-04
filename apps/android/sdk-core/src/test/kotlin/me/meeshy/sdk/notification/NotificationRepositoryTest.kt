@@ -245,6 +245,24 @@ class NotificationRepositoryTest {
     }
 
     @Test
+    fun delete_rollbackPutsTheRowBackAtItsOriginalIndex() = runTest {
+        val repo = seed(
+            notification("n1", isRead = true),
+            notification("n2", isRead = true),
+            notification("n3", isRead = true),
+            unread = 0,
+        )
+        coEvery { api.delete("n2") } throws IOException("offline")
+
+        repo.delete("n2")
+
+        repo.notificationsStream().test {
+            assertThat(awaitItem().notifications().map { it.id }).containsExactly("n1", "n2", "n3").inOrder()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun markAllAsRead_rollsBackOnFailure() = runTest {
         val repo = seed(notification("n1", isRead = false), unread = 1)
         coEvery { api.markAllAsRead() } throws IOException("offline")

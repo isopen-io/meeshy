@@ -1,5 +1,7 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.composer.StoryToolMode
+
 /**
  * Le fond média SÉLECTIONNÉ (grammaire d'édition, #13973) : toucher ou tenir le fond peint le sélectionne et pose son
  * niveau « Fond » ; toucher la scène quand quelque chose est sélectionné ressort de tout. Mettre sur la scène fait du fond
@@ -50,6 +52,13 @@ internal fun StoryComposerViewModel.onSceneTap() = onSceneReduce(StoryComposerBa
 
 /** L'appui long sur le fond média, ou la vignette de diapo › Fond : le fond est sélectionné, son niveau « Fond » se pose. */
 internal fun StoryComposerViewModel.onSelectBackground() = onSceneReduce(StoryComposerBackgroundSelectionReducer::selected)
+
+/**
+ * Le bouton Fond de la colonne (#15863, iOS `handleRestTool`) : un fond MÉDIA peint se sélectionne, ses outils prennent le
+ * rail ; sans lui, le panneau des fonds s'ouvre.
+ */
+internal fun StoryComposerViewModel.onBackgroundTool() =
+    if (state.value.selectedSlideBackdropMediaId != null) onSelectBackground() else onBandToolSwipeUp(StoryToolMode.TEXTURE)
 
 /** « Mettre sur la scène » : le fond devient un objet posé, sélectionné ; un cran d'historique. */
 internal fun StoryComposerViewModel.onPutBackgroundOnScene() = onSceneReduce(StoryComposerBackgroundSelectionReducer::putOnScene)

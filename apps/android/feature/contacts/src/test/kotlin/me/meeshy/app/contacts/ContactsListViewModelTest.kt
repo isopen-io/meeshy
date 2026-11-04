@@ -111,11 +111,46 @@ class ContactsListViewModelTest {
         cached: List<FriendRequestUser>? = null,
         statuses: StatusBarCache = statusBarCache(),
         socket: PresenceStore = socketManager(),
+        userUpdates: MutableSharedFlow<me.meeshy.sdk.model.UserUpdatedEvent>? = null,
     ): ContactsListViewModel {
         coEvery { repository.friendshipGraph(any()) } returns
             NetworkResult.Success(FriendshipPages(sent = sent, received = received))
         coEvery { listRepository.cachedSnapshot() } returns cached
-        return ContactsListViewModel(repository, listRepository, cache, session, statuses, socket)
+        val messageSocket = userUpdates?.let { flow ->
+            mockk<me.meeshy.sdk.socket.MessageSocketManager> { every { userUpdated } returns flow }
+        }
+        return ContactsListViewModel(
+            repository, listRepository, cache, session, statuses, socket, messageSocket = messageSocket,
+        )
+    }
+
+    @Test
+    fun `user updated repaints the row name and persists it without a reload`() = runTest {
+        val updates = MutableSharedFlow<me.meeshy.sdk.model.UserUpdatedEvent>(extraBufferCapacity = 4)
+        val vm = viewModel(
+            received = listOf(accepted("r1", sender = user("alice", displayName = "Alice"))),
+            userUpdates = updates,
+        )
+
+        updates.tryEmit(
+            me.meeshy.sdk.model.UserUpdatedEvent(userId = "alice", displayName = "Alicia", username = "alice", hasNameGroup = true),
+        )
+
+        assertThat(vm.state.value.friends.single().displayName).isEqualTo("Alicia")
+        coVerify(exactly = 1) { repository.friendshipGraph(any()) }
+        coVerify { listRepository.persist(match { it.single().displayName == "Alicia" }, any()) }
+    }
+
+    @Test
+    fun `user updated for a stranger leaves the roster untouched`() = runTest {
+        val updates = MutableSharedFlow<me.meeshy.sdk.model.UserUpdatedEvent>(extraBufferCapacity = 4)
+        val vm = viewModel(received = listOf(accepted("r1", sender = user("alice", displayName = "Alice"))), userUpdates = updates)
+
+        updates.tryEmit(
+            me.meeshy.sdk.model.UserUpdatedEvent(userId = "zed", displayName = "Z", username = "z", hasNameGroup = true),
+        )
+
+        assertThat(vm.state.value.friends.single().displayName).isEqualTo("Alice")
     }
 
     @Test

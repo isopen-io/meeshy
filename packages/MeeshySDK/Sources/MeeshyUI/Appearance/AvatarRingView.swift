@@ -114,7 +114,8 @@ public enum AvatarRingGeometry {
 /// La mise en place d'un contour dans sa boîte (#15157) : l'échelle de l'avatar, le film illustré
 /// s'il s'affiche, et si l'anneau fixe se dessine. Le film ne sort de la boîte que de la place que
 /// l'hôte déclare libre (`AvatarRingDecor.fit`) ; quand il s'affiche, l'anneau fixe — son image de
-/// repli — ne se dessine pas dessous ; trop petit pour se lire, l'anneau seul.
+/// repli — ne se dessine pas dessous. Il s'affiche à toutes les tailles (#16114) ; seul l'hôte qui
+/// le retire (`decor: false`, la bulle de frappe) garde l'anneau seul.
 public struct AvatarRingLayout: Equatable {
     public let contentScale: CGFloat
     public let decor: AvatarRingDecorFit?
@@ -127,7 +128,7 @@ public struct AvatarRingLayout: Equatable {
     /// Ce que le film d'un cadre demande au-delà de sa boîte, de chaque côté : la place qu'un hôte
     /// RÉSERVE (et déclare en `decorRoom`) pour le montrer sans réduire l'avatar. `0` sans film.
     public static func fullSpill(_ design: AvatarRingDesign?, box: CGFloat) -> CGFloat {
-        guard let decor = design?.decor, decor.fit(box: Double(box), room: .greatestFiniteMagnitude) != nil else { return 0 }
+        guard let decor = design?.decor else { return 0 }
         return box * CGFloat(decor.reach - 1) / 2
     }
 
@@ -139,8 +140,8 @@ public struct AvatarRingLayout: Equatable {
         return spill > 0 ? (box + 2 * spill - avatarSize) / 2 : 0
     }
 
-    public static func make(_ design: AvatarRingDesign, box: CGFloat, baseScale: CGFloat, room: CGFloat = 0) -> AvatarRingLayout {
-        let decor = design.decor?.fit(box: Double(box), room: Double(room))
+    public static func make(_ design: AvatarRingDesign, box: CGFloat, baseScale: CGFloat, room: CGFloat = 0, decor showsDecor: Bool = true) -> AvatarRingLayout {
+        let decor = showsDecor ? design.decor?.fit(box: Double(box), room: Double(room)) : nil
         return AvatarRingLayout(contentScale: baseScale * CGFloat(decor?.scale ?? 1), decor: decor)
     }
 }
@@ -170,9 +171,9 @@ public extension View {
     /// films vivants (`LottieLiveBudget`) n'en fait jouer que quelques-uns à la fois — les
     /// autres montrent leur première image fixe, et un même fichier ne se décode qu'une fois.
     @ViewBuilder
-    func avatarRingWithin(_ design: AvatarRingDesign?, footprint: CGFloat, storyRingSize: CGFloat? = nil, animates: Bool = true, decorRoom: CGFloat = 0) -> some View {
+    func avatarRingWithin(_ design: AvatarRingDesign?, footprint: CGFloat, storyRingSize: CGFloat? = nil, animates: Bool = true, decorRoom: CGFloat = 0, decor: Bool = true) -> some View {
         if let design {
-            let layout = AvatarRingLayout.make(design, box: footprint, baseScale: AvatarRingGeometry.footprintScale(footprint: footprint, storyRingSize: storyRingSize), room: decorRoom)
+            let layout = AvatarRingLayout.make(design, box: footprint, baseScale: AvatarRingGeometry.footprintScale(footprint: footprint, storyRingSize: storyRingSize), room: decorRoom, decor: decor)
             modifier(AvatarRingFrameModifier(design: design, box: footprint, layout: layout, animates: animates))
         } else {
             self

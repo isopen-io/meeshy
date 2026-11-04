@@ -207,7 +207,9 @@ object MessageMergePolicy {
     /**
      * Les pièces servies l'emportent ; une charge sans pièce garde celles du cache. Une pièce servie
      * sans adresse (fichier ou vignette) reprend l'adresse locale de sa jumelle en cache — le chemin
-     * du fichier que l'envoi optimiste a posé — par identifiant, sinon par rang à nombre égal.
+     * du fichier que l'envoi optimiste a posé — par identifiant, sinon par rang à nombre égal. Une page servie AVANT
+     * Whisper ne retire jamais la transcription ni les pistes parlées que la jumelle porte déjà
+     * ([AttachmentAudioMetadata.mergedAttachment], le serveur l'emportant quand il re-sert un texte).
      */
     private fun mergedAttachments(
         cached: List<ApiMessageAttachment>,
@@ -221,7 +223,7 @@ object MessageMergePolicy {
             if (twin == null) {
                 attachment
             } else {
-                attachment.copy(
+                AttachmentAudioMetadata.mergedAttachment(twin, attachment, forceOverwrite = true).copy(
                     fileUrl = attachment.fileUrl.takeUnless { it.isNullOrBlank() } ?: twin.fileUrl,
                     thumbnailUrl = attachment.thumbnailUrl.takeUnless { it.isNullOrBlank() } ?: twin.thumbnailUrl,
                 )

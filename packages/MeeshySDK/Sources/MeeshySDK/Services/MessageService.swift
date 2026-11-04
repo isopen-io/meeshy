@@ -249,7 +249,7 @@ public final class MessageService: MessageServiceProviding, AfterReadConsuming, 
 
     public func pin(conversationId: String, messageId: String) async throws {
         struct Empty: Encodable {}
-        let _: APIResponse<[String: String]> = try await api.put(ConversationsEndpoint.byIdMessagesByMessageIdPin(id: conversationId, messageId: messageId), body: Empty())
+        let _: APIResponse<DiscardedResponseBody> = try await api.put(ConversationsEndpoint.byIdMessagesByMessageIdPin(id: conversationId, messageId: messageId), body: Empty())
     }
 
     public func unpin(conversationId: String, messageId: String) async throws {

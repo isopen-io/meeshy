@@ -118,8 +118,7 @@ public fun ApiPostMedia.servedAudioUrl(
 ): String? {
     val original = fileUrl?.takeIf { it.isNotBlank() } ?: return null
     val tracks = translations.orEmpty().mapNotNull { (language, track) ->
-        val url = track.url?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-        MessageTranslatedAudio(id = "${id}_$language", attachmentId = id, targetLanguage = language, url = url)
+        AttachmentMetadataMapping.translatedAudio(id, language, track)
     }
     val transcriptionLanguage = transcription?.language?.takeIf { it.isNotBlank() }
         ?.let { MessageTranscription(attachmentId = id, language = it) }

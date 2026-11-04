@@ -19,6 +19,11 @@ public data class QueuedAudio(
     val trackLanguage: String? = null,
     val isTranslatedTrack: Boolean = false,
     val isProtected: Boolean,
+    /**
+     * La consommation SERVIE de ce vocal (position et complétion relevées sur tous les appareils du compte), que le
+     * coordinateur remet au moteur avant de le jouer : la reprise s'amorce depuis le serveur quand l'appareil n'a rien.
+     */
+    val servedConsumption: MeeshyMediaConsumption? = null,
 )
 
 /**
@@ -38,12 +43,38 @@ public data class AudioQueueMessage(
     val attachmentIds: List<String> = audios.map { it.attachmentId },
 )
 
-/** Un vocal du message ; [isProtected] est celle de la PIÈCE ([VoiceQueueProtection.ofPiece]), requise. */
+/**
+ * Un vocal du message ; [isProtected] est celle de la PIÈCE ([VoiceQueueProtection.ofPiece]), requise.
+ * [listenedComplete] : la consommation SERVIE dit qu'il a été écouté jusqu'au bout — il ne rejoint jamais la file.
+ * [trackLanguage] et [isTranslatedTrack] décrivent la piste [fileUrl] (élue par le Prisme,
+ * [me.meeshy.sdk.lang.AttachmentTranscriptPrism.playedTrack]) ; la file les recopie, sans seconde descente.
+ */
 public data class AudioQueueAttachment(
     val attachmentId: String,
     val fileUrl: String,
     val durationMs: Long,
     val isProtected: Boolean,
+    val listenedComplete: Boolean = false,
+    val trackLanguage: String? = null,
+    val isTranslatedTrack: Boolean = false,
+    /** La position SERVIE où l'écoute s'était arrêtée ; elle voyage avec l'entrée de file ([QueuedAudio.servedConsumption]). */
+    val lastPlayPositionMs: Int? = null,
+)
+
+/** L'entrée de file d'une pièce de ce message : protection du message OU de la pièce (leçon 275), piste servie recopiée. */
+internal fun AudioQueueMessage.queued(audio: AudioQueueAttachment, fileUrl: String = audio.fileUrl): QueuedAudio = QueuedAudio(
+    attachmentId = audio.attachmentId,
+    messageId = messageId,
+    conversationId = conversationId,
+    fileUrl = fileUrl,
+    durationMs = audio.durationMs,
+    senderName = senderName,
+    senderAvatarUrl = senderAvatarUrl,
+    receivedAtEpochMs = createdAtEpochMs,
+    trackLanguage = audio.trackLanguage,
+    isTranslatedTrack = audio.isTranslatedTrack,
+    isProtected = isProtected || audio.isProtected,
+    servedConsumption = me.meeshy.sdk.model.playback.MediaConsumptionSeed.of(audio.lastPlayPositionMs, audio.listenedComplete),
 )
 
 /**
@@ -52,7 +83,7 @@ public data class AudioQueueAttachment(
  *
  * 1. Les vocaux de l'utilisateur sont exclus — SAUF le message du curseur : on peut jouer son propre
  *    message à plusieurs pièces, et l'auto-avance doit enchaîner les pièces suivantes.
- * 2. Les vocaux déjà écoutés sont exclus.
+ * 2. Les vocaux déjà écoutés (session ou consommation servie [AudioQueueAttachment.listenedComplete]) sont exclus.
  * 3. Avec un curseur, ne restent que les vocaux strictement APRÈS lui (date, puis rang dans le message).
  * 4. Tri par date croissante puis identifiant ; à l'intérieur d'un message, l'ordre des pièces gagne.
  * 5. Un vocal est protégé si son message OU sa pièce l'est (leçon 275) ; le résolveur de piste ne change que l'URL.
@@ -72,20 +103,8 @@ public object AudioQueueBuilder {
             val isCursorMessage = message.messageId == cursorMessage?.messageId
             if (message.senderId == currentUserId && !isCursorMessage) return@flatMap emptyList()
             message.audios
-                .filter { it.attachmentId !in listenedAttachmentIds }
-                .map { audio ->
-                    QueuedAudio(
-                        attachmentId = audio.attachmentId,
-                        messageId = message.messageId,
-                        conversationId = message.conversationId,
-                        fileUrl = trackUrlResolver?.invoke(message, audio) ?: audio.fileUrl,
-                        durationMs = audio.durationMs,
-                        senderName = message.senderName,
-                        senderAvatarUrl = message.senderAvatarUrl,
-                        receivedAtEpochMs = message.createdAtEpochMs,
-                        isProtected = message.isProtected || audio.isProtected,
-                    )
-                }
+                .filter { it.attachmentId !in listenedAttachmentIds && !it.listenedComplete }
+                .map { audio -> message.queued(audio, trackUrlResolver?.invoke(message, audio) ?: audio.fileUrl) }
         }
 
         val afterCursor = if (cursorMessage != null && startingAfterAttachmentId != null) {
@@ -168,6 +187,25 @@ public data class AudioPlayQueue(
         upcoming = upcoming.filterNot { it.messageId == messageId },
         played = played.filterNot { it.messageId == messageId },
     )
+
+    /**
+     * #15969 — le vocal courant [fromAttachmentId] a été accusé : il prend son id serveur et l'adresse servie ; la suite et
+     * l'historique ne bougent pas ; [messageId], quand il est connu, est l'id serveur de son message. Une autre pièce, ou
+     * une file vide, laisse la file telle quelle.
+     */
+    public fun followed(fromAttachmentId: String, toAttachmentId: String, fileUrl: String, messageId: String? = null): AudioPlayQueue {
+        val playing = current?.takeIf { it.attachmentId == fromAttachmentId } ?: return this
+        return copy(current = playing.copy(attachmentId = toAttachmentId, fileUrl = fileUrl, messageId = messageId ?: playing.messageId))
+    }
+
+    /**
+     * La suite devient [tail] (iOS `replaceUpcoming`) : le courant et l'historique restent ; le courant et les doublons
+     * sortent de la suite. Sans courant, rien ne joue : aucune suite ne s'y accroche.
+     */
+    public fun withUpcoming(tail: List<QueuedAudio>): AudioPlayQueue {
+        val playing = current ?: return this
+        return copy(upcoming = tail.distinctBy { it.attachmentId }.filter { it.attachmentId != playing.attachmentId })
+    }
 
     public val hasNext: Boolean get() = upcoming.isNotEmpty()
     public val hasPrevious: Boolean get() = played.isNotEmpty()

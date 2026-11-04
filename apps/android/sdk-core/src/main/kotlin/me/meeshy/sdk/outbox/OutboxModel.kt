@@ -98,6 +98,12 @@ public enum class OutboxKind {
 
     /** Terminer une conversation pour tous (#15920) : retrait optimiste, rejeu hors ligne, jamais fusionné. */
     DELETE_CONVERSATION_FOR_ALL,
+
+    /**
+     * La déclaration d'une capture d'un contenu qui disparaît (#9617) : DURABLE, rejouée avec le recul exponentiel tant que la
+     * passerelle l'accepte ; seul un refus FINAL la fait partir. Jamais comptée dans la pastille de synchronisation.
+     */
+    REPORT_CONTENT_CAPTURE,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -144,6 +150,9 @@ public object OutboxLanes {
     public const val COMMENT: String = "comment"
     public const val CONSUMPTION: String = "consumption"
     public const val CONVERSATION: String = "conversation"
+
+    /** Les déclarations de capture : une lane à elles, un rapport coincé ne retient ni un accusé de lecture ni un message. */
+    public const val CAPTURE: String = "capture"
 
     /** Quitter / supprimer une conversation (#15920) : une lane à elle, un retrait coincé ne retient ni une création ni un renommage. */
     public const val CONVERSATION_STATE: String = "conversationState"
@@ -262,6 +271,7 @@ public object OutboxLaneMap {
         OutboxKind.DELETE_CONVERSATION_FOR_ME,
         OutboxKind.DELETE_CONVERSATION_FOR_ALL,
         -> OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION_STATE)
+        OutboxKind.REPORT_CONTENT_CAPTURE -> OutboxLaneAssignment.Shared(OutboxLanes.CAPTURE)
     }
 
     /**
@@ -375,6 +385,10 @@ public data class CommentPayload(
     val attachmentIds: List<String>? = null,
     val effectFlags: Int? = null,
     val location: me.meeshy.sdk.model.SharedPlace? = null,
+    /** L'ancre du média cité du post commenté (#6578) ; absente sur une ancienne ligne. */
+    val quotedPostMediaId: String? = null,
+    /** Les pièces encore sur le disque et ce qui en est déjà téléversé (#9743) ; absent sans pièce et sur une ancienne ligne. */
+    val media: me.meeshy.sdk.post.CommentMediaPayload? = null,
 )
 
 /**

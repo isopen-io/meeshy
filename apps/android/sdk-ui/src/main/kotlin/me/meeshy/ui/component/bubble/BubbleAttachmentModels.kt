@@ -164,9 +164,30 @@ public data class BubbleAudio(
      * horodatages que s'ils décrivent la piste JOUÉE ; sur une autre piste ils avancent à la progression.
      */
     val transcriptionSegments: List<MessageTranscriptionSegment> = emptyList(),
+    /**
+     * Le vocal est protégé (vue unique, flou, éphémère ou chiffré — le message OU la pièce, [me.meeshy.sdk.model.VoiceQueueProtection]) :
+     * il ne s'écrit jamais sur le disque, aucune onde n'est calculée, il ne s'ouvre ni en plein écran ni au transfert.
+     */
+    val isProtected: Boolean = false,
+    /** La consommation SERVIE du lecteur : où il s'était arrêté, et s'il l'a écouté jusqu'au bout. */
+    val lastPlayPositionMs: Int? = null,
+    val listenedComplete: Boolean = false,
+    /** La langue de la transcription d'origine, puis celles des pistes traduites : les drapeaux du pied d'une pile. */
+    val originalLanguage: String? = null,
+    val translatedLanguages: List<String> = emptyList(),
 ) {
+    /** La durée déclarée en millisecondes, 0 quand elle est inconnue. */
+    val declaredDurationMs: Long get() = (durationSeconds ?: 0).coerceAtLeast(0) * 1000L
+
     /** True when the audio has a playable URL (already downloaded / remote-ready). */
     val isPlayable: Boolean get() = !url.isNullOrBlank()
+
+    /**
+     * La langue qu'on ENTEND en jouant [url] (iOS `publishConsumedLanguage` : « orig » ⇒ la langue de la transcription
+     * d'origine) : celle de la piste traduite, sinon celle de la voix d'origine — jamais [audioLanguage] seul, qui retombe
+     * sur la langue du TEXTE servi quand la voix d'origine joue sous une transcription traduite. `null` : inconnue.
+     */
+    val playedLanguage: String? get() = if (isAudioTranslated) audioLanguage else originalLanguage
 
     /** True when a non-blank transcription line is worth surfacing under the player. */
     val hasTranscription: Boolean get() = !transcriptionText.isNullOrBlank()

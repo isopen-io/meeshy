@@ -146,6 +146,141 @@ final class PendingBubbleMediaRelocationTests: XCTestCase {
         XCTAssertEqual(relocated.fileUrl, "file:///tmp/durable/0.mp4")
         XCTAssertEqual(relocated.thumbnailUrl, "file:///tmp/src/poster.jpg")
     }
+
+    // MARK: - La bulle relue suit le conteneur de l'app (#15294)
+
+    /// Le chemin qu'aurait écrit le même appareil avant que le conteneur ne
+    /// change (mise à jour, restauration, réinstallation).
+    private func underAnotherContainer(_ relative: String) throws -> String {
+        let home = NSHomeDirectory()
+        let marker = "/Data/Application/"
+        guard let range = home.range(of: marker) else { throw XCTSkip("hôte de test hors conteneur d'app") }
+        let afterMarker = home[range.upperBound...]
+        let containerEnd = afterMarker.firstIndex(of: "/") ?? afterMarker.endIndex
+        let staleHome = String(home[..<range.upperBound]) + "00000000-0000-0000-0000-0000000A1D00" + afterMarker[containerEnd...]
+        return URL(fileURLWithPath: staleHome + "/Documents/" + relative).absoluteString
+    }
+
+    private func currentContainer(_ relative: String) -> String {
+        URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(forStored: relative)).absoluteString
+    }
+
+    func test_decode_attachmentWrittenUnderAnotherContainer_pointsIntoTheCurrentContainer() throws {
+        let stale = try underAnotherContainer("pending-media/cid_moved/0.jpg")
+        let written = MeeshyMessageAttachment(id: "att-img", mimeType: "image/jpeg", fileUrl: stale, thumbnailUrl: stale)
+
+        let decoded = try JSONDecoder().decode(MeeshyMessageAttachment.self, from: JSONEncoder().encode(written))
+
+        XCTAssertEqual(decoded.fileUrl, currentContainer("pending-media/cid_moved/0.jpg"))
+        XCTAssertEqual(decoded.thumbnailUrl, currentContainer("pending-media/cid_moved/0.jpg"))
+    }
+
+    func test_toMessage_rowWrittenUnderAnotherContainer_keepsTheBubblePreview() async throws {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        let store = MessagePersistenceActor(dbWriter: pool)
+        try await store.insertOptimistic(SendingRowFixture.record(localId: "cid_moved", conversationId: Self.conversationId, content: ""))
+        let staleAudio = try underAnotherContainer("pending-audio/cid_moved/0.m4a")
+        let audio = MeeshyMessageAttachment(id: "att-voc", mimeType: "audio/mp4", fileUrl: staleAudio, duration: 4_000)
+        try await store.updateAttachmentsJson(localId: "cid_moved", attachmentsJson: JSONEncoder().encode([audio]))
+
+        let record = try await pool.read { db in try MessageRecord.fetchOne(db, key: "cid_moved") }
+        let message = try XCTUnwrap(record).toMessage(currentUserId: "me")
+
+        XCTAssertEqual(message.attachments.map(\.fileUrl), [currentContainer("pending-audio/cid_moved/0.m4a")])
+        XCTAssertEqual(message.attachments.first?.duration, 4_000)
+    }
+
+    func test_decode_remoteOrForeignURLs_stayUntouched() throws {
+        let remote = MeeshyMessageAttachment(id: "a", mimeType: "image/jpeg",
+                                             fileUrl: "https://gate.example/u/a.jpg", thumbnailUrl: nil)
+        let foreign = MeeshyMessageAttachment(id: "b", mimeType: "image/jpeg", fileUrl: "file:///tmp/src/b.jpg")
+
+        let decoded = try JSONDecoder().decode([MeeshyMessageAttachment].self, from: JSONEncoder().encode([remote, foreign]))
+
+        XCTAssertEqual(decoded.map(\.fileUrl), ["https://gate.example/u/a.jpg", "file:///tmp/src/b.jpg"])
+        XCTAssertNil(decoded.first?.thumbnailUrl)
+        let json = try XCTUnwrap(String(data: JSONEncoder().encode(remote), encoding: .utf8))
+        XCTAssertFalse(json.contains("thumbnailUrl"), "une vignette absente ne s'écrit pas")
+    }
+
+    // MARK: - La copie durable survit à l'accusé, jusqu'à la bascule (#15294)
+
+    private struct AcceptingDispatcher: OutboxDispatching {
+        func dispatch(_ record: OutboxRecord) async throws {}
+    }
+
+    private func enqueueReplayedVisual(cid: String, in pool: DatabaseQueue) async throws -> String {
+        let stored = "pending-media/\(cid)/0.jpg"
+        let absolute = OfflineQueue.absoluteMediaPath(forStored: stored)
+        try FileManager.default.createDirectory(atPath: (absolute as NSString).deletingLastPathComponent,
+                                                withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: absolute, contents: Data("jpeg".utf8))
+        let item = OfflineQueueItem(
+            id: "qid_\(cid)", clientMessageId: cid, conversationId: Self.conversationId, content: "",
+            originalLanguage: "fr", replyToId: nil, forwardedFromId: nil, forwardedFromConversationId: nil,
+            attachmentIds: nil, localAudioPath: nil, localMediaPaths: [stored], createdAt: Date()
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let payload = try encoder.encode(item)
+        let conversationId = Self.conversationId
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "ofq_\(cid)", kind: .sendMessage, conversationId: conversationId, clientMessageId: cid,
+                payload: payload, status: .pending, attempts: 0, lastError: nil,
+                createdAt: Date(), updatedAt: Date(), nextAttemptAt: Date()
+            ).insert(db)
+        }
+        return absolute
+    }
+
+    func test_flush_appliedReplay_keepsTheDurableCopyUntilTheEchoCanAdoptIt() async throws {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        let copy = try await enqueueReplayedVisual(cid: "cid_ack_\(UUID().uuidString.prefix(8))", in: pool)
+        defer { try? FileManager.default.removeItem(atPath: copy) }
+
+        await OutboxFlusher(pool: pool, dispatcher: AcceptingDispatcher()).flush()
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: copy),
+                      "l'accusé précède l'écho : effacer la copie maintenant vide la bulle et prive l'écho de l'adoption en cache")
+    }
+
+    func test_flush_appliedReplay_sweepsTheCopyOnceTheEchoGraceHasElapsed() async throws {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        let copy = try await enqueueReplayedVisual(cid: "cid_grace_\(UUID().uuidString.prefix(8))", in: pool)
+        defer { try? FileManager.default.removeItem(atPath: copy) }
+        let scheduled = ScheduledSweeps()
+
+        await OutboxFlusher(pool: pool, dispatcher: AcceptingDispatcher(),
+                            scheduleAppliedFileSweep: { scheduled.append($0) }).flush()
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: copy))
+        XCTAssertEqual(scheduled.count, 1)
+        scheduled.runAll()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: copy), "ce que l'écho n'a pas adopté ne fuit pas")
+    }
+
+    func test_appliedFileSweepGrace_leavesTheEchoTimeToArrive() {
+        XCTAssertGreaterThanOrEqual(OutboxFlusher.appliedFileSweepGrace, .seconds(60))
+    }
+}
+
+private final class ScheduledSweeps: @unchecked Sendable {
+    private let lock = NSLock()
+    private var sweeps: [@Sendable () -> Void] = []
+
+    var count: Int { lock.withLock { sweeps.count } }
+
+    func append(_ sweep: @escaping @Sendable () -> Void) {
+        lock.withLock { sweeps.append(sweep) }
+    }
+
+    func runAll() {
+        lock.withLock { sweeps }.forEach { $0() }
+    }
 }
 
 private extension FakeOfflineMessageQueue {

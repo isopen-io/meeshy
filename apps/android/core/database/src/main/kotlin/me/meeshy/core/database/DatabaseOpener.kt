@@ -5,6 +5,9 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import java.io.File
 import kotlinx.coroutines.CancellationException
+import me.meeshy.core.database.crypto.DatabaseFileState
+import me.meeshy.core.database.crypto.DatabaseFileStates
+import me.meeshy.core.database.crypto.DatabaseKeyUnavailableException
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.core.database.entity.PendingIdEntity
 import me.meeshy.core.database.entity.PlaintextErasureEntity
@@ -23,8 +26,16 @@ public sealed interface DatabaseLocation {
  *    lecture seule, fichiers mis en quarantaine (`.corrupted.<ts>`, [MAX_QUARANTINES] au plus), base recréée, ce qui a
  *    été sauvé réinjecté ;
  * 2. disque qui refuse ([OpenFailureKind.UNAVAILABLE]), ou recréation impossible : base de repli sur un chemin
- *    secondaire (cache de l'app), le fichier principal restant en place ;
+ *    secondaire (cache de l'app), le fichier principal restant en place — sauf si [allowsSecondary] est faux (base
+ *    principale chiffrée : une base de repli serait en clair), auquel cas on passe directement au point 3 ;
  * 3. sinon base en mémoire, [StorageHealth] passe en éphémère.
+ * Avant tout (marqueur de corruption compris : sans la clé, le sauvetage ne lirait rien et la quarantaine emporterait
+ * l'outbox), [prepare] met en place le chiffrement (clé, migration de la base en clair). S'il échoue : une base encore EN
+ * CLAIR qu'une corruption empêche d'exporter suit le chemin 1 (sauvetage, quarantaine, recréation chiffrée) ; toute
+ * autre panne (disque, coffre qui ne rend pas la clé, bibliothèque native absente) ouvre la base EN MÉMOIRE pour ce
+ * lancement, sans toucher au fichier (son outbox y est relue en lecture seule), et le lancement suivant réessaie. Jamais de repli en clair, jamais de plantage en
+ * boucle. [salvageOpener] relit la base principale pour le sauvetage : en production, l'ouvreur SQLCipher qui détient la
+ * clé.
  * Un échec qui relève du CODE ([OpenFailureKind.DEFECT] : migration absente ou fautive, schéma incohérent) REMONTE : rien
  * n'est déplacé ni vidé, et le crash rend le bug visible au lieu d'effacer en silence le cache de chaque utilisateur.
  * Chaque jalon est consigné dans [DatabaseInitDiagnostics].
@@ -33,6 +44,13 @@ public sealed interface DatabaseLocation {
  * pas chiffrée, et elle ne doit jamais être rouverte plus tard sous un autre compte. Une ligne reprise quitte la base de
  * repli dans le même geste, une ligne non reprise y reste, et une ligne sauvée n'écrase jamais celle que la base de
  * destination porte déjà : rien n'est rejoué, rien n'est perdu.
+ *
+ * Une purge de session restée due sur la base disque (session close pendant un lancement en mémoire, [PendingDiskPurge])
+ * passe avant tout : la base sur disque n'est jamais rendue au compte suivant avec les lignes du précédent.
+ *
+ * Une base en mémoire qui reçoit la copie de l'outbox d'une base sur disque restée intacte tient le registre de ce qu'elle
+ * en règle ([DiskOutboxSettlement]) : la prochaine ouverture sur disque en retire ces lignes, et un envoi annulé pendant
+ * le lancement en mémoire ne repart pas.
  */
 public class DatabaseOpener(
     private val context: Context,
@@ -43,21 +61,77 @@ public class DatabaseOpener(
     private val secondaryFile: File = File(context.cacheDir, SECONDARY_NAME),
     private val leftovers: DatabaseLeftovers? = null,
     private val readable: (File) -> Boolean = DatabaseRecovery::isReadable,
+    private val prepare: () -> Unit = {},
+    private val salvageOpener: SalvageOpener = DatabaseRecovery.frameworkSalvage,
+    private val allowsSecondary: Boolean = true,
     private val build: (Context, DatabaseLocation) -> MeeshyDatabase,
 ) {
     public fun open(): MeeshyDatabase {
         val primaryFile = context.getDatabasePath(primaryName)
+        health.markNormal()
+        val purge = pendingPurge(primaryFile)
+        if (purge.blocked) return inMemory(purge.kept, PURGE_PENDING)
+        val database = openPurged(primaryFile)
+        restore(database, purge.kept)
+        return database
+    }
+
+    private class PurgeOutcome(val blocked: Boolean, val kept: DatabaseSalvage = DatabaseSalvage())
+
+    /**
+     * La purge de session que la base sur disque doit encore subir ([PendingDiskPurge]), appliquée AVANT toute ouverture :
+     * les clairs E2EE à effacer marqués d'un compte sont relus, tous les fichiers de la base supprimés (base de repli
+     * comprise), et ces inscriptions repartent dans la base qui s'ouvre. Si le fichier ne se relit pas, la préparation du
+     * chiffrement est jouée d'abord (elle rend la clé, ou purge un fichier que la clé perdue ne déverrouille plus), puis la
+     * lecture retentée. Un fichier qui ne se relit toujours pas faute de clé ou de disque, ou qui ne se supprime pas,
+     * bloque l'ouverture sur disque : le marqueur reste, et rien du compte qui est parti n'est recopié. Un fichier corrompu
+     * se supprime sans ses inscriptions, qu'aucune clé ne relirait.
+     */
+    private fun pendingPurge(primaryFile: File): PurgeOutcome {
+        if (!PendingDiskPurge.isDue(primaryFile)) return PurgeOutcome(blocked = false)
+        val owed = owedErasures(primaryFile) ?: run {
+            prepared()?.let { failure ->
+                diagnostics.record(DatabaseInitStage.FIRST_FAILURE, failure)
+                return PurgeOutcome(blocked = true)
+            }
+            owedErasures(primaryFile)
+        } ?: return PurgeOutcome(blocked = true)
+        val kept = DatabaseSalvage(plaintextErasures = owed)
+        if (!PendingDiskPurge.wipe(primaryFile)) {
+            diagnostics.record(DatabaseInitStage.FIRST_FAILURE, "$PURGE_PENDING:${primaryFile.name}")
+            return PurgeOutcome(blocked = true, kept = kept)
+        }
+        DatabaseRecovery.deleteFallback(secondaryFile)
+        PendingDiskPurge.clear(primaryFile)
+        diagnostics.record(DatabaseInitStage.DISK_PURGED, "${primaryFile.name}:erasures=${owed.size}")
+        return PurgeOutcome(blocked = false, kept = kept)
+    }
+
+    /** Les inscriptions dues de [primaryFile] ; vide pour un fichier corrompu, `null` s'il ne se relit pas (clé, disque). */
+    private fun owedErasures(primaryFile: File): List<PlaintextErasureEntity>? = try {
+        PendingDiskPurge.owedErasures(primaryFile, salvageOpener)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failure: Throwable) {
+        if (failure is VirtualMachineError) throw failure
+        diagnostics.record(DatabaseInitStage.FIRST_FAILURE, failure)
+        if (DatabaseRecovery.classify(failure) == OpenFailureKind.CORRUPTION) emptyList() else null
+    }
+
+    private fun openPurged(primaryFile: File): MeeshyDatabase {
+        val settlement = DiskOutboxSettlement(primaryFile)
+        prepared()?.let { failure -> return afterPrepareFailure(primaryFile, settlement, failure) }
         if (DatabaseRecovery.isMarkedCorrupted(primaryFile)) {
             diagnostics.record(DatabaseInitStage.FIRST_FAILURE, "corruption-marked:${primaryFile.name}")
-            return recreate(primaryFile)
+            return recreate(primaryFile, settlement)
         }
         if (!readable(primaryFile)) {
             diagnostics.record(DatabaseInitStage.FIRST_FAILURE, "unreadable:${primaryFile.name}")
-            return recreate(primaryFile)
+            return recreate(primaryFile, settlement)
         }
         val first = attempt(DatabaseLocation.Named(primaryName))
         first.database?.let {
-            health.markNormal()
+            settlement.applyTo(it)
             adoptFallback(it)
             leftovers?.markInUse(primaryFile)
             return it
@@ -65,18 +139,71 @@ public class DatabaseOpener(
         val failure = first.failure ?: IllegalStateException("open failed")
         diagnostics.record(DatabaseInitStage.FIRST_FAILURE, failure)
         return when (DatabaseRecovery.classify(failure)) {
-            OpenFailureKind.CORRUPTION -> recreate(primaryFile)
+            OpenFailureKind.CORRUPTION -> recreate(primaryFile, settlement)
             OpenFailureKind.UNAVAILABLE -> fallBack(DatabaseSalvage())
             OpenFailureKind.DEFECT -> throw failure
         }
     }
 
-    private fun recreate(primaryFile: File): MeeshyDatabase {
-        val salvaged = quarantine(primaryFile)
+    /** `null` si le chiffrement est en place ; sinon l'échec, qui ne remonte jamais tel quel (voir [afterPrepareFailure]). */
+    private fun prepared(): Throwable? = try {
+        prepare()
+        null
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failure: Throwable) {
+        if (failure is VirtualMachineError) throw failure
+        failure
+    }
+
+    /**
+     * Une base encore en clair qu'une corruption empêche d'exporter : sauvée, mise en quarantaine, recréée chiffrée. Toute
+     * autre panne de la préparation ouvre la base en mémoire, sans toucher au fichier ni l'ouvrir en clair ; ce que la base
+     * en mémoire règle de l'outbox recopiée est inscrit à [settlement], pour que le disque ne le rejoue pas.
+     */
+    private fun afterPrepareFailure(primaryFile: File, settlement: DiskOutboxSettlement, failure: Throwable): MeeshyDatabase {
+        diagnostics.record(DatabaseInitStage.FIRST_FAILURE, failure)
+        val corruptPlaintext = DatabaseRecovery.classify(failure) == OpenFailureKind.CORRUPTION &&
+            DatabaseFileStates.of(primaryFile) == DatabaseFileState.PLAINTEXT
+        if (corruptPlaintext) return recreate(primaryFile, settlement)
+        val salvaged = settlement.withoutSettled(salvageInPlace(primaryFile))
+        val memory = inMemory(salvaged, encryptionUnavailable(failure))
+        settlement.watch(memory, salvaged.outbox.map { it.cmid }.toSet())
+        return memory
+    }
+
+    /**
+     * Ce que la base sur disque garde d'irremplaçable (outbox, ponts d'identifiants, clairs E2EE à effacer), relu en
+     * lecture seule pour la base en mémoire : un envoi en attente reste visible, et il repart avec son identifiant
+     * d'origine, que le serveur déduplique quand la base sur disque le rejouera. Le fichier n'est ni déplacé ni écrit. Un
+     * ouvreur qui lève (bibliothèque native absente, clé indisponible) ne rend rien, sans empêcher la base en mémoire.
+     */
+    private fun salvageInPlace(primaryFile: File): DatabaseSalvage = try {
+        DatabaseRecovery.salvage(primaryFile, salvageOpener)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failure: Throwable) {
+        if (failure is VirtualMachineError) throw failure
+        DatabaseSalvage()
+    }
+
+    /** `encryption-unavailable:key` quand le coffre n'a pas rendu la clé, sinon la nature de l'échec (`unavailable`, `defect`…). */
+    private fun encryptionUnavailable(failure: Throwable): String {
+        val cause = if (failure is DatabaseKeyUnavailableException) KEY else DatabaseRecovery.classify(failure).name.lowercase()
+        return "$ENCRYPTION_UNAVAILABLE$cause"
+    }
+
+    private fun recreate(primaryFile: File, settlement: DiskOutboxSettlement): MeeshyDatabase {
+        val salvaged = settlement.withoutSettled(quarantine(primaryFile))
+        prepared()?.let { failure ->
+            diagnostics.record(DatabaseInitStage.FIRST_FAILURE, failure)
+            return inMemory(salvaged, encryptionUnavailable(failure))
+        }
         val retry = attempt(DatabaseLocation.Named(primaryName))
         retry.database?.let {
             diagnostics.record(DatabaseInitStage.RECREATED, primaryName)
             restore(it, salvaged)
+            settlement.applyTo(it)
             health.markDegraded("recreated")
             leftovers?.markInUse(primaryFile)
             return it
@@ -88,6 +215,7 @@ public class DatabaseOpener(
     }
 
     private fun fallBack(salvaged: DatabaseSalvage): MeeshyDatabase {
+        if (!allowsSecondary) return inMemory(salvaged, MEMORY)
         secondaryFile.parentFile?.mkdirs()
         val secondary = attempt(DatabaseLocation.Named(secondaryFile.absolutePath))
         secondary.database?.let {
@@ -98,9 +226,20 @@ public class DatabaseOpener(
             return it
         }
         val failure = secondary.failure ?: IllegalStateException("secondary failed")
-        diagnostics.record(DatabaseInitStage.FELL_BACK_MEMORY, failure)
-        if (DatabaseRecovery.classify(failure) == OpenFailureKind.DEFECT) throw failure
-        health.markEphemeral("memory")
+        if (DatabaseRecovery.classify(failure) == OpenFailureKind.DEFECT) {
+            diagnostics.record(DatabaseInitStage.FELL_BACK_MEMORY, failure)
+            throw failure
+        }
+        return inMemory(salvaged, MEMORY, failure)
+    }
+
+    /** La base en mémoire : rien ne sera conservé, [StorageHealth] passe en éphémère et l'interface le dit. */
+    private fun inMemory(salvaged: DatabaseSalvage, reason: String, failure: Throwable? = null): MeeshyDatabase {
+        when (failure) {
+            null -> diagnostics.record(DatabaseInitStage.FELL_BACK_MEMORY, reason)
+            else -> diagnostics.record(DatabaseInitStage.FELL_BACK_MEMORY, failure)
+        }
+        health.markEphemeral(reason)
         val memory = build(context, DatabaseLocation.Memory)
         restore(memory, salvaged)
         leftovers?.markInUse(null)
@@ -151,7 +290,7 @@ public class DatabaseOpener(
     }
 
     private fun quarantine(file: File): DatabaseSalvage {
-        val salvaged = DatabaseRecovery.salvage(file)
+        val salvaged = DatabaseRecovery.salvage(file, salvageOpener)
         val moved = DatabaseRecovery.quarantine(file, clock())
         if (!file.exists()) DatabaseRecovery.clearCorruptionMarker(file)
         diagnostics.record(DatabaseInitStage.QUARANTINED, moved.joinToString(",") { it.name })
@@ -280,6 +419,20 @@ public class DatabaseOpener(
 
         /** La raison de [StorageState.Degraded] quand la base de repli garde des lignes non reprises, suivie de leur nombre. */
         public const val FALLBACK_KEPT: String = "fallback-kept:"
+
+        /** La raison de [StorageState.Ephemeral] d'une base en mémoire faute de fichier ouvrable. */
+        public const val MEMORY: String = "memory"
+
+        /**
+         * La raison de [StorageState.Ephemeral] quand la base sur disque attend une purge de session qu'on ne peut pas encore
+         * appliquer ([PendingDiskPurge]) : elle n'est pas ouverte, et ce lancement tourne en mémoire.
+         */
+        public const val PURGE_PENDING: String = "purge-pending"
+
+        /** La raison de [StorageState.Ephemeral] quand le chiffrement n'a pas pu se mettre en place, suivie de la nature de l'échec. */
+        public const val ENCRYPTION_UNAVAILABLE: String = "encryption-unavailable:"
+
+        private const val KEY = "key"
 
         private val OUTBOX_KEY = listOf("cmid")
         private val ERASURE_KEY = listOf("account", "kind", "itemId")

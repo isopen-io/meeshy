@@ -61,6 +61,6 @@ public final class StatusService: StatusServiceProviding, Sendable {
     public func react(statusId: String, emoji: String) async throws {
         let body = ["emoji": emoji]
         let bodyData = try JSONSerialization.data(withJSONObject: body)
-        let _: APIResponse<[String: String]> = try await api.request(PostsEndpoint.byPostIdLike(postId: statusId), method: "POST", body: bodyData)
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(PostsEndpoint.byPostIdLike(postId: statusId), method: "POST", body: bodyData)
     }
 }

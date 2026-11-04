@@ -155,4 +155,17 @@ class ConversationWireDecodingTest {
         assertThat(params["count"]?.rendered).isEqualTo("3")
         assertThat(params).doesNotContainKey("bad")
     }
+
+    @Test
+    fun `la capacite du lecteur est lue, absente vaut null, illisible vaut null sans jeter la ligne`() {
+        assertThat(decode(row(""""viewerCapabilities":{"canMakeObsolete":false},""")).viewerCapabilities)
+            .isEqualTo(ConversationViewerCapabilities(canMakeObsolete = false))
+        assertThat(decode(row(""""viewerCapabilities":{"canMakeObsolete":true},""")).viewerCapabilities?.canMakeObsolete).isTrue()
+        assertThat(decode(row("")).viewerCapabilities).isNull()
+        val unreadable = decode(row(""""viewerCapabilities":{"canMakeObsolete":"oui"},"""))
+        assertThat(unreadable.viewerCapabilities).isNull()
+        assertThat(unreadable.id).isEqualTo("c1")
+        assertThat(decode(row(""""viewerCapabilities":{},""")).viewerCapabilities).isNull()
+        assertThat(decode(row(""""viewerCapabilities":null,""")).viewerCapabilities).isNull()
+    }
 }

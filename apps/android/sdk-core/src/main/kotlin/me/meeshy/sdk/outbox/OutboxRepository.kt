@@ -209,11 +209,14 @@ class OutboxRepository @Inject constructor(
      *
      * #15677 — [send] runs only once [cmid] is CLAIMED ([OutboxDao.claimPending]): two overlapping passes that both read
      * the row `PENDING` reduce to one send, and the pass that loses the claim gets `null` without sending anything.
+     *
+     * #15541 — the claim also requires the row to be DUE at [at] (the drainer's clock): a pass whose snapshot predates
+     * another pass's failed attempt does not send the row again past its backoff — a 44 MB video is uploaded once.
      */
-    suspend fun <T : Any> sendingLive(cmid: String, send: suspend () -> T): T? {
+    suspend fun <T : Any> sendingLive(cmid: String, at: Long = now(), send: suspend () -> T): T? {
         if (!liveSends.add(cmid)) return null
         try {
-            if (outboxDao.claimPending(cmid, now()) != 1) return null
+            if (outboxDao.claimPending(cmid, at) != 1) return null
             return send()
         } finally {
             liveSends -= cmid
@@ -236,11 +239,17 @@ class OutboxRepository @Inject constructor(
      * (with an [OutboxOutcome.Exhausted] signal) once [MAX_ATTEMPTS] is reached.
      */
     suspend fun markFailed(cmid: String, reason: String? = null, backoffMs: Long = 0L): OutboxState {
+        val state = database.withTransaction { markFailedInTransaction(cmid, reason, backoffMs) }
+        if (state == OutboxState.EXHAUSTED) emit(OutboxOutcome.Exhausted(cmid, "Exceeded $MAX_ATTEMPTS delivery attempts"))
+        return state
+    }
+
+    /** #15541 — `PENDING` and its backoff land TOGETHER: no overlapping claim slips between the two writes. */
+    private suspend fun markFailedInTransaction(cmid: String, reason: String?, backoffMs: Long): OutboxState {
         val row = outboxDao.find(cmid) ?: return OutboxState.PENDING
         val attempts = row.attempts + 1
         return if (attempts >= MAX_ATTEMPTS) {
             outboxDao.updateState(cmid, OutboxState.EXHAUSTED.name, attempts, now())
-            emit(OutboxOutcome.Exhausted(cmid, "Exceeded $MAX_ATTEMPTS delivery attempts"))
             OutboxState.EXHAUSTED
         } else {
             outboxDao.updateState(cmid, OutboxState.PENDING.name, attempts, now())
@@ -255,11 +264,13 @@ class OutboxRepository @Inject constructor(
      * [backoffMs] on its own row — a network outage of a few minutes exhausts nothing.
      */
     suspend fun markTransportFailed(cmid: String, reason: String, backoffMs: Long) {
-        val row = outboxDao.find(cmid) ?: return
-        val at = now()
-        outboxDao.updateState(cmid, OutboxState.PENDING.name, row.attempts, at)
-        outboxDao.recordError(cmid, reason, at)
-        outboxDao.scheduleNext(cmid, at + backoffMs, at)
+        database.withTransaction {
+            val row = outboxDao.find(cmid) ?: return@withTransaction
+            val at = now()
+            outboxDao.updateState(cmid, OutboxState.PENDING.name, row.attempts, at)
+            outboxDao.recordError(cmid, reason, at)
+            outboxDao.scheduleNext(cmid, at + backoffMs, at)
+        }
     }
 
     /** The earliest `nextAttemptAt` of a `PENDING` row, or `null` when no row is held back. */
@@ -320,11 +331,18 @@ class OutboxRepository @Inject constructor(
         outboxDao.endWait(cmid, reason, now())
     }
 
-    /** Reclaims rows left `INFLIGHT` for longer than [staleAfterMs] (a worker killed mid-send). */
+    /**
+     * Reclaims rows left `INFLIGHT` for longer than [staleAfterMs] (a worker killed mid-send). A row a live pass of this
+     * process is still sending ([sendingLive]) is not stale however long it takes (#15541): a slow 44 MB upload is never
+     * put back in the queue for another pass to send again.
+     */
     suspend fun reclaimStaleInflight(staleAfterMs: Long = STALE_INFLIGHT_MS): Int {
         val at = now()
-        return outboxDao.reclaimStaleInflight(staleBefore = at - staleAfterMs, now = at)
+        return outboxDao.reclaimStaleInflightExcept(liveSends.toList(), staleBefore = at - staleAfterMs, now = at)
     }
+
+    /** Grave [payload] sur la ligne [cmid] : ce qu'une tentative a déjà acquis (pièces téléversées) survit au rejeu. */
+    suspend fun rewritePayload(cmid: String, payload: String) = outboxDao.updatePayload(cmid, payload, now())
 
     /** Whether a [kind] row anchored on [anchor] is still on its way (exhausted rows do not count). */
     suspend fun hasUnsentRow(kind: OutboxKind, anchor: String): Boolean =

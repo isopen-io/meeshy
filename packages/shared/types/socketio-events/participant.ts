@@ -4,6 +4,8 @@
  * @see ../socketio-events.ts — la façade qui garde l'adresse historique.
  */
 
+import type { ConversationViewerCapabilities } from '../conversation-viewer-capabilities.js';
+
 /**
  * Données pour l'événement de mise à jour du rôle d'un participant
  * Émis lorsqu'un admin/modérateur modifie le rôle d'un participant dans une conversation
@@ -33,6 +35,15 @@ export interface ParticipantRoleUpdatedEventData {
     readonly displayName?: string | null;
     readonly userId: string | null;
   } | null;
+  /**
+   * Ce que la CIBLE peut désormais faire de la conversation (#15987), recalculé
+   * par la décision qui garde la route (`obsoleteVerdict`). Présent SEULEMENT
+   * dans l'exemplaire remis à la room personnelle de la cible — la salle reçoit
+   * l'événement sans lui, une capacité n'appartenant qu'à son lecteur. ABSENT :
+   * serveur antérieur, autre destinataire ou lecture impossible ; la cible relit
+   * alors `GET /conversations/:id?fields=viewerCapabilities`.
+   */
+  readonly viewerCapabilities?: ConversationViewerCapabilities;
 }
 
 /**

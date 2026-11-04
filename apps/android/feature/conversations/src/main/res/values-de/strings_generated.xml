@@ -20,6 +20,8 @@
     <string name="context_report">Melden</string>
     <string name="context_search">Suchen</string>
     <string name="conversationCard_expired">Link abgelaufen</string>
+    <string name="conversation_row_avatar_a11y_details">Details zu %1$s</string>
+    <string name="conversation_row_avatar_a11y_profile">Profil von %1$s anzeigen</string>
     <string name="conversations_action_archive">Archivieren</string>
     <string name="conversations_action_create_category">„%1$s\" erstellen</string>
     <string name="conversations_action_delete_for_all">Für alle löschen</string>

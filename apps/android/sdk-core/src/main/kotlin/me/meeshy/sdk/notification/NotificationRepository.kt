@@ -458,13 +458,14 @@ class NotificationRepository @Inject constructor(
      * on failure. A deleted row that was unread also decrements [unreadCountStream] — mirrors
      * [markAsRead]'s exact optimistic-mutation shape. Port of iOS `NotificationRowView`'s
      * trailing swipe / `NotificationListViewModel.deleteNotification`. The rollback is
-     * TARGETED — it reinserts only the removed row into whichever list is current at that
+     * TARGETED — it reinserts only the removed row, at its ORIGINAL index, into whichever list is current at that
      * point (deduped by id, like [prependLive]), never a wholesale restore of the pre-mutation
      * snapshot.
      */
     suspend fun delete(notificationId: String): NetworkResult<Unit> {
         val previous = _notificationsCache.value
-        val removed = previous?.firstOrNull { it.id == notificationId }
+        val removedIndex = previous?.indexOfFirst { it.id == notificationId } ?: -1
+        val removed = previous?.getOrNull(removedIndex)
         val wasUnread = removed?.state?.isRead == false
         _notificationsCache.value = previous?.filterNot { it.id == notificationId }
         if (wasUnread) _unreadCount.update { (it - 1).coerceAtLeast(0) }
@@ -474,7 +475,8 @@ class NotificationRepository @Inject constructor(
             if (removed != null) {
                 _notificationsCache.update { current ->
                     val list = current.orEmpty()
-                    if (list.any { it.id == notificationId }) list else listOf(removed) + list
+                    if (list.any { it.id == notificationId }) list
+                    else list.toMutableList().apply { add(removedIndex.coerceIn(0, size), removed) }
                 }
             }
             if (wasUnread) _unreadCount.update { it + 1 }

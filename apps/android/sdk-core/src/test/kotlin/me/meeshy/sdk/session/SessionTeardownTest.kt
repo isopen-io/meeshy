@@ -475,6 +475,19 @@ class SessionTeardownTest {
     }
 
     @Test
+    fun wipe_duringAnInMemoryLaunchLeavesTheDiskDatabasePurgeDue() = runTest {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val primary = context.getDatabasePath("teardown-memory-launch.db").also { it.parentFile?.mkdirs() }
+        primary.writeText("history of A, still on disk")
+        val leftovers = me.meeshy.core.database.DatabaseLeftovers(primary, java.io.File(context.cacheDir, "absent-memory.db"))
+        leftovers.markInUse(null)
+
+        teardown(perAccountCaches = setOf(DatabaseLeftoversTeardown(leftovers))).wipe()
+
+        assertThat(me.meeshy.core.database.PendingDiskPurge.isDue(primary)).isTrue()
+    }
+
+    @Test
     fun wipe_aCorruptionMarkerLeftOnAFileTheVacuumHealedIsCleared() = runTest {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         db.close()

@@ -55,20 +55,14 @@ export function sendFailureReason(
   if (failure.code === UPLOAD_FORMAT_REFUSED) return translate(language, 'send.failure.formatRefused');
   if (failure.code === 'UPLOAD_PARTIAL') return translate(language, 'send.failure.uploadPartial');
   /**
-   * PAS DE BRANCHE `ATTACHMENT_RIGHT_NOT_PERMITTED` ICI, ET C'EST MESURÉ
-   * (revue-correction #5668) — la passerelle FABRIQUE bien ce code
-   * (`MessagingService.ts:294-297`) et la route le LIT pour choisir son statut
-   * (`messages-send.ts:363`), mais elle le rend par
-   * `sendForbidden(reply, result.error)` SANS `options.code`
-   * (`messages-send.ts:364`) : `sendError` pose alors `code: undefined`
-   * (`utils/response.ts:89`), que JSON supprime. Aucun 403 servi à ce client
-   * ne porte donc ce code — une branche écrite dessus serait morte, et son
-   * témoin ne prouverait que sa propre cohérence (`tasks/lessons.md`, « un
-   * témoin qui épingle un chemin d'API »). Le refus se dit ici par le 403
-   * générique ci-dessous, et le composeur n'OFFRE pas la porte qu'il sait
-   * refusée (`send/attachments.ts § acceptPendingFiles`). Une issue compagnon
-   * de passerelle (servir le `code`) est proposée à la clôture.
+   * LE DROIT DE PIÈCE JOINTE (#16053) — la passerelle sert
+   * `code: ATTACHMENT_RIGHT_NOT_PERMITTED` sur le 403 de
+   * `POST /conversations/:id/messages` : la cause dit que CE TYPE de pièce
+   * jointe ne passe pas encore ici. Le 403 reste permanent
+   * (`isPermanentFailure`) : l'envoi ne se rejoue pas. `WRITE_NOT_PERMITTED`
+   * garde le refus générique du 403, qui le dit déjà.
    */
+  if (failure.code === 'ATTACHMENT_RIGHT_NOT_PERMITTED') return translate(language, 'send.failure.attachmentRight');
   /* #7740 — le mode lent des nouveaux comptes (Meeshy Global) : temporaire,
      et le délai est celui du serveur (`retryAfter`), jamais une constante. */
   if (failure.code === 'NEWCOMER_SLOW_MODE') {

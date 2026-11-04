@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import com.google.common.truth.Truth.assertThat
 import java.io.File
+import kotlinx.coroutines.Dispatchers
 import me.meeshy.sdk.model.voice.VoiceProfilePrompts
 import me.meeshy.sdk.model.voice.VoiceSample
 import me.meeshy.sdk.model.waveform.VoiceRecordingSession
@@ -65,7 +66,7 @@ class VoiceRecordingViewTest {
     private fun show(recorder: FakeRecorder, initialLanguage: String? = null, onReady: (List<VoiceSample>) -> Unit = {}) {
         compose.setContent {
             MeeshyTheme(darkTheme = false) {
-                VoiceRecordingView(onSamplesReady = onReady, initialLanguage = initialLanguage, newRecorder = { recorder })
+                VoiceRecordingView(onSamplesReady = onReady, initialLanguage = initialLanguage, newRecorder = { recorder }, readDispatcher = Dispatchers.Unconfined)
             }
         }
     }

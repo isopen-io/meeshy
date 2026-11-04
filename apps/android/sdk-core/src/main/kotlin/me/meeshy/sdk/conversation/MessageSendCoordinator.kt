@@ -197,12 +197,14 @@ internal class MessageSendCoordinator(
      */
     suspend fun reconcileSent(cmid: String, serverMessage: ApiMessage) {
         val now = clock.nowMillis()
-        val optimisticAttachments = if (adoption != null || previews != null) optimisticAttachmentsOf(cmid) else emptyList()
+        val optimisticAttachments = optimisticAttachmentsOf(cmid)
         database.withTransaction {
+            DedicatedTranslationRows.rekey(database, cmid, serverMessage, optimisticAttachments, now)
             messageDao.deleteByIds(listOf(cmid))
             messageDao.upsertAll(listOf(MessageEntityFactory.cached(serverMessage, now)))
             MessageIdReconciliation.recordAck(database, cmid, serverMessage.id, serverMessage.conversationId, now)
         }
+        TranslationLayer.of(database).forget(listOf(cmid))
         regime?.learnFromServed(listOf(serverMessage))
         adoption?.adopt(optimisticAttachments, serverMessage.attachments)
         previews?.release(optimisticAttachments)

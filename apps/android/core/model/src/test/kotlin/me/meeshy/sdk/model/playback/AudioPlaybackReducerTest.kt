@@ -142,4 +142,18 @@ class AudioPlaybackReducerTest {
 
         assertThat(state).isEqualTo(AudioPlaybackState(speed = PlaybackSpeed.X2_0))
     }
+
+    @Test
+    fun `le vocal accuse change de nom sans perdre sa lecture ni sa position`() {
+        val state = reduce(playing("cmid", at = 5_000L), AudioPlaybackAction.Relabeled("att_server"))
+
+        assertThat(state.attachmentId).isEqualTo("att_server")
+        assertThat(state.isPlaying).isTrue()
+        assertThat(state.currentTimeMs).isEqualTo(5_000L)
+    }
+
+    @Test
+    fun `renommer sans vocal charge ne charge rien`() {
+        assertThat(reduce(AudioPlaybackState(), AudioPlaybackAction.Relabeled("att_server"))).isEqualTo(AudioPlaybackState())
+    }
 }

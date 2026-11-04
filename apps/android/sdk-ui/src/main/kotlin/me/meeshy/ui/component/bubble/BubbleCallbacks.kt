@@ -1,6 +1,9 @@
 package me.meeshy.ui.component.bubble
 
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.runtime.Immutable
+import kotlinx.coroutines.flow.Flow
+import me.meeshy.sdk.model.MessageTranscriptionFiche
 
 /**
  * Every callback a [MessageBubble] can raise, bundled in one immutable value so that adding a
@@ -34,6 +37,31 @@ public data class BubbleCallbacks(
     val onAudioClick: ((BubbleAudio) -> Unit)? = null,
     /** Tap on a word of the transcript of the voice note being played: seek it to that word's start, in seconds. */
     val onAudioSeek: ((BubbleAudio, Double) -> Unit)? = null,
+    /** Glissé (ou toucher) sur l'onde du vocal en cours : se placer à cette fraction (0…1). */
+    val onAudioSeekFraction: ((BubbleAudio, Double) -> Unit)? = null,
+    /** Toucher de la puce de vitesse : ×1 → ×1,5 → ×2 du moteur partagé. */
+    val onAudioCycleSpeed: (() -> Unit)? = null,
+    /**
+     * Le plein écran d'un vocal, avec SA piste (iOS `AudioStackView.fullscreenOpener`). Exposé ici, câblé par le lot du
+     * plein écran audio ; jamais offert pour un vocal protégé.
+     */
+    val onAudioFullscreen: ((BubbleAudio) -> Unit)? = null,
+    /**
+     * La vraie forme d'onde d'un vocal (niveaux 0…1), calculée une fois et mise en cache par l'hôte ; sa valeur présente se
+     * dessine dès le premier rendu (pas de forme de repli fugace au retour d'une bulle). Demandée seulement pour un vocal
+     * déjà sur l'appareil et jamais pour un vocal protégé : la bulle garde sinon sa forme de repli déterministe.
+     */
+    val audioSamples: ((BubbleAudio) -> StateFlow<List<Float>>)? = null,
+    /**
+     * Tap sur « Transcrire » d'un vocal que rien ne transcrit encore (iOS `onRequestTranscription`) : l'hôte demande la
+     * transcription au serveur. Nul ⇒ aucun bouton de demande (jamais offert pour un vocal protégé ni un brouillon local).
+     */
+    val onRequestTranscription: ((BubbleAudio) -> Unit)? = null,
+    /**
+     * L'état de la demande de transcription de ce vocal (au repos, en cours, en échec), tenu par l'hôte : « Transcription… »
+     * reste affiché tant que la tâche tourne, « Transcrire » revient au plafond de silence ou à l'échec reçu.
+     */
+    val transcriptionRequest: ((BubbleAudio) -> Flow<MessageTranscriptionFiche.Request>)? = null,
     /** Tap on a file attachment that has a url. */
     val onFileClick: ((BubbleFile) -> Unit)? = null,
     /** Tap on the quoted-reply preview (only wired when the quoted message id is known). */
@@ -42,6 +70,8 @@ public data class BubbleCallbacks(
     val onQuotedAuthorTap: (() -> Unit)? = null,
     /** Tap sur la miniature du média cité : la visionneuse (repli hôte : le saut à l'original). */
     val onQuotedMediaTap: (() -> Unit)? = null,
+    /** Tap sur le ▶ d'une citation de vocal : il joue seul, sans file ([BubbleContent.replyToAudio]). */
+    val onQuotedAudioClick: ((BubbleAudio) -> Unit)? = null,
     /** Tap on the citation card of a quoted story (only wired when the story still opens, #13296). */
     val onStoryCitationClick: (() -> Unit)? = null,
     /** Tap on a language flag of the Prisme strip, with its language code. */

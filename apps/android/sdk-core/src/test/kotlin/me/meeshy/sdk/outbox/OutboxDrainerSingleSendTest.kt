@@ -110,4 +110,76 @@ class OutboxDrainerSingleSendTest {
 
         assertThat(sent).containsExactly("media-1", "media-2")
     }
+
+    /**
+     * #15541 — la passe B lit la pièce `PENDING`, la passe A la réserve, l'envoie, échoue et la remet à plus tard : B ne
+     * la renvoie pas sur sa lecture périmée — la réservation exige que la ligne soit DUE, pas seulement `PENDING`.
+     */
+    @Test
+    fun `an upload that failed under one pass is not sent again by an overlapping pass that read it before`() = runTest {
+        enqueue(OutboxKind.UPLOAD_MEDIA, OutboxLanes.MEDIA, "video")
+        val uploads = mutableListOf<String>()
+        val senders = mapOf(
+            OutboxKind.UPLOAD_MEDIA to MutationSender { row -> uploads += row.cmid; SendResult.TransientFailure },
+        )
+        val first = drainer(senders)
+        var overlapped = false
+        val beforeClaim = object : OutboxPlaintextAdmission {
+            override suspend fun judge(row: OutboxEntity): OutboxAdmissionVerdict {
+                if (!overlapped) {
+                    overlapped = true
+                    first.drainLane(OutboxLanes.MEDIA)
+                }
+                return OutboxAdmissionVerdict.ADMIT
+            }
+        }
+
+        OutboxDrainer(outbox, senders, plaintextAdmission = beforeClaim).drainLane(OutboxLanes.MEDIA)
+
+        assertThat(uploads).containsExactly("video")
+        assertThat(outbox.stateOf("video")).isEqualTo(OutboxState.PENDING)
+    }
+
+    @Test
+    fun `a transport failure under one pass is not sent again by an overlapping pass that read it before`() = runTest {
+        enqueue(OutboxKind.UPLOAD_MEDIA, OutboxLanes.MEDIA, "photo")
+        val uploads = mutableListOf<String>()
+        val senders = mapOf(
+            OutboxKind.UPLOAD_MEDIA to MutationSender { row -> uploads += row.cmid; SendResult.TransportFailure },
+        )
+        val first = drainer(senders)
+        var overlapped = false
+        val beforeClaim = object : OutboxPlaintextAdmission {
+            override suspend fun judge(row: OutboxEntity): OutboxAdmissionVerdict {
+                if (!overlapped) {
+                    overlapped = true
+                    first.drainLane(OutboxLanes.MEDIA)
+                }
+                return OutboxAdmissionVerdict.ADMIT
+            }
+        }
+
+        OutboxDrainer(outbox, senders, plaintextAdmission = beforeClaim).drainLane(OutboxLanes.MEDIA)
+
+        assertThat(uploads).containsExactly("photo")
+    }
+
+    /**
+     * #15541 — un gros téléversement qui dure plus que le seuil des lignes figées reste `INFLIGHT` tant que CE process
+     * l'envoie : le retour au premier plan ne le remet pas en file, où une autre passe le réserverait et le relancerait.
+     */
+    @Test
+    fun `a live upload older than the stale threshold is not put back in the queue`() = runTest {
+        enqueue(OutboxKind.UPLOAD_MEDIA, OutboxLanes.MEDIA, "long-video")
+        var stateDuringSend: OutboxState? = null
+        val sender = MutationSender { row ->
+            outbox.reclaimStaleInflight(staleAfterMs = -60_000L)
+            stateDuringSend = outbox.stateOf(row.cmid)
+            SendResult.Success
+        }
+
+        drainer(mapOf(OutboxKind.UPLOAD_MEDIA to sender)).drainLane(OutboxLanes.MEDIA)
+
+        assertThat(stateDuringSend).isEqualTo(OutboxState.INFLIGHT)
+    }
 }

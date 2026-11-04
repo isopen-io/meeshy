@@ -126,7 +126,7 @@ class ChatViewModel @Inject constructor(
     private val endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
     private val openConversations: OpenConversationRegistry,
     reactionRows: me.meeshy.sdk.reaction.ReactionRowStore? = null,
-    pendingPreviews: me.meeshy.sdk.media.PendingMediaPreviewing = me.meeshy.sdk.media.PendingMediaPreviewing.None,
+    private val pendingPreviews: me.meeshy.sdk.media.PendingMediaPreviewing = me.meeshy.sdk.media.PendingMediaPreviewing.None,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -813,7 +813,7 @@ class ChatViewModel @Inject constructor(
     // --- Media, files ---------------------------------------------------------------------
 
     fun openImageViewer(messageId: String, imageIndex: Int) {
-        val gallery = ConversationMediaGallery.of(_state.value.messages, messageId, imageIndex)
+        val gallery = ConversationMediaGallery.of(_state.value.messages, messageId, imageIndex, pendingPreviews::sharpUrlFor)
         _state.update { it.copy(imageViewer = gallery.takeUnless(ConversationGallery::isEmpty)) }
     }
 

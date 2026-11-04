@@ -224,7 +224,7 @@ class ComposerEditingChromeComposeTest {
     }
 
     @Test
-    fun `talkback hears the editing family on selection and the return to the tools on deselection`() {
+    fun `talkback hears the selected family as iOS names it, then the selection cleared`() {
         val vm = viewModel()
         vm.onAddSticker("😀")
         vm.onSceneBackgroundTap()
@@ -234,10 +234,10 @@ class ComposerEditingChromeComposeTest {
         announcer.assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.ContentDescription))
 
         compose.onNodeWithContentDescription("😀").performClick()
-        announcer.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("Editing: Sticker")))
+        announcer.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("Sticker selected")))
 
         tapEmptyScene()
-        announcer.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("Back to the scene tools")))
+        announcer.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("Selection cleared")))
     }
 
     private fun publishCountTwoFramesAfterSelecting(reduceMotion: Boolean): Int {

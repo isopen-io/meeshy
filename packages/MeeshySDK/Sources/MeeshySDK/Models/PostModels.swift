@@ -591,7 +591,7 @@ extension APIPost {
             return comment
         }
 
-        let repost: RepostContent? = repostOf?.toRepostContent()
+        let repost: RepostContent? = repostOf?.toRepostContent(preferredLanguages: langs)
 
         let postTranslations: [String: PostTranslation]? = translations?.mapValues { entry in
             PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
@@ -681,7 +681,7 @@ extension APIRepostOf {
     /// Conversion partagée `APIRepostOf` → `RepostContent` — utilisée par
     /// `APIPost.toFeedPost` (réseau) ET `PostRecord.toFeedPost` (cache GRDB,
     /// stores-05) : une seule projection, pas deux qui divergent.
-    func toRepostContent() -> RepostContent {
+    func toRepostContent(preferredLanguages: [String] = []) -> RepostContent {
         let repostMedia: [FeedMedia] = (media ?? []).map { m in
             FeedMedia(
                 id: m.id, type: m.mediaType, url: m.fileUrl,
@@ -715,6 +715,6 @@ extension APIRepostOf {
                              location: location,
                              mentions: mentions)
         repost.authorRing = author.avatarRing
-        return repost
+        return repost.resolved(preferredLanguages: preferredLanguages)
     }
 }

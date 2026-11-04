@@ -315,4 +315,41 @@ class MessageMergePolicyTest {
         assertThat(MinimalMessageSeed.fromPush(PushPayload(type = "reaction", messageId = "m1", conversationId = "c1"))).isNull()
         assertThat(MinimalMessageSeed.fromPush(PushPayload(type = "new_message", conversationId = "c1"))).isNull()
     }
+
+    private fun voice(transcription: String?) = ApiMessageAttachment(
+        id = "v1",
+        mimeType = "audio/m4a",
+        fileUrl = "https://cdn/v1.m4a",
+        transcription = transcription?.let { ApiAttachmentTranscription(text = it, language = "fr") },
+    )
+
+    @Test
+    fun `a served page that predates Whisper never erases the transcription already held`() {
+        val cached = message(attachments = listOf(voice("bonjour")))
+        val served = message(attachments = listOf(voice(null)))
+
+        val outcome = MessageMergePolicy.merge(cached, served)
+
+        assertThat(outcome.message.attachments.single().transcription?.text).isEqualTo("bonjour")
+    }
+
+    @Test
+    fun `a served re-transcription replaces the one held`() {
+        val cached = message(attachments = listOf(voice("bonjour")))
+        val served = message(attachments = listOf(voice("bonjour a tous")))
+
+        val outcome = MessageMergePolicy.merge(cached, served)
+
+        assertThat(outcome.message.attachments.single().transcription?.text).isEqualTo("bonjour a tous")
+    }
+
+    @Test
+    fun `a served page without cloned tracks keeps the ones already received`() {
+        val withTrack = voice(null).copy(
+            translations = mapOf("es" to ApiAttachmentTranslation(type = "audio", url = "https://cdn/es.mp3")),
+        )
+        val outcome = MessageMergePolicy.merge(message(attachments = listOf(withTrack)), message(attachments = listOf(voice(null))))
+
+        assertThat(outcome.message.attachments.single().translations?.keys).containsExactly("es")
+    }
 }

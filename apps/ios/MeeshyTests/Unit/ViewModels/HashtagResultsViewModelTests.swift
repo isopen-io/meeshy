@@ -178,4 +178,272 @@ final class HashtagResultsViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.posts.map(\.id), ["p1", "p2"])
     }
+
+    // MARK: - #15934 — « Repartager » republie depuis un hashtag
+
+    /// Une page servie telle quelle : la carte `card` repartage `mid`, dont la
+    /// racine est `root` — la chaîne que `RepostTargeting` doit remonter.
+    private static func repostChainPage(repostCount: Int = 3, isRepostedByMe: Bool = false) -> PaginatedAPIResponse<[APIPost]> {
+        JSONStub.decode(#"""
+        {"success":true,"data":[{"id":"card","type":"POST","content":"#paris","createdAt":"2026-01-15T12:00:00.000Z",
+        "likeCount":0,"commentCount":0,"repostCount":\#(repostCount),"isRepostedByMe":\#(isRepostedByMe),
+        "author":{"id":"author-1","username":"alice"},
+        "repostOf":{"id":"mid","createdAt":"2026-01-14T12:00:00.000Z","author":{"id":"author-2","username":"bob"},"originalRepostOfId":"root"}}],
+        "pagination":null,"error":null}
+        """#)
+    }
+
+    private func makeRepostSUT(
+        service: MockPostService = MockPostService(),
+        queue: MockOfflineQueue = MockOfflineQueue(),
+        toasts: MockFeedbackToast = MockFeedbackToast(),
+        offline: Bool = false
+    ) -> HashtagResultsViewModel {
+        HashtagResultsViewModel(
+            tag: "paris", service: service,
+            reposter: ListedPostReposter(
+                publisher: RepostPublisher(postService: service, offlineQueue: queue, isOffline: { offline }),
+                toasts: toasts
+            )
+        )
+    }
+
+    func test_toggleRepost_publishesTheRootAtTheCardFormat_andFlipsIconAndCounterAtOnce() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.repostChainPage(repostCount: 3))
+        service.holdRepost(for: 5)
+        let toasts = MockFeedbackToast()
+        let sut = makeRepostSUT(service: service, toasts: toasts)
+        await sut.load()
+
+        let task = Task { await sut.toggleRepost("card") }
+        for _ in 0..<100 where !sut.posts[0].isRepostedByMe { await Task.yield() }
+        XCTAssertTrue(sut.posts[0].isRepostedByMe, "l'icône bascule AVANT la réponse du réseau")
+        XCTAssertEqual(sut.posts[0].repostCount, 4, "le compteur bouge avec l'icône")
+        service.releaseRepost()
+        await task.value
+
+        XCTAssertEqual(service.repostCallCount, 1)
+        XCTAssertEqual(service.lastRepostPostId, "root", "la référence remonte à la RACINE de la chaîne")
+        XCTAssertEqual(service.lastRepostTargetType, .post, "le format reste celui de la carte")
+        XCTAssertFalse(service.lastRepostIsQuote ?? true, "Repartager n'est pas Citer")
+        XCTAssertNil(service.lastRepostVisibility, "l'audience est héritée de l'original")
+        XCTAssertTrue(sut.posts[0].isRepostedByMe)
+        XCTAssertEqual(sut.posts[0].repostCount, 4)
+        XCTAssertEqual(toasts.successMessages.count, 1, "le repartage se confirme à l'utilisateur")
+    }
+
+    func test_toggleRepost_whenTheServerRefuses_rollsBackTheRepostOnly() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.repostChainPage(repostCount: 3))
+        service.repostResult = .failure(URLError(.badServerResponse))
+        let toasts = MockFeedbackToast()
+        let sut = makeRepostSUT(service: service, toasts: toasts)
+        await sut.load()
+        await sut.toggleLike("card")
+
+        await sut.toggleRepost("card")
+
+        XCTAssertEqual(toasts.errorMessages.count, 1, "l'échec se dit")
+        XCTAssertTrue(toasts.successMessages.isEmpty)
+
+        XCTAssertFalse(sut.posts[0].isRepostedByMe, "l'échec défait la bascule")
+        XCTAssertEqual(sut.posts[0].repostCount, 3, "et le compteur revient")
+        XCTAssertTrue(sut.posts[0].isLiked, "le retour arrière ne défait pas un like voisin")
+    }
+
+    func test_toggleRepost_offline_queuesTheRepostInTheOutbox_andKeepsTheCardReposted() async throws {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.repostChainPage())
+        let queue = MockOfflineQueue()
+        let sut = makeRepostSUT(service: service, queue: queue, offline: true)
+        await sut.load()
+
+        await sut.toggleRepost("card")
+
+        XCTAssertEqual(service.repostCallCount, 0, "hors ligne, rien ne part sur le réseau")
+        let call = try XCTUnwrap(queue.enqueueCalls.first)
+        XCTAssertEqual(call.kind, .repostPost)
+        XCTAssertEqual((call.payload as? RepostPostPayload)?.postId, "root")
+        XCTAssertTrue(sut.posts[0].isRepostedByMe, "la ligne enfilée partira au retour du réseau")
+    }
+
+    func test_toggleRepost_onACardAlreadyReposted_sendsNothing() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.repostChainPage(repostCount: 1, isRepostedByMe: true))
+        let sut = makeRepostSUT(service: service)
+        await sut.load()
+
+        await sut.toggleRepost("card")
+
+        XCTAssertEqual(service.repostCallCount, 0, "le repartage est append-only : un second toucher n'envoie rien")
+        XCTAssertEqual(sut.posts[0].repostCount, 1)
+    }
+
+    // MARK: - #15994 — « Enregistrer » enregistre depuis un hashtag
+
+    private static func bookmarkPage(bookmarkCount: Int = 2, isBookmarkedByMe: Bool = false, shareCount: Int = 0) -> PaginatedAPIResponse<[APIPost]> {
+        JSONStub.decode(#"""
+        {"success":true,"data":[{"id":"card","type":"POST","content":"#paris","createdAt":"2026-01-15T12:00:00.000Z",
+        "likeCount":0,"commentCount":0,"bookmarkCount":\#(bookmarkCount),"isBookmarkedByMe":\#(isBookmarkedByMe),
+        "shareCount":\#(shareCount),"author":{"id":"author-1","username":"alice"}}],
+        "pagination":null,"error":null}
+        """#)
+    }
+
+    private final class NoFavoritesCache: FavoritesCacheMirroring {
+        private(set) var inserted: [FeedPost] = []
+        func insert(_ post: FeedPost) async { inserted.append(post) }
+        func remove(postId: String) async {}
+    }
+
+    private func makeBookmarkSUT(
+        service: MockPostService,
+        queue: MockOfflineQueue = MockOfflineQueue(),
+        favorites: FavoritesCacheMirroring = NoFavoritesCache(),
+        toasts: MockFeedbackToast = MockFeedbackToast()
+    ) -> HashtagResultsViewModel {
+        HashtagResultsViewModel(
+            tag: "paris", service: service,
+            bookmarker: PostBookmarkWriter(queue: queue, favorites: favorites, toasts: toasts)
+        )
+    }
+
+    private static func bookmarkRows(_ queue: MockOfflineQueue) -> [ToggleBookmarkPostPayload] {
+        queue.enqueueCalls.filter { $0.kind == .toggleBookmarkPost }.compactMap { $0.payload as? ToggleBookmarkPostPayload }
+    }
+
+    func test_toggleBookmark_flipsIconAndCounterAtOnce_thenWritesThroughTheSharedWriter() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.bookmarkPage(bookmarkCount: 2))
+        let queue = MockOfflineQueue()
+        let favorites = NoFavoritesCache()
+        let toasts = MockFeedbackToast()
+        let sut = makeBookmarkSUT(service: service, queue: queue, favorites: favorites, toasts: toasts)
+        await sut.load()
+
+        await sut.toggleBookmark("card")
+
+        XCTAssertTrue(sut.posts[0].isBookmarkedByMe)
+        XCTAssertEqual(sut.posts[0].bookmarkCount, 3)
+        XCTAssertEqual(Self.bookmarkRows(queue).map(\.postId), ["card"])
+        XCTAssertEqual(Self.bookmarkRows(queue).first?.bookmarked, true)
+        XCTAssertEqual(favorites.inserted.map(\.id), ["card"], "le post rejoint l'onglet Favoris")
+        XCTAssertEqual(favorites.inserted.first?.isBookmarkedByMe, true, "et y arrive marqué enregistré")
+        XCTAssertEqual(toasts.successMessages.count, 1, "même toast que le fil")
+        XCTAssertFalse(sut.isBookmarkInFlight("card"))
+    }
+
+    func test_toggleBookmark_isOptimistic_theCardFlipsBeforeTheQueueAnswers() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.bookmarkPage(bookmarkCount: 2))
+        let sut = makeBookmarkSUT(service: service)
+        await sut.load()
+
+        let task = Task { await sut.toggleBookmark("card") }
+        for _ in 0..<100 where !sut.posts[0].isBookmarkedByMe { await Task.yield() }
+
+        XCTAssertTrue(sut.posts[0].isBookmarkedByMe, "l'icône bascule au toucher")
+        await task.value
+    }
+
+    func test_toggleBookmark_whenTheServerRefusesTheReplay_rollsBackTheBookmarkOnly() async throws {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.bookmarkPage(bookmarkCount: 2))
+        let queue = MockOfflineQueue()
+        let toasts = MockFeedbackToast()
+        let sut = makeBookmarkSUT(service: service, queue: queue, toasts: toasts)
+        await sut.load()
+        await sut.toggleLike("card")
+        await sut.toggleBookmark("card")
+        let cmid = try XCTUnwrap(Self.bookmarkRows(queue).first?.clientMutationId)
+        try await waitForCondition(timeout: 2) { queue.outcomeContinuations[cmid] != nil }
+
+        queue.emitOutcome(.exhausted(cmid: cmid), for: cmid)
+
+        try await waitForCondition(timeout: 2) { !sut.posts[0].isBookmarkedByMe }
+        XCTAssertEqual(sut.posts[0].bookmarkCount, 2, "et le compteur revient")
+        XCTAssertTrue(sut.posts[0].isLiked, "le retour arrière ne défait pas un like voisin")
+        XCTAssertEqual(toasts.errorMessages.count, 1, "l'échec se dit")
+    }
+
+    func test_toggleBookmark_onASavedCard_queuesTheRemoval() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.bookmarkPage(bookmarkCount: 1, isBookmarkedByMe: true))
+        let queue = MockOfflineQueue()
+        let sut = makeBookmarkSUT(service: service, queue: queue)
+        await sut.load()
+
+        await sut.toggleBookmark("card")
+
+        XCTAssertEqual(Self.bookmarkRows(queue).map(\.bookmarked), [false])
+        XCTAssertFalse(sut.posts[0].isBookmarkedByMe)
+        XCTAssertEqual(sut.posts[0].bookmarkCount, 0)
+    }
+
+    func test_toggleBookmark_aSecondTapWhileTheFirstIsInFlight_sendsNothing() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.bookmarkPage())
+        let queue = MockOfflineQueue()
+        let gate = GatedFavoritesCache()
+        let sut = makeBookmarkSUT(service: service, queue: queue, favorites: gate)
+        await sut.load()
+
+        let first = Task { await sut.toggleBookmark("card") }
+        while !gate.isHolding { await Task.yield() }
+        XCTAssertTrue(sut.isBookmarkInFlight("card"))
+        await sut.toggleBookmark("card")
+        gate.release()
+        await first.value
+
+        XCTAssertEqual(Self.bookmarkRows(queue).count, 1,
+                       "un double toucher n'envoie pas deux écritures contradictoires")
+        XCTAssertTrue(sut.posts[0].isBookmarkedByMe)
+        XCTAssertFalse(sut.isBookmarkInFlight("card"))
+    }
+
+    /// Tient la première écriture ouverte : le second toucher arrive PENDANT
+    /// qu'elle est en vol, quel que soit l'ordonnancement des tâches.
+    private final class GatedFavoritesCache: FavoritesCacheMirroring {
+        private(set) var isHolding = false
+        private var continuation: CheckedContinuation<Void, Never>?
+
+        func insert(_ post: FeedPost) async {
+            await withCheckedContinuation { continuation = $0; isHolding = true }
+        }
+
+        func release() { continuation?.resume(); continuation = nil }
+        func remove(postId: String) async {}
+    }
+
+    // MARK: - #15994 — « Partager » du menu ⋯ partage depuis un hashtag
+
+    func test_shareLink_recordsTheShare_bumpsTheCounter_andHandsTheTrackedLink() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.bookmarkPage(shareCount: 4))
+        let sut = HashtagResultsViewModel(tag: "paris", service: service)
+        await sut.load()
+
+        let link = await sut.shareLink(for: "card")
+
+        XCTAssertEqual(service.lastSharePostId, "card")
+        XCTAssertEqual(service.lastSharePlatform, "system")
+        XCTAssertEqual(service.lastShareGenerateLink, true)
+        XCTAssertEqual(link?.url.absoluteString, "https://meeshy.me/l/mock123")
+        XCTAssertEqual(sut.posts[0].shareCount, 5)
+    }
+
+    func test_shareLink_whenTheShareIsNotRecorded_stillHandsThePostLink_withoutBumping() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.bookmarkPage(shareCount: 4))
+        service.shareResult = .failure(URLError(.notConnectedToInternet))
+        let sut = HashtagResultsViewModel(tag: "paris", service: service)
+        await sut.load()
+
+        let link = await sut.shareLink(for: "card")
+
+        XCTAssertEqual(link?.url.absoluteString, "https://meeshy.me/feeds/post/card",
+                       "l'utilisateur n'est jamais laissé sans rien à partager")
+        XCTAssertEqual(sut.posts[0].shareCount, 4)
+    }
 }

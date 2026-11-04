@@ -17,9 +17,14 @@
  * son rôle de plateforme — reçoit 403 sans écriture. « Non acceptée » se lit
  * comme `acceptMessageRequest` le lit (`NOT_YET_ACCEPTED` : la date OU la
  * provenance, posées sur la ligne du destinataire, effacées par « Accepter »
- * seulement — une ligne antérieure à la provenance n'a que la date) ; la
+ * ou, dans une directe, par une réponse du destinataire (#16053) — une ligne
+ * antérieure à la provenance n'a que la date) ; la
  * ligne n'est pas filtrée sur `isActive` : un destinataire parti ne rend pas
  * la main à l'expéditeur.
+ *
+ * #14690 — la décision vit dans `services/conversations/obsoleteCapability.ts`
+ * (`obsoleteVerdict`), que la liste, le détail et `conversation:new`
+ * consultent aussi pour servir `viewerCapabilities.canMakeObsolete`.
  *
  * Rétrocompatible : la conversation est AUSSI fermée (`isActive: false`,
  * `closedAt`, `conversation:closed`), donc un ancien client qui ne connaît ni
@@ -27,67 +32,18 @@
  */
 import type { FastifyInstance, preValidationHookHandler } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { MemberRole } from '@meeshy/shared/types/role-types';
-import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendForbidden, sendInternalError } from '../../utils/response';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { obsoleteConversation } from '../../services/conversations/obsoleteConversation';
-import { NOT_YET_ACCEPTED } from '../../services/messaging/messageRequests';
+import { loadObsoleteVerdicts, obsoleteViewerOf } from '../../services/conversations/obsoleteCapability';
 import { getSharedNotificationService } from '../../services/notifications/notification-service-registry';
 
 const logger = enhancedLogger.child({ module: 'ConversationObsoleteRoute' });
 
 type ObsoleteParams = { readonly id: string };
-
-type ObsoleteMembership = {
-  readonly role: string;
-  readonly type: string;
-  readonly leftAt: Date | null;
-  readonly bannedAt: Date | null;
-  readonly conversation: { readonly type: string } | null;
-};
-
-export const DIRECT_CONVERSATION_MAX_ACTIVE_PARTICIPANTS = 2;
-
-export function mayObsoleteAsDirectMember(
-  membership: ObsoleteMembership | null,
-  caller: { readonly isAnonymous: boolean; readonly hasRegisteredUser: boolean },
-): boolean {
-  if (membership === null) return false;
-  if (caller.isAnonymous || !caller.hasRegisteredUser) return false;
-  if (membership.type !== 'user') return false;
-  if (membership.leftAt !== null || membership.bannedAt !== null) return false;
-  return membership.conversation?.type === 'direct';
-}
-
-async function directMemberMayObsolete(
-  prisma: PrismaClient,
-  conversationId: string,
-  membership: ObsoleteMembership | null,
-  caller: { readonly isAnonymous: boolean; readonly hasRegisteredUser: boolean },
-): Promise<boolean> {
-  if (!mayObsoleteAsDirectMember(membership, caller)) return false;
-  const activeParticipants = await prisma.participant.count({ where: { conversationId, isActive: true } });
-  return activeParticipants <= DIRECT_CONVERSATION_MAX_ACTIVE_PARTICIPANTS;
-}
-
-/** L'appelant est-il l'EXPÉDITEUR d'une demande non acceptée dans cette directe ? Une autre ligne porte la demande. */
-async function sendsPendingDirectRequest(
-  prisma: PrismaClient,
-  conversationId: string,
-  userId: string,
-  membership: ObsoleteMembership | null,
-): Promise<boolean> {
-  if (membership?.conversation?.type !== 'direct') return false;
-  const recipient = await prisma.participant.findFirst({
-    where: { conversationId, userId: { not: userId }, ...NOT_YET_ACCEPTED },
-    select: { id: true },
-  });
-  return recipient !== null;
-}
 
 export function registerObsoleteConversationRoute(
   fastify: FastifyInstance,
@@ -140,21 +96,16 @@ export function registerObsoleteConversationRoute(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      const membership = await prisma.participant.findFirst({
-        where: { conversationId, userId, isActive: true },
-        select: { role: true, type: true, leftAt: true, bannedAt: true, conversation: { select: { type: true } } },
-      });
-      if (await sendsPendingDirectRequest(prisma, conversationId, userId, membership)) {
+      const viewer = obsoleteViewerOf(authRequest.authContext);
+      const verdictOf = await loadObsoleteVerdicts(prisma, { viewers: [viewer], conversationIds: [conversationId] });
+      const verdict = verdictOf(viewer.userId, conversationId);
+      if (verdict === 'protected') {
+        return sendForbidden(reply, 'The global conversation cannot be made obsolete');
+      }
+      if (verdict === 'pending-request-sender') {
         return sendForbidden(reply, 'Seul le destinataire d\'une demande de message non acceptée peut rendre cette conversation obsolète');
       }
-      const allowed = actorHasMinimumRole(
-        { conversationRole: membership?.role, platformRole: authRequest.authContext.registeredUser?.role },
-        MemberRole.ADMIN,
-      ) || await directMemberMayObsolete(prisma, conversationId, membership, {
-        isAnonymous: authRequest.authContext.isAnonymous,
-        hasRegisteredUser: authRequest.authContext.registeredUser !== undefined,
-      });
-      if (!allowed) {
+      if (verdict !== 'allowed') {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à rendre cette conversation obsolète');
       }
 

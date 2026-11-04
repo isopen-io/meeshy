@@ -39,6 +39,7 @@ import me.meeshy.ui.theme.MeeshySpacing
  * Un réel republié montre le réel source, signé de son auteur d'origine (« Republié par … »), et ouvre ce réel-là.
  *
  * [showsActions] retire la rangée d'actions quand l'écran porte déjà la sienne (détail du post) ; [captionLines] borne la légende.
+ * Un geste que l'hôte ne passe pas n'est pas dessiné : la carte n'affiche jamais un bouton sans effet (#13244).
  */
 @Composable
 internal fun ReelPostCard(
@@ -49,18 +50,18 @@ internal fun ReelPostCard(
     isOwn: Boolean = false,
     showsActions: Boolean = true,
     captionLines: Int = 2,
-    onLike: () -> Unit = {},
-    onBookmark: () -> Unit = {},
-    onComments: () -> Unit = {},
-    onRepost: () -> Unit = {},
-    onQuote: () -> Unit = {},
-    onShare: () -> Unit = {},
+    onLike: (() -> Unit)? = null,
+    onBookmark: (() -> Unit)? = null,
+    onComments: (() -> Unit)? = null,
+    onRepost: (() -> Unit)? = null,
+    onQuote: (() -> Unit)? = null,
+    onShare: (() -> Unit)? = null,
     onSend: (() -> Unit)? = null,
-    onCopyLink: () -> Unit = {},
-    onCopyText: () -> Unit = {},
-    onPin: () -> Unit = {},
-    onReport: () -> Unit = {},
-    onDelete: () -> Unit = {},
+    onCopyLink: (() -> Unit)? = null,
+    onCopyText: (() -> Unit)? = null,
+    onPin: (() -> Unit)? = null,
+    onReport: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
     onOpenProfile: ((String) -> Unit)? = null,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)

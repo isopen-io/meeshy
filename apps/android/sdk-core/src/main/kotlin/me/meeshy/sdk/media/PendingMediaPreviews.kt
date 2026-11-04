@@ -10,8 +10,17 @@ import dagger.multibindings.IntoSet
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.io.ByteArrayInputStream
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.composer.AttachmentThumbnailing
 import me.meeshy.sdk.model.ApiMessageAttachment
@@ -41,6 +50,11 @@ public data class PendingMediaPreview(
  * Un vocal en attente se LIT depuis l'appareil (#15428, iOS lit l'enregistrement local) : sa copie jouable, nommée par
  * le même `cmid`, devient le `fileUrl` `file://` de la pièce optimiste. À l'accusé, [MediaAdoption] la range sous
  * l'adresse canonique dans le cache AUDIO : la lecture suivante ne retélécharge pas ce qui vient de partir.
+ *
+ * Une photo en attente s'ouvre NETTE en plein écran (#15970, iOS montre l'original) : une copie ASSAINIE — ré-encodée,
+ * bornée, sans aucune métadonnée de l'original ([SanitizedImageEncoder]) — s'écrit en arrière-plan après la bulle, et la
+ * visionneuse la demande par l'id de la pièce ([sharpUrlFor]). L'original n'est jamais écrit en clair ; une pièce à vue
+ * unique ou floutée n'a pas de copie ; la copie part avec l'aperçu.
  */
 public interface PendingMediaPreviewing {
     /** Garde la vignette déjà préparée par le plateau ; `null` pour une pièce protégée ou sans vignette lisible. */
@@ -51,6 +65,15 @@ public interface PendingMediaPreviewing {
 
     /** Garde une copie jouable d'un SON en attente ; `null` pour une pièce protégée ou qui n'est pas un son. */
     public suspend fun keepPlayable(cmid: String, item: MediaUploadItem, effects: MessageEffects): String? = null
+
+    /**
+     * Prépare, en arrière-plan, la copie nette et assainie d'une PHOTO en attente ; rien pour une pièce protégée, qui n'est
+     * pas une image, ou trop lourde pour être tenue en mémoire le temps de la copie.
+     */
+    public suspend fun keepSharp(cmid: String, item: MediaUploadItem, effects: MessageEffects): Unit = Unit
+
+    /** La copie nette de la pièce en attente [attachmentId], ou `null` tant qu'elle n'est pas prête (l'aperçu sert alors). */
+    public fun sharpUrlFor(attachmentId: String): String? = null
 
     /** Supprime les aperçus et copies jouables que [attachments] référencent — seulement les siens. */
     public suspend fun release(attachments: List<ApiMessageAttachment>)
@@ -69,7 +92,11 @@ public class PendingMediaPreviews internal constructor(
     private val dir: File,
     private val thumbnailer: AttachmentThumbnailing,
     private val io: CoroutineDispatcher,
+    private val sanitizer: SanitizedImageEncoding = SanitizedImageEncoder,
 ) : PendingMediaPreviewing, PerAccountCache {
+
+    private val sharpening = CoroutineScope(SupervisorJob() + io)
+    private val sharpJobs = ConcurrentHashMap<String, Job>()
 
     @Inject
     public constructor(@ApplicationContext context: Context, thumbnailer: AttachmentThumbnailing) :
@@ -110,15 +137,40 @@ public class PendingMediaPreviews internal constructor(
         }
     }
 
+    override suspend fun keepSharp(cmid: String, item: MediaUploadItem, effects: MessageEffects) {
+        if (isMasked(effects) || !isSafeName(cmid) || PendingAttachmentType.forMime(item.mimeType) != PendingAttachmentType.IMAGE) return
+        if (item.sizeBytes !in 1L..MAX_SHARP_SOURCE_BYTES) return
+        val octets = withContext(io) { runCatching { item.source.open().use { it.readBytes() } }.getOrNull() } ?: return
+        val job = sharpening.launch(start = CoroutineStart.LAZY) {
+            val target = sharpFile(cmid)
+            val written = runCatching { sanitizer.encode({ ByteArrayInputStream(octets) }, target) }.getOrDefault(false)
+            if (written && !isActive) target.delete()
+        }
+        sharpJobs.put(cmid, job)?.cancel()
+        job.invokeOnCompletion { sharpJobs.remove(cmid, job) }
+        job.start()
+    }
+
+    override fun sharpUrlFor(attachmentId: String): String? {
+        if (!isSafeName(attachmentId)) return null
+        return sharpFile(attachmentId).takeIf { it.isFile && it.length() > 0L }?.let(::fileUrlOf)
+    }
+
     override suspend fun release(attachments: List<ApiMessageAttachment>) {
-        val owned = attachments.flatMap { listOfNotNull(it.thumbnailUrl, it.fileUrl) }.mapNotNull(::ownedFile)
-        if (owned.isEmpty()) return
+        val sharp = attachments.map { it.id }.filter(::isSafeName).onEach { sharpJobs.remove(it)?.cancel() }.map(::sharpFile)
+        val owned = attachments.flatMap { listOfNotNull(it.thumbnailUrl, it.fileUrl) }.mapNotNull(::ownedFile) + sharp
         withContext(io) { owned.forEach { it.delete() } }
     }
 
     override suspend fun clear() {
+        sharpening.coroutineContext.cancelChildren()
+        sharpJobs.clear()
         withContext(io) { dir.deleteRecursively() }
     }
+
+    private fun sharpFile(cmid: String): File = File(dir, "$cmid$SHARP_SUFFIX")
+
+    private fun isSafeName(id: String): Boolean = id.matches(SAFE_NAME)
 
     private fun ownedFile(url: String): File? {
         val path = LocalFileUrl.pathOf(url) ?: return null
@@ -139,6 +191,11 @@ public class PendingMediaPreviews internal constructor(
         const val DIRECTORY = "pending-previews"
         const val SUFFIX = ".preview.jpg"
         const val PLAYABLE_SUFFIX = ".voice"
+        const val SHARP_SUFFIX = ".sharp.jpg"
+
+        /** Au-delà, la photo n'est pas tenue en mémoire le temps de sa copie : l'aperçu sert la visionneuse. */
+        const val MAX_SHARP_SOURCE_BYTES: Long = 40L * 1024 * 1024
+        val SAFE_NAME = Regex("[A-Za-z0-9_-]{1,96}")
         const val DEFAULT_AUDIO_EXTENSION = "m4a"
         val EXTENSION = Regex("[a-z0-9]{1,5}")
     }

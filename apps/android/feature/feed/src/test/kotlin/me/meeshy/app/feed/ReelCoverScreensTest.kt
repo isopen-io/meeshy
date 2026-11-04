@@ -12,7 +12,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/** #13666 — Enregistrés, Publications d'un utilisateur, Proximité et Détail du post rendent la couverture du fil et ouvrent CE réel. */
+/** #13666 — Enregistrés, Publications d'un utilisateur, Proximité (#13244 : une seule carte) et Détail du post rendent la couverture du fil et ouvrent CE réel. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class ReelCoverScreensTest {
@@ -38,14 +38,13 @@ class ReelCoverScreensTest {
         val posts = mutableListOf<String>()
     }
 
-    private fun saved(p: FeedPostPresentation, t: Taps): @Composable () -> Unit =
-        { SavedPostCard(post = p, onRemove = {}, onClick = {}, onOpenPost = { t.posts += it }, onOpenReel = { t.reels += it }) }
-
-    private fun userPosts(p: FeedPostPresentation, t: Taps): @Composable () -> Unit =
-        { UserPostCard(post = p, onClick = {}, onOpenPost = { t.posts += it }, onOpenReel = { t.reels += it }) }
-
-    private fun nearby(p: FeedPostPresentation, t: Taps): @Composable () -> Unit =
-        { NearbyPostCard(post = p, onClick = {}, onOpenPost = { t.posts += it }, onOpenReel = { t.reels += it }) }
+    /** Les favoris, les publications d'un auteur, « À proximité » et un hashtag montent la même carte (#13244). */
+    private fun listed(p: FeedPostPresentation, t: Taps): @Composable () -> Unit = {
+        ListedPostCard(
+            post = p, actions = RecordingCardActions(), sheets = ListedPostSheets(), share = recordingShare(mutableListOf()),
+            onOpenPost = { t.posts += it }, onOpenReel = { t.reels += it }, onOpenProfile = null, onOpenHashtag = {},
+        )
+    }
 
     private fun detail(p: FeedPostPresentation, t: Taps): @Composable () -> Unit = {
         PostDetailContent(
@@ -64,14 +63,10 @@ class ReelCoverScreensTest {
         return taps
     }
 
-    @Test fun `Enregistres rend la couverture et ouvre ce reel`() = opensThisReel(::saved)
-    @Test fun `Publications d un utilisateur rend la couverture et ouvre ce reel`() = opensThisReel(::userPosts)
-    @Test fun `Proximite rend la couverture et ouvre ce reel`() = opensThisReel(::nearby)
+    @Test fun `Enregistres, Publications d un utilisateur et Proximite rendent la couverture et ouvrent ce reel`() = opensThisReel(::listed)
     @Test fun `Detail du post rend la couverture et ouvre ce reel`() = opensThisReel(::detail)
 
-    @Test fun `Enregistres - un reel republie n a qu une couverture et ouvre le reel cite`() = opensQuotedReel(::saved)
-    @Test fun `Publications d un utilisateur - un reel republie n a qu une couverture et ouvre le reel cite`() = opensQuotedReel(::userPosts)
-    @Test fun `Proximite - un reel republie n a qu une couverture et ouvre le reel cite`() = opensQuotedReel(::nearby)
+    @Test fun `les listes - un reel republie n a qu une couverture et ouvre le reel cite`() = opensQuotedReel(::listed)
     @Test fun `Detail du post - un reel republie n a qu une couverture et ouvre le reel cite`() = opensQuotedReel(::detail)
 
     private fun opensThisReel(card: (FeedPostPresentation, Taps) -> @Composable () -> Unit) {

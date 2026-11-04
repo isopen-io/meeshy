@@ -281,4 +281,38 @@ class AttachmentAudioTranslationMergeTest {
         assertThat(merged.id).isEqualTo("keep")
         assertThat(merged.conversationId).isEqualTo("c1")
     }
+
+    private val hola = listOf(TranscriptionSegment(text = "hola", startTime = 0.0, endTime = 1.0))
+
+    @Test
+    fun `carries the segments onto the stored track`() {
+        val merged = AttachmentAudioTranslationMerge.mergeAudioTranslation(
+            message(), null, "es", "https://cdn/es.mp3", segments = hola,
+        )!!
+
+        assertThat(merged.attachments.single().translations!!.getValue("es").segments).isEqualTo(hola)
+    }
+
+    @Test
+    fun `an identical track with segments the target lacks is not a no-op`() {
+        val bare = message(
+            attachments = listOf(audio(translations = mapOf("es" to ApiAttachmentTranslation(type = "audio", url = "https://cdn/es.mp3", transcription = "")))),
+        )
+
+        val merged = AttachmentAudioTranslationMerge.mergeAudioTranslation(bare, null, "es", "https://cdn/es.mp3", segments = hola)
+
+        assertThat(merged).isNotNull()
+        assertThat(merged!!.attachments.single().translations!!.getValue("es").segments).isEqualTo(hola)
+    }
+
+    @Test
+    fun `a second call without segments never strips the segments already held`() {
+        val rich = message(
+            attachments = listOf(
+                audio(translations = mapOf("es" to ApiAttachmentTranslation(type = "audio", url = "https://cdn/es.mp3", transcription = "", segments = hola))),
+            ),
+        )
+
+        assertThat(AttachmentAudioTranslationMerge.mergeAudioTranslation(rich, null, "es", "https://cdn/es.mp3")).isNull()
+    }
 }

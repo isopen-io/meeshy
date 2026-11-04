@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.StoredTextTranslation
 import me.meeshy.sdk.model.StoredTranscription
 import me.meeshy.sdk.model.AttachmentTranscriptionMerge
 import me.meeshy.sdk.model.MessageTranslationMerge
+import me.meeshy.sdk.model.TranscriptionSegment
 import me.meeshy.sdk.model.TranslationOverlay
 import me.meeshy.sdk.model.translation.ServerTranslationAdmission
 import me.meeshy.sdk.net.NetworkResult
@@ -81,15 +82,18 @@ internal class MessageEnrichmentWriter(
         language: String?,
         confidence: Double?,
         durationMs: Long?,
+        segments: List<TranscriptionSegment>? = null,
+        speakerCount: Int? = null,
     ) {
         val rows = layerFor(messageId)
         if (rows != null) {
-            updater.enrich(updater.ticket(), messageId) { canonical, stored ->
+            val ticket = updater.ticket()
+            updater.enrich(ticket, messageId) { canonical, stored ->
                 if (!dedicated(stored)) return@enrich false
                 rows.ensureLoaded(listOf(canonical))
                 val message = rows.project(LocalMessage(stored)).message
                 val merged = AttachmentTranscriptionMerge.mergeTranscription(
-                    message, attachmentId, text, language, confidence, durationMs,
+                    message, attachmentId, text, language, confidence, durationMs, segments, speakerCount,
                 ) ?: return@enrich false
                 val attachment = changedAttachment(message, merged) ?: return@enrich false
                 val held = attachment.transcription ?: return@enrich false
@@ -98,6 +102,15 @@ internal class MessageEnrichmentWriter(
                     StoredTranscription(canonical, attachment.id, held.transcribedText ?: held.text.orEmpty(), held.language, held.confidence, held.durationMs),
                     now(),
                 )
+            }
+            // Les lignes dédiées ne portent que le texte : les segments et les locuteurs voyagent dans la charge.
+            if (!segments.isNullOrEmpty()) {
+                updater.update(ticket, messageId, requireSynced = false) { message ->
+                    if (!dedicated(message)) return@update message
+                    AttachmentTranscriptionMerge.mergeTranscription(
+                        message, attachmentId, text, language, confidence, durationMs, segments, speakerCount,
+                    ) ?: message
+                }
             }
             return
         }
@@ -110,6 +123,8 @@ internal class MessageEnrichmentWriter(
                 language,
                 confidence,
                 durationMs,
+                segments,
+                speakerCount,
             ) ?: message
         }
     }
@@ -133,15 +148,18 @@ internal class MessageEnrichmentWriter(
         quality: Double?,
         voiceModelId: String?,
         ttsModel: String?,
+        segments: List<TranscriptionSegment>? = null,
     ) {
         val rows = layerFor(messageId)
         if (rows != null) {
-            updater.enrich(updater.ticket(), messageId) { canonical, stored ->
+            val ticket = updater.ticket()
+            updater.enrich(ticket, messageId) { canonical, stored ->
                 if (!dedicated(stored)) return@enrich false
                 rows.ensureLoaded(listOf(canonical))
                 val message = rows.project(LocalMessage(stored)).message
                 val merged = AttachmentAudioTranslationMerge.mergeAudioTranslation(
                     message, attachmentId, language, url, transcription, durationMs, format, cloned, quality, voiceModelId, ttsModel,
+                    segments,
                 ) ?: return@enrich false
                 val attachment = changedAttachment(message, merged) ?: return@enrich false
                 val entry = attachment.translations.orEmpty().entries
@@ -154,6 +172,15 @@ internal class MessageEnrichmentWriter(
                     ),
                     now(),
                 )
+            }
+            if (!segments.isNullOrEmpty()) {
+                updater.update(ticket, messageId, requireSynced = false) { message ->
+                    if (!dedicated(message)) return@update message
+                    AttachmentAudioTranslationMerge.mergeAudioTranslation(
+                        message, attachmentId, language, url, transcription, durationMs, format, cloned, quality, voiceModelId, ttsModel,
+                        segments,
+                    ) ?: message
+                }
             }
             return
         }
@@ -171,6 +198,7 @@ internal class MessageEnrichmentWriter(
                 quality,
                 voiceModelId,
                 ttsModel,
+                segments,
             ) ?: message
         }
     }

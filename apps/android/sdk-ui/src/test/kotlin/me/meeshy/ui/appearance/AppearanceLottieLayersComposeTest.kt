@@ -120,8 +120,13 @@ class AppearanceLottieLayersComposeTest {
         modes(2).forEach { node -> with(rule.density) { assertThat(node.boundsInRoot.width.toDp().value).isWithin(0.6f).of(100f) } }
     }
 
-    @Test fun `a list avatar too small to read an illustration wears the ring alone, no film (#15157)`() {
+    @Test fun `a list avatar shows its whole illustrated frame, both films inside the footprint (#16114)`() {
         host { AvatarRingLayer(masque, footprint = 52.dp, modifier = Modifier.size(52.dp)) { Box(Modifier.size(52.dp)) } }
+        modes(2).forEach { node -> with(rule.density) { assertThat(node.boundsInRoot.width.toDp().value).isWithin(0.6f).of(52f) } }
+    }
+
+    @Test fun `the typing indicator host drops the films and keeps the ring alone (#16114)`() {
+        host { AvatarRingLayer(masque, footprint = 22.dp, decor = false, modifier = Modifier.size(22.dp)) { Box(Modifier.size(22.dp)) } }
         rule.waitForIdle()
         assertThat(rule.onAllNodes(layer, useUnmergedTree = true).fetchSemanticsNodes()).isEmpty()
     }
@@ -136,10 +141,15 @@ class AppearanceLottieLayersComposeTest {
         assertThat(tray.drawsStill).isFalse()
         listOf(52.0, 32.0, 20.0).forEach { size ->
             val small = AvatarRingLayout.make(masque, footprint = size)
-            assertThat(small.decor).isNull()
-            assertThat(small.drawsStill).isTrue()
-            assertThat(small.contentScale).isWithin(1e-6).of(0.84)
+            assertThat(small.decor).isNotNull()
+            assertThat(small.paintedSide(size)).isAtMost(size + 1e-9)
+            assertThat(small.drawsStill).isFalse()
+            assertThat(small.contentScale).isWithin(1e-6).of(0.84 / 1.4)
         }
+        val typing = AvatarRingLayout.make(masque, footprint = 22.0, decor = false)
+        assertThat(typing.decor).isNull()
+        assertThat(typing.drawsStill).isTrue()
+        assertThat(typing.contentScale).isWithin(1e-6).of(0.84)
     }
 
     @Test fun `an illustrated frame holds both films at their first frame under reduce motion`() {

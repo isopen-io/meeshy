@@ -59,6 +59,7 @@ class OutboxKindDiskValuesLockTest {
         "LEAVE_CONVERSATION",
         "DELETE_CONVERSATION_FOR_ME",
         "DELETE_CONVERSATION_FOR_ALL",
+        "REPORT_CONTENT_CAPTURE",
     )
 
     @Test

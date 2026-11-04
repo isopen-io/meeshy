@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.game
 
+import android.os.Looper
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.offset
@@ -16,8 +17,11 @@ import me.meeshy.sdk.model.game.MeeshEdition
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
 import org.junit.runner.RunWith
+import org.junit.runners.model.Statement
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -29,7 +33,27 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class MeeshCoinTest {
 
-    @get:Rule val rule = createComposeRule()
+    /**
+     * « Les trois faces des trois éditions » laissait `AndroidUiDispatcher.Main` programmé pour la JVM : les trois
+     * témoins suivants (ordre JUnit par empreinte du nom) et toute la suite de sdk-ui tombaient sur la garde de #15815.
+     * La boucle principale est vidée APRÈS le démontage de la règle Compose (ordre 0, donc extérieure), juste avant
+     * que Robolectric n'efface la file.
+     */
+    @get:Rule(order = 0)
+    val settleMainLooper = TestRule { base, _ ->
+        object : Statement() {
+            override fun evaluate() {
+                try {
+                    base.evaluate()
+                } finally {
+                    shadowOf(Looper.getMainLooper()).idle()
+                }
+            }
+        }
+    }
+
+    @get:Rule(order = 1)
+    val rule = createComposeRule()
 
     private fun twinkling(value: Boolean) = SemanticsMatcher.expectValue(MeeshCoinTwinkling, value)
 

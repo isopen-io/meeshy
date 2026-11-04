@@ -41,10 +41,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.chrome.CollapsibleHeaderMetrics
 import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyGradients
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -310,23 +312,27 @@ fun CollapsibleHeaderActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    diameter: Dp = 40.dp,
+    iconSize: Dp = 18.dp,
+    hapticOnClick: Boolean = false,
 ) {
     val dark = MeeshyTheme.isDark
+    val haptics = rememberMeeshyHaptics()
     Box(
         modifier
             .minimumInteractiveComponentSize()
-            .size(40.dp)
+            .size(diameter)
             .clip(CircleShape)
             .background(MeeshyTheme.tokens.backgroundSecondary.copy(alpha = 0.60f))
             .border(1.dp, MeeshyGradients.glassBorder(dark), CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        IconButton(onClick = onClick, enabled = enabled) {
+        IconButton(onClick = { if (hapticOnClick) haptics.light(); onClick() }, enabled = enabled) {
             Icon(
                 imageVector = icon,
                 contentDescription = contentDescription,
                 tint = MeeshyPalette.Indigo500,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(iconSize),
             )
         }
     }

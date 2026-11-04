@@ -589,6 +589,7 @@ internal class ChatComposerController(
             val mime = MimeTypeResolver.resolve(item.mimeType, name)
             val upload = tray.uploadItem(item, name, mime) ?: return@mapNotNull null
             val cmid = mediaUploadQueue.enqueue(upload, conversationId = conversationId)
+            pendingPreviews.keepSharp(cmid, upload, effects)
             cmid to ApiMessageAttachment(
                 id = cmid,
                 fileName = name,

@@ -17,6 +17,9 @@ import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
+import me.meeshy.sdk.model.friend.repainted
+import me.meeshy.sdk.model.UserUpdatedEvent
+import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.friend.ContactFilter
@@ -93,6 +96,7 @@ class ContactsListViewModel @Inject constructor(
     private val presenceStore: PresenceStore,
     private val blockCache: BlockCache = BlockCache(),
     private val blockRepository: BlockRepository? = null,
+    private val messageSocket: MessageSocketManager? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ContactsListUiState())
@@ -111,6 +115,7 @@ class ContactsListViewModel @Inject constructor(
     init {
         observeFriendshipCache()
         observePresence()
+        observeUserUpdates()
         load()
     }
 
@@ -225,6 +230,36 @@ class ContactsListViewModel @Inject constructor(
                 _state.update { it.copy(friends = PresenceOverlay.apply(servedRoster, entries)) }
             }
         }
+    }
+
+    /**
+     * `user:updated` (nom, photo) repeint la ligne en place — sans relecture du carnet. Le carnet
+     * SERVI est repeint (et réécrit en base) : la carte de présence se recouvre ensuite par-dessus.
+     */
+    private fun observeUserUpdates() {
+        val updates = messageSocket?.userUpdated ?: return
+        viewModelScope.launch {
+            updates.collect { event ->
+                try {
+                    repaint(event)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    Unit
+                }
+            }
+        }
+    }
+
+    private suspend fun repaint(event: UserUpdatedEvent) {
+        var changed = false
+        val next = servedRoster.map { friend ->
+            event.repainted(friend)?.also { changed = true } ?: friend
+        }
+        if (!changed) return
+        servedRoster = next
+        _state.update { it.copy(friends = withPresence(next)) }
+        friendListRepository.persist(next, friendListRepository.ticket())
     }
 
     private fun withPresence(friends: List<FriendRequestUser>): List<FriendRequestUser> =

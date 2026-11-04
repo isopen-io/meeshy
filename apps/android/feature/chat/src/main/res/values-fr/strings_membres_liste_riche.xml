@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Feuille des membres, version riche (#15966) : clés propres à Android. -->
+<resources>
+    <string name="members_sheet_leave">Quitter le groupe</string>
+    <string name="members_sheet_leave_title">Quitter le groupe ?</string>
+    <string name="members_sheet_leave_message">Vous ne pourrez plus voir les messages de ce groupe.</string>
+    <string name="members_sheet_leave_confirm">Quitter</string>
+    <string name="members_sheet_role_title">Changer le rôle ?</string>
+    <string name="members_sheet_role_message">Passer ce membre en %1$s ?</string>
+    <string name="members_sheet_role_confirm">Confirmer</string>
+    <string name="members_sheet_since">Depuis %1$s</string>
+    <plurals name="members_sheet_title_capped">
+        <item quantity="one">%1$s+ membre</item>
+        <item quantity="many">%1$s+ de membres</item>
+        <item quantity="other">%1$s+ membres</item>
+    </plurals>
+    <string name="members_sheet_error_title">Erreur</string>
+    <string name="members_sheet_error_ok">OK</string>
+    <string name="members_sheet_swipe_remove">Retirer</string>
+    <string name="add_participant_failed">Impossible d\'ajouter ce membre.</string>
+    <string name="add_participant_search_failed">La recherche a échoué. Réessayez.</string>
+    <string name="add_participant_add_a11y">Ajouter %1$s</string>
+    <string name="add_participant_searching_a11y">Recherche en cours</string>
+</resources>
