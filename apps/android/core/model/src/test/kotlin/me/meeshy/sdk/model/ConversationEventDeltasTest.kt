@@ -118,6 +118,37 @@ class ConversationEventDeltasTest {
     }
 
     @Test
+    fun `the viewer consuming a view-once seals its content, translations and attachments`() {
+        val event = MessageConsumedEvent(messageId = "m1", conversationId = "c1", userId = "me", viewOnceCount = 1)
+        val sealed = ConversationEventDeltas.consumed(message(attachments = listOf(photo())), event, viewerId = "me")
+
+        assertThat(sealed.consumedByMe).isTrue()
+        assertThat(sealed.content).isEmpty()
+        assertThat(sealed.translations).isEmpty()
+        assertThat(sealed.attachments.map { it.fileUrl }).containsExactly(null)
+        assertThat(sealed.attachments.map { it.thumbnailUrl }).containsExactly(null)
+    }
+
+    @Test
+    fun `someone else consuming a view-once empties nothing`() {
+        val event = MessageConsumedEvent(messageId = "m1", conversationId = "c1", userId = "u2", viewOnceCount = 1)
+        val kept = ConversationEventDeltas.consumed(message(attachments = listOf(photo())), event, viewerId = "me")
+
+        assertThat(kept.content).isEqualTo("salut")
+        assertThat(kept.translations).hasSize(1)
+        assertThat(kept.attachments.single().fileUrl).isEqualTo("https://cdn/x.jpg")
+    }
+
+    @Test
+    fun `sealing an already sealed view-once returns the same instance`() {
+        val event = MessageConsumedEvent(messageId = "m1", conversationId = "c1", userId = "me", viewOnceCount = 1)
+        val sealed = ConversationEventDeltas.consumed(message(attachments = listOf(photo())), event, viewerId = "me")
+
+        assertThat(ConversationEventDeltas.consumed(sealed, event, viewerId = "me")).isSameInstanceAs(sealed)
+        assertThat(ConversationEventDeltas.sealedAsOpened(sealed)).isSameInstanceAs(sealed)
+    }
+
+    @Test
     fun `a view-once purge drops every carried content but keeps the bubble`() {
         val withMedia = message(attachments = listOf(photo()))
 
