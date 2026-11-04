@@ -210,11 +210,11 @@ data class CachePolicy(
         )
 
         // The people a search query found, replayed offline for the same query: a minute fresh so a retyped
-        // query revalidates quickly, kept a day, 20 rows per query (the page the search asks for). No iOS twin.
+        // query revalidates quickly, kept a day, room for the 20 rows a query asks for (the store keeps the TAIL when it truncates). No iOS twin.
         val UserSearch = CachePolicy(
             freshForMillis = MINUTE,
             keepForMillis = DAY,
-            maxItemCount = 20,
+            maxItemCount = 50,
         )
 
         // ── File-cache media (iOS `.disk`): no stale window, fresh until the TTL ──

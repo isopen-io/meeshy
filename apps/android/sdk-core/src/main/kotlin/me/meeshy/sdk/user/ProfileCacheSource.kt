@@ -11,8 +11,8 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * Profils d'autres utilisateurs sur le CacheStore generique (iOS `CachePolicy.userProfiles` : 30 j, 5 min de
- * fraicheur, 100 profils). Une seule liste, du plus recent au plus ancien : le plafond de 100 du store evince
- * donc le profil le moins recemment vu, et revoir un profil le remonte en tete (prolongation a chaque visite).
+ * fraicheur, 100 profils). Une seule liste, du plus ancien au plus recent (l'ordre du store) : son plafond de 100 evince
+ * donc le profil le moins recemment vu, et revoir un profil le replace en queue (prolongation a chaque visite).
  *
  * Presence (loi 2026-08-25) : `isOnline` / `lastActiveAt` ne sont NI ranges NI restitues — le serveur peut les
  * retirer sans que rien ne le dise. Absente = aucun point d'avatar ; elle ne vient que d'une reponse fraiche.
@@ -31,7 +31,7 @@ class ProfileCacheSource(
         fence.commitOrWrite(ticket) {
             val kept = user.withoutServedPresence()
             val others = store.loadIgnoringExpiry(KEY)?.items.orEmpty().filterNot { it.id == user.id }
-            store.saveFetched(listOf(kept) + others, KEY)
+            store.saveFetched(others + kept, KEY)
         }
     }
 

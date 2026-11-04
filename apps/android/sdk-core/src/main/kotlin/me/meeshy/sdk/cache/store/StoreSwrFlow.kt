@@ -25,14 +25,16 @@ internal fun <V, T : Any> RoomCacheStore<V>.swrFlow(
     val first = load(key).projected(select)
     emit(first)
     if (first !is CacheResult.Fresh) {
-        try {
+        val revalidated = try {
             revalidate()
-            emit(load(key).projected(select))
+            true
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
             onRevalidateError(failure)
+            false
         }
+        if (revalidated) emit(load(key).projected(select))
     }
     emitAll(
         observe(key)
