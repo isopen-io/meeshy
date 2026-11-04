@@ -161,7 +161,7 @@ public class TusUploadRepository @Inject constructor(
         val mimeType = MediaUpload.mimeType(outgoing.mimeType)
         val totalBytes = outgoing.sizeBytes
 
-        val decision = when (val verdict = resolveSession(checkpointKey, totalBytes)) {
+        val decision = when (val verdict = resolveSession(checkpointKey, totalBytes, extras.authorization)) {
             is NetworkResult.Failure -> return verdict
             is NetworkResult.Success -> verdict.data
         }
@@ -180,6 +180,7 @@ public class TusUploadRepository @Inject constructor(
                         fileName, mimeType, context, extras.thumbHash, extras.transcription, extras.capturedInApp,
                     ),
                     tusResumable = TusUploadMetadata.TUS_RESUMABLE_VERSION,
+                    bearer = extras.authorization,
                 )
                 location = when (locationResult) {
                     is NetworkResult.Failure -> return locationResult
@@ -207,6 +208,7 @@ public class TusUploadRepository @Inject constructor(
                     uploadOffset = range.offset,
                     tusResumable = TusUploadMetadata.TUS_RESUMABLE_VERSION,
                     body = outgoing.rangeBody(range.offset, range.length, OCTET_STREAM_MEDIA_TYPE),
+                    bearer = extras.authorization,
                 )
                 if (chunkResult is NetworkResult.Failure) return purgedOr(chunkResult, checkpointKey)
                 checkpoint(checkpointKey, location, uploadedBytes = range.offset + range.length, totalBytes = totalBytes)
@@ -220,6 +222,7 @@ public class TusUploadRepository @Inject constructor(
                     uploadOffset = range.offset,
                     tusResumable = TusUploadMetadata.TUS_RESUMABLE_VERSION,
                     body = outgoing.rangeBody(range.offset, range.length, OCTET_STREAM_MEDIA_TYPE),
+                    authorization = extras.authorization,
                 )
             }
             if (finishResult is NetworkResult.Failure) return purgedOr(finishResult, checkpointKey)
@@ -264,7 +267,7 @@ public class TusUploadRepository @Inject constructor(
      * earn a `409` forever and a session the gateway swept does not fail every retry — its checkpoint
      * is dropped and the upload starts over. An unreachable gateway is a failure the caller retries.
      */
-    private suspend fun resolveSession(checkpointKey: String, totalBytes: Long): NetworkResult<TusResumeDecision> {
+    private suspend fun resolveSession(checkpointKey: String, totalBytes: Long, bearer: String?): NetworkResult<TusResumeDecision> {
         val existing = checkpoints.find(checkpointKey)
         val location = existing?.location
         if (location.isNullOrBlank()) return NetworkResult.Success(TusResumeDecision.Fresh)
@@ -272,7 +275,7 @@ public class TusUploadRepository @Inject constructor(
             checkpoints.delete(checkpointKey)
             return NetworkResult.Success(TusResumeDecision.Fresh)
         }
-        val probe = when (val result = tusApi.probeSession(location, TusUploadMetadata.TUS_RESUMABLE_VERSION)) {
+        val probe = when (val result = tusApi.probeSession(location, TusUploadMetadata.TUS_RESUMABLE_VERSION, bearer)) {
             is NetworkResult.Failure -> return result
             is NetworkResult.Success -> result.data
         }

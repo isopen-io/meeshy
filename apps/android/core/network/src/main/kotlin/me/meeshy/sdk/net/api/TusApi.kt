@@ -38,6 +38,7 @@ public interface TusApi {
         @Header("Upload-Length") uploadLength: Long,
         @Header("Upload-Metadata") uploadMetadata: String,
         @Header("Tus-Resumable") tusResumable: String,
+        @Header("Authorization") authorization: String? = null,
     ): Response<Unit>
 
     /**
@@ -49,6 +50,7 @@ public interface TusApi {
     public suspend fun headUpload(
         @Url location: String,
         @Header("Tus-Resumable") tusResumable: String,
+        @Header("Authorization") authorization: String? = null,
     ): Response<Unit>
 
     /**
@@ -68,6 +70,7 @@ public interface TusApi {
         @Header("Upload-Offset") uploadOffset: Long,
         @Header("Tus-Resumable") tusResumable: String,
         @Body body: RequestBody,
+        @Header("Authorization") authorization: String? = null,
     ): Response<Unit>
 
     /**
@@ -88,6 +91,7 @@ public interface TusApi {
         @Header("Upload-Offset") uploadOffset: Long,
         @Header("Tus-Resumable") tusResumable: String,
         @Body body: RequestBody,
+        @Header("Authorization") authorization: String? = null,
     ): ApiResponse<TusUploadFinishData>
 }
 
@@ -103,8 +107,9 @@ public suspend fun TusApi.createSession(
     uploadLength: Long,
     uploadMetadata: String,
     tusResumable: String,
+    bearer: String? = null,
 ): NetworkResult<String> =
-    headerCall("Location") { createUpload(uploadLength, uploadMetadata, tusResumable) }
+    headerCall("Location") { createUpload(uploadLength, uploadMetadata, tusResumable, bearer) }
 
 /**
  * PATCHes one non-final chunk to [location] and folds the raw
@@ -117,8 +122,9 @@ public suspend fun TusApi.patchChunk(
     uploadOffset: Long,
     tusResumable: String,
     body: RequestBody,
+    bearer: String? = null,
 ): NetworkResult<Unit> =
-    chunkCall { uploadChunk(location, uploadOffset, tusResumable, body) }
+    chunkCall { uploadChunk(location, uploadOffset, tusResumable, body, bearer) }
 
 /**
  * `HEAD` on a stored session folded into a [TusServerProbe]: the server's own offset, [TusServerProbe.Gone]
@@ -126,9 +132,13 @@ public suspend fun TusApi.patchChunk(
  * written under another account on this device — retrying it would fail forever), and a failure for anything else (offline, `5xx`) — the caller
  * cannot decide to resume or restart without knowing, so it surfaces the failure and retries later.
  */
-public suspend fun TusApi.probeSession(location: String, tusResumable: String): NetworkResult<TusServerProbe> =
+public suspend fun TusApi.probeSession(
+    location: String,
+    tusResumable: String,
+    bearer: String? = null,
+): NetworkResult<TusServerProbe> =
     try {
-        val response = headUpload(location, tusResumable)
+        val response = headUpload(location, tusResumable, bearer)
         val offset = response.headers()["Upload-Offset"]?.toLongOrNull()
         when {
             response.code() in UNRESUMABLE_SESSION_CODES -> NetworkResult.Success(TusServerProbe.Gone)
