@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PersonOff
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -104,6 +106,7 @@ fun NewConversationScreen(
             onToggleEncryption = viewModel::toggleEncryptionOptions,
             onSelectEncryption = viewModel::selectEncryptionMode,
             onToggleUser = viewModel::toggleSelection,
+            onTapUser = viewModel::onPersonTapped,
             onRowShown = viewModel::loadMoreIfNeeded,
             onRetrySearch = viewModel::retrySearch,
             onDismissError = viewModel::dismissError,
@@ -264,6 +267,9 @@ internal fun SelectedChip(
 internal fun UserRow(
     user: SelectableUser,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    opening: Boolean = false,
 ) {
     val blockedLabel = stringResource(UiR.string.connection_badge_blocked)
     val presence = rememberPresence(user.id, user.servedPresence)
@@ -274,10 +280,10 @@ internal fun UserRow(
         onlineLabel = stringResource(R.string.new_conversation_user_online),
     )
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .alpha(if (user.isBlocked) 0.5f else 1f)
-            .clickable(enabled = NewConversationLogic.isSelectable(user), onClick = onClick)
+            .clickable(enabled = enabled && NewConversationLogic.isSelectable(user), onClick = onClick)
             .semantics(mergeDescendants = true) {
                 role = Role.Button
                 contentDescription = label
@@ -307,7 +313,13 @@ internal fun UserRow(
                 color = MeeshyTheme.tokens.textSecondary,
             )
         }
-        if (user.isBlocked) {
+        if (opening) {
+            CircularProgressIndicator(
+                color = MeeshyPalette.Indigo400,
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(20.dp).testTag(NewConversationTags.OPENING),
+            )
+        } else if (user.isBlocked) {
             Text(
                 text = blockedLabel,
                 style = MaterialTheme.typography.labelMedium,

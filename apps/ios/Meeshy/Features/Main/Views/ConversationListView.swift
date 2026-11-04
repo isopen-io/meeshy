@@ -75,7 +75,7 @@ struct ConversationListView: View {
     @State private var dragOriginSectionId: String?
 
     // Performance optimized scroll variables
-    @State private var selectedProfileUser: ProfileSheetUser? = nil
+    @State var selectedProfileUser: ProfileSheetUser? = nil
     /// Offset de scroll relayé au header SANS invalider ce body : `@State`
     /// retient la référence sans s'abonner (même famille que
     /// `sectionFrameRegistry` / `chipAutoScrollDriver`) ; seul
@@ -416,7 +416,7 @@ struct ConversationListView: View {
             trailingActions: swipeActions.trailingSwipeActions(for: conversation),
             onViewStory: { handleStoryView(conversation) },
             onViewProfile: { handleProfileView(conversation) },
-            onViewConversationInfo: { handleConversationInfoView(conversation) },
+            onViewConversationInfo: { presentInfo(of: conversation) },
             onMoodBadgeTap: { anchor in handleMoodBadgeTap(conversation, at: anchor) },
             onCreateShareLink: canCreateShareLink(for: conversation) ? {
                 sheetTargets.inviteSheet = conversation
@@ -480,7 +480,7 @@ struct ConversationListView: View {
                 },
                 onShowParticipants: {
                     HapticFeedback.light()
-                    handleConversationInfoView(conversation)
+                    presentInfo(of: conversation)
                 }
             )
         )
@@ -496,7 +496,7 @@ struct ConversationListView: View {
         let route = ConversationOpenRoute.resolve(conversation.id, searching: searching)
         if route.armsSearchNow { router.armSearch() }
         guard route.presentsLockSheet else { return onSelect(conversation) }
-        sheetTargets.searchAfterUnlock = route.searchesAfterUnlock
+        sheetTargets.searchAfterUnlock = route.searchesAfterUnlock; sheetTargets.infoAfterUnlock = false
         lockSheetMode = .openConversation
         sheetTargets.lockSheet = conversation
     }
@@ -858,25 +858,6 @@ struct ConversationListView: View {
         onStoryViewRequest?(userId, false)
     }
 
-    // MARK: - Handle Profile View
-    func handleProfileView(_ conversation: Conversation) {
-        // Open user profile sheet (works for DM, uses participant data)
-        selectedProfileUser = .from(conversation: conversation)
-    }
-
-    // MARK: - Handle Conversation Info View
-    private func handleConversationInfoView(_ conversation: Conversation) {
-        presentInfo(of: conversation)
-    }
-
-    /// Conversation verrouillée : la fiche passe par la porte d'ouverture (PIN).
-    func presentInfo(of conversation: Conversation) {
-        guard ConversationOpenRoute.mayShowInfo(conversation.id) else {
-            return openConversation(conversation)
-        }
-        sheetTargets.info = conversation
-    }
-
     // MARK: - Handle Mood Badge Tap (opens status bubble)
     private func handleMoodBadgeTap(_ conversation: Conversation, at anchor: CGPoint) {
         guard conversation.type == .direct,
@@ -884,8 +865,6 @@ struct ConversationListView: View {
               let status = statusViewModel.statusForUser(userId: userId) else { return }
         StatusBubbleController.shared.show(entry: status, anchor: anchor)
     }
-
-    // See ConversationListView+Overlays.swift for conversationContextMenuOverlay
 
     // MARK: - Handle Drop
     /// Drop du drag NATIF (`.onDrag`, chemin iOS 26) sur un header de

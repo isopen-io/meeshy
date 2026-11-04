@@ -73,7 +73,17 @@ public sealed interface NotificationRowFooter {
     public data class Conversation(val title: String) : NotificationRowFooter
 
     /** [excerpt] `null` : la couche UI retombe sur le libellé de [kind]. */
-    public data class Content(val kind: RowContentKind, val excerpt: String?) : NotificationRowFooter
+    public data class Content(
+        val kind: RowContentKind,
+        val excerpt: String?,
+        /** Date de publication du contenu lié ; la couche UI la formate. */
+        val publishedAtMillis: Long? = null,
+        /** Le contenu éphémère lié a expiré : le pied se grise et passe en rouge. */
+        val isExpired: Boolean = false,
+    ) : NotificationRowFooter
+
+    /** Tout le reste : une ligne de contexte servie par la passerelle. */
+    public data class Plain(val text: String) : NotificationRowFooter
 }
 
 /** Les pièces de rangée que la bannière ne porte pas : la citation et le pied, dédoublonnés. */
@@ -84,7 +94,12 @@ public data class NotificationRowDetail(
 ) {
     public companion object {
 
-        public fun of(notification: ApiNotification, headline: String, body: String?): NotificationRowDetail {
+        public fun of(
+            notification: ApiNotification,
+            headline: String,
+            body: String?,
+            nowMillis: Long = System.currentTimeMillis(),
+        ): NotificationRowDetail {
             val quote = if (notification.notificationType == MeeshyNotificationType.COMMENT_REPLY) {
                 notification.metadata?.parentCommentPreview?.takeIf { it.isNotBlank() }
             } else {
@@ -95,19 +110,27 @@ public data class NotificationRowDetail(
             return NotificationRowDetail(
                 body = keptBody,
                 quote = keptQuote,
-                footer = footer(notification)?.let { dedupe(it, shown) },
+                footer = footer(notification, nowMillis)?.let { dedupe(it, shown) },
             )
         }
 
-        private fun footer(notification: ApiNotification): NotificationRowFooter? {
+        private fun footer(notification: ApiNotification, nowMillis: Long): NotificationRowFooter? {
             val kind = contentKind(notification)
             if (kind != null) {
-                return NotificationRowFooter.Content(kind, notification.metadata?.postPreview?.takeIf { it.isNotBlank() })
+                val context = notification.context
+                return NotificationRowFooter.Content(
+                    kind = kind,
+                    excerpt = notification.metadata?.postPreview?.takeIf { it.isNotBlank() },
+                    publishedAtMillis = context?.postCreatedAt?.let(::isoToEpochMillisOrNull),
+                    isExpired = context?.postExpiresAt?.let(::isoToEpochMillisOrNull)?.let { it <= nowMillis } ?: false,
+                )
             }
-            val context = notification.context ?: return null
-            val group = context.conversationTitle?.takeIf { it.isNotBlank() } ?: return null
-            if (context.conversationType.equals("direct", ignoreCase = true)) return null
-            return NotificationRowFooter.Conversation(group)
+            val context = notification.context
+            val group = context?.conversationTitle?.takeIf { it.isNotBlank() }
+            if (group != null && !context.conversationType.equals("direct", ignoreCase = true)) {
+                return NotificationRowFooter.Conversation(group)
+            }
+            return notification.subtitle?.trim()?.takeIf { it.isNotEmpty() }?.let { NotificationRowFooter.Plain(it) }
         }
 
         private fun dedupe(footer: NotificationRowFooter, shown: List<String>): NotificationRowFooter? = when (footer) {
@@ -115,6 +138,8 @@ public data class NotificationRowDetail(
                 if (shown.any { NotificationRowText.repeats(footer.title, it) }) null else footer
             is NotificationRowFooter.Content ->
                 footer.copy(excerpt = footer.excerpt?.takeUnless { e -> shown.any { NotificationRowText.repeats(e, it) } })
+            is NotificationRowFooter.Plain ->
+                if (shown.any { NotificationRowText.repeats(footer.text, it) }) null else footer
         }
 
         private fun contentKind(notification: ApiNotification): RowContentKind? {

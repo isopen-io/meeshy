@@ -53,6 +53,7 @@ data class NewConversationUiState(
     val groupRequested: Boolean = false,
     /** Les modes de chiffrement dépliés sous la ligne « Chiffrement · <mode> » (iOS `showsEncryptionOptions`). */
     val encryptionExpanded: Boolean = false,
+    val openingUserId: String? = null,
 ) {
     /** What the selection draws (iOS `NewConversationShape`). */
     val shape: NewConversationShape get() = NewConversationLogic.shape(selected.size, groupRequested)
@@ -60,8 +61,8 @@ data class NewConversationUiState(
     /** A group — the switch, or two peers and more: its title field shows, and the title is required. */
     val isGroup: Boolean get() = shape == NewConversationShape.GROUP
 
-    /** « Créer » appears once the selection draws something (iOS: hidden while the shape is `.none`). */
-    val showsCreate: Boolean get() = shape != NewConversationShape.NONE
+    /** « Créer » belongs to the group only: in direct, one tap on a person opens the conversation (#14646). */
+    val showsCreate: Boolean get() = isGroup
 
     /** Two peers and more already make a group: the switch says so and does not turn off. */
     val groupToggleEnabled: Boolean get() = selected.size <= 1
@@ -71,14 +72,14 @@ data class NewConversationUiState(
 
     /** La section Chiffrement (décision du 2026-11-01) : les modes offerts pour ce rôle et ce type. */
     val encryptionOffer: CreationEncryptionOffer
-        get() = NewConversationLogic.encryptionOffer(platformRole, selected.size, groupRequested)
+        get() = NewConversationLogic.encryptionOffer(platformRole, if (isGroup) selected.size else 1, groupRequested)
 
     /** Le mode coché, celui qui partira avec la demande. */
     val encryptionMode: CreationEncryptionMode
         get() = NewConversationLogic.resolvedEncryptionMode(encryptionOffer, pickedEncryptionMode)
 
-    /** La ligne « Chiffrement · <mode> » apparaît dès que la sélection dessine une conversation (iOS `shape != .none`). */
-    val showsEncryption: Boolean get() = showsCreate
+    /** La ligne « Chiffrement · <mode> » est toujours là : en direct, le toucher crée aussitôt avec le mode coché. */
+    val showsEncryption: Boolean get() = true
 
     /** Before a searchable query, the picker shows « Your contacts » (iOS `NewConversationView`). */
     val showsContacts: Boolean get() = query.trim().length < NewConversationLogic.MIN_QUERY_LENGTH
@@ -157,7 +158,24 @@ class NewConversationViewModel @Inject constructor(
 
     /** « Nouveau groupe » : bascule, sauf quand deux invités et plus font déjà un groupe. */
     fun toggleGroupRequested() {
-        _state.update { if (it.groupToggleEnabled) it.copy(groupRequested = !it.groupRequested) else it }
+        val current = _state.value
+        if (!current.groupToggleEnabled) return
+        if (current.groupRequested) selectedById.clear()
+        _state.update { it.copy(groupRequested = !it.groupRequested) }
+        publishSelection()
+    }
+
+    fun onPersonTapped(userId: String) {
+        if (_state.value.groupRequested) toggleSelection(userId) else openDirect(userId)
+    }
+
+    private fun openDirect(userId: String) {
+        val current = _state.value
+        if (current.isCreating) return
+        val row = (current.results + current.contacts).firstOrNull { it.id == userId } ?: return
+        if (row.isBlocked) return
+        val request = NewConversationLogic.request(listOf(userId), "", groupRequested = false, encryptionMode = current.encryptionMode)
+        submit(request, openingUserId = userId)
     }
 
     /** Déplie ou replie les modes sous la ligne « Chiffrement · <mode> ». */
@@ -198,18 +216,22 @@ class NewConversationViewModel @Inject constructor(
         if (!current.canCreate) return
         val participants = selectedById.keys.toList()
         val request = NewConversationLogic.request(participants, current.groupTitle, current.groupRequested, current.encryptionMode)
-        _state.update { it.copy(isCreating = true, error = null) }
+        submit(request, openingUserId = null)
+    }
+
+    private fun submit(request: CreateConversationRequest, openingUserId: String?) {
+        _state.update { it.copy(isCreating = true, error = null, openingUserId = openingUserId) }
         viewModelScope.launch {
             try {
                 when (val result = conversationRepository.create(request.type, request.title, request.participantIds, request.encryptionMode)) {
                     is NetworkResult.Success ->
-                        _state.update { it.copy(isCreating = false, createdConversationId = result.data.id) }
+                        _state.update { it.copy(isCreating = false, openingUserId = null, createdConversationId = result.data.id) }
                     is NetworkResult.Failure -> onCreateFailed(request, result.error.code)
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(isCreating = false, error = NewConversationError.CREATE_FAILED) }
+                _state.update { it.copy(isCreating = false, openingUserId = null, error = NewConversationError.CREATE_FAILED) }
             }
         }
     }
@@ -221,8 +243,8 @@ class NewConversationViewModel @Inject constructor(
             null
         }
         _state.update {
-            if (pendingId != null) it.copy(isCreating = false, queuedOffline = true)
-            else it.copy(isCreating = false, error = creationErrorOf(code))
+            if (pendingId != null) it.copy(isCreating = false, openingUserId = null, queuedOffline = true)
+            else it.copy(isCreating = false, openingUserId = null, error = creationErrorOf(code))
         }
     }
 

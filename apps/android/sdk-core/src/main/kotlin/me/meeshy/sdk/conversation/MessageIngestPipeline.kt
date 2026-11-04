@@ -6,6 +6,7 @@ import me.meeshy.core.database.dao.sameStoredContentAs
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ConversationEventDeltas
 import me.meeshy.sdk.model.MessageMergePolicy
 import me.meeshy.sdk.model.PendingMessageMutations
 import me.meeshy.sdk.model.ReplyReferenceBuilder
@@ -74,7 +75,8 @@ internal class MessageIngestPipeline(
                 ?.let { messageDao.find(it) }
             val base = direct ?: optimistic
             // La citation se grave à la PREMIÈRE ingestion : un écho allégé ne dégrade jamais une citation riche déjà gravée.
-            val incoming = if (base == null) ReplyReferenceBuilder.engrave(served) else served
+            // Une vue unique déjà ouverte par ce lecteur entre scellée, même à sa première ingestion (#15897).
+            val incoming = if (base == null) sealedIfOpened(ReplyReferenceBuilder.engrave(served), openedHere = false) else served
             val fresh = MessageEntityFactory.cached(incoming, cachedAt = nowMillis, conversationId = filedUnder)
             val row = if (base == null) fresh else merged(base, incoming, fresh, pending)
             rowIdOfMessage[incoming.id] = row.id
@@ -121,7 +123,8 @@ internal class MessageIngestPipeline(
             val row = writes[rowId] ?: continue
             val waiting = buffer.take(listOfNotNull(message.id, message.clientMessageId, rowId)) ?: continue
             val current = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull() ?: continue
-            val replayed = PendingRowEventReplay.apply(current, waiting).message
+            // Le rejeu (une modification, surtout) ne remet jamais de clair dans une vue unique scellée (#15897).
+            val replayed = PendingRowEventReplay.apply(current, waiting).message?.let { sealedIfOpened(it, row.viewOnceOpenedAt != null) }
             if (replayed == null) {
                 writes.remove(rowId)
                 removed += rowId
@@ -143,11 +146,15 @@ internal class MessageIngestPipeline(
         fresh: MessageEntity,
         pending: PendingMessageMutations,
     ): MessageEntity {
+        val openedHere = base.viewOnceOpenedAt != null
         val cached = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(base.payload) }.getOrNull()
-            ?: return fresh.copy(changeVersion = base.changeVersion + 1)
+            ?: return MessageEntityFactory.refreshed(fresh, sealedIfOpened(incoming, openedHere)).copy(
+                viewOnceOpenedAt = base.viewOnceOpenedAt ?: fresh.viewOnceOpenedAt,
+                changeVersion = base.changeVersion + 1,
+            )
         val outcome = MessageMergePolicy.merge(cached, incoming, pending.guardsFor(incoming.id))
         val sameRow = base.id == fresh.id
-        val rebuilt = MessageEntityFactory.refreshed(fresh, outcome.message).copy(
+        val rebuilt = MessageEntityFactory.refreshed(fresh, sealedIfOpened(outcome.message, openedHere)).copy(
             createdAt = isoToEpochMillisOrNull(outcome.message.createdAt) ?: base.createdAt,
             seq = fresh.seq ?: base.seq,
             viewOnceOpenedAt = base.viewOnceOpenedAt ?: fresh.viewOnceOpenedAt,
@@ -159,6 +166,14 @@ internal class MessageIngestPipeline(
             rebuilt
         }
     }
+
+    /**
+     * Une vue unique que CE lecteur a ouverte — la ligne le sait ([openedHere], colonne `viewOnceOpenedAt`, posée avant
+     * que l'outbox n'ait prévenu le serveur) ou la charge le dit (`consumedByMe`) — sort scellée : rien de ce qu'une page
+     * servie porte encore ne revient en Room (iso iOS `APIMessageUpsert+Merge`, #15897).
+     */
+    private fun sealedIfOpened(message: ApiMessage, openedHere: Boolean): ApiMessage =
+        ConversationEventDeltas.sealedIfOpened(message, openedHere)
 
     /** Ce qu'une page servie change aux traductions retenues : des messages entiers, ou certaines langues seulement. */
     private class RetainedChanges(val outlived: List<String>, val superseded: List<Pair<List<String>, Set<String>>>)

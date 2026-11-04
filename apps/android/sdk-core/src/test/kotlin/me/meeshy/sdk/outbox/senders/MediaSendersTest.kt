@@ -12,6 +12,7 @@ import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadProgressLedger
 import me.meeshy.sdk.media.MediaUploadSender
 import me.meeshy.sdk.media.TusUploadRepository
+import me.meeshy.sdk.media.UploadedAttachmentIds
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.ApiError
@@ -71,6 +72,29 @@ class MediaSendersTest {
 
         assertThat(result).isEqualTo(SendResult.SuccessWithId("media-9"))
         coVerify(exactly = 1) { mediaRepository.upload(listOf(item), "c-1") }
+    }
+
+    @Test
+    fun `a chat upload that lands bridges its cmid to the server id of the piece`() = runTest {
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
+        coEvery { mediaRepository.upload(listOf(item), "c-1") } returns NetworkResult.Success(listOf(uploaded))
+        val acknowledged = UploadedAttachmentIds()
+
+        UploadMediaHandler(mediaBlobStore, mediaRepository, tusUploadRepository, senderJson, ledger, regimes, acknowledged).send(chatRow())
+
+        assertThat(acknowledged.serverIdOf("cmid-1")).isEqualTo("media-9")
+    }
+
+    @Test
+    fun `an upload that fails bridges nothing`() = runTest {
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
+        coEvery { mediaRepository.upload(listOf(item), "c-1") } returns
+            NetworkResult.Failure(ApiError("down", code = "HTTP_503", httpStatus = 503))
+        val acknowledged = UploadedAttachmentIds()
+
+        UploadMediaHandler(mediaBlobStore, mediaRepository, tusUploadRepository, senderJson, ledger, regimes, acknowledged).send(chatRow())
+
+        assertThat(acknowledged.serverIdOf("cmid-1")).isNull()
     }
 
     @Test

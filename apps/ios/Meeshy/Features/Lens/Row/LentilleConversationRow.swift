@@ -47,6 +47,8 @@ struct LentilleConversationRow: View {
     /// #11387 — verrouillée par PIN : la ligne 2 dit le verrou, rien de ce
     /// que la conversation contient (même entrée que `ThemedConversationRow`).
     var isContentLocked: Bool = false
+    /// Ce qu'ouvre le toucher de l'avatar (#15887) — même entrée que `ThemedConversationRow`.
+    var avatarRoute: ConversationAvatarRoute = .info
     var preferredContentLanguages: [String] = []
     /// Le clair local du dernier message scellé (#12968), lu par la liste.
     var deviceText: ConversationPreviewDeviceText? = nil
@@ -249,7 +251,8 @@ struct LentilleConversationRow: View {
                 onViewProfile: onViewProfile,
                 onViewConversationInfo: onViewConversationInfo,
                 onMoodBadgeTap: onMoodBadgeTap,
-                onCreateShareLink: onCreateShareLink
+                onCreateShareLink: onCreateShareLink,
+                avatarRoute: avatarRoute
             )
         }
     }
@@ -612,6 +615,7 @@ extension LentilleConversationRow: @MainActor Equatable {
         lhs.isSelected == rhs.isSelected &&
         lhs.draftSummary == rhs.draftSummary &&
         lhs.isContentLocked == rhs.isContentLocked &&
+        lhs.avatarRoute == rhs.avatarRoute &&
         lhs.preferredContentLanguages == rhs.preferredContentLanguages &&
         lhs.deviceText == rhs.deviceText &&
         lhs.liveCall == rhs.liveCall &&
@@ -644,37 +648,23 @@ private struct LentilleRowAvatar: View {
     var onViewConversationInfo: (() -> Void)? = nil
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
     var onCreateShareLink: (() -> Void)? = nil
+    var avatarRoute: ConversationAvatarRoute = .info
 
     private var isDirect: Bool { conversation.type == .direct }
 
-    private var directContextMenuItems: [AvatarContextMenuItem] {
-        ConversationAvatarMenu.directRoles().map(menuItem(for:))
-    }
-
-    private var groupContextMenuItems: [AvatarContextMenuItem] {
-        let sharableTypes: [MeeshyConversation.ConversationType] = [.group, .public, .global, .broadcast]
-        let canShare = sharableTypes.contains(conversation.type) && onCreateShareLink != nil
-        return ConversationAvatarMenu.groupRoles(canShare: canShare).map(menuItem(for:))
+    private var contextMenuItems: [AvatarContextMenuItem] {
+        ConversationAvatarMenu.roles(
+            type: conversation.type, opensProfile: avatarRoute.opensProfile, hasShareAction: onCreateShareLink != nil
+        ).map(menuItem(for:))
     }
 
     private func menuItem(for role: AvatarMenuRole) -> AvatarContextMenuItem {
-        switch role {
-        case .conversationInfo:
-            return AvatarContextMenuItem(
-                label: String(localized: "conversation.info", defaultValue: "Infos conversation", bundle: .main),
-                icon: "info.circle.fill"
-            ) { onViewConversationInfo?() }
-        case .profile:
-            return AvatarContextMenuItem(
-                label: String(localized: "Voir le profil", bundle: .main),
-                icon: "person.circle.fill"
-            ) { onViewProfile?() }
-        case .shareLink:
-            return AvatarContextMenuItem(
-                label: String(localized: "menu.create_share_link", bundle: .main),
-                icon: "link.badge.plus"
-            ) { onCreateShareLink?() }
+        let action: (() -> Void)? = switch role {
+        case .conversationInfo: onViewConversationInfo
+        case .profile: onViewProfile
+        case .shareLink: onCreateShareLink
         }
+        return AvatarContextMenuItem(label: role.label, icon: role.icon) { action?() }
     }
 
     var body: some View {
@@ -702,12 +692,17 @@ private struct LentilleRowAvatar: View {
             // le pose dans son empreinte, l'anneau de story concentrique à l'intérieur (#10714).
             ring: isDirect ? conversation.participantRing : nil,
             enablePulse: false,
-            onTap: isDirect ? onViewProfile : onViewConversationInfo,
+            // Story non lue d'abord (`MeeshyAvatar.handleTap`), puis ce que la loi
+            // décide (#15887) : le profil du pair, sinon les détails — jamais rien.
+            onTap: avatarRoute.opensProfile ? onViewProfile : onViewConversationInfo,
             onViewProfile: nil,
             onViewStory: (isDirect && storyRingState != .none) ? onViewStory : nil,
             onMoodTap: onMoodBadgeTap,
-            contextMenuItems: isDirect ? directContextMenuItems : groupContextMenuItems
+            contextMenuItems: contextMenuItems
         )
+        // Hors de la fusion VoiceOver de la ligne : l'élément frère posé par
+        // `ConversationRowItem` parle pour lui (#15887).
+        .accessibilityHidden(true)
     }
 }
 

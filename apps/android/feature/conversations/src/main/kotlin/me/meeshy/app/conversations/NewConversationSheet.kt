@@ -66,6 +66,9 @@ internal object NewConversationTags {
     const val GROUP_TITLE = "new-conversation-group-title"
     const val ENCRYPTION_ROW = "new-conversation-encryption-toggle"
     const val ENCRYPTION_OPTIONS = "new-conversation-encryption"
+    const val OPENING = "new-conversation-opening"
+
+    fun row(userId: String): String = "new-conversation-user-$userId"
 }
 
 /** Every gesture the sheet answers; the screen binds them to [NewConversationViewModel]. */
@@ -78,6 +81,7 @@ internal data class NewConversationActions(
     val onToggleEncryption: () -> Unit,
     val onSelectEncryption: (CreationEncryptionMode) -> Unit,
     val onToggleUser: (String) -> Unit,
+    val onTapUser: (String) -> Unit,
     val onRowShown: (String) -> Unit,
     val onRetrySearch: () -> Unit = {},
     val onDismissError: () -> Unit = {},
@@ -113,7 +117,7 @@ internal fun NewConversationSheet(state: NewConversationUiState, actions: NewCon
             }
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 if (state.showsEncryption) encryptionItems(state, actions)
-                if (state.showsContacts) contactItems(state, actions.onToggleUser) else resultItems(state, actions)
+                if (state.showsContacts) contactItems(state, actions.onTapUser) else resultItems(state, actions)
             }
         }
     }
@@ -315,7 +319,7 @@ private fun EncryptionRow(state: NewConversationUiState, onToggle: () -> Unit) {
  * served from the cache first; a loading state only on a cold cache; « No contacts » with a hint
  * to search once the roster answered with nobody.
  */
-private fun LazyListScope.contactItems(state: NewConversationUiState, onToggle: (String) -> Unit) {
+private fun LazyListScope.contactItems(state: NewConversationUiState, onTap: (String) -> Unit) {
     item(key = "contacts-header") {
         Text(
             text = stringResource(R.string.new_conversation_contacts_section),
@@ -328,7 +332,7 @@ private fun LazyListScope.contactItems(state: NewConversationUiState, onToggle: 
         )
     }
     items(state.contacts, key = { "contact-${it.id}" }) { user ->
-        UserRow(user = user, onClick = { onToggle(user.id) })
+        PersonRow(state = state, user = user, onTap = onTap)
     }
     if (state.isLoadingContacts && state.contacts.isEmpty()) {
         item(key = "contacts-loading") { ListSpinner(labelRes = R.string.new_conversation_contacts_loading) }
@@ -340,7 +344,7 @@ private fun LazyListScope.contactItems(state: NewConversationUiState, onToggle: 
 
 private fun LazyListScope.resultItems(state: NewConversationUiState, actions: NewConversationActions) {
     items(state.results, key = { it.id }) { user ->
-        UserRow(user = user, onClick = { actions.onToggleUser(user.id) })
+        PersonRow(state = state, user = user, onTap = actions.onTapUser)
         actions.onRowShown(user.id)
     }
     if (state.isLoadingMore) {
@@ -352,6 +356,17 @@ private fun LazyListScope.resultItems(state: NewConversationUiState, actions: Ne
     if (state.showsNoResults) {
         item(key = "results-empty") { NoUserFound() }
     }
+}
+
+@Composable
+private fun PersonRow(state: NewConversationUiState, user: SelectableUser, onTap: (String) -> Unit) {
+    UserRow(
+        user = user,
+        onClick = { onTap(user.id) },
+        enabled = !state.isCreating,
+        opening = state.openingUserId == user.id,
+        modifier = Modifier.testTag(NewConversationTags.row(user.id)),
+    )
 }
 
 @Composable

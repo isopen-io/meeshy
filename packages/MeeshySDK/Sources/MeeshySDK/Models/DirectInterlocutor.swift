@@ -35,6 +35,17 @@ extension APIConversation {
 }
 
 extension MeeshyConversation {
+    /// Ce que l'interlocuteur ÉLU porte au-delà de son identité : son contour
+    /// d'avatar (#10713) et la fermeture de son compte (#15717). Une directe
+    /// seulement — une conversation à plusieurs n'a pas d'interlocuteur.
+    func wearingInterlocutor(_ participant: APIParticipant?) -> MeeshyConversation {
+        var worn = self
+        let peer = type == .direct ? participant : nil
+        worn.participantRing = peer?.profileDecor?.avatarRing
+        worn.participantAccountClosed = peer?.accountClosed ?? false
+        return worn
+    }
+
     /// Ce que le cache sait de l'interlocuteur, reporté sur une ligne servie
     /// qui ne l'a PAS élu (lecteur inconnu, participants non servis). Une ligne
     /// qui ne sait rien de lui n'efface pas celle qui sait.
@@ -47,6 +58,7 @@ extension MeeshyConversation {
         kept.participantAvatarURL = known.participantAvatarURL
         kept.participantBanner = known.participantBanner
         kept.participantRing = known.participantRing
+        kept.participantAccountClosed = known.participantAccountClosed
         return kept
     }
 
@@ -67,6 +79,7 @@ extension MeeshyConversation {
         cleared.participantAvatarURL = nil
         cleared.participantBanner = nil
         cleared.participantRing = nil
+        cleared.participantAccountClosed = false
         return cleared
     }
 
@@ -92,6 +105,7 @@ extension MeeshyConversation {
         adopted.participantAvatarURL = served.participantAvatarURL
         adopted.participantBanner = served.participantBanner ?? (sameInterlocutor ? participantBanner : nil)
         adopted.participantRing = served.participantRing
+        adopted.participantAccountClosed = served.participantAccountClosed
         return adopted
     }
 }

@@ -30,6 +30,8 @@ import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.chat.InMemoryStarredMessagesStore
 import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationLivePatcher
+import me.meeshy.sdk.conversation.ConversationRemoval
+import me.meeshy.sdk.conversation.ConversationRemovalWrite
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
@@ -193,6 +195,7 @@ class ConversationListViewModelTest {
         statusBarCache: StatusBarCache = statusBarCache(),
         patcher: ConversationLivePatcher = io.mockk.mockk(relaxed = true),
         loadingDeps: ConversationListLoadingDeps = ConversationListLoadingDeps.detached(),
+        remover: FakeConversationRemover = FakeConversationRemover(),
     ) = ConversationListViewModel(
         repo, messageRepo, socket, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore, ConversationUnlockSessionStore(),
@@ -202,6 +205,9 @@ class ConversationListViewModelTest {
         idleRowSignalsSource(),
         patcher,
         loadingDeps,
+        ConversationListDialogDeps.detached().let { inert ->
+            ConversationListDialogDeps(blocker = inert.blocker, reporter = inert.reporter, remover = remover)
+        },
     )
 
     private fun direct(id: String, otherId: String = "other") = ApiConversation(
@@ -1114,29 +1120,27 @@ class ConversationListViewModelTest {
     }
 
     @Test
-    fun leaveConversation_calls_the_repository_and_clears_any_prior_error() = runTest(dispatcher) {
+    fun leaveConversation_hands_the_gesture_to_the_removal_queue_and_clears_any_prior_error() = runTest(dispatcher) {
         val repo = repositoryReturning(
             flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
         )
-        coEvery { repo.leave("c1") } returns me.meeshy.sdk.net.NetworkResult.Success(Unit)
-        val vm = viewModel(repo)
+        val remover = FakeConversationRemover()
+        val vm = viewModel(repo, remover = remover)
         advanceUntilIdle()
 
         vm.leaveConversation("c1")
         advanceUntilIdle()
 
-        coVerify { repo.leave("c1") }
+        assertThat(remover.calls).containsExactly("c1" to ConversationRemoval.LEAVE)
         assertThat(vm.state.value.errorMessage).isNull()
     }
 
     @Test
-    fun leaveConversation_surfaces_the_error_on_failure() = runTest(dispatcher) {
+    fun leaveConversation_surfaces_the_error_when_the_queue_refuses() = runTest(dispatcher) {
         val repo = repositoryReturning(
             flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
         )
-        coEvery { repo.leave("c1") } returns
-            me.meeshy.sdk.net.NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "Not a participant"))
-        val vm = viewModel(repo)
+        val vm = viewModel(repo, remover = FakeConversationRemover(ConversationRemovalWrite.Failed("Not a participant")))
         advanceUntilIdle()
 
         vm.leaveConversation("c1")
@@ -1146,29 +1150,27 @@ class ConversationListViewModelTest {
     }
 
     @Test
-    fun deleteConversationForMe_calls_the_repository_and_clears_any_prior_error() = runTest(dispatcher) {
+    fun deleteConversationForMe_hands_the_gesture_to_the_removal_queue_and_clears_any_prior_error() = runTest(dispatcher) {
         val repo = repositoryReturning(
             flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
         )
-        coEvery { repo.deleteForMe("c1") } returns me.meeshy.sdk.net.NetworkResult.Success(Unit)
-        val vm = viewModel(repo)
+        val remover = FakeConversationRemover()
+        val vm = viewModel(repo, remover = remover)
         advanceUntilIdle()
 
         vm.deleteConversationForMe("c1")
         advanceUntilIdle()
 
-        coVerify { repo.deleteForMe("c1") }
+        assertThat(remover.calls).containsExactly("c1" to ConversationRemoval.DELETE_FOR_ME)
         assertThat(vm.state.value.errorMessage).isNull()
     }
 
     @Test
-    fun deleteConversationForMe_surfaces_the_error_on_failure() = runTest(dispatcher) {
+    fun deleteConversationForMe_surfaces_the_error_when_the_queue_refuses() = runTest(dispatcher) {
         val repo = repositoryReturning(
             flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
         )
-        coEvery { repo.deleteForMe("c1") } returns
-            me.meeshy.sdk.net.NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "Not a participant"))
-        val vm = viewModel(repo)
+        val vm = viewModel(repo, remover = FakeConversationRemover(ConversationRemovalWrite.Failed("Not a participant")))
         advanceUntilIdle()
 
         vm.deleteConversationForMe("c1")
@@ -1178,29 +1180,27 @@ class ConversationListViewModelTest {
     }
 
     @Test
-    fun deleteConversationForAll_calls_the_repository_and_clears_any_prior_error() = runTest(dispatcher) {
+    fun deleteConversationForAll_hands_the_gesture_to_the_removal_queue_and_clears_any_prior_error() = runTest(dispatcher) {
         val repo = repositoryReturning(
             flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
         )
-        coEvery { repo.deleteForAll("c1") } returns me.meeshy.sdk.net.NetworkResult.Success(Unit)
-        val vm = viewModel(repo)
+        val remover = FakeConversationRemover()
+        val vm = viewModel(repo, remover = remover)
         advanceUntilIdle()
 
         vm.deleteConversationForAll("c1")
         advanceUntilIdle()
 
-        coVerify { repo.deleteForAll("c1") }
+        assertThat(remover.calls).containsExactly("c1" to ConversationRemoval.DELETE_FOR_ALL)
         assertThat(vm.state.value.errorMessage).isNull()
     }
 
     @Test
-    fun deleteConversationForAll_surfaces_the_error_on_failure() = runTest(dispatcher) {
+    fun deleteConversationForAll_surfaces_the_error_when_the_queue_refuses() = runTest(dispatcher) {
         val repo = repositoryReturning(
             flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
         )
-        coEvery { repo.deleteForAll("c1") } returns
-            me.meeshy.sdk.net.NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "Only the creator can do this"))
-        val vm = viewModel(repo)
+        val vm = viewModel(repo, remover = FakeConversationRemover(ConversationRemovalWrite.Failed("Only the creator can do this")))
         advanceUntilIdle()
 
         vm.deleteConversationForAll("c1")

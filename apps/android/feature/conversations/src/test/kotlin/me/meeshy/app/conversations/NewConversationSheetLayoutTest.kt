@@ -33,6 +33,7 @@ class NewConversationSheetLayoutTest {
     private fun show(
         initial: NewConversationUiState,
         onClose: () -> Unit = {},
+        onTapUser: (String) -> Unit = {},
     ) {
         compose.setContent {
             var state by remember { mutableStateOf(initial) }
@@ -48,6 +49,7 @@ class NewConversationSheetLayoutTest {
                         onToggleEncryption = { state = state.copy(encryptionExpanded = !state.encryptionExpanded) },
                         onSelectEncryption = {},
                         onToggleUser = {},
+                        onTapUser = onTapUser,
                         onRowShown = {},
                     ),
                 )
@@ -58,14 +60,14 @@ class NewConversationSheetLayoutTest {
     private fun top(tag: String) = compose.onNodeWithTag(tag, useUnmergedTree = true).getUnclippedBoundsInRoot().top
 
     @Test
-    fun the_sheet_opens_light_with_no_title_field_no_encryption_row_and_no_create() {
+    fun the_sheet_opens_light_with_no_title_field_no_create_and_its_encryption_row() {
         show(NewConversationUiState())
 
         compose.onNodeWithTag(NewConversationTags.CLOSE).assertIsDisplayed()
         compose.onNodeWithTag(NewConversationTags.SEARCH).assertIsDisplayed()
         compose.onNodeWithTag(NewConversationTags.GROUP_TOGGLE).assertIsDisplayed()
         compose.onNodeWithTag(NewConversationTags.GROUP_TITLE).assertDoesNotExist()
-        compose.onNodeWithTag(NewConversationTags.ENCRYPTION_ROW).assertDoesNotExist()
+        compose.onNodeWithTag(NewConversationTags.ENCRYPTION_ROW).assertIsDisplayed()
         compose.onNodeWithTag(NewConversationTags.CREATE).assertDoesNotExist()
     }
 
@@ -114,5 +116,33 @@ class NewConversationSheetLayoutTest {
         compose.onNodeWithTag(NewConversationTags.CLOSE).performClick()
 
         assertThat(closed).isEqualTo(1)
+    }
+
+    private fun person(id: String) = SelectableUser(id = id, displayName = id.uppercase(), username = id, avatarUrl = null, isOnline = false)
+
+    @Test
+    fun in_direct_mode_one_tap_on_a_person_opens_the_conversation() {
+        val tapped = mutableListOf<String>()
+        show(NewConversationUiState(contacts = listOf(person("ann"))), onTapUser = { tapped += it })
+
+        compose.onNodeWithTag(NewConversationTags.row("ann")).performClick()
+
+        assertThat(tapped).containsExactly("ann")
+        compose.onNodeWithTag(NewConversationTags.CREATE).assertDoesNotExist()
+    }
+
+    @Test
+    fun while_a_conversation_opens_its_row_spins_and_every_row_waits() {
+        show(
+            NewConversationUiState(
+                contacts = listOf(person("ann"), person("bob")),
+                isCreating = true,
+                openingUserId = "ann",
+            ),
+        )
+
+        compose.onNodeWithTag(NewConversationTags.OPENING, useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag(NewConversationTags.row("ann")).assertIsNotEnabled()
+        compose.onNodeWithTag(NewConversationTags.row("bob")).assertIsNotEnabled()
     }
 }

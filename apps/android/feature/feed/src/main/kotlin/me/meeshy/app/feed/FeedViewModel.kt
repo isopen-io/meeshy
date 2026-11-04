@@ -90,17 +90,6 @@ fun FeedUiState.translatingCodesOf(postId: String): Set<String> =
         key.substringAfter('|', "").takeIf { it.isNotEmpty() && key.substringBefore('|') == postId }
     }
 
-/**
- * State of the open quote-repost composer: the source post being quoted (author +
- * a content preview so the sheet renders the embed) and the commentary draft.
- */
-data class QuoteComposerState(
-    val postId: String,
-    val sourceAuthorName: String?,
-    val sourceContentPreview: String,
-    val text: String = "",
-)
-
 @HiltViewModel
 class FeedViewModel @Inject constructor(
     private val postRepository: PostRepository,
@@ -534,16 +523,7 @@ class FeedViewModel @Inject constructor(
      */
     fun beginQuote(postId: String) {
         val source = latestPosts.firstOrNull { it.id == postId } ?: return
-        _state.update {
-            it.copy(
-                quoteComposer = QuoteComposerState(
-                    postId = postId,
-                    sourceAuthorName = (source.author?.displayName ?: source.author?.username)
-                        ?.takeIf { name -> name.isNotBlank() },
-                    sourceContentPreview = source.content.orEmpty().trim(),
-                ),
-            )
-        }
+        _state.update { it.copy(quoteComposer = QuoteComposerState.quoting(source, sessionRepository.currentUser.value)) }
     }
 
     fun onQuoteTextChange(text: String) {

@@ -233,8 +233,7 @@ class NewConversationViewModelTest {
 
         vm.onQueryChange("bob")
         advanceUntilIdle()
-        vm.toggleSelection("u1")
-        vm.create()
+        vm.onPersonTapped("u1")
         advanceUntilIdle()
 
         coVerify { conversations.create(NewConversationLogic.TYPE_DIRECT, null, listOf("u1"), "server") }
@@ -273,8 +272,7 @@ class NewConversationViewModelTest {
 
         vm.onQueryChange("bob")
         advanceUntilIdle()
-        vm.toggleSelection("u1")
-        vm.create()
+        vm.onPersonTapped("u1")
         advanceUntilIdle()
 
         assertThat(vm.state.value.isCreating).isFalse()
@@ -294,8 +292,7 @@ class NewConversationViewModelTest {
 
         vm.onQueryChange("bob")
         advanceUntilIdle()
-        vm.toggleSelection("u1")
-        vm.create()
+        vm.onPersonTapped("u1")
         advanceUntilIdle()
 
         coVerify { conversations.createOptimistic(NewConversationLogic.TYPE_DIRECT, null, listOf("u1"), "server") }
@@ -315,8 +312,7 @@ class NewConversationViewModelTest {
 
         vm.onQueryChange("bob")
         advanceUntilIdle()
-        vm.toggleSelection("u1")
-        vm.create()
+        vm.onPersonTapped("u1")
         advanceUntilIdle()
 
         assertThat(vm.state.value.error).isEqualTo(NewConversationError.BLOCKED)
@@ -472,6 +468,7 @@ class NewConversationViewModelTest {
     fun an_unavailable_mode_cannot_be_checked() = runTest(dispatcher) {
         val vm = viewModel(users = pickerWith("u1"), session = session(role = "ADMIN"))
         advanceUntilIdle()
+        vm.toggleGroupRequested()
 
         vm.selectEncryptionMode(CreationEncryptionMode.E2EE)
 
@@ -485,24 +482,22 @@ class NewConversationViewModelTest {
         val vm = viewModel(users = pickerWith("u1"), conversations = conversations, session = session(role = "USER"))
         vm.onQueryChange("bob")
         advanceUntilIdle()
-        vm.toggleSelection("u1")
-
         vm.selectEncryptionMode(CreationEncryptionMode.HYBRID)
-        vm.create()
+        vm.onPersonTapped("u1")
         advanceUntilIdle()
 
         coVerify { conversations.create(NewConversationLogic.TYPE_DIRECT, null, listOf("u1"), "hybrid") }
     }
 
     @Test
-    fun the_sheet_opens_with_nothing_to_create_and_no_encryption_row() = runTest(dispatcher) {
+    fun the_sheet_opens_with_nothing_to_create_and_its_encryption_row_folded() = runTest(dispatcher) {
         val vm = viewModel(session = session(role = "USER"))
         advanceUntilIdle()
 
         assertThat(vm.state.value.shape).isEqualTo(NewConversationShape.NONE)
         assertThat(vm.state.value.isGroup).isFalse()
         assertThat(vm.state.value.showsCreate).isFalse()
-        assertThat(vm.state.value.showsEncryption).isFalse()
+        assertThat(vm.state.value.showsEncryption).isTrue()
         assertThat(vm.state.value.encryptionExpanded).isFalse()
     }
 

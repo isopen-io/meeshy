@@ -59,6 +59,24 @@ class MediaAdoptionTest {
         assertThat(cache.contains(MediaCacheCategory.VIDEO, "https://gate.meeshy.me/x/v.mp4")).isTrue()
     }
 
+    /**
+     * (#15428) La passerelle sert une adresse RELATIVE (`/api/v1/static/<id>.m4a`), que la bulle résout sur la même
+     * base. Refuser tout ce qui ne commence pas par http(s) laissait le vocal d'un envoi hors du cache : relu juste
+     * après l'accusé, hors ligne, il ne jouait plus.
+     */
+    @Test
+    fun `une adresse servie relative est adoptee sous la cle que la bulle resout`() {
+        val voice = local("v.m4a")
+        val served = "/api/v1/static/040424b5-c2e7-4184-b2d7-412b753a9ab9.m4a"
+
+        val adopted = adopt(listOf(attachment(voice.toURI().toString(), "audio/mp4")), listOf(attachment(served, "audio/mp4")))
+
+        val key = me.meeshy.sdk.util.resolveMediaUrl(served, "https://gate.meeshy.me/api/v1/")
+        assertThat(key).startsWith("https://")
+        assertThat(adopted).isEqualTo(1)
+        assertThat(cache.contains(MediaCacheCategory.AUDIO, key)).isTrue()
+    }
+
     @Test
     fun `no-op quand la pieces etait deja https, message recu ou rafraichissement`() {
         assertThat(adopt(listOf(attachment(remote)), listOf(attachment(remote)))).isEqualTo(0)

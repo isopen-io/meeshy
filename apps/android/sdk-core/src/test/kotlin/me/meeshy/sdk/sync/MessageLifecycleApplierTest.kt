@@ -5,7 +5,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.conversation.MessageDeltaApplier
@@ -98,7 +97,8 @@ class MessageLifecycleApplierTest {
         advanceTimeBy(299)
         runCurrent()
         assertThat(refreshed).isEmpty()
-        advanceUntilIdle()
+        advanceTimeBy(10_000)
+        runCurrent()
 
         assertThat(refreshed).containsExactly("c1", "c2").inOrder()
     }
@@ -112,7 +112,8 @@ class MessageLifecycleApplierTest {
         }
 
         refresher.request(listOf("bad", "good"))
-        advanceUntilIdle()
+        advanceTimeBy(10_000)
+        runCurrent()
 
         assertThat(refreshed).containsExactly("good")
     }
@@ -123,9 +124,11 @@ class MessageLifecycleApplierTest {
         val refresher = PendingDeliveredRefresher(backgroundScope, windowMs = 10) { refreshed += it }
 
         refresher.request(listOf("c1"))
-        advanceUntilIdle()
+        advanceTimeBy(10_000)
+        runCurrent()
         refresher.request(listOf("c1"))
-        advanceUntilIdle()
+        advanceTimeBy(10_000)
+        runCurrent()
 
         assertThat(refreshed).containsExactly("c1", "c1").inOrder()
     }
