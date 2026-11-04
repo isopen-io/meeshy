@@ -63,6 +63,7 @@
     <string name="feed_post_deleted">Post eliminato</string>
     <string name="feed_post_detail_document">Documento</string>
     <string name="feed_post_detail_pages">pagine</string>
+    <string name="feed_post_detail_story_unavailable">Storia non disponibile</string>
     <string name="feed_post_open">Apri</string>
     <string name="feed_post_pinned">Post fissato</string>
     <string name="feed_post_reposted_from">ha ricondiviso da @%1$s</string>
