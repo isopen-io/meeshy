@@ -263,3 +263,25 @@ final class PostEditComposerHydrationTests: XCTestCase {
     }
     """
 }
+
+/// **Une publication rouverte ne bascule jamais d'elle-même en réel** (#15631).
+@MainActor
+final class PostEditReelAutoSwitchTests: XCTestCase {
+
+    func test_demandsReel_editedPostWithVideoBackground_false() {
+        XCTAssertFalse(ComposerReelAutoSwitch.demandsReel([videoBackgroundSlide()], slideImageIds: [],
+                                                          editsPublication: true))
+    }
+
+    func test_demandsReel_newCompositionWithVideoBackground_true() {
+        XCTAssertTrue(ComposerReelAutoSwitch.demandsReel([videoBackgroundSlide()], slideImageIds: [],
+                                                         editsPublication: false))
+    }
+
+    private func videoBackgroundSlide() -> StorySlide {
+        var effets = StoryEffects()
+        effets.mediaObjects = [StoryMediaObject(id: "fond", postMediaId: "v1", kind: .video, aspectRatio: 1,
+                                                isBackground: true)]
+        return StorySlide(id: "s1", mediaURL: nil, mediaData: nil, content: nil, effects: effets, duration: 6, order: 0)
+    }
+}
