@@ -1,10 +1,11 @@
 package me.meeshy.sdk.attachment
 
-import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -41,118 +42,104 @@ class TranscriptionRequestTrackerTest {
 
     private val failure = NetworkResult.Failure(ApiError("réseau", code = "NETWORK"))
 
-    @Test
-    fun `nothing is requested at rest`() = runTest {
-        val harness = Harness(this)
-
-        harness.tracker.observe("m1", "a1").test {
-            assertThat(awaitItem()).isEqualTo(Request.IDLE)
-            cancelAndIgnoreRemainingEvents()
+    /** Ce que l'observateur de [attachmentId] a vu, dans l'ordre ; arrêté avec le test. */
+    private fun TestScope.watch(harness: Harness, attachmentId: String = "a1"): List<Request> {
+        val seen = mutableListOf<Request>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            harness.tracker.observe("m1", attachmentId).toList(seen)
         }
+        runCurrent()
+        return seen
+    }
+
+    private fun TestScope.ask(harness: Harness) {
+        backgroundScope.launch { harness.tracker.request("m1", "a1") }
+        runCurrent()
     }
 
     @Test
-    fun `a request is in flight until the answer comes, then rests`() = runTest {
+    fun `nothing is requested at rest`() = runTest {
+        val seen = watch(Harness(this))
+
+        assertThat(seen).containsExactly(Request.IDLE)
+    }
+
+    @Test
+    fun `a request is in flight until the answer comes`() = runTest {
         val harness = Harness(this)
+        val seen = watch(harness)
 
-        harness.tracker.observe("m1", "a1").test {
-            assertThat(awaitItem()).isEqualTo(Request.IDLE)
-            launch { harness.tracker.request("m1", "a1") }
-            runCurrent()
-            assertThat(awaitItem()).isEqualTo(Request.IN_FLIGHT)
+        ask(harness)
 
-            harness.answers.single().complete(NetworkResult.Success(null))
-            runCurrent()
-            cancelAndIgnoreRemainingEvents()
-        }
+        assertThat(seen).containsExactly(Request.IDLE, Request.IN_FLIGHT).inOrder()
         assertThat(harness.requested).containsExactly("a1")
     }
 
     @Test
     fun `a transcription that was already done is applied to the cache and the request rests`() = runTest {
         val harness = Harness(this)
+        val seen = watch(harness)
+        ask(harness)
 
-        launch { harness.tracker.request("m1", "a1") }
-        runCurrent()
         harness.answers.single().complete(NetworkResult.Success(ApiAttachmentTranscription(text = "salut", language = "fr")))
         runCurrent()
 
         assertThat(harness.applied).containsExactly(Triple("m1", "a1", "salut"))
-        harness.tracker.observe("m1", "a1").test {
-            assertThat(awaitItem()).isEqualTo(Request.IDLE)
-            cancelAndIgnoreRemainingEvents()
-        }
+        assertThat(seen.last()).isEqualTo(Request.IDLE)
     }
 
     @Test
     fun `a refused request fails and can be asked again`() = runTest {
         val harness = Harness(this)
+        val seen = watch(harness)
+        ask(harness)
 
-        harness.tracker.observe("m1", "a1").test {
-            assertThat(awaitItem()).isEqualTo(Request.IDLE)
-            launch { harness.tracker.request("m1", "a1") }
-            runCurrent()
-            assertThat(awaitItem()).isEqualTo(Request.IN_FLIGHT)
-            harness.answers.removeFirst().complete(failure)
-            runCurrent()
-            assertThat(awaitItem()).isEqualTo(Request.FAILED)
+        harness.answers.removeFirst().complete(failure)
+        runCurrent()
+        assertThat(seen.last()).isEqualTo(Request.FAILED)
 
-            launch { harness.tracker.request("m1", "a1") }
-            runCurrent()
-            assertThat(awaitItem()).isEqualTo(Request.IN_FLIGHT)
-            cancelAndIgnoreRemainingEvents()
-        }
+        ask(harness)
+        assertThat(seen.last()).isEqualTo(Request.IN_FLIGHT)
         assertThat(harness.requested).containsExactly("a1", "a1")
     }
 
     @Test
     fun `a failure received by the socket while waiting shows and offers a retry`() = runTest {
         val harness = Harness(this)
+        val seen = watch(harness)
+        ask(harness)
 
-        harness.tracker.observe("m1", "a1").test {
-            assertThat(awaitItem()).isEqualTo(Request.IDLE)
-            launch { harness.tracker.request("m1", "a1") }
-            runCurrent()
-            assertThat(awaitItem()).isEqualTo(Request.IN_FLIGHT)
+        harness.failures.failed(TranslationFailureEntry("m1", TranslationFailureKind.TRANSCRIPTION, "a1"))
+        runCurrent()
 
-            harness.failures.failed(TranslationFailureEntry("m1", TranslationFailureKind.TRANSCRIPTION, "a1"))
-            runCurrent()
-            assertThat(awaitItem()).isEqualTo(Request.FAILED)
-            cancelAndIgnoreRemainingEvents()
-        }
+        assertThat(seen.last()).isEqualTo(Request.FAILED)
     }
 
     @Test
     fun `after ninety seconds of silence the request rests so it can be made again`() = runTest {
         val harness = Harness(this)
+        val seen = watch(harness)
+        ask(harness)
+        harness.answers.single().complete(NetworkResult.Success(null))
+        runCurrent()
 
-        harness.tracker.observe("m1", "a1").test {
-            assertThat(awaitItem()).isEqualTo(Request.IDLE)
-            launch { harness.tracker.request("m1", "a1") }
-            runCurrent()
-            assertThat(awaitItem()).isEqualTo(Request.IN_FLIGHT)
-            harness.answers.single().complete(NetworkResult.Success(null))
+        advanceTimeBy(89_000L)
+        runCurrent()
+        assertThat(seen.last()).isEqualTo(Request.IN_FLIGHT)
+        advanceTimeBy(1_000L)
+        runCurrent()
 
-            advanceTimeBy(89_000L)
-            runCurrent()
-            expectNoEvents()
-            advanceTimeBy(1_000L)
-            runCurrent()
-            assertThat(awaitItem()).isEqualTo(Request.IDLE)
-            cancelAndIgnoreRemainingEvents()
-        }
+        assertThat(seen.last()).isEqualTo(Request.IDLE)
     }
 
     @Test
     fun `asking again while the wait lasts sends nothing`() = runTest {
         val harness = Harness(this)
-
-        launch { harness.tracker.request("m1", "a1") }
-        runCurrent()
+        ask(harness)
         harness.answers.single().complete(NetworkResult.Success(null))
         runCurrent()
-        launch { harness.tracker.request("m1", "a1") }
-        runCurrent()
+
+        ask(harness)
 
         assertThat(harness.requested).hasSize(1)
     }
@@ -160,13 +147,10 @@ class TranscriptionRequestTrackerTest {
     @Test
     fun `another attachment is not affected`() = runTest {
         val harness = Harness(this)
+        val seen = watch(harness, attachmentId = "a2")
 
-        launch { harness.tracker.request("m1", "a1") }
-        runCurrent()
+        ask(harness)
 
-        harness.tracker.observe("m1", "a2").test {
-            assertThat(awaitItem()).isEqualTo(Request.IDLE)
-            cancelAndIgnoreRemainingEvents()
-        }
+        assertThat(seen).containsExactly(Request.IDLE)
     }
 }
