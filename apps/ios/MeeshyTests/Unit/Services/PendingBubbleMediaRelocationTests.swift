@@ -2,6 +2,7 @@ import XCTest
 import GRDB
 @testable import Meeshy
 @testable import MeeshySDK
+import MeeshyUI
 
 @MainActor
 final class PendingBubbleMediaRelocationTests: XCTestCase {
@@ -261,6 +262,36 @@ final class PendingBubbleMediaRelocationTests: XCTestCase {
         XCTAssertEqual(scheduled.count, 1)
         scheduled.runAll()
         XCTAssertFalse(FileManager.default.fileExists(atPath: copy), "ce que l'écho n'a pas adopté ne fuit pas")
+    }
+
+    // MARK: - Le vocal en attente se lit depuis sa copie durable (#15294)
+
+    private func writeSilentWave(seconds: Int) throws -> URL {
+        let sampleRate = 8_000
+        let samples = Data(count: sampleRate * seconds * 2)
+        func le32(_ v: Int) -> Data { withUnsafeBytes(of: UInt32(v).littleEndian) { Data($0) } }
+        func le16(_ v: Int) -> Data { withUnsafeBytes(of: UInt16(v).littleEndian) { Data($0) } }
+        var wave = Data("RIFF".utf8) + le32(36 + samples.count) + Data("WAVE".utf8)
+        wave += Data("fmt ".utf8) + le32(16) + le16(1) + le16(1) + le32(sampleRate) + le32(sampleRate * 2) + le16(2) + le16(16)
+        wave += Data("data".utf8) + le32(samples.count) + samples
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("pending-voice-\(UUID().uuidString).wav")
+        try wave.write(to: url)
+        return url
+    }
+
+    func test_playURLString_pendingVoiceFileURL_playsTheLocalCopy() async throws {
+        let voice = try writeSilentWave(seconds: 2)
+        defer { try? FileManager.default.removeItem(at: voice) }
+        let player = AudioPlaybackManager(registerWithCoordinator: false)
+
+        player.play(urlString: voice.absoluteString)
+        for _ in 0..<50 where player.duration == 0 {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        player.stop()
+
+        XCTAssertGreaterThan(player.duration, 1.5,
+                             "la file de lecture de la conversation passe l'URL file:// de la bulle en attente : elle doit se lire sur le disque, jamais par le cache réseau")
     }
 
     func test_appliedFileSweepGrace_leavesTheEchoTimeToArrive() {
