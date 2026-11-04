@@ -14,10 +14,9 @@ final class HashtagResultsViewModel: ObservableObject {
 
     private let service: PostServiceProviding
     private let languageProvider: LanguageProviding
-    /// L'écrivain UNIQUE du repartage, construit sur le service injecté : un
-    /// double de test observe l'envoi, et hors ligne la ligne part dans la
-    /// même file que le fil (#15934).
-    private let repostPublisher: RepostPublisher
+    /// « Repartager » d'une carte (#15934) : l'écrivain unique, construit sur
+    /// le service injecté, et le retour à l'utilisateur.
+    private let reposter: ListedPostReposter
     /// La file des impressions de CE listing — la carte y situe son
     /// apparition et y relaie sa visibilité (#10501).
     let impressions: ReachImpressionRecording
@@ -33,12 +32,12 @@ final class HashtagResultsViewModel: ObservableObject {
         service: PostServiceProviding = PostService.shared,
         languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
         impressions: ReachImpressionRecording? = nil,
-        repostPublisher: RepostPublisher? = nil
+        reposter: ListedPostReposter? = nil
     ) {
         self.tag = tag
         self.service = service
         self.languageProvider = languageProvider
-        self.repostPublisher = repostPublisher ?? RepostPublisher(postService: service)
+        self.reposter = reposter ?? ListedPostReposter(publisher: RepostPublisher(postService: service))
         if let impressions {
             self.impressions = impressions
         } else {
@@ -123,17 +122,11 @@ final class HashtagResultsViewModel: ObservableObject {
     func toggleRepost(_ postId: String) async {
         guard let index = posts.firstIndex(where: { $0.id == postId }),
               let reposted = PostRepostMutation.reposted(posts[index]) else { return }
-        let intent = PostRepostMutation.intent(for: posts[index])
+        let shown = posts[index]
         posts[index] = reposted
-        do {
-            try await repostPublisher.publish(intent)
-            FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.repost.success", defaultValue: "Repartagé", bundle: .main))
-        } catch {
-            if let current = posts.firstIndex(where: { $0.id == postId }) {
-                posts[current] = PostRepostMutation.withdrawn(posts[current])
-            }
-            FeedbackToastManager.shared.showError(String(localized: "feed.repost.error", defaultValue: "Erreur lors du repost", bundle: .main))
-        }
+        guard await !reposter.repost(shown),
+              let current = posts.firstIndex(where: { $0.id == postId }) else { return }
+        posts[current] = PostRepostMutation.withdrawn(posts[current])
     }
 
     func loadMore() async {

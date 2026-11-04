@@ -16,19 +16,18 @@ class BookmarksViewModel: ObservableObject {
     private var nextCursor: String?
     private let postService: PostServiceProviding
     private let languageProvider: LanguageProviding
-    /// L'écrivain UNIQUE du repartage, construit sur le service injecté : un
-    /// double de test observe l'envoi, et hors ligne la ligne part dans la
-    /// même file que le fil (#15934).
-    private let repostPublisher: RepostPublisher
+    /// « Repartager » d'une carte (#15934) : l'écrivain unique, construit sur
+    /// le service injecté, et le retour à l'utilisateur.
+    private let reposter: ListedPostReposter
 
     init(
         postService: PostServiceProviding = PostService.shared,
         languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
-        repostPublisher: RepostPublisher? = nil
+        reposter: ListedPostReposter? = nil
     ) {
         self.postService = postService
         self.languageProvider = languageProvider
-        self.repostPublisher = repostPublisher ?? RepostPublisher(postService: postService)
+        self.reposter = reposter ?? ListedPostReposter(publisher: RepostPublisher(postService: postService))
     }
 
     private var preferredLanguages: [String] {
@@ -99,7 +98,7 @@ class BookmarksViewModel: ObservableObject {
             hasMore = response.pagination?.hasMore ?? false
 
             if replacingExisting || nextCursor == nil || posts.count == unique.count {
-                await bestEffort("bookmarksViewModel.feed.save", category: .cache) { try await CacheCoordinator.shared.feed.save(posts, for: "bookmarks") }
+                await saveToCache("bookmarksViewModel.feed.save")
             }
         } catch {
             FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.loadError", defaultValue: "Impossible de charger les favoris", bundle: .main))
@@ -111,7 +110,7 @@ class BookmarksViewModel: ObservableObject {
         let removed = posts.remove(at: index)
         do {
             try await postService.removeBookmark(postId: postId)
-            await bestEffort("bookmarksViewModel.feed.save.2", category: .cache) { try await CacheCoordinator.shared.feed.save(posts, for: "bookmarks") }
+            await saveToCache("bookmarksViewModel.feed.save.2")
         } catch {
             // Défaire CE retrait, pas l'écran : une page chargée ou un autre
             // retrait réussi pendant l'attente restait effacé par l'instantané.
@@ -148,7 +147,7 @@ class BookmarksViewModel: ObservableObject {
             } else {
                 try await postService.unlike(postId: postId)
             }
-            await bestEffort("bookmarksViewModel.feed.save.3", category: .cache) { try await CacheCoordinator.shared.feed.save(posts, for: "bookmarks") }
+            await saveToCache("bookmarksViewModel.feed.save.3")
         } catch {
             if let current = posts.firstIndex(where: { $0.id == postId }) {
                 posts[current] = snapshot
@@ -165,18 +164,19 @@ class BookmarksViewModel: ObservableObject {
     func toggleRepost(_ postId: String) async {
         guard let index = posts.firstIndex(where: { $0.id == postId }),
               let reposted = PostRepostMutation.reposted(posts[index]) else { return }
-        let intent = PostRepostMutation.intent(for: posts[index])
+        let shown = posts[index]
         posts[index] = reposted
-        do {
-            try await repostPublisher.publish(intent)
-            await bestEffort("bookmarksViewModel.feed.save.4", category: .cache) { try await CacheCoordinator.shared.feed.save(posts, for: "bookmarks") }
-            FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.repost.success", defaultValue: "Repartagé", bundle: .main))
-        } catch {
-            if let current = posts.firstIndex(where: { $0.id == postId }) {
-                posts[current] = PostRepostMutation.withdrawn(posts[current])
-            }
-            FeedbackToastManager.shared.showError(String(localized: "feed.repost.error", defaultValue: "Erreur lors du repost", bundle: .main))
+        if await reposter.repost(shown) {
+            await saveToCache("bookmarksViewModel.feed.save.4")
+            return
         }
+        guard let current = posts.firstIndex(where: { $0.id == postId }) else { return }
+        posts[current] = PostRepostMutation.withdrawn(posts[current])
+    }
+
+    /// Le SEUL site qui écrit la liste dans le cache « bookmarks ».
+    private func saveToCache(_ label: StaticString) async {
+        await bestEffort(label, category: .cache) { try await CacheCoordinator.shared.feed.save(posts, for: "bookmarks") }
     }
 
     /// vm-bookmarks-pagination-01 — page suivante RÉSEAU, jamais le cache :

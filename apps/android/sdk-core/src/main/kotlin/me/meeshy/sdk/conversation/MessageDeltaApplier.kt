@@ -137,7 +137,7 @@ class MessageDeltaApplier internal constructor(
     }
 
     private suspend fun transform(messageId: String, delta: (ApiMessage) -> ApiMessage) {
-        updater.update(messageId, requireSynced = false, transform = delta)
+        updater.update(messageId, requireSynced = false, openedAt = clock.nowMillis(), transform = delta)
     }
 
     /** Une suppression pour tous laisse une pierre tombale ; une expiration retire la ligne. */

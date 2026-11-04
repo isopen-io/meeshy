@@ -35,7 +35,7 @@ class StoryMediaPreloaderTest {
         val recorder = Recorder()
         val groups = (0 until 10).map { g -> listOf(story("https://c/f$g.jpg"), story("https://c/n$g.jpg")) }
         preloader(recorder).preload(groups)
-        testScheduler.advanceUntilIdle()
+        testScheduler.advanceTimeBy(10_000); testScheduler.runCurrent()
         val urls = recorder.fetched.map { it.first }
         assertThat(urls.filter { it.contains("/f") }).hasSize(8)
         assertThat(urls.filter { it.contains("/n") }).hasSize(8)
@@ -46,7 +46,7 @@ class StoryMediaPreloaderTest {
     fun `un mp4 declare image est tire comme video`() = runTest {
         val recorder = Recorder()
         preloader(recorder).preload(listOf(listOf(story("https://c/v.mp4", FeedMediaType.IMAGE))))
-        testScheduler.advanceUntilIdle()
+        testScheduler.advanceTimeBy(10_000); testScheduler.runCurrent()
         assertThat(recorder.fetched).containsExactly("https://c/v.mp4" to FeedMediaType.VIDEO)
     }
 
@@ -56,7 +56,7 @@ class StoryMediaPreloaderTest {
         val monitor = InMemoryNetworkConditionMonitor(NetworkCondition.GOOD_CELLULAR)
         val loader = preloader(recorder, monitor)
         loader.preload(listOf(listOf(story("https://c/v.mp4"), story("https://c/i.jpg"))))
-        testScheduler.advanceUntilIdle()
+        testScheduler.advanceTimeBy(10_000); testScheduler.runCurrent()
         assertThat(recorder.fetched.map { it.first }).doesNotContain("https://c/v.mp4")
         assertThat(loader.claimedUrls()).doesNotContain("https://c/v.mp4")
     }
@@ -67,9 +67,9 @@ class StoryMediaPreloaderTest {
         val monitor = InMemoryNetworkConditionMonitor(NetworkCondition.GOOD_CELLULAR)
         val loader = preloader(recorder, monitor)
         loader.preload(listOf(listOf(story("https://c/v.mp4"))))
-        testScheduler.advanceUntilIdle()
+        testScheduler.advanceTimeBy(10_000); testScheduler.runCurrent()
         monitor.set(NetworkCondition.WIFI)
-        testScheduler.advanceUntilIdle()
+        testScheduler.advanceTimeBy(10_000); testScheduler.runCurrent()
         assertThat(recorder.fetched.map { it.first }).containsExactly("https://c/v.mp4")
     }
 
@@ -79,9 +79,9 @@ class StoryMediaPreloaderTest {
         val loader = preloader(recorder)
         val groups = listOf(listOf(story("https://c/a.jpg")))
         loader.preload(groups)
-        testScheduler.advanceUntilIdle()
+        testScheduler.advanceTimeBy(10_000); testScheduler.runCurrent()
         loader.preload(groups)
-        testScheduler.advanceUntilIdle()
+        testScheduler.advanceTimeBy(10_000); testScheduler.runCurrent()
         assertThat(recorder.fetched).hasSize(1)
     }
 }

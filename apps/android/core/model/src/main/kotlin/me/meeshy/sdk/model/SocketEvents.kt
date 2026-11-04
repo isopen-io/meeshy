@@ -88,6 +88,8 @@ data class UnreadUpdateEvent(
     val conversationId: String,
     val unreadCount: Int,
     val totalUnread: Int = 0,
+    /** Le pont ✦ à trois états : absent = non calculé (on garde), `null` = effacer, objet = remplacer. */
+    val bridge: BridgeAnnouncement = BridgeAnnouncement.NotComputed,
 )
 
 /**

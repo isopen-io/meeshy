@@ -196,11 +196,15 @@ final class HashtagResultsViewModelTests: XCTestCase {
     private func makeRepostSUT(
         service: MockPostService = MockPostService(),
         queue: MockOfflineQueue = MockOfflineQueue(),
+        toasts: MockFeedbackToast = MockFeedbackToast(),
         offline: Bool = false
     ) -> HashtagResultsViewModel {
         HashtagResultsViewModel(
             tag: "paris", service: service,
-            repostPublisher: RepostPublisher(postService: service, offlineQueue: queue, isOffline: { offline })
+            reposter: ListedPostReposter(
+                publisher: RepostPublisher(postService: service, offlineQueue: queue, isOffline: { offline }),
+                toasts: toasts
+            )
         )
     }
 
@@ -208,7 +212,8 @@ final class HashtagResultsViewModelTests: XCTestCase {
         let service = MockPostService()
         service.getPostsByHashtagResult = .success(Self.repostChainPage(repostCount: 3))
         service.holdRepost(for: 5)
-        let sut = makeRepostSUT(service: service)
+        let toasts = MockFeedbackToast()
+        let sut = makeRepostSUT(service: service, toasts: toasts)
         await sut.load()
 
         let task = Task { await sut.toggleRepost("card") }
@@ -225,17 +230,22 @@ final class HashtagResultsViewModelTests: XCTestCase {
         XCTAssertNil(service.lastRepostVisibility, "l'audience est héritée de l'original")
         XCTAssertTrue(sut.posts[0].isRepostedByMe)
         XCTAssertEqual(sut.posts[0].repostCount, 4)
+        XCTAssertEqual(toasts.successMessages.count, 1, "le repartage se confirme à l'utilisateur")
     }
 
     func test_toggleRepost_whenTheServerRefuses_rollsBackTheRepostOnly() async {
         let service = MockPostService()
         service.getPostsByHashtagResult = .success(Self.repostChainPage(repostCount: 3))
         service.repostResult = .failure(URLError(.badServerResponse))
-        let sut = makeRepostSUT(service: service)
+        let toasts = MockFeedbackToast()
+        let sut = makeRepostSUT(service: service, toasts: toasts)
         await sut.load()
         await sut.toggleLike("card")
 
         await sut.toggleRepost("card")
+
+        XCTAssertEqual(toasts.errorMessages.count, 1, "l'échec se dit")
+        XCTAssertTrue(toasts.successMessages.isEmpty)
 
         XCTAssertFalse(sut.posts[0].isRepostedByMe, "l'échec défait la bascule")
         XCTAssertEqual(sut.posts[0].repostCount, 3, "et le compteur revient")

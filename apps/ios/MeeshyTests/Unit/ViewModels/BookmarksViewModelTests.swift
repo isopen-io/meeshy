@@ -241,7 +241,10 @@ final class BookmarksViewModelTests: XCTestCase {
         BookmarksViewModel(
             postService: postService,
             languageProvider: MockLanguageProvider(preferredLanguages: []),
-            repostPublisher: RepostPublisher(postService: postService, offlineQueue: queue, isOffline: { offline })
+            reposter: ListedPostReposter(
+                publisher: RepostPublisher(postService: postService, offlineQueue: queue, isOffline: { offline }),
+                toasts: MockFeedbackToast()
+            )
         )
     }
 
@@ -259,6 +262,10 @@ final class BookmarksViewModelTests: XCTestCase {
         XCTAssertFalse(mock.lastRepostIsQuote ?? true)
         XCTAssertTrue(sut.posts[0].isRepostedByMe, "l'icône du favori passe à l'état repartagé")
         XCTAssertEqual(sut.posts[0].repostCount, 3)
+        guard case .fresh(let cached, _) = await CacheCoordinator.shared.feed.load(for: "bookmarks") else {
+            return XCTFail("le repartage réécrit le cache « bookmarks »")
+        }
+        XCTAssertEqual(cached.first?.isRepostedByMe, true, "la réouverture des favoris garde l'état repartagé")
     }
 
     func test_toggleRepost_whenTheServerRefuses_rollsBackIconAndCounter() async {
