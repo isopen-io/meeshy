@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model
 
+import me.meeshy.sdk.model.translation.ServerTranslationAdmission
+
 /** Une traduction de texte retenue localement, unique par (message, langue). */
 data class StoredTextTranslation(
     val messageId: String,
@@ -41,8 +43,24 @@ data class StoredAudioTranslation(
  * lit. Les lignes l'emportent sur la charge (elles sont plus récentes : une charge REST ne les
  * efface pas). Une langue hors [prism] n'est pas projetée. Rend l'instance reçue quand rien ne
  * change : aucun re-rendu inutile.
+ *
+ * Un message dont le contenu est PROTÉGÉ ou PURGÉ ([refuses]) ne reçoit jamais de ligne : sa traduction et sa
+ * transcription ne vivent que dans sa charge, qui part avec lui (purge de la vue unique, pierre tombale, échéance).
  */
 object TranslationOverlay {
+
+    /**
+     * `true` quand aucune ligne dédiée ne doit être ni écrite ni projetée sur [message] : supprimé, vue unique
+     * (ouverte ou non), éphémère, flouté, masqué par un effet, chiffré, ou portant une pièce masquée ou chiffrée.
+     * Fail-closed : la projection ne réinjecte jamais le clair d'un contenu que la charge a retiré.
+     */
+    fun refuses(message: ApiMessage): Boolean =
+        message.deletedAt != null ||
+            message.consumedByMe == true ||
+            message.expiresAt != null ||
+            QuotePropagation.holdsProtectedContent(message) ||
+            !ServerTranslationAdmission.admits(message, conversationEncryptionMode = null) ||
+            message.attachments.any { it.isEncrypted == true || it.protectionVerdict == AttachmentProtectionVerdict.Masked }
 
     fun apply(
         message: ApiMessage,
@@ -51,7 +69,7 @@ object TranslationOverlay {
         audioTranslations: List<StoredAudioTranslation>,
         prism: List<String>? = null,
     ): ApiMessage {
-        if (message.deletedAt != null) return message
+        if (refuses(message)) return message
         val withTexts = overlayTexts(message, texts, prism)
         val withAttachments = overlayAttachments(withTexts, transcriptions, audioTranslations, prism)
         return withAttachments

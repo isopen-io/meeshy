@@ -7,6 +7,11 @@ import kotlinx.coroutines.flow.flowOf
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.ApiTextTranslation
+import me.meeshy.sdk.model.MessageHiddenForMeEvent
+import me.meeshy.sdk.model.MessageRemoved
+import me.meeshy.sdk.model.MessageViewOncePurgedEvent
+import me.meeshy.sdk.model.PersonalMessageVisibilityRef
 import me.meeshy.sdk.model.StoredTextTranslation
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.TranslateRequest
@@ -118,17 +123,149 @@ class TranslationLayerTest {
         assertThat(harness.shown().attachments.map { it.transcription?.text }).containsExactly("premier", "second").inOrder()
     }
 
-    @Test
-    fun `une langue hors prisme est ecrite sur disque mais ni retenue ni projetee`() = runHarnessTest { harness ->
-        harness.seedSynced(message())
-        val layer = TranslationLayer.of(harness.database).also { it.prism = listOf("fr") }
+    private suspend fun MessageCollaboratorHarness.retained(vararg ids: String): Int {
+        val dao = database.messageTranslationDao()
+        val all = ids.toList()
+        return dao.textsFor(all).size + dao.transcriptionsFor(all).size + dao.audioFor(all).size
+    }
 
-        writer(harness).applyTranslation("m1", "es", "Hola")
+    private suspend fun MessageCollaboratorHarness.enrichFully(w: MessageEnrichmentWriter = writer(this)) {
+        w.applyTranslation("m1", "fr", "Bonjour")
+        w.applyTranscription("m1", "a1", "Hello", "en", null, null)
+        w.applyAudioTranslation("m1", "a1", "fr", "https://cdn/fr.m4a", "Bonjour", null, null, false, null, null, null)
+        check(retained("m1") == 3)
+    }
+
+    private fun deltas(harness: MessageCollaboratorHarness) = MessageDeltaApplier(harness.database, harness.updater, harness.clock)
+
+    @Test
+    fun `une suppression serveur emporte les trois familles et la pierre tombale n'en recoit aucune`() = runHarnessTest { harness ->
+        harness.seedSynced(audioMessage())
+        harness.enrichFully()
+
+        deltas(harness).apply(MessageRemoved("m1", "c1", deletedAt = "2026-06-01T11:00:00Z"), viewerId = null)
+
+        assertThat(harness.retained("m1")).isEqualTo(0)
+        assertThat(harness.shown().translations).isEmpty()
+        assertThat(harness.shown().attachments.flatMap { listOfNotNull(it.transcription) }).isEmpty()
+    }
+
+    @Test
+    fun `une expiration servie et un masquage pour moi retirent la ligne et ses traductions`() = runHarnessTest { harness ->
+        harness.seedSynced(audioMessage())
+        harness.seedSynced(message("m2"))
+        harness.enrichFully()
+        writer(harness).applyTranslation("m2", "fr", "Salut")
+
+        deltas(harness).apply(MessageRemoved("m1", "c1", expired = true), viewerId = null)
+        deltas(harness).apply(MessageHiddenForMeEvent(messages = listOf(PersonalMessageVisibilityRef("m2", "c1"))), viewerId = null)
+
+        assertThat(harness.retained("m1", "m2")).isEqualTo(0)
+    }
+
+    @Test
+    fun `la purge d'une vue unique emporte ses lignes et la projection n'y remet rien`() = runHarnessTest { harness ->
+        harness.seedSynced(audioMessage())
+        harness.enrichFully()
+        harness.database.messageDao().upsertAll(
+            listOf(MessageEntityFactory.cached(harness.cachedMessage("m1").copy(isViewOnce = true, consumedByMe = true), harness.clock.now)),
+        )
+
+        deltas(harness).apply(MessageViewOncePurgedEvent("m1", "c1"), viewerId = null)
+
+        assertThat(harness.retained("m1")).isEqualTo(0)
+        val shown = harness.shown()
+        assertThat(shown.translations).isEmpty()
+        assertThat(shown.attachments.single().transcription).isNull()
+        assertThat(shown.attachments.single().translations.orEmpty()).isEmpty()
+    }
+
+    @Test
+    fun `une suppression optimiste emporte les lignes retenues`() = runHarnessTest { harness ->
+        harness.seedSynced(audioMessage())
+        harness.enrichFully()
+
+        MessageMutationWriter(harness.updater, harness.outbox, harness.clock).deleteOptimistic("m1")
+
+        assertThat(harness.retained("m1")).isEqualTo(0)
+    }
+
+    @Test
+    fun `une vue unique ou un ephemere garde sa traduction dans sa charge, jamais dans une ligne`() = runHarnessTest { harness ->
+        harness.seedSynced(audioMessage().copy(isViewOnce = true))
+        harness.seedSynced(message("m2").copy(expiresAt = "2026-06-02T10:00:00Z"))
+        val w = writer(harness)
+
+        harness.enrichFullyAllowingNone(w)
+        w.applyTranslation("m2", "fr", "Salut")
+
+        assertThat(harness.retained("m1", "m2")).isEqualTo(0)
+        assertThat(harness.cachedMessage("m1").translations.single().translatedContent).isEqualTo("Bonjour")
+        assertThat(harness.cachedMessage("m1").attachments.single().transcription?.text).isEqualTo("Hello")
+        assertThat(harness.cachedMessage("m2").translations.single().translatedContent).isEqualTo("Salut")
+    }
+
+    private suspend fun MessageCollaboratorHarness.enrichFullyAllowingNone(w: MessageEnrichmentWriter) {
+        w.applyTranslation("m1", "fr", "Bonjour")
+        w.applyTranscription("m1", "a1", "Hello", "en", null, null)
+        w.applyAudioTranslation("m1", "a1", "fr", "https://cdn/fr.m4a", "Bonjour", null, null, false, null, null, null)
+    }
+
+    @Test
+    fun `une traduction socket d'un message chiffre n'est ni affichee ni persistee`() = runHarnessTest { harness ->
+        harness.seedSynced(audioMessage().copy(isEncrypted = true, encryptionMode = "e2ee"))
+        val payloadBefore = harness.database.messageDao().find("m1")!!.payload
+
+        harness.enrichFullyAllowingNone(writer(harness))
+        MessageEnrichmentWriter(harness.updater, NoTranslator()).applyTranslation("m1", "fr", "forgee")
+
+        assertThat(harness.retained("m1")).isEqualTo(0)
+        assertThat(harness.database.messageDao().find("m1")!!.payload).isEqualTo(payloadBefore)
+    }
+
+    @Test
+    fun `une edition recue par REST remplace l'ancienne traduction retenue par celle du nouveau texte`() = runHarnessTest { harness ->
+        harness.seedSynced(message().copy(content = "RDV 14h"))
+        writer(harness).applyTranslation("m1", "fr", "RDV 14h fr")
+        val edited = message().copy(
+            content = "RDV 16h",
+            isEdited = true,
+            editedAt = "2026-06-01T11:00:00Z",
+            translations = listOf(ApiTextTranslation(targetLanguage = "fr", translatedContent = "RDV 16h fr")),
+        )
+
+        MessageIngestPipeline(harness.database).ingest(listOf(edited), harness.clock.now)
+
+        assertThat(harness.retained("m1")).isEqualTo(0)
+        assertThat(harness.shown().translations.single { it.targetLanguage == "fr" }.translatedContent).isEqualTo("RDV 16h fr")
+    }
+
+    @Test
+    fun `une page REST au meme texte garde la traduction retenue`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
         writer(harness).applyTranslation("m1", "fr", "Bonjour")
 
-        assertThat(harness.shown().translations.map { it.targetLanguage }).containsExactly("fr")
-        assertThat(harness.database.messageTranslationDao().textsFor(listOf("m1")).map { it.language }).containsExactly("es", "fr")
-        layer.prism = null
+        MessageIngestPipeline(harness.database).ingest(listOf(message().copy(updatedAt = "2026-06-01T10:05:00Z")), harness.clock.now)
+
+        assertThat(harness.retained("m1")).isEqualTo(1)
+        assertThat(harness.shown().translations.single().translatedContent).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `la fin de session vide le L1 et le compte suivant relit son propre disque`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
+        writer(harness).applyTranslation("m1", "fr", "Bonjour de A")
+        val layer = TranslationLayer.of(harness.database)
+        check(harness.shown().translations.single().translatedContent == "Bonjour de A")
+
+        harness.database.messageTranslationDao().deleteTextsFor(listOf("m1"))
+        layer.clear()
+        assertThat(layer.heldMessageCount()).isEqualTo(0)
+        harness.database.messageTranslationDao().upsertText(
+            me.meeshy.core.database.entity.MessageTranslationEntity("m1", "fr", "Bonjour de B", "en", null, null, 2L),
+        )
+
+        assertThat(harness.shown().translations.single().translatedContent).isEqualTo("Bonjour de B")
     }
 
     @Test
@@ -138,7 +275,7 @@ class TranslationLayerTest {
         w.applyTranslation("m1", "fr", "Bonjour")
         w.applyTranscription("m1", "a1", "Hello", "en", null, null)
         w.applyAudioTranslation("m1", "a1", "fr", "https://cdn/fr.m4a", "", null, null, false, null, null, null)
-        val mutations = MessageMutationWriter(harness.updater, harness.outbox, harness.clock, translations = TranslationLayer.of(harness.database))
+        val mutations = MessageMutationWriter(harness.updater, harness.outbox, harness.clock)
 
         mutations.editOptimistic("m1", "hello again")
 

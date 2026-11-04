@@ -65,6 +65,63 @@ class TranslationOverlayTest {
         assertThat(apply(tomb, texts = listOf(text("fr", "Bonjour")))).isSameInstanceAs(tomb)
     }
 
+    private val voice = ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")
+
+    private fun overlaid(held: ApiMessage) = apply(
+        held,
+        texts = listOf(text("fr", "secret traduit")),
+        transcriptions = listOf(StoredTranscription("m1", "a1", "secret transcrit", "en")),
+        audio = listOf(StoredAudioTranslation("m1", "a1", "fr", "https://cdn/fr.m4a", "secret")),
+    )
+
+    @Test
+    fun `une vue unique purgee ne recoit ni traduction ni transcription retenue`() {
+        val viewOnce = message(attachments = listOf(voice)).copy(content = "secret", isViewOnce = true)
+        val purged = ConversationEventDeltas.viewOncePurged(viewOnce).copy(consumedByMe = true)
+
+        val out = overlaid(purged)
+
+        assertThat(out.translations).isEmpty()
+        assertThat(out.attachments.single().transcription).isNull()
+        assertThat(out.attachments.single().translations.orEmpty()).isEmpty()
+    }
+
+    @Test
+    fun `une vue unique deja ouverte reste fermee meme servie sans drapeau de vue unique`() {
+        val opened = message(attachments = listOf(voice)).copy(consumedByMe = true)
+
+        assertThat(overlaid(opened)).isSameInstanceAs(opened)
+    }
+
+    @Test
+    fun `un message ephemere, floute, chiffre ou a piece masquee ne recoit aucune ligne retenue`() {
+        val held = message(attachments = listOf(voice))
+        val protectedOnes = listOf(
+            held.copy(expiresAt = "2026-06-01T10:00:00Z"),
+            held.copy(isBlurred = true),
+            held.copy(isEncrypted = true),
+            held.copy(encryptionMode = "e2ee"),
+            held.copy(attachments = listOf(voice.copy(isViewOnce = true))),
+            held.copy(attachments = listOf(voice.copy(isEncrypted = true))),
+        )
+
+        protectedOnes.forEach { protectedMessage ->
+            assertThat(overlaid(protectedMessage)).isSameInstanceAs(protectedMessage)
+            assertThat(TranslationOverlay.refuses(protectedMessage)).isTrue()
+        }
+    }
+
+    @Test
+    fun `un message ordinaire et sa piece non declaree recoivent leurs lignes`() {
+        val held = message(attachments = listOf(voice))
+
+        val out = overlaid(held)
+
+        assertThat(TranslationOverlay.refuses(held)).isFalse()
+        assertThat(out.translations.single().translatedContent).isEqualTo("secret traduit")
+        assertThat(out.attachments.single().transcription?.text).isEqualTo("secret transcrit")
+    }
+
     @Test
     fun `transcription and voice translation land on their own attachment only`() {
         val held = message(

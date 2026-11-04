@@ -193,16 +193,12 @@ class MessageDeltaApplier internal constructor(
         }
     }
 
-    /** Retire les lignes nommées (par l'une ou l'autre de leurs deux clés), en une transaction. */
+    /** Retire les lignes nommées (par l'une ou l'autre de leurs deux clés) et leurs traductions retenues, en une transaction. */
     private suspend fun purge(messageIds: List<String>) {
         if (messageIds.isEmpty()) return
         val ticket = updater.ticket()
         val known = if (mediaIndex == null) emptyList() else messageIds.mapNotNull { id -> updater.find(id)?.let { it.conversationId to id } }
-        database.withTransaction {
-            val rowIds = messageIds.mapNotNull { MessageIdReconciliation.locate(database, it)?.id }.distinct()
-            if (rowIds.isNotEmpty()) database.messageDao().deleteByIds(rowIds)
-            messageIds.forEach { database.editRevisionDao().deleteForMessage(it) }
-        }
+        database.withTransaction { CachedMessageUpdater.purgeInTransaction(database, messageIds) }
         known.forEach { (conversationId, id) -> mediaIndex?.forgetMessage(conversationId, id, ticket) }
     }
 

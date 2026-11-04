@@ -83,7 +83,6 @@ class MessageRepository internal constructor(
             EditRevisionLedger(database.editRevisionDao(), clock, fence),
             events,
             mediaIndex = mediaIndex,
-            translations = TranslationLayer.of(database),
         ),
         enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao, fence), translationApi, TranslationLayer.of(database), clock),
         receipts = MessageReceiptWriter(database, messageDao, fence),

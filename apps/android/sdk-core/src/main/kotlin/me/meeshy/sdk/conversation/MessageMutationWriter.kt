@@ -37,8 +37,6 @@ internal class MessageMutationWriter(
     private val selfId: (suspend () -> String?)? = null,
     /** L'index des médias de la conversation : un message supprimé quitte TOUS les genres. */
     private val mediaIndex: ConversationMediaHubIndex? = null,
-    /** Les traductions déjà reçues : un contenu modifié ou un message retiré les invalide, par id local ET serveur. */
-    private val translations: TranslationLayer? = null,
 ) {
     private val tombstones = MessageTombstoneWriter(updater, revisions, events, mediaIndex)
 
@@ -100,7 +98,6 @@ internal class MessageMutationWriter(
         }
         val before = previous
         if (before != null && updated === message && before.content != message.content) {
-            translations?.invalidate(updater.idsOf(message.id) + listOfNotNull(message.clientMessageId))
             val parentIds = listOfNotNull(updated.id, updated.clientMessageId)
             updater.updateCiting(ticket, updated.conversationId, parentIds) { reply ->
                 QuotePropagation.followEdit(reply, parentIds, updated.content, QuotePropagation.holdsProtectedContent(updated))
@@ -122,10 +119,7 @@ internal class MessageMutationWriter(
         tombstones.markUndeleted(messageId, snapshot)
 
     /** Retire les lignes nommées — par l'une ou l'autre de leurs deux clés — et leurs versions antérieures. */
-    suspend fun purgeMessages(messageIds: Collection<String>) {
-        translations?.invalidate(messageIds.flatMap { updater.idsOf(it) })
-        updater.purge(updater.ticket(), messageIds)
-    }
+    suspend fun purgeMessages(messageIds: Collection<String>) = updater.purge(updater.ticket(), messageIds)
 
     /** Épingle posée ou retirée par un événement, sans toucher au reste de la ligne ni à l'outbox. */
     suspend fun setPinned(messageId: String, pinnedAtIso: String?, pinnedBy: String?): Boolean =
@@ -159,7 +153,6 @@ internal class MessageMutationWriter(
             previousContent = message.content
             message.copy(content = content, isEdited = true, translations = emptyList())
         } ?: return false
-        translations?.invalidate(updater.idsOf(messageId) + updated.id)
         revisions?.record(messageId, previousContent, content, ticket)
         outboxRepository.enqueue(
             OutboxMutation(

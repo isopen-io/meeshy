@@ -1,6 +1,5 @@
 package me.meeshy.sdk.conversation
 
-import androidx.room.withTransaction
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageTranslationDao
 import me.meeshy.core.database.entity.MessageAudioTranslationEntity
@@ -10,6 +9,7 @@ import me.meeshy.sdk.model.StoredAudioTranslation
 import me.meeshy.sdk.model.StoredTextTranslation
 import me.meeshy.sdk.model.StoredTranscription
 import me.meeshy.sdk.model.TranslationOverlay
+import me.meeshy.sdk.session.PerAccountCache
 
 /**
  * Les traductions, transcriptions et pistes audio traduites DÉJÀ REÇUES d'un message, hors de sa charge (miroir de
@@ -18,7 +18,10 @@ import me.meeshy.sdk.model.TranslationOverlay
  *
  * - Les lignes sont rangées sous l'identifiant CANONIQUE du message (le serveur dès qu'il est connu) : le repli
  *   socket horodaté et l'id stable du serveur désignent la même ligne.
- * - Une langue hors [prism] est écrite sur disque mais jamais retenue en mémoire ni projetée.
+ * - Un message protégé ou purgé ([TranslationOverlay.refuses]) n'a jamais de ligne : sa traduction vit dans sa charge.
+ * - Toute disparition du message ou de son contenu (purge, pierre tombale, édition) emporte ses lignes dans la même
+ *   transaction ([DedicatedTranslationRows]), et le L1 les oublie.
+ * - Le L1 est un cache du COMPTE : la fin de session le vide ([clear]), le compte suivant réhydrate depuis le disque.
  * - [ensureLoaded] lit en UNE requête groupée par table les messages qu'une fenêtre affiche et que le L1 ne tient pas.
  * - Un L1 inchangé rend la même instance : aucune republication pour un dictionnaire inchangé.
  */
@@ -26,17 +29,14 @@ internal class TranslationLayer(
     private val database: MeeshyDatabase,
     private val dao: MessageTranslationDao,
     private val capacity: Int = L1_CAPACITY,
-) {
+) : PerAccountCache {
     private class Entry(
         val texts: List<StoredTextTranslation>,
         val transcriptions: List<StoredTranscription>,
         val audio: List<StoredAudioTranslation>,
     )
 
-    private class Projected(val base: LocalMessage, val entry: Entry?, val prism: List<String>?, val result: LocalMessage)
-
-    @Volatile
-    var prism: List<String>? = null
+    private class Projected(val base: LocalMessage, val entry: Entry?, val result: LocalMessage)
 
     private val l1 = object : LinkedHashMap<String, Entry>(capacity, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Entry>): Boolean = size > capacity
@@ -62,14 +62,13 @@ internal class TranslationLayer(
         val texts = ids.chunked(CHUNK).flatMap { dao.textsFor(it) }.groupBy { it.messageId }
         val transcriptions = ids.chunked(CHUNK).flatMap { dao.transcriptionsFor(it) }.groupBy { it.messageId }
         val audio = ids.chunked(CHUNK).flatMap { dao.audioFor(it) }.groupBy { it.messageId }
-        val admitting = prism
         synchronized(l1) {
             ids.forEach { id ->
                 if (id in l1) return@forEach
                 l1[id] = Entry(
-                    texts = texts[id].orEmpty().filter { admits(admitting, it.language) }.map { it.stored() },
+                    texts = texts[id].orEmpty().map { it.stored() },
                     transcriptions = transcriptions[id].orEmpty().map { it.stored() },
-                    audio = audio[id].orEmpty().filter { admits(admitting, it.language) }.map { it.stored() },
+                    audio = audio[id].orEmpty().map { it.stored() },
                 )
             }
         }
@@ -79,17 +78,16 @@ internal class TranslationLayer(
     fun project(local: LocalMessage): LocalMessage {
         val id = local.message.id
         val entry = synchronized(l1) { l1[id] }
-        val admitting = prism
         val known = synchronized(projections) { projections[id] }
-        if (known != null && known.base === local && known.entry === entry && known.prism == admitting) return known.result
+        if (known != null && known.base === local && known.entry === entry) return known.result
         val result = if (entry == null) {
             local
         } else {
-            val overlaid = TranslationOverlay.apply(local.message, entry.texts, entry.transcriptions, entry.audio, admitting)
+            val overlaid = TranslationOverlay.apply(local.message, entry.texts, entry.transcriptions, entry.audio)
             if (overlaid === local.message) local else local.copy(message = overlaid)
         }
         synchronized(projections) {
-            projections[id] = Projected(local, entry, admitting, result)
+            projections[id] = Projected(local, entry, result)
             if (projections.size > capacity * 2) projections.keys.retainAll(synchronized(l1) { l1.keys.toSet() })
         }
         return result
@@ -104,7 +102,6 @@ internal class TranslationLayer(
             MessageTranslationEntity(messageId, language, row.content, row.sourceLanguage, row.model, row.confidence, nowMillis),
         )
         retain(messageId) { entry ->
-            if (!admits(prism, language)) return@retain entry
             val stored = row.copy(messageId = messageId, language = language)
             Entry(entry.texts.filterNot { it.language.equals(language, true) } + stored, entry.transcriptions, entry.audio)
         }
@@ -135,7 +132,6 @@ internal class TranslationLayer(
             ),
         )
         retain(messageId) { entry ->
-            if (!admits(prism, language)) return@retain entry
             val stored = row.copy(messageId = messageId, language = language)
             Entry(
                 entry.texts,
@@ -146,19 +142,20 @@ internal class TranslationLayer(
         return true
     }
 
-    /**
-     * Les trois familles de [ids] disparaissent du disque et du L1 : le contenu a changé (édition) ou le message est
-     * parti. [ids] porte l'id local ET l'id serveur — chacun désigne la même ligne.
-     */
-    suspend fun invalidate(ids: Collection<String>) {
-        val all = ids.filter { it.isNotBlank() }.distinct()
-        if (all.isEmpty()) return
-        database.withTransaction {
-            dao.deleteTextsFor(all)
-            dao.deleteTranscriptionsFor(all)
-            dao.deleteAudioFor(all)
+    /** Le L1 tient pour vides ceux de [ids] qu'il tenait : leurs lignes viennent de quitter le disque. */
+    fun forget(ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        synchronized(l1) { ids.filter { l1.containsKey(it) }.forEach { l1[it] = EMPTY } }
+        synchronized(projections) { ids.forEach { projections.remove(it) } }
+    }
+
+    /** Fin de session : rien du compte qui part ne reste en mémoire, et le suivant réhydrate depuis son disque. */
+    override suspend fun clear() {
+        synchronized(l1) {
+            l1.clear()
+            hydrated = false
         }
-        synchronized(l1) { all.forEach { l1[it] = EMPTY } }
+        synchronized(projections) { projections.clear() }
     }
 
     /** L'entrée du L1, chargée au besoin depuis le disque. */
@@ -171,9 +168,6 @@ internal class TranslationLayer(
         val base = current(messageId) ?: EMPTY
         synchronized(l1) { l1[messageId] = change(base) }
     }
-
-    private fun admits(prism: List<String>?, language: String): Boolean =
-        prism == null || prism.any { it.trim().equals(language.trim(), ignoreCase = true) }
 
     private fun MessageTranslationEntity.stored() = StoredTextTranslation(messageId, language, content, sourceLanguage, model, confidence)
 

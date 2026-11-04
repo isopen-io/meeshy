@@ -64,6 +64,7 @@ internal class MessageIngestPipeline(
         val replacedLocalIds = mutableSetOf<String>()
         val changed = mutableSetOf<String>()
         val rowIdOfMessage = HashMap<String, String>()
+        val baseOfRow = HashMap<String, MessageEntity>()
         val latest = latestPerId(messages)
         for (served in latest) {
             val filedUnder = conversationId ?: served.conversationId
@@ -77,6 +78,7 @@ internal class MessageIngestPipeline(
             val fresh = MessageEntityFactory.cached(incoming, cachedAt = nowMillis, conversationId = filedUnder)
             val row = if (base == null) fresh else merged(base, incoming, fresh, pending)
             rowIdOfMessage[incoming.id] = row.id
+            if (base != null) baseOfRow[row.id] = base
             listOfNotNull(direct, optimistic).filter { it.id != row.id }.forEach { replacedLocalIds += it.id }
             val unchanged = base != null && base.id == row.id && row.sameStoredContentAs(base)
             if (!unchanged) {
@@ -91,6 +93,7 @@ internal class MessageIngestPipeline(
         replacedLocalIds -= writes.keys
         if (replacedLocalIds.isNotEmpty()) messageDao.deleteByIds(replacedLocalIds.toList())
         if (writes.isNotEmpty()) messageDao.upsertAll(writes.values.toList())
+        DedicatedTranslationRows.drop(database, outlivedKeys(writes.values, baseOfRow) + replacedLocalIds)
         regime?.learnFromServed(latest, conversationId)
         erasures?.recordServedGone(latest)
         return changed
@@ -152,6 +155,20 @@ internal class MessageIngestPipeline(
             rebuilt
         }
     }
+
+    /**
+     * Les clés des traductions retenues qu'une page servie rend caduques : un texte édité ailleurs (la ligne disait
+     * « RDV 14h », la page sert « RDV 16h » et SA traduction), un message devenu pierre tombale, protégé ou purgé.
+     * Une charge illisible est tenue pour caduque : fail-closed.
+     */
+    private fun outlivedKeys(written: Collection<MessageEntity>, baseOfRow: Map<String, MessageEntity>): List<String> =
+        written.flatMap { row ->
+            val base = baseOfRow[row.id] ?: return@flatMap emptyList()
+            val before = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(base.payload) }.getOrNull()
+            val after = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull()
+            val stale = before == null || DedicatedTranslationRows.outlived(before, after)
+            if (stale) DedicatedTranslationRows.keysOf(base, before) + DedicatedTranslationRows.keysOf(row, after) else emptyList()
+        }
 
     /** Une rafale peut porter deux fois le même message : seul son dernier état compte. */
     private fun latestPerId(messages: List<ApiMessage>): Collection<ApiMessage> {
