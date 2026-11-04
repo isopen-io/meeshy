@@ -269,8 +269,8 @@ nonisolated enum ComposerOpening: Equatable, CaseIterable {
 /// **Des cas qui ne sont plus routés RESTENT dans l'énum.** Ce ne sont pas des
 /// cas morts à balayer.
 ///
-/// - `feedComposer` : `FeedComposerSheet` existe toujours et le fil la monte
-///   encore ;
+/// - `feedComposer`, `repostComposer` : la feuille du fil a quitté le dépôt,
+///   le fil et la citation passent par le meuble — les cas, eux, restent ;
 /// - `statusComposer` : plus aucune porte ne le désigne et plus aucune feuille
 ///   ne le monte — le cas, lui, reste.
 ///
@@ -483,12 +483,12 @@ nonisolated extension ComposerProfile {
             // déjà son propre ancrage, et un éventail à une entrée n'affiche
             // aucun sélecteur (loi 4).
             //
-            // Le routage de cette porte est fonction du FORMAT PORTÉ, ce que la
-            // doctrine de la table autorise en toutes lettres plus haut — « le
-            // FORMAT qu'une porte porte fait partie de son identité ». Faire passer
-            // `.repost` à `nil` en bloc dirait que le meuble sert AUSSI les reposts
-            // de post et de réel, ce qui est faux. Le mood et la story vont au
-            // meuble, chacun pour une raison qui existe :
+            // Les quatre formats vont au meuble, chacun pour une raison qui existe :
+            //
+            // - le post et le réel CITÉS reçoivent de `ComposerHydration` la carte
+            //   de leur source et son plafond d'audience ; leur envoi est celui du
+            //   repost (`QuoteComposerDoor`, `RepostPublisher`), et leur scène
+            //   n'offre que l'écriture (`ComposerOrigin.composesQuote`) ;
             //
             // - le mood n'a besoin ni d'une graine `StoryItem`, ni d'un canal de
             //   scène : sa graine est un emoji et une phrase, son envoi est celui du
@@ -566,12 +566,7 @@ nonisolated extension ComposerProfile {
                 showsTimeline: true,
                 opensWith: .keyboardOnContent,
                 allowsCapture: false,
-                // `.post` et `.reel` restent déclarés sur `.repostComposer`. Aucun
-                // site du dépôt ne les construit ; les router vers le meuble
-                // affirmerait qu'il les sert, ce qui n'est vérifié par rien.
-                routesToLegacy: (sourceFormat == .status || sourceFormat == .story)
-                    ? nil
-                    : .repostComposer
+                routesToLegacy: nil
             )
 
         case .edit(_, let documentFormat, let isRepost):
