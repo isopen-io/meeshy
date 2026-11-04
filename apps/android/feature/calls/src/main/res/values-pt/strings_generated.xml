@@ -71,6 +71,8 @@
     <string name="call_detail_type">Tipo</string>
     <string name="call_detail_type_audio">Chamada de voz</string>
     <string name="call_detail_type_video">Chamada de vídeo</string>
+    <string name="call_effects_companions_more">Mais %1$d participantes</string>
+    <string name="call_effects_companions_move">Mudar de lado</string>
     <string name="call_ended">Chamada encerrada</string>
     <string name="call_ended_connection_lost">Conexão perdida</string>
     <string name="call_ended_declined">Chamada recusada</string>

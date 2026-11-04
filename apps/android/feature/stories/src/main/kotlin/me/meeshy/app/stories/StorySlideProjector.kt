@@ -17,6 +17,8 @@ import me.meeshy.sdk.model.composer.scene.StoryFitMode
 import me.meeshy.sdk.model.isoToEpochMillis
 import me.meeshy.sdk.model.net.MediaRequestCredential
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
+import me.meeshy.sdk.model.scene.SceneAudioMixerPlan
+import me.meeshy.sdk.model.scene.SceneAudioTrack
 import me.meeshy.sdk.model.scene.SceneLookRecipe
 import me.meeshy.sdk.model.scene.SceneObjectNumbers
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
@@ -77,6 +79,7 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
             foregroundAudioWindow = foregroundTrack?.window,
             foregroundAudioId = foregroundTrack?.id,
             unresolvedAudioIds = unresolvedAudioIds(),
+            audioTracks = mixerTracks(),
             autoAdvanceMillis = StorySlideDuration.computeMillis(storyEffects, background.videoSeconds),
             opening = storyEffects?.opening,
             closing = storyEffects?.closing,
@@ -290,11 +293,25 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
         return legacy?.let { AudioTrack(url = it, window = null) }
     }
 
-    private fun StoryItem.audioObjectUrl(track: me.meeshy.sdk.model.StoryAudioPlayerObject): String? =
-        track.postMediaId
+    private fun StoryItem.audioObjectUrl(audio: me.meeshy.sdk.model.StoryAudioPlayerObject): String? =
+        audio.postMediaId
             .let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
             ?.let { resolveMediaUrl(it, apiBaseUrl) }
-            ?: MediaRequestCredential.libraryAudioUrl(track.mediaURL, apiBaseUrl)
+            ?: MediaRequestCredential.libraryAudioUrl(audio.mediaURL, apiBaseUrl)
+
+    /**
+     * TOUTES les pistes sonores de la scène (fond, puis clips de premier plan), pour le mixeur multipistes : une piste
+     * sans adresse jouable n'est pas planifiée. Sans `audioPlayerObjects`, le fond hérité (voix de la publication, son
+     * de bibliothèque) devient l'unique piste.
+     */
+    private fun StoryItem.mixerTracks(): List<SceneAudioTrack> {
+        val fromEffects = storyEffects?.let { SceneAudioMixerPlan.tracks(it) { audio -> audioObjectUrl(audio) } }.orEmpty()
+        if (fromEffects.isNotEmpty() || storyEffects?.audioPlayerObjects.orEmpty().isNotEmpty()) return fromEffects
+        val legacy = audioUrl?.let { resolveMediaUrl(it, apiBaseUrl) }
+            ?: backgroundAudio?.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, apiBaseUrl) }
+            ?: return emptyList()
+        return listOf(SceneAudioTrack(id = "legacy-bg-audio", url = legacy, isBackground = true))
+    }
 
     /** Les pistes que l'auteur a posées et dont aucune adresse ne se résout : le lecteur les journalise, il ne les tait pas en silence. */
     private fun StoryItem.unresolvedAudioIds(): List<String> =

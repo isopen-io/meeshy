@@ -326,7 +326,15 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             // referme que ceux de cette fenêtre (#10543).
             // La demande d'un lien d'appel : confirmée ici, dans la fenêtre principale.
             .callLinkConfirmationSheet()
+            .environment(\.meeshyQuoteComposerHost, quoteHost)
             .environment(\.presentedSurfaceScope, router.surfaceScope)
+    }
+
+    /// La porte de citation de toute surface de publication (#15911).
+    private var quoteHost: QuoteComposerHost {
+        QuoteComposerHost(storyViewModel: storyViewModel, router: router,
+                          conversationListViewModel: conversationViewModel,
+                          statusViewModel: statusViewModel)
     }
 
     /// Le lecteur de réels plein cadre — sorti de `body` (cohésion, #15869).

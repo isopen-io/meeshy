@@ -47,5 +47,15 @@ internal fun StoryViewerCanvas(
         mutedTracks = trackMute.mutedTrackIds,
         onToggleTrack = { id -> trackMute = trackMute.toggleTrack(id) },
     )
-    StorySceneAudio(slide = slide, playing = playing, muted = muted, lap = lap, mutedTracks = trackMute.mutedTrackIds)
+    StorySceneAudio(
+        slide = slide,
+        playing = playing,
+        muted = muted,
+        elapsedSeconds = { progress.value * slideDurationMs / 1000.0 },
+        lap = lap,
+        mutedTracks = trackMute.mutedTrackIds,
+        onAudioFocusLost = viewModel.interruption::onFocusLost,
+        onAudioFocusGained = viewModel.interruption::onFocusGained,
+        onAudioFocusLostForGood = viewModel.interruption::onFocusLostForGood,
+    )
 }

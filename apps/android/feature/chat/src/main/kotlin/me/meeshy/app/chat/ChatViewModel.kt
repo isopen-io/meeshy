@@ -2,7 +2,6 @@ package me.meeshy.app.chat
 
 import me.meeshy.sdk.model.TypingNames
 import me.meeshy.sdk.e2ee.libsignal.EndToEndThreadAccess
-import me.meeshy.sdk.model.knownUserRole
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
@@ -200,12 +199,11 @@ class ChatViewModel @Inject constructor(
     private val windowAnswered = MutableStateFlow(false)
     private var avatarByUserId: Map<String, String?> = emptyMap()
 
-    /**
-     * The conversation's unread count captured from the cache **before** the open
-     * marks it read — the input to the [UnreadMarker] boundary. Null until the
-     * first conversation emission has been read.
-     */
+    /** The unread count captured from the cache **before** the open marks it read — the [UnreadMarker] input. */
     private val initialUnreadCount = MutableStateFlow<Int?>(null)
+
+    /** The SERVER count the unread separator announces (#7525), apart from [state]; `null` until the first emission. */
+    val unreadAtOpening: StateFlow<Int?> = initialUnreadCount.asStateFlow()
     private var openingCursor = UnreadCursor.of(null, null)
 
     private val screenState = ChatStateAccess(_state)
@@ -304,11 +302,11 @@ class ChatViewModel @Inject constructor(
         // count and a non-empty message window are known. A later message arrival
         // never re-derives it (the boundary is stable for the session).
         viewModelScope.launch {
-            val count = initialUnreadCount.filterNotNull().first()
+            initialUnreadCount.filterNotNull().first()
             val bubbles = _state.map { it.messages }.first { it.isNotEmpty() }
             val firstUnread = UnreadMarker.firstUnreadId(bubbles, openingCursor, sessionRepository.currentUser.value?.id)
             _state.update {
-                it.copy(firstUnreadMessageId = firstUnread, unreadAtOpening = count, unreadBoundaryResolved = true)
+                it.copy(firstUnreadMessageId = firstUnread, unreadBoundaryResolved = true)
             }
         }
 
@@ -379,7 +377,6 @@ class ChatViewModel @Inject constructor(
                         mentionDisplayNames = MentionRoster.displayNames(roster),
                         slowModeSeconds = conversation.slowModeSeconds,
                         slowModeExempt = SlowModePolicy.isExemptRole(viewerRole),
-                        viewerRole = conversation.knownUserRole(currentUserId)?.name,
                         encryptionMode = conversation.encryptionMode,
                         directPeerUserId = conversation.otherParticipantUserId(currentUserId),
                         composerLanguageSeed = sessionRepository.currentUser.value

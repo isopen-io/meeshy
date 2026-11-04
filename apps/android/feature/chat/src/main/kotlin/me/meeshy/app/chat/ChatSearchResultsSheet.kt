@@ -141,6 +141,10 @@ private fun ChatSearchResultRow(
         }.orEmpty()
     }
     val description = stringResource(R.string.chat_search_open_result, result.senderName)
+    val translationBadge = stringResource(R.string.chat_search_translation_badge)
+    val isTranslation = result.matchType == SearchMatchType.TRANSLATION
+    // iOS `MessageSearchResultRow.accessibilityLabel` : l'auteur, le texte trouvé et l'heure — plus, ici, le drapeau de traduction.
+    val spokenMatch = listOfNotNull(translationBadge.takeIf { isTranslation }, result.matchedText, whenLabel.ifBlank { null }).joinToString(", ")
     Row(
         Modifier
             .fillMaxWidth()
@@ -151,13 +155,13 @@ private fun ChatSearchResultRow(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
         MeeshyAvatar(name = result.senderName, size = RESULT_AVATAR_SIZE, containerColor = accentColor, imageUrl = result.senderAvatar)
-        Column(Modifier.weight(1f).clearAndSetSemantics { }) {
+        Column(Modifier.weight(1f).clearAndSetSemantics { contentDescription = spokenMatch }) {
             Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm), verticalAlignment = Alignment.CenterVertically) {
                 Text(result.senderName, style = MaterialTheme.typography.labelLarge, color = tokens.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 Text(whenLabel, style = MaterialTheme.typography.labelSmall, color = tokens.textMuted)
             }
-            if (result.matchType == SearchMatchType.TRANSLATION) {
-                Text(stringResource(R.string.chat_search_translation_badge), style = MaterialTheme.typography.labelSmall, color = accentColor)
+            if (isTranslation) {
+                Text(translationBadge, style = MaterialTheme.typography.labelSmall, color = accentColor)
             }
             Text(
                 text = highlightedMatch(result.matchedText, query, wash),

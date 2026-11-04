@@ -327583,6 +327583,53 @@
         }
       }
     },
+    "conversation.obsolete.refused_pending_request": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن إلا لمستلم طلب رسالة لم يُقبل بعدُ جعل هذه المحادثة متقادمة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur der Empfänger einer nicht angenommenen Nachrichtenanfrage kann diese Unterhaltung als veraltet markieren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only the recipient of a message request that hasn't been accepted can make this conversation obsolete."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo el destinatario de una solicitud de mensaje no aceptada puede volver obsoleta esta conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seul le destinataire d'une demande de message non acceptée peut rendre cette conversation obsolète."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo il destinatario di una richiesta di messaggio non accettata può rendere obsoleta questa conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Somente o destinatário de uma solicitação de mensagem não aceita pode tornar esta conversa obsoleta."
+          }
+        }
+      }
+    },
     "conversation.obsoleted.notice": {
       "extractionState": "manual",
       "localizations": {

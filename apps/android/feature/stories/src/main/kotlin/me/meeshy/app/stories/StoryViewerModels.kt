@@ -194,6 +194,8 @@ data class StorySlideView(
     val backgroundVideoWindow: StorySourceWindowMs? = null,
     val backgroundAudioWindow: StorySourceWindowMs? = null,
     val foregroundAudioWindow: StorySourceWindowMs? = null,
+    /** TOUTES les pistes sonores de la scène (fond puis clips), lues par le mixeur multipistes ; vide : le repli des deux URL ci-dessus. */
+    val audioTracks: List<me.meeshy.sdk.model.scene.SceneAudioTrack> = emptyList(),
     val languageCode: String? = null,
     /**
      * How long this slide stays on screen before auto-advancing, in milliseconds.

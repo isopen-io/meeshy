@@ -75,6 +75,9 @@ public object OutboxKindCatalog {
         OutboxKind.REPOST_STORY,
         OutboxKind.DELETE_COMMENT,
         OutboxKind.TOGGLE_LIKE_COMMENT,
+        OutboxKind.LEAVE_CONVERSATION,
+        OutboxKind.DELETE_CONVERSATION_FOR_ME,
+        OutboxKind.DELETE_CONVERSATION_FOR_ALL,
         -> true
     }
 
@@ -104,6 +107,9 @@ public object OutboxKindCatalog {
         OutboxKind.MARK_STORY_VIEWED,
         OutboxKind.DELETE_COMMENT,
         OutboxKind.TOGGLE_LIKE_COMMENT,
+        OutboxKind.LEAVE_CONVERSATION,
+        OutboxKind.DELETE_CONVERSATION_FOR_ME,
+        OutboxKind.DELETE_CONVERSATION_FOR_ALL,
         -> true
         OutboxKind.REPOST_STORY,
         OutboxKind.REMOVE_ATTACHMENT,
