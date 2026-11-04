@@ -180,7 +180,7 @@ export function ConversationDetailsSheet({
     },
   });
 
-  /* #14648 — monter le mode d'une conversation que le serveur lit (tête-à-tête ou groupe, au droit servi) ; une identité stable, l'état servi se lit une fois. */
+  /* #14648 — changer le mode d'un tête-à-tête que le serveur lit ; une identité stable, l'état servi se lit une fois. */
   const modeSwitch = useMemo(
     () => encryptionModeSwitchGesture({ deps, queryClient, conversationId: conversation.id, online: () => navigator.onLine }),
     [deps, queryClient, conversation.id],
