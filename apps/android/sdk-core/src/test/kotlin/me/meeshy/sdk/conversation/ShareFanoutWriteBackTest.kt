@@ -10,7 +10,11 @@ import org.junit.Test
 class ShareFanoutWriteBackTest {
 
     private fun payload(copyFrom: String?, attachments: List<String>? = null) = MeeshyApi.json.encodeToString(
-        SendMessageRequest(content = "x", copyAttachmentsFromMessageId = copyFrom, attachmentIds = attachments),
+        SendMessageRequest(
+            content = "x",
+            originalLanguage = "fr",
+            clientMessageId = "cmid",
+            copyAttachmentsFromMessageId = copyFrom, attachmentIds = attachments),
     )
 
     @Test
