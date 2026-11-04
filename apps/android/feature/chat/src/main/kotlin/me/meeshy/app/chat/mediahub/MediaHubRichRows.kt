@@ -58,6 +58,7 @@ internal fun MediaHubAttachment.toBubbleAudio(): BubbleAudio = BubbleAudio(
     url = url.takeUnless { isEncrypted },
     durationSeconds = durationMs?.let { it / 1000 },
     sizeBytes = sizeBytes?.toInt(),
+    isProtected = isProtected,
 )
 
 /**

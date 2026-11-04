@@ -1,8 +1,10 @@
 package me.meeshy.sdk.model.playback
 
 import me.meeshy.sdk.model.media.AudioAvailability
+import me.meeshy.sdk.model.media.LocalFileUrl
 import me.meeshy.sdk.model.media.MediaAvailabilityState
 import me.meeshy.sdk.model.media.PlaybackSpeed
+import me.meeshy.sdk.model.waveform.WaveformLocation
 
 /**
  * Ce que la bulle d'un vocal lit du moteur partagé quand c'est SA pièce qui est chargée (iOS `CoordinatedAudioPlayer` :
@@ -79,6 +81,20 @@ public object BubbleVoiceProjection {
      */
     public fun measuresWaveform(state: MediaAvailabilityState, isProtected: Boolean): Boolean =
         !isProtected && state == MediaAvailabilityState.Ready
+
+    /**
+     * OÙ la vraie forme d'onde se mesure : un fichier DÉJÀ sur l'appareil — l'adresse `file:` elle-même, ou la copie
+     * ENTIÈRE du cache typé que rend [wholeFileOf]. Jamais une adresse distante : la lire téléchargerait le vocal en entier,
+     * hors du cache média et hors de la politique réseau, même quand la bulle le croit « prêt ». Un vocal protégé n'a aucune
+     * source (son relevé irait sur le disque). `null` : la bulle garde sa forme de repli déterministe.
+     */
+    public fun waveformLocation(url: String?, isProtected: Boolean, wholeFileOf: (String) -> String?): String? {
+        if (isProtected) return null
+        val address = url?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        if (LocalFileUrl.isLocal(address)) return address
+        val whole = wholeFileOf(address)?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return whole.takeIf { WaveformLocation.parse(it) is WaveformLocation.Local }
+    }
 
     private const val MS_PER_SECOND = 1000.0
 }

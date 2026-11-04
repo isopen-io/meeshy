@@ -26,9 +26,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.core.common.IoDispatcher
+import me.meeshy.sdk.media.TypedMediaCache
 import me.meeshy.sdk.media.UploadedAttachmentIds
 import me.meeshy.sdk.model.media.MediaPlayerContext
 import me.meeshy.sdk.model.media.formatMediaDuration
+import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.sdk.model.playback.AudioPlaybackState
 import me.meeshy.sdk.model.playback.BubbleVoiceLive
 import me.meeshy.sdk.model.playback.BubbleVoiceProjection
@@ -95,6 +97,7 @@ internal class ChatAudioViewModel @Inject constructor(
     private val coordinator: ConversationAudioCoordinator,
     private val waveforms: WaveformRepository,
     private val uploads: UploadedAttachmentIds,
+    private val wholeFiles: TypedMediaCache,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : ViewModel(), ChatVoicePlayback {
 
@@ -170,11 +173,17 @@ internal class ChatAudioViewModel @Inject constructor(
 
     override fun cycleSpeed() = coordinator.cycleSpeed()
 
+    /**
+     * La vraie onde, mesurée sur un fichier DÉJÀ sur l'appareil ([BubbleVoiceProjection.waveformLocation]) : jamais sur
+     * l'adresse servie — la lire téléchargerait le vocal hors cache et hors politique. Sans copie entière, la bulle garde
+     * sa forme de repli ; la mesure n'est retenue que sous le fichier qu'elle a lu.
+     */
     override fun samples(audio: BubbleAudio): StateFlow<List<Float>> {
-        val url = audio.url?.takeIf { it.isNotBlank() }
-        if (audio.isProtected || url == null) return NO_WAVEFORM
-        return waveformByPiece.getOrPut("${audio.attachmentId}|$url") {
-            flow { emit(waveforms.bubbleLevels(url, BUBBLE_BAR_COUNT).values) }
+        val location = BubbleVoiceProjection.waveformLocation(audio.url, audio.isProtected) { address ->
+            wholeFiles.file(MediaCacheCategory.AUDIO, address)?.absolutePath
+        } ?: return NO_WAVEFORM
+        return waveformByPiece.getOrPut("${audio.attachmentId}|$location") {
+            flow { emit(waveforms.bubbleLevels(location, BUBBLE_BAR_COUNT).values) }
                 .catch { failure ->
                     Timber.w(failure, "Forme d'onde du vocal illisible : repli déterministe")
                     emit(emptyList())
