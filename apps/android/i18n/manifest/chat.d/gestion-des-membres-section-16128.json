@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "member-management.title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "member-management.search", "status": "adopted" },
+        { "catalog": "app", "iosKey": "member-management.empty", "status": "adopted" },
+        { "catalog": "app", "iosKey": "member-management.options-a11y", "status": "adopted" },
+        { "catalog": "app", "iosKey": "member-management.add-a11y", "status": "adopted" },
+        { "catalog": "app", "iosKey": "member-management.role.creator", "status": "adopted" },
+        { "catalog": "app", "iosKey": "member-management.role.admin", "status": "adopted" },
+        { "catalog": "app", "iosKey": "member-management.role.moderator", "status": "adopted" },
+        { "catalog": "app", "iosKey": "member-management.action.promote-admin", "status": "adopted" },
+        { "catalog": "app", "iosKey": "member-management.action.promote-moderator", "status": "adopted" },
+        { "catalog": "app", "iosKey": "member-management.action.demote-member", "status": "adopted" },
+        { "catalog": "app", "iosKey": "member-management.action.expel", "status": "adopted" },
+        { "catalog": "app", "iosKey": "member-management.action.ban", "status": "adopted" }
+      ]
+    }
+  }
+}
