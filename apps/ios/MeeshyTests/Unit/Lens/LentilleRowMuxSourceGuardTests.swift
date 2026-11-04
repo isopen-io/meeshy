@@ -225,5 +225,9 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
             occurrences(of: "SwipeAction(", in: trailingBody), 3,
             "SwipeableRow tronque à trois : une quatrième action déclarée ici ferait disparaître « Masquer » en silence."
         )
+        XCTAssertTrue(
+            trailingBody.contains("ConversationTrailingSwipe.plan("),
+            "Le bord de fin passe par le plan pur, qui tient le plafond de trois (#10579) même avec « Rendre obsolète » (#14645)."
+        )
     }
 }

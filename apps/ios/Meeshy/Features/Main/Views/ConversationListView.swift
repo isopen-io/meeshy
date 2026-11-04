@@ -510,17 +510,16 @@ struct ConversationListView: View {
         ConversationSwipeActions(
             viewModel: conversationViewModel,
             lockManager: lockManager,
+            currentUser: AuthManager.shared.currentUser,
             onLockRequest: { conversation, mode in
                 lockSheetMode = mode
                 sheetTargets.lockSheet = conversation
             },
             onMasterPinMissing: { showNoMasterPinAlert = true },
-            onHide: { conversation in sheetTargets.deleteTarget = conversation }
+            onHide: { conversation in sheetTargets.deleteTarget = conversation },
+            onObsolete: { conversation in sheetTargets.obsoleteTarget = conversation }
         )
     }
-
-    // Pagination footer now lives in `ConversationPaginationFooter`
-    // (ConversationListView+Rows.swift).
 
     private func triggerLoadMoreIfNeeded(conversation: Conversation) {
         let all = conversationViewModel.conversations
