@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Chantier #15462 « Android lit les vocaux comme iOS », de bout en bout et SANS S'ARRÊTER : lots du programme de parité (branches claude/android-<clé>) ordonnancés par ready.py --scope, cadrés contre l'arbre vivant, développés en TDD, relus et corrigés, audités s'ils sont sensibles, prouvés par workflow_dispatch d'android.yml (CI des PR gelée), fusionnés dans dev et clos avec leur preuve, en boucle jusqu'à ce que tout le périmètre soit fusionné ou bloqué après deux tentatives — opus cadre, relit, prouve et arbitre ; sonnet développe ; haiku fait le mécanique",
   whenToUse:
-    "Lancer, reprendre ou poursuivre le chantier audio Android (#15462) : lecture qui survit à la conversation et à l'app, enchaînement des non-écoutés, karaoké, forme d'onde, mini-lecteur, plein écran décoré avec Réagir, Répondre et Transférer. Args, tous optionnels : { run, scope, date, attribution, batch (2), maxFix (4), maxRounds (160), maxIdle (40), tentatives (2), parapluie (15462), outillage (15463), milestone (17), base ('dev'), brancheOutillage ('claude/youthful-mayer-an0qgn'), sensibles, lourds }.",
+    "Lancer, reprendre ou poursuivre le chantier audio Android (#15462) : lecture qui survit à la conversation et à l'app, enchaînement des non-écoutés, karaoké, forme d'onde, mini-lecteur, plein écran décoré avec Réagir, Répondre et Transférer. Args, tous optionnels : { run, scope, date, attribution, batch (2), maxFix (4), maxRounds (160), maxIdle (40), tentatives (2), rapprocher (true), parapluie (15462), outillage (15463), milestone (17), base ('dev'), brancheOutillage ('claude/youthful-mayer-an0qgn'), sensibles, lourds }.",
   phases: [
     { title: 'Préparer', detail: "répertoire d'exécution, PR de l'outillage, rouge préalable de dev, rapprochement des issues des lots déjà fusionnés", model: 'opus' },
     { title: 'Ordonnancer', detail: 'ready.py --scope : lots prêts, branches à reprendre, PR du périmètre restées ouvertes', model: 'haiku' },
@@ -42,6 +42,7 @@ const MAX_FIX = Number.isInteger(A.maxFix) && A.maxFix > 0 ? A.maxFix : 4
 const MAX_ROUNDS = Number.isInteger(A.maxRounds) && A.maxRounds > 0 ? A.maxRounds : 160
 const MAX_IDLE = Number.isInteger(A.maxIdle) && A.maxIdle > 0 ? A.maxIdle : 40
 const TENTATIVES = Number.isInteger(A.tentatives) && A.tentatives > 0 ? A.tentatives : 2
+const RAPPROCHER = A.rapprocher !== false
 
 const SCOPE = Array.isArray(A.scope) && A.scope.length ? A.scope : [
   // 1-2 · la lecture survit à la conversation et à l'app
@@ -239,7 +240,7 @@ MISSION — PRÉPARER LE CHANTIER (mécanique et vérifications, aucune ligne de
    prends la plus récente. Conclusion failure ⇒ mcp__github__get_job_logs run_id <id> failed_only true return_content true tail_lines 400 :
    relève les tâches Gradle rouges et les FQN des tests rouges (étape « Summarise failing tests »). Écris
    ${RUN}/rouge-prealable.json = { run_id, head_sha, conclusion, echecs: [...] } et rends echecs dans rouge_prealable.
-5. Rapprochement des issues de lots DÉJÀ fusionnés du programme audio qui sont restées ouvertes (les PR vers ${BASE} ne ferment pas les
+5. ${RAPPROCHER ? '' : 'SAUTE CE POINT (déjà fait à un tour précédent) : rends issues_rapprochees vide. '}Rapprochement des issues de lots DÉJÀ fusionnés du programme audio qui sont restées ouvertes (les PR vers ${BASE} ne ferment pas les
    issues : seule la branche par défaut le fait) : #14519, #11823, #14899, #14746, #15088, #14947, #11645, #11835, #13393, #13680, #12109.
    Pour chacune : lis-la (mcp__github__issue_read), confronte son critère au code de origin/${BASE} (lecture seule dans ${REPO} après
    git fetch origin ${BASE} : git show origin/${BASE}:<chemin>, git grep <symbole> origin/${BASE}). Critère TENU ⇒ ferme-la avec la preuve
