@@ -207,7 +207,7 @@ internal fun MessageActionsSheet(
             bubble.audios.firstOrNull { it.isPlayable }?.let { audio ->
                 OverlayMediaPreview(
                     audio = audio,
-                    isProtected = bubble.voiceTrackSource().isProtected,
+                    isProtected = ChatVoiceQueue.isProtected(bubble, audio),
                     accentColor = accentColor,
                     modifier = Modifier.padding(
                         horizontal = MeeshySpacing.lg,

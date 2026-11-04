@@ -13,7 +13,7 @@ import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.ui.component.media.MeeshyMediaCache
 
 /**
- * The platform player under [ChatAudioPlayer] and the message menu's [OverlayAudioPreview], reduced
+ * The platform player under the message menu's [OverlayAudioPreview] (the thread plays through the shared coordinator), reduced
  * to what a voice note needs. Audio focus is the caller's business, never the engine's.
  */
 internal interface VoiceNoteEngine {

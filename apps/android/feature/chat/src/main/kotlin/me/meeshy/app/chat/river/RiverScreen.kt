@@ -36,7 +36,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.withContext
-import me.meeshy.app.chat.ChatAudioPlayer
+import me.meeshy.app.chat.ChatVoicePlayback
 import me.meeshy.app.chat.ChatHostContext
 import me.meeshy.app.chat.ChatMessageRowActions
 import me.meeshy.app.chat.TypingIndicator
@@ -81,7 +81,7 @@ internal fun RiverScreen(
     modifier: Modifier = Modifier,
     /** Les actions de rangée du fil : les pièces, la citation et la story d'une bulle s'ouvrent par les MÊMES. */
     rowActions: ChatMessageRowActions = ChatMessageRowActions(),
-    audioPlayer: ChatAudioPlayer? = null,
+    audioPlayer: ChatVoicePlayback? = null,
 ) {
     val state = host.state
     val bubbles = state.messages

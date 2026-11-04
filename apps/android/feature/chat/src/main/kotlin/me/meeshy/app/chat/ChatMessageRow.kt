@@ -3,7 +3,7 @@ package me.meeshy.app.chat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -15,7 +15,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import me.meeshy.app.chat.conversationcard.LocalConversationLinkCards
 import me.meeshy.feature.chat.R
@@ -37,6 +36,8 @@ import me.meeshy.sdk.model.PlainSignalAdmission
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
+import me.meeshy.sdk.model.AudioPlayerChromeElection
+import me.meeshy.ui.component.bubble.LocalBubbleAudioChrome
 
 /**
  * The callbacks one message row can raise, all keyed by the message id so a single instance
@@ -111,7 +112,7 @@ internal fun ChatMessageRow(
     linkPreviewStore: LinkPreviewStore,
     linkPreviewCache: LinkPreviewCache,
     actions: ChatMessageRowActions,
-    audioPlayer: ChatAudioPlayer? = null,
+    audioPlayer: ChatVoicePlayback? = null,
     canWrite: Boolean = true,
     showReplyCountPill: Boolean = false,
     /** Script / Focal : la rangée plate (iOS `FocalRow`) au lieu de la bulle. */
@@ -129,10 +130,7 @@ internal fun ChatMessageRow(
     /** L'overlay d'appui long présente CETTE cellule : elle s'efface en fondu, la copie élevée prend sa place. */
     hiddenForOverlay: Boolean = false,
 ) {
-    val uriHandler = LocalUriHandler.current
-    val audioPlayback by remember(bubble.audios, audioPlayer) {
-        derivedStateOf { audioPlayer?.let { player -> bubble.audios.firstNotNullOfOrNull(player::bubbleFor) } }
-    }
+    val audioPlayback by rememberBubbleVoicePlayback(audioPlayer, bubble.audios)
     val linkContext = LocalContext.current
     val messageId = bubble.messageId
     val offer = remember(bubble, canWrite) { MessageRowOffer.of(bubble, canWrite) }
@@ -144,7 +142,7 @@ internal fun ChatMessageRow(
     // Le panneau secondaire est un état de vue de la bulle (iOS `@State secondaryLangCode`), pas du fil.
     var secondaryCode by remember(messageId) { mutableStateOf<String?>(null) }
     val flagHaptics = rememberMeeshyHaptics()
-    val callbacks = remember(bubble, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel, menuLabel, reacts, canWrite, secondaryCode) {
+    val callbacks = remember(bubble, actions, audioPlayer, offer, replyLabel, forwardLabel, menuLabel, reacts, canWrite, secondaryCode) {
         BubbleCallbacks(
             onLongPress = { actions.onLongPress(messageId) },
             onReactionClick = { emoji: String -> actions.onReactionClick(messageId, emoji) }.takeIf { reacts },
@@ -155,8 +153,6 @@ internal fun ChatMessageRow(
                 if (attachmentId == null) actions.onLongPress(messageId) else actions.onImageLongPress(messageId, attachmentId)
             },
             onLocationClick = { location -> actions.onLocationClick(messageId, location) },
-            onAudioClick = { audio -> audioPlayer?.toggle(audio, bubble.voiceTrackSource()) },
-            onAudioSeek = { audio, seconds -> audioPlayer?.seek(audio, seconds) },
             onFileClick = { file -> actions.onFileClick(messageId, file.attachmentId) },
             onReplyPreviewClick = { actions.onReplyPreviewClick(messageId) },
             onStoryCitationClick = bubble.storyReply?.postId?.takeIf { bubble.storyReply?.opensTarget == true }
@@ -201,7 +197,7 @@ internal fun ChatMessageRow(
                     MessageRowAction.Forward -> BubbleAccessibilityAction(forwardLabel) { actions.onForward(messageId) }
                 }
             } + BubbleAccessibilityAction(menuLabel) { actions.onLongPress(messageId) },
-        )
+        ).withVoice(audioPlayer, bubble)
     }
     val translatingCodes = remember(translatingLanguages, messageId) {
         translatingLanguages.filter { it.startsWith("$messageId|") }.mapTo(HashSet()) { it.removePrefix("$messageId|") }
@@ -297,6 +293,7 @@ internal fun ChatMessageRow(
             actions.onBubbleFramed(messageId, it.boundsInWindow())
         },
     ) {
+        CompositionLocalProvider(LocalBubbleAudioChrome provides AudioPlayerChromeElection.of(focalElected)) {
         ThreadRow(
             rendering = if (flat) ThreadRowRendering.Flat else ThreadRowRendering.Bubble,
             bubble = shownBubble,
@@ -309,6 +306,7 @@ internal fun ChatMessageRow(
             metaAlpha = metaAlpha,
             focus = if (focalElected) rememberFlatRowFocus(bubble, focalScale, actions) else null,
         )
+        }
     }
     }
     // iOS n'a plus de pastille « N réponses » sous la bulle (le fil s'ouvre par l'appui long →

@@ -159,6 +159,7 @@ fun ChatScreen(
     )
 
     val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()
+    val voicePlayback: ChatAudioViewModel = hiltViewModel()
     val isEndToEnd = state.isEndToEnd
     val clearance = remember(cardsViewModel, state.conversationId, state.encryptionMode, isEndToEnd) {
         cardsViewModel.clearance(state.conversationId, state.encryptionMode)
@@ -176,6 +177,7 @@ fun ChatScreen(
         LocalBubbleContactCardAccounts provides contactCards,
         LocalChatContactCardScope provides contactCards::underConversation,
         LocalChatSignalClearance provides signalClearance,
+        LocalChatVoicePlayback provides voicePlayback,
         LocalBubbleSkin provides remember(appearance.personalAccentHex) { BubbleSkin.of(appearance.personalAccentHex) },
     ) {
     ChatBackgroundHost(appearance, state) {

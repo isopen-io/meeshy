@@ -51,7 +51,7 @@ internal fun ChatListRow(
     linkPreviewStore: LinkPreviewStore,
     linkPreviewCache: LinkPreviewCache,
     actions: ChatMessageRowActions,
-    audioPlayer: ChatAudioPlayer? = null,
+    audioPlayer: ChatVoicePlayback? = null,
     isGroup: Boolean = true,
     canWrite: Boolean = true,
     /** Script / Focal : la rangée plate au lieu de la bulle. */

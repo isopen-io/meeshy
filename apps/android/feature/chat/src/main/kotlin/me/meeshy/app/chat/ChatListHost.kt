@@ -119,7 +119,10 @@ internal fun ChatListHost(
     // dies with the screen (its cache is discarded on logout/leave — nothing leaks to the next
     // user). Each bubble projects a pure outcome from this collected cache.
     val linkPreviewStore = remember { LinkPreviewStore(scope) }
-    val audioPlayer = rememberChatAudioPlayer(state.conversationTitle, state.conversationId)
+    val audioPlayer = LocalChatVoicePlayback.current
+    androidx.compose.runtime.SideEffect {
+        audioPlayer?.bind(ChatVoiceThread(state.conversationId, state.conversationTitle.orEmpty(), host.header.avatarUrl, accentColor.voiceHex(), state.messages))
+    }
     val linkPreviewCache by linkPreviewStore.cache.collectAsStateWithLifecycle()
     // [ChatListOrientation.BottomUp]: the list is rendered bottom-anchored
     // (`LazyColumn(reverseLayout = true)` below fed the REVERSED item order)
