@@ -80,6 +80,7 @@ class AudioFullscreenHeroTest {
         reduceMotion: Boolean = false,
         shown: androidx.compose.runtime.State<Boolean> = mutableStateOf(true),
         diameter: Float = HERO_DIAMETER,
+        playing: Boolean = false,
     ) {
         compose.setContent {
             MeeshyTheme {
@@ -94,7 +95,7 @@ class AudioFullscreenHeroTest {
                                 source = source(ring),
                                 diameter = diameter,
                                 progress = 0.5,
-                                isPlaying = true,
+                                isPlaying = playing,
                                 totalMs = 10_000L,
                                 samples = List(72) { 0.5f },
                                 accent = Color.Magenta,
@@ -130,7 +131,7 @@ class AudioFullscreenHeroTest {
 
     @Test
     fun `sous reduire les animations la decoration garde sa premiere image`() {
-        show(onde, reduceMotion = true)
+        show(onde, reduceMotion = true, playing = true)
         assertThat(filmMode()).isEqualTo(LottiePlaybackMode.FirstFrame)
     }
 
