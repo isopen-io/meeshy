@@ -65,9 +65,16 @@ class BubbleAudioStackSemanticsTest {
     }
 
     @Test
-    fun `l'avis de consentement vocal ferme la pile une seule fois`() {
-        show(voiceBubble(listOf(voiceNote("a"), voiceNote("b")), voiceConsentMissing = true))
+    fun `l'avis de consentement vocal ferme la pile de mon vocal une seule fois`() {
+        show(voiceBubble(listOf(voiceNote("a"), voiceNote("b")), voiceConsentMissing = true, isOutgoing = true))
 
         compose.onAllNodesWithTag(AUDIO_CONSENT_NOTICE_TAG).assertCountEquals(1)
+    }
+
+    @Test
+    fun `l'avis de consentement ne se pose jamais sous le vocal d'un tiers`() {
+        show(voiceBubble(listOf(voiceNote("a")), voiceConsentMissing = true, isOutgoing = false))
+
+        compose.onAllNodesWithTag(AUDIO_CONSENT_NOTICE_TAG).assertCountEquals(0)
     }
 }

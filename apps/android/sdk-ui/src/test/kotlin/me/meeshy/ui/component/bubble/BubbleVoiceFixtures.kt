@@ -1,10 +1,14 @@
 package me.meeshy.ui.component.bubble
 
 /** Une bulle reçue qui ne porte que des vocaux — la fabrique des témoins de la bulle vocale et de sa pile. */
-internal fun voiceBubble(audios: List<BubbleAudio>, voiceConsentMissing: Boolean = false): BubbleContent = BubbleContent(
+internal fun voiceBubble(
+    audios: List<BubbleAudio>,
+    voiceConsentMissing: Boolean = false,
+    isOutgoing: Boolean = false,
+): BubbleContent = BubbleContent(
     messageId = "m1",
     text = "",
-    isOutgoing = false,
+    isOutgoing = isOutgoing,
     isTranslated = false,
     originalText = null,
     senderName = "Nour",
