@@ -263,9 +263,9 @@ struct ConversationRowItem: View {
         ConversationLockManager.shared.hidesContent(of: conversation.id)
     }
 
-    /// #15887 — ce qu'ouvre le toucher de l'avatar, résolu UNE fois par rendu
-    /// (verrou et blocage relus, comme `isContentLocked`) et remis aux deux
-    /// rangs ET à l'élément VoiceOver : ils disent la même chose.
+    /// #15887 — ce qu'ouvre le toucher de l'avatar, relu à chaque rendu
+    /// (verrou et blocage, comme `isContentLocked`) par la MÊME loi pour les
+    /// deux rangs ET l'élément VoiceOver : ils disent la même chose.
     private var avatarRoute: ConversationAvatarRoute {
         ConversationOpenRoute.avatarRoute(for: conversation)
     }
