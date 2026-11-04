@@ -182,7 +182,7 @@ final class ConversationPreviewLineTests: XCTestCase {
 
     private func photoRow(
         senderName: String? = "Alice", caption: String? = "Au bord du lac",
-        type: ConversationType = .direct, ephemeralDuration: Int? = nil
+        type: Conversation.ConversationType = .direct, ephemeralDuration: Int? = nil
     ) -> Conversation {
         var row = Conversation(
             id: "c-photo", identifier: "c-photo", type: type,
