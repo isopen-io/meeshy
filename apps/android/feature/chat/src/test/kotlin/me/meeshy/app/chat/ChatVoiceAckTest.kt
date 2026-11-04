@@ -41,7 +41,7 @@ class ChatVoiceAckTest {
         val engine = FakeVoiceEngine()
         val uploads = UploadedAttachmentIds()
         val coordinator = ConversationAudioCoordinator(engine, UnconfinedTestDispatcher())
-        val viewModel = ChatAudioViewModel(coordinator, mockk(relaxed = true), uploads, UnconfinedTestDispatcher())
+        val viewModel = ChatAudioViewModel(coordinator, mockk(relaxed = true), uploads, mockk(relaxed = true), UnconfinedTestDispatcher())
     }
 
     /** Le vocal en attente joue depuis son fichier, à 5 s ; puis son envoi est accusé sous `att_server`. */

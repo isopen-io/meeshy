@@ -15,7 +15,11 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.media.MediaCacheDirs
+import me.meeshy.sdk.media.TypedMediaCache
 import me.meeshy.sdk.media.UploadedAttachmentIds
+import me.meeshy.sdk.model.mediacache.MediaCacheCategory
+import me.meeshy.sdk.model.mediacache.MediaCacheKey
 import me.meeshy.sdk.playback.AudioEngineEvent
 import me.meeshy.sdk.playback.ConversationAudioCoordinator
 import me.meeshy.sdk.waveform.WaveformLevels
@@ -23,6 +27,8 @@ import me.meeshy.sdk.waveform.WaveformRepository
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import java.io.File
+import java.nio.file.Files
 
 /**
  * Le fil joue par le coordinateur PARTAGÉ (#15462) : la bulle active lit son état, une bulle inactive ne reçoit aucune
@@ -41,9 +47,18 @@ class ChatAudioBinderTest {
     private class Rig(
         val engine: FakeVoiceEngine = FakeVoiceEngine(),
         val waveforms: WaveformRepository = mockk(relaxed = true),
+        val cacheRoot: File = Files.createTempDirectory("chat-audio").toFile(),
     ) {
+        val dirs = MediaCacheDirs(cacheRoot, cacheRoot)
         val coordinator = ConversationAudioCoordinator(engine, UnconfinedTestDispatcher())
-        val viewModel = ChatAudioViewModel(coordinator, waveforms, UploadedAttachmentIds(), UnconfinedTestDispatcher())
+        val viewModel = ChatAudioViewModel(coordinator, waveforms, UploadedAttachmentIds(), TypedMediaCache(dirs), UnconfinedTestDispatcher())
+
+        /** Le vocal de [url] téléchargé EN ENTIER dans le cache typé : la copie que la bulle a le droit de mesurer. */
+        fun wholeCopyOf(url: String): File =
+            File(dirs.dirFor(MediaCacheCategory.AUDIO), MediaCacheKey.of(url)).apply {
+                parentFile?.mkdirs()
+                writeBytes(ByteArray(2_048) { it.toByte() })
+            }
     }
 
     private val m1 = voiceMessage("m1", "2026-11-04T08:00:00Z", voice("a"))
@@ -175,22 +190,47 @@ class ChatAudioBinderTest {
     }
 
     @Test
-    fun `la forme d'onde d'un vocal ordinaire est servie une fois et memorisee`() = runTest {
+    fun `la forme d'onde d'un vocal ordinaire est mesuree une fois sur sa copie entiere, et memorisee`() = runTest {
         val waveforms = mockk<WaveformRepository>()
         coEvery { waveforms.bubbleLevels(any(), any(), any()) } returns WaveformLevels(listOf(0.2f, 1f), WaveformLevels.Origin.DECODED)
         val rig = Rig(waveforms = waveforms)
+        val whole = rig.wholeCopyOf(voice("a").url!!)
 
         val first = rig.viewModel.samples(voice("a"))
         val samples = first.first { it.isNotEmpty() }
 
         assertThat(samples).containsExactly(0.2f, 1f).inOrder()
         assertThat(rig.viewModel.samples(voice("a"))).isSameInstanceAs(first)
+        coVerify(exactly = 1) { waveforms.bubbleLevels(whole.absolutePath, any(), any()) }
+    }
+
+    @Test
+    fun `un vocal distant sans copie entiere sur l'appareil ne fait jamais mesurer son onde`() = runTest {
+        val waveforms = mockk<WaveformRepository>(relaxed = true)
+        val rig = Rig(waveforms = waveforms)
+
+        assertThat(rig.viewModel.samples(voice("a")).first()).isEmpty()
+        coVerify(exactly = 0) { waveforms.bubbleLevels(any(), any(), any()) }
+    }
+
+    @Test
+    fun `aucune adresse distante n'atteint jamais la mesure, copie entiere ou non`() = runTest {
+        val waveforms = mockk<WaveformRepository>()
+        coEvery { waveforms.bubbleLevels(any(), any(), any()) } returns WaveformLevels(listOf(0.5f), WaveformLevels.Origin.DECODED)
+        val rig = Rig(waveforms = waveforms)
+        rig.wholeCopyOf(voice("a").url!!)
+
+        rig.viewModel.samples(voice("a")).first { it.isNotEmpty() }
+        rig.viewModel.samples(voice("b")).first()
+
+        coVerify(exactly = 0) { waveforms.bubbleLevels(match { it.startsWith("https:") || it.startsWith("http:") }, any(), any()) }
     }
 
     @Test
     fun `aucune forme d'onde n'est calculee pour un vocal protege`() = runTest {
         val waveforms = mockk<WaveformRepository>(relaxed = true)
         val rig = Rig(waveforms = waveforms)
+        rig.wholeCopyOf(voice("a").url!!)
 
         assertThat(rig.viewModel.samples(voice("a", isProtected = true)).first()).isEmpty()
         coVerify(exactly = 0) { waveforms.bubbleLevels(any(), any(), any()) }
