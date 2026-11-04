@@ -316,6 +316,10 @@ internal fun ChatListHost(
                 }
             },
             onOpenJoinProfile = { bubble -> bubble.joinNotice?.toProfileSheetUser()?.let(profileTap) },
+            onCallBack = { bubble ->
+                val isVideo = bubble.callSummary?.callType == me.meeshy.sdk.model.CallSummaryMetadata.MediaType.VIDEO
+                host.navigation.onStartCall(state.conversationTitle.orEmpty(), isVideo)
+            },
             onAddReaction = { messageId ->
                 val quick = state.quickReactions.firstOrNull()
                 if (quick == null) actions.openEmojiPicker(messageId) else actions.toggleReaction(messageId, quick)

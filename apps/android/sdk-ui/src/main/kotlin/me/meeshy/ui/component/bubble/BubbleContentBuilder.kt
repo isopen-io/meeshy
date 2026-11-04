@@ -276,6 +276,7 @@ public object BubbleContentBuilder {
             protection = BubbleKindBuilder.protection(message),
             isViewOnceSealed = viewOnceSealed,
             callSummary = message.callSummary?.takeIf { message.isSystemMessage && !isDeleted },
+            callIsOutgoing = message.callSummary?.isOutgoing(currentUserId.orEmpty()) == true,
         )
     }
 
