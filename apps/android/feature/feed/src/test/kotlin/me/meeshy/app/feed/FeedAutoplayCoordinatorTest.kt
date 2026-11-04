@@ -5,7 +5,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.FeedReelAutoplay
 import me.meeshy.sdk.model.FeedReelFrame
@@ -19,6 +18,9 @@ class FeedAutoplayCoordinatorTest {
 
     private val frames = listOf(frame("a", 300f), frame("b", 780f), frame("c", 1300f, FeedReelKind.SCENE))
 
+    /** L'élection vit dans `backgroundScope`, qu'`advanceUntilIdle` ne fait pas avancer : on laisse passer le débounce. */
+    private fun TestScope.settle() = advanceTimeBy(FeedAutoplayCoordinator.ELECTION_DEBOUNCE_MS * 2)
+
     private fun TestScope.coordinator(call: MutableStateFlow<Boolean> = MutableStateFlow(false), prewarm: Boolean = true) =
         FeedAutoplayCoordinator(scope = backgroundScope, callActive = call, prewarmsNeighbours = { prewarm })
 
@@ -28,7 +30,7 @@ class FeedAutoplayCoordinatorTest {
         coordinator.update(frames, 0f, 1600f)
         advanceTimeBy(50)
         assertThat(coordinator.activeId.value).isNull()
-        advanceUntilIdle()
+        settle()
         assertThat(coordinator.activeId.value).isEqualTo("b")
         assertThat(coordinator.prewarmId.value).isEqualTo("c")
     }
@@ -39,7 +41,7 @@ class FeedAutoplayCoordinatorTest {
         coordinator.update(frames, 0f, 1600f)
         advanceTimeBy(60)
         coordinator.update(listOf(frame("a", 800f)), 0f, 1600f)
-        advanceUntilIdle()
+        settle()
         assertThat(coordinator.activeId.value).isEqualTo("a")
     }
 
@@ -48,13 +50,13 @@ class FeedAutoplayCoordinatorTest {
         val call = MutableStateFlow(false)
         val coordinator = coordinator(call)
         coordinator.update(frames, 0f, 1600f)
-        advanceUntilIdle()
+        settle()
         call.value = true
-        advanceUntilIdle()
+        settle()
         assertThat(coordinator.activeId.value).isNull()
         assertThat(coordinator.prewarmId.value).isNull()
         coordinator.update(frames, 0f, 1600f)
-        advanceUntilIdle()
+        settle()
         assertThat(coordinator.activeId.value).isNull()
     }
 
@@ -65,11 +67,11 @@ class FeedAutoplayCoordinatorTest {
         frames.forEach(coordinator::report)
         coordinator.reportViewport(0f, 1600f)
         coordinator.electReported()
-        advanceUntilIdle()
+        settle()
         call.value = true
-        advanceUntilIdle()
+        settle()
         call.value = false
-        advanceUntilIdle()
+        settle()
         assertThat(coordinator.activeId.value).isEqualTo("b")
     }
 
@@ -77,10 +79,10 @@ class FeedAutoplayCoordinatorTest {
     fun `une surface qui perd l election n est plus vivante`() = runTest {
         val coordinator = coordinator()
         coordinator.update(frames, 0f, 1600f)
-        advanceUntilIdle()
+        settle()
         assertThat(coordinator.isLive("b")).isTrue()
         coordinator.update(listOf(frame("a", 780f), frame("b", 5000f)), 0f, 1600f)
-        advanceUntilIdle()
+        settle()
         assertThat(coordinator.isLive("b")).isFalse()
         assertThat(coordinator.isLive("a")).isTrue()
     }
@@ -89,7 +91,7 @@ class FeedAutoplayCoordinatorTest {
     fun `quitter l ecran coupe tout et la garde libere le moteur de la carte qui le possede`() = runTest {
         val coordinator = coordinator()
         coordinator.update(frames, 0f, 1600f)
-        advanceUntilIdle()
+        settle()
         coordinator.clear()
         assertThat(coordinator.activeId.value).isNull()
         assertThat(FeedReelAutoplay.shouldRelinquish(ownsEngine = true, isShowingThis = !coordinator.isLive("b"))).isTrue()
@@ -99,7 +101,7 @@ class FeedAutoplayCoordinatorTest {
     fun `sans prewarm voisin autorise personne n est prechauffe`() = runTest {
         val coordinator = coordinator(prewarm = false)
         coordinator.update(frames, 0f, 1600f)
-        advanceUntilIdle()
+        settle()
         assertThat(coordinator.prewarmId.value).isNull()
     }
 
