@@ -101,7 +101,7 @@ public class CommentDraftStore(
         }
     }
 
-    public fun clear(postId: String) = save(postId, "")
+    public fun clear(postId: String): Unit = save(postId, "")
 
     override suspend fun clear() {
         synchronized(lock) {
