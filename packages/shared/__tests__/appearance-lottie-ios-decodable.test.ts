@@ -57,7 +57,7 @@ function layerDefects(layer: unknown, at: string): string[] {
   return [...head, ...transform, ...shapes];
 }
 
-export function lottieIosDefects(film: unknown): string[] {
+function lottieIosDefects(film: unknown): string[] {
   if (!isRecord(film)) return ['film non objet'];
   const head = [typeof film['v'] === 'string' ? [] : ['« v » absent'], ...['fr', 'ip', 'op', 'w', 'h'].map((key) => (isNumber(film[key]) ? [] : [`« ${key} » absent`]))].flat();
   const layers = Array.isArray(film['layers']) ? film['layers'].flatMap((layer, index) => layerDefects(layer, `layers[${index}]`)) : ['« layers » absent'];
