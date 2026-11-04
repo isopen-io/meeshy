@@ -43,9 +43,10 @@ class ImageViewerTransformTest {
     }
 
     @Test
-    fun `the zoom reaches x5 like iOS`() {
-        assertThat(ImageViewerTransform.MAX_SCALE).isEqualTo(5f)
-        assertThat(ImageViewerTransform.clampScale(4.8f)).isEqualTo(4.8f)
+    fun `the zoom stops at x4 like iOS`() {
+        assertThat(ImageViewerTransform.MAX_SCALE).isEqualTo(4f)
+        assertThat(ImageViewerTransform.clampScale(4.8f)).isEqualTo(4f)
+        assertThat(ImageViewerTransform.clampScale(3.9f)).isEqualTo(3.9f)
     }
 
     @Test
