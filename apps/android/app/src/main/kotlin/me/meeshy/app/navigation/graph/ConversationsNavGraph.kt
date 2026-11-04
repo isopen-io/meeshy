@@ -7,7 +7,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -40,7 +39,7 @@ import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.feed.MoodLookup
 import me.meeshy.app.feed.StatusesViewModel
-import me.meeshy.app.navigation.MoodBubbleHost
+import me.meeshy.app.navigation.MoodBubbleFor
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.search.PostSearchDestination
 import me.meeshy.app.stories.StoriesViewModel
@@ -77,16 +76,11 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         infoTarget?.let { (conversation, readerId) ->
             ConversationInfoFromList(conversation, readerId, navController) { infoTarget = null }
         }
-        val statuses by statusesViewModel.state.collectAsStateWithLifecycle()
-        val moods = remember(statuses.statuses, statuses.myStatus) { MoodLookup.from(statuses) }
+        // La bulle d'humeur du badge d'avatar : les humeurs se lisent au toucher (`state.value`), jamais ici,
+        // pour qu'une humeur qui change ne recompose pas les lignes.
         var moodBubbleUserId by rememberSaveable { mutableStateOf<String?>(null) }
-        MoodBubbleHost(
-            shown = moodBubbleUserId?.let(moods::entryOf),
-            myUserId = statuses.myStatus?.userId,
-            navController = navController,
-            statusesViewModel = statusesViewModel,
-            onDismiss = { moodBubbleUserId = null },
-        )
+        MoodBubbleFor(moodBubbleUserId, navController, statusesViewModel) { moodBubbleUserId = null }
+        val moodsNow = { MoodLookup.from(statusesViewModel.state.value) }
         val openProfile = rememberProfileOpenerOverSheet(navController)
         ConversationListScreen(
             onConversationClick = { conversationId ->
@@ -116,12 +110,12 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 onViewConversationInfo = { conversation, readerId -> infoTarget = conversation to readerId },
                 onViewStory = { userId -> navController.navigate(Routes.story(userId)) },
                 onMoodBadgeTap = { userId ->
-                    moods.entryOf(userId)?.let { entry ->
+                    moodsNow().entryOf(userId)?.let { entry ->
                         moodBubbleUserId = userId
                         statusesViewModel.markStatusViewed(entry.id)
                     }
                 },
-                onMoodShown = { userId -> moods.statusIdOf(userId)?.let(statusesViewModel::trackAvatarImpression) },
+                onMoodShown = { userId -> moodsNow().statusIdOf(userId)?.let(statusesViewModel::trackAvatarImpression) },
             ),
             onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             onOpenMessage = { conversationId, messageId ->
