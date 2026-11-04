@@ -20,7 +20,7 @@ internal class CommentQuotationBinding(
     private val postId: String,
     scope: CoroutineScope,
 ) {
-    val quotation: StateFlow<CommentQuotedMedia?> = (store?.quotations ?: MutableStateFlow(emptyMap()))
+    val quotation: StateFlow<CommentQuotedMedia?> = (store?.quotations ?: MutableStateFlow<Map<String, CommentQuotedMedia>>(emptyMap()))
         .map { it[postId] }
         .distinctUntilChanged()
         .stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), store?.quotation(postId))
