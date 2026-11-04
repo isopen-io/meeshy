@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import me.meeshy.app.chat.audio.AudioFullscreenAuthorVisual
 import me.meeshy.sdk.model.QueuedAudio
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenStart
 import me.meeshy.sdk.model.media.PlaybackSpeed
@@ -32,7 +33,10 @@ import me.meeshy.ui.component.viewer.viewerDialogProperties
  */
 internal object ChatAudioFullscreenSources {
 
-    fun of(startId: String, thread: List<BubbleContent>, conversationId: String, contextName: String): List<AudioFullscreenSource>? {
+    fun of(startId: String, thread: List<BubbleContent>, conversationId: String, contextName: String): List<AudioFullscreenSource>? =
+        pages(startId, thread, conversationId, contextName)?.let { AudioFullscreenAuthorVisual.withRings(it, thread) }
+
+    private fun pages(startId: String, thread: List<BubbleContent>, conversationId: String, contextName: String): List<AudioFullscreenSource>? {
         val window = thread.flatMap { bubble -> bubble.audios.map { audio -> bubble to audio } }
         val hit = window.firstOrNull { (_, audio) -> audio.attachmentId == startId }
         if (hit != null) {
