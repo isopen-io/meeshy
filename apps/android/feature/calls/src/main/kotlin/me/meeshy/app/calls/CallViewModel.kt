@@ -197,6 +197,7 @@ class CallViewModel @Inject constructor(
         override fun publish() = this@CallViewModel.publish()
         override fun routesGroupMediaToggle(toggle: CallMediaTogglePayload): Boolean =
             coordinator.routesGroupMediaToggle(toggle)
+        override val isGroupCall: Boolean get() = coordinator.isGroupCall
     }
 
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))

@@ -323,6 +323,39 @@ class NotificationRepository @Inject constructor(
             )
         }
 
+    /**
+     * Une page de la liste de [scope] avec sa pagination PROPRE (curseur servi, sinon rang [offset]) : chaque catégorie
+     * de la cloche pagine sa liste, indépendamment de la liste « all ». Rien n'est écrit ici — l'appelant range le
+     * résultat par [replaceAll].
+     */
+    suspend fun listScopePage(
+        scope: NotificationScope,
+        cursor: String? = null,
+        offset: Int = 0,
+        limit: Int = PAGE_SIZE,
+    ): NetworkResult<NotificationScopePage> =
+        when (
+            val result = pagedApiCall {
+                notificationApi.list(
+                    offset = if (cursor === null) offset else null,
+                    limit = limit,
+                    unreadOnly = if (scope.unreadOnly) true else null,
+                    cursor = cursor,
+                    types = NotificationTypeSelection.csv(scope.types.sorted()),
+                    hideReadTypes = NotificationTypeSelection.csv(scope.hideReadTypes.sorted()),
+                )
+            }
+        ) {
+            is NetworkResult.Success -> NetworkResult.Success(
+                NotificationScopePage(
+                    items = result.data.data,
+                    hasMore = result.data.pagination?.hasMore ?: (result.data.data.size >= limit),
+                    nextCursor = result.data.pagination?.nextCursor,
+                ),
+            )
+            is NetworkResult.Failure -> result
+        }
+
     /** Les totaux de toute la boîte par type brut, tels que le serveur les compte (même prédicat que la liste). */
     suspend fun counts(): NetworkResult<NotificationCounts> = apiCall { notificationApi.counts() }
 

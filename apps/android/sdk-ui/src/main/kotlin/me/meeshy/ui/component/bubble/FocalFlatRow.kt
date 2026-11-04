@@ -411,7 +411,7 @@ private fun FlatText(content: BubbleContent, accentColor: Color, ink: Color, dec
         Text(text = content.text.trim(), style = largeEmojiTextStyle(emojiFontSize.sp))
         return
     }
-    FocalLongMessage(messageId = content.messageId, text = content.text, accentColor = accentColor) { shown ->
+    FocalLongMessage(messageId = content.messageId, text = content.text, accentColor = accentColor, inkColor = ink) { shown ->
         RichMessageText(
             text = shown,
             color = ink,

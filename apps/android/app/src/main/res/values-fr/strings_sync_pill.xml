@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connection_offline">Hors ligne</string>
+    <string name="connection_reconnecting">Reconnexion en cours</string>
+</resources>

@@ -61,6 +61,7 @@ import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.StoryReactionDelivery
 import me.meeshy.sdk.story.StoryReactionPublisher
 import me.meeshy.sdk.story.StoryRepostPublisher
+import me.meeshy.sdk.story.StoryViewReporting
 import me.meeshy.sdk.story.purgingDeadStories
 import me.meeshy.sdk.story.toStoryGroups
 import me.meeshy.sdk.story.toStoryItem
@@ -85,6 +86,7 @@ class StoryViewerViewModel @Inject constructor(
     private val gameMoment: GameMomentPresence = GameMomentPresence(),
     private val repostPublisher: StoryRepostPublisher = storyRepository.asRepostPublisher(),
     private val reactionPublisher: StoryReactionPublisher = storyRepository.asReactionPublisher(),
+    private val viewReporter: StoryViewReporting = StoryViewReporting { storyRepository.markViewed(it) },
 ) : ViewModel() {
 
     private val userId: String = savedStateHandle.get<String>(USER_ID_ARG).orEmpty()
@@ -509,7 +511,7 @@ class StoryViewerViewModel @Inject constructor(
     fun markCurrentViewed() {
         val slideId = playback.currentSlide?.id ?: return
         viewModelScope.launch {
-            runCatching { storyRepository.markViewed(slideId) }
+            runCatching { viewReporter.report(slideId) }
         }
     }
 

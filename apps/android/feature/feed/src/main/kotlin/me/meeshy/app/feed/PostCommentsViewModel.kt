@@ -50,6 +50,10 @@ import me.meeshy.sdk.model.SocketCommentTranslationUpdatedData
 import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.outbox.SendFailureClassifier
+import me.meeshy.sdk.outbox.SendResult
+import me.meeshy.sdk.post.CommentGestureQueue
+import me.meeshy.sdk.post.CommentGestureRollback
 import me.meeshy.sdk.post.CommentHeartTransport
 import me.meeshy.sdk.post.PostCommentsEngine
 import me.meeshy.sdk.post.PostRepository
@@ -139,6 +143,7 @@ class PostCommentsViewModel @Inject constructor(
     private val commentsEngine: PostCommentsEngine? = null,
     private val heartTransport: CommentHeartTransport? = null,
     private val network: NetworkMonitor = InMemoryNetworkMonitor(),
+    private val gestureQueue: CommentGestureQueue? = null,
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
@@ -212,6 +217,7 @@ class PostCommentsViewModel @Inject constructor(
                 offline.value = false
             }
         }
+        observeQueuedGestureRollbacks()
         viewModelScope.launch {
             combine(thread, sessionRepository.currentUser, status, likes, replies) { t, user, st, likeState, replyState ->
                 ProjectionInputs(t, user, st, likeState, replyState)
@@ -863,10 +869,11 @@ class PostCommentsViewModel @Inject constructor(
         likes.value = began
         viewModelScope.launch {
             try {
+                if (offline.value && queueLike(commentId, liked = !wasLiked)) return@launch
                 val transport = heartTransport
                 if (transport != null) {
                     if (transport.deliver(wasLiked, commentId, postId)) likes.update { it.settle(commentId) }
-                    else likes.update { it.rollback(commentId) }
+                    else if (!queueLike(commentId, liked = !wasLiked)) likes.update { it.rollback(commentId) }
                     return@launch
                 }
                 val result =
@@ -874,15 +881,60 @@ class PostCommentsViewModel @Inject constructor(
                     else postRepository.likeComment(postId, commentId)
                 when (result) {
                     is NetworkResult.Success -> likes.update { it.settle(commentId) }
-                    is NetworkResult.Failure -> likes.update { it.rollback(commentId) }
+                    is NetworkResult.Failure ->
+                        if (!(isRetryable(result) && queueLike(commentId, liked = !wasLiked))) likes.update { it.rollback(commentId) }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                likes.update { it.rollback(commentId) }
+                if (!queueLike(commentId, liked = !wasLiked)) likes.update { it.rollback(commentId) }
             }
         }
     }
+
+    private suspend fun queueDelete(commentId: String, threadSnapshot: CommentThreadState, repliesSnapshot: CommentRepliesState): Boolean {
+        val queue = gestureQueue ?: return false
+        if (!queue.queueDelete(postId, commentId)) return false
+        queuedDeletions[commentId] = threadSnapshot to repliesSnapshot
+        status.update { it.copy(notice = CommentNotice.DELETED) }
+        return true
+    }
+
+    /** Le coeur voulu entre dans la file durable : l'optimiste reste, le geste part au retour du réseau. */
+    private suspend fun queueLike(commentId: String, liked: Boolean): Boolean {
+        val queue = gestureQueue ?: return false
+        if (!queue.queueLike(postId, commentId, liked)) return false
+        likes.update { it.settle(commentId) }
+        return true
+    }
+
+    private fun isRetryable(failure: NetworkResult.Failure): Boolean =
+        SendFailureClassifier.classify(failure.error) !is SendResult.PermanentFailure
+
+    /** Un geste mis en file a renoncé (refus définitif) : le coeur ou le commentaire revient comme avant le geste. */
+    private fun observeQueuedGestureRollbacks() {
+        val queue = gestureQueue ?: return
+        viewModelScope.launch {
+            queue.rollbacks.collect { rollback ->
+                when (rollback) {
+                    is CommentGestureRollback.Like ->
+                        if (likes.value.isLiked(rollback.commentId) == rollback.liked) {
+                            likes.update { state -> state.beginToggle(rollback.commentId)?.settle(rollback.commentId) ?: state }
+                        }
+                    is CommentGestureRollback.Delete -> restoreDeleted(rollback.commentId)
+                }
+            }
+        }
+    }
+
+    private fun restoreDeleted(commentId: String) {
+        val snapshot = queuedDeletions.remove(commentId) ?: return
+        thread.value = snapshot.first
+        replies.value = snapshot.second
+        status.update { it.copy(notice = CommentNotice.DELETE_FAILED) }
+    }
+
+    private val queuedDeletions = mutableMapOf<String, Pair<CommentThreadState, CommentRepliesState>>()
 
     /**
      * Delete a comment the viewer authored (the UI gates the affordance to
@@ -900,9 +952,11 @@ class PostCommentsViewModel @Inject constructor(
         onCommentDeleted(commentId)
         viewModelScope.launch {
             try {
+                if (offline.value && queueDelete(commentId, threadSnapshot, repliesSnapshot)) return@launch
                 when (val result = postRepository.deleteComment(postId, commentId)) {
                     is NetworkResult.Success -> status.update { it.copy(notice = CommentNotice.DELETED) }
                     is NetworkResult.Failure -> {
+                        if (isRetryable(result) && queueDelete(commentId, threadSnapshot, repliesSnapshot)) return@launch
                         thread.value = threadSnapshot
                         replies.value = repliesSnapshot
                         status.update { it.copy(error = result.error.message, notice = CommentNotice.DELETE_FAILED) }

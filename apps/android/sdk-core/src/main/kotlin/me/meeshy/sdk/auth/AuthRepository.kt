@@ -226,9 +226,16 @@ class AuthRepository @Inject constructor(
             is NetworkResult.Failure -> result
             is NetworkResult.Success -> {
                 val session = result.data.asSession()
+                val pending = result.data.pendingVerification(request.email)
                 when {
                     result.data.phoneOwnershipConflict ->
                         NetworkResult.Success(RegisterOutcome.PhoneOwnershipConflict)
+                    // « Ce n'est pas moi » (#8214) : le compte existe SANS session, un code est parti à l'adresse.
+                    // L'attente du code PRIME sur une identité servie à côté (iOS `AuthManager+EmailAccess`) :
+                    // une réponse qui demande la preuve n'ouvre jamais de session, quoi qu'elle porte d'autre.
+                    pending != null -> NetworkResult.Success(
+                        RegisterOutcome.VerificationRequired(pending.email, pending.pendingSessionToken),
+                    )
                     session != null -> NetworkResult.Success(
                         RegisterOutcome.Created(
                             session = session,
@@ -617,4 +624,10 @@ sealed interface RegisterOutcome {
 
     /** Le numéro est rattaché à un autre compte vérifié ; aucun compte créé. */
     data object PhoneOwnershipConflict : RegisterOutcome
+
+    /**
+     * L'adresse a été REVENDIQUÉE (`claimEmail`, #8214) : le compte existe sans session et n'entre que par le code
+     * envoyé à [email] ; [pendingSessionToken] apprend à l'écran du code que le lien a été ouvert ailleurs.
+     */
+    data class VerificationRequired(val email: String, val pendingSessionToken: String? = null) : RegisterOutcome
 }

@@ -70,7 +70,8 @@ object DeliveryStatusResolver {
             // unambiguous "all" markers first, then the per-message counters.
             return when {
                 readByAllAt != null || readCount >= recipientCount -> DeliveryTier.Read
-                deliveredToAllAt != null || deliveredCount >= recipientCount -> DeliveryTier.Delivered
+                deliveredToAllAt != null || effectiveDeliveredCount(deliveredCount, readCount) >= recipientCount ->
+                    DeliveryTier.Delivered
                 else -> DeliveryTier.Sent
             }
         }
@@ -78,6 +79,32 @@ object DeliveryStatusResolver {
         return when {
             readByAllAt != null || readCount > 0 -> DeliveryTier.Read
             deliveredToAllAt != null || deliveredCount > 0 -> DeliveryTier.Delivered
+            else -> DeliveryTier.Sent
+        }
+    }
+
+    /**
+     * « On ne lit pas ce qu'on n'a pas reçu » : un lecteur compte aussi comme destinataire. Un cache local, un
+     * événement partiel ou une passerelle plus ancienne peuvent tendre `delivered < read` ; le plancher
+     * `max(delivered, read)` garde la coche juste sans jamais gonfler au-delà des lecteurs observés.
+     */
+    fun effectiveDeliveredCount(deliveredCount: Int, readCount: Int): Int = maxOf(deliveredCount, readCount)
+
+    /**
+     * Le palier impliqué par les seuls compteurs, sans contexte d'envoi (miroir de `fromCounts` iOS).
+     * Dénominateur inconnu (`<= 0`) : « un seul suffit » ; sinon tout-ou-rien.
+     */
+    fun fromCounts(deliveredCount: Int, readCount: Int, recipientCount: Int): DeliveryTier {
+        if (recipientCount <= 0) {
+            return when {
+                readCount > 0 -> DeliveryTier.Read
+                deliveredCount > 0 -> DeliveryTier.Delivered
+                else -> DeliveryTier.Sent
+            }
+        }
+        return when {
+            readCount >= recipientCount -> DeliveryTier.Read
+            effectiveDeliveredCount(deliveredCount, readCount) >= recipientCount -> DeliveryTier.Delivered
             else -> DeliveryTier.Sent
         }
     }

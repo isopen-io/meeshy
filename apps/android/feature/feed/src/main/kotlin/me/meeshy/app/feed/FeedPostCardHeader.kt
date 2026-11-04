@@ -55,7 +55,7 @@ internal fun FeedPostCardHeader(
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
+        val profileTap = Modifier.opensAuthorProfile(post.authorProfile())
         MeeshyAvatar(
             name = post.authorName ?: unknownAuthor,
             size = 40.dp,

@@ -14,8 +14,8 @@ import me.meeshy.app.R
  */
 internal fun GlanceModifier.widgetSurface(brand: Boolean = false): GlanceModifier =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        background(if (brand) WidgetTheme.brandSurface else WidgetTheme.background)
+        (if (brand) background(ImageProvider(R.drawable.widget_brand_gradient)) else background(WidgetTheme.background))
             .cornerRadius(android.R.dimen.system_app_widget_background_radius)
     } else {
-        background(ImageProvider(if (brand) R.drawable.widget_brand_surface else R.drawable.widget_surface))
+        background(ImageProvider(if (brand) R.drawable.widget_brand_gradient else R.drawable.widget_surface))
     }

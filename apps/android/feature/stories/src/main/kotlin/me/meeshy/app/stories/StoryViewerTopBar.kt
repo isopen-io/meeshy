@@ -12,9 +12,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.sdk.model.profile.ofAuthor
 import me.meeshy.ui.component.audio.BackgroundSoundBadge
 import me.meeshy.ui.component.audio.BackgroundSoundBadgeLabels
 import me.meeshy.ui.haptics.MeeshyHaptics
+import me.meeshy.ui.profile.LocalProfileSheetOpener
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -55,17 +58,25 @@ internal fun StoryViewerTopBar(
                 .padding(top = MeeshySpacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val profileOpener = LocalProfileSheetOpener.current
+            val author = remember(state.authorUserId, state.authorName, state.authorAvatarUrl, accent) {
+                ProfileSheetUser.ofAuthor(
+                    userId = state.authorUserId,
+                    displayName = state.authorName,
+                    avatarUrl = state.authorAvatarUrl,
+                )
+            }
             StoryAuthorIdentity(
-                onClick = state.authorUserId?.let { userId ->
+                onClick = author?.let { user ->
                     {
                         haptics.light()
-                        actions.onOpenProfile(userId)
+                        profileOpener.open(user)
                     }
                 },
-                onLongClick = state.authorUserId?.let { userId ->
+                onLongClick = author?.let { user ->
                     {
                         haptics.medium()
-                        actions.onOpenProfile(userId)
+                        profileOpener.open(user)
                     }
                 },
                 name = state.authorName,

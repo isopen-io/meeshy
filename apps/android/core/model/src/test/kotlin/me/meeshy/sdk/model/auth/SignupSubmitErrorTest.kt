@@ -223,3 +223,57 @@ class SignupSubmitErrorTest {
         assertThat(SignupFieldMessages.resolve(SignupField.PHONE, validation, null)).isNull()
     }
 }
+
+class SignupEmailOwnerTest {
+
+    private val owner = me.meeshy.sdk.model.net.MaskedEmailOwner("J••• D•••", "jd•••", null)
+
+    @Test
+    fun emailTaken_carriesTheMaskedOwner() {
+        val routed = SignupErrorRouter.route(code = "EMAIL_TAKEN", emailOwner = owner) as SignupSubmitError.Field
+
+        assertThat(routed.owner).isEqualTo(owner)
+    }
+
+    @Test
+    fun emailTaken_withoutOwner_fallsBackSoberly() {
+        val routed = SignupErrorRouter.route(code = "EMAIL_TAKEN") as SignupSubmitError.Field
+
+        assertThat(routed.owner).isNull()
+        assertThat(EmailTaken.from(routed, "a@b.co")).isEqualTo(EmailTaken("a@b.co", null))
+    }
+
+    @Test
+    fun anotherRefusal_neverCarriesTheOwner() {
+        val routed = SignupErrorRouter.route(code = "USERNAME_TAKEN", emailOwner = owner) as SignupSubmitError.Field
+
+        assertThat(routed.owner).isNull()
+        assertThat(EmailTaken.from(routed, "a@b.co")).isNull()
+    }
+
+    @Test
+    fun gestures_areShownOnlyForTheRefusedAddress() {
+        val taken = EmailTaken("a@b.co", owner)
+
+        assertThat(taken.isShownFor("a@b.co")).isTrue()
+        assertThat(taken.isShownFor("a@b.com")).isFalse()
+    }
+
+    @Test
+    fun partialEmail_keepsTheFirstLetterAndTheDomain() {
+        assertThat(EmailMasking.partial(" jean@gmail.com ")).isEqualTo("j•••@gmail.com")
+        assertThat(EmailMasking.partial("nope")).isEqualTo("nope")
+    }
+
+    @Test
+    fun registerResponse_verificationRequired_servedAddressWins() {
+        val response = me.meeshy.sdk.model.RegisterResponse(
+            status = "verification-required", email = " served@b.co ", accountCreated = true, pendingSessionToken = "p",
+        )
+
+        assertThat(response.pendingVerification("typed@b.co"))
+            .isEqualTo(PendingEmailVerification("served@b.co", true, "p"))
+        assertThat(response.asSession()).isNull()
+        assertThat(me.meeshy.sdk.model.RegisterResponse().pendingVerification("typed@b.co")).isNull()
+    }
+}
