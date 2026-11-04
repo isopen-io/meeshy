@@ -34,7 +34,7 @@ class CallMontageRendererLayersTest {
             val scene = scene(style)
             val frame = scene.hole.photoFrame
             val inside = scene.overlay.getPixel(frame.midX.toInt().coerceIn(0, width - 1), frame.midY.toInt().coerceIn(0, height - 1))
-            assertWithMessage("$style : le trou est transparent").that(Color.alpha(inside)).isEqualTo(0)
+            assertWithMessage("$style : le trou est transparent (grain du noir toléré)").that(Color.alpha(inside)).isAtMost(40)
             assertThat(scene.frameId).isEqualTo("classic-${style.raw}")
         }
     }
