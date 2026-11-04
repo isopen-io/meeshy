@@ -1004,6 +1004,55 @@
       "text": "Alice : 👤 Contact partagé"
     },
     {
+      "id": "contact-card-with-caption",
+      "matrix": "Carte de visite — légende (la légende prend la place du libellé, le nom du contact reste)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "file",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "text/vcard",
+            "originalName": "contact_80140BD0-3D81-42CA-B339-E67D81528456_Zoé Sanscompte.vcf",
+            "fileSize": 255
+          },
+          "content": "Voici son numéro"
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "contact",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Voici son numéro",
+            "language": null
+          },
+          {
+            "kind": "label",
+            "text": "Zoé Sanscompte"
+          }
+        ]
+      },
+      "text": "Alice : 👤 Voici son numéro · Zoé Sanscompte"
+    },
+    {
       "id": "file",
       "matrix": "Fichier",
       "input": {

@@ -271,15 +271,16 @@ struct ConversationPreviewBody {
 
     /// Une carte de visite se dit par son CONTACT, jamais par son fichier
     /// (#8122, #8148) : « Contact partagé · Zoé » — ni UUID, ni extension, ni
-    /// poids. Miroir de `contactCardBody` (`packages/shared/utils/conversation-preview.ts`).
+    /// poids. Une légende prend la place du libellé, le nom du contact reste :
+    /// « Voici son numéro · Zoé ». Miroir de `contactCardBody`
+    /// (`packages/shared/utils/conversation-preview.ts`).
     private static func contactCard(
         _ attachment: ConversationPreviewAttachment, text: ConversationPreviewSegment?, _ strings: ConversationPreviewStrings
     ) -> ConversationPreviewBody {
         let nature = ConversationPreviewSegment.label(strings(.attachmentContact))
-        if let text { return ConversationPreviewBody(icon: .contact, segments: [text], sealed: [nature, text]) }
         let name = ContactCardFile.displayName(fromFileName: attachment.originalName ?? "")
-        let segments = [nature] + (name.map { [ConversationPreviewSegment.label($0)] } ?? [])
-        return ConversationPreviewBody(icon: .contact, segments: segments, sealed: [nature])
+        let contact = name.map { [ConversationPreviewSegment.label($0)] } ?? []
+        return ConversationPreviewBody(icon: .contact, segments: [text ?? nature] + contact, sealed: withText([nature], text))
     }
 
     /// Chaque détail n'apparaît QUE si l'information existe — durée, dimensions,

@@ -52,6 +52,21 @@ describe('composeConversationPreview — le fichier de cas commun (web + iOS)', 
     'en-view-once-placeholder-not-translated',
     'sticker-text',
     'sticker-text-view-once',
+    'photo-with-caption',
+    'file-with-caption',
+    'audio-named-with-caption',
+    'contact-card-with-caption',
+    'videos-with-caption',
+    'attachments-with-caption',
+    'attachments-mixed-with-caption',
+    'ephemeral-photo',
+    'ephemeral-named-audio',
+    'ephemeral-file',
+    'ephemeral-photo-with-caption',
+    'ephemeral-photos-many',
+    'ephemeral-contact-card',
+    'text-direct-member',
+    'text-direct-self',
   ])('le fichier couvre le cas exigé %s', (id) => {
     expect(caseById(id).text.length).toBeGreaterThan(0);
   });
@@ -117,6 +132,7 @@ describe('pièce jointe détaillée — la légende ne fait disparaître ni le n
     ['photo-with-caption', `Alice : 📷 Au bord du lac · 450${NBSP}×${NBSP}456 · 234 Ko`],
     ['file-with-caption', 'Alice : 📄 Le contrat · contrat.pdf · 12 pages · 2 Mo'],
     ['audio-named-with-caption', 'Alice : 🎵 Écoute · nom.mp3 · 3:05 · 4,2 Mo'],
+    ['contact-card-with-caption', 'Alice : 👤 Voici son numéro · Zoé Sanscompte'],
   ])('%s garde la légende ET les détails de la pièce seule', (id, expected) => {
     expect(textOf(id)).toBe(expected);
   });
@@ -142,6 +158,22 @@ describe('pièce jointe détaillée — la légende ne fait disparaître ni le n
     });
     expect(served.segments[0]).toEqual({ kind: 'text', text: 'Au bord du lac', language: 'fr' });
     expect(served.segments).toHaveLength(3);
+  });
+
+  it('une légende servie au rang 2 du Prisme garde ses détails', () => {
+    const { input } = caseById('photo-with-caption');
+    const served = composeConversationPreview({
+      ...input,
+      preferredLanguages: ['de', 'fr'],
+      lastMessage: {
+        ...input.lastMessage!,
+        originalLanguage: 'en',
+        content: 'By the lake',
+        translations: { fr: 'Au bord du lac' },
+      },
+    });
+    expect(served.segments.map((segment) => segment.text)).toEqual(['Au bord du lac', '450\u00a0×\u00a0456', '234 Ko']);
+    expect(served.segments[0]).toEqual({ kind: 'text', text: 'Au bord du lac', language: 'fr' });
   });
 
   it('un vocal légendé garde sa durée et jamais son nom', () => {

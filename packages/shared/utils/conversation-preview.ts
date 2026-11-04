@@ -541,13 +541,15 @@ function bodyOf(message: ConversationPreviewMessage, input: ConversationPreviewI
 
 /**
  * Une carte de visite se dit par son CONTACT, jamais par son fichier (#8122,
- * #8148) : « Contact partagé · Zoé » — ni UUID, ni extension, ni poids.
+ * #8148) : « Contact partagé · Zoé » — ni UUID, ni extension, ni poids. Une
+ * légende prend la place du libellé, le nom du contact reste : « Voici son
+ * numéro · Zoé ».
  */
 function contactCardBody(attachment: ConversationPreviewAttachment, text: PreviewSegment | null, str: Str): Body {
   const nature = label(str('attachment.contact'));
-  if (text) return { icon: 'contact', segments: [text], sealed: [nature, text] };
   const name = contactCardNameFromFileName(attachment.originalName);
-  return { icon: 'contact', segments: [nature, ...(name ? [label(name)] : [])], sealed: [nature] };
+  const contact = name ? [label(name)] : [];
+  return { icon: 'contact', segments: [text ?? nature, ...contact], sealed: withText([nature], text) };
 }
 
 function detailsOf(kind: AttachmentKind, attachment: ConversationPreviewAttachment | null, language: string, str: Str): readonly PreviewSegment[] {
