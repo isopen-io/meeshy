@@ -31,6 +31,7 @@ import me.meeshy.sdk.model.appearance.ConversationBackgroundPhotoVerdict
 import me.meeshy.sdk.model.appearance.ConversationBackgroundResolution
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.appearance.AppearanceDesignView
+import me.meeshy.ui.appearance.rememberPowerSaver
 import me.meeshy.ui.component.lottie.PackLottieLayer
 import me.meeshy.ui.component.chrome.ConversationAnimatedBackground
 import me.meeshy.ui.component.chrome.rememberReduceTransparency
@@ -98,7 +99,7 @@ internal fun ConversationBackgroundLayer(host: ConversationAppearanceHost) {
                 PackLottieLayer(
                     resolution.design.lottie,
                     Modifier.fillMaxSize(),
-                    animates = host.appearance.animate && !LocalReduceMotion.current,
+                    animates = ConversationBackgroundResolution.animatesLottieLayer(host.appearance, lowPower = rememberPowerSaver()) && !LocalReduceMotion.current,
                     contentScale = ContentScale.Crop,
                 )
             }
