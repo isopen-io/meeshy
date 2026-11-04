@@ -51,6 +51,9 @@ class CallVideoEffectsController internal constructor(
     private val _config = MutableStateFlow(VideoFilterConfig.DEFAULT)
     val config: StateFlow<VideoFilterConfig> = _config.asStateFlow()
 
+    /** L'appareil se protège : les effets avancés sont coupés (iOS `videoFilters.isAutoDegraded`, indicateur du panneau). */
+    val isAutoDegraded: StateFlow<Boolean> = health?.effectsDegraded ?: MutableStateFlow(false).asStateFlow()
+
     fun apply(config: VideoFilterConfig) {
         if (_config.value == config) return
         _config.value = config

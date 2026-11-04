@@ -114,6 +114,7 @@ fun SignupScreen(
     onOpenSignInLink: () -> Unit = {},
     onOpenForgotPassword: () -> Unit = {},
     viewModel: SignupViewModel = hiltViewModel(),
+    codeEntry: @Composable () -> EmailVerificationViewModel = { hiltViewModel(key = SIGNUP_CODE_ENTRY_KEY) },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
@@ -186,7 +187,7 @@ fun SignupScreen(
                         SignupIdentityCard(
                             state = state,
                             actions = actions,
-                            codeStep = { step -> SignupCodeHost(step, viewModel) },
+                            codeStep = { step -> SignupCodeHost(step, viewModel, codeEntry()) },
                         )
                         if (state.card is SignupCard.Editing) LanguagePill(state = state, viewModel = viewModel)
                     }
@@ -354,10 +355,11 @@ private fun SignupPrimaryButton(state: SignupUiState, onClick: () -> Unit, modif
     }
 }
 
+private const val SIGNUP_CODE_ENTRY_KEY = "signup-code"
+
 /** La saisie du code dans la carte : son ViewModel est celui de l'écran du code, une instance par écran d'inscription. */
 @Composable
-private fun SignupCodeHost(step: SignupCodeStep, viewModel: SignupViewModel) {
-    val entry: EmailVerificationViewModel = hiltViewModel(key = "signup-code")
+private fun SignupCodeHost(step: SignupCodeStep, viewModel: SignupViewModel, entry: EmailVerificationViewModel) {
     SignupCodeStepContent(
         step = step,
         entry = entry,

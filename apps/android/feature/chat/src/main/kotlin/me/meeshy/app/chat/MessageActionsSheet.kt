@@ -74,6 +74,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.ConversationClearance
+import me.meeshy.sdk.model.MessageExitTransport
 import me.meeshy.sdk.model.MessageMenuEntries
 import me.meeshy.sdk.model.PinAction
 import me.meeshy.sdk.model.PlainSignalAdmission
@@ -253,7 +254,7 @@ internal fun MessageActionsSheet(
                         icon = Icons.Filled.ContentCopy,
                         label = stringResource(R.string.chat_action_copy),
                         onClick = {
-                            clipboard.setText(AnnotatedString(bubble.text))
+                            MessageExitTransport.copy(bubble.text, bubble.exitOffer) { clipboard.setText(AnnotatedString(it)) }
                             onDismiss()
                         },
                     )
@@ -376,7 +377,8 @@ internal fun MessageActionsSheet(
                         label = shareTitle,
                         onClick = {
                             when (MessageMenuEntries.shareTarget(entryFacts)) {
-                                MessageMenuEntries.ShareTarget.TEXT -> shareMessageText(context, bubble.text, shareTitle)
+                                MessageMenuEntries.ShareTarget.TEXT ->
+                                    MessageExitTransport.share(bubble.text, bubble.exitOffer) { shareMessageText(context, it, shareTitle) }
                                 MessageMenuEntries.ShareTarget.PIECE -> bubble.onlyPieceId?.let(onSharePiece)
                                 null -> Unit
                             }

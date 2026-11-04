@@ -136,6 +136,7 @@ class ComposerSelectionActionBarTest {
 
     private fun tapEmptyScene() {
         compose.onNodeWithContentDescription(canvas).performTouchInput { click(Offset(width * 0.15f, height * 0.35f)) }
+        compose.passSceneDoubleTapWindow()
     }
 
     @Test
