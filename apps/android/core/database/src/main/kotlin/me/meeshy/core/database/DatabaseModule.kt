@@ -82,6 +82,7 @@ internal object DatabaseModule {
         return builder
             .addMigrations(*MeeshyMigrations.all)
             .addCallback(SearchIndexSchema.callback)
+            .addCallback(RetainedTranslationCascade.callback)
             .addCallback(DatabasePragmas.callback)
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .setQueryExecutor(DatabasePragmas.sharedQueryExecutor)

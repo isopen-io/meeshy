@@ -92,6 +92,11 @@ internal class ChatTranslationController(
                 .collect { explorer -> state.update { it.copy(languageExplorer = explorer) } }
         }
         scope.launch {
+            messageSocketManager.messageEdited.collectArrived { edited ->
+                if (edited.conversationId == conversationId) forgetManualChoice(edited.id)
+            }
+        }
+        scope.launch {
             messageSocketManager.translationReceived.collectArrived { event ->
                 if (event.conversationId == conversationId) {
                     mutableFailures.update { it - TranslationRequestFailure.rowKey(event.messageId, event.targetLanguage) }
@@ -103,6 +108,11 @@ internal class ChatTranslationController(
                 }
             }
         }
+    }
+
+    private fun forgetManualChoice(messageId: String) {
+        mutableShowingOriginal.update { it - messageId }
+        mutableActiveLanguageOverride.update { it - messageId }
     }
 
     fun toggleShowOriginal(messageId: String) {
