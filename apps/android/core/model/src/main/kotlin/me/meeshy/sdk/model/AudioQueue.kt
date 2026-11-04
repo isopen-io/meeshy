@@ -4,7 +4,8 @@ package me.meeshy.sdk.model
  * Un vocal de la file de lecture d'une conversation — port de `QueuedAudio` d'iOS.
  * [trackLanguage] est la langue de la piste [fileUrl] (élue par la langue du texte servi), `null`
  * quand l'appelant ne la connaît pas. [isProtected] : éphémère, vue unique, flouté ou chiffré — rien
- * de son contenu ne part vers l'écran verrouillé.
+ * de son contenu ne part vers l'écran verrouillé, aucun octet sur le disque. Sans défaut : la file la recopie
+ * de [AudioQueueMessage] et [AudioQueueAttachment] ; une entrée qui l'oublie ne compile pas.
  */
 public data class QueuedAudio(
     val attachmentId: String,
@@ -17,10 +18,13 @@ public data class QueuedAudio(
     val receivedAtEpochMs: Long,
     val trackLanguage: String? = null,
     val isTranslatedTrack: Boolean = false,
-    val isProtected: Boolean = false,
+    val isProtected: Boolean,
 )
 
-/** Ce que la file lit d'un message : l'ordre des pièces jointes est celui du message. */
+/**
+ * Ce que la file lit d'un message : l'ordre des pièces jointes est celui du message. [isProtected] est la
+ * protection du MESSAGE ([VoiceQueueProtection.ofMessage]) ; requise, elle ne se tait jamais en `false`.
+ */
 public data class AudioQueueMessage(
     val messageId: String,
     val conversationId: String,
@@ -28,15 +32,18 @@ public data class AudioQueueMessage(
     val senderName: String,
     val senderAvatarUrl: String?,
     val createdAtEpochMs: Long,
+    val isProtected: Boolean,
     val audios: List<AudioQueueAttachment>,
     /** Tous les identifiants de pièces jointes du message (audio ou non), pour situer le curseur. */
     val attachmentIds: List<String> = audios.map { it.attachmentId },
 )
 
+/** Un vocal du message ; [isProtected] est celle de la PIÈCE ([VoiceQueueProtection.ofPiece]), requise. */
 public data class AudioQueueAttachment(
     val attachmentId: String,
     val fileUrl: String,
     val durationMs: Long,
+    val isProtected: Boolean,
 )
 
 /**
@@ -48,6 +55,7 @@ public data class AudioQueueAttachment(
  * 2. Les vocaux déjà écoutés sont exclus.
  * 3. Avec un curseur, ne restent que les vocaux strictement APRÈS lui (date, puis rang dans le message).
  * 4. Tri par date croissante puis identifiant ; à l'intérieur d'un message, l'ordre des pièces gagne.
+ * 5. Un vocal est protégé si son message OU sa pièce l'est (leçon 275) ; le résolveur de piste ne change que l'URL.
  */
 public object AudioQueueBuilder {
 
@@ -75,6 +83,7 @@ public object AudioQueueBuilder {
                         senderName = message.senderName,
                         senderAvatarUrl = message.senderAvatarUrl,
                         receivedAtEpochMs = message.createdAtEpochMs,
+                        isProtected = message.isProtected || audio.isProtected,
                     )
                 }
         }

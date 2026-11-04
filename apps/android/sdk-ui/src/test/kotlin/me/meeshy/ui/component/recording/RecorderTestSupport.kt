@@ -70,7 +70,7 @@ internal class FakePlaybackEngine : AudioPlaybackEngine {
         mutableState.value = next
     }
 
-    override fun play(attachmentId: String, url: String, origin: PlaybackCommandOrigin): Boolean = true
+    override fun play(attachmentId: String, url: String, origin: PlaybackCommandOrigin, isProtected: Boolean): Boolean = true
 
     override fun playLocal(attachmentId: String, fileUri: String, origin: PlaybackCommandOrigin): Boolean {
         localPlays += attachmentId to fileUri
