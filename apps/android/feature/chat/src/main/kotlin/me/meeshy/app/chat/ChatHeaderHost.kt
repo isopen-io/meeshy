@@ -27,6 +27,7 @@ import me.meeshy.sdk.model.avatar.AvatarContext
 import me.meeshy.sdk.model.ConversationEngagementSnapshot
 import me.meeshy.sdk.model.engagement.HeaderFlameLaw
 import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.ui.component.reading.ReadingModeChip
 import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
 import androidx.compose.foundation.background
@@ -206,8 +207,11 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
                     readingModeSlot = {
                         val readingMode = host.readingMode
                         if (readingMode != null && readingMode.state.showsChip) {
-                            ChatReadingModeChip(
-                                state = readingMode.state,
+                            ReadingModeChip(
+                                mode = readingMode.state.mode,
+                                isAuto = readingMode.state.isAuto,
+                                entries = readingMode.state.menuEntries,
+                                nextInCycle = readingMode.state.nextInCycle,
                                 accentColor = accentColor,
                                 onSelect = readingMode.select,
                                 onAuto = readingMode.resetToAuto,
