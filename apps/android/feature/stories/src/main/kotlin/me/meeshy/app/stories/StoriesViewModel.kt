@@ -23,6 +23,8 @@ import me.meeshy.sdk.story.InMemoryStoryViewedLedger
 import me.meeshy.sdk.story.PendingStoryPublish
 import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.story.StoryCoverStore
+import me.meeshy.sdk.story.StoryMediaPins
+import me.meeshy.sdk.story.StoryMediaPreloader
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.StoryViewedLedger
 import me.meeshy.sdk.story.toStoryGroups
@@ -64,6 +66,8 @@ class StoriesViewModel @Inject constructor(
     private val coverStore: StoryCoverStore = StoryCoverStore.Empty,
     private val coverSignal: StoryCoverRenderSignal? = null,
     private val viewedLedger: StoryViewedLedger = InMemoryStoryViewedLedger(),
+    private val mediaPreloader: StoryMediaPreloader? = null,
+    private val mediaPins: StoryMediaPins? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoriesUiState())
@@ -112,6 +116,7 @@ class StoriesViewModel @Inject constructor(
                         pending = StoryOptimisticTray.pendingStories(pending, self),
                     )
                     val groups = merged.toStoryGroups(currentUserId = currentUserId)
+                    preloadAndPin(groups)
                     val tray = StoryTrayBuilder.build(
                         groups = groups,
                         currentUserId = currentUserId,
@@ -190,11 +195,47 @@ class StoriesViewModel @Inject constructor(
         }
     }
 
+    /** Dernière signature de plan : le plateau se ré-émet à chaque compteur, le préchargement ne repart que si les médias changent. */
+    private var lastPreloadPlan: List<List<List<String>>>? = null
+
+    /** Stories dont les médias sont déjà épinglés, et leurs données pour relâcher à la purge (iOS `releaseOfflineMedia`). */
+    private val pinnedStories = HashMap<String, me.meeshy.sdk.model.StoryItem>()
+
+    private fun preloadAndPin(groups: List<me.meeshy.sdk.model.StoryGroup>) {
+        val plan = me.meeshy.sdk.model.story.StoryTrayPreloadPlan.of(groups)
+        val signature = plan.map { stories -> stories.map { s -> listOf(s.isViewed.toString()) + s.media.map { it.url } } }
+        if (signature != lastPreloadPlan) {
+            lastPreloadPlan = signature
+            mediaPreloader?.preload(plan)
+        }
+        val pins = mediaPins ?: return
+        val toPin = groups.flatMap { it.stories }.filter { it.isViewed && it.id !in pinnedStories }
+        if (toPin.isEmpty()) return
+        toPin.forEach { pinnedStories[it.id] = it }
+        viewModelScope.launch { toPin.forEach { runQuietly { pins.pin(it) } } }
+    }
+
+    private fun releasePins(storyIds: Collection<String>) {
+        val pins = mediaPins ?: return
+        val dead = storyIds.mapNotNull { pinnedStories.remove(it) }
+        if (dead.isEmpty()) return
+        viewModelScope.launch { dead.forEach { runQuietly { pins.release(it) } } }
+    }
+
+    private suspend fun runQuietly(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+    }
+
     /** Balayage d'expiration (appelé chaque minute tant que le plateau est à l'écran) : les stories mortes sortent du cache. */
     fun sweepExpired() {
         viewModelScope.launch {
             try {
-                storyRepository.sweepExpired()
+                releasePins(storyRepository.sweepExpired())
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -222,6 +263,7 @@ class StoriesViewModel @Inject constructor(
         viewModelScope.launch {
             socialSocket.storyDeleted.collectEachArrivedSafely { payload ->
                 storyRepository.removeCachedStory(payload.storyId)
+                releasePins(listOf(payload.storyId))
             }
         }
     }
