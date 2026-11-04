@@ -187,7 +187,7 @@ public class PublicationOutbox @Inject constructor(
         val owner = ownerSource.currentOwnerId() ?: return null
         val rows = outboxRepository.observeAll().first().filter { it.ownerId == owner && it.kindEnum == OutboxKind.CREATE_POST }
         val candidates = rows.mapNotNull { stuckCandidate(it) }
-        val picked = StuckPublicationRecovery.pick(candidates, nowMillis) ?: return null
+        val picked = StuckPublicationRecovery.pick(candidates.map { it.first }, nowMillis) ?: return null
         if (picked.state != PublicationRowState.Pending) return null
         val request = candidates.firstOrNull { it.first.cmid == picked.cmid }?.second ?: return null
         val removed = outboxRepository.withdrawUnlessInflight(picked.cmid) as? OutboxWithdrawal.Removed ?: return null
