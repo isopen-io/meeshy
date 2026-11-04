@@ -112,6 +112,57 @@ describe('resolveLastMessagePreviewGroup — un message protégé ne transporte 
   });
 });
 
+describe('resolveLastMessagePreviewGroup — une pièce masquée ou d’éphémère ne transporte aucun détail', () => {
+  it('pièce floutée : nature gardée, aucun détail, poids total retenu', () => {
+    const group = resolveLastMessagePreviewGroup(
+      reader,
+      makeMessage({
+        attachments: [{ ...photo('a1', 1000), isBlurred: true }, photo('a2', 2000)],
+        _count: { attachments: 2 },
+      }),
+      NOW,
+    );
+
+    expect(group.lastMessageAttachmentSummary).toEqual({ count: 2, kinds: { image: 2 }, totalSize: null });
+    expect(group.lastMessageAttachments[0]).toMatchObject({
+      id: 'a1',
+      mimeType: 'image/jpeg',
+      isBlurred: true,
+      fileSize: null,
+      width: null,
+      height: null,
+      thumbnailUrl: null,
+      originalName: null,
+    });
+    expect(JSON.stringify(group)).not.toContain('cdn/');
+  });
+
+  it('éphémère de 240 s : le texte reste servi, la pièce ne sert aucun détail et aucun poids', () => {
+    const group = resolveLastMessagePreviewGroup(
+      reader,
+      makeMessage({
+        ephemeralDuration: 240,
+        attachments: [photo('a1', 1000), photo('a2', 2000)],
+        _count: { attachments: 2 },
+      }),
+      NOW,
+    );
+
+    expect(group.lastMessagePreview).toBe('Le code du portail est 4521');
+    expect(group.lastMessageAttachmentCount).toBe(2);
+    expect(group.lastMessageAttachmentSummary).toEqual({ count: 2, kinds: { image: 2 }, totalSize: null });
+    expect(group.lastMessageAttachments[0]).toMatchObject({
+      id: 'a1',
+      fileSize: null,
+      width: null,
+      height: null,
+      thumbnailUrl: null,
+      originalName: null,
+    });
+    expect(JSON.stringify(group)).not.toContain('cdn/');
+  });
+});
+
 describe('resolveLastMessagePreviewGroup — la nature du dernier message', () => {
   it('résume toutes les pièces jointes, pas seulement la première', () => {
     const group = resolveLastMessagePreviewGroup(

@@ -441,7 +441,9 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
       isViewOnce: false,
       isBlurred: false,
       isEncrypted: false,
-      expiresAt: new Date('2099-08-22T11:00:00.000Z'),
+      // Ordinaire : une échéance future ferait un éphémère actif, dont la pièce
+      // ne sert plus aucun détail (#15701) — témoin ci-dessous.
+      expiresAt: null,
       attachments: [
         {
           id: 'att-1',
@@ -464,7 +466,7 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
       expect(payload.lastMessageSenderName).toBe('Alice');
       expect(payload.lastMessageIsBlurred).toBe(false);
       expect(payload.lastMessageIsViewOnce).toBe(false);
-      expect(payload.lastMessageExpiresAt).toBe('2099-08-22T11:00:00.000Z');
+      expect(payload.lastMessageExpiresAt).toBeNull();
       // Plafonnée à la première pièce jointe, comptée et résumée sur les DEUX.
       expect(payload.lastMessageAttachmentCount).toBe(2);
       expect(payload.lastMessageAttachmentSummary).toEqual({ count: 2, kinds: { image: 2 }, totalSize: 13344 });
@@ -486,6 +488,52 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
           effectFlags: 0,
         },
       ]);
+    }
+  });
+
+  it('les DEUX producteurs : un éphémère actif garde son échéance, sa pièce ne sert aucun détail (#15701)', async () => {
+    const message = makeContractMessage({
+      isViewOnce: false,
+      isBlurred: false,
+      isEncrypted: false,
+      expiresAt: new Date('2099-08-22T11:00:00.000Z'),
+      attachments: [
+        {
+          id: 'att-1',
+          mimeType: 'image/jpeg',
+          thumbnailUrl: 'https://cdn.example/att-1-thumb.jpg',
+          originalName: 'photo.jpg',
+          fileSize: 12345,
+          duration: null,
+          width: 800,
+          height: 600,
+        },
+        { id: 'att-2', mimeType: 'image/png', originalName: 'second.png', fileSize: 999 },
+      ],
+    });
+
+    for (const payload of [await updatedFromSocketPath(message), await updatedFromRestPath(message)]) {
+      expect(payload.lastMessageExpiresAt).toBe('2099-08-22T11:00:00.000Z');
+      expect(payload.lastMessageAttachmentCount).toBe(2);
+      expect(payload.lastMessageAttachmentSummary).toEqual({ count: 2, kinds: { image: 2 }, totalSize: null });
+      expect(payload.lastMessageAttachments).toEqual([
+        {
+          id: 'att-1',
+          mimeType: 'image/jpeg',
+          thumbnailUrl: null,
+          originalName: null,
+          fileSize: null,
+          duration: null,
+          width: null,
+          height: null,
+          pageCount: null,
+          alt: null,
+          isViewOnce: false,
+          isBlurred: false,
+          effectFlags: 0,
+        },
+      ]);
+      expect(JSON.stringify(payload)).not.toContain('att-1-thumb');
     }
   });
 
