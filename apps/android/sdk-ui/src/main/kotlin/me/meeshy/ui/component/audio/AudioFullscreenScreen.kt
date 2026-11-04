@@ -108,6 +108,7 @@ public fun AudioFullscreenScreen(
     conversationTail: (String) -> List<QueuedAudio> = { emptyList() },
     onDismissToMessage: (String) -> Unit = {},
     onDownload: ((AudioFullscreenSource) -> Unit)? = null,
+    actions: AudioFullscreenActionPort? = null,
 ) {
     val ordered = remember(sources) { AudioFullscreenSequence.ordered(sources) { it.createdAtEpochMs } }
     val ids = remember(ordered) { ordered.map { it.id } }
@@ -201,7 +202,7 @@ public fun AudioFullscreenScreen(
             ?.let(onDismissToMessage)
         onDismiss()
     }
-    BackHandler(onBack = dismiss)
+    BackHandler { if (chrome.overlay != null) chrome = chrome.closingOverlay() else dismiss() }
 
     val density = LocalDensity.current
     val dragOffset = remember { Animatable(0f) }
@@ -248,6 +249,11 @@ public fun AudioFullscreenScreen(
                 onRevealChrome = { chrome = chrome.revealing() },
                 onChromeInteraction = { touches += 1 },
                 onDownload = onDownload,
+                rail = if (actions != null && index == pagerState.currentPage) {
+                    @Composable { AudioFullscreenActionRailSlot(actions, source, chrome, onChrome = { chrome = it }, onClose = dismiss) }
+                } else {
+                    null
+                },
                 onNext = AudioFullscreenSequence.next(source.id, ids)?.let { id ->
                     { scope.launch { pagerState.animateScrollToPage(latestIds.indexOf(id).coerceAtLeast(0)) }; Unit }
                 },
@@ -255,6 +261,10 @@ public fun AudioFullscreenScreen(
                     { scope.launch { pagerState.animateScrollToPage(latestIds.indexOf(id).coerceAtLeast(0)) }; Unit }
                 },
             )
+        }
+        val posed = ordered.getOrNull(pagerState.currentPage)
+        if (actions != null && posed != null) {
+            AudioFullscreenActionOverlays(actions, posed, chrome, accent, onChrome = { chrome = it })
         }
     }
 }

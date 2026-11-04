@@ -582,6 +582,7 @@
     <string name="media_hub_tile_image">صورة من %1$s، %2$s</string>
     <string name="media_hub_tile_video">فيديو من %1$s، %2$s</string>
     <string name="media_hub_title">الوسائط والروابط والمستندات</string>
+    <string name="media_reply_placeholder">الرد على هذا المرفق…</string>
     <string name="member_management_action_ban">حظر نهائي</string>
     <string name="member_management_action_demote_member">خفض إلى عضو</string>
     <string name="member_management_action_expel">طرد</string>
