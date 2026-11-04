@@ -11,7 +11,7 @@ class SendMessageRequestSerializationTest {
     private val json = Json { encodeDefaults = false; ignoreUnknownKeys = true }
 
     private fun request(copyFrom: String? = null) =
-        SendMessageRequest(content = "salut", originalLanguage = "fr", copyAttachmentsFromMessageId = copyFrom)
+        SendMessageRequest(content = "salut", originalLanguage = "fr", clientMessageId = "cid_target", copyAttachmentsFromMessageId = copyFrom)
 
     @Test
     fun `une cible de fan-out serialise copyAttachmentsFromMessageId`() {
