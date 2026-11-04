@@ -21,18 +21,17 @@ import me.meeshy.sdk.model.comments.CommentReplyFocus
  * réponse dépliée s'enregistre, et [KeepsReplyTargetInView] ramène la cible au bas de la zone visible, juste au-dessus
  * du composeur, une fois le clavier posé.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Stable
 public class CommentAnchors {
     private val requesters = HashMap<String, BringIntoViewRequester>()
 
-    @OptIn(ExperimentalFoundationApi::class)
     internal fun requester(anchor: String): BringIntoViewRequester = requesters.getOrPut(anchor) { BringIntoViewRequester() }
 
     internal fun release(anchor: String) {
         requesters.remove(anchor)
     }
 
-    @OptIn(ExperimentalFoundationApi::class)
     internal suspend fun reveal(anchor: String) {
         requesters[anchor]?.bringIntoView()
     }
