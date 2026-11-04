@@ -97,7 +97,7 @@ final class SyncPillDestinationWiringTests: XCTestCase {
             let corps = try corps(ofHandlerIn: hote)
             XCTAssertTrue(corps.contains("SyncPillDestination.resolve("),
                           "\(hote) : la décision doit sortir de la loi unique")
-            XCTAssertTrue(corps.contains("-> Bool"),
+            XCTAssertTrue(corps.hasPrefix("func handleSyncPillTap(_ source: OutboxUIItem.Source) -> Bool"),
                           "\(hote) : le handler doit dire s'il a ouvert quelque chose")
         }
     }
@@ -117,5 +117,26 @@ final class SyncPillDestinationWiringTests: XCTestCase {
             try AppSourceGuard.unit("Meeshy/Features/Main/Components/SyncPill.swift"))
         XCTAssertTrue(pastille.contains("guard let onTap, onTap(source) else { return rotator.advance() }"),
                       "Un toucher que la racine n'honore pas doit au moins avancer la rotation.")
+    }
+}
+
+/// Une entrée dont la source est `.unknown` n'a AUCUNE destination : elle ne
+/// doit pas promettre à VoiceOver « ouvrir l'emplacement de l'opération » pour
+/// ne faire, au toucher, qu'avancer la rotation. L'indice et l'action lisent la
+/// même règle (`tapOutcome`) : la rendre honnête rend les deux honnêtes.
+@MainActor
+final class SyncPillUnknownSourceTapTests: XCTestCase {
+
+    private func entree(source: OutboxUIItem.Source?) -> SyncPillEntry {
+        SyncPillEntry(id: "e", label: "Story en cours d'envoi", iconName: nil, dotStyle: .error,
+                      source: source, showsActivityDots: false)
+    }
+
+    func test_tapOutcome_unknownSource_advancesWithoutPromisingANavigation() {
+        XCTAssertEqual(entree(source: .unknown).tapOutcome, .advance)
+    }
+
+    func test_tapOutcome_storySource_stillNavigates() {
+        XCTAssertEqual(entree(source: .story(id: "s1")).tapOutcome, .navigate(.story(id: "s1")))
     }
 }
