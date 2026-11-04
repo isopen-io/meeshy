@@ -135,6 +135,8 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var participantBanner: String? = nil
     /// Le contour d'avatar équipé du pair d'une directe (#10713) — posé après l'init, comme `bridge`.
     public var participantRing: ServedProfileDecorItem? = nil
+    /// Le compte du pair d'une directe est supprimé ou désactivé (#15717) — posé après l'init, comme `participantRing`.
+    public var participantAccountClosed: Bool = false
     public var lastSeenAt: Date? = nil
 
     public var closedAt: Date? = nil
@@ -354,10 +356,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(userState.mentionsOnly)
         h.combine(userState.customName)
         h.combine(avatar)
-        h.combine(participantUsername)
-        h.combine(participantAvatarURL)
-        h.combine(participantBanner)
-        h.combine(participantRing)
+        combineInterlocutor(into: &h)
         h.combine(tags)
         h.combine(userState.reaction)
         // Catégorie — AFFICHÉE par l'encoche haut-gauche de la carte de focus
@@ -534,7 +533,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         case recentMessages, tags
         case bridge
         case isAnnouncementChannel, defaultWriteRole, slowModeSeconds, autoTranslateEnabled
-        case participantUserId, participantUsername, participantAvatarURL, participantBanner, participantRing, lastSeenAt
+        case participantUserId, participantUsername, participantAvatarURL, participantBanner, participantRing, participantAccountClosed, lastSeenAt
         case closedAt, closedBy, currentUserRole, currentUserJoinedAt
         case language, theme, colorPalette
 
@@ -612,11 +611,6 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.slowModeSeconds = try c.decodeIfPresent(Int.self, forKey: .slowModeSeconds)
         self.autoTranslateEnabled = try c.decodeIfPresent(Bool.self, forKey: .autoTranslateEnabled)
 
-        self.participantUserId = try c.decodeIfPresent(String.self, forKey: .participantUserId)
-        self.participantUsername = try c.decodeIfPresent(String.self, forKey: .participantUsername)
-        self.participantAvatarURL = try c.decodeIfPresent(String.self, forKey: .participantAvatarURL)
-        self.participantBanner = try c.decodeIfPresent(String.self, forKey: .participantBanner)
-        self.participantRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .participantRing)
         self.lastSeenAt = try c.decodeIfPresent(Date.self, forKey: .lastSeenAt)
         self.closedAt = try c.decodeIfPresent(Date.self, forKey: .closedAt)
         self.closedBy = try c.decodeIfPresent(String.self, forKey: .closedBy)
@@ -663,6 +657,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
             lastSyncedAt: try c.decodeIfPresent(Date.self, forKey: .lastSyncedAt),
             pendingMutationCount: try c.decodeIfPresent(Int.self, forKey: .pendingMutationCount) ?? 0
         )
+        try decodeInterlocutor(from: c)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -713,11 +708,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encodeIfPresent(slowModeSeconds, forKey: .slowModeSeconds)
         try c.encodeIfPresent(autoTranslateEnabled, forKey: .autoTranslateEnabled)
 
-        try c.encodeIfPresent(participantUserId, forKey: .participantUserId)
-        try c.encodeIfPresent(participantUsername, forKey: .participantUsername)
-        try c.encodeIfPresent(participantAvatarURL, forKey: .participantAvatarURL)
-        try c.encodeIfPresent(participantBanner, forKey: .participantBanner)
-        try c.encodeIfPresent(participantRing, forKey: .participantRing)
+        try encodeInterlocutor(into: &c)
         try c.encodeIfPresent(lastSeenAt, forKey: .lastSeenAt)
         try c.encodeIfPresent(closedAt, forKey: .closedAt)
         try c.encodeIfPresent(closedBy, forKey: .closedBy)
@@ -753,6 +744,36 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encode(userState.hasDraft, forKey: .hasDraft)
         try c.encodeIfPresent(userState.draftPreview, forKey: .draftPreview)
         try c.encodeIfPresent(userState.appearance, forKey: .appearance)
+    }
+
+    /// L'interlocuteur d'une directe se lit, s'écrit et se replie D'UN BLOC
+    /// (`DirectInterlocutor.swift`) : ses champs sont vrais ensemble.
+    private mutating func decodeInterlocutor(from c: KeyedDecodingContainer<CodingKeys>) throws {
+        participantUserId = try c.decodeIfPresent(String.self, forKey: .participantUserId)
+        participantUsername = try c.decodeIfPresent(String.self, forKey: .participantUsername)
+        participantAvatarURL = try c.decodeIfPresent(String.self, forKey: .participantAvatarURL)
+        participantBanner = try c.decodeIfPresent(String.self, forKey: .participantBanner)
+        participantRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .participantRing)
+        participantAccountClosed = (try? c.decodeIfPresent(Bool.self, forKey: .participantAccountClosed)) ?? false
+    }
+
+    private func encodeInterlocutor(into c: inout KeyedEncodingContainer<CodingKeys>) throws {
+        try c.encodeIfPresent(participantUserId, forKey: .participantUserId)
+        try c.encodeIfPresent(participantUsername, forKey: .participantUsername)
+        try c.encodeIfPresent(participantAvatarURL, forKey: .participantAvatarURL)
+        try c.encodeIfPresent(participantBanner, forKey: .participantBanner)
+        try c.encodeIfPresent(participantRing, forKey: .participantRing)
+        try c.encode(participantAccountClosed, forKey: .participantAccountClosed)
+    }
+
+    /// La fermeture est repliée : elle décide de ce qu'ouvre l'avatar de la ligne
+    /// (`ConversationAvatarTarget`), et la ligne est `.equatable()` sur ce hash.
+    private func combineInterlocutor(into h: inout Hasher) {
+        h.combine(participantUsername)
+        h.combine(participantAvatarURL)
+        h.combine(participantBanner)
+        h.combine(participantRing)
+        h.combine(participantAccountClosed)
     }
 }
 
