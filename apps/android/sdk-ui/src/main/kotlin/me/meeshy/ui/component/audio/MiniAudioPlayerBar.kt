@@ -22,11 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -66,6 +61,7 @@ import me.meeshy.ui.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.chrome.topChromeBarSpring
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -185,14 +181,14 @@ private fun MiniAudioPlayerBarContent(
         val mirror = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1f else 1f
         IconButton(onClick = onTogglePlay, modifier = Modifier.size(BarTouchTarget)) {
             Icon(
-                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                imageVector = if (isPlaying) MeeshyIcons.Pause else MeeshyIcons.Play,
                 contentDescription = stringResource(if (isPlaying) R.string.mini_player_pause else R.string.mini_player_play),
                 tint = primary,
             )
         }
         IconButton(onClick = onNext, modifier = Modifier.size(BarTouchTarget)) {
             Icon(
-                imageVector = Icons.Filled.SkipNext,
+                imageVector = MeeshyIcons.FastForward,
                 contentDescription = stringResource(R.string.mini_player_next),
                 tint = secondary,
                 modifier = Modifier.graphicsLayer { scaleX = mirror },
@@ -200,7 +196,7 @@ private fun MiniAudioPlayerBarContent(
         }
         IconButton(onClick = onClose, modifier = Modifier.size(BarTouchTarget)) {
             Icon(
-                imageVector = Icons.Filled.Close,
+                imageVector = MeeshyIcons.Close,
                 contentDescription = stringResource(R.string.mini_player_close),
                 tint = secondary,
             )
