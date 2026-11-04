@@ -26,7 +26,10 @@ import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.lock.ConversationUnlockSessionStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationFilter
+import me.meeshy.sdk.model.conversationlist.ConversationAvatarRoute
+import me.meeshy.sdk.model.conversationlist.ConversationAvatarTarget
 import me.meeshy.sdk.model.conversationlist.ConversationFilterComposition
+import me.meeshy.sdk.model.conversationlist.avatarTarget
 import me.meeshy.sdk.model.conversationlist.ConversationListLoadState
 import me.meeshy.sdk.model.search.ListMessageSearchState
 import me.meeshy.sdk.search.ListMessageSearchSource
@@ -97,6 +100,10 @@ class ConversationListViewModel @Inject constructor(
     private val openConversationRequests = Channel<String>(Channel.BUFFERED)
     val openConversation: Flow<String> = openConversationRequests.receiveAsFlow()
 
+    /** Le toucher d'avatar d'une ligne (#15989) : profil du pair ou détails, à usage unique. */
+    private val avatarEffectRequests = Channel<ConversationAvatarEffect>(Channel.BUFFERED)
+    val avatarEffects: Flow<ConversationAvatarEffect> = avatarEffectRequests.receiveAsFlow()
+
     /** Liste brute faisant autorite ; [ConversationListUiState.conversations] en est la vue filtree. */
     private var rawConversations: List<ApiConversation> = emptyList()
 
@@ -105,6 +112,7 @@ class ConversationListViewModel @Inject constructor(
         lockStore = lockStore,
         openConversation = { dialogs.onConversationOpened(it); openConversationRequests.trySend(it) },
         unlockSession = unlockSession,
+        openInfo = { avatarEffectRequests.trySend(ConversationAvatarEffect.OpenInfo(it)) },
     )
     private val actions = ConversationListRowActions(
         scope = viewModelScope,
@@ -291,6 +299,17 @@ class ConversationListViewModel @Inject constructor(
     fun onConversationTap(id: String) {
         loadingDeps.explicitUnreadMarks.clear(id)
         lock.onConversationTap(id)
+    }
+    /** Toucher d'avatar : la loi relue AU TOUCHER — un verrou ou un blocage posés depuis le rendu comptent. */
+    fun onAvatarTap(id: String) {
+        val target = conversationFor(id)
+            ?.avatarTarget(_state.value.currentUserId, isPeerBlocked = dialogs.isPeerBlocked(id) == true)
+            ?: ConversationAvatarTarget.ConversationInfo
+        when (val route = ConversationAvatarRoute.route(target, lock.isLocked(id))) {
+            is ConversationAvatarRoute.Profile ->
+                avatarEffectRequests.trySend(ConversationAvatarEffect.OpenProfile(route.userId))
+            ConversationAvatarRoute.Info, ConversationAvatarRoute.UnlockThenInfo -> lock.onAvatarInfo(id)
+        }
     }
     fun onLockToggle(id: String) = lock.onLockToggle(id)
     fun onUnlockAll() = lock.onUnlockAll()
