@@ -17,7 +17,8 @@
  * son rôle de plateforme — reçoit 403 sans écriture. « Non acceptée » se lit
  * comme `acceptMessageRequest` le lit (`NOT_YET_ACCEPTED` : la date OU la
  * provenance, posées sur la ligne du destinataire, effacées par « Accepter »
- * seulement — une ligne antérieure à la provenance n'a que la date) ; la
+ * ou, dans une directe, par une réponse du destinataire (#16053) — une ligne
+ * antérieure à la provenance n'a que la date) ; la
  * ligne n'est pas filtrée sur `isActive` : un destinataire parti ne rend pas
  * la main à l'expéditeur.
  *

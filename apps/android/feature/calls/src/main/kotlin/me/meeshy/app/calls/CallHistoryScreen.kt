@@ -24,7 +24,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,9 +41,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallRecord
+import kotlinx.coroutines.flow.first
+import me.meeshy.ui.component.MeeshyEmptyState
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.component.refresh.MeeshyRefreshableBox
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.component.chrome.MeeshyBackButton
 import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -102,9 +106,11 @@ fun CallHistoryScreen(
                 CallHistoryContent.SKELETON -> CallHistorySkeleton()
                 CallHistoryContent.ERROR -> CallHistoryError(onRetry = viewModel::retry)
                 CallHistoryContent.EMPTY -> CallHistoryEmpty(state)
-                CallHistoryContent.LIST -> PullToRefreshBox(
-                    isRefreshing = state.isUserRefreshing,
-                    onRefresh = viewModel::refresh,
+                CallHistoryContent.LIST -> MeeshyRefreshableBox(
+                    onRefresh = {
+                        viewModel.refresh()
+                        viewModel.state.first { !it.isUserRefreshing }
+                    },
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     LazyColumn(Modifier.fillMaxSize()) {
@@ -183,38 +189,34 @@ private fun CallHistorySkeleton() {
 
 @Composable
 private fun CallHistoryEmpty(state: CallHistoryUiState) {
-    if (state.isSearching) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    when (CallHistoryEmptyKind.of(state)) {
+        CallHistoryEmptyKind.NO_RESULTS -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CallHistorySearchEmpty(query = state.searchQuery)
         }
-        return
-    }
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = stringResource(
-                if (state.missedOnly) R.string.call_history_empty_missed else R.string.call_history_empty,
-            ),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MeeshyTheme.tokens.textSecondary,
+        CallHistoryEmptyKind.NO_MISSED_CALLS -> MeeshyEmptyState(
+            icon = MeeshyIcons.CallEnd,
+            title = stringResource(R.string.call_history_empty_missed),
+            subtitle = "",
+            accent = MeeshyPalette.Error,
+        )
+        CallHistoryEmptyKind.NO_CALLS -> MeeshyEmptyState(
+            icon = MeeshyIcons.Call,
+            title = stringResource(R.string.call_history_empty),
+            subtitle = "",
         )
     }
 }
 
 @Composable
 private fun CallHistoryError(onRetry: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(MeeshySpacing.xl),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = stringResource(R.string.call_history_error),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MeeshyTheme.tokens.textSecondary,
-        )
-        Spacer(Modifier.height(MeeshySpacing.md))
-        TextButton(onClick = onRetry) { Text(stringResource(R.string.call_history_retry)) }
-    }
+    MeeshyEmptyState(
+        icon = MeeshyIcons.WifiOff,
+        title = stringResource(R.string.call_history_error),
+        subtitle = "",
+        accent = MeeshyPalette.Error,
+        actionLabel = stringResource(R.string.call_history_retry),
+        onAction = onRetry,
+    )
 }
 
 /** Bottom of the list: loads the next older page on arrival, or offers to retry it. */

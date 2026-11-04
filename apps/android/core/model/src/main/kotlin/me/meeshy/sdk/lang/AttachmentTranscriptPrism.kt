@@ -55,6 +55,22 @@ object AttachmentTranscriptPrism {
         return Track(url = picked.value.url.orEmpty(), language = picked.language, durationMs = picked.value.durationMs)
     }
 
+    /**
+     * **La piste effectivement JOUÉE** : [track] couplée au texte [served]. La voix n'est servie que si elle est dans la
+     * langue du texte servi (ou s'il n'y a aucun texte à contredire) : deux descentes parallèles serviraient « la réunion
+     * est déplacée » au-dessus d'une voix espagnole, pire qu'une traduction absente. Site unique de ce couplage — la bulle
+     * ET la file du fil l'appellent. `null` ⇒ jouer la note vocale d'origine.
+     */
+    fun playedTrack(
+        transcription: ApiAttachmentTranscription?,
+        translations: Map<String, ApiAttachmentTranslation>?,
+        preferences: LanguageResolver.ContentLanguagePreferences,
+    ): Track? {
+        val track = track(transcription, translations, preferences) ?: return null
+        val text = served(transcription, translations, preferences) ?: return track
+        return track.takeIf { text.isTranslated && text.language.equals(it.language, ignoreCase = true) }
+    }
+
     /** Le texte d'origine, `transcribedText` d'abord (forme du serveur), `text` ensuite ; un blanc n'en est pas un. */
     fun originalText(transcription: ApiAttachmentTranscription?): String? =
         (transcription?.transcribedText ?: transcription?.text)?.trim()?.ifBlank { null }
