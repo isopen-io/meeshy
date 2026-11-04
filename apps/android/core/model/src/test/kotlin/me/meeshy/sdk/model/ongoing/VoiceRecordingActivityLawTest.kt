@@ -5,96 +5,60 @@ import org.junit.Test
 
 class VoiceRecordingActivityLawTest {
 
-    private val wording = VoiceRecordingActivityLaw.Wording("Enregistrement")
+    private val wording = VoiceRecordingActivityLaw.Wording(recording = "Enregistrement vocal")
 
-    private fun input(
-        recording: Boolean = true,
-        started: Long = 1_000L,
-        title: String = "Famille",
-        levels: List<Float> = emptyList(),
-        now: Long = 0L,
-    ) = VoiceRecordingActivityLaw.Input(recording, started, title, levels, now)
-
-    private fun open(levels: List<Float> = emptyList(), now: Long = 0L): VoiceRecordingSnapshot {
-        val step = VoiceRecordingActivityLaw.step(null, input(levels = levels, now = now), wording)
-        return (step.action as VoiceRecordingActivityLaw.Action.Start).snapshot
-    }
+    private fun input(recording: Boolean = true, startedAt: Long = 1_000L) =
+        VoiceRecordingActivityLaw.Input(isRecording = recording, startedAtEpochMs = startedAt)
 
     @Test
-    fun `a take opens with the status label, the conversation title and the level`() {
-        val snapshot = open(levels = listOf(1f, 1f))
-
-        assertThat(snapshot.statusLabel).isEqualTo("Enregistrement")
-        assertThat(snapshot.title).isEqualTo("Famille")
-        assertThat(snapshot.level).isEqualTo(VoiceRecordingActivityLaw.MAX_LEVEL)
-    }
-
-    @Test
-    fun `the level is the quantized mean clamped to the scale`() {
-        assertThat(VoiceRecordingActivityLaw.quantizedLevel(emptyList())).isEqualTo(0)
-        assertThat(VoiceRecordingActivityLaw.quantizedLevel(listOf(0.5f))).isEqualTo(2)
-        assertThat(VoiceRecordingActivityLaw.quantizedLevel(listOf(7f))).isEqualTo(VoiceRecordingActivityLaw.MAX_LEVEL)
-        assertThat(VoiceRecordingActivityLaw.quantizedLevel(listOf(-3f))).isEqualTo(0)
-    }
-
-    @Test
-    fun `a level change inside the same second does not wake the notification`() {
-        val running = open(levels = listOf(0f), now = 0L)
-
-        val step = VoiceRecordingActivityLaw.step(running, input(levels = listOf(1f), now = 999L), wording)
+    fun `no recording opens nothing`() {
+        val step = VoiceRecordingActivityLaw.step(null, input(recording = false), wording)
 
         assertThat(step.action).isEqualTo(VoiceRecordingActivityLaw.Action.None)
-        assertThat(step.running).isEqualTo(running)
+        assertThat(step.running).isNull()
     }
 
     @Test
-    fun `a level change a second later updates the notification`() {
-        val running = open(levels = listOf(0f), now = 0L)
+    fun `a recording opens the activity anchored on its start`() {
+        val start = VoiceRecordingActivityLaw.step(null, input(startedAt = 42L), wording)
+            .action as VoiceRecordingActivityLaw.Action.Start
 
-        val step = VoiceRecordingActivityLaw.step(running, input(levels = listOf(1f), now = 1_000L), wording)
-
-        val update = step.action as VoiceRecordingActivityLaw.Action.Update
-        assertThat(update.snapshot.level).isEqualTo(VoiceRecordingActivityLaw.MAX_LEVEL)
-        assertThat(step.running?.lastUpdateEpochMs).isEqualTo(1_000L)
+        assertThat(start.snapshot.startedAtEpochMs).isEqualTo(42L)
+        assertThat(start.snapshot.statusLabel).isEqualTo("Enregistrement vocal")
+        assertThat(start.snapshot.isFinished).isFalse()
     }
 
     @Test
-    fun `an unchanged level never updates`() {
-        val running = open(levels = listOf(0.5f), now = 0L)
+    fun `the running recording never wakes the notification`() {
+        val first = VoiceRecordingActivityLaw.step(null, input(), wording)
 
-        val step = VoiceRecordingActivityLaw.step(running, input(levels = listOf(0.5f), now = 5_000L), wording)
-
-        assertThat(step.action).isEqualTo(VoiceRecordingActivityLaw.Action.None)
+        assertThat(VoiceRecordingActivityLaw.step(first.running, input(), wording).action)
+            .isEqualTo(VoiceRecordingActivityLaw.Action.None)
     }
 
     @Test
-    fun `a new title updates immediately`() {
-        val running = open(now = 0L)
+    fun `stopping ends the activity at once with a finished snapshot`() {
+        val first = VoiceRecordingActivityLaw.step(null, input(), wording)
 
-        val step = VoiceRecordingActivityLaw.step(running, input(title = "Travail", now = 10L), wording)
-
-        assertThat(step.action).isInstanceOf(VoiceRecordingActivityLaw.Action.Update::class.java)
-    }
-
-    @Test
-    fun `a new take start restarts the notification`() {
-        val running = open()
-
-        val step = VoiceRecordingActivityLaw.step(running, input(started = 2_000L), wording)
-
-        assertThat(step.action).isInstanceOf(VoiceRecordingActivityLaw.Action.Start::class.java)
-    }
-
-    @Test
-    fun `the end closes immediately with a finished silent snapshot`() {
-        val running = open(levels = listOf(1f))
-
-        val step = VoiceRecordingActivityLaw.step(running, input(recording = false), wording)
-
+        val step = VoiceRecordingActivityLaw.step(first.running, input(recording = false), wording)
         val end = step.action as VoiceRecordingActivityLaw.Action.End
         assertThat(end.snapshot.isFinished).isTrue()
-        assertThat(end.snapshot.level).isEqualTo(0)
         assertThat(step.running).isNull()
-        assertThat(VoiceRecordingActivityLaw.step(null, null, wording).action).isEqualTo(VoiceRecordingActivityLaw.Action.None)
+    }
+
+    @Test
+    fun `a new take replaces the previous activity`() {
+        val first = VoiceRecordingActivityLaw.step(null, input(startedAt = 1L), wording)
+
+        val next = VoiceRecordingActivityLaw.step(first.running, input(startedAt = 2L), wording)
+        assertThat(next.action).isInstanceOf(VoiceRecordingActivityLaw.Action.Start::class.java)
+    }
+
+    @Test
+    fun `a language change relabels the running activity`() {
+        val first = VoiceRecordingActivityLaw.step(null, input(), wording)
+
+        val step = VoiceRecordingActivityLaw.step(first.running, input(), VoiceRecordingActivityLaw.Wording("Voice recording"))
+        assertThat((step.action as VoiceRecordingActivityLaw.Action.Update).snapshot.statusLabel).isEqualTo("Voice recording")
     }
 }
