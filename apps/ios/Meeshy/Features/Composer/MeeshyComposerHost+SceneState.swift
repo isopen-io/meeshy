@@ -79,7 +79,7 @@ extension MeeshyComposerHost {
             format: selectedFormat,
             stage: sceneCameraStage,
             toolIsOpen: sceneToolOwnsScreen,
-            mediaIsEntering: sceneIntake?.isPreparing == true) else { return nil }
+            mediaIsEntering: sceneIntake?.isPreparing == true, writesText: writesText) else { return nil }
         return ComposerSceneQuickCapture.hint(format: selectedFormat)
     }
 }

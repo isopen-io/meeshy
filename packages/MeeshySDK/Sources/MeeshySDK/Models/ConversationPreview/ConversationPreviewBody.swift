@@ -99,12 +99,27 @@ enum ConversationPreviewProtection: Equatable {
 }
 
 /// Le corps d'un message lisible : `segments` pour une ligne dont l'icône porte
-/// la nature (📷 Photo · …), `labelled` pour une ligne dont l'icône est prise
-/// par une protection (🔥 4 min · Photo · …), où la nature doit se dire en mots.
+/// la nature (📷 Photo · 450 × 456 · 234 Ko), `sealed` pour une ligne dont
+/// l'icône est prise par la flamme d'un éphémère (🔥 4 min · Photo) : la nature
+/// s'y dit en mots, le texte servi reste, et la pièce ne livre AUCUN détail —
+/// ni dimensions, ni poids, ni durée, ni pages, ni nom, ni nom de contact.
+/// Miroir de `Body` (`packages/shared/utils/conversation-preview.ts`).
 struct ConversationPreviewBody {
     let icon: ConversationPreviewIcon?
     let segments: [ConversationPreviewSegment]
-    let labelled: [ConversationPreviewSegment]
+    let sealed: [ConversationPreviewSegment]
+
+    private static func withText(
+        _ head: [ConversationPreviewSegment], _ text: ConversationPreviewSegment?
+    ) -> [ConversationPreviewSegment] {
+        text.map { head + [$0] } ?? head
+    }
+
+    /// « 450 × 456 » : le × entre deux espaces insécables, qui ne se coupe
+    /// jamais en fin de ligne. Miroir de `dimensionsLabel`.
+    private static func dimensionsLabel(_ width: Double, _ height: Double) -> String {
+        "\(Int(width.rounded()))\u{00A0}×\u{00A0}\(Int(height.rounded()))"
+    }
 
     private enum AttachmentKind {
         case voice, audio, video, photo, file
@@ -207,28 +222,31 @@ struct ConversationPreviewBody {
                 .first(where: ConversationPreviewComposer.hasText)
                 .map { [ConversationPreviewSegment.label(ConversationPreviewComposer.trimmed($0))] } ?? []
             let segments = [ConversationPreviewSegment.label(strings(.attachmentLocation))] + place
-            return ConversationPreviewBody(icon: .location, segments: segments, labelled: segments)
+            return ConversationPreviewBody(icon: .location, segments: segments, sealed: segments)
         }
         if message.messageType == "sticker" || message.sticker != nil {
             let segments = attachment?.alt
                 .flatMap { ConversationPreviewComposer.hasText($0) ? $0 : nil }
                 .map { [ConversationPreviewSegment.text(ConversationPreviewComposer.trimmed($0), language: nil)] }
                 ?? [ConversationPreviewSegment.label(strings(.attachmentSticker))]
-            return ConversationPreviewBody(icon: .sticker, segments: segments, labelled: segments)
+            return ConversationPreviewBody(icon: .sticker, segments: segments, sealed: segments)
         }
         if count == 0 {
             let segments = text.map { [$0] } ?? []
-            return ConversationPreviewBody(icon: nil, segments: segments, labelled: segments)
+            return ConversationPreviewBody(icon: nil, segments: segments, sealed: segments)
         }
 
         if count > 1 {
             let kinds = Set((summary?.kinds ?? [:]).filter { $0.value > 0 }.map { summaryKind($0.key) })
             let kind = kinds.count == 1 ? kinds.first : nil
             let icon = kind?.icon ?? .attachments
-            if let text { return ConversationPreviewBody(icon: icon, segments: [text], labelled: [text]) }
             let size = positive(summary?.totalSize.map { Double($0) }).map { [ConversationPreviewSegment.label(strings.fileSize($0))] } ?? []
             let head = ConversationPreviewSegment.label(strings(kind?.many ?? .attachmentMixedMany, ["count": String(count)]))
-            return ConversationPreviewBody(icon: icon, segments: [head] + size, labelled: [head] + size)
+            return ConversationPreviewBody(
+                icon: icon,
+                segments: text.map { [head, $0] + size } ?? ([head] + size),
+                sealed: withText([head], text)
+            )
         }
 
         if let attachment, ContactCardFile.isContactCard(
@@ -238,26 +256,31 @@ struct ConversationPreviewBody {
         }
 
         let kind = kindOf(attachment, messageType: message.messageType)
-        if let text { return ConversationPreviewBody(icon: kind.icon, segments: [text], labelled: [text]) }
         let name = ConversationPreviewComposer.trimmed(attachment?.originalName ?? "")
         let named = (kind == .audio || kind == .file) && !name.isEmpty
-        let head = ConversationPreviewSegment.label(named ? name : strings(kind.one))
+        let nature = ConversationPreviewSegment.label(strings(kind.one))
         let details = detailsOf(kind, attachment, strings)
-        let labelledHead = named ? [ConversationPreviewSegment.label(strings(kind.one)), head] : [head]
-        return ConversationPreviewBody(icon: kind.icon, segments: [head] + details, labelled: labelledHead + details)
+        let sealed = withText([nature], text)
+        if let text {
+            let nameSegments = named ? [ConversationPreviewSegment.label(name)] : []
+            return ConversationPreviewBody(icon: kind.icon, segments: [text] + nameSegments + details, sealed: sealed)
+        }
+        let head = named ? ConversationPreviewSegment.label(name) : nature
+        return ConversationPreviewBody(icon: kind.icon, segments: [head] + details, sealed: sealed)
     }
 
     /// Une carte de visite se dit par son CONTACT, jamais par son fichier
     /// (#8122, #8148) : « Contact partagé · Zoé » — ni UUID, ni extension, ni
-    /// poids. Miroir de `contactCardBody` (`packages/shared/utils/conversation-preview.ts`).
+    /// poids. Une légende prend la place du libellé, le nom du contact reste :
+    /// « Voici son numéro · Zoé ». Miroir de `contactCardBody`
+    /// (`packages/shared/utils/conversation-preview.ts`).
     private static func contactCard(
         _ attachment: ConversationPreviewAttachment, text: ConversationPreviewSegment?, _ strings: ConversationPreviewStrings
     ) -> ConversationPreviewBody {
-        if let text { return ConversationPreviewBody(icon: .contact, segments: [text], labelled: [text]) }
+        let nature = ConversationPreviewSegment.label(strings(.attachmentContact))
         let name = ContactCardFile.displayName(fromFileName: attachment.originalName ?? "")
-        let segments = [ConversationPreviewSegment.label(strings(.attachmentContact))]
-            + (name.map { [ConversationPreviewSegment.label($0)] } ?? [])
-        return ConversationPreviewBody(icon: .contact, segments: segments, labelled: segments)
+        let contact = name.map { [ConversationPreviewSegment.label($0)] } ?? []
+        return ConversationPreviewBody(icon: .contact, segments: [text ?? nature] + contact, sealed: withText([nature], text))
     }
 
     /// Chaque détail n'apparaît QUE si l'information existe — durée, dimensions,
@@ -273,7 +296,7 @@ struct ConversationPreviewBody {
             details.append(.label(ConversationPreviewStrings.clock(seconds: (duration / 1000).rounded())))
         }
         if sized, let width = positive(attachment.width), let height = positive(attachment.height) {
-            details.append(.label("\(Int(width.rounded()))×\(Int(height.rounded()))"))
+            details.append(.label(dimensionsLabel(width, height)))
         }
         if kind == .file, let pages = positive(attachment.pageCount) {
             let count = Int(pages.rounded(.down))

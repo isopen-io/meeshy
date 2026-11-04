@@ -11,7 +11,7 @@ class SendMessageRequestSerializationTest {
     private val json = Json { encodeDefaults = false; ignoreUnknownKeys = true }
 
     private fun request(copyFrom: String? = null) =
-        SendMessageRequest(content = "salut", originalLanguage = "fr", copyAttachmentsFromMessageId = copyFrom)
+        SendMessageRequest(content = "salut", originalLanguage = "fr", clientMessageId = "cid_target", copyAttachmentsFromMessageId = copyFrom)
 
     @Test
     fun `une cible de fan-out serialise copyAttachmentsFromMessageId`() {
@@ -28,6 +28,7 @@ class SendMessageRequestSerializationTest {
     fun `la cle revient intacte a la lecture et une vieille ligne sans cle se lit nulle`() {
         assertThat(json.decodeFromString<SendMessageRequest>(json.encodeToString(request("m9"))).copyAttachmentsFromMessageId)
             .isEqualTo("m9")
-        assertThat(json.decodeFromString<SendMessageRequest>("""{"content":"x"}""").copyAttachmentsFromMessageId).isNull()
+        val oldRow = """{"content":"x","originalLanguage":"fr","clientMessageId":"cid_old"}"""
+        assertThat(json.decodeFromString<SendMessageRequest>(oldRow).copyAttachmentsFromMessageId).isNull()
     }
 }
