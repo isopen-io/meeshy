@@ -128,7 +128,7 @@ public final class CommunityService: CommunityServiceProviding, Sendable {
     // MARK: - Remove Member
 
     public func removeMember(communityId: String, userId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(
             CommunitiesEndpoint.byIdMembersByMemberId(id: communityId, memberId: userId),
             method: "DELETE"
         )
@@ -147,7 +147,7 @@ public final class CommunityService: CommunityServiceProviding, Sendable {
     // MARK: - Leave Community
 
     public func leave(communityId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(
             CommunitiesEndpoint.byIdLeave(id: communityId),
             method: "POST"
         )

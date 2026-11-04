@@ -28,6 +28,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { isEndToEndMode } from '../conversations/encryptionRegime.js';
 import { notePairInteraction, type PairInteractionDb } from './pairInteractionRecorder.js';
 import { answerMessageRequest, type MessageRequestDb } from '../messaging/messageRequests.js';
+import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache.js';
 
 const logger = enhancedLogger.child({ module: 'MessageInteractions' });
 
@@ -48,7 +49,7 @@ export type MessageInteraction = {
   readonly at?: Date;
 };
 
-type InteractionParticipant = { userId: string | null; messageRequestAt?: Date | null };
+type InteractionParticipant = { userId: string | null; messageRequestAt?: Date | null; messageRequestFromId?: string | null };
 
 type MessageInteractionDb = PairInteractionDb & {
   readonly conversation: {
@@ -57,16 +58,24 @@ type MessageInteractionDb = PairInteractionDb & {
 };
 
 /**
- * #14107 — le destinataire d'une DEMANDE de message qui y répond l'efface
- * (`answerMessageRequest` : sans consentement implicite, audit M3), dans un
- * tête-à-tête comme dans un groupe (contre-audit M1). L'expéditeur
- * qui relance n'efface rien (sa ligne ne porte pas de demande).
+ * #14107, #16053 — le destinataire d'une DEMANDE de message qui y répond
+ * (`answerMessageRequest`) : dans un tête-à-tête la réponse vaut accord et
+ * rouvre les médias de l'expéditeur — y compris une demande déjà répondue sous
+ * l'ancienne règle, dont seule la provenance reste —, sauf demande encore
+ * CONTENUE (RG-21), que seul « Accepter » lève ; dans un groupe elle sort
+ * seulement la conversation de la boîte (RG-22). L'expéditeur qui relance
+ * n'efface rien (sa ligne ne porte pas de demande).
  */
 const answersOwnRequest = (conversation: { type: string; participants: ReadonlyArray<InteractionParticipant> }, sender: string): boolean =>
-  conversation.participants.some((p) => p.userId === sender && p.messageRequestAt instanceof Date);
+  conversation.participants.some(
+    (p) =>
+      p.userId === sender &&
+      (p.messageRequestAt instanceof Date || (conversation.type === 'direct' && Boolean(p.messageRequestFromId))),
+  );
 
 async function acceptRequestByReply(prisma: unknown, conversationId: string, userId: string, now: Date): Promise<void> {
-  await answerMessageRequest(prisma as MessageRequestDb, { conversationId, userId, now });
+  const answer = await answerMessageRequest(prisma as MessageRequestDb, { conversationId, userId, now });
+  if (answer.requesterParticipantId) invalidateParticipantLookup(answer.requesterParticipantId, conversationId);
 }
 
 const isVoiceMessage = (interaction: MessageInteraction): boolean =>
@@ -106,7 +115,7 @@ export function noteMessageInteractions(prisma: MessageInteractionDb | PrismaCli
         where: { id: interaction.conversationId },
         select: {
           type: true,
-          participants: { where: { isActive: true, type: 'user', userId: { not: null } }, select: { userId: true, messageRequestAt: true } },
+          participants: { where: { isActive: true, type: 'user', userId: { not: null } }, select: { userId: true, messageRequestAt: true, messageRequestFromId: true } },
         },
       });
       if (!conversation) return;

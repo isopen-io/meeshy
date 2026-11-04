@@ -55,7 +55,6 @@ import me.meeshy.app.upgrade.UpgradeRequiredViewModel
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.model.rootnav.RootRoute
-import me.meeshy.sdk.net.SessionExpiryNotifier
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -70,7 +69,6 @@ private const val CALL_ENDED_MINIMISED_SETTLE_MS = 1500L
 @Composable
 fun MeeshyApp(
     floatingButtonPositions: FloatingButtonPositionStore,
-    sessionExpiry: SessionExpiryNotifier,
     launchRoute: String? = null,
     onLaunchRouteConsumed: () -> Unit = {},
     warmDeepLink: Uri? = null,
@@ -183,15 +181,8 @@ fun MeeshyApp(
     // incoming-call screen (the Android analogue of iOS CallManager.shared observed
     // at RootView). Reads the live destination per offer so a second offer mid-call
     // yields no route (call-waiting stays with CallViewModel's banner).
-    // Session expiree: la passerelle a refuse l'identite hors route d'auth. Sans
-    // ceci, l'ecran affichait « verifiez votre connexion » alors que le reseau
-    // fonctionnait, et l'utilisateur n'avait aucun moyen de comprendre qu'il devait
-    // se reconnecter. La deconnexion vide la session, donc `startDestination`
-    // bascule sur LOGIN.
-    LaunchedEffect(Unit) {
-        sessionExpiry.expirations.collect { authViewModel.logout(closedByServer = true) }
-    }
-
+    // Une session fermée par le serveur (révoquée, expirée) se ferme dans le SDK (`SessionRevocationCenter`) ;
+    // SessionRevocationOverlay aligne la racine et explique pourquoi.
     LaunchedEffect(Unit) {
         incomingCallViewModel.incomingOffers.collect { offer ->
             LaunchRouter.routeIncomingSocketOffer(offer, navController.currentDestination?.route)

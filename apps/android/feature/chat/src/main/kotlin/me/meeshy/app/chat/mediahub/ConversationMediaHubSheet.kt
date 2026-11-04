@@ -10,7 +10,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import android.widget.Toast
-import me.meeshy.app.chat.rememberChatAudioPlayer
+import me.meeshy.app.chat.LocalChatVoicePlayback
 import me.meeshy.ui.component.video.MeeshyVideoViewer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -143,7 +143,7 @@ internal fun ConversationMediaHubContent(
     var query by rememberSaveable { mutableStateOf("") }
     var viewerIndex by remember { mutableStateOf<Int?>(null) }
     var video by remember { mutableStateOf<MediaHubLaunch.Video?>(null) }
-    val audioPlayer = rememberChatAudioPlayer(conversationTitle, conversationId)
+    val audioPlayer = LocalChatVoicePlayback.current
     val haptics = rememberMeeshyHaptics()
     val context = LocalContext.current
     val reduceMotion = LocalReduceMotion.current

@@ -21,4 +21,12 @@ nonisolated enum PostBookmarkMutation {
         next.bookmarkCount = max(0, post.bookmarkCount + (bookmarked ? 1 : -1))
         return next
     }
+
+    /// Repose sur un fil relu les favoris encore en file (#15997) : le serveur
+    /// a pu servir l'état d'avant le geste. `setting` étant idempotente, un
+    /// instantané qui porte déjà le favori n'est pas compté deux fois.
+    static func reapplying(_ posts: [FeedPost], pending: [String: Bool]) -> [FeedPost] {
+        guard !pending.isEmpty else { return posts }
+        return posts.map { post in pending[post.id].map { setting(post, bookmarked: $0) } ?? post }
+    }
 }

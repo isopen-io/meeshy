@@ -38,22 +38,24 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 }));
 
 import { changerRangDeParticipant } from '../../../../routes/conversations/participant-role-core';
+import { announceParticipantRoleWithCapabilities } from '../../../../services/conversations/obsoleteCapability';
 
 const CONV_ID = '507f1f77bcf86cd799439033';
 const ACTEUR_ID = '507f1f77bcf86cd799439011';
 const CIBLE_PART_ID = '507f1f77bcf86cd799439022';
 const CIBLE_USER_ID = '507f1f77bcf86cd799439044';
 
-type EmissionEnregistree = { readonly room: string; readonly event: string; readonly payload: any };
+type EmissionEnregistree = { readonly room: string; readonly excepts: readonly string[]; readonly event: string; readonly payload: any };
 
 function fabriquerSocket() {
   const emissions: EmissionEnregistree[] = [];
   const invalidations: Array<readonly [string, string]> = [];
-  const io = {
-    to: (room: string) => ({
-      emit: (event: string, payload: unknown) => { emissions.push({ room, event, payload }); },
-    }),
-  };
+  const diffusion = (room: string, excepts: readonly string[]): any => ({
+    to: (autre: string) => diffusion(autre, excepts),
+    except: (exclue: string) => diffusion(room, [...excepts, exclue]),
+    emit: (event: string, payload: unknown) => { emissions.push({ room, excepts, event, payload }); },
+  });
+  const io = { to: (room: string) => diffusion(room, []) };
   const manager = {
     getIO: () => io,
     invalidateParticipantCache: (key: string, conversationId: string) => {
@@ -75,6 +77,8 @@ function fabriquerPrisma(options: {
   readonly cible?: Record<string, unknown> | null;
   /** Vrai quand le segment d'URL porte un `Participant.id` : la 1re passe rend `null`. */
   readonly cibleParIdDeParticipant?: boolean;
+  /** Le rang RELU de la cible quand la capacité de son lecteur se calcule. */
+  readonly rangRelu?: string;
 } = {}) {
   const {
     rangDemandeur = 'admin',
@@ -90,6 +94,7 @@ function fabriquerPrisma(options: {
       shareLinkId: null,
     },
     cibleParIdDeParticipant = false,
+    rangRelu = 'moderator',
   } = options;
 
   const findFirst = jest.fn<any>();
@@ -98,7 +103,20 @@ function fabriquerPrisma(options: {
   findFirst.mockResolvedValueOnce(cible);
 
   return {
+    user: {
+      findMany: jest.fn<any>().mockResolvedValue([{ id: CIBLE_USER_ID, role: 'USER' }]),
+    },
     participant: {
+      findMany: jest.fn<any>().mockResolvedValue([{
+        conversationId: CONV_ID,
+        userId: CIBLE_USER_ID,
+        role: rangRelu,
+        type: 'user',
+        leftAt: null,
+        bannedAt: null,
+        conversation: { type: 'group', identifier: null },
+      }]),
+      groupBy: jest.fn<any>().mockResolvedValue([]),
       findFirst,
       update: jest.fn<any>().mockResolvedValue({}),
       findUnique: jest.fn<any>().mockResolvedValue({
@@ -224,5 +242,124 @@ describe('changerRangDeParticipant — appelé DIRECTEMENT, sans Fastify (#4713)
     // aucune présence, gatée ou non (#4009 + directive du 2026-08-25).
     expect('isOnline' in emission!.payload.participant).toBe(false);
     expect('lastActiveAt' in emission!.payload.participant).toBe(false);
+  });
+});
+
+/**
+ * #15987 — la capacité servie au lecteur SUIT son rang. `participant:role-updated`
+ * ne touche pas `conversation.updatedAt` : sans la capacité recalculée dans
+ * l'événement, un membre promu garderait le `canMakeObsolete: false` de son
+ * ancien rang jusqu'au prochain rechargement complet.
+ */
+describe('participant:role-updated porte à la CIBLE sa capacité recalculée (#15987)', () => {
+  const attendreLesLectures = () => new Promise((resolve) => setImmediate(resolve));
+
+  async function changerLeRang(role: string, rangRelu: string) {
+    const prisma = fabriquerPrisma({ rangRelu, rangDemandeur: 'creator', cible: {
+      id: CIBLE_PART_ID, userId: CIBLE_USER_ID, role: role === 'admin' ? 'member' : 'admin', isActive: true,
+      leftAt: null, bannedAt: null, displayName: 'Bob', shareLinkId: null,
+    } });
+    const socket = fabriquerSocket();
+    const verdict = await changerRangDeParticipant({
+      prisma: prisma as any,
+      conversationIdentifier: CONV_ID,
+      targetKey: CIBLE_USER_ID,
+      role,
+      currentUserId: ACTEUR_ID,
+      viewer: null,
+      socketIO: socket.passerelle as any,
+      notifications: null,
+    });
+    expect(verdict.genre).toBe('ok');
+    await attendreLesLectures();
+    return socket.emissions.filter((e) => e.event === 'participant:role-updated');
+  }
+
+  it('un membre PROMU administrateur reçoit, dans SA room, canMakeObsolete: true', async () => {
+    const emissions = await changerLeRang('admin', 'admin');
+
+    const pourLaCible = emissions.find((e) => e.room === `user:${CIBLE_USER_ID}`);
+    expect(pourLaCible).toBeDefined();
+    expect(pourLaCible!.payload).toMatchObject({ userId: CIBLE_USER_ID, newRole: 'admin', viewerCapabilities: { canMakeObsolete: true } });
+  });
+
+  it('un administrateur RÉTROGRADÉ membre reçoit canMakeObsolete: false', async () => {
+    const emissions = await changerLeRang('member', 'member');
+
+    const pourLaCible = emissions.find((e) => e.room === `user:${CIBLE_USER_ID}`);
+    expect(pourLaCible!.payload.viewerCapabilities).toEqual({ canMakeObsolete: false });
+  });
+
+  it('la salle reçoit l’événement SANS capacité, et la cible ne le reçoit qu’une fois', async () => {
+    const emissions = await changerLeRang('admin', 'admin');
+
+    const salle = emissions.find((e) => e.room === `conversation:${CONV_ID}`);
+    expect(salle).toBeDefined();
+    expect(salle!.excepts).toEqual([`user:${CIBLE_USER_ID}`]);
+    expect('viewerCapabilities' in salle!.payload).toBe(false);
+    expect(emissions).toHaveLength(2);
+  });
+
+  it('une lecture de capacité qui échoue livre tout de même l’événement à la cible, sans capacité', async () => {
+    const prisma = fabriquerPrisma({ rangRelu: 'admin' });
+    prisma.user.findMany.mockRejectedValue(new Error('mongo indisponible'));
+    const socket = fabriquerSocket();
+    await changerRangDeParticipant({
+      prisma: prisma as any,
+      conversationIdentifier: CONV_ID,
+      targetKey: CIBLE_USER_ID,
+      role: 'admin',
+      currentUserId: ACTEUR_ID,
+      viewer: null,
+      socketIO: socket.passerelle as any,
+      notifications: null,
+    });
+    await attendreLesLectures();
+
+    const pourLaCible = socket.emissions.find((e) => e.room === `user:${CIBLE_USER_ID}`);
+    expect(pourLaCible).toBeDefined();
+    expect(pourLaCible!.payload.newRole).toBe('admin');
+    expect('viewerCapabilities' in pourLaCible!.payload).toBe(false);
+  });
+
+  it('deux changements rapprochés : la cible reçoit ses exemplaires dans l’ORDRE, le dernier dit l’état final', async () => {
+    const lectures: Array<() => void> = [];
+    let rangEnBase = 'admin';
+    const prisma = {
+      user: {
+        findMany: jest.fn<any>().mockImplementation(() => new Promise((resolve) => {
+          lectures.push(() => resolve([{ id: CIBLE_USER_ID, role: 'USER' }]));
+        })),
+      },
+      participant: {
+        findMany: jest.fn<any>().mockImplementation(async () => [{
+          conversationId: CONV_ID, userId: CIBLE_USER_ID, role: rangEnBase, type: 'user',
+          leftAt: null, bannedAt: null, conversation: { type: 'group', identifier: null },
+        }]),
+        groupBy: jest.fn<any>().mockResolvedValue([]),
+      },
+    };
+    const socket = fabriquerSocket();
+    const io = socket.passerelle.getManager().getIO() as any;
+    const annonce = (newRole: string) => announceParticipantRoleWithCapabilities(prisma as any, {
+      io,
+      payload: { conversationId: CONV_ID, userId: CIBLE_USER_ID, newRole, updatedBy: ACTEUR_ID },
+      onError: () => undefined,
+    });
+
+    const promotion = annonce('admin');
+    rangEnBase = 'member';
+    const retrogradation = annonce('member');
+    await attendreLesLectures();
+    expect(lectures).toHaveLength(1);
+    lectures[0]();
+    await attendreLesLectures();
+    expect(lectures).toHaveLength(2);
+    lectures[1]();
+    await Promise.all([promotion, retrogradation]);
+
+    const pourLaCible = socket.emissions.filter((e) => e.room === `user:${CIBLE_USER_ID}`);
+    expect(pourLaCible.map((e) => e.payload.newRole)).toEqual(['admin', 'member']);
+    expect(pourLaCible[1].payload.viewerCapabilities).toEqual({ canMakeObsolete: false });
   });
 });

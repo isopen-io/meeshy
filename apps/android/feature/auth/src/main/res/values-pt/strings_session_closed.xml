@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- « Mot de passe oublié » crée aussi un premier mot de passe (#6645) : jamais « réinitialiser ». -->
+    <string name="session_closed_password_message">Entre com a nova senha. Se você não fez essa alteração, escolha outra imediatamente em “Esqueceu a senha?”.</string>
+</resources>

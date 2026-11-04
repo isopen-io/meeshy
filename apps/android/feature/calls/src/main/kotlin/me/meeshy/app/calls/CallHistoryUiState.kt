@@ -71,3 +71,16 @@ enum class CallHistoryContent {
         }
     }
 }
+
+/** Ce que l'état vide du journal dit : le vide à froid, le filtre « manqués » sans résultat, ou une recherche sans résultat. */
+enum class CallHistoryEmptyKind {
+    NO_CALLS, NO_MISSED_CALLS, NO_RESULTS;
+
+    companion object {
+        fun of(state: CallHistoryUiState): CallHistoryEmptyKind = when {
+            state.isSearching -> NO_RESULTS
+            state.missedOnly -> NO_MISSED_CALLS
+            else -> NO_CALLS
+        }
+    }
+}

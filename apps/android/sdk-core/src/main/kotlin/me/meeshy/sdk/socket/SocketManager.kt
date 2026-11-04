@@ -261,6 +261,8 @@ class SocketManager internal constructor(
         socket.on(EVENT_HEARTBEAT_ACK) { args -> onHeartbeatAck(args) }
         socket.on(EVENT_TOKEN_EXPIRED) { onTokenExpired(presented) }
         socket.on(EVENT_SESSION_REVOKED) { args ->
+            // Une socket déjà remplacée ou fermée ne parle plus au nom de la session : sa révocation tardive n'est pas livrée.
+            if (_socket !== socket) return@on
             Timber.w("Socket: session revoked")
             _sessionRevoked.tryEmit(reasonOf(args))
             _sessionRevocations.tryEmit(SocketSessionRevocation(args.firstOrNull()?.toString().orEmpty(), presented))

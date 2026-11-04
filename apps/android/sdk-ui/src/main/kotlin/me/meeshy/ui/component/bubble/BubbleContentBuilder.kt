@@ -31,6 +31,7 @@ import me.meeshy.sdk.model.SendLifecycleResolver
 import me.meeshy.sdk.model.exitOffer
 import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.model.isProtected
+import me.meeshy.sdk.model.VoiceQueueProtection
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.profile.from
 import me.meeshy.sdk.theme.DynamicColorGenerator
@@ -130,6 +131,9 @@ public object BubbleContentBuilder {
         // télécharge : sa rangée ne promet rien (#13492) — le même verdict que l'aperçu et le contrôleur.
         val protectedIds = message.attachments.filter { MessagePieceTarget.isProtected(it, message) }.mapTo(HashSet()) { it.id }
         val files = attachments.files.map { if (it.attachmentId in protectedIds) it.copy(isProtected = true) else it }
+        // Un vocal est protégé si son message OU sa pièce l'est (leçon 275) : rien sur le disque, aucune onde, aucun transfert.
+        val protectedVoiceIds = message.attachments.filter { VoiceQueueProtection.ofPiece(it, message) }.mapTo(HashSet()) { it.id }
+        val audios = attachments.audios.map { if (it.attachmentId in protectedVoiceIds) it.copy(isProtected = true) else it }
         // Un avis système (capture, arrivées) se compose CHEZ LE LECTEUR, dans sa langue et son fuseau ;
         // une métadonnée qui ne se lit pas retombe sur le `content` (repli français). Jamais une bulle.
         val noticeText = if (isDeleted || isEndToEndSealed || viewOnceSealed) {
@@ -219,7 +223,7 @@ public object BubbleContentBuilder {
             images = attachments.images.map { if (it.attachmentId in protectedIds) it.copy(isProtected = true) else it },
             files = files,
             locations = listOfNotNull(messagePlace) + attachments.locations,
-            audios = attachments.audios,
+            audios = audios,
             emojiOnlyCount = if (visibleAttachments.isEmpty()) {
                 EmojiDetector.emojiOnlyCount(text)
             } else {
@@ -269,6 +273,7 @@ public object BubbleContentBuilder {
             replyToIsMe = !replyToDeleted && currentUserId != null &&
                 message.replyTo?.senderId == currentUserId,
             replyToAuthor = quotedAuthorProfile(message.replyTo, quoted?.senderName, currentUserId),
+            replyToAudio = quoted?.audio,
             isSlowSend = isOutgoing && isSlowSend,
             sticker = if (isDeleted || isEndToEndSealed || viewOnceSealed) null else stickerOf(message, visibleAttachments, attachments.images),
             videos = attachments.videos,

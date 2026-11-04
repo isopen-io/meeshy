@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="new_conversation_search_placeholder">Nutzer suchen…</string>
+    <string name="new_conversation_search_failed">Suche fehlgeschlagen</string>
+    <string name="new_conversation_search_retry">Erneut versuchen</string>
+    <string name="new_conversation_user_online">online</string>
+    <string name="new_conversation_error_title">Fehler</string>
+    <string name="new_conversation_ok">OK</string>
+</resources>

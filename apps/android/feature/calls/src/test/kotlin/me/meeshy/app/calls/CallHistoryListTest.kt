@@ -76,4 +76,20 @@ class CallHistoryListTest {
 
         assertThat(CallHistoryList.filter(records, missedOnly = true)).isEmpty()
     }
+
+    @Test
+    fun `empty kind says no calls on a cold empty journal`() {
+        assertThat(CallHistoryEmptyKind.of(CallHistoryUiState())).isEqualTo(CallHistoryEmptyKind.NO_CALLS)
+    }
+
+    @Test
+    fun `empty kind says no missed calls under the missed filter`() {
+        assertThat(CallHistoryEmptyKind.of(CallHistoryUiState(missedOnly = true))).isEqualTo(CallHistoryEmptyKind.NO_MISSED_CALLS)
+    }
+
+    @Test
+    fun `empty kind says no results while searching even under the missed filter`() {
+        val state = CallHistoryUiState(missedOnly = true, searchQuery = "zoe")
+        assertThat(CallHistoryEmptyKind.of(state)).isEqualTo(CallHistoryEmptyKind.NO_RESULTS)
+    }
 }

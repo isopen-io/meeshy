@@ -21,6 +21,8 @@ internal class ConversationListLockCoordinator(
     private val state: MutableStateFlow<ConversationListUiState>,
     private val lockStore: ConversationLockStore,
     private val unlockSession: ConversationUnlockSessionStore = ConversationUnlockSessionStore(),
+    /** Les détails d'une conversation, ouverts par le toucher de son avatar (#15989). */
+    private val openInfo: (String) -> Unit = {},
     private val openConversation: (String) -> Unit,
 ) {
 
@@ -37,6 +39,14 @@ internal class ConversationListLockCoordinator(
      */
     private var pendingLockConversationId: String? = null
 
+    /**
+     * La conversation dont l'AVATAR a été touché sous verrou (#15989) : le code accepté ouvre ses détails,
+     * jamais son fil. Un code abandonné, ou toute autre feuille, l'oublie.
+     */
+    private var pendingInfoAfterUnlock: String? = null
+
+    fun isLocked(id: String): Boolean = lockStore.isLocked(id)
+
     /** Miroir vivant des ids verrouilles ; rejoue l'instantane a l'abonnement. */
     suspend fun observe() {
         lockStore.lockedConversationIdsFlow.collect { ids ->
@@ -46,6 +56,7 @@ internal class ConversationListLockCoordinator(
 
     /** Tap sur une rangee : ouvre, ou demande le code si la rangee est verrouillee. */
     fun onConversationTap(id: String) {
+        pendingInfoAfterUnlock = null
         if (lockStore.isLocked(id)) {
             state.update { it.copy(lockPrompt = LockPinState(LockPinMode.OPEN_CONVERSATION, id)) }
         } else {
@@ -53,8 +64,16 @@ internal class ConversationListLockCoordinator(
         }
     }
 
+    /** Toucher d'avatar : les détails, derrière le code quand la conversation est verrouillée. */
+    fun onAvatarInfo(id: String) {
+        if (!lockStore.isLocked(id)) return openInfo(id)
+        pendingInfoAfterUnlock = id
+        state.update { it.copy(lockPrompt = LockPinState(LockPinMode.OPEN_CONVERSATION, id)) }
+    }
+
     /** Verrouiller / deverrouiller [id], avec configuration du code maitre si absent. */
     fun onLockToggle(id: String) {
+        pendingInfoAfterUnlock = null
         val prompt = when {
             lockStore.isLocked(id) -> LockPinState(LockPinMode.UNLOCK_CONVERSATION, id)
             lockStore.hasMasterPin() -> LockPinState(LockPinMode.LOCK_CONVERSATION, id)
@@ -87,6 +106,7 @@ internal class ConversationListLockCoordinator(
 
     private fun openMasterSheet(mode: LockPinMode) {
         pendingLockConversationId = null
+        pendingInfoAfterUnlock = null
         state.update { it.copy(lockPrompt = LockPinState(mode, conversationId = null)) }
     }
 
@@ -102,6 +122,7 @@ internal class ConversationListLockCoordinator(
 
     fun dismissLockPrompt() {
         pendingLockConversationId = null
+        pendingInfoAfterUnlock = null
         state.update { it.copy(lockPrompt = null) }
     }
 
@@ -119,7 +140,9 @@ internal class ConversationListLockCoordinator(
                 LockPinEffect.RemoveAllLocks -> lockStore.removeAllLocks()
                 is LockPinEffect.OpenConversation -> {
                     unlockSession.unlock(effect.conversationId)
-                    openConversation(effect.conversationId)
+                    val wantsInfo = pendingInfoAfterUnlock == effect.conversationId
+                    pendingInfoAfterUnlock = null
+                    if (wantsInfo) openInfo(effect.conversationId) else openConversation(effect.conversationId)
                 }
                 LockPinEffect.Completed -> {
                     val pending = pendingLockConversationId

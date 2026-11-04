@@ -233,7 +233,7 @@ final class StatusServiceTests: XCTestCase {
     // MARK: - react
 
     func testReactPostsToLikeEndpoint() async throws {
-        let response = APIResponse<[String: String]>(success: true, data: [:], error: nil)
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/posts/post123/like", result: response)
 
         try await service.react(statusId: "post123", emoji: "heart")

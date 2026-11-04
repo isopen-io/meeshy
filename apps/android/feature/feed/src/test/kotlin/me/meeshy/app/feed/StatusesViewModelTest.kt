@@ -1158,4 +1158,23 @@ class StatusesViewModelTest {
             )
         }
     }
+
+    @Test
+    fun `a mood shown on a conversation avatar counts on the mood avatar surface`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "other"), hasMore = false)
+        val vm = viewModel()
+
+        vm.trackAvatarImpression("a")
+
+        coVerify(timeout = 8_000) {
+            engagement.deliver(
+                match { batch ->
+                    batch.size == 1 && (batch.single().event as? SocialEvent.Impression)?.let {
+                        it.postId == "a" && it.source == "status" && it.surface == ContentSurface.MOOD_AVATAR
+                    } == true
+                },
+            )
+        }
+    }
 }

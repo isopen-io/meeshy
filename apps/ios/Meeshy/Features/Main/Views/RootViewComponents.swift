@@ -172,14 +172,15 @@ struct ThemedFeedOverlay: View {
         Task {
             defer { postBookmarkInFlightIds.remove(postId) }
             let shown = viewModel.posts.first(where: { $0.id == postId })
-            guard await !PostBookmarkWriter().write(bookmarked: !wasBookmarked, postId: postId, post: shown) else { return }
-            if wasBookmarked {
-                postBookmarkedIds.insert(postId)
-                postBookmarkDelta[postId, default: 0] += 1
-            } else {
-                postBookmarkedIds.remove(postId)
-                postBookmarkDelta[postId, default: 0] -= 1
-            }
+            await PostBookmarkWriter().write(bookmarked: !wasBookmarked, postId: postId, post: shown, onRejected: {
+                if wasBookmarked {
+                    postBookmarkedIds.insert(postId)
+                    postBookmarkDelta[postId, default: 0] += 1
+                } else {
+                    postBookmarkedIds.remove(postId)
+                    postBookmarkDelta[postId, default: 0] -= 1
+                }
+            })
         }
     }
 

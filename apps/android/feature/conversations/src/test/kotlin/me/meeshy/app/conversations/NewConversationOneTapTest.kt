@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.friend.BlockedUser
@@ -79,8 +80,8 @@ class NewConversationOneTapTest {
         session(role),
         mockk(relaxed = true),
         mockk(relaxed = true),
-        mockk(relaxed = true),
         blocks,
+        BlockCache(),
     )
 
     private fun kotlinx.coroutines.test.TestScope.searched(vm: NewConversationViewModel) {

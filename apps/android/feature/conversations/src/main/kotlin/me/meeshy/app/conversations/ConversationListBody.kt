@@ -14,7 +14,6 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -35,7 +34,8 @@ import me.meeshy.sdk.model.search.ListMessageHit
 import me.meeshy.sdk.model.search.ListMessageSearchState
 import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.CollapsibleSection
-import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import kotlinx.coroutines.flow.first
+import me.meeshy.ui.component.refresh.MeeshyRefreshableBox
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.hexColor
 
@@ -57,14 +57,11 @@ internal fun ConversationListBody(
     onOpenMessage: (ListMessageHit) -> Unit = {},
 ) {
     val signals by viewModel.rowSignals.collectAsStateWithLifecycle()
-    val haptics = rememberMeeshyHaptics()
-    LaunchedEffect(viewModel) { viewModel.pullRefreshSucceeded.collect { haptics.success() } }
-    PullToRefreshBox(
-        isRefreshing = state.isUserRefreshing,
+    MeeshyRefreshableBox(
         onRefresh = {
-            haptics.light()
             viewModel.refresh()
             onRefresh()
+            viewModel.state.first { !it.isUserRefreshing }
         },
         modifier = Modifier.fillMaxSize(),
     ) {
