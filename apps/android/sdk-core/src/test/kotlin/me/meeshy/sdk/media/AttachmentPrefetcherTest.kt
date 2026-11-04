@@ -2,6 +2,10 @@ package me.meeshy.sdk.media
 
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -68,13 +72,15 @@ class AttachmentPrefetcherTest {
     )
 
     @Test
-    fun `le prechargement est muet de bout en bout`() = blocking {
+    fun `le prechargement est muet de bout en bout`() = blocking { coroutineScope {
         server.enqueue(MockResponse().setBody(okio.Buffer().write(body)))
+        val end = async(start = CoroutineStart.UNDISPATCHED) {
+            center.events(center.key(url)).first { it !is AttachmentDownloadEvent.Progress }
+        }
         prefetcher(NetworkCondition.WIFI, AutoDownloadPolicy.WIFI_ONLY).prefetch(url, body.size.toLong(), category, MediaKind.VIDEO)
-        val end = center.awaitEnd(center.key(url))
-        assertThat(end).isEqualTo(AttachmentDownloadEvent.Finished(body.size.toLong()))
+        assertThat(end.await()).isEqualTo(AttachmentDownloadEvent.Finished(body.size.toLong()))
         assertThat(haptics).isEmpty()
-    }
+    } }
 
     @Test
     fun `une lecture qui rejoint un prechargement le releve`() = blocking {

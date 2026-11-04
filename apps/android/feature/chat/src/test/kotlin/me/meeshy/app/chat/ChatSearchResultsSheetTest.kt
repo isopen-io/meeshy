@@ -62,7 +62,7 @@ class ChatSearchResultsSheetTest {
     fun `a translation match is flagged`() {
         show(ChatServerSearchState(query = "bonjour", results = listOf(result("m1", "bonjour tout le monde", SearchMatchType.TRANSLATION))))
 
-        compose.onNodeWithText("Translation").assertExists()
+        compose.onNodeWithText("Translation", useUnmergedTree = true).assertExists()
     }
 
     @Test
